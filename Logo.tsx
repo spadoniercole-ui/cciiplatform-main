@@ -8,7 +8,7 @@
 // tutte le associazioni) resta in Utenti, nella sidebar dello spazio.
 
 import React, { useEffect, useState } from 'react';
-import { Plus, UserPlus, X, Ban, RotateCcw } from 'lucide-react';
+import { Plus, UserPlus, X, Ban, RotateCcw, Download, Copy } from 'lucide-react';
 import {
   ottieniUtentiSpazio,
   creaUtenteSpazioAction,
@@ -40,8 +40,39 @@ export function AziendaUtentiManager({ nomeSchema, aziendaId }: Props) {
   const [form, setForm] = useState(FORM_VUOTO);
   const [salvataggio, setSalvataggio] = useState(false);
   const [passwordGenerata, setPasswordGenerata] = useState<string | null>(null);
+  const [usernameGenerato, setUsernameGenerato] = useState<string | null>(null);
+  // Snapshot dell'anagrafica al momento della creazione, per il file
+  // credenziali (il form può essere già stato svuotato/ricompilato).
+  const [datiCreato, setDatiCreato] = useState<{
+    nome: string;
+    cognome: string;
+    email: string;
+    tipologia: TipologiaUtente;
+  } | null>(null);
 
   const [utenteDaAssociare, setUtenteDaAssociare] = useState<number | ''>('');
+
+  const handleScaricaCredenziali = () => {
+    if (!usernameGenerato || !passwordGenerata) return;
+    const nomeCompleto = datiCreato ? `${datiCreato.nome} ${datiCreato.cognome}`.trim() : '';
+    const ruolo = datiCreato?.tipologia === 'CONSULTATORE' ? 'Consultatore' : 'Operativo';
+    const contenuto = `Credenziali di accesso — ${ruolo}${nomeCompleto ? ` ${nomeCompleto}` : ''}
+Generate il ${new Date().toLocaleString('it-IT')}
+
+Login (nome utente): ${usernameGenerato}
+Password temporanea: ${passwordGenerata}
+Email di contatto: ${datiCreato?.email || '—'}
+
+Si accede con il NOME UTENTE (non con l'email). La password è temporanea e va cambiata al primo accesso.
+Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le credenziali — non è recuperabile una seconda volta da qui.`;
+    const blob = new Blob([contenuto], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `credenziali-${usernameGenerato}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const carica = async () => {
     setCaricamento(true);
@@ -74,6 +105,13 @@ export function AziendaUtentiManager({ nomeSchema, aziendaId }: Props) {
       }
       if (risultato.passwordTemporanea) {
         setPasswordGenerata(risultato.passwordTemporanea);
+        setUsernameGenerato(risultato.username || null);
+        setDatiCreato({
+          nome: form.nome,
+          cognome: form.cognome,
+          email: form.email,
+          tipologia: form.tipologia,
+        });
       } else {
         setMostraForm(false);
         setForm(FORM_VUOTO);
@@ -174,19 +212,70 @@ export function AziendaUtentiManager({ nomeSchema, aziendaId }: Props) {
           </div>
 
           {passwordGenerata ? (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800">
-              Operatore creato. Password temporanea: <strong>{passwordGenerata}</strong>
-              <button
-                type="button"
-                onClick={() => {
-                  setMostraForm(false);
-                  setPasswordGenerata(null);
-                  setForm(FORM_VUOTO);
-                }}
-                className="block mt-2 text-emerald-700 underline font-bold"
-              >
-                Chiudi
-              </button>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800 space-y-2">
+              <div className="font-bold uppercase tracking-wider text-[10px]">
+                Operatore creato — credenziali mostrate una sola volta
+              </div>
+              {usernameGenerato && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase text-emerald-700 w-24 shrink-0">
+                    Nome utente
+                  </span>
+                  <code className="font-mono bg-white px-2 py-1 rounded border border-emerald-200">
+                    {usernameGenerato}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(usernameGenerato)}
+                    className="text-emerald-700 hover:text-emerald-900"
+                    title="Copia"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase text-emerald-700 w-24 shrink-0">
+                  Password
+                </span>
+                <code className="font-mono bg-white px-2 py-1 rounded border border-emerald-200">
+                  {passwordGenerata}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(passwordGenerata)}
+                  className="text-emerald-700 hover:text-emerald-900"
+                  title="Copia"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <p className="text-[10px]">
+                L&apos;operatore accede con il <strong>nome utente</strong> (non con l&apos;email) e
+                dovrà cambiare la password al primo accesso.
+              </p>
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={handleScaricaCredenziali}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-800 font-bold text-[10px] uppercase rounded-lg transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" /> Scarica credenziali (.txt)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMostraForm(false);
+                    setPasswordGenerata(null);
+                    setUsernameGenerato(null);
+                    setDatiCreato(null);
+                    setForm(FORM_VUOTO);
+                  }}
+                  className="text-emerald-700 underline font-bold"
+                >
+                  Chiudi
+                </button>
+              </div>
             </div>
           ) : (
             <>

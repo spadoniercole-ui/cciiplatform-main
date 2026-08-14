@@ -1,101 +1,120 @@
--- ============================================================================
--- RESET COMPLETO DEL DATABASE — CCIIWEB4.0
--- ============================================================================
--- Cosa fa: elimina OGNI spazio (schema tenant), OGNI licenza, OGNI sessione
--- attiva, e tutte le tabelle globali di supporto (indici email→schema,
--- storico XBRL, mappature tag, cache dati di settore, modello base Check
--- List). Dopo l'esecuzione, l'unica cosa che resta funzionante è il login
--- superadmin — che non vive nel database: è definito dalle variabili
--- d'ambiente SUPERADMIN_USER / SUPERADMIN_PASSWORD sul server, quindi
--- questo script non lo tocca in alcun modo, né deve.
---
--- Cosa NON fa: non tocca il database Postgres stesso, non tocca ruoli o
--- permessi, non tocca estensioni. Elimina solo lo schema "public" del
--- CCIIWEB4.0 (tabelle applicative) e tutti gli schemi "tenant_*".
---
--- IRREVERSIBILE. Non c'è un modo per annullarlo dopo l'esecuzione — se sul
--- database ci sono spazi con dati reali che servono ancora, fare un backup
--- prima (pg_dump) o non eseguirlo.
---
--- Verificato contro il codice sorgente reale del progetto (non scritto a
--- memoria): i nomi delle tabelle e degli schemi elencati sotto sono quelli
--- effettivamente creati da src/db/provision.ts, src/db/ensureTables.ts e
--- src/db/sql/*.sql al momento di questa consegna (versione 0.44.1).
--- ============================================================================
+// src/lib/checklist/scoring.ts
+//
+// Calcolo del quadro qualitativo pesato della Check List. Il punteggio
+// considera SOLO le domande già risposte (Sì o No): quelle non ancora
+// valutate non contano né a favore né contro, per non mostrare un quadro
+// falsamente positivo su uno scenario ancora in compilazione.
+//
+// Soglie di sintesi (0-100% di criticità pesata) scelte da Claude come
+// default ragionevole, NON normativa: vanno riviste insieme, come i pesi
+// stessi.
 
--- ----------------------------------------------------------------------------
--- 1. Elimina ogni schema tenant (uno per spazio) — nominati sempre
---    "tenant_<codice_spazio_normalizzato>" (src/db/provision.ts).
---    Trovati dinamicamente, non elencati a mano: non serve sapere in
---    anticipo quanti spazi esistono o come si chiamano.
--- ----------------------------------------------------------------------------
-DO $$
-DECLARE
-  schema_tenant TEXT;
-BEGIN
-  FOR schema_tenant IN
-    SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant\_%'
-  LOOP
-    EXECUTE format('DROP SCHEMA IF EXISTS %I CASCADE', schema_tenant);
-    RAISE NOTICE 'Schema eliminato: %', schema_tenant;
-  END LOOP;
-END $$;
+import { PESO_NUMERICO, type SezioneChecklist, type PesoDomanda } from './ministeriale';
 
--- ----------------------------------------------------------------------------
--- 2. Svuota le tabelle globali (schema public) — elenco completo verificato:
---    spazi, licenze_spazio, licenze (src/db/sql/spazi.sql, licenze.sql)
---    sessioni (src/db/sql/sessioni.sql)
---    analisi_xbrl_storico (src/db/sql/analisi_xbrl_storico.sql)
---    xbrl_tag_mappings (src/db/sql/xbrl_tag_mappings.sql)
---    admin_spazio_index, utente_spazio_index (src/db/ensureTables.ts)
---    checklist_modello_base (src/app/actions/checklistModelloBase.ts)
---    dati_settore_cache, dati_settore_ultima_chiamata (src/db/provision.ts)
---    RESTART IDENTITY: azzera anche i contatori seriali (id che ripartono da 1).
---    CASCADE: gestisce eventuali riferimenti tra queste tabelle senza dover
---    rispettare un ordine specifico.
---    "IF EXISTS" tabella per tabella: lo script non si blocca se una di
---    queste, per qualche motivo, non fosse mai stata creata su questo
---    database (es. una consegna non ancora arrivata all'ambiente in uso).
--- ----------------------------------------------------------------------------
-DO $$
-DECLARE
-  tabella TEXT;
-BEGIN
-  FOREACH tabella IN ARRAY ARRAY[
-    'spazi',
-    'licenze_spazio',
-    'licenze',
-    'sessioni',
-    'analisi_xbrl_storico',
-    'xbrl_tag_mappings',
-    'admin_spazio_index',
-    'utente_spazio_index',
-    'checklist_modello_base',
-    'dati_settore_cache',
-    'dati_settore_ultima_chiamata'
-  ]
-  LOOP
-    IF EXISTS (
-      SELECT 1 FROM information_schema.tables
-      WHERE table_schema = 'public' AND table_name = tabella
-    ) THEN
-      EXECUTE format('TRUNCATE TABLE public.%I RESTART IDENTITY CASCADE', tabella);
-      RAISE NOTICE 'Tabella svuotata: public.%', tabella;
-    ELSE
-      RAISE NOTICE 'Tabella non trovata (saltata): public.%', tabella;
-    END IF;
-  END LOOP;
-END $$;
+export interface RispostaPerCalcolo {
+  domandaId: string;
+  risposta: boolean | null;
+}
 
--- ----------------------------------------------------------------------------
--- 3. Verifica finale — deve restituire ZERO righe su entrambe le query se
---    il reset è andato a buon fine.
--- ----------------------------------------------------------------------------
-SELECT nspname AS schema_tenant_residuo
-FROM pg_catalog.pg_namespace
-WHERE nspname LIKE 'tenant\_%';
+export interface QuadroSezione {
+  numero: string;
+  titolo: string;
+  domandeRisposte: number;
+  domandeTotali: number;
+  puntiCriticita: number;
+  puntiMassimi: number;
+  percentualeCriticita: number | null; // null = nessuna domanda ancora risposta
+  criticitaStrutturaliAperte: { id: string; domanda: string }[];
+}
 
-SELECT
-  (SELECT count(*) FROM public.spazi) AS spazi_residui,
-  (SELECT count(*) FROM public.licenze) AS licenze_residue,
-  (SELECT count(*) FROM public.sessioni) AS sessioni_residue;
+export interface QuadroQualitativo {
+  sezioni: QuadroSezione[];
+  percentualeCriticitaComplessiva: number | null;
+  etichetta: string;
+  coloreEtichetta: 'verde' | 'giallo' | 'rosso' | 'grigio';
+  criticitaStrutturaliAperte: { sezione: string; id: string; domanda: string }[];
+}
+
+function etichettaDaCriticita(
+  percentuale: number | null,
+  soglie: { solido: number; daRafforzare: number }
+): {
+  etichetta: string;
+  colore: 'verde' | 'giallo' | 'rosso' | 'grigio';
+} {
+  if (percentuale === null) return { etichetta: 'Non ancora valutabile', colore: 'grigio' };
+  if (percentuale === 0) return { etichetta: 'Nessuna criticità rilevata', colore: 'verde' };
+  if (percentuale <= soglie.solido)
+    return { etichetta: 'Piano solido, alcune aree di attenzione', colore: 'verde' };
+  if (percentuale <= soglie.daRafforzare)
+    return { etichetta: 'Piano da rafforzare su più punti', colore: 'giallo' };
+  return { etichetta: 'Criticità strutturali rilevanti', colore: 'rosso' };
+}
+
+export function calcolaQuadroQualitativo(
+  sezioniChecklist: SezioneChecklist[],
+  risposte: Record<string, RispostaPerCalcolo>,
+  pesiNumerici: Record<PesoDomanda, number> = PESO_NUMERICO,
+  soglie: { solido: number; daRafforzare: number } = { solido: 20, daRafforzare: 50 }
+): QuadroQualitativo {
+  const quadriSezione: QuadroSezione[] = [];
+  const criticitaStrutturaliAperte: { sezione: string; id: string; domanda: string }[] = [];
+
+  let puntiCriticitaTotali = 0;
+  let puntiMassimiTotali = 0;
+
+  for (const sezione of sezioniChecklist) {
+    let puntiCriticita = 0;
+    let puntiMassimi = 0;
+    let domandeRisposte = 0;
+    const strutturaliAperte: { id: string; domanda: string }[] = [];
+
+    for (const domanda of sezione.domande) {
+      const risposta = risposte[domanda.id]?.risposta;
+      if (risposta === null || risposta === undefined) continue;
+
+      domandeRisposte++;
+      const peso = pesiNumerici[domanda.peso as PesoDomanda];
+      puntiMassimi += peso;
+
+      if (risposta === false) {
+        puntiCriticita += peso;
+        if (domanda.peso === 'STRUTTURALE') {
+          strutturaliAperte.push({ id: domanda.id, domanda: domanda.domanda });
+          criticitaStrutturaliAperte.push({
+            sezione: `${sezione.numero}. ${sezione.titolo}`,
+            id: domanda.id,
+            domanda: domanda.domanda,
+          });
+        }
+      }
+    }
+
+    quadriSezione.push({
+      numero: sezione.numero,
+      titolo: sezione.titolo,
+      domandeRisposte,
+      domandeTotali: sezione.domande.length,
+      puntiCriticita,
+      puntiMassimi,
+      percentualeCriticita:
+        puntiMassimi > 0 ? Math.round((puntiCriticita / puntiMassimi) * 100) : null,
+      criticitaStrutturaliAperte: strutturaliAperte,
+    });
+
+    puntiCriticitaTotali += puntiCriticita;
+    puntiMassimiTotali += puntiMassimi;
+  }
+
+  const percentualeComplessiva =
+    puntiMassimiTotali > 0 ? Math.round((puntiCriticitaTotali / puntiMassimiTotali) * 100) : null;
+  const { etichetta, colore } = etichettaDaCriticita(percentualeComplessiva, soglie);
+
+  return {
+    sezioni: quadriSezione,
+    percentualeCriticitaComplessiva: percentualeComplessiva,
+    etichetta,
+    coloreEtichetta: colore,
+    criticitaStrutturaliAperte,
+  };
+}

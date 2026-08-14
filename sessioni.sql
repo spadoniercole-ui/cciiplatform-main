@@ -15,9 +15,17 @@ import {
   type SpazioPerScelta,
 } from '@/app/actions/spazi';
 import { Logo } from '@/components/brand/Logo';
-import packageJson from '../../package.json';
+import { APP_VERSION, PORTABLE_VERSION } from '@/lib/appVersion';
 
 const DASHBOARD_VALUE = '__dashboard__';
+
+// Versione mostrata in fondo alla pagina di login. Presa dalle costanti di
+// appVersion.ts — NON importando package.json, che (a) trascinerebbe l'intero
+// package.json nel bundle client e (b) fa sì che il resolver di webpack
+// legga i package.json come "directory description file", rompendo la build
+// se ne trova uno malformato nell'albero (es. uno spurio in src/).
+const ETICHETTA_VERSIONE =
+  process.env.NEXT_PUBLIC_PORTABLE === '1' ? `Portable v${PORTABLE_VERSION}` : `v${APP_VERSION}`;
 
 /** Il tracciato ECG del logo, ripetuto come filo conduttore sottile
  * lungo il bordo della schermata — un solo elemento di rischio
@@ -189,13 +197,13 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-              Nome utente (email per utenti)
+              Nome utente
             </label>
             <input
               type="text"
               value={utente}
               onChange={(e) => setUtente(e.target.value)}
-              placeholder="Inserisci username o email..."
+              placeholder="es. mario.rossi"
               autoComplete="username"
               className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 transition-shadow"
             />
@@ -234,7 +242,7 @@ export default function LoginPage() {
             Architettura Postgres dinamica per schema attiva
           </span>
           <span className="text-[9px] text-slate-300 font-mono block mt-1">
-            v{packageJson.version}
+            {ETICHETTA_VERSIONE}
           </span>
         </div>
       </div>

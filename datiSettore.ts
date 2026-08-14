@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { UserCog, AlertTriangle } from 'lucide-react';
 import { ottieniContestoAccessoSpazio, ottieniAdminSpazio } from '@/app/actions/spazi';
-import { RigeneraPasswordAdmin } from '@/components/spazi/RigeneraPasswordAdmin';
+import { AdminSpazioCard } from '@/components/spazi/AdminSpazioCard';
 import { UtentiManager } from '@/components/spazio/UtentiManager';
 
 // Utenti dello Spazio: l'Admin di Spazio (con rigenerazione password) più
@@ -48,18 +48,7 @@ export default async function UtentiSpazioPage({
         )}
 
         {risultatoAdmin.admins.map((admin) => (
-          <div key={admin.id} className="border border-slate-200 rounded-lg p-3">
-            <div className="font-bold text-slate-900 text-xs">
-              {admin.nome} {admin.cognome}
-            </div>
-            <div className="text-[11px] text-slate-500 font-mono mt-1">{admin.email}</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">{admin.cellulare}</div>
-            <RigeneraPasswordAdmin
-              nomeSchema={contesto.nomeSchema}
-              adminId={admin.id}
-              email={admin.email}
-            />
-          </div>
+          <AdminSpazioCard key={admin.id} nomeSchema={contesto.nomeSchema} admin={admin} />
         ))}
       </div>
 

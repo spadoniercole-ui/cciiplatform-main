@@ -162,7 +162,16 @@ export function UtentiManager({ nomeSchema }: Props) {
                   <div className="font-bold text-slate-900 text-xs">
                     {utente.nome} {utente.cognome}
                   </div>
-                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">{utente.email}</div>
+                  {utente.username && (
+                    <div className="text-[10px] text-slate-600 font-mono mt-0.5">
+                      <span className="text-slate-400">nome utente:</span> {utente.username}
+                    </div>
+                  )}
+                  {utente.email && (
+                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                      {utente.email}
+                    </div>
+                  )}
                   <div className="text-[10px] text-slate-400 mt-0.5">
                     {utente.tipologia === 'OPERATIVO' ? 'Operativo' : 'Consultatore'} ·{' '}
                     {utente.aziendeIds.length === 0
