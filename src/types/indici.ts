@@ -1,5 +1,6 @@
 // Tipo realmente usato da ModuloIndici.tsx (schermata "Dizionario Indici
-// Tassonomia XBRL").
+// Tassonomia XBRL"). Mancava del tutto: l'errore di compilazione era
+// silenziato da `ignoreBuildErrors: true` in next.config.mjs, ora rimosso.
 export interface IndiceXbrl {
   id: string;
   categoria: string;
