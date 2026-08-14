@@ -39,7 +39,3 @@ export const DOCUMENTI_CORREDO: MetaDocumentoCorredo[] = [
     sempre: false,
   },
 ];
-
-export function metaDocumentoCorredo(tipo: TipoDocumentoCorredo): MetaDocumentoCorredo {
-  return DOCUMENTI_CORREDO.find((d) => d.tipo === tipo) || DOCUMENTI_CORREDO[0];
-}

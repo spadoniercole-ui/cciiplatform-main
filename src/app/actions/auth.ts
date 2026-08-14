@@ -18,12 +18,6 @@ import { pool } from '@/lib/db';
 
 const DURATA_SESSIONE_ORE = 8;
 
-export interface WorkspaceDinamico {
-  id: string;
-  name: string;
-  type: 'system' | 'tenant';
-}
-
 /** Confronto a tempo costante, per non rivelare via timing quanti caratteri della password sono corretti. */
 function confrontoSicuro(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -56,7 +50,7 @@ async function creaSessione(
   const cookieStore = await cookies();
   cookieStore.set('session_token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' && process.env.PORTABLE !== '1',
     sameSite: 'lax',
     path: '/',
     expires: scadenza,
@@ -353,8 +347,4 @@ export async function eseguiLogout() {
     }
     return { success: true };
   }
-}
-
-export async function ottieniListaWorkspace(): Promise<WorkspaceDinamico[]> {
-  return [{ id: 'CENTRAL_CONSOLE', name: '👑 CONSOLE CENTRALE superadmin', type: 'system' }];
 }

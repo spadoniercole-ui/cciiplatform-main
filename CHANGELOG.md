@@ -93,6 +93,55 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.108.0 — 2026-08-10 (centocinquantottesima consegna)
+
+**Cloud — ingegnerizzazione: rimozione del codice morto (vecchia architettura, rotte legacy, dipendenze inutilizzate)**
+
+Pulizia strutturale, senza cambiamenti funzionali per l'utente. Partendo
+dalla 0.107.0 ho ricostruito il grafo degli import dai punti d'ingresso
+reali (page/layout/route, middleware, instrumentation, test) e rimosso
+tutto ciò che non è raggiungibile — codice "lettera morta" che appesantisce
+il progetto e rischia di riemergere nei momenti sbagliati. Rete di
+sicurezza: type-check, build di produzione (lint incluso) e 67/67 test
+verdi dopo ogni lotto; alla fine 0 file irraggiungibili residui.
+
+Numeri: **273 → 218 file** (−55), **~47.600 → ~40.500 righe** (−7.100, circa
+−15%), **dipendenze runtime 27 → 19** (−8).
+
+- **Vecchia architettura single-tenant (50 file)**: la UI kit non più usata
+  (`components/ui/*`: Badge, Modal, Toggle, GlassCard, EmptyState,
+  LoadingSkeleton, AppLogo, AppIcon, AppImage), i vecchi moduli
+  (ModuloProfili/Utenti/Spazi, GestioneArchitettura, CndcecDashboard/Matrice,
+  XBRLViewer, AppLayout, LoginPage, Topbar, XbrlUpload*), i vecchi motori
+  (`cciiEngine`, `evaluator`, `calculators`, `financialEngine`,
+  `licenseEngine`, `thresholds`), tipi e costanti orfani (`types.ts`,
+  `src/types/*`, `lib/types.ts`, `Constants.ts`, `theme.ts`), hook morti
+  (`usePlatformData`, `useIndici`), `SoglieConfig`, `db/migrator`, `db/seed`
+  (stub), action morte (`licenseActions`, `simulazione.ts`), i `Tab*` legacy,
+  `LicenseForm`.
+- **3 rotte legacy placeholder**: `/ccii-dashboard` (coi suoi `LicenseManager`
+  e `SystemParamsManager`), `/setup-licenza`, `/wizard-setup` — pagine con
+  stili inline, residui del vecchio setup, non raggiunte da alcun link
+  interno.
+- **Cruft**: `src/app/schemas.py` (un file Python finito in un'app Next) e
+  cartelle vuote (`src/lib/scenario`, e quelle rimaste vuote dopo le
+  rimozioni).
+- **8 dipendenze npm mai importate**: `@vercel/postgres`,
+  `@dhiwise/component-tagger`, `@google/genai`, `openai`, `react-hook-form`,
+  `@tailwindcss/forms`, `@tailwindcss/typography`, `@heroicons/react`.
+  `package-lock.json` riallineato. (`jose` resta: la usa il middleware per il
+  JWT; `drizzle-kit`, `recharts`, `sonner`, `tailwindcss-animate` restano,
+  sono in uso.)
+- **2 funzioni esportate mai usate** rimosse da file vivi:
+  `ottieniListaWorkspace` (+ l'interfaccia `WorkspaceDinamico`, usata solo da
+  lei) in `auth.ts`, e `metaDocumentoCorredo` in `documentiCorredo/costanti.ts`.
+- **Tenuta di proposito**: `importaDebitiEnteExcel` in
+  `debitiEnte/excelDebitiEnte.ts`, pur senza chiamanti, riporta un commento
+  esplicito che la dichiara shim di retro-compatibilità per i dati inseriti
+  prima dell'architrave — rimossa contro la sua stessa intenzione sarebbe un
+  rischio. Segnalata: da agganciare all'import Excel o da eliminare in modo
+  deliberato.
+
 ## 0.107.0 — 2026-08-10 (centocinquantasettesima consegna)
 
 **Cloud — la ricevibilità è solo dell'Ente: rimossa da tutto il percorso Redigente**
