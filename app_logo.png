@@ -1,0 +1,13 @@
+Metti in QUESTA cartella il file  node.exe  (Windows x64, versione LTS).
+
+Dove prenderlo:
+  - Vai su https://nodejs.org
+  - Scarica il pacchetto "Windows Binary (.zip)" a 64 bit (LTS)
+  - Aprilo ed estrai SOLO il file  node.exe
+  - Copialo qui, accanto a questo file di testo.
+
+Serve per far girare l'app su PC dove Node NON e' installato.
+Se sul PC Node e' gia' installato (sistema), questa cartella puo' restare vuota:
+il launcher usera' automaticamente quello di sistema.
+
+Puoi eliminare questo file .txt dopo aver messo node.exe.
