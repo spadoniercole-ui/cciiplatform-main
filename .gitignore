@@ -1,0 +1,52 @@
+# ============================================================
+#  .gitignore — CCIIPlatform
+#  Non versionare mai: dipendenze, build, cache, segreti, output.
+# ============================================================
+
+# Dipendenze
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+
+# Build e cache di Next.js (QUESTI sono i file enormi che bloccavano il push)
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# Edizione portable: cartella prodotta dal build, non va versionata
+/portable-dist/
+# node.exe eventualmente messo nel template della portable
+/portable/template/node/
+
+# Database locale cifrato dell'edizione portable
+/dati/
+*.db.enc
+
+# Variabili d'ambiente / segreti (MAI su GitHub)
+.env
+.env.*
+!.env.example
+
+# Deploy / piattaforme
+/.vercel
+/.netlify
+
+# Log e debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Test / coverage
+/coverage
+
+# Sistema operativo / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
