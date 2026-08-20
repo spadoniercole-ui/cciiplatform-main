@@ -20,7 +20,10 @@ import {
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
-const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 150 * 1000 }) : null;
+// maxRetries: 1 — con timeout a 150s, i due retry di default rischiano di
+// sforare il limite della funzione serverless e farla uccidere da Vercel
+// (spinner infinito lato browser). Stesso principio dello screening ENTE.
+const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 150 * 1000, maxRetries: 1 }) : null;
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);

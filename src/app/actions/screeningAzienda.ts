@@ -22,7 +22,19 @@ const apiKey = process.env.ANTHROPIC_API_KEY;
 // errore leggibile (gestito dal try/catch sotto) che essere uccisa
 // dall'esterno da Vercel — quel tipo di interruzione non dà mai un
 // messaggio comprensibile al browser, solo una connessione interrotta.
-const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 150 * 1000 }) : null;
+// maxRetries: 1 (non il default 2). Con due chiamate in parallelo e un
+// limite di funzione di 180s, due retry a 150s l'uno sforerebbero il
+// budget e la funzione verrebbe uccisa da Vercel PRIMA di rispondere —
+// il browser resterebbe appeso (spinner infinito). Un solo retry copre il
+// sovraccarico transitorio senza rischiare lo sforamento; a difesa
+// ulteriore c'è comunque un AbortController con scadenza esplicita.
+const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 150 * 1000, maxRetries: 1 }) : null;
+
+// Scadenza complessiva della generazione screening, sotto il maxDuration=180s
+// della pagina: se le chiamate AI non rientrano, si abortisce e si restituisce
+// un errore leggibile invece di far uccidere la funzione da Vercel (che al
+// browser arriva come connessione interrotta → spinner infinito).
+const SCADENZA_GENERAZIONE_MS = 150 * 1000;
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -355,54 +367,83 @@ Scrivi una relazione con questi paragrafi, in prosa, non elenchi puntati:
 
 Non dare un giudizio legale definitivo — è una base istruttoria per chi dovrà poi leggere la proposta, non un responso.`;
 
-    // Le due chiamate leggono lo stesso documento ma non dipendono
-    // l'una dall'altra — lanciate in parallelo invece che in sequenza,
-    // il tempo di attesa complessivo è quello della più lenta delle
-    // due, non la somma di entrambe.
-    const [response, responseRelazione] = await Promise.all([
-      anthropic.messages.create({
-        model: 'claude-sonnet-5',
-        // Fino a 20 domande, ciascuna con id/domanda/peso/aCuraDi
-        // dentro sezioni annidate — con 3000 token il JSON veniva
-        // troncato a metà (parsing falliva sempre): margine più ampio.
-        max_tokens: 6000,
-        // Senza questo, il ragionamento esteso può consumare l'intero
-        // budget di token prima di produrre l'output — la causa più
-        // probabile, retroattivamente, del troncamento originale.
-        thinking: { type: 'disabled' },
-        messages: [
+    // Le due chiamate leggono lo stesso documento ma non dipendono l'una
+    // dall'altra — lanciate in parallelo, il tempo d'attesa è quello della
+    // più lenta, non la somma. Il blocco documento è marcato con
+    // cache_control: un eventuale retry (o una ri-generazione entro pochi
+    // minuti) riusa il PDF già elaborato invece di ri-ingerirlo da capo.
+    const bloccoDocumento = {
+      type: 'document' as const,
+      source: {
+        type: 'base64' as const,
+        media_type: 'application/pdf' as const,
+        data: visuraBase64,
+      },
+      title: nomeFileVisura,
+      cache_control: { type: 'ephemeral' as const },
+    };
+
+    // AbortController con scadenza esplicita: se le chiamate non rientrano
+    // nel budget, si abortisce e si restituisce un errore leggibile invece
+    // di lasciare che Vercel uccida la funzione (spinner infinito lato UI).
+    const controller = new AbortController();
+    const timerScadenza = setTimeout(() => controller.abort(), SCADENZA_GENERAZIONE_MS);
+
+    let esiti: PromiseSettledResult<Anthropic.Messages.Message>[];
+    try {
+      // allSettled invece di all: una relazione lenta o fallita non deve
+      // buttare via anche il questionario (l'output essenziale).
+      esiti = await Promise.allSettled([
+        anthropic.messages.create(
           {
-            role: 'user',
-            content: [
-              {
-                type: 'document',
-                source: { type: 'base64', media_type: 'application/pdf', data: visuraBase64 },
-                title: nomeFileVisura,
-              },
-              { type: 'text', text: promptTestuale },
+            model: 'claude-sonnet-5',
+            // Fino a 20 domande, ciascuna con id/domanda/peso/aCuraDi dentro
+            // sezioni annidate — con 3000 token il JSON veniva troncato:
+            // margine più ampio.
+            max_tokens: 6000,
+            // Senza questo, il ragionamento esteso può consumare l'intero
+            // budget di token prima di produrre l'output.
+            thinking: { type: 'disabled' },
+            messages: [
+              { role: 'user', content: [bloccoDocumento, { type: 'text', text: promptTestuale }] },
             ],
           },
-        ],
-      }),
-      anthropic.messages.create({
-        model: 'claude-sonnet-5',
-        max_tokens: 3000,
-        thinking: { type: 'disabled' },
-        messages: [
+          { signal: controller.signal }
+        ),
+        anthropic.messages.create(
           {
-            role: 'user',
-            content: [
-              {
-                type: 'document',
-                source: { type: 'base64', media_type: 'application/pdf', data: visuraBase64 },
-                title: nomeFileVisura,
-              },
-              { type: 'text', text: promptRelazione },
+            model: 'claude-sonnet-5',
+            max_tokens: 3000,
+            thinking: { type: 'disabled' },
+            messages: [
+              { role: 'user', content: [bloccoDocumento, { type: 'text', text: promptRelazione }] },
             ],
           },
-        ],
-      }),
-    ]);
+          { signal: controller.signal }
+        ),
+      ]);
+    } finally {
+      clearTimeout(timerScadenza);
+    }
+
+    const esitoQuestionario = esiti[0];
+    const esitoRelazione = esiti[1];
+
+    // Il questionario è l'output essenziale: se fallisce, si ferma qui.
+    if (esitoQuestionario.status === 'rejected') {
+      const scaduto = controller.signal.aborted;
+      console.error(
+        '[generaScreeningAziendaAction] Generazione questionario fallita:',
+        esitoQuestionario.reason
+      );
+      return {
+        success: false,
+        error: scaduto
+          ? 'La generazione ha superato il tempo massimo disponibile — riprova. Se il fascicolo storico è molto voluminoso, carica una versione più leggera (solo le pagine rilevanti).'
+          : "L'assistente non è riuscito a generare il questionario — riprova tra poco.",
+      };
+    }
+    const response = esitoQuestionario.value;
 
     const testoGrezzo = response.content
       .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
@@ -443,10 +484,15 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
       return { success: false, error: "L'assistente non ha generato nessuna domanda — riprova." };
     }
 
-    const relazioneTesto = responseRelazione.content
-      .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('\n');
+    // La relazione è secondaria: se la sua chiamata è fallita o scaduta,
+    // si salva comunque il questionario con una nota al posto della relazione.
+    const relazioneTesto =
+      esitoRelazione.status === 'fulfilled'
+        ? esitoRelazione.value.content
+            .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
+            .map((b) => b.text)
+            .join('\n')
+        : 'Relazione di inquadramento non disponibile (la generazione non è riuscita a completarla in tempo). Puoi rigenerare lo screening per riprovare.';
 
     await pool.query(
       `INSERT INTO "${nomeSchema}".azienda_screening (azienda_id, direttrici_usate, sezioni, relazione_testo, nome_file_visura, generato_il)
