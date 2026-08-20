@@ -28,6 +28,12 @@ import {
   MAX_ANNI_STORICO_LIMITE,
   normalizzaAnniStorico,
 } from '@/lib/parametriPeriodi';
+import {
+  SCREENING_MAX_TOKENS_DEFAULT,
+  SCREENING_MAX_TOKENS_MIN,
+  SCREENING_MAX_TOKENS_LIMITE,
+  normalizzaScreeningMaxTokens,
+} from '@/lib/parametriGenerazione';
 
 export interface IndiceMaster {
   id: number;
@@ -633,6 +639,75 @@ export async function aggiornaAnniStoricoMaxAction(
     return { success: true };
   } catch (error: any) {
     console.error('[aggiornaAnniStoricoMaxAction] Errore:', error);
+    return { success: false, error: `Impossibile salvare: ${error.message || error}` };
+  }
+}
+
+/** Tetto di token in output per il questionario di Screening generato
+ * dall'AI (per-spazio, con default di sistema). Alzarlo evita il
+ * troncamento del JSON quando le direttrici/domande sono molte. */
+export async function ottieniScreeningMaxTokens(
+  nomeSchema: string
+): Promise<{ success: boolean; maxTokens: number; personalizzato: boolean; error?: string }> {
+  try {
+    if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
+      return {
+        success: false,
+        maxTokens: SCREENING_MAX_TOKENS_DEFAULT,
+        personalizzato: false,
+        error: 'Nome schema non valido.',
+      };
+    }
+    await assicuraTabelleParametriSpazio(nomeSchema);
+    const risultato = await pool.query(
+      `SELECT screening_max_tokens FROM "${nomeSchema}".parametri_visualizzazione WHERE id = 1`
+    );
+    const grezzo: number | null = risultato.rows[0]?.screening_max_tokens ?? null;
+    return {
+      success: true,
+      maxTokens: normalizzaScreeningMaxTokens(grezzo),
+      personalizzato: grezzo !== null,
+    };
+  } catch (error: any) {
+    console.error('[ottieniScreeningMaxTokens] Errore:', error);
+    return {
+      success: false,
+      maxTokens: SCREENING_MAX_TOKENS_DEFAULT,
+      personalizzato: false,
+      error: `Impossibile leggere il parametro: ${error.message || error}`,
+    };
+  }
+}
+
+/** Imposta il tetto di token per-spazio. `maxTokens = null` azzera
+ * l'override e torna al default di sistema. Fuori intervallo → rifiutato. */
+export async function aggiornaScreeningMaxTokensAction(
+  nomeSchema: string,
+  maxTokens: number | null
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
+      return { success: false, error: 'Nome schema non valido.' };
+    }
+    if (
+      maxTokens !== null &&
+      (maxTokens < SCREENING_MAX_TOKENS_MIN || maxTokens > SCREENING_MAX_TOKENS_LIMITE)
+    ) {
+      return {
+        success: false,
+        error: `Il tetto di token deve essere tra ${SCREENING_MAX_TOKENS_MIN} e ${SCREENING_MAX_TOKENS_LIMITE}.`,
+      };
+    }
+    await assicuraTabelleParametriSpazio(nomeSchema);
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".parametri_visualizzazione (id, screening_max_tokens)
+       VALUES (1, $1)
+       ON CONFLICT (id) DO UPDATE SET screening_max_tokens = EXCLUDED.screening_max_tokens`,
+      [maxTokens]
+    );
+    return { success: true };
+  } catch (error: any) {
+    console.error('[aggiornaScreeningMaxTokensAction] Errore:', error);
     return { success: false, error: `Impossibile salvare: ${error.message || error}` };
   }
 }

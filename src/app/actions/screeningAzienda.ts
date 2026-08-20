@@ -8,7 +8,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { del, get } from '@/lib/blobStore';
 import { pool } from '@/lib/db';
-import { assicuraTabelleScreeningAzienda } from '@/db/provision';
+import { assicuraTabelleScreeningAzienda, assicuraTabelleParametriSpazio } from '@/db/provision';
+import { normalizzaScreeningMaxTokens } from '@/lib/parametriGenerazione';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 import { raggruppaPerTipoDebito } from '@/lib/debitiEnte/tipoDebito';
@@ -241,6 +242,22 @@ export async function generaScreeningAziendaAction(
 
     await assicuraTabelleScreeningAzienda(nomeSchema);
 
+    // Tetto di token in output per il questionario: parametro per-spazio con
+    // default di sistema (Parametri di Spazio → Visualizzazione). Alzabile
+    // quando le direttrici sono molte e il JSON verrebbe altrimenti troncato.
+    let maxTokensQuestionario: number;
+    try {
+      await assicuraTabelleParametriSpazio(nomeSchema);
+      const paramRis = await pool.query(
+        `SELECT screening_max_tokens FROM "${nomeSchema}".parametri_visualizzazione WHERE id = 1`
+      );
+      maxTokensQuestionario = normalizzaScreeningMaxTokens(
+        paramRis.rows[0]?.screening_max_tokens ?? null
+      );
+    } catch {
+      maxTokensQuestionario = normalizzaScreeningMaxTokens(null);
+    }
+
     const [direttriciRis, storicoRis, debitiRis] = await Promise.all([
       ottieniDirettriciEnte(nomeSchema),
       ottieniStoricoXbrlAzienda(nomeSchema, aziendaId),
@@ -397,10 +414,11 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
         anthropic.messages.create(
           {
             model: 'claude-sonnet-5',
-            // Fino a 20 domande, ciascuna con id/domanda/peso/aCuraDi dentro
-            // sezioni annidate — con 3000 token il JSON veniva troncato:
-            // margine più ampio.
-            max_tokens: 6000,
+            // Tetto di token in output configurabile per-spazio (default di
+            // sistema in parametriGenerazione.ts): con un valore troppo basso
+            // il JSON del questionario veniva troncato a metà quando le
+            // direttrici/domande erano molte.
+            max_tokens: maxTokensQuestionario,
             // Senza questo, il ragionamento esteso può consumare l'intero
             // budget di token prima di produrre l'output.
             thinking: { type: 'disabled' },
