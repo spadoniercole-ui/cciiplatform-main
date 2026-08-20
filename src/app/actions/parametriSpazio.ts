@@ -33,6 +33,15 @@ import {
   SCREENING_MAX_TOKENS_MIN,
   SCREENING_MAX_TOKENS_LIMITE,
   normalizzaScreeningMaxTokens,
+  SCREENING_MAX_DOMANDE_MIN,
+  SCREENING_MAX_DOMANDE_LIMITE,
+  SCREENING_MAX_DIRETTRICI_MIN,
+  SCREENING_MAX_DIRETTRICI_LIMITE,
+  SCREENING_MAX_PRODOTTI_MIN,
+  SCREENING_MAX_PRODOTTI_LIMITE,
+  normalizzaMaxDomande,
+  normalizzaMaxDirettrici,
+  normalizzaMaxProdotti,
 } from '@/lib/parametriGenerazione';
 
 export interface IndiceMaster {
@@ -708,6 +717,101 @@ export async function aggiornaScreeningMaxTokensAction(
     return { success: true };
   } catch (error: any) {
     console.error('[aggiornaScreeningMaxTokensAction] Errore:', error);
+    return { success: false, error: `Impossibile salvare: ${error.message || error}` };
+  }
+}
+
+export interface LimitiGenerazioneScreening {
+  maxDomande: number;
+  maxDirettrici: number;
+  maxProdotti: number;
+}
+
+/** Legge i limiti quantitativi della generazione Screening per-spazio
+ * (max domande, max direttrici, max prodotti per direttrice), con fallback
+ * ai default di sistema. */
+export async function ottieniLimitiScreening(
+  nomeSchema: string
+): Promise<{ success: boolean; limiti: LimitiGenerazioneScreening; error?: string }> {
+  const defaults: LimitiGenerazioneScreening = {
+    maxDomande: normalizzaMaxDomande(null),
+    maxDirettrici: normalizzaMaxDirettrici(null),
+    maxProdotti: normalizzaMaxProdotti(null),
+  };
+  try {
+    if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
+      return { success: false, limiti: defaults, error: 'Nome schema non valido.' };
+    }
+    await assicuraTabelleParametriSpazio(nomeSchema);
+    const r = await pool.query(
+      `SELECT screening_max_domande, screening_max_direttrici, screening_max_prodotti
+         FROM "${nomeSchema}".parametri_visualizzazione WHERE id = 1`
+    );
+    const row = r.rows[0] || {};
+    return {
+      success: true,
+      limiti: {
+        maxDomande: normalizzaMaxDomande(row.screening_max_domande ?? null),
+        maxDirettrici: normalizzaMaxDirettrici(row.screening_max_direttrici ?? null),
+        maxProdotti: normalizzaMaxProdotti(row.screening_max_prodotti ?? null),
+      },
+    };
+  } catch (error: any) {
+    console.error('[ottieniLimitiScreening] Errore:', error);
+    return {
+      success: false,
+      limiti: defaults,
+      error: `Impossibile leggere: ${error.message || error}`,
+    };
+  }
+}
+
+/** Imposta i tre limiti insieme. Ogni valore è clampato nel proprio
+ * intervallo; valori fuori range vengono rifiutati con messaggio chiaro. */
+export async function aggiornaLimitiScreeningAction(
+  nomeSchema: string,
+  limiti: LimitiGenerazioneScreening
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
+      return { success: false, error: 'Nome schema non valido.' };
+    }
+    const { maxDomande, maxDirettrici, maxProdotti } = limiti;
+    if (maxDomande < SCREENING_MAX_DOMANDE_MIN || maxDomande > SCREENING_MAX_DOMANDE_LIMITE) {
+      return {
+        success: false,
+        error: `Il numero di domande deve essere tra ${SCREENING_MAX_DOMANDE_MIN} e ${SCREENING_MAX_DOMANDE_LIMITE}.`,
+      };
+    }
+    if (
+      maxDirettrici < SCREENING_MAX_DIRETTRICI_MIN ||
+      maxDirettrici > SCREENING_MAX_DIRETTRICI_LIMITE
+    ) {
+      return {
+        success: false,
+        error: `Il numero di direttrici deve essere tra ${SCREENING_MAX_DIRETTRICI_MIN} e ${SCREENING_MAX_DIRETTRICI_LIMITE}.`,
+      };
+    }
+    if (maxProdotti < SCREENING_MAX_PRODOTTI_MIN || maxProdotti > SCREENING_MAX_PRODOTTI_LIMITE) {
+      return {
+        success: false,
+        error: `Il numero di prodotti per direttrice deve essere tra ${SCREENING_MAX_PRODOTTI_MIN} e ${SCREENING_MAX_PRODOTTI_LIMITE}.`,
+      };
+    }
+    await assicuraTabelleParametriSpazio(nomeSchema);
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".parametri_visualizzazione
+         (id, screening_max_domande, screening_max_direttrici, screening_max_prodotti)
+       VALUES (1, $1, $2, $3)
+       ON CONFLICT (id) DO UPDATE SET
+         screening_max_domande = EXCLUDED.screening_max_domande,
+         screening_max_direttrici = EXCLUDED.screening_max_direttrici,
+         screening_max_prodotti = EXCLUDED.screening_max_prodotti`,
+      [maxDomande, maxDirettrici, maxProdotti]
+    );
+    return { success: true };
+  } catch (error: any) {
+    console.error('[aggiornaLimitiScreeningAction] Errore:', error);
     return { success: false, error: `Impossibile salvare: ${error.message || error}` };
   }
 }

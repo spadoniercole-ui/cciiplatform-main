@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Check } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniConteggioScreeningPendente } from '@/app/actions/screeningAzienda';
+import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
+import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 
 const SOTTO_NAV = [
   { id: '', label: 'Anagrafica' },
@@ -39,11 +41,32 @@ export default async function AziendaLayout({
   }
   const azienda = risultato.azienda;
 
-  const pendenteScreening = await ottieniConteggioScreeningPendente(
-    contesto.nomeSchema,
-    Number(aziendaId)
-  );
+  const aziendaNum = Number(aziendaId);
+  const isEnte = contesto.tipoSpazio === 'ENTE';
+
+  // Stato di completamento delle varie sezioni, per colorare in verde le
+  // funzioni con esito positivo. Query leggere, tutte in parallelo per non
+  // allungare il caricamento. Per gli spazi non-ENTE la Posizione Ente non
+  // esiste, quindi non la si interroga.
+  const [pendenteScreening, anagraficaEnteRis, debitiRis] = await Promise.all([
+    ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
+    isEnte ? ottieniAnagraficaEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
+    isEnte ? ottieniDebitiEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
+  ]);
   const domandeMancanti = pendenteScreening.totali - pendenteScreening.risposte;
+
+  const anagraficaEnteCompilata = !!anagraficaEnteRis?.dati?.idEnte;
+  const haDebiti = (debitiRis?.righe?.length ?? 0) > 0;
+
+  // Mappa id-voce → completato. Anagrafica azienda: presente (siamo qui solo
+  // se esiste). Posizione Ente: anagrafica ente + almeno un debito. Screening:
+  // questionario generato. Check List: tutte le domande risposte.
+  const completato: Record<string, boolean> = {
+    '': true,
+    'posizione-ente': anagraficaEnteCompilata && haDebiti,
+    screening: pendenteScreening.esiste,
+    checklist: pendenteScreening.esiste && pendenteScreening.totali > 0 && domandeMancanti === 0,
+  };
 
   const base = `/spazio/${codice}/aziende/${aziendaId}`;
 
@@ -102,9 +125,16 @@ export default async function AziendaLayout({
           <Link
             key={voce.id}
             href={voce.id ? `${base}/${voce.id}` : base}
-            className="relative px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap bg-white border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-colors shrink-0"
+            className={`relative px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border transition-colors shrink-0 ${
+              completato[voce.id]
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:border-emerald-400'
+                : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
+            }`}
           >
-            {voce.label}
+            <span className="inline-flex items-center gap-1">
+              {completato[voce.id] && <Check className="w-3 h-3 shrink-0" />}
+              {voce.label}
+            </span>
             {voce.id === 'checklist' && domandeMancanti > 0 && (
               <span
                 className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-amber-500 text-white text-[9px] font-black rounded-full"

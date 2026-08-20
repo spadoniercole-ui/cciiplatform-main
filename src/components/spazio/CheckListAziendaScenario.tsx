@@ -8,11 +8,12 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ListChecks, CheckCircle2, Sparkles, Wand2 } from 'lucide-react';
+import { ListChecks, CheckCircle2, Sparkles, Wand2, Pencil, Check, X } from 'lucide-react';
 import {
   ottieniScreeningAzienda,
   salvaRispostaScreeningAction,
   correggiPolaritaScreeningAction,
+  aggiornaTestoDomandaScreeningAction,
   type StatoScreeningAzienda,
 } from '@/app/actions/screeningAzienda';
 
@@ -27,6 +28,10 @@ export function CheckListAziendaScenario({ nomeSchema, aziendaId, codice }: Prop
   const [caricamento, setCaricamento] = useState(true);
   const [correzioneInCorso, setCorrezioneInCorso] = useState(false);
   const [esitoCorrezione, setEsitoCorrezione] = useState<string | null>(null);
+  // Modifica inline del testo di una domanda (icona matita)
+  const [domandaInModifica, setDomandaInModifica] = useState<string | null>(null);
+  const [testoModifica, setTestoModifica] = useState('');
+  const [salvataggioTesto, setSalvataggioTesto] = useState(false);
 
   const carica = async () => {
     setCaricamento(true);
@@ -63,12 +68,39 @@ export function CheckListAziendaScenario({ nomeSchema, aziendaId, codice }: Prop
 
   const handleRispondi = async (domandaId: string, risposta: boolean) => {
     if (!stato) return;
+    // Toggle-off: se si riclicca la risposta già selezionata, la si annulla
+    // (torna a "nessuna risposta" = null), senza cancellare la riga.
+    const corrente = stato.risposte.find((r) => r.domandaId === domandaId)?.risposta;
+    const nuovoValore: boolean | null = corrente === risposta ? null : risposta;
+
     const nuoveRisposte = stato.risposte.filter((r) => r.domandaId !== domandaId);
-    nuoveRisposte.push({ domandaId, risposta, note: null });
+    nuoveRisposte.push({ domandaId, risposta: nuovoValore, note: null });
     setStato({ ...stato, risposte: nuoveRisposte });
-    await salvaRispostaScreeningAction(nomeSchema, aziendaId, domandaId, risposta, null);
+    await salvaRispostaScreeningAction(nomeSchema, aziendaId, domandaId, nuovoValore, null);
     const screeningRis = await ottieniScreeningAzienda(nomeSchema, aziendaId);
     if (screeningRis.success) setStato(screeningRis.stato);
+  };
+
+  const avviaModificaDomanda = (domandaId: string, testoCorrente: string) => {
+    setDomandaInModifica(domandaId);
+    setTestoModifica(testoCorrente);
+  };
+
+  const salvaModificaDomanda = async () => {
+    if (!domandaInModifica || !testoModifica.trim()) return;
+    setSalvataggioTesto(true);
+    const risultato = await aggiornaTestoDomandaScreeningAction(
+      nomeSchema,
+      aziendaId,
+      domandaInModifica,
+      testoModifica.trim()
+    );
+    if (risultato.success) {
+      setDomandaInModifica(null);
+      setTestoModifica('');
+      await carica();
+    }
+    setSalvataggioTesto(false);
   };
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
@@ -170,7 +202,50 @@ export function CheckListAziendaScenario({ nomeSchema, aziendaId, codice }: Prop
                     key={d.id}
                     className="flex items-center justify-between gap-3 border-b border-slate-50 pb-2 last:border-0"
                   >
-                    <span className="text-xs text-slate-700 flex-1">{d.domanda}</span>
+                    {domandaInModifica === d.id ? (
+                      <div className="flex-1 flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={testoModifica}
+                          onChange={(e) => setTestoModifica(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') salvaModificaDomanda();
+                            if (e.key === 'Escape') setDomandaInModifica(null);
+                          }}
+                          autoFocus
+                          className="flex-1 text-xs px-2 py-1 border border-blue-300 rounded text-slate-900 outline-none focus:border-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={salvaModificaDomanda}
+                          disabled={salvataggioTesto || !testoModifica.trim()}
+                          className="p-1 text-emerald-600 hover:text-emerald-800 disabled:opacity-40"
+                          title="Salva"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDomandaInModifica(null)}
+                          className="p-1 text-slate-400 hover:text-slate-600"
+                          title="Annulla"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-700 flex-1 flex items-center gap-1.5 group">
+                        {d.domanda}
+                        <button
+                          type="button"
+                          onClick={() => avviaModificaDomanda(d.id, d.domanda)}
+                          className="text-slate-300 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          title="Modifica il testo della domanda"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </span>
+                    )}
                     <div className="flex gap-1.5 shrink-0">
                       <button
                         type="button"

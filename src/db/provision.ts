@@ -452,6 +452,17 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.parametri_visualizzazione ADD COLUMN IF NOT EXISTS screening_max_tokens INTEGER`
   );
+  // Limiti quantitativi della generazione Screening (vedi
+  // src/lib/parametriGenerazione.ts). NULL = default di sistema.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.parametri_visualizzazione ADD COLUMN IF NOT EXISTS screening_max_domande INTEGER`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.parametri_visualizzazione ADD COLUMN IF NOT EXISTS screening_max_direttrici INTEGER`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.parametri_visualizzazione ADD COLUMN IF NOT EXISTS screening_max_prodotti INTEGER`
+  );
 
   // Quali tab del motore XBRL (Indici CNDCEC, Altri Indici, Situazione
   // Debitoria, Andamento Storico) l'Admin di Spazio vuole attive
@@ -1017,6 +1028,13 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
   // Data — generica (scadenza, notifica, emissione: il significato lo
   // sa l'ente che configura l'architrave, non serve saperlo qui).
   await eseguiDdlTenant(sql`ALTER TABLE ${s}.debiti_ente ADD COLUMN IF NOT EXISTS data DATE`);
+  // Colonne "extra": qualunque colonna del file che l'operatore mappa al
+  // ruolo "extra" viene salvata qui, chiave = intestazione originale. Così
+  // se si mappano 10 colonne, tutte e 10 vengono caricate — anche quelle
+  // che non rientrano nei campi semantici (voce/importo/tipo/nota/data).
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_ente ADD COLUMN IF NOT EXISTS dati_extra JSONB`
+  );
 
   // Migrazione dati "best effort", una tantum: per ogni azienda, se la
   // nuova tabella è ancora vuota, copia TUTTE le righe dello scenario

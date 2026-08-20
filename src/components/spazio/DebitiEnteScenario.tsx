@@ -700,6 +700,7 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
                     <option value="tipo">Tipo (classificazione del debito)</option>
                     <option value="nota">Nota</option>
                     <option value="data">Data</option>
+                    <option value="extra">Colonna extra (salva com&apos;è)</option>
                   </select>
                 </div>
                 {!usaTipoFisso &&
@@ -854,12 +855,28 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
                   <td className="p-3">
                     <span
                       className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-700"
-                      title={etichettaTipoDebito(r.tipo, mappaEtichette)}
+                      title={r.tipo}
                     >
-                      {r.tipo}
+                      {etichettaTipoDebito(r.tipo, mappaEtichette)}
                     </span>
                   </td>
-                  <td className="p-3 text-slate-500 text-[11px]">{r.note || '—'}</td>
+                  <td className="p-3 text-slate-500 text-[11px]">
+                    {r.note || '—'}
+                    {r.datiExtra && Object.keys(r.datiExtra).length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {Object.entries(r.datiExtra).map(([k, v]) => (
+                          <span
+                            key={k}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 text-[10px] text-slate-600"
+                            title={`${k}: ${v}`}
+                          >
+                            <span className="text-slate-400">{k}:</span>
+                            <span className="font-medium text-slate-700">{v}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="p-3">
                     <button
                       type="button"

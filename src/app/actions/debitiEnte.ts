@@ -26,6 +26,8 @@ export interface RigaDebitoEnte {
   note: string | null;
   /** Opzionale — generica (scadenza, notifica, emissione: il significato lo sa chi ha configurato l'architrave). */
   data: string | null;
+  /** Colonne extra mappate dall'operatore (chiave = intestazione originale del file). null/vuoto se nessuna. */
+  datiExtra: Record<string, string> | null;
 }
 
 export interface DatiRigaDebitoEnte {
@@ -35,6 +37,8 @@ export interface DatiRigaDebitoEnte {
   tipo: TipoDebitoEnte;
   note: string | null;
   data: string | null;
+  /** Colonne extra (chiave = intestazione originale). Opzionale: l'inserimento manuale non ne ha. */
+  datiExtra?: Record<string, string> | null;
 }
 
 export interface RisultatoElencoDebitiEnte {
@@ -54,7 +58,7 @@ export async function ottieniDebitiEnte(
     await assicuraTabellaDebitiEnte(nomeSchema);
 
     const risultato = await pool.query(
-      `SELECT id, azienda_id, voce, importo, importo_versato, tipo, note, data
+      `SELECT id, azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra
        FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1 ORDER BY id ASC`,
       [aziendaId]
     );
@@ -70,6 +74,10 @@ export async function ottieniDebitiEnte(
         tipo: r.tipo as TipoDebitoEnte,
         note: r.note,
         data: r.data ? new Date(r.data).toISOString().slice(0, 10) : null,
+        datiExtra:
+          r.dati_extra && typeof r.dati_extra === 'object' && Object.keys(r.dati_extra).length > 0
+            ? (r.dati_extra as Record<string, string>)
+            : null,
       })),
     };
   } catch (error: any) {
@@ -101,9 +109,13 @@ export async function aggiungiRigaDebitoEnteAction(
       return { success: false, error: "L'importo non può essere negativo." };
     }
     await assicuraTabellaDebitiEnte(nomeSchema);
+    const datiExtra =
+      dati.datiExtra && Object.keys(dati.datiExtra).length > 0
+        ? JSON.stringify(dati.datiExtra)
+        : null;
     await pool.query(
-      `INSERT INTO "${nomeSchema}".debiti_ente (azienda_id, voce, importo, importo_versato, tipo, note, data)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO "${nomeSchema}".debiti_ente (azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         aziendaId,
         dati.voce.trim(),
@@ -112,6 +124,7 @@ export async function aggiungiRigaDebitoEnteAction(
         dati.tipo,
         dati.note,
         dati.data,
+        datiExtra,
       ]
     );
     return { success: true };

@@ -16,6 +16,6 @@
 // Tenute a mano in sync ad ogni consegna; non lette dinamicamente dal
 // package.json per non includerlo nel bundle client.
 
-export const APP_VERSION = '0.109.5';
+export const APP_VERSION = '0.109.6';
 
 export const PORTABLE_VERSION = '1.0.0';

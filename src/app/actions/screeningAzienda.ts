@@ -9,7 +9,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { del, get } from '@/lib/blobStore';
 import { pool } from '@/lib/db';
 import { assicuraTabelleScreeningAzienda, assicuraTabelleParametriSpazio } from '@/db/provision';
-import { normalizzaScreeningMaxTokens } from '@/lib/parametriGenerazione';
+import {
+  normalizzaScreeningMaxTokens,
+  normalizzaMaxDomande,
+  normalizzaMaxDirettrici,
+  normalizzaMaxProdotti,
+} from '@/lib/parametriGenerazione';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 import { raggruppaPerTipoDebito } from '@/lib/debitiEnte/tipoDebito';
@@ -246,16 +251,25 @@ export async function generaScreeningAziendaAction(
     // default di sistema (Parametri di Spazio → Visualizzazione). Alzabile
     // quando le direttrici sono molte e il JSON verrebbe altrimenti troncato.
     let maxTokensQuestionario: number;
+    let maxDomande: number;
+    let maxDirettrici: number;
+    let maxProdotti: number;
     try {
       await assicuraTabelleParametriSpazio(nomeSchema);
       const paramRis = await pool.query(
-        `SELECT screening_max_tokens FROM "${nomeSchema}".parametri_visualizzazione WHERE id = 1`
+        `SELECT screening_max_tokens, screening_max_domande, screening_max_direttrici, screening_max_prodotti
+           FROM "${nomeSchema}".parametri_visualizzazione WHERE id = 1`
       );
-      maxTokensQuestionario = normalizzaScreeningMaxTokens(
-        paramRis.rows[0]?.screening_max_tokens ?? null
-      );
+      const row = paramRis.rows[0] || {};
+      maxTokensQuestionario = normalizzaScreeningMaxTokens(row.screening_max_tokens ?? null);
+      maxDomande = normalizzaMaxDomande(row.screening_max_domande ?? null);
+      maxDirettrici = normalizzaMaxDirettrici(row.screening_max_direttrici ?? null);
+      maxProdotti = normalizzaMaxProdotti(row.screening_max_prodotti ?? null);
     } catch {
       maxTokensQuestionario = normalizzaScreeningMaxTokens(null);
+      maxDomande = normalizzaMaxDomande(null);
+      maxDirettrici = normalizzaMaxDirettrici(null);
+      maxProdotti = normalizzaMaxProdotti(null);
     }
 
     const [direttriciRis, storicoRis, debitiRis] = await Promise.all([
@@ -264,14 +278,20 @@ export async function generaScreeningAziendaAction(
       ottieniDebitiEnte(nomeSchema, aziendaId),
     ]);
 
-    const direttrici = direttriciRis.direttrici;
-    if (!direttrici || direttrici.length === 0) {
+    const direttriciTutte = direttriciRis.direttrici;
+    if (!direttriciTutte || direttriciTutte.length === 0) {
       return {
         success: false,
         error:
           'Le direttrici di questo ente non sono ancora impostate — vai su Parametri di Spazio prima di generare uno screening.',
       };
     }
+    // Limiti quantitativi per-spazio: si tagliano direttrici e prodotti PRIMA
+    // di costruire il prompt, così non si spendono token per generare un
+    // report enorme. Il numero massimo di domande totali è forzato nel testo.
+    const direttrici = direttriciTutte
+      .slice(0, maxDirettrici)
+      .map((d) => ({ ...d, prodotti: d.prodotti.slice(0, maxProdotti) }));
     const direttriciTesto = direttrici
       .map((d) => `${d.nome} — domande attinenti a ${d.prodotti.join(', ')}`)
       .join('\n');
@@ -348,7 +368,7 @@ ${direttriciTesto}
 DATI GIÀ RACCOLTI:
 ${blocchiContesto.join('\n')}
 
-Il tuo compito: genera un questionario Sì/No organizzato per sezioni, una sezione per ciascuna direttrice elencata sopra. Per ciascun prodotto elencato in una direttrice, genera 1-2 domande — mai una domanda generica sulla direttrice nel suo complesso, sempre ancorata a uno specifico prodotto/procedura tra quelli indicati. Ogni domanda deve essere qualcosa che un funzionario dell'ente può verificare nei PROPRI sistemi interni per QUESTA azienda specifica — mai un giudizio generico sull'azienda che il funzionario non potrebbe conoscere senza un'interazione diretta con l'azienda stessa (evita domande su governance, competenza del management, clima interno). Non superare le 20 domande totali complessive, distribuite tra le direttrici in proporzione al numero di prodotti elencati per ciascuna.
+Il tuo compito: genera un questionario Sì/No organizzato per sezioni, una sezione per ciascuna direttrice elencata sopra. Per ciascun prodotto elencato in una direttrice, genera 1-2 domande — mai una domanda generica sulla direttrice nel suo complesso, sempre ancorata a uno specifico prodotto/procedura tra quelli indicati. Ogni domanda deve essere qualcosa che un funzionario dell'ente può verificare nei PROPRI sistemi interni per QUESTA azienda specifica — mai un giudizio generico sull'azienda che il funzionario non potrebbe conoscere senza un'interazione diretta con l'azienda stessa (evita domande su governance, competenza del management, clima interno). Non superare le ${maxDomande} domande totali complessive, distribuite tra le direttrici in proporzione al numero di prodotti elencati per ciascuna.
 
 REGOLA VINCOLANTE SULLA FORMULAZIONE — nessuna eccezione: ogni domanda deve essere scritta in modo che "Sì" sia SEMPRE la risposta favorevole all'azienda, e "No" SEMPRE quella sfavorevole. Il punteggio finale somma il peso di ogni "No" e sottrae quello di ogni "Sì" — se anche una sola domanda avesse la polarità invertita, il conteggio diventerebbe sbagliato senza che nessuno se ne accorga leggendo la domanda da sola.
 - SBAGLIATO (Sì = cattiva notizia): "Risultano versamenti scaduti negli ultimi 12 mesi?" — "Sono aperte procedure di recupero crediti?" — "Risulta attivo un flag di blocco sulla posizione?"
@@ -567,6 +587,58 @@ export async function salvaRispostaScreeningAction(
     return { success: true };
   } catch (error: any) {
     console.error('[salvaRispostaScreeningAction] Errore:', error);
+    return { success: false, error: `Impossibile salvare: ${error.message || error}` };
+  }
+}
+
+/**
+ * Modifica il TESTO di una singola domanda generata dello Screening
+ * (icona matita in Check List). Le domande vivono nel JSON
+ * `azienda_screening.sezioni`, quindi si riscrive quel JSON. L'`id` della
+ * domanda NON cambia: le risposte già date (chiave azienda_id+domanda_id)
+ * restano agganciate correttamente, nessuna migrazione necessaria.
+ */
+export async function aggiornaTestoDomandaScreeningAction(
+  nomeSchema: string,
+  aziendaId: number,
+  domandaId: string,
+  nuovoTesto: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    const testo = (nuovoTesto || '').trim();
+    if (!testo) return { success: false, error: 'Il testo della domanda non può essere vuoto.' };
+
+    await assicuraTabelleScreeningAzienda(nomeSchema);
+    const ris = await pool.query(
+      `SELECT sezioni FROM "${nomeSchema}".azienda_screening WHERE azienda_id = $1`,
+      [aziendaId]
+    );
+    if (ris.rows.length === 0) {
+      return { success: false, error: 'Nessuno screening trovato per questa azienda.' };
+    }
+
+    const sezioni: SezioneChecklist[] = ris.rows[0].sezioni || [];
+    let trovata = false;
+    for (const sez of sezioni) {
+      for (const d of sez.domande || []) {
+        if (d.id === domandaId) {
+          d.domanda = testo;
+          trovata = true;
+        }
+      }
+    }
+    if (!trovata) {
+      return { success: false, error: 'Domanda non trovata nello screening.' };
+    }
+
+    await pool.query(
+      `UPDATE "${nomeSchema}".azienda_screening SET sezioni = $2 WHERE azienda_id = $1`,
+      [aziendaId, JSON.stringify(sezioni)]
+    );
+    return { success: true };
+  } catch (error: any) {
+    console.error('[aggiornaTestoDomandaScreeningAction] Errore:', error);
     return { success: false, error: `Impossibile salvare: ${error.message || error}` };
   }
 }

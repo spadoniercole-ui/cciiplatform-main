@@ -10,7 +10,7 @@ import { assicuraTabellaArchitraveDebitiEnte } from '@/db/provision';
 import type { TipoDebitoEnte } from '@/lib/debitiEnte/tipoDebito';
 
 export type RuoloColonnaDebito =
-  'voce' | 'importo' | 'importo_versato' | 'tipo' | 'nota' | 'data' | 'ignora';
+  'voce' | 'importo' | 'importo_versato' | 'tipo' | 'nota' | 'data' | 'extra' | 'ignora';
 
 export interface ArchitraveDebitiEnte {
   intestazioniOriginali: string[];

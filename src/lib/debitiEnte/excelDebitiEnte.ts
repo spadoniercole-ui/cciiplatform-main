@@ -123,6 +123,8 @@ export interface RigaDebitoEsportabile {
   tipo: TipoDebitoEnte;
   note: string | null;
   data: string | null;
+  /** Colonne mappate al ruolo "extra" (chiave = intestazione originale). null se nessuna. */
+  datiExtra: Record<string, string> | null;
 }
 
 export interface RisultatoParsingDebitiEnte {
@@ -192,7 +194,7 @@ export async function importaDebitiEnteExcel(
       continue;
     }
 
-    righe.push({ voce, importo, importoVersato: null, tipo, note, data: null });
+    righe.push({ voce, importo, importoVersato: null, tipo, note, data: null, datiExtra: null });
   }
 
   return { righe, righeConErrore };
@@ -340,6 +342,19 @@ export async function importaConArchitrave(
   const idxNota = mappatura.indexOf('nota');
   const idxData = mappatura.indexOf('data');
 
+  // Colonne "extra": ogni colonna mappata al ruolo 'extra' viene salvata
+  // com'è, chiave = intestazione originale. Così TUTTE le colonne mappate
+  // vengono caricate, non solo i sei campi semantici. L'intestazione si
+  // legge dalla prima riga dell'intervallo.
+  const rHeader = intervallo.s.r;
+  const colonneExtra: { idx: number; header: string }[] = [];
+  for (let c = 0; c < numeroColonne; c++) {
+    if (mappatura[c] === 'extra') {
+      const header = String(cella(rHeader, c)?.v ?? '').trim() || `Colonna ${c + 1}`;
+      colonneExtra.push({ idx: c, header });
+    }
+  }
+
   // Stessa correzione di leggiIntestazioniExcel — vedi lì il commento.
   const rigaHaDati = (r: number): boolean => {
     for (let c = 0; c < numeroColonne; c++) {
@@ -381,7 +396,19 @@ export async function importaConArchitrave(
       continue;
     }
 
-    righe.push({ voce, importo, importoVersato, tipo, note, data });
+    let datiExtra: Record<string, string> | null = null;
+    if (colonneExtra.length > 0) {
+      const acc: Record<string, string> = {};
+      for (const { idx, header } of colonneExtra) {
+        const v = cella(r, idx)?.v;
+        if (v !== undefined && v !== null && String(v).trim() !== '') {
+          acc[header] = String(v).trim();
+        }
+      }
+      if (Object.keys(acc).length > 0) datiExtra = acc;
+    }
+
+    righe.push({ voce, importo, importoVersato, tipo, note, data, datiExtra });
   }
 
   return { righe, righeConErrore, strutturaNonCorrispondente: false };
