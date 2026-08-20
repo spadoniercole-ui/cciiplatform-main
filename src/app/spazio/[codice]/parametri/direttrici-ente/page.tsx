@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { DirettriciEnteConfigManager } from '@/components/spazio/DirettriciEnteConfigManager';
+import { ScreeningMaxTokensControl } from '@/components/spazio/ScreeningMaxTokensControl';
 
 export default async function ParametriDirettriciEntePage({
   params,
@@ -24,6 +25,9 @@ export default async function ParametriDirettriciEntePage({
       </Link>
       <div className="bg-white border border-slate-200 rounded-xl p-6">
         <DirettriciEnteConfigManager nomeSchema={contesto.nomeSchema} />
+      </div>
+      <div className="bg-white border border-slate-200 rounded-xl p-6">
+        <ScreeningMaxTokensControl nomeSchema={contesto.nomeSchema} />
       </div>
     </div>
   );

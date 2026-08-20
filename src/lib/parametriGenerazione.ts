@@ -9,9 +9,9 @@
 // direttrici/domande erano molte. Reso configurabile e forzato nella
 // chiamata AI, così spazi con molte direttrici possono alzarlo.
 
-export const SCREENING_MAX_TOKENS_DEFAULT = 8000;
+export const SCREENING_MAX_TOKENS_DEFAULT = 12000;
 export const SCREENING_MAX_TOKENS_MIN = 2000;
-export const SCREENING_MAX_TOKENS_LIMITE = 16000;
+export const SCREENING_MAX_TOKENS_LIMITE = 24000;
 
 /** Riporta un valore grezzo (da DB o input) nell'intervallo consentito;
  * null/assente/non valido → default di sistema. */
