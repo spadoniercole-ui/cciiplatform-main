@@ -169,6 +169,51 @@ export function estraiSezione(aoa: Aoa, headerRowForzata = -1): SezioneEstratta 
   return { headerRow, intestazioni, colonneReali, righe, fermatoARiga };
 }
 
+export interface SezioneConTitolo extends SezioneEstratta {
+  /** Titolo della sezione (la riga a sola prima colonna che la precede). */
+  titolo: string;
+}
+
+/**
+ * Estrae TUTTE le sezioni-dati di un foglio (per il file VERA): ogni sezione è
+ * un blocco «titolo → header → righe fino al salto». Salta il rumore (righe
+ * "SEZIONE F24", "Non riscontrate irregolarità", "Totale gestione:") che non è
+ * seguito da un header vero. Ogni sezione porta il suo titolo, con cui poi si
+ * attribuisce la natura (Debito/AVA/Neutro).
+ */
+export function estraiTutteLeSezioni(aoa: Aoa): SezioneConTitolo[] {
+  const out: SezioneConTitolo[] = [];
+  let r = 0;
+  let ultimoTitolo = '';
+  while (r < aoa.length) {
+    const row = aoa[r] || [];
+    const ne = colonneRealiDaRiga(row);
+    // Candidata a TITOLO: una sola colonna reale, testuale, non "totale…".
+    if (ne.length === 1) {
+      const txt = testoCella(row[ne[0]]);
+      if (txt && !normalizzaEtichetta(txt).startsWith('totale')) ultimoTitolo = txt;
+      r++;
+      continue;
+    }
+    // Candidata a HEADER: ≥3 colonne, in prevalenza testuali, con dati sotto.
+    if (ne.length >= 3) {
+      const testuali = ne.filter((i) => !pareNumero(row[i]));
+      const succ = aoa[r + 1] || [];
+      const succSet = new Set(colonneRealiDaRiga(succ));
+      const overlap = ne.filter((i) => succSet.has(i));
+      if (testuali.length >= 3 && overlap.length >= 2) {
+        const sez = estraiSezione(aoa, r);
+        out.push({ titolo: ultimoTitolo || `Sezione ${out.length + 1}`, ...sez });
+        ultimoTitolo = '';
+        r = sez.fermatoARiga;
+        continue;
+      }
+    }
+    r++;
+  }
+  return out;
+}
+
 /** Valori distinti (testo, non vuoti) di una colonna reale entro le righe della sezione. */
 export function valoriDistintiColonna(
   righe: CellaGrezza[][],

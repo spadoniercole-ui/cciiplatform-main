@@ -1243,6 +1243,39 @@ export async function assicuraTabellaTracciatiDebitiEnte(nomeSchema: string): Pr
 }
 
 /**
+ * Posizione V.E.R.A. — il file INPS "DettaglioRichiesta" letto su TUTTE le
+ * sezioni, ognuna con la natura data dal titolo di sezione. Due tabelle:
+ *  - vera_titoli: mappa (per spazio) titolo-di-sezione normalizzato → categoria;
+ *  - debiti_vera: righe importate (per azienda), usate per il confronto
+ *    certo-per-certo con la Situazione Debitoria contabilizzata.
+ */
+export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaAziende(nomeSchema); // FK aziende
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.vera_titoli (
+      titolo_norm TEXT PRIMARY KEY,
+      titolo TEXT NOT NULL,
+      categoria TEXT NOT NULL
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.debiti_vera (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      sezione TEXT NOT NULL,
+      voce TEXT NOT NULL,
+      importo NUMERIC NOT NULL DEFAULT 0,
+      categoria TEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_debiti_vera_azienda ON ${s}.debiti_vera (azienda_id)`
+  );
+}
+
+/**
  * Cache dei dati ISTAT per settore (Dati di Settore) — GLOBALE (schema
  * public, non per tenant). Il dato è nazionale, identico per qualunque
  * azienda con lo stesso gruppo ATECO, di qualunque spazio: metterlo per

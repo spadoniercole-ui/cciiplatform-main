@@ -22,9 +22,10 @@
 // visibile sopra l'altra scheda.
 
 import React, { useEffect, useState } from 'react';
-import { IdCard, Scale, Lock } from 'lucide-react';
+import { IdCard, Scale, Lock, ClipboardCheck } from 'lucide-react';
 import { AnagraficaEnteScenario } from '@/components/spazio/AnagraficaEnteScenario';
 import { DebitiEnteScenario } from '@/components/spazio/DebitiEnteScenario';
+import { PosizioneVeraScenario } from '@/components/spazio/PosizioneVeraScenario';
 import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import { ottieniAnagraficaEnte, type AnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { CHIAVI_CAMPO_ANAGRAFICA_ENTE } from '@/lib/costantiRicevibilita';
@@ -35,11 +36,12 @@ interface Props {
   nomeAzienda: string;
 }
 
-type Scheda = 'anagrafica' | 'debitoria';
+type Scheda = 'anagrafica' | 'debitoria' | 'vera';
 
 const SCHEDE: { id: Scheda; label: string; icon: typeof IdCard }[] = [
   { id: 'anagrafica', label: 'Anagrafica', icon: IdCard },
   { id: 'debitoria', label: 'Situazione Debitoria', icon: Scale },
+  { id: 'vera', label: 'Posizione V.E.R.A.', icon: ClipboardCheck },
 ];
 
 const VUOTA: AnagraficaEnte = {
@@ -177,6 +179,9 @@ export function PosizioneEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Pr
           aziendaId={aziendaId}
           nomeAzienda={nomeAzienda}
         />
+      )}
+      {scheda === 'vera' && sbloccata && (
+        <PosizioneVeraScenario nomeSchema={nomeSchema} aziendaId={aziendaId} />
       )}
     </div>
   );
