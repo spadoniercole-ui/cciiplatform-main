@@ -7,12 +7,14 @@
 // ripetere due volte.
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { FileSpreadsheet } from 'lucide-react';
 import {
   ottieniTabXbrlAzienda,
   impostaTabXbrlAziendaAction,
   type TabXbrlAzienda,
 } from '@/app/actions/aziendaConfig';
+import { segnaVistaAnalisiBilancioAction } from '@/app/actions/analisiBilancioStep';
 
 interface Props {
   nomeSchema: string;
@@ -20,6 +22,7 @@ interface Props {
 }
 
 export function AziendaConfigXbrl({ nomeSchema, aziendaId }: Props) {
+  const router = useRouter();
   const [tab, setTab] = useState<TabXbrlAzienda[]>([]);
   const [caricamento, setCaricamento] = useState(true);
   const [errore, setErrore] = useState<string | null>(null);
@@ -33,6 +36,18 @@ export function AziendaConfigXbrl({ nomeSchema, aziendaId }: Props) {
       else setErrore(risultato.error || 'Impossibile caricare la configurazione.');
       setCaricamento(false);
     })();
+  }, [nomeSchema, aziendaId]);
+
+  // Presa visione della sotto-sezione: aprirla è ciò che concorre a rendere
+  // verde "Analisi Bilancio". Segniamo la visita e, solo se è la prima volta
+  // (cambiato), aggiorniamo il semaforo dei passi nel layout (Server
+  // Component) con router.refresh().
+  useEffect(() => {
+    (async () => {
+      const esito = await segnaVistaAnalisiBilancioAction(nomeSchema, aziendaId, 'xbrl');
+      if (esito.success && esito.cambiato) router.refresh();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, aziendaId]);
 
   const handleToggle = async (t: TabXbrlAzienda) => {

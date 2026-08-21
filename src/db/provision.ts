@@ -1147,6 +1147,30 @@ export async function assicuraTabelleAnagraficaEnte(nomeSchema: string): Promise
 }
 
 /**
+ * Presa in carico dello step "Analisi Bilancio" a livello di AZIENDA.
+ *
+ * Le due sotto-sezioni (Configurazione XBRL e Indici) sono un semplice
+ * sottoinsieme dei parametri di spazio: non c'è nulla di pesante da
+ * caricare qui (il bilancio XBRL vero si carica nello Scenario). Perché il
+ * passo diventi verde — e sblocchi lo Screening — basta che l'operatore
+ * abbia aperto entrambe le sotto-sezioni. Registriamo quella presa visione
+ * qui, una riga per azienda, due booleani. Idempotente: la visita ripetuta
+ * non cambia nulla.
+ */
+export async function assicuraTabellaAnalisiBilancioStep(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaAziende(nomeSchema); // serve aziende per la FK
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.analisi_bilancio_step (
+      azienda_id INTEGER PRIMARY KEY REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      xbrl_config_vista BOOLEAN NOT NULL DEFAULT FALSE,
+      indici_visti BOOLEAN NOT NULL DEFAULT FALSE,
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+}
+
+/**
  * Cache dei dati ISTAT per settore (Dati di Settore) — GLOBALE (schema
  * public, non per tenant). Il dato è nazionale, identico per qualunque
  * azienda con lo stesso gruppo ATECO, di qualunque spazio: metterlo per

@@ -7,6 +7,7 @@ import { ottieniConteggioScreeningPendente } from '@/app/actions/screeningAziend
 import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
+import { ottieniStatoAnalisiBilancioStep } from '@/app/actions/analisiBilancioStep';
 import { anagraficaAziendaCompleta } from '@/lib/anagraficaAzienda';
 
 type StatoStep = 'bloccato' | 'attivo' | 'completo';
@@ -44,12 +45,14 @@ export default async function AziendaLayout({
 
   // Segnali di completamento, tutti in parallelo. La Posizione Ente esiste
   // solo per gli spazi ENTE.
-  const [pendenteScreening, anagraficaEnteRis, debitiRis, xbrlRis] = await Promise.all([
-    ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
-    isEnte ? ottieniAnagraficaEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
-    isEnte ? ottieniDebitiEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
-    ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
-  ]);
+  const [pendenteScreening, anagraficaEnteRis, debitiRis, xbrlRis, statoAnalisiBilancio] =
+    await Promise.all([
+      ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
+      isEnte ? ottieniAnagraficaEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
+      isEnte ? ottieniDebitiEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
+      ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
+      ottieniStatoAnalisiBilancioStep(contesto.nomeSchema, aziendaNum),
+    ]);
   const domandeMancanti = pendenteScreening.totali - pendenteScreening.risposte;
 
   // Completamento dei passi (unica fonte del semaforo).
@@ -80,7 +83,14 @@ export default async function AziendaLayout({
       return typeof v === 'string' && v.trim().length > 0;
     });
   const posizioneEnteCompleta = anagraficaEnteCompilata && (debitiRis?.righe?.length ?? 0) > 0;
-  const analisiBilancioCompleta = (xbrlRis?.storico?.length ?? 0) > 0;
+  // "Analisi Bilancio" verde: le due sotto-sezioni (Configurazione XBRL e
+  // Indici) sono un sottoinsieme dei parametri di spazio — non c'è nulla di
+  // pesante da caricare qui. Basta che l'operatore le abbia aperte
+  // entrambe (presa visione registrata lato server). Resta verde anche se
+  // in futuro si carica un bilancio XBRL vero da uno Scenario (storico > 0).
+  const analisiBilancioCompleta =
+    (xbrlRis?.storico?.length ?? 0) > 0 ||
+    (!!statoAnalisiBilancio?.stato.xbrlConfigVista && !!statoAnalisiBilancio?.stato.indiciVisti);
   const screeningGenerato = pendenteScreening.esiste;
   const checklistCompleta =
     screeningGenerato && pendenteScreening.totali > 0 && domandeMancanti === 0;

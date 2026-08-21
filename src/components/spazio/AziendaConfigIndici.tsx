@@ -7,12 +7,14 @@
 // tutte le aziende.
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { TrendingUp } from 'lucide-react';
 import {
   ottieniIndiciAzienda,
   impostaIndiceAziendaAction,
   type IndiceAzienda,
 } from '@/app/actions/aziendaConfig';
+import { segnaVistaAnalisiBilancioAction } from '@/app/actions/analisiBilancioStep';
 
 interface Props {
   nomeSchema: string;
@@ -20,6 +22,7 @@ interface Props {
 }
 
 export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
+  const router = useRouter();
   const [indici, setIndici] = useState<IndiceAzienda[]>([]);
   const [caricamento, setCaricamento] = useState(true);
   const [errore, setErrore] = useState<string | null>(null);
@@ -33,6 +36,17 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
       else setErrore(risultato.error || 'Impossibile caricare gli indici.');
       setCaricamento(false);
     })();
+  }, [nomeSchema, aziendaId]);
+
+  // Presa visione della sotto-sezione: aprirla concorre a rendere verde
+  // "Analisi Bilancio". Segniamo la visita e aggiorniamo il semaforo del
+  // layout solo alla prima apertura (cambiato).
+  useEffect(() => {
+    (async () => {
+      const esito = await segnaVistaAnalisiBilancioAction(nomeSchema, aziendaId, 'indici');
+      if (esito.success && esito.cambiato) router.refresh();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, aziendaId]);
 
   const handleToggle = async (indice: IndiceAzienda) => {
