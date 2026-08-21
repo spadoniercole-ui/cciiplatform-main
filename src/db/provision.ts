@@ -445,24 +445,6 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
       CONSTRAINT una_sola_riga_visualizzazione CHECK (id = 1)
     )`
   );
-  // screening_max_tokens: tetto di token in output per il questionario di
-  // Screening generato dall'AI. NULL = default di sistema (vedi
-  // src/lib/parametriGenerazione.ts). Difensivo per gli spazi già creati
-  // prima dell'introduzione di questo parametro.
-  await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.parametri_visualizzazione ADD COLUMN IF NOT EXISTS screening_max_tokens INTEGER`
-  );
-  // Limiti quantitativi della generazione Screening (vedi
-  // src/lib/parametriGenerazione.ts). NULL = default di sistema.
-  await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.parametri_visualizzazione ADD COLUMN IF NOT EXISTS screening_max_domande INTEGER`
-  );
-  await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.parametri_visualizzazione ADD COLUMN IF NOT EXISTS screening_max_direttrici INTEGER`
-  );
-  await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.parametri_visualizzazione ADD COLUMN IF NOT EXISTS screening_max_prodotti INTEGER`
-  );
 
   // Quali tab del motore XBRL (Indici CNDCEC, Altri Indici, Situazione
   // Debitoria, Andamento Storico) l'Admin di Spazio vuole attive

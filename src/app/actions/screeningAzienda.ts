@@ -8,13 +8,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { del, get } from '@/lib/blobStore';
 import { pool } from '@/lib/db';
-import { assicuraTabelleScreeningAzienda, assicuraTabelleParametriSpazio } from '@/db/provision';
-import {
-  normalizzaScreeningMaxTokens,
-  normalizzaMaxDomande,
-  normalizzaMaxDirettrici,
-  normalizzaMaxProdotti,
-} from '@/lib/parametriGenerazione';
+import { assicuraTabelleScreeningAzienda } from '@/db/provision';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 import { raggruppaPerTipoDebito } from '@/lib/debitiEnte/tipoDebito';
@@ -44,6 +38,36 @@ const SCADENZA_GENERAZIONE_MS = 150 * 1000;
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
+}
+
+/**
+ * Estrae l'array di domande dalla risposta AI di una sezione, in modo
+ * TOLLERANTE al troncamento: prima prova il parse pulito di
+ * `{ "domande": [...] }`; se fallisce (JSON tagliato a metà), recupera
+ * comunque tutti gli oggetti-domanda COMPLETI presenti nel testo — quelli
+ * emessi prima del taglio non vanno persi. Con l'architettura per-sezione
+ * il troncamento è comunque improbabile, ma questa è la rete di sicurezza.
+ */
+function estraiDomandeDaJson(raw: string): { domanda?: unknown; peso?: unknown }[] {
+  const pulito = (raw || '').replace(/```json|```/g, '').trim();
+  try {
+    const obj = JSON.parse(pulito);
+    if (Array.isArray(obj?.domande)) return obj.domande;
+    if (Array.isArray(obj)) return obj;
+  } catch {
+    // Salvataggio: recupera ogni oggetto {...} completo che contenga "domanda".
+  }
+  const risultati: { domanda?: unknown; peso?: unknown }[] = [];
+  const oggetti = pulito.match(/\{[^{}]*"domanda"[^{}]*\}/g) || [];
+  for (const o of oggetti) {
+    try {
+      const parsed = JSON.parse(o);
+      if (parsed && typeof parsed.domanda === 'string') risultati.push(parsed);
+    } catch {
+      // oggetto incompleto (troncato a metà): saltato
+    }
+  }
+  return risultati;
 }
 
 /** Una direttrice con i suoi "prodotti" — ancoraggi concreti e
@@ -247,31 +271,6 @@ export async function generaScreeningAziendaAction(
 
     await assicuraTabelleScreeningAzienda(nomeSchema);
 
-    // Tetto di token in output per il questionario: parametro per-spazio con
-    // default di sistema (Parametri di Spazio → Visualizzazione). Alzabile
-    // quando le direttrici sono molte e il JSON verrebbe altrimenti troncato.
-    let maxTokensQuestionario: number;
-    let maxDomande: number;
-    let maxDirettrici: number;
-    let maxProdotti: number;
-    try {
-      await assicuraTabelleParametriSpazio(nomeSchema);
-      const paramRis = await pool.query(
-        `SELECT screening_max_tokens, screening_max_domande, screening_max_direttrici, screening_max_prodotti
-           FROM "${nomeSchema}".parametri_visualizzazione WHERE id = 1`
-      );
-      const row = paramRis.rows[0] || {};
-      maxTokensQuestionario = normalizzaScreeningMaxTokens(row.screening_max_tokens ?? null);
-      maxDomande = normalizzaMaxDomande(row.screening_max_domande ?? null);
-      maxDirettrici = normalizzaMaxDirettrici(row.screening_max_direttrici ?? null);
-      maxProdotti = normalizzaMaxProdotti(row.screening_max_prodotti ?? null);
-    } catch {
-      maxTokensQuestionario = normalizzaScreeningMaxTokens(null);
-      maxDomande = normalizzaMaxDomande(null);
-      maxDirettrici = normalizzaMaxDirettrici(null);
-      maxProdotti = normalizzaMaxProdotti(null);
-    }
-
     const [direttriciRis, storicoRis, debitiRis] = await Promise.all([
       ottieniDirettriciEnte(nomeSchema),
       ottieniStoricoXbrlAzienda(nomeSchema, aziendaId),
@@ -286,15 +285,12 @@ export async function generaScreeningAziendaAction(
           'Le direttrici di questo ente non sono ancora impostate — vai su Parametri di Spazio prima di generare uno screening.',
       };
     }
-    // Limiti quantitativi per-spazio: si tagliano direttrici e prodotti PRIMA
-    // di costruire il prompt, così non si spendono token per generare un
-    // report enorme. Il numero massimo di domande totali è forzato nel testo.
-    const direttrici = direttriciTutte
-      .slice(0, maxDirettrici)
-      .map((d) => ({ ...d, prodotti: d.prodotti.slice(0, maxProdotti) }));
-    const direttriciTesto = direttrici
-      .map((d) => `${d.nome} — domande attinenti a ${d.prodotti.join(', ')}`)
-      .join('\n');
+    // Nessun limite artificiale: lo screening copre TUTTE le direttrici e i
+    // prodotti che l'ente ha configurato. L'ampiezza del questionario è
+    // governata direttamente da quell'elenco (editor Direttrici Ente), non da
+    // parametri numerici separati — con la generazione per-sezione non c'è più
+    // rischio di troncamento, quindi non serve limitare.
+    const direttrici = direttriciTutte;
 
     const blocchiContesto: string[] = [];
     if (storicoRis.success && storicoRis.storico.length > 0) {
@@ -360,39 +356,86 @@ export async function generaScreeningAziendaAction(
       );
     }
 
-    const promptTestuale = `Sei un assistente che aiuta un ente creditore a costruire un questionario di screening per un'azienda, PRIMA che arrivi una proposta di composizione negoziata della crisi — uno "state of the art" iniziale, basato solo su quello che è già pubblico (bilancio XBRL, fascicolo storico allegato), su quello che l'ente stesso ha già dichiarato di avere a credito (Situazione Debitoria), e su quello che l'ente stesso può verificare nei propri sistemi.
+    const contestoTesto = blocchiContesto.join('\n');
 
-Le direttrici lungo cui l'ente valuta le proprie relazioni con le aziende, ciascuna con i prodotti/procedure concreti a cui deve ancorarsi ogni domanda (non generare mai una domanda che non riguardi uno di questi prodotti):
-${direttriciTesto}
+    // Regola di polarità condivisa da ogni sezione — l'invariante che tiene
+    // il punteggio coerente: "Sì" sempre favorevole all'azienda.
+    const REGOLA_POLARITA = `REGOLA VINCOLANTE SULLA FORMULAZIONE — nessuna eccezione: ogni domanda deve essere scritta in modo che "Sì" sia SEMPRE la risposta favorevole all'azienda, e "No" SEMPRE quella sfavorevole.
+- SBAGLIATO (Sì = cattiva notizia): "Risultano versamenti scaduti negli ultimi 12 mesi?"
+- CORRETTO (Sì = buona notizia, stessa domanda capovolta): "La posizione è priva di versamenti scaduti negli ultimi 12 mesi?"
+Prima di scrivere ciascuna domanda, chiediti: "se rispondo Sì, è una buona notizia per l'azienda?" Se no, riformulala al negativo.`;
 
-DATI GIÀ RACCOLTI:
-${blocchiContesto.join('\n')}
+    /**
+     * Genera UNA sezione (le domande di UNA direttrice) con una chiamata
+     * dedicata e output piccolo: così il troncamento è strutturalmente
+     * impossibile, qualunque sia il numero totale di direttrici/domande.
+     * Non invia il PDF (le domande sono ancorate a direttrici/prodotti e ai
+     * dati finanziari già estratti, non alla visura): chiamate leggere,
+     * veloci, parallelizzabili senza far esplodere banda e token.
+     */
+    const generaSezione = async (
+      d: { nome: string; prodotti: string[] },
+      numero: number,
+      signal: AbortSignal
+    ): Promise<SezioneChecklist | null> => {
+      // Tetto di domande PER QUESTA sezione derivato dai suoi prodotti (1-2 a
+      // testa), con un massimo di sicurezza per tenere ogni chiamata piccola.
+      const perSezioneMax = Math.min(12, Math.max(2, d.prodotti.length * 2));
+      const prompt = `Sei un assistente che aiuta un ente creditore a costruire la sezione di un questionario di screening per un'azienda, PRIMA che arrivi una proposta di composizione negoziata della crisi. La sezione riguarda UNA sola direttrice dell'ente.
 
-Il tuo compito: genera un questionario Sì/No organizzato per sezioni, una sezione per ciascuna direttrice elencata sopra. Per ciascun prodotto elencato in una direttrice, genera 1-2 domande — mai una domanda generica sulla direttrice nel suo complesso, sempre ancorata a uno specifico prodotto/procedura tra quelli indicati. Ogni domanda deve essere qualcosa che un funzionario dell'ente può verificare nei PROPRI sistemi interni per QUESTA azienda specifica — mai un giudizio generico sull'azienda che il funzionario non potrebbe conoscere senza un'interazione diretta con l'azienda stessa (evita domande su governance, competenza del management, clima interno). Non superare le ${maxDomande} domande totali complessive, distribuite tra le direttrici in proporzione al numero di prodotti elencati per ciascuna.
+DIRETTRICE: "${d.nome}"
+PRODOTTI/PROCEDURE concreti a cui ancorare le domande (mai una domanda generica sulla direttrice nel suo complesso, sempre su uno di questi):
+${d.prodotti.map((p) => `- ${p}`).join('\n')}
 
-REGOLA VINCOLANTE SULLA FORMULAZIONE — nessuna eccezione: ogni domanda deve essere scritta in modo che "Sì" sia SEMPRE la risposta favorevole all'azienda, e "No" SEMPRE quella sfavorevole. Il punteggio finale somma il peso di ogni "No" e sottrae quello di ogni "Sì" — se anche una sola domanda avesse la polarità invertita, il conteggio diventerebbe sbagliato senza che nessuno se ne accorga leggendo la domanda da sola.
-- SBAGLIATO (Sì = cattiva notizia): "Risultano versamenti scaduti negli ultimi 12 mesi?" — "Sono aperte procedure di recupero crediti?" — "Risulta attivo un flag di blocco sulla posizione?"
-- CORRETTO (Sì = buona notizia, stessa domanda capovolta): "La posizione è priva di versamenti scaduti negli ultimi 12 mesi?" — "Non risultano procedure di recupero crediti aperte?" — "La posizione risulta libera da flag di blocco?"
-Prima di scrivere ciascuna domanda, chiediti: "se rispondo Sì, è una buona notizia per l'azienda?" Se la risposta è no, riformula la domanda al negativo finché non lo è.
+DATI GIÀ RACCOLTI SULL'AZIENDA:
+${contestoTesto}
+
+Genera da 1 a 2 domande per prodotto, MA non più di ${perSezioneMax} domande in tutto per questa sezione. Ogni domanda deve essere qualcosa che un funzionario dell'ente può verificare nei PROPRI sistemi interni per QUESTA azienda specifica — mai un giudizio generico sull'azienda che richiederebbe un'interazione diretta con essa (evita governance, competenza del management, clima interno).
+
+${REGOLA_POLARITA}
 
 Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esatto:
-{
-  "sezioni": [
-    {
-      "numero": "1",
-      "titolo": "Nome della direttrice",
-      "domande": [
-        { "id": "1.1", "domanda": "Testo della domanda", "peso": "RILEVANTE", "aCuraDi": "esperto" }
-      ]
-    }
-  ]
-}
-Peso: STRUTTURALE, RILEVANTE o DOCUMENTALE. aCuraDi è sempre "esperto" qui (non c'è un imprenditore in questo flusso). 3-6 domande per sezione, una sezione per direttrice.`;
+{ "domande": [ { "domanda": "Testo della domanda", "peso": "RILEVANTE" } ] }
+Peso ammesso: STRUTTURALE, RILEVANTE o DOCUMENTALE.`;
+
+      const resp = await anthropic.messages.create(
+        {
+          model: 'claude-sonnet-5',
+          // Ampiamente sufficiente per una singola sezione (poche domande):
+          // il modello termina molto prima, il troncamento non si verifica.
+          max_tokens: 2000,
+          thinking: { type: 'disabled' },
+          messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+        },
+        { signal }
+      );
+
+      const raw = resp.content
+        .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('\n');
+
+      const domandeGrezze = estraiDomandeDaJson(raw);
+      const domande = domandeGrezze
+        .slice(0, perSezioneMax)
+        .map((x, k) => ({
+          id: `${numero}.${k + 1}`,
+          domanda: String(x.domanda || '').trim(),
+          peso: (PESI_VALIDI.includes(x.peso as PesoDomanda)
+            ? (x.peso as PesoDomanda)
+            : 'RILEVANTE') as PesoDomanda,
+          aCuraDi: 'esperto' as const,
+        }))
+        .filter((q) => q.domanda.length > 0);
+
+      if (domande.length === 0) return null;
+      return { numero: String(numero), titolo: d.nome, domande };
+    };
 
     const promptRelazione = `Sei un assistente che scrive una relazione di analisi preliminare per un ente creditore, PRIMA che arrivi una proposta di composizione negoziata della crisi — una fotografia di partenza basata sul bilancio XBRL, sul fascicolo storico allegato, e sulla Situazione Debitoria già dichiarata dall'ente.
 
 DATI GIÀ RACCOLTI:
-${blocchiContesto.join('\n')}
+${contestoTesto}
 
 Scrivi una relazione con questi paragrafi, in prosa, non elenchi puntati:
 1. Identikit dell'impresa (dal fascicolo storico: anagrafica, oggetto, storia, stato, organi).
@@ -404,11 +447,6 @@ Scrivi una relazione con questi paragrafi, in prosa, non elenchi puntati:
 
 Non dare un giudizio legale definitivo — è una base istruttoria per chi dovrà poi leggere la proposta, non un responso.`;
 
-    // Le due chiamate leggono lo stesso documento ma non dipendono l'una
-    // dall'altra — lanciate in parallelo, il tempo d'attesa è quello della
-    // più lenta, non la somma. Il blocco documento è marcato con
-    // cache_control: un eventuale retry (o una ri-generazione entro pochi
-    // minuti) riusa il PDF già elaborato invece di ri-ingerirlo da capo.
     const bloccoDocumento = {
       type: 'document' as const,
       source: {
@@ -420,110 +458,66 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
       cache_control: { type: 'ephemeral' as const },
     };
 
-    // AbortController con scadenza esplicita: se le chiamate non rientrano
-    // nel budget, si abortisce e si restituisce un errore leggibile invece
-    // di lasciare che Vercel uccida la funzione (spinner infinito lato UI).
+    // AbortController con scadenza esplicita: se le chiamate non rientrano nel
+    // budget, si abortisce e si restituisce un errore leggibile invece di
+    // lasciare che Vercel uccida la funzione (spinner infinito lato UI).
     const controller = new AbortController();
     const timerScadenza = setTimeout(() => controller.abort(), SCADENZA_GENERAZIONE_MS);
 
-    let esiti: PromiseSettledResult<Anthropic.Messages.Message>[];
+    // Tutto in parallelo: una sezione per direttrice + la relazione. Ogni
+    // sezione è indipendente e piccola; allSettled garantisce che il
+    // fallimento di una NON butti via le altre — si salva quello che c'è.
+    let esitiSezioni: PromiseSettledResult<SezioneChecklist | null>[];
+    let esitoRelazione: PromiseSettledResult<Anthropic.Messages.Message>;
     try {
-      // allSettled invece di all: una relazione lenta o fallita non deve
-      // buttare via anche il questionario (l'output essenziale).
-      esiti = await Promise.allSettled([
-        anthropic.messages.create(
-          {
-            model: 'claude-sonnet-5',
-            // Tetto di token in output configurabile per-spazio (default di
-            // sistema in parametriGenerazione.ts): con un valore troppo basso
-            // il JSON del questionario veniva troncato a metà quando le
-            // direttrici/domande erano molte.
-            max_tokens: maxTokensQuestionario,
-            // Senza questo, il ragionamento esteso può consumare l'intero
-            // budget di token prima di produrre l'output.
-            thinking: { type: 'disabled' },
-            messages: [
-              { role: 'user', content: [bloccoDocumento, { type: 'text', text: promptTestuale }] },
-            ],
-          },
-          { signal: controller.signal }
-        ),
-        anthropic.messages.create(
-          {
-            model: 'claude-sonnet-5',
-            max_tokens: 3000,
-            thinking: { type: 'disabled' },
-            messages: [
-              { role: 'user', content: [bloccoDocumento, { type: 'text', text: promptRelazione }] },
-            ],
-          },
-          { signal: controller.signal }
-        ),
+      const [sezRis, relRis] = await Promise.all([
+        Promise.allSettled(direttrici.map((d, i) => generaSezione(d, i + 1, controller.signal))),
+        Promise.allSettled([
+          anthropic.messages.create(
+            {
+              model: 'claude-sonnet-5',
+              // La relazione è l'unico output libero e lungo: tetto ampio, ma
+              // fisso — non serve un parametro utente (il questionario, ora
+              // spezzato per sezione, non ha più alcun limite da regolare).
+              max_tokens: 8000,
+              thinking: { type: 'disabled' },
+              messages: [
+                {
+                  role: 'user',
+                  content: [bloccoDocumento, { type: 'text', text: promptRelazione }],
+                },
+              ],
+            },
+            { signal: controller.signal }
+          ),
+        ]),
       ]);
+      esitiSezioni = sezRis;
+      esitoRelazione = relRis[0];
     } finally {
       clearTimeout(timerScadenza);
     }
 
-    const esitoQuestionario = esiti[0];
-    const esitoRelazione = esiti[1];
+    // Assembla le sezioni riuscite, in ordine di direttrice.
+    const sezioni: SezioneChecklist[] = [];
+    let sezioniFallite = 0;
+    for (const esito of esitiSezioni) {
+      if (esito.status === 'fulfilled' && esito.value) sezioni.push(esito.value);
+      else sezioniFallite += 1;
+    }
 
-    // Il questionario è l'output essenziale: se fallisce, si ferma qui.
-    if (esitoQuestionario.status === 'rejected') {
+    if (sezioni.length === 0) {
       const scaduto = controller.signal.aborted;
-      console.error(
-        '[generaScreeningAziendaAction] Generazione questionario fallita:',
-        esitoQuestionario.reason
-      );
       return {
         success: false,
         error: scaduto
-          ? 'La generazione ha superato il tempo massimo disponibile — riprova. Se il fascicolo storico è molto voluminoso, carica una versione più leggera (solo le pagine rilevanti).'
+          ? 'La generazione ha superato il tempo massimo disponibile — riprova.'
           : "L'assistente non è riuscito a generare il questionario — riprova tra poco.",
       };
     }
-    const response = esitoQuestionario.value;
 
-    const testoGrezzo = response.content
-      .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('\n')
-      .replace(/```json|```/g, '')
-      .trim();
-
-    let parsed: { sezioni: SezioneChecklist[] };
-    try {
-      parsed = JSON.parse(testoGrezzo);
-    } catch (erroreParsing) {
-      // Diagnostica vera invece di un catch muto — la causa più
-      // probabile è il troncamento (risposta tagliata a metà prima di
-      // chiudere il JSON), verificabile da stop_reason.
-      console.error('[generaScreeningAziendaAction] Parsing questionario fallito:', {
-        stopReason: response.stop_reason,
-        lunghezzaTesto: testoGrezzo.length,
-        ultimiCaratteri: testoGrezzo.slice(-200),
-        erroreParsing: erroreParsing instanceof Error ? erroreParsing.message : erroreParsing,
-      });
-      return {
-        success: false,
-        error:
-          response.stop_reason === 'max_tokens'
-            ? 'Il questionario generato era troppo lungo ed è stato tagliato a metà — riprova, o riduci il numero di prodotti elencati per direttrice.'
-            : "L'assistente non ha restituito un questionario leggibile — riprova.",
-      };
-    }
-
-    for (const sez of parsed.sezioni || []) {
-      for (const d of sez.domande || []) {
-        if (!PESI_VALIDI.includes(d.peso)) d.peso = 'RILEVANTE';
-        d.aCuraDi = 'esperto';
-      }
-    }
-    if (!parsed.sezioni || parsed.sezioni.length === 0) {
-      return { success: false, error: "L'assistente non ha generato nessuna domanda — riprova." };
-    }
-
-    // La relazione è secondaria: se la sua chiamata è fallita o scaduta,
-    // si salva comunque il questionario con una nota al posto della relazione.
+    // La relazione è secondaria: se fallita/scaduta, si salva comunque il
+    // questionario con una nota al posto della relazione.
     const relazioneTesto =
       esitoRelazione.status === 'fulfilled'
         ? esitoRelazione.value.content
@@ -539,7 +533,7 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
       [
         aziendaId,
         JSON.stringify(direttrici),
-        JSON.stringify(parsed.sezioni),
+        JSON.stringify(sezioni),
         relazioneTesto,
         nomeFileVisura,
       ]
@@ -549,7 +543,13 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
       [aziendaId]
     );
 
-    return { success: true, sezioni: parsed.sezioni, relazioneTesto };
+    if (sezioniFallite > 0) {
+      console.warn(
+        `[generaScreeningAziendaAction] ${sezioniFallite}/${direttrici.length} sezioni non generate (le altre salvate).`
+      );
+    }
+
+    return { success: true, sezioni, relazioneTesto };
   } catch (error: any) {
     console.error('[generaScreeningAziendaAction] Errore:', error);
     return {
