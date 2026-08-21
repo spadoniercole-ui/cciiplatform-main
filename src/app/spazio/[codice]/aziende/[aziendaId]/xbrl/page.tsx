@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { AziendaConfigXbrl } from '@/components/spazio/AziendaConfigXbrl';
+import { SottoNavAnalisiBilancio } from '@/components/spazio/SottoNavAnalisiBilancio';
 
 export default async function AziendaXbrlPage({
   params,
@@ -18,5 +19,10 @@ export default async function AziendaXbrlPage({
     redirect(`/spazio/${codice}/aziende`);
   }
 
-  return <AziendaConfigXbrl nomeSchema={contesto.nomeSchema} aziendaId={Number(aziendaId)} />;
+  return (
+    <div className="space-y-4">
+      <SottoNavAnalisiBilancio base={`/spazio/${codice}/aziende/${aziendaId}`} attivo="xbrl" />
+      <AziendaConfigXbrl nomeSchema={contesto.nomeSchema} aziendaId={Number(aziendaId)} />
+    </div>
+  );
 }

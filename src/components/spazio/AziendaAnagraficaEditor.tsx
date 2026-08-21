@@ -1,14 +1,15 @@
 'use client';
 
-// Anagrafica di una singola azienda, nella sua pagina di dettaglio.
-// Estesa con i dati di sede legale, capitale sociale, rappresentante
-// legale, REA e PEC — servono alla reportistica (intestazioni di lettere
-// e relazioni li richiedono per esteso).
+// Anagrafica di una singola azienda. I campi che qualificano l'azienda sono
+// quasi tutti obbligatori (vedi src/lib/anagraficaAzienda.ts): sono marcati
+// con l'asterisco e validati al salvataggio. Le tre sezioni sono comprimibili
+// per non allungare troppo la vista — quelle già complete si chiudono da sole.
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save } from 'lucide-react';
+import { Save, ChevronDown, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { modificaAziendaAction, type Azienda } from '@/app/actions/aziende';
+import { anagraficaAziendaCompleta, campiMancantiAzienda } from '@/lib/anagraficaAzienda';
 
 interface Props {
   nomeSchema: string;
@@ -37,18 +38,65 @@ interface FormState {
 
 function Campo({
   label,
+  obbligatorio,
   children,
   hint,
 }: {
   label: string;
+  obbligatorio?: boolean;
   children: React.ReactNode;
   hint?: string;
 }) {
   return (
     <div>
-      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">{label}</label>
+      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+        {label}
+        {obbligatorio && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
       {children}
       {hint && <p className="text-[10px] text-slate-400 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+/** Sezione comprimibile con indicatore di completezza. */
+function Sezione({
+  titolo,
+  aperta,
+  onToggle,
+  completa,
+  children,
+}: {
+  titolo: string;
+  aperta: boolean;
+  onToggle: () => void;
+  completa: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border border-slate-200 rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          {aperta ? (
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          )}
+          <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+            {titolo}
+          </span>
+        </span>
+        {completa ? (
+          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+        ) : (
+          <AlertCircle className="w-4 h-4 text-amber-500" />
+        )}
+      </button>
+      {aperta && <div className="p-4 space-y-4">{children}</div>}
     </div>
   );
 }
@@ -56,7 +104,7 @@ function Campo({
 const classeInput =
   'w-full p-2 text-sm border border-slate-200 rounded-lg outline-none focus:border-blue-500 text-slate-900';
 
-export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazio }: Props) {
+export function AziendaAnagraficaEditor({ nomeSchema, azienda }: Props) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>({
     ragioneSociale: azienda.ragioneSociale,
@@ -79,11 +127,49 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
   const [errore, setErrore] = useState<string | null>(null);
   const [salvato, setSalvato] = useState(false);
 
+  // Completezza per sezione (guida l'apertura iniziale e l'indicatore).
+  const sezioneIdentificativiCompleta =
+    !!form.ragioneSociale.trim() &&
+    !!form.formaGiuridica.trim() &&
+    !!form.codiceAteco.trim() &&
+    !!form.codiceFiscale.trim() &&
+    !!form.partitaIva.trim() &&
+    !!form.numeroRea.trim() &&
+    form.capitaleSociale.trim() !== '';
+  const sezioneSedeCompleta =
+    !!form.indirizzoSedeLegale.trim() &&
+    !!form.citta.trim() &&
+    !!form.provincia.trim() &&
+    !!form.cap.trim();
+  const sezioneContattiCompleta =
+    !!form.rappresentanteLegale.trim() &&
+    !!form.ruoloRappresentanteLegale.trim() &&
+    !!form.pec.trim();
+
+  // All'apertura: le sezioni incomplete restano aperte, le complete chiuse.
+  const [aperte, setAperte] = useState<Record<string, boolean>>({
+    identificativi: !sezioneIdentificativiCompleta,
+    sede: !sezioneSedeCompleta,
+    contatti: !sezioneContattiCompleta,
+  });
+  const toggle = (k: string) => setAperte((p) => ({ ...p, [k]: !p[k] }));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSalvataggio(true);
     setErrore(null);
     setSalvato(false);
+
+    // Validazione: tutti gli obbligatori valorizzati. Se manca qualcosa,
+    // apre tutte le sezioni e mostra cosa manca.
+    const formRecord = form as unknown as Record<string, unknown>;
+    if (!anagraficaAziendaCompleta(formRecord)) {
+      const mancanti = campiMancantiAzienda(formRecord);
+      setAperte({ identificativi: true, sede: true, contatti: true });
+      setErrore(`Compila i campi obbligatori mancanti: ${mancanti.join(', ')}.`);
+      return;
+    }
+
+    setSalvataggio(true);
     try {
       const risultato = await modificaAziendaAction(nomeSchema, azienda.id, {
         ...form,
@@ -94,11 +180,9 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
         return;
       }
       setSalvato(true);
-      // Invalida la cache di navigazione: senza questo, l'intestazione
-      // della scheda (Server Component in layout.tsx) e i dati mostrati
-      // se si torna su questa tab restano quelli precedenti al
-      // salvataggio finché non si ricarica la pagina per intero — sembra
-      // che il salvataggio non abbia funzionato, anche se in realtà sì.
+      // Invalida la cache di navigazione: senza questo, l'intestazione della
+      // scheda (Server Component in layout.tsx) e il semaforo degli step
+      // restano quelli precedenti al salvataggio finché non si ricarica.
       router.refresh();
     } finally {
       setSalvataggio(false);
@@ -107,11 +191,7 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
 
   return (
     <div className="max-w-3xl space-y-4">
-      {/* Il link allo Screening vive già nella scheda del layout condiviso (layout.tsx) — niente da ripetere qui. */}
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white border border-slate-200 rounded-xl p-5 space-y-6"
-      >
+      <form onSubmit={handleSubmit} className="space-y-3">
         {errore && (
           <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
             {errore}
@@ -122,22 +202,31 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
             Anagrafica aggiornata.
           </div>
         )}
+        <p className="text-[10px] text-slate-400">
+          I campi con <span className="text-red-500">*</span> sono obbligatori: qualificano
+          l&apos;azienda e servono alla reportistica. Le sezioni si comprimono cliccando sul titolo.
+        </p>
 
-        <div className="space-y-4">
-          <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            Dati identificativi
-          </h3>
-          <Campo label="Ragione Sociale">
+        <Sezione
+          titolo="Dati identificativi"
+          aperta={aperte.identificativi}
+          onToggle={() => toggle('identificativi')}
+          completa={sezioneIdentificativiCompleta}
+        >
+          <Campo label="Ragione Sociale" obbligatorio>
             <input
               type="text"
               value={form.ragioneSociale}
               onChange={(e) => setForm({ ...form, ragioneSociale: e.target.value })}
               className={classeInput}
-              required
             />
           </Campo>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Campo label="Forma Giuridica" hint="Es. S.r.l., S.p.A., S.r.l. Unipersonale">
+            <Campo
+              label="Forma Giuridica"
+              obbligatorio
+              hint="Es. S.r.l., S.p.A., S.r.l. Unipersonale"
+            >
               <input
                 type="text"
                 value={form.formaGiuridica}
@@ -145,7 +234,7 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
                 className={classeInput}
               />
             </Campo>
-            <Campo label="Codice ATECO">
+            <Campo label="Codice ATECO" obbligatorio>
               <input
                 type="text"
                 value={form.codiceAteco}
@@ -155,7 +244,7 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
             </Campo>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Campo label="Codice Fiscale">
+            <Campo label="Codice Fiscale" obbligatorio>
               <input
                 type="text"
                 value={form.codiceFiscale}
@@ -163,7 +252,7 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
                 className={`${classeInput} font-mono`}
               />
             </Campo>
-            <Campo label="Partita IVA">
+            <Campo label="Partita IVA" obbligatorio>
               <input
                 type="text"
                 value={form.partitaIva}
@@ -173,7 +262,7 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
             </Campo>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Campo label="Numero REA" hint="Numero di iscrizione al Registro Imprese">
+            <Campo label="Numero REA" obbligatorio hint="Numero di iscrizione al Registro Imprese">
               <input
                 type="text"
                 value={form.numeroRea}
@@ -181,7 +270,7 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
                 className={`${classeInput} font-mono`}
               />
             </Campo>
-            <Campo label="Capitale Sociale (€)">
+            <Campo label="Capitale Sociale (€)" obbligatorio>
               <input
                 type="number"
                 min={0}
@@ -192,13 +281,15 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
               />
             </Campo>
           </div>
-        </div>
+        </Sezione>
 
-        <div className="space-y-4 border-t border-slate-100 pt-4">
-          <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            Sede legale
-          </h3>
-          <Campo label="Indirizzo">
+        <Sezione
+          titolo="Sede legale"
+          aperta={aperte.sede}
+          onToggle={() => toggle('sede')}
+          completa={sezioneSedeCompleta}
+        >
+          <Campo label="Indirizzo" obbligatorio>
             <input
               type="text"
               value={form.indirizzoSedeLegale}
@@ -207,7 +298,7 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
             />
           </Campo>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Campo label="Città">
+            <Campo label="Città" obbligatorio>
               <input
                 type="text"
                 value={form.citta}
@@ -215,7 +306,7 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
                 className={classeInput}
               />
             </Campo>
-            <Campo label="Provincia" hint="Sigla, es. MI">
+            <Campo label="Provincia" obbligatorio hint="Sigla, es. MI">
               <input
                 type="text"
                 maxLength={2}
@@ -224,7 +315,7 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
                 className={`${classeInput} font-mono uppercase`}
               />
             </Campo>
-            <Campo label="CAP">
+            <Campo label="CAP" obbligatorio>
               <input
                 type="text"
                 value={form.cap}
@@ -233,7 +324,10 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
               />
             </Campo>
           </div>
-          <Campo label="Numero sedi secondarie" hint="0 se l'azienda opera solo dalla sede legale">
+          <Campo
+            label="Numero sedi secondarie"
+            hint="Facoltativo — 0 se l'azienda opera solo dalla sede legale"
+          >
             <input
               type="number"
               min={0}
@@ -244,14 +338,16 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
               className={`${classeInput} font-mono max-w-[8rem]`}
             />
           </Campo>
-        </div>
+        </Sezione>
 
-        <div className="space-y-4 border-t border-slate-100 pt-4">
-          <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            Rappresentanza e contatti
-          </h3>
+        <Sezione
+          titolo="Rappresentanza e contatti"
+          aperta={aperte.contatti}
+          onToggle={() => toggle('contatti')}
+          completa={sezioneContattiCompleta}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Campo label="Rappresentante Legale" hint="Nome e cognome">
+            <Campo label="Rappresentante Legale" obbligatorio hint="Nome e cognome">
               <input
                 type="text"
                 value={form.rappresentanteLegale}
@@ -259,7 +355,7 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
                 className={classeInput}
               />
             </Campo>
-            <Campo label="Ruolo" hint="Es. Amministratore Unico, Presidente CdA">
+            <Campo label="Ruolo" obbligatorio hint="Es. Amministratore Unico, Presidente CdA">
               <input
                 type="text"
                 value={form.ruoloRappresentanteLegale}
@@ -268,7 +364,11 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
               />
             </Campo>
           </div>
-          <Campo label="PEC" hint="Necessaria per comunicazioni formali (es. a Enti, creditori)">
+          <Campo
+            label="PEC"
+            obbligatorio
+            hint="Necessaria per comunicazioni formali (es. a Enti, creditori)"
+          >
             <input
               type="email"
               value={form.pec}
@@ -276,7 +376,7 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda, codice, tipoSpazi
               className={`${classeInput} font-mono`}
             />
           </Campo>
-        </div>
+        </Sezione>
 
         <button
           type="submit"

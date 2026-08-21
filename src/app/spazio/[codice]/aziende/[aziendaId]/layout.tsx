@@ -1,25 +1,23 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, Check, Lock, Users } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniConteggioScreeningPendente } from '@/app/actions/screeningAzienda';
 import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
+import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
+import { anagraficaAziendaCompleta } from '@/lib/anagraficaAzienda';
 
-const SOTTO_NAV = [
-  { id: '', label: 'Anagrafica' },
-  { id: 'xbrl', label: 'Configurazione XBRL' },
-  { id: 'indici', label: 'Indici' },
-  { id: 'operatori', label: 'Operatori' },
-] as const;
+type StatoStep = 'bloccato' | 'attivo' | 'completo';
 
-/** Solo per spazi ENTE — un redigente non ha un ente che dichiara nulla su di sé. */
-const VOCE_POSIZIONE_ENTE = { id: 'posizione-ente', label: 'Posizione Ente' } as const;
-/** Per entrambi i tipi di spazio — genera un questionario libero dalle direttrici per il Ricevente, prova a pre-compilare la Check List Ministeriale per il Redigente. */
-const VOCE_SCREENING = { id: 'screening', label: 'Screening' } as const;
-/** Separata da Screening apposta: Screening genera/pre-compila, qui si risponde — sempre presente, non nascosta dentro il flusso di generazione. */
-const VOCE_CHECKLIST = { id: 'checklist', label: 'Check List' } as const;
+interface Step {
+  id: string; // segmento URL ('' = anagrafica root)
+  label: string;
+  stato: StatoStep;
+  motivo?: string; // perché è bloccato (tooltip)
+  badge?: number; // es. domande residue
+}
 
 export default async function AziendaLayout({
   children,
@@ -44,31 +42,81 @@ export default async function AziendaLayout({
   const aziendaNum = Number(aziendaId);
   const isEnte = contesto.tipoSpazio === 'ENTE';
 
-  // Stato di completamento delle varie sezioni, per colorare in verde le
-  // funzioni con esito positivo. Query leggere, tutte in parallelo per non
-  // allungare il caricamento. Per gli spazi non-ENTE la Posizione Ente non
-  // esiste, quindi non la si interroga.
-  const [pendenteScreening, anagraficaEnteRis, debitiRis] = await Promise.all([
+  // Segnali di completamento, tutti in parallelo. La Posizione Ente esiste
+  // solo per gli spazi ENTE.
+  const [pendenteScreening, anagraficaEnteRis, debitiRis, xbrlRis] = await Promise.all([
     ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
     isEnte ? ottieniAnagraficaEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
     isEnte ? ottieniDebitiEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
+    ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
   ]);
   const domandeMancanti = pendenteScreening.totali - pendenteScreening.risposte;
 
-  const anagraficaEnteCompilata = !!anagraficaEnteRis?.dati?.idEnte;
-  const haDebiti = (debitiRis?.righe?.length ?? 0) > 0;
+  // Completamento dei passi (unica fonte del semaforo).
+  const anagraficaCompleta = anagraficaAziendaCompleta(
+    azienda as unknown as Record<string, unknown>
+  );
+  const posizioneEnteCompleta =
+    !!anagraficaEnteRis?.dati?.idEnte && (debitiRis?.righe?.length ?? 0) > 0;
+  const analisiBilancioCompleta = (xbrlRis?.storico?.length ?? 0) > 0;
+  const screeningGenerato = pendenteScreening.esiste;
+  const checklistCompleta =
+    screeningGenerato && pendenteScreening.totali > 0 && domandeMancanti === 0;
 
-  // Mappa id-voce → completato. Anagrafica azienda: presente (siamo qui solo
-  // se esiste). Posizione Ente: anagrafica ente + almeno un debito. Screening:
-  // questionario generato. Check List: tutte le domande risposte.
-  const completato: Record<string, boolean> = {
-    '': true,
-    'posizione-ente': anagraficaEnteCompilata && haDebiti,
-    screening: pendenteScreening.esiste,
-    checklist: pendenteScreening.esiste && pendenteScreening.totali > 0 && domandeMancanti === 0,
-  };
+  // Prerequisiti di attivazione (semaforo/gating richiesti da INPS):
+  //  - Screening si attiva solo se Anagrafica, Posizione Ente e Analisi
+  //    Bilancio sono verdi (per il Redigente non c'è Posizione Ente).
+  //  - Check List è bloccata finché lo Screening non è stato generato.
+  const passi123Verdi =
+    anagraficaCompleta && (!isEnte || posizioneEnteCompleta) && analisiBilancioCompleta;
 
   const base = `/spazio/${codice}/aziende/${aziendaId}`;
+
+  // Sequenza dei passi di analisi (Operatori è a parte, spinto a destra).
+  const steps: Step[] = [];
+  steps.push({
+    id: '',
+    label: 'Anagrafica',
+    stato: anagraficaCompleta ? 'completo' : 'attivo',
+  });
+  if (isEnte) {
+    steps.push({
+      id: 'posizione-ente',
+      label: 'Posizione Ente',
+      stato: !anagraficaCompleta ? 'bloccato' : posizioneEnteCompleta ? 'completo' : 'attivo',
+      motivo: "Completa prima l'Anagrafica azienda.",
+    });
+  }
+  steps.push({
+    id: 'xbrl',
+    label: 'Analisi Bilancio',
+    stato: !anagraficaCompleta ? 'bloccato' : analisiBilancioCompleta ? 'completo' : 'attivo',
+    motivo: "Completa prima l'Anagrafica azienda.",
+  });
+  steps.push({
+    id: 'screening',
+    label: 'Screening',
+    stato: !passi123Verdi ? 'bloccato' : screeningGenerato ? 'completo' : 'attivo',
+    motivo: isEnte
+      ? 'Completa prima Anagrafica, Posizione Ente e Analisi Bilancio.'
+      : 'Completa prima Anagrafica e Analisi Bilancio.',
+  });
+  steps.push({
+    id: 'checklist',
+    label: 'Check List',
+    stato: !screeningGenerato ? 'bloccato' : checklistCompleta ? 'completo' : 'attivo',
+    motivo: 'Genera prima lo Screening.',
+    badge: screeningGenerato && domandeMancanti > 0 ? domandeMancanti : undefined,
+  });
+
+  const classePerStato = (stato: StatoStep): string => {
+    if (stato === 'completo')
+      return 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:border-emerald-400';
+    if (stato === 'attivo')
+      return 'bg-amber-50 border-amber-300 text-amber-800 hover:border-amber-400';
+    // bloccato
+    return 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed';
+  };
 
   return (
     <div className="max-w-5xl space-y-4">
@@ -115,36 +163,51 @@ export default async function AziendaLayout({
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {[
-          ...SOTTO_NAV,
-          ...(contesto.tipoSpazio === 'ENTE' ? [VOCE_POSIZIONE_ENTE] : []),
-          VOCE_SCREENING,
-          VOCE_CHECKLIST,
-        ].map((voce) => (
-          <Link
-            key={voce.id}
-            href={voce.id ? `${base}/${voce.id}` : base}
-            className={`relative px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border transition-colors shrink-0 ${
-              completato[voce.id]
-                ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:border-emerald-400'
-                : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
-            }`}
-          >
+      {/* Barra dei passi: sequenza logica dell'analisi a sinistra, Operatori a
+          destra. Semaforo: grigio = bloccato, arancione = da fare, verde = fatto. */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        {steps.map((step) => {
+          const contenuto = (
             <span className="inline-flex items-center gap-1">
-              {completato[voce.id] && <Check className="w-3 h-3 shrink-0" />}
-              {voce.label}
+              {step.stato === 'completo' && <Check className="w-3 h-3 shrink-0" />}
+              {step.stato === 'bloccato' && <Lock className="w-3 h-3 shrink-0" />}
+              {step.label}
             </span>
-            {voce.id === 'checklist' && domandeMancanti > 0 && (
+          );
+          const classi = `relative px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border transition-colors shrink-0 ${classePerStato(step.stato)}`;
+          const badge =
+            step.badge !== undefined ? (
               <span
                 className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-amber-500 text-white text-[9px] font-black rounded-full"
-                title={`${domandeMancanti} domande dello screening in attesa di risposta`}
+                title={`${step.badge} domande dello screening in attesa di risposta`}
               >
-                {domandeMancanti}
+                {step.badge}
               </span>
-            )}
-          </Link>
-        ))}
+            ) : null;
+
+          if (step.stato === 'bloccato') {
+            return (
+              <span key={step.id} className={classi} title={step.motivo} aria-disabled="true">
+                {contenuto}
+              </span>
+            );
+          }
+          return (
+            <Link key={step.id} href={step.id ? `${base}/${step.id}` : base} className={classi}>
+              {contenuto}
+              {badge}
+            </Link>
+          );
+        })}
+
+        {/* Operatori — separato dal flusso di analisi, spinto all'estremità
+            opposta: sopra restano solo i passi utili all'analisi aziendale. */}
+        <Link
+          href={`${base}/operatori`}
+          className="ml-auto shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
+        >
+          <Users className="w-3.5 h-3.5" /> Operatori
+        </Link>
       </div>
 
       {children}

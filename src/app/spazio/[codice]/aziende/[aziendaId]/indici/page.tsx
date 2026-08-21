@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { AziendaConfigIndici } from '@/components/spazio/AziendaConfigIndici';
+import { SottoNavAnalisiBilancio } from '@/components/spazio/SottoNavAnalisiBilancio';
 
 export default async function AziendaIndiciPage({
   params,
@@ -18,5 +19,10 @@ export default async function AziendaIndiciPage({
     redirect(`/spazio/${codice}/aziende`);
   }
 
-  return <AziendaConfigIndici nomeSchema={contesto.nomeSchema} aziendaId={Number(aziendaId)} />;
+  return (
+    <div className="space-y-4">
+      <SottoNavAnalisiBilancio base={`/spazio/${codice}/aziende/${aziendaId}`} attivo="indici" />
+      <AziendaConfigIndici nomeSchema={contesto.nomeSchema} aziendaId={Number(aziendaId)} />
+    </div>
+  );
 }
