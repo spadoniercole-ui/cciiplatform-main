@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { eseguiLogout } from '@/app/actions/auth';
 import { APP_VERSION, PORTABLE_VERSION } from '@/lib/appVersion';
+import { testoCopyright } from '@/lib/copyright';
 
 // Bundle compilato per l'edizione portable? Il flag è inlinato al build da
 // build-portable.mjs (NEXT_PUBLIC_PORTABLE=1); nel build cloud è assente.
@@ -78,6 +79,8 @@ export function TopStatusBar({ nomeUtente, ruolo, variante = 'chiaro' }: Props) 
           {formattaData(ora)} · {formattaOra(ora)}
         </span>
       )}
+
+      <span className="hidden lg:inline opacity-70">{testoCopyright()}</span>
 
       <span className="hidden md:inline font-mono opacity-60">{ETICHETTA_VERSIONE}</span>
 

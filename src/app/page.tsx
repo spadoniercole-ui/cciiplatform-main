@@ -16,6 +16,7 @@ import {
 } from '@/app/actions/spazi';
 import { Logo } from '@/components/brand/Logo';
 import { APP_VERSION, PORTABLE_VERSION } from '@/lib/appVersion';
+import { testoCopyright } from '@/lib/copyright';
 
 const DASHBOARD_VALUE = '__dashboard__';
 
@@ -244,6 +245,7 @@ export default function LoginPage() {
           <span className="text-[9px] text-slate-300 font-mono block mt-1">
             {ETICHETTA_VERSIONE}
           </span>
+          <span className="text-[9px] text-slate-400 block mt-1">{testoCopyright()}</span>
         </div>
       </div>
     </div>

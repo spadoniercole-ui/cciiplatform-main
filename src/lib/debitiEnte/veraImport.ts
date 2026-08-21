@@ -26,6 +26,13 @@ function indiceImporto(intestazioni: string[]): number {
   return i;
 }
 
+function indiceCredito(intestazioni: string[]): number {
+  const norm = intestazioni.map(normalizzaEtichetta);
+  let i = norm.findIndex((h) => h === 'totale credito');
+  if (i < 0) i = norm.findIndex((h) => h.includes('credito'));
+  return i;
+}
+
 function indiceVoce(intestazioni: string[]): number {
   const norm = intestazioni.map(normalizzaEtichetta);
   const i = norm.findIndex((h) => /(natura|descriz|voce|posizione|causale|gestione)/.test(h));
@@ -53,13 +60,24 @@ export interface AnalisiVera {
 function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
   const idxImporto = indiceImporto(s.intestazioni);
   const idxVoce = indiceVoce(s.intestazioni);
-  const righe = s.righe.map((r, n) => ({
-    voce:
-      idxVoce >= 0 && testoCella(r[idxVoce]).trim() !== ''
-        ? testoCella(r[idxVoce])
-        : `Riga ${n + 1}`,
-    importo: idxImporto >= 0 ? parseNumero(r[idxImporto]) : 0,
-  }));
+  // NETTING: se la sezione ha una colonna "Totale credito", l'importo utile è
+  // debito − credito (posizione netta). Dove la colonna manca (es. ADR,
+  // Gestione Separata) coincide col debito, e i totali combaciano al centesimo
+  // col foglio Esito. Nella prima gestione può restare un piccolo scarto: è
+  // dovuto alle Note di Rettifica, che l'Esito somma ma non compaiono nelle
+  // righe di dettaglio.
+  const idxCredito = indiceCredito(s.intestazioni);
+  const righe = s.righe.map((r, n) => {
+    const debito = idxImporto >= 0 ? parseNumero(r[idxImporto]) : 0;
+    const credito = idxCredito >= 0 ? parseNumero(r[idxCredito]) : 0;
+    return {
+      voce:
+        idxVoce >= 0 && testoCella(r[idxVoce]).trim() !== ''
+          ? testoCella(r[idxVoce])
+          : `Riga ${n + 1}`,
+      importo: debito - credito,
+    };
+  });
   const totale = righe.reduce((a, r) => a + r.importo, 0);
   return {
     titolo: s.titolo,
