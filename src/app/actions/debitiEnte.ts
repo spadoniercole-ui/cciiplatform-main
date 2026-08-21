@@ -30,6 +30,8 @@ export interface RigaDebitoEnte {
   datiExtra: Record<string, string> | null;
   /** Tracciato d'origine della riga (catalogo). null = riga legacy/manuale. */
   tracciatoId: number | null;
+  /** Codice-guida grezzo da cui è stata derivata la categoria. null se manuale o tipo fisso. */
+  codiceGuida: string | null;
 }
 
 export interface DatiRigaDebitoEnte {
@@ -43,6 +45,8 @@ export interface DatiRigaDebitoEnte {
   datiExtra?: Record<string, string> | null;
   /** Tracciato d'origine (import). Assente per l'inserimento manuale. */
   tracciatoId?: number | null;
+  /** Codice-guida grezzo (per la ri-applicazione delle correzioni). Assente per l'inserimento manuale/tipo fisso. */
+  codiceGuida?: string | null;
 }
 
 export interface RisultatoElencoDebitiEnte {
@@ -62,7 +66,7 @@ export async function ottieniDebitiEnte(
     await assicuraTabellaDebitiEnte(nomeSchema);
 
     const risultato = await pool.query(
-      `SELECT id, azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id
+      `SELECT id, azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida
        FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1 ORDER BY id ASC`,
       [aziendaId]
     );
@@ -84,6 +88,7 @@ export async function ottieniDebitiEnte(
             : null,
         tracciatoId:
           r.tracciato_id === null || r.tracciato_id === undefined ? null : Number(r.tracciato_id),
+        codiceGuida: r.codice_guida ?? null,
       })),
     };
   } catch (error: any) {
@@ -120,8 +125,8 @@ export async function aggiungiRigaDebitoEnteAction(
         ? JSON.stringify(dati.datiExtra)
         : null;
     await pool.query(
-      `INSERT INTO "${nomeSchema}".debiti_ente (azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      `INSERT INTO "${nomeSchema}".debiti_ente (azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         aziendaId,
         dati.voce.trim(),
@@ -132,6 +137,7 @@ export async function aggiungiRigaDebitoEnteAction(
         dati.data,
         datiExtra,
         dati.tracciatoId ?? null,
+        dati.codiceGuida ?? null,
       ]
     );
     return { success: true };

@@ -99,6 +99,8 @@ export interface RigaImportata {
   note: string | null;
   data: string | null;
   datiExtra: Record<string, string> | null;
+  /** Codice-guida grezzo di questa riga (per ri-applicare le correzioni). null se tipo fisso. */
+  codiceGuida: string | null;
 }
 
 export interface EsitoEstrazione {
@@ -134,11 +136,12 @@ export function estraiRighe(sezione: SezioneEstratta, tracciato: Tracciato): Esi
     }
     // Categoria
     let tipo: string | null = null;
+    let codiceGuida: string | null = null;
     if (tracciato.classificazioneModo === 'tipo_fisso') {
       tipo = tracciato.tipoFisso;
     } else if (idxGuida >= 0) {
-      const codice = testoCella(riga[idxGuida]);
-      tipo = tracciato.mappaturaCodici[codice] ?? null;
+      codiceGuida = testoCella(riga[idxGuida]) || null;
+      tipo = codiceGuida ? (tracciato.mappaturaCodici[codiceGuida] ?? null) : null;
     }
     if (!tipo) {
       scartate.push({ indice: n, motivo: 'categoria non risolvibile per questa riga' });
@@ -166,6 +169,7 @@ export function estraiRighe(sezione: SezioneEstratta, tracciato: Tracciato): Esi
       note,
       data,
       datiExtra: Object.keys(datiExtra).length > 0 ? datiExtra : null,
+      codiceGuida,
     });
   });
 

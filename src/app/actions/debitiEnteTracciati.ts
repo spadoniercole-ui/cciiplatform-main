@@ -124,6 +124,91 @@ export interface RisultatoOperazioneTracciato {
   error?: string;
 }
 
+export interface RisultatoCorrezioneTracciato {
+  success: boolean;
+  /** Numero di righe già importate a cui la correzione della categoria è stata ri-applicata. */
+  righeAggiornate?: number;
+  error?: string;
+}
+
+/**
+ * Correzione IN-PLACE di un tracciato, valida "per sempre": aggiorna il
+ * modello (ruoli/foglio/classificazione/mappatura) e RI-APPLICA la
+ * correzione della categoria anche ai dati già importati, senza ricaricare il
+ * file. Le modifiche strutturali (quale colonna è l'importo, il foglio…)
+ * valgono per i caricamenti futuri; la ri-classificazione dei codici invece
+ * si propaga subito alle righe esistenti tramite il codice-guida salvato su
+ * ciascuna. Le righe importate prima dell'introduzione del codice-guida
+ * (senza quel dato) non vengono toccate: basta un nuovo caricamento.
+ */
+export async function aggiornaTracciatoDebitiEnteAction(
+  nomeSchema: string,
+  tracciatoId: number,
+  dati: DatiNuovoTracciato
+): Promise<RisultatoCorrezioneTracciato> {
+  try {
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (!dati.nome.trim())
+      return { success: false, error: 'Il nome del tracciato è obbligatorio.' };
+    if (!dati.ruoli.includes('importo')) {
+      return { success: false, error: 'Indica quale colonna è l’Importo.' };
+    }
+    if (dati.classificazioneModo === 'colonna_guida' && !dati.ruoli.includes('guida')) {
+      return { success: false, error: 'Indica la colonna-guida dei codici da classificare.' };
+    }
+    if (dati.classificazioneModo === 'tipo_fisso' && !dati.tipoFisso) {
+      return { success: false, error: 'Scegli la categoria fissa per l’intera sezione.' };
+    }
+    await assicuraTabellaTracciatiDebitiEnte(nomeSchema);
+    await assicuraTabellaDebitiEnte(nomeSchema);
+
+    await pool.query(
+      `UPDATE "${nomeSchema}".debiti_ente_tracciati
+         SET nome=$2, foglio=$3, intestazioni=$4, ruoli=$5, classificazione_modo=$6,
+             tipo_fisso=$7, mappatura_codici=$8, codici_noti=$9, firma=$10, nome_file_origine=$11
+       WHERE id=$1`,
+      [
+        tracciatoId,
+        dati.nome.trim(),
+        dati.foglio,
+        JSON.stringify(dati.intestazioni),
+        JSON.stringify(dati.ruoli),
+        dati.classificazioneModo,
+        dati.tipoFisso,
+        JSON.stringify(dati.mappaturaCodici),
+        JSON.stringify(dati.codiciNoti),
+        dati.firma,
+        dati.nomeFileOrigine,
+      ]
+    );
+
+    // Ri-applicazione della categoria ai dati già importati.
+    let righeAggiornate = 0;
+    if (dati.classificazioneModo === 'tipo_fisso' && dati.tipoFisso) {
+      const res = await pool.query(
+        `UPDATE "${nomeSchema}".debiti_ente SET tipo=$2 WHERE tracciato_id=$1`,
+        [tracciatoId, dati.tipoFisso]
+      );
+      righeAggiornate += res.rowCount ?? 0;
+    } else {
+      for (const [codice, categoria] of Object.entries(dati.mappaturaCodici)) {
+        const res = await pool.query(
+          `UPDATE "${nomeSchema}".debiti_ente SET tipo=$3 WHERE tracciato_id=$1 AND codice_guida=$2`,
+          [tracciatoId, codice, categoria]
+        );
+        righeAggiornate += res.rowCount ?? 0;
+      }
+    }
+    return { success: true, righeAggiornate };
+  } catch (error: any) {
+    console.error('[aggiornaTracciatoDebitiEnteAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile correggere il tracciato: ${error.message || error}`,
+    };
+  }
+}
+
 /**
  * Aggiorna la mappatura dei codici-guida (aggiunge i nuovi mappati
  * dall'operatore) e i codici noti. Usata quando un caricamento porta codici

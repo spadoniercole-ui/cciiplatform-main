@@ -1031,6 +1031,13 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.debiti_ente ADD COLUMN IF NOT EXISTS tracciato_id INTEGER`
   );
+  // Codice-guida grezzo da cui è stata derivata la categoria (solo per le
+  // righe importate da un tracciato a colonna-guida). Serve a RI-APPLICARE
+  // una correzione della mappatura codice→categoria anche ai dati già
+  // importati, senza dover ricaricare il file: UPDATE tipo WHERE codice_guida = X.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_ente ADD COLUMN IF NOT EXISTS codice_guida TEXT`
+  );
 
   // Migrazione dati "best effort", una tantum: per ogni azienda, se la
   // nuova tabella è ancora vuota, copia TUTTE le righe dello scenario

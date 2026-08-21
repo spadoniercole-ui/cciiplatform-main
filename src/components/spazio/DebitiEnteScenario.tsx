@@ -27,6 +27,7 @@ import {
   ottieniTracciatiDebitiEnte,
   salvaTracciatoDebitiEnteAction,
   aggiornaMappaturaCodiciTracciatoAction,
+  aggiornaTracciatoDebitiEnteAction,
   eliminaTracciatoDebitiEnteAction,
 } from '@/app/actions/debitiEnteTracciati';
 import {
@@ -116,6 +117,17 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
     codici: string[];
     mappa: Record<string, string>;
   } | null>(null);
+
+  // Correzione in-place di un tracciato (senza ricaricare il file).
+  const [correzione, setCorrezione] = useState<{
+    tracciato: Tracciato;
+    nome: string;
+    ruoli: RuoloColonna[];
+    modo: ClassificazioneModo;
+    tipoFisso: string;
+    mappaCodici: Record<string, string>;
+  } | null>(null);
+  const [erroreCorrezione, setErroreCorrezione] = useState<string | null>(null);
 
   useDichiaraContestoAssistente({ pagina: 'debitoria-ente', nomeSchema, scenarioId: aziendaId });
 
@@ -282,6 +294,7 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
         data: r.data,
         datiExtra: r.datiExtra,
         tracciatoId: tracciato.id,
+        codiceGuida: r.codiceGuida,
       });
       if (res.success) salvate++;
       else erroriSalvataggio.push(res.error || 'errore');
@@ -458,6 +471,65 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
     }
   };
 
+  const apriCorrezione = (t: Tracciato) => {
+    setErroreCorrezione(null);
+    setCorrezione({
+      tracciato: t,
+      nome: t.nome,
+      ruoli: [...t.ruoli],
+      modo: t.classificazioneModo,
+      tipoFisso: t.tipoFisso || '',
+      mappaCodici: { ...t.mappaturaCodici },
+    });
+  };
+
+  const confermaCorrezione = async () => {
+    if (!correzione) return;
+    setErroreCorrezione(null);
+    const t = correzione.tracciato;
+    if (!correzione.ruoli.includes('importo')) {
+      setErroreCorrezione('Indica quale colonna è l’Importo.');
+      return;
+    }
+    if (correzione.modo === 'colonna_guida' && !correzione.ruoli.includes('guida')) {
+      setErroreCorrezione('Indica la colonna-guida dei codici da classificare.');
+      return;
+    }
+    if (correzione.modo === 'tipo_fisso' && !correzione.tipoFisso) {
+      setErroreCorrezione('Scegli la categoria fissa.');
+      return;
+    }
+    setInElaborazione(true);
+    try {
+      const res = await aggiornaTracciatoDebitiEnteAction(nomeSchema, t.id, {
+        nome: correzione.nome.trim() || t.nome,
+        foglio: t.foglio,
+        intestazioni: t.intestazioni,
+        ruoli: correzione.ruoli,
+        classificazioneModo: correzione.modo,
+        tipoFisso: correzione.modo === 'tipo_fisso' ? correzione.tipoFisso : null,
+        mappaturaCodici: correzione.modo === 'colonna_guida' ? correzione.mappaCodici : {},
+        codiciNoti: t.codiciNoti,
+        firma: calcolaFirma([t.foglio], t.intestazioni),
+        nomeFileOrigine: t.nomeFileOrigine,
+      });
+      if (!res.success) {
+        setErroreCorrezione(res.error || 'Impossibile correggere il tracciato.');
+        return;
+      }
+      setCorrezione(null);
+      await carica();
+      setEsito(
+        `Tracciato «${correzione.nome || t.nome}» corretto.` +
+          (res.righeAggiornate
+            ? ` Correzione ri-applicata a ${res.righeAggiornate} righe già importate.`
+            : ' Le modifiche valgono dai prossimi caricamenti.')
+      );
+    } finally {
+      setInElaborazione(false);
+    }
+  };
+
   const handleEliminaTracciato = async (t: Tracciato) => {
     if (
       !window.confirm(
@@ -621,24 +693,182 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
             </label>
           </div>
           {tracciati.length > 0 && (
-            <div className="text-[10px] text-slate-500">
-              Tracciati riconosciuti:{' '}
-              {tracciati.map((t, i) => (
-                <span key={t.id} className="inline-flex items-center gap-1">
-                  <span className="font-bold text-slate-700">{t.nome}</span>
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Tracciati riconosciuti
+              </span>
+              {tracciati.map((t) => (
+                <div
+                  key={t.id}
+                  className="flex items-center gap-2 flex-wrap border border-slate-200 rounded-lg px-3 py-2"
+                >
+                  <span className="font-bold text-slate-700 text-xs flex-1 min-w-0 truncate">
+                    {t.nome}
+                    <span className="ml-2 font-normal text-[10px] text-slate-400">
+                      {t.foglio} ·{' '}
+                      {t.classificazioneModo === 'colonna_guida'
+                        ? `${Object.keys(t.mappaturaCodici).length} codici mappati`
+                        : 'tipo fisso'}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => apriCorrezione(t)}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase text-blue-600 hover:bg-blue-50 rounded"
+                  >
+                    <Pencil className="w-3 h-3" /> Correggi
+                  </button>
                   <button
                     type="button"
                     onClick={() => handleEliminaTracciato(t)}
-                    title="Elimina tracciato"
-                    className="text-slate-300 hover:text-red-600"
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
                   >
-                    <X className="w-3 h-3" />
+                    <Trash2 className="w-3 h-3" /> Dimentica
                   </button>
-                  {i < tracciati.length - 1 ? <span className="text-slate-300 mr-1">·</span> : null}
-                </span>
+                </div>
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ---- Correzione IN-PLACE di un tracciato ---- */}
+      {correzione && (
+        <div className="bg-white border border-blue-200 rounded-xl p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Pencil className="w-4 h-4 text-blue-600" />
+            <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+              Correggi tracciato «{correzione.tracciato.nome}»
+            </h3>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Le correzioni ai codici valgono <strong>per sempre</strong>: si applicano ai prossimi
+            caricamenti e vengono ri-applicate anche alle righe già importate. Le modifiche
+            strutturali (quale colonna è l’importo, ecc.) valgono dal prossimo caricamento.
+          </p>
+
+          {erroreCorrezione && (
+            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+              {erroreCorrezione}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+              Nome del tracciato
+            </label>
+            <input
+              type="text"
+              value={correzione.nome}
+              onChange={(e) => setCorrezione({ ...correzione, nome: e.target.value })}
+              className="w-full sm:w-72 p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-[10px] font-bold text-slate-500 uppercase block">
+              Ruoli delle colonne (per i prossimi caricamenti)
+            </span>
+            {correzione.tracciato.intestazioni.map((intest, i) => (
+              <div key={i} className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-slate-900 text-xs min-w-0 flex-1 truncate">
+                  {intest || '(vuota)'}
+                </span>
+                <select
+                  value={correzione.ruoli[i] || 'ignora'}
+                  onChange={(e) => {
+                    const nuovi = [...correzione.ruoli];
+                    nuovi[i] = e.target.value as RuoloColonna;
+                    if (nuovi[i] === 'guida')
+                      nuovi.forEach((r, k) => {
+                        if (k !== i && r === 'guida') nuovi[k] = 'ignora';
+                      });
+                    setCorrezione({ ...correzione, ruoli: nuovi });
+                  }}
+                  className="p-1.5 text-xs border border-slate-200 rounded-lg text-slate-900 bg-white"
+                >
+                  {RUOLI_OPZIONI.map((o) => (
+                    <option key={o.valore} value={o.valore}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+
+          {correzione.modo === 'colonna_guida' && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1.5">
+              <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                Categoria per ogni codice-guida (la correzione qui si applica anche ai dati già
+                importati)
+              </span>
+              {correzione.tracciato.codiciNoti.length === 0 && (
+                <p className="text-[10px] text-slate-400">
+                  Nessun codice ancora registrato per questo tracciato.
+                </p>
+              )}
+              {correzione.tracciato.codiciNoti.map((c) => (
+                <div key={c} className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-slate-700 flex-1 truncate">{c}</span>
+                  <select
+                    value={correzione.mappaCodici[c] || ''}
+                    onChange={(e) =>
+                      setCorrezione({
+                        ...correzione,
+                        mappaCodici: { ...correzione.mappaCodici, [c]: e.target.value },
+                      })
+                    }
+                    className="p-1 text-xs border border-slate-200 rounded text-slate-900 bg-white"
+                  >
+                    <option value="">— categoria —</option>
+                    {categorieAttive.map((cat) => (
+                      <option key={cat.codice} value={cat.codice}>
+                        {cat.etichetta}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
+          {correzione.modo === 'tipo_fisso' && (
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                Categoria fissa (si applica a tutte le righe del tracciato)
+              </label>
+              <select
+                value={correzione.tipoFisso}
+                onChange={(e) => setCorrezione({ ...correzione, tipoFisso: e.target.value })}
+                className="w-full sm:w-64 p-2 text-xs bg-white border border-slate-300 rounded-lg text-slate-900"
+              >
+                <option value="">— scegli —</option>
+                {categorieAttive.map((c) => (
+                  <option key={c.codice} value={c.codice}>
+                    {c.etichetta}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setCorrezione(null)}
+              className="px-4 py-2 text-xs font-bold uppercase text-slate-500 hover:text-slate-700"
+            >
+              Annulla
+            </button>
+            <button
+              type="button"
+              onClick={confermaCorrezione}
+              disabled={inElaborazione}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold uppercase tracking-wider rounded-lg text-xs"
+            >
+              {inElaborazione ? 'Correzione...' : 'Salva correzione (vale per sempre)'}
+            </button>
+          </div>
         </div>
       )}
 
