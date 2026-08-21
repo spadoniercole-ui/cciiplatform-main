@@ -8,6 +8,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ListChecks, CheckCircle2, Sparkles, Wand2, Pencil, Check, X } from 'lucide-react';
 import {
   ottieniScreeningAzienda,
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function CheckListAziendaScenario({ nomeSchema, aziendaId, codice }: Props) {
+  const router = useRouter();
   const [stato, setStato] = useState<StatoScreeningAzienda | null>(null);
   const [caricamento, setCaricamento] = useState(true);
   const [correzioneInCorso, setCorrezioneInCorso] = useState(false);
@@ -79,6 +81,10 @@ export function CheckListAziendaScenario({ nomeSchema, aziendaId, codice }: Prop
     await salvaRispostaScreeningAction(nomeSchema, aziendaId, domandaId, nuovoValore, null);
     const screeningRis = await ottieniScreeningAzienda(nomeSchema, aziendaId);
     if (screeningRis.success) setStato(screeningRis.stato);
+    // Aggiorna il semaforo dei passi nel layout (Server Component): il badge
+    // delle domande residue deve scalare a ogni risposta e la Check List
+    // diventare verde appena il contatore arriva a zero, senza ricaricare.
+    router.refresh();
   };
 
   const avviaModificaDomanda = (domandaId: string, testoCorrente: string) => {

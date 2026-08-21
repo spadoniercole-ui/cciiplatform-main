@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Sparkles, RefreshCw, Upload, FileText, AlertTriangle, Printer } from 'lucide-react';
 import {
   ottieniScreeningAzienda,
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSpazio }: Props) {
+  const router = useRouter();
   const [stato, setStato] = useState<StatoScreeningAzienda | null>(null);
   const [numeroXbrl, setNumeroXbrl] = useState(0);
   const [caricamento, setCaricamento] = useState(true);
@@ -124,6 +126,11 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               : `${risultato.domandeCompilate} domanda/e della Check List Ministeriale compilata/e — completa il resto in Check List, la scheda accanto.`
           );
           setVisuraFile(null);
+          // Il semaforo dei passi vive nel layout (Server Component): senza
+          // questo refresh la Check List non si sbloccherebbe finché non si
+          // ricarica la pagina o si compie un'altra azione che aggiorna il
+          // layout.
+          router.refresh();
         } else {
           setErrore(risultato.error || 'Impossibile pre-compilare la Check List Ministeriale.');
         }
@@ -138,6 +145,11 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
       if (risultato.success) {
         await carica();
         setVisuraFile(null);
+        // Screening appena generato → la Check List deve sbloccarsi (e
+        // mostrare il badge delle domande) subito, non solo dopo un'altra
+        // azione. Il semaforo è renderizzato dal layout (Server Component),
+        // quindi va forzata la rilettura.
+        router.refresh();
       } else {
         setErrore(risultato.error || 'Impossibile generare lo screening.');
       }
