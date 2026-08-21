@@ -9,7 +9,6 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabellaDebitiEnte } from '@/db/provision';
-import type { TipoDebitoEnte } from '@/lib/debitiEnte/tipoDebito';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -22,23 +21,28 @@ export interface RigaDebitoEnte {
   importo: number;
   /** Opzionale — solo se lo schema del file distingue debito originario da quanto già pagato. null = nessuna distinzione, il saldo coincide con l'importo. */
   importoVersato: number | null;
-  tipo: TipoDebitoEnte;
+  /** Codice categoria (parametrico): DEBITO/AVA/NEUTRO o un legacy CLE/CEN/CEC/CEA. */
+  tipo: string;
   note: string | null;
-  /** Opzionale — generica (scadenza, notifica, emissione: il significato lo sa chi ha configurato l'architrave). */
+  /** Opzionale — generica (scadenza, notifica, emissione: il significato lo sa chi ha configurato il tracciato). */
   data: string | null;
   /** Colonne extra mappate dall'operatore (chiave = intestazione originale del file). null/vuoto se nessuna. */
   datiExtra: Record<string, string> | null;
+  /** Tracciato d'origine della riga (catalogo). null = riga legacy/manuale. */
+  tracciatoId: number | null;
 }
 
 export interface DatiRigaDebitoEnte {
   voce: string;
   importo: number;
   importoVersato: number | null;
-  tipo: TipoDebitoEnte;
+  tipo: string;
   note: string | null;
   data: string | null;
   /** Colonne extra (chiave = intestazione originale). Opzionale: l'inserimento manuale non ne ha. */
   datiExtra?: Record<string, string> | null;
+  /** Tracciato d'origine (import). Assente per l'inserimento manuale. */
+  tracciatoId?: number | null;
 }
 
 export interface RisultatoElencoDebitiEnte {
@@ -58,7 +62,7 @@ export async function ottieniDebitiEnte(
     await assicuraTabellaDebitiEnte(nomeSchema);
 
     const risultato = await pool.query(
-      `SELECT id, azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra
+      `SELECT id, azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id
        FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1 ORDER BY id ASC`,
       [aziendaId]
     );
@@ -71,13 +75,15 @@ export async function ottieniDebitiEnte(
         voce: r.voce,
         importo: Number(r.importo),
         importoVersato: r.importo_versato === null ? null : Number(r.importo_versato),
-        tipo: r.tipo as TipoDebitoEnte,
+        tipo: r.tipo as string,
         note: r.note,
         data: r.data ? new Date(r.data).toISOString().slice(0, 10) : null,
         datiExtra:
           r.dati_extra && typeof r.dati_extra === 'object' && Object.keys(r.dati_extra).length > 0
             ? (r.dati_extra as Record<string, string>)
             : null,
+        tracciatoId:
+          r.tracciato_id === null || r.tracciato_id === undefined ? null : Number(r.tracciato_id),
       })),
     };
   } catch (error: any) {
@@ -114,8 +120,8 @@ export async function aggiungiRigaDebitoEnteAction(
         ? JSON.stringify(dati.datiExtra)
         : null;
     await pool.query(
-      `INSERT INTO "${nomeSchema}".debiti_ente (azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO "${nomeSchema}".debiti_ente (azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         aziendaId,
         dati.voce.trim(),
@@ -125,6 +131,7 @@ export async function aggiungiRigaDebitoEnteAction(
         dati.note,
         dati.data,
         datiExtra,
+        dati.tracciatoId ?? null,
       ]
     );
     return { success: true };
@@ -166,6 +173,33 @@ export async function eliminaRigaDebitoEnteAction(
   } catch (error: any) {
     console.error('[eliminaRigaDebitoEnteAction] Errore:', error);
     return { success: false, error: `Impossibile eliminare la riga: ${error.message || error}` };
+  }
+}
+
+/**
+ * Elimina le righe di un'azienda provenienti da UN SOLO tracciato — usata
+ * prima di reimportare quello stesso tracciato: sostituzione per-tracciato,
+ * così ricaricare l'nrc non tocca le righe del DettaglioRichiesta. Le righe
+ * manuali/legacy (tracciato_id NULL) non vengono toccate.
+ */
+export async function eliminaDebitiPerTracciatoAzienda(
+  nomeSchema: string,
+  aziendaId: number,
+  tracciatoId: number
+): Promise<RisultatoOperazioneDebitoEnte> {
+  try {
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await pool.query(
+      `DELETE FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1 AND tracciato_id = $2`,
+      [aziendaId, tracciatoId]
+    );
+    return { success: true };
+  } catch (error: any) {
+    console.error('[eliminaDebitiPerTracciatoAzienda] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile eliminare le righe del tracciato: ${error.message || error}`,
+    };
   }
 }
 

@@ -1024,6 +1024,13 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.debiti_ente ADD COLUMN IF NOT EXISTS dati_extra JSONB`
   );
+  // Tracciato d'origine della riga (catalogo tracciati). NULL per le righe
+  // caricate col vecchio percorso architrave — restano intatte. Permette la
+  // sostituzione PER-TRACCIATO: ricaricare l'nrc non tocca le righe del
+  // DettaglioRichiesta della stessa azienda.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_ente ADD COLUMN IF NOT EXISTS tracciato_id INTEGER`
+  );
 
   // Migrazione dati "best effort", una tantum: per ogni azienda, se la
   // nuova tabella è ancora vuota, copia TUTTE le righe dello scenario
@@ -1166,6 +1173,64 @@ export async function assicuraTabellaAnalisiBilancioStep(nomeSchema: string): Pr
       xbrl_config_vista BOOLEAN NOT NULL DEFAULT FALSE,
       indici_visti BOOLEAN NOT NULL DEFAULT FALSE,
       updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+}
+
+/**
+ * Categorie tipo debito PARAMETRICHE di spazio (Debito / AVA / Neutro di
+ * default). Sostituiscono l'insieme fisso CLE/CEN/CEC/CEA come CHOICE per i
+ * nuovi caricamenti; i vecchi codici restano risolvibili via fallback statico
+ * (vedi lib/debitiEnte/tipoDebito), quindi i dati già inseriti non si toccano.
+ * Idempotente; seed solo se la tabella è vuota (mai sovrascrive scelte fatte).
+ */
+export async function assicuraTabellaCategorieTipoDebito(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.categorie_tipo_debito (
+      codice TEXT PRIMARY KEY,
+      etichetta TEXT NOT NULL,
+      descrizione TEXT,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      attivo BOOLEAN NOT NULL DEFAULT TRUE
+    )`
+  );
+  const conteggio = await db.execute(
+    sql`SELECT count(*)::int AS n FROM ${s}.categorie_tipo_debito`
+  );
+  const n = (conteggio[0] as { n: number } | undefined)?.n ?? 0;
+  if (n === 0) {
+    await eseguiDdlTenant(
+      sql`INSERT INTO ${s}.categorie_tipo_debito (codice, etichetta, descrizione, ordine, attivo) VALUES
+        ('DEBITO', 'Debito', 'Debito certo da contabilizzare', 1, TRUE),
+        ('AVA', 'AVA', 'Affidato all''Agente della Riscossione', 2, TRUE),
+        ('NEUTRO', 'Neutro', 'Voce neutra ai fini del confronto', 3, TRUE)`
+    );
+  }
+}
+
+/**
+ * Catalogo dei TRACCIATI della Posizione Debitoria (un formato di file =
+ * un tracciato). Sostituisce l'architrave unico per spazio: più tracciati
+ * coesistono (nrc, DettaglioRichiesta, futuri), riconosciuti per firma.
+ * Il vecchio debiti_ente_architrave NON viene toccato.
+ */
+export async function assicuraTabellaTracciatiDebitiEnte(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.debiti_ente_tracciati (
+      id SERIAL PRIMARY KEY,
+      nome TEXT NOT NULL,
+      foglio TEXT NOT NULL,
+      intestazioni JSONB NOT NULL,
+      ruoli JSONB NOT NULL,
+      classificazione_modo TEXT NOT NULL,
+      tipo_fisso TEXT,
+      mappatura_codici JSONB NOT NULL DEFAULT '{}'::jsonb,
+      codici_noti JSONB NOT NULL DEFAULT '[]'::jsonb,
+      firma TEXT NOT NULL,
+      nome_file_origine TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
 }

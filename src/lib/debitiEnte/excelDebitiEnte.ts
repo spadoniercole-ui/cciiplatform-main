@@ -44,7 +44,7 @@ export function esportaDebitiEnteExcel(
   righe: RigaDebitoEnte[],
   etichettePersonalizzate?: EtichetteTipoDebitoPersonalizzate
 ): void {
-  const etichettaColonna = (tipo: TipoDebitoEnte) => etichettePersonalizzate?.[tipo] || tipo;
+  const etichettaColonna = (tipo: string) => etichettePersonalizzate?.[tipo] || tipo;
   const intestazioniConSaldo = [
     'Voce',
     'Importo (€)',

@@ -1,49 +1,53 @@
 'use client';
 
-// Posizione Debitoria dell'Ente — "step 0" del cammino, solo per le
-// proposte RICEVUTE. Stesso sistema di caricamento della Proposta (stessa
-// UI, stesso export/import Excel, stessa selezione multipla), ma è
-// un'altra tabella: qui l'ente dichiara cosa gli è dovuto secondo la
-// propria contabilità (CLE/CEN/CEC/CEA), un parametro di confronto
-// indipendente rispetto a quanto l'azienda ha dichiarato nella Proposta.
+// Posizione Debitoria dell'Ente — a livello di AZIENDA. Percorso a
+// TRACCIATI: ogni formato di file (nrc, DettaglioRichiesta, futuri) è un
+// tracciato riconosciuto per firma. Al caricamento il sistema riconosce il
+// tracciato (o apre il wizard per uno nuovo), chiede la mappatura dei soli
+// codici-guida nuovi, e sostituisce SOLO le righe di quel tracciato. Le
+// categorie (Debito/AVA/Neutro di default) sono parametriche di spazio.
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Pencil, X, Download, Upload } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Download, Upload, FileStack } from 'lucide-react';
 import {
   ottieniDebitiEnte,
   aggiungiRigaDebitoEnteAction,
   modificaRigaDebitoEnteAction,
   eliminaRigaDebitoEnteAction,
-  eliminaTuttiDebitiEnteAction,
+  eliminaDebitiPerTracciatoAzienda,
   type RigaDebitoEnte,
   type DatiRigaDebitoEnte,
 } from '@/app/actions/debitiEnte';
-import { useDichiaraContestoAssistente } from '@/components/ContestoAssistenteContext';
+import {
+  ottieniCategorieTipoDebito,
+  type CategoriaTipoDebito,
+} from '@/app/actions/categorieTipoDebito';
+import {
+  ottieniTracciatiDebitiEnte,
+  salvaTracciatoDebitiEnteAction,
+  aggiornaMappaturaCodiciTracciatoAction,
+  eliminaTracciatoDebitiEnteAction,
+} from '@/app/actions/debitiEnteTracciati';
+import {
+  analizzaFoglio,
+  riconosciTracciato,
+  rilevaCodiciNuovi,
+  estraiRighe,
+  suggerisciRuoli,
+  type AnalisiFoglio,
+} from '@/lib/debitiEnte/tracciatoImport';
+import {
+  calcolaFirma,
+  valoriDistintiColonna,
+  type RuoloColonna,
+  type ClassificazioneModo,
+  type Tracciato,
+  type SezioneEstratta,
+} from '@/lib/debitiEnte/tracciatoCore';
+import { raggruppaPerTipoDebito, etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
 import { esportaDebitiEnteExcel } from '@/lib/debitiEnte/excelDebitiEnte';
-import {
-  leggiIntestazioniExcel,
-  importaConArchitrave,
-  type IntestazioniLette,
-  type RigaDebitoEsportabile,
-} from '@/lib/debitiEnte/excelDebitiEnte';
-import {
-  ottieniArchitraveDebitiEnte,
-  salvaArchitraveDebitiEnteAction,
-  azzeraArchitraveDebitiEnteAction,
-  type ArchitraveDebitiEnte,
-  type RuoloColonnaDebito,
-} from '@/app/actions/debitiEnteArchitrave';
-import {
-  TIPI_DEBITO_ENTE,
-  raggruppaPerTipoDebito,
-  etichettaTipoDebito,
-  type TipoDebitoEnte,
-} from '@/lib/debitiEnte/tipoDebito';
-import {
-  ottieniEtichetteTipoDebito,
-  type EtichettaTipoDebito,
-} from '@/app/actions/tipoDebitoConfig';
+import { useDichiaraContestoAssistente } from '@/components/ContestoAssistenteContext';
 
 interface Props {
   nomeSchema: string;
@@ -51,14 +55,16 @@ interface Props {
   nomeAzienda: string;
 }
 
-const FORM_VUOTO: DatiRigaDebitoEnte = {
-  voce: '',
-  importo: 0,
-  importoVersato: null,
-  tipo: 'CLE',
-  note: null,
-  data: null,
-};
+const RUOLI_OPZIONI: { valore: RuoloColonna; label: string }[] = [
+  { valore: 'ignora', label: 'Ignora questa colonna' },
+  { valore: 'voce', label: 'Voce / descrizione' },
+  { valore: 'importo', label: 'Importo (debito)' },
+  { valore: 'importo_versato', label: 'Importo versato (per il saldo)' },
+  { valore: 'guida', label: 'Colonna-guida (codici da classificare)' },
+  { valore: 'data', label: 'Data' },
+  { valore: 'nota', label: 'Nota' },
+  { valore: 'extra', label: "Colonna extra (salva com'è)" },
+];
 
 function parseNumeroItaliano(testo: string): number {
   const pulito = testo.trim().replace(',', '.');
@@ -68,87 +74,81 @@ function parseNumeroItaliano(testo: string): number {
 
 export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props) {
   const router = useRouter();
-  // Il primo caricamento (mount) non deve forzare un refresh del layout: solo
-  // le ricariche successive a una mutazione (aggiunta/modifica/eliminazione/
-  // import/cambio modello) devono aggiornare il semaforo dei passi in alto,
-  // che vive nel layout (Server Component) e non si rilegge da solo.
   const primoCaricamento = React.useRef(true);
+
   const [righe, setRighe] = useState<RigaDebitoEnte[]>([]);
-  const [etichetteTipoDebito, setEtichetteTipoDebito] = useState<EtichettaTipoDebito[]>(
-    TIPI_DEBITO_ENTE.map((t) => ({
-      codice: t.valore,
-      etichetta: t.etichetta,
-      descrizione: t.descrizione,
-    }))
-  );
+  const [categorie, setCategorie] = useState<CategoriaTipoDebito[]>([]);
+  const [tracciati, setTracciati] = useState<Tracciato[]>([]);
   const [caricamento, setCaricamento] = useState(true);
   const [errore, setErrore] = useState<string | null>(null);
+  const [esito, setEsito] = useState<string | null>(null);
+  const [inElaborazione, setInElaborazione] = useState(false);
 
-  const [form, setForm] = useState<DatiRigaDebitoEnte>(FORM_VUOTO);
+  // Form inserimento/modifica manuale.
+  const [form, setForm] = useState<DatiRigaDebitoEnte>({
+    voce: '',
+    importo: 0,
+    importoVersato: null,
+    tipo: '',
+    note: null,
+    data: null,
+  });
   const [rigaInModifica, setRigaInModifica] = useState<number | null>(null);
   const [salvataggio, setSalvataggio] = useState(false);
 
+  // Selezione multipla per eliminazione.
   const [righeSelezionate, setRigheSelezionate] = useState<Set<number>>(new Set());
-  const [eliminazioneMultiplaInCorso, setEliminazioneMultiplaInCorso] = useState(false);
-  const [importazioneInCorso, setImportazioneInCorso] = useState(false);
-  const [architrave, setArchitrave] = useState<ArchitraveDebitiEnte | null>(null);
-  const [caricamentoArchitrave, setCaricamentoArchitrave] = useState(true);
-  // Fase di mappatura — attiva solo al primo caricamento, quando non esiste ancora un architrave.
-  const [inMappatura, setInMappatura] = useState(false);
-  const [fileInMappatura, setFileInMappatura] = useState<File | null>(null);
-  const [intestazioniLette, setIntestazioniLette] = useState<IntestazioniLette | null>(null);
-  const [ruoliScelti, setRuoliScelti] = useState<RuoloColonnaDebito[]>([]);
-  const [mappaturaTipoScelta, setMappaturaTipoScelta] = useState<Record<string, TipoDebitoEnte>>(
-    {}
-  );
-  // Alternativa a mappare una colonna Tipo — alcuni export (es. INPS)
-  // non ce l'hanno affatto, ogni riga è implicitamente della stessa
-  // natura.
-  const [usaTipoFisso, setUsaTipoFisso] = useState(false);
-  const [tipoFissoScelto, setTipoFissoScelto] = useState<TipoDebitoEnte | ''>('');
-  const [erroreMappatura, setErroreMappatura] = useState<string | null>(null);
-  const [cambioModelloInCorso, setCambioModelloInCorso] = useState(false);
-  const [confermaCambioModello, setConfermaCambioModello] = useState('');
-  const [esitoImportazione, setEsitoImportazione] = useState<string | null>(null);
+
+  // Wizard nuovo tracciato.
+  const [wizardFile, setWizardFile] = useState<File | null>(null);
+  const [analisi, setAnalisi] = useState<AnalisiFoglio | null>(null);
+  const [ruoli, setRuoli] = useState<RuoloColonna[]>([]);
+  const [modo, setModo] = useState<ClassificazioneModo>('colonna_guida');
+  const [tipoFisso, setTipoFisso] = useState<string>('');
+  const [mappaCodici, setMappaCodici] = useState<Record<string, string>>({});
+  const [nomeTracciato, setNomeTracciato] = useState('');
+  const [erroreWizard, setErroreWizard] = useState<string | null>(null);
+
+  // Mappatura codici nuovi (tracciato già riconosciuto).
+  const [codiciNuovi, setCodiciNuovi] = useState<{
+    tracciato: Tracciato;
+    sezione: SezioneEstratta;
+    codici: string[];
+    mappa: Record<string, string>;
+  } | null>(null);
 
   useDichiaraContestoAssistente({ pagina: 'debitoria-ente', nomeSchema, scenarioId: aziendaId });
 
-  // Mappa codice -> etichetta, per le funzioni condivise (etichettaTipoDebito,
-  // raggruppaPerTipoDebito, export Excel) che accettano etichette personalizzate opzionali.
-  const mappaEtichette = React.useMemo(
-    () =>
-      Object.fromEntries(etichetteTipoDebito.map((e) => [e.codice, e.etichetta])) as Record<
-        TipoDebitoEnte,
-        string
-      >,
-    [etichetteTipoDebito]
+  const categorieAttive = categorie.filter((c) => c.attivo);
+  const mappaEtichette: Record<string, string> = Object.fromEntries(
+    categorie.map((c) => [c.codice, c.etichetta])
+  );
+  const ordineCategorie = categorie.map((c) => c.codice);
+  const nomiTracciato: Record<number, string> = Object.fromEntries(
+    tracciati.map((t) => [t.id, t.nome])
   );
 
   const carica = async () => {
     setCaricamento(true);
-    setCaricamentoArchitrave(true);
     try {
-      const [risultato, risultatoEtichette, risultatoArchitrave] = await Promise.all([
+      const [rDebiti, rCat, rTrac] = await Promise.all([
         ottieniDebitiEnte(nomeSchema, aziendaId),
-        ottieniEtichetteTipoDebito(nomeSchema),
-        ottieniArchitraveDebitiEnte(nomeSchema),
+        ottieniCategorieTipoDebito(nomeSchema),
+        ottieniTracciatiDebitiEnte(nomeSchema),
       ]);
-      if (risultato.success) setRighe(risultato.righe);
-      else setErrore(risultato.error || 'Impossibile caricare la posizione debitoria.');
-      if (risultatoEtichette.success) setEtichetteTipoDebito(risultatoEtichette.etichette);
-      if (risultatoArchitrave.success) setArchitrave(risultatoArchitrave.architrave);
+      if (rDebiti.success) setRighe(rDebiti.righe);
+      else setErrore(rDebiti.error || 'Impossibile caricare la posizione debitoria.');
+      if (rCat.success) {
+        setCategorie(rCat.categorie);
+        setForm((f) =>
+          f.tipo ? f : { ...f, tipo: rCat.categorie.find((c) => c.attivo)?.codice || '' }
+        );
+      }
+      if (rTrac.success) setTracciati(rTrac.tracciati);
     } finally {
       setCaricamento(false);
-      setCaricamentoArchitrave(false);
-      // Ogni mutazione (add/modifica/elimina/import/cambio modello) e ogni
-      // aggiornamento dall'assistente passano da qui: rileggiamo il semaforo
-      // dei passi solo dopo il primo caricamento, così "Posizione Ente"
-      // diventa verde appena la prima riga è salvata, senza reload manuale.
-      if (primoCaricamento.current) {
-        primoCaricamento.current = false;
-      } else {
-        router.refresh();
-      }
+      if (primoCaricamento.current) primoCaricamento.current = false;
+      else router.refresh();
     }
   };
 
@@ -164,10 +164,15 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, aziendaId]);
 
-  const handleSalva = async (e: React.FormEvent) => {
+  // ---------------------------------------------------------------- manuale
+  const handleSalvaManuale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.voce.trim()) {
       setErrore('Inserisci la voce di debito.');
+      return;
+    }
+    if (!form.tipo) {
+      setErrore('Scegli la categoria.');
       return;
     }
     setSalvataggio(true);
@@ -182,7 +187,14 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
       setSalvataggio(false);
       return;
     }
-    setForm(FORM_VUOTO);
+    setForm({
+      voce: '',
+      importo: 0,
+      importoVersato: null,
+      tipo: categorieAttive[0]?.codice || '',
+      note: null,
+      data: null,
+    });
     setRigaInModifica(null);
     setSalvataggio(false);
     await carica();
@@ -201,278 +213,283 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
     setErrore(null);
   };
 
-  const handleAnnullaModifica = () => {
-    setForm(FORM_VUOTO);
+  const annullaModifica = () => {
+    setForm({
+      voce: '',
+      importo: 0,
+      importoVersato: null,
+      tipo: categorieAttive[0]?.codice || '',
+      note: null,
+      data: null,
+    });
     setRigaInModifica(null);
     setErrore(null);
   };
 
   const handleElimina = async (id: number) => {
-    if (rigaInModifica === id) handleAnnullaModifica();
+    if (rigaInModifica === id) annullaModifica();
     await eliminaRigaDebitoEnteAction(nomeSchema, id);
     await carica();
   };
 
   const toggleSelezione = (id: number) => {
     setRigheSelezionate((prev) => {
-      const nuovo = new Set(prev);
-      if (nuovo.has(id)) nuovo.delete(id);
-      else nuovo.add(id);
-      return nuovo;
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
     });
   };
-
   const toggleSelezionaTutte = () => {
     setRigheSelezionate((prev) =>
       prev.size === righe.length ? new Set() : new Set(righe.map((r) => r.id))
     );
   };
-
   const handleEliminaSelezionate = async () => {
     if (righeSelezionate.size === 0) return;
-    const conferma = window.confirm(
-      `Eliminare ${righeSelezionate.size} rig${righeSelezionate.size === 1 ? 'a' : 'he'} selezionat${righeSelezionate.size === 1 ? 'a' : 'e'}? L'operazione non è reversibile.`
-    );
-    if (!conferma) return;
-    setEliminazioneMultiplaInCorso(true);
+    if (
+      !window.confirm(
+        `Eliminare ${righeSelezionate.size} righe selezionate? Operazione non reversibile.`
+      )
+    )
+      return;
+    setInElaborazione(true);
     try {
-      for (const id of righeSelezionate) {
-        await eliminaRigaDebitoEnteAction(nomeSchema, id);
-      }
+      for (const id of righeSelezionate) await eliminaRigaDebitoEnteAction(nomeSchema, id);
       setRigheSelezionate(new Set());
-      if (righeSelezionate.has(rigaInModifica ?? -1)) handleAnnullaModifica();
       await carica();
     } finally {
-      setEliminazioneMultiplaInCorso(false);
+      setInElaborazione(false);
     }
   };
 
-  const handleEsporta = () => {
-    esportaDebitiEnteExcel(nomeAzienda, righe, mappaEtichette);
-  };
+  const handleEsporta = () => esportaDebitiEnteExcel(nomeAzienda, righe, mappaEtichette);
 
-  /** Condiviso tra "importa con architrave già noto" e "primo caricamento, dopo la mappatura" — stessa logica di sostituzione (non aggiunta) delle righe esistenti. */
-  const salvaRigheImportate = async (
-    righeImportate: RigaDebitoEsportabile[],
-    righeConErrore: { indice: number; motivo: string }[]
-  ) => {
-    if (righe.length > 0) {
-      const risultatoPulizia = await eliminaTuttiDebitiEnteAction(nomeSchema, aziendaId);
-      if (!risultatoPulizia.success) {
-        setEsitoImportazione(
-          risultatoPulizia.error || 'Impossibile eliminare le righe esistenti prima di importare.'
-        );
-        return;
-      }
-    }
-
+  // --------------------------------------------------------------- import
+  const salvaRigheDaSezione = async (tracciato: Tracciato, sezione: SezioneEstratta) => {
+    const { righe: importate, scartate } = estraiRighe(sezione, tracciato);
+    // Sostituzione PER-TRACCIATO: via solo le righe di questo tracciato.
+    await eliminaDebitiPerTracciatoAzienda(nomeSchema, aziendaId, tracciato.id);
     let salvate = 0;
     const erroriSalvataggio: string[] = [];
-    for (const riga of righeImportate) {
-      const risultato = await aggiungiRigaDebitoEnteAction(nomeSchema, aziendaId, riga);
-      if (risultato.success) salvate += 1;
-      else erroriSalvataggio.push(`"${riga.voce}": ${risultato.error || 'errore sconosciuto'}`);
+    for (const r of importate) {
+      const res = await aggiungiRigaDebitoEnteAction(nomeSchema, aziendaId, {
+        voce: r.voce,
+        importo: r.importo,
+        importoVersato: r.importoVersato,
+        tipo: r.tipo,
+        note: r.note,
+        data: r.data,
+        datiExtra: r.datiExtra,
+        tracciatoId: tracciato.id,
+      });
+      if (res.success) salvate++;
+      else erroriSalvataggio.push(res.error || 'errore');
     }
     await carica();
-
-    const parti = [`${salvate} di ${righeImportate.length} righe lette sono state salvate.`];
-    if (erroriSalvataggio.length > 0) {
-      parti.push(
-        `Non salvate: ${erroriSalvataggio.slice(0, 3).join('; ')}${erroriSalvataggio.length > 3 ? '…' : ''}`
-      );
-    }
-    if (righeConErrore.length > 0) {
-      parti.push(
-        `${righeConErrore.length} righe scartate in lettura: ${righeConErrore
-          .slice(0, 3)
-          .map((r) => r.motivo)
-          .join('; ')}${righeConErrore.length > 3 ? '…' : ''}`
-      );
-    }
-    setEsitoImportazione(parti.join(' '));
+    const parti = [`${salvate} righe importate dal tracciato «${tracciato.nome}».`];
+    if (scartate.length > 0)
+      parti.push(`${scartate.length} righe scartate (importo o categoria mancante).`);
+    if (erroriSalvataggio.length > 0) parti.push(`${erroriSalvataggio.length} non salvate.`);
+    setEsito(parti.join(' '));
   };
 
   const handleSelezionaFile = async (file: File) => {
-    if (righe.length > 0) {
-      const conferma = window.confirm(
-        `Questo scenario ha già ${righe.length} rig${righe.length === 1 ? 'a' : 'he'} di posizione debitoria. Importando da questo file, le righe esistenti verranno eliminate e sostituite con quelle del file — non aggiunte. Continuare?`
-      );
-      if (!conferma) return;
-    }
-
-    // Architrave già riconosciuto: applica direttamente, nessuna
-    // interpretazione nuova da chiedere.
-    if (architrave) {
-      setImportazioneInCorso(true);
-      setEsitoImportazione(null);
-      try {
-        const {
-          righe: righeImportate,
-          righeConErrore,
-          strutturaNonCorrispondente,
-        } = await importaConArchitrave(
-          file,
-          architrave.mappatura,
-          architrave.mappaturaTipo,
-          architrave.numeroColonne,
-          architrave.nomeFoglio,
-          architrave.tipoFisso
-        );
-        if (strutturaNonCorrispondente) {
-          setEsitoImportazione(
-            `Questo file ha un numero di colonne diverso dal modello riconosciuto (${architrave.numeroColonne}) — non corrisponde al formato atteso. Se il formato è davvero cambiato, usa "Cambia modello" qui sotto.`
-          );
+    setErrore(null);
+    setEsito(null);
+    setInElaborazione(true);
+    try {
+      const ric = await riconosciTracciato(file, tracciati);
+      if (ric) {
+        const nuovi = rilevaCodiciNuovi(ric.sezione, ric.tracciato);
+        if (nuovi.length > 0) {
+          setCodiciNuovi({
+            tracciato: ric.tracciato,
+            sezione: ric.sezione,
+            codici: nuovi,
+            mappa: {},
+          });
+        } else {
+          await salvaRigheDaSezione(ric.tracciato, ric.sezione);
+        }
+      } else {
+        // Nuovo tracciato → wizard.
+        const a = await analizzaFoglio(file);
+        if (a.sezione.headerRow < 0) {
+          setEsito('Non riesco a individuare l’intestazione in questo file. Controlla il foglio.');
           return;
         }
-        await salvaRigheImportate(righeImportate, righeConErrore);
-      } catch (err: any) {
-        setEsitoImportazione(`Impossibile leggere il file: ${err.message || err}`);
-      } finally {
-        setImportazioneInCorso(false);
+        setWizardFile(file);
+        setAnalisi(a);
+        setRuoli(suggerisciRuoli(a.sezione.intestazioni));
+        setModo('colonna_guida');
+        setTipoFisso('');
+        setMappaCodici({});
+        setNomeTracciato(file.name.replace(/\.(xlsx?|xls)$/i, ''));
+        setErroreWizard(null);
       }
-      return;
-    }
-
-    // Primo caricamento: nessun modello ancora riconosciuto — si legge
-    // solo la struttura, la si mostra all'operatore, e si chiede come
-    // interpretarla. Non si importa nulla finché non è confermata.
-    setImportazioneInCorso(true);
-    setErroreMappatura(null);
-    try {
-      const lette = await leggiIntestazioniExcel(file);
-      setIntestazioniLette(lette);
-      setRuoliScelti(lette.intestazioni.map(() => 'ignora' as RuoloColonnaDebito));
-      setMappaturaTipoScelta({});
-      setFileInMappatura(file);
-      setInMappatura(true);
     } catch (err: any) {
-      setEsitoImportazione(`Impossibile leggere il file: ${err.message || err}`);
+      setEsito(`Impossibile leggere il file: ${err.message || err}`);
     } finally {
-      setImportazioneInCorso(false);
+      setInElaborazione(false);
     }
   };
 
-  const handleCambiaFoglio = async (nuovoFoglio: string) => {
-    if (!fileInMappatura) return;
-    setImportazioneInCorso(true);
-    setErroreMappatura(null);
+  const cambiaFoglioWizard = async (foglio: string) => {
+    if (!wizardFile) return;
+    setInElaborazione(true);
     try {
-      const lette = await leggiIntestazioniExcel(fileInMappatura, nuovoFoglio);
-      setIntestazioniLette(lette);
-      // Colonne diverse da un foglio all'altro — la mappatura scelta
-      // finora non ha più senso, riparte da zero.
-      setRuoliScelti(lette.intestazioni.map(() => 'ignora' as RuoloColonnaDebito));
-      setMappaturaTipoScelta({});
-      setUsaTipoFisso(false);
-      setTipoFissoScelto('');
-    } catch (err: any) {
-      setErroreMappatura(`Impossibile leggere il foglio: ${err.message || err}`);
+      const a = await analizzaFoglio(wizardFile, foglio);
+      setAnalisi(a);
+      setRuoli(suggerisciRuoli(a.sezione.intestazioni));
+      setMappaCodici({});
     } finally {
-      setImportazioneInCorso(false);
+      setInElaborazione(false);
     }
   };
 
-  const handleConfermaMappatura = async () => {
-    if (!intestazioniLette || !fileInMappatura) return;
-    const idxImporto = ruoliScelti.indexOf('importo');
-    if (idxImporto < 0) {
-      setErroreMappatura('Devi indicare quale colonna è "Importo".');
+  const idxGuidaWizard = ruoli.indexOf('guida');
+  const valoriGuidaWizard =
+    analisi && idxGuidaWizard >= 0
+      ? valoriDistintiColonna(analisi.sezione.righe, idxGuidaWizard)
+      : [];
+
+  const confermaWizard = async () => {
+    if (!analisi || !wizardFile) return;
+    setErroreWizard(null);
+    if (!ruoli.includes('importo')) {
+      setErroreWizard('Indica quale colonna è l’Importo.');
       return;
     }
-    if (usaTipoFisso) {
-      if (!tipoFissoScelto) {
-        setErroreMappatura('Scegli il tipo fisso da applicare a tutte le righe.');
+    if (modo === 'colonna_guida') {
+      if (idxGuidaWizard < 0) {
+        setErroreWizard('Indica la colonna-guida dei codici da classificare.');
         return;
       }
-    } else {
-      const idxTipo = ruoliScelti.indexOf('tipo');
-      if (idxTipo < 0) {
-        setErroreMappatura('Devi indicare quale colonna è "Tipo".');
-        return;
-      }
-      const valoriTipo = intestazioniLette.valoriDistintiPerColonna[idxTipo] || [];
-      const nonMappati = valoriTipo.filter((v) => !mappaturaTipoScelta[v]);
+      const nonMappati = valoriGuidaWizard.filter((v) => !mappaCodici[v]);
       if (nonMappati.length > 0) {
-        setErroreMappatura(
-          `Mappa ancora questi valori trovati nella colonna Tipo: ${nonMappati.join(', ')}.`
+        setErroreWizard(
+          `Mappa ancora questi codici: ${nonMappati.slice(0, 8).join(', ')}${nonMappati.length > 8 ? '…' : ''}`
         );
         return;
       }
+    } else if (!tipoFisso) {
+      setErroreWizard('Scegli la categoria fissa per l’intera sezione.');
+      return;
     }
-
-    setImportazioneInCorso(true);
-    setErroreMappatura(null);
+    if (!nomeTracciato.trim()) {
+      setErroreWizard('Dai un nome al tracciato.');
+      return;
+    }
+    setInElaborazione(true);
     try {
-      const tipoFissoDaSalvare = usaTipoFisso ? (tipoFissoScelto as TipoDebitoEnte) : null;
-      const nuovoArchitrave: ArchitraveDebitiEnte = {
-        intestazioniOriginali: intestazioniLette.intestazioni,
-        mappatura: ruoliScelti,
-        mappaturaTipo: mappaturaTipoScelta,
-        numeroColonne: intestazioniLette.intestazioni.length,
-        nomeFileOrigine: fileInMappatura.name,
-        nomeFoglio: intestazioniLette.foglioLetto,
-        tipoFisso: tipoFissoDaSalvare,
-      };
-      const risultatoSalvataggio = await salvaArchitraveDebitiEnteAction(
-        nomeSchema,
-        nuovoArchitrave
-      );
-      if (!risultatoSalvataggio.success) {
-        setErroreMappatura(risultatoSalvataggio.error || 'Impossibile salvare il modello.');
+      const firma = calcolaFirma(analisi.fogli, analisi.sezione.intestazioni);
+      const codiciNoti = modo === 'colonna_guida' ? valoriGuidaWizard : [];
+      const res = await salvaTracciatoDebitiEnteAction(nomeSchema, {
+        nome: nomeTracciato.trim(),
+        foglio: analisi.foglioLetto,
+        intestazioni: analisi.sezione.intestazioni,
+        ruoli,
+        classificazioneModo: modo,
+        tipoFisso: modo === 'tipo_fisso' ? tipoFisso : null,
+        mappaturaCodici: modo === 'colonna_guida' ? mappaCodici : {},
+        codiciNoti,
+        firma,
+        nomeFileOrigine: wizardFile.name,
+      });
+      if (!res.success || !res.id) {
+        setErroreWizard(res.error || 'Impossibile salvare il tracciato.');
         return;
       }
-      const { righe: righeImportate, righeConErrore } = await importaConArchitrave(
-        fileInMappatura,
-        ruoliScelti,
-        mappaturaTipoScelta,
-        intestazioniLette.intestazioni.length,
-        intestazioniLette.foglioLetto,
-        tipoFissoDaSalvare
-      );
-      await salvaRigheImportate(righeImportate, righeConErrore);
-      setArchitrave(nuovoArchitrave);
-      setInMappatura(false);
-      setFileInMappatura(null);
-      setIntestazioniLette(null);
+      const tracciato: Tracciato = {
+        id: res.id,
+        nome: nomeTracciato.trim(),
+        foglio: analisi.foglioLetto,
+        intestazioni: analisi.sezione.intestazioni,
+        ruoli,
+        classificazioneModo: modo,
+        tipoFisso: modo === 'tipo_fisso' ? tipoFisso : null,
+        mappaturaCodici: modo === 'colonna_guida' ? mappaCodici : {},
+        codiciNoti,
+        nomeFileOrigine: wizardFile.name,
+      };
+      await salvaRigheDaSezione(tracciato, analisi.sezione);
+      // reset wizard
+      setWizardFile(null);
+      setAnalisi(null);
     } catch (err: any) {
-      setErroreMappatura(`Impossibile importare: ${err.message || err}`);
+      setErroreWizard(`Impossibile completare: ${err.message || err}`);
     } finally {
-      setImportazioneInCorso(false);
+      setInElaborazione(false);
     }
   };
 
-  const handleAnnullaMappatura = () => {
-    setInMappatura(false);
-    setFileInMappatura(null);
-    setIntestazioniLette(null);
-    setErroreMappatura(null);
-    setUsaTipoFisso(false);
-    setTipoFissoScelto('');
+  const annullaWizard = () => {
+    setWizardFile(null);
+    setAnalisi(null);
+    setErroreWizard(null);
   };
 
-  const handleCambiaModello = async () => {
-    if (confermaCambioModello !== 'CAMBIA MODELLO') return;
-    setCambioModelloInCorso(true);
+  const confermaCodiciNuovi = async () => {
+    if (!codiciNuovi) return;
+    const nonMappati = codiciNuovi.codici.filter((c) => !codiciNuovi.mappa[c]);
+    if (nonMappati.length > 0) return;
+    setInElaborazione(true);
     try {
-      const risultato = await azzeraArchitraveDebitiEnteAction(nomeSchema);
-      if (risultato.success) {
-        setArchitrave(null);
-        setConfermaCambioModello('');
-        await carica();
-      } else {
-        setEsitoImportazione(risultato.error || 'Impossibile cambiare modello.');
-      }
+      const mappaturaAgg = { ...codiciNuovi.tracciato.mappaturaCodici, ...codiciNuovi.mappa };
+      const codiciNotiAgg = Array.from(
+        new Set([...codiciNuovi.tracciato.codiciNoti, ...codiciNuovi.codici])
+      );
+      await aggiornaMappaturaCodiciTracciatoAction(
+        nomeSchema,
+        codiciNuovi.tracciato.id,
+        mappaturaAgg,
+        codiciNotiAgg
+      );
+      const tracciatoAgg: Tracciato = {
+        ...codiciNuovi.tracciato,
+        mappaturaCodici: mappaturaAgg,
+        codiciNoti: codiciNotiAgg,
+      };
+      await salvaRigheDaSezione(tracciatoAgg, codiciNuovi.sezione);
+      setCodiciNuovi(null);
     } finally {
-      setCambioModelloInCorso(false);
+      setInElaborazione(false);
+    }
+  };
+
+  const handleEliminaTracciato = async (t: Tracciato) => {
+    if (
+      !window.confirm(
+        `Eliminare il tracciato «${t.nome}»? Verranno cancellate SOLO le righe importate con questo tracciato (in tutte le aziende dello spazio). Le righe manuali restano.`
+      )
+    )
+      return;
+    setInElaborazione(true);
+    try {
+      const res = await eliminaTracciatoDebitiEnteAction(nomeSchema, t.id);
+      if (!res.success) setEsito(res.error || 'Impossibile eliminare il tracciato.');
+      await carica();
+    } finally {
+      setInElaborazione(false);
     }
   };
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
 
-  const riepilogo = raggruppaPerTipoDebito(righe, mappaEtichette);
-  const totaleComplessivo = riepilogo.reduce((acc, r) => acc + r.totale, 0);
-  const totaleSaldoComplessivo = riepilogo.reduce((acc, r) => acc + r.totaleSaldo, 0);
-  const haDistinzioneSaldo = righe.some((r) => r.importoVersato !== null);
+  const riepilogo = raggruppaPerTipoDebito(
+    righe.map((r) => ({
+      voce: r.voce,
+      importo: r.importo,
+      importoVersato: r.importoVersato,
+      tipo: r.tipo,
+    })),
+    mappaEtichette,
+    ordineCategorie
+  );
+  const totale = riepilogo.reduce((a, r) => a + r.totale, 0);
+  const totaleSaldo = riepilogo.reduce((a, r) => a + r.totaleSaldo, 0);
+  const haSaldo = righe.some((r) => r.importoVersato !== null);
 
   return (
     <div className="space-y-6">
@@ -481,9 +498,9 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
           Posizione Debitoria dell&apos;Ente
         </h2>
         <p className="text-slate-500 text-[11px] mt-1">
-          Cosa l&apos;ente dichiara essergli dovuto secondo la propria contabilità — un parametro di
-          confronto indipendente da quanto dichiarato nella Proposta, non una sua copia. In
-          difficoltà? L&apos;assistente in basso a destra può registrare le voci parlandone.
+          Carica i file dell&apos;ente (contabilizzati e non): ogni formato è un «tracciato»
+          riconosciuto in automatico. Al primo caricamento di un formato nuovo ti chiedo come
+          leggerlo; ai successivi lo applico da solo, chiedendoti solo i codici mai visti.
         </p>
       </div>
 
@@ -492,35 +509,38 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
           {errore}
         </div>
       )}
+      {esito && (
+        <div className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
+          {esito}
+        </div>
+      )}
 
+      {/* ---- Inserimento / modifica manuale ---- */}
       <form
-        onSubmit={handleSalva}
+        onSubmit={handleSalvaManuale}
         className="bg-white border border-slate-200 rounded-xl p-5 space-y-3"
       >
         <div className="flex items-center justify-between">
           <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-            {rigaInModifica ? 'Modifica riga' : 'Nuova riga'}
+            {rigaInModifica ? 'Modifica riga' : 'Nuova riga (manuale)'}
           </h3>
           {rigaInModifica && (
             <button
               type="button"
-              onClick={handleAnnullaModifica}
+              onClick={annullaModifica}
               className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-red-600 uppercase"
             >
-              <X className="w-3 h-3" /> Annulla modifica
+              <X className="w-3 h-3" /> Annulla
             </button>
           )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div>
-            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-              Voce di debito
-            </label>
+            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Voce</label>
             <input
               type="text"
               value={form.voce}
               onChange={(e) => setForm({ ...form, voce: e.target.value })}
-              placeholder="Es. Contributi 2023"
               className="w-full p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
             />
           </div>
@@ -537,15 +557,18 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
             />
           </div>
           <div>
-            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Tipo</label>
+            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+              Categoria
+            </label>
             <select
               value={form.tipo}
-              onChange={(e) => setForm({ ...form, tipo: e.target.value as TipoDebitoEnte })}
+              onChange={(e) => setForm({ ...form, tipo: e.target.value })}
               className="w-full p-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-900"
             >
-              {etichetteTipoDebito.map((t) => (
-                <option key={t.codice} value={t.codice}>
-                  {t.etichetta} — {t.descrizione}
+              {categorieAttive.length === 0 && <option value="">—</option>}
+              {categorieAttive.map((c) => (
+                <option key={c.codice} value={c.codice}>
+                  {c.etichetta}
                 </option>
               ))}
             </select>
@@ -570,7 +593,8 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
         </button>
       </form>
 
-      {!caricamentoArchitrave && !inMappatura && (
+      {/* ---- Caricamento file (tracciati) ---- */}
+      {!wizardFile && !codiciNuovi && (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -578,250 +602,288 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
               onClick={handleEsporta}
               className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg transition-colors"
             >
-              <Download className="w-3.5 h-3.5" />
-              Scarica quanto già inserito (consultazione)
+              <Download className="w-3.5 h-3.5" /> Scarica quanto inserito
             </button>
             <label className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] uppercase rounded-lg transition-colors cursor-pointer">
               <Upload className="w-3.5 h-3.5" />
-              {importazioneInCorso
-                ? 'Elaborazione...'
-                : architrave
-                  ? 'Carica il file dell\u2019ente'
-                  : 'Carica il primo file dell\u2019ente'}
+              {inElaborazione ? 'Elaborazione...' : 'Carica un file dell’ente'}
               <input
                 type="file"
                 accept=".xlsx,.xls"
                 className="hidden"
-                disabled={importazioneInCorso}
+                disabled={inElaborazione}
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleSelezionaFile(file);
+                  const f = e.target.files?.[0];
+                  if (f) handleSelezionaFile(f);
                   e.target.value = '';
                 }}
               />
             </label>
           </div>
-          {architrave ? (
-            <p className="text-[10px] text-slate-400">
-              Modello riconosciuto da &quot;{architrave.nomeFileOrigine || 'un file precedente'}
-              &quot; ({architrave.numeroColonne} colonne) — ogni nuovo file deve avere la stessa
-              struttura.
-            </p>
-          ) : (
-            <p className="text-[10px] text-slate-400">
-              Nessun modello riconosciuto ancora — il primo file che carichi qui, con le colonne che
-              l&apos;ente già usa, diventa il riferimento fisso per i caricamenti successivi.
-            </p>
-          )}
-        </div>
-      )}
-
-      {esitoImportazione && (
-        <div className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
-          {esitoImportazione}
-        </div>
-      )}
-
-      {inMappatura && intestazioniLette && (
-        <div className="bg-white border border-blue-200 rounded-xl p-5 space-y-4">
-          <div>
-            <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-              Riconosci le colonne del tuo file
-            </h3>
-            <p className="text-[11px] text-slate-500 mt-1">
-              {intestazioniLette.numeroRigheDati} righe di dati trovate. Dicci cosa significa
-              ciascuna colonna — questa scelta diventa il modello fisso per i caricamenti
-              successivi, cambiarla dopo richiede di cancellare tutto e ricominciare.
-            </p>
-          </div>
-
-          {erroreMappatura && (
-            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-              {erroreMappatura}
-            </div>
-          )}
-
-          {intestazioniLette.fogliDisponibili.length > 1 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <label className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block mb-1">
-                Questo file ha più fogli — quale leggiamo?
-              </label>
-              <p className="text-[10px] text-amber-700 mb-2">
-                Molti export (es. INPS) hanno un foglio di riepilogo e altri di dettaglio — scegli
-                quello con le righe che ti interessano. Gli altri fogli vengono ignorati, anche nei
-                caricamenti successivi.
-              </p>
-              <select
-                value={intestazioniLette.foglioLetto}
-                onChange={(e) => handleCambiaFoglio(e.target.value)}
-                className="w-full sm:w-64 p-2 text-xs bg-white border border-amber-300 rounded-lg outline-none focus:border-blue-500 text-slate-900"
-              >
-                {intestazioniLette.fogliDisponibili.map((nome) => (
-                  <option key={nome} value={nome}>
-                    {nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-            <label className="flex items-center gap-2 text-[11px] text-slate-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={usaTipoFisso}
-                onChange={(e) => setUsaTipoFisso(e.target.checked)}
-              />
-              Questo file non ha una colonna &quot;Tipo&quot; — tutte le righe sono dello stesso
-              tipo (es. un export INPS, tutto contributi/sanzioni previdenziali)
-            </label>
-            {usaTipoFisso && (
-              <select
-                value={tipoFissoScelto}
-                onChange={(e) => setTipoFissoScelto(e.target.value as TipoDebitoEnte)}
-                className="w-full sm:w-64 p-2 mt-2 text-xs bg-white border border-slate-300 rounded-lg outline-none focus:border-blue-500 text-slate-900"
-              >
-                <option value="">— scegli il tipo —</option>
-                {etichetteTipoDebito.map((t) => (
-                  <option key={t.codice} value={t.codice}>
-                    {t.etichetta}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            {intestazioniLette.intestazioni.map((intestazione, i) => (
-              <div key={i} className="border border-slate-200 rounded-lg p-3">
-                <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                  <span className="font-bold text-slate-900 text-xs">
-                    Colonna {i + 1}: &quot;{intestazione}&quot;
-                  </span>
-                  <select
-                    value={ruoliScelti[i]}
-                    onChange={(e) => {
-                      const nuovi = [...ruoliScelti];
-                      nuovi[i] = e.target.value as RuoloColonnaDebito;
-                      setRuoliScelti(nuovi);
-                    }}
-                    className="p-1.5 text-xs border border-slate-200 rounded-lg text-slate-900 bg-white"
+          {tracciati.length > 0 && (
+            <div className="text-[10px] text-slate-500">
+              Tracciati riconosciuti:{' '}
+              {tracciati.map((t, i) => (
+                <span key={t.id} className="inline-flex items-center gap-1">
+                  <span className="font-bold text-slate-700">{t.nome}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleEliminaTracciato(t)}
+                    title="Elimina tracciato"
+                    className="text-slate-300 hover:text-red-600"
                   >
-                    <option value="ignora">Ignora questa colonna</option>
-                    <option value="voce">Voce / descrizione</option>
-                    <option value="importo">Importo (debito)</option>
-                    <option value="importo_versato">
-                      Importo versato (per calcolare il saldo)
+                    <X className="w-3 h-3" />
+                  </button>
+                  {i < tracciati.length - 1 ? <span className="text-slate-300 mr-1">·</span> : null}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ---- Mappatura codici NUOVI (tracciato riconosciuto) ---- */}
+      {codiciNuovi && (
+        <div className="bg-white border border-amber-200 rounded-xl p-5 space-y-3">
+          <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+            Codici nuovi nel tracciato «{codiciNuovi.tracciato.nome}»
+          </h3>
+          <p className="text-[11px] text-slate-500">
+            Questo file porta codici-guida mai visti prima. Assegna una categoria a ciascuno, poi
+            importo.
+          </p>
+          <div className="space-y-1.5">
+            {codiciNuovi.codici.map((c) => (
+              <div key={c} className="flex items-center gap-2">
+                <span className="text-xs font-mono text-slate-700 flex-1 truncate">{c}</span>
+                <select
+                  value={codiciNuovi.mappa[c] || ''}
+                  onChange={(e) =>
+                    setCodiciNuovi({
+                      ...codiciNuovi,
+                      mappa: { ...codiciNuovi.mappa, [c]: e.target.value },
+                    })
+                  }
+                  className="p-1.5 text-xs border border-slate-200 rounded text-slate-900 bg-white"
+                >
+                  <option value="">— categoria —</option>
+                  {categorieAttive.map((cat) => (
+                    <option key={cat.codice} value={cat.codice}>
+                      {cat.etichetta}
                     </option>
-                    <option value="tipo">Tipo (classificazione del debito)</option>
-                    <option value="nota">Nota</option>
-                    <option value="data">Data</option>
-                    <option value="extra">Colonna extra (salva com&apos;è)</option>
-                  </select>
-                </div>
-                {!usaTipoFisso &&
-                  ruoliScelti[i] === 'tipo' &&
-                  (intestazioniLette.valoriDistintiPerColonna[i] || []).length > 0 && (
-                    <div className="mt-2 space-y-1.5 bg-slate-50 rounded-lg p-2.5">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase block">
-                        Valori trovati in questa colonna — mappa ciascuno su un codice
-                      </span>
-                      {intestazioniLette.valoriDistintiPerColonna[i].map((valore) => (
-                        <div key={valore} className="flex items-center gap-2">
-                          <span className="text-xs text-slate-700 flex-1 truncate">
-                            &quot;{valore}&quot;
-                          </span>
-                          <select
-                            value={mappaturaTipoScelta[valore] || ''}
-                            onChange={(e) =>
-                              setMappaturaTipoScelta({
-                                ...mappaturaTipoScelta,
-                                [valore]: e.target.value as TipoDebitoEnte,
-                              })
-                            }
-                            className="p-1 text-xs border border-slate-200 rounded text-slate-900 bg-white"
-                          >
-                            <option value="">— scegli —</option>
-                            {TIPI_DEBITO_ENTE.map((t) => (
-                              <option key={t.valore} value={t.valore}>
-                                {etichetteTipoDebito.find((e) => e.codice === t.valore)
-                                  ?.etichetta || t.etichetta}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  ))}
+                </select>
               </div>
             ))}
           </div>
-
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={handleAnnullaMappatura}
+              onClick={() => setCodiciNuovi(null)}
               className="px-4 py-2 text-xs font-bold uppercase text-slate-500 hover:text-slate-700"
             >
               Annulla
             </button>
             <button
               type="button"
-              onClick={handleConfermaMappatura}
-              disabled={importazioneInCorso}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold uppercase tracking-wider rounded-lg text-xs transition-colors"
+              onClick={confermaCodiciNuovi}
+              disabled={inElaborazione || codiciNuovi.codici.some((c) => !codiciNuovi.mappa[c])}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold uppercase tracking-wider rounded-lg text-xs"
             >
-              {importazioneInCorso ? 'Salvataggio...' : 'Conferma e importa'}
+              {inElaborazione ? 'Import...' : 'Mappa e importa'}
             </button>
           </div>
         </div>
       )}
 
-      {architrave && !inMappatura && (
-        <div className="border border-amber-200 bg-amber-50/50 rounded-lg p-3 space-y-2">
-          <p className="text-[11px] text-amber-800">
-            Cambiare modello cancella <strong>ogni riga</strong> di Situazione Debitoria già
-            inserita in <strong>tutti</strong> gli scenari di questo spazio, non solo questo — il
-            vecchio formato non descrive più i dati nuovi.
-          </p>
+      {/* ---- Wizard NUOVO tracciato ---- */}
+      {wizardFile && analisi && (
+        <div className="bg-white border border-blue-200 rounded-xl p-5 space-y-4">
           <div className="flex items-center gap-2">
+            <FileStack className="w-4 h-4 text-blue-600" />
+            <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+              Nuovo tracciato — come leggo questo file?
+            </h3>
+          </div>
+
+          {erroreWizard && (
+            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+              {erroreWizard}
+            </div>
+          )}
+
+          {analisi.fogli.length > 1 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <label className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block mb-1">
+                Foglio da leggere
+              </label>
+              <select
+                value={analisi.foglioLetto}
+                onChange={(e) => cambiaFoglioWizard(e.target.value)}
+                className="w-full sm:w-72 p-2 text-xs bg-white border border-amber-300 rounded-lg text-slate-900"
+              >
+                {analisi.fogli.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <p className="text-[11px] text-slate-500">
+            Intestazione rilevata alla riga {analisi.sezione.headerRow + 1};{' '}
+            {analisi.sezione.righe.length} righe utili fino al primo salto di sezione. Assegna un
+            ruolo a ogni colonna.
+          </p>
+
+          <div className="space-y-2">
+            {analisi.sezione.intestazioni.map((intest, i) => (
+              <div key={i} className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-slate-900 text-xs min-w-0 flex-1 truncate">
+                  Col {i + 1}: «{intest || '(vuota)'}»
+                </span>
+                <select
+                  value={ruoli[i] || 'ignora'}
+                  onChange={(e) => {
+                    const nuovi = [...ruoli];
+                    nuovi[i] = e.target.value as RuoloColonna;
+                    // Una sola colonna-guida.
+                    if (nuovi[i] === 'guida')
+                      nuovi.forEach((r, k) => {
+                        if (k !== i && r === 'guida') nuovi[k] = 'ignora';
+                      });
+                    setRuoli(nuovi);
+                  }}
+                  className="p-1.5 text-xs border border-slate-200 rounded-lg text-slate-900 bg-white"
+                >
+                  {RUOLI_OPZIONI.map((o) => (
+                    <option key={o.valore} value={o.valore}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+            <span className="text-[10px] font-bold text-slate-500 uppercase block">
+              Come si classificano i debiti di questa sezione?
+            </span>
+            <label className="flex items-center gap-2 text-[11px] text-slate-700">
+              <input
+                type="radio"
+                checked={modo === 'colonna_guida'}
+                onChange={() => setModo('colonna_guida')}
+              />
+              Da una colonna-guida (mappo i suoi codici sulle categorie)
+            </label>
+            <label className="flex items-center gap-2 text-[11px] text-slate-700">
+              <input
+                type="radio"
+                checked={modo === 'tipo_fisso'}
+                onChange={() => setModo('tipo_fisso')}
+              />
+              Tutta la sezione è un&apos;unica categoria
+            </label>
+
+            {modo === 'colonna_guida' && idxGuidaWizard >= 0 && (
+              <div className="mt-2 space-y-1.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                  Codici trovati nella colonna-guida — assegna una categoria
+                </span>
+                {valoriGuidaWizard.map((v) => (
+                  <div key={v} className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-slate-700 flex-1 truncate">{v}</span>
+                    <select
+                      value={mappaCodici[v] || ''}
+                      onChange={(e) => setMappaCodici({ ...mappaCodici, [v]: e.target.value })}
+                      className="p-1 text-xs border border-slate-200 rounded text-slate-900 bg-white"
+                    >
+                      <option value="">— categoria —</option>
+                      {categorieAttive.map((c) => (
+                        <option key={c.codice} value={c.codice}>
+                          {c.etichetta}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+            {modo === 'colonna_guida' && idxGuidaWizard < 0 && (
+              <p className="text-[10px] text-amber-600">
+                Imposta una colonna al ruolo «Colonna-guida» qui sopra.
+              </p>
+            )}
+            {modo === 'tipo_fisso' && (
+              <select
+                value={tipoFisso}
+                onChange={(e) => setTipoFisso(e.target.value)}
+                className="w-full sm:w-64 p-2 text-xs bg-white border border-slate-300 rounded-lg text-slate-900"
+              >
+                <option value="">— scegli la categoria —</option>
+                {categorieAttive.map((c) => (
+                  <option key={c.codice} value={c.codice}>
+                    {c.etichetta}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+              Nome del tracciato
+            </label>
             <input
               type="text"
-              value={confermaCambioModello}
-              onChange={(e) => setConfermaCambioModello(e.target.value)}
-              placeholder='Scrivi "CAMBIA MODELLO" per confermare'
-              className="flex-1 p-2 text-xs border border-amber-300 rounded-lg text-slate-900 bg-white"
+              value={nomeTracciato}
+              onChange={(e) => setNomeTracciato(e.target.value)}
+              placeholder="Es. NRC INPS"
+              className="w-full sm:w-72 p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900"
             />
+          </div>
+
+          <div className="flex gap-2">
             <button
               type="button"
-              onClick={handleCambiaModello}
-              disabled={confermaCambioModello !== 'CAMBIA MODELLO' || cambioModelloInCorso}
-              className="px-3 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg transition-colors shrink-0"
+              onClick={annullaWizard}
+              className="px-4 py-2 text-xs font-bold uppercase text-slate-500 hover:text-slate-700"
             >
-              {cambioModelloInCorso ? 'In corso...' : 'Cambia modello'}
+              Annulla
+            </button>
+            <button
+              type="button"
+              onClick={confermaWizard}
+              disabled={inElaborazione}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold uppercase tracking-wider rounded-lg text-xs"
+            >
+              {inElaborazione ? 'Salvataggio...' : 'Salva tracciato e importa'}
             </button>
           </div>
         </div>
       )}
 
+      {/* ---- Selezione multipla ---- */}
       {righeSelezionate.size > 0 && (
         <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-xl p-3">
           <span className="text-xs font-bold text-red-800">
-            {righeSelezionate.size} rig
-            {righeSelezionate.size === 1 ? 'a selezionata' : 'he selezionate'}
+            {righeSelezionate.size} righe selezionate
           </span>
           <button
             type="button"
             onClick={handleEliminaSelezionate}
-            disabled={eliminazioneMultiplaInCorso}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg transition-colors"
+            disabled={inElaborazione}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            {eliminazioneMultiplaInCorso ? 'Eliminazione...' : 'Elimina selezionate'}
+            <Trash2 className="w-3.5 h-3.5" /> Elimina selezionate
           </button>
         </div>
       )}
 
+      {/* ---- Tabella righe ---- */}
       {righe.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <table className="w-full text-left text-xs">
@@ -832,13 +894,13 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
                     type="checkbox"
                     checked={righe.length > 0 && righeSelezionate.size === righe.length}
                     onChange={toggleSelezionaTutte}
-                    aria-label="Seleziona tutte le righe"
+                    aria-label="Seleziona tutte"
                   />
                 </th>
                 <th className="p-3">Voce</th>
                 <th className="p-3">Importo</th>
-                {haDistinzioneSaldo && <th className="p-3">Saldo</th>}
-                <th className="p-3">Tipo</th>
+                {haSaldo && <th className="p-3">Saldo</th>}
+                <th className="p-3">Categoria</th>
                 <th className="p-3">Note</th>
                 <th className="p-3"></th>
               </tr>
@@ -851,19 +913,22 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
                       type="checkbox"
                       checked={righeSelezionate.has(r.id)}
                       onChange={() => toggleSelezione(r.id)}
-                      aria-label={`Seleziona riga ${r.voce}`}
+                      aria-label={`Seleziona ${r.voce}`}
                     />
                   </td>
                   <td className="p-3 font-bold text-slate-900">
                     {r.voce}
                     {r.data && (
-                      <span className="block text-[10px] font-normal text-slate-400">
-                        {new Date(r.data).toLocaleDateString('it-IT')}
+                      <span className="block text-[10px] font-normal text-slate-400">{r.data}</span>
+                    )}
+                    {r.tracciatoId && nomiTracciato[r.tracciatoId] && (
+                      <span className="block text-[9px] font-normal text-blue-400">
+                        da {nomiTracciato[r.tracciatoId]}
                       </span>
                     )}
                   </td>
                   <td className="p-3 text-slate-700">€ {r.importo.toLocaleString('it-IT')}</td>
-                  {haDistinzioneSaldo && (
+                  {haSaldo && (
                     <td className="p-3 font-bold text-slate-900">
                       € {(r.importo - (r.importoVersato ?? 0)).toLocaleString('it-IT')}
                     </td>
@@ -918,20 +983,21 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
         </div>
       )}
 
+      {/* ---- Riepilogo per categoria ---- */}
       {righe.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="p-3 border-b border-slate-100 bg-slate-50">
             <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-              Riepilogo per tipo
+              Riepilogo per categoria
             </h3>
           </div>
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="text-[10px] uppercase text-slate-500 font-bold border-b border-slate-100">
-                <th className="p-3">Tipo</th>
+                <th className="p-3">Categoria</th>
                 <th className="p-3">Righe</th>
-                <th className="p-3">{haDistinzioneSaldo ? 'Debito lordo' : 'Totale'}</th>
-                {haDistinzioneSaldo && <th className="p-3">Saldo (usato per il confronto)</th>}
+                <th className="p-3">{haSaldo ? 'Debito lordo' : 'Totale'}</th>
+                {haSaldo && <th className="p-3">Saldo</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -939,15 +1005,12 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
                 .filter((r) => r.numeroRighe > 0)
                 .map((r) => (
                   <tr key={r.tipo}>
-                    <td
-                      className="p-3 font-bold text-slate-900"
-                      title={etichettaTipoDebito(r.tipo, mappaEtichette)}
-                    >
+                    <td className="p-3 font-bold text-slate-900" title={r.tipo}>
                       {r.etichetta}
                     </td>
                     <td className="p-3 text-slate-700">{r.numeroRighe}</td>
                     <td className="p-3 text-slate-700">€ {r.totale.toLocaleString('it-IT')}</td>
-                    {haDistinzioneSaldo && (
+                    {haSaldo && (
                       <td className="p-3 font-bold text-slate-900">
                         € {r.totaleSaldo.toLocaleString('it-IT')}
                       </td>
@@ -958,13 +1021,9 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
                 <td className="p-3 text-slate-900" colSpan={2}>
                   Totale complessivo
                 </td>
-                <td className="p-3 text-slate-900">
-                  € {totaleComplessivo.toLocaleString('it-IT')}
-                </td>
-                {haDistinzioneSaldo && (
-                  <td className="p-3 text-slate-900">
-                    € {totaleSaldoComplessivo.toLocaleString('it-IT')}
-                  </td>
+                <td className="p-3 text-slate-900">€ {totale.toLocaleString('it-IT')}</td>
+                {haSaldo && (
+                  <td className="p-3 text-slate-900">€ {totaleSaldo.toLocaleString('it-IT')}</td>
                 )}
               </tr>
             </tbody>
