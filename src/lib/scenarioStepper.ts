@@ -186,6 +186,38 @@ export const PASSI_SCENARIO_DA_DEFINIRE: PassoScenario[] = [
   },
 ];
 
-export function passiScenario(tipoProposta: 'RICEVUTA' | 'DA_DEFINIRE'): PassoScenario[] {
-  return tipoProposta === 'RICEVUTA' ? PASSI_SCENARIO_RICEVUTA : PASSI_SCENARIO_DA_DEFINIRE;
+/** Passo Simulazione a levette — riusabile: sempre presente per il Redigente,
+ * inserito nel percorso Ricevente solo se lo scenario ha il flag attivo. */
+const PASSO_SIMULAZIONE: PassoScenario = {
+  numero: 0, // rinumerato da passiScenario in base alla posizione
+  id: 'simulazione',
+  label: 'Simulazione',
+  descrizione:
+    'Leve da muovere (personale, giorni di incasso/pagamento, imposte) finché gli indici non tornano in equilibrio — uno strumento di scrittura per valutare la sostenibilità del piano, non di lettura.',
+  modulo: null,
+  stato: 'pronta',
+  icon: FlaskConical,
+};
+
+/**
+ * Passi dello scenario. Per il Ricevente (RICEVUTA) la Simulazione a levette
+ * è opzionale: compare solo se lo scenario è stato creato con il flag
+ * `simulazioneAttiva`. Inserita dopo "Dati di Settore", prima del Brogliaccio.
+ * I passi vengono rinumerati in sequenza in base alla posizione effettiva.
+ */
+export function passiScenario(
+  tipoProposta: 'RICEVUTA' | 'DA_DEFINIRE',
+  simulazioneAttiva: boolean = false
+): PassoScenario[] {
+  if (tipoProposta !== 'RICEVUTA') return PASSI_SCENARIO_DA_DEFINIRE;
+
+  if (!simulazioneAttiva) return PASSI_SCENARIO_RICEVUTA;
+
+  const passi: PassoScenario[] = [];
+  for (const p of PASSI_SCENARIO_RICEVUTA) {
+    passi.push(p);
+    if (p.id === 'settore') passi.push(PASSO_SIMULAZIONE);
+  }
+  // Rinumerazione sequenziale (il numero è solo un'etichetta d'ordine).
+  return passi.map((p, i) => ({ ...p, numero: i }));
 }

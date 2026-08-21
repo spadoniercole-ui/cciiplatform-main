@@ -49,11 +49,13 @@ export default async function ScenarioPanoramicaPage({
   };
 
   const base = `/spazio/${codice}/scenari/${scenarioId}`;
-  const passiVisibili = passiScenario(scenario.tipoProposta).filter((passo) => {
-    if (contesto.modalita !== 'OPERATORE') return true;
-    if (!passo.modulo) return true;
-    return (contesto.permessi?.[passo.modulo] || 'NESSUNO') !== 'NESSUNO';
-  });
+  const passiVisibili = passiScenario(scenario.tipoProposta, scenario.simulazioneAttiva).filter(
+    (passo) => {
+      if (contesto.modalita !== 'OPERATORE') return true;
+      if (!passo.modulo) return true;
+      return (contesto.permessi?.[passo.modulo] || 'NESSUNO') !== 'NESSUNO';
+    }
+  );
 
   return (
     <div className="space-y-2">

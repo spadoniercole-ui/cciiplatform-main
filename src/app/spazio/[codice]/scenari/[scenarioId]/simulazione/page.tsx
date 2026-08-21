@@ -30,13 +30,16 @@ export default async function SimulazioneScenarioPage({
     redirect(`/spazio/${codice}/scenari`);
   }
 
-  // Due strumenti diversi, non una variante dello stesso: chi redige
-  // aggiusta leve fino a un equilibrio (resta qui). Chi riceve legge
-  // criticamente i documenti allegati contro i dati già raccolti — quel
-  // pezzo vive dentro Proposta ora, non più qui: lo stepper Ricevente
-  // non ha più questo passo, redirect per chi arriva comunque
-  // sull'URL diretto.
-  if (scenarioRis.scenario!.tipoProposta === 'DA_DEFINIRE') {
+  // Lo strumento a levette (sostenibilità del piano) è sempre disponibile per
+  // il Redigente (DA_DEFINIRE). Per il Ricevente (RICEVUTA) compare solo se lo
+  // scenario è stato creato con il flag "simulazione attiva". Chi arriva
+  // sull'URL diretto senza i requisiti viene rimandato alla Panoramica.
+  const scenario = scenarioRis.scenario!;
+  const simulazioneDisponibile =
+    scenario.tipoProposta === 'DA_DEFINIRE' ||
+    (scenario.tipoProposta === 'RICEVUTA' && scenario.simulazioneAttiva);
+
+  if (simulazioneDisponibile) {
     return (
       <SimulazioneRedigenteScenario
         nomeSchema={contesto.nomeSchema}
@@ -45,5 +48,5 @@ export default async function SimulazioneScenarioPage({
     );
   }
 
-  redirect(`/spazio/${codice}/scenari/${scenarioId}/proposta`);
+  redirect(`/spazio/${codice}/scenari/${scenarioId}`);
 }

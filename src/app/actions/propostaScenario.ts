@@ -647,7 +647,10 @@ export interface RisultatoRelazioneProposta {
 }
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
-const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
+// timeout esplicito + maxRetries: 1 (non il default 2): evita che un retry
+// lento sfori il limite della funzione serverless e la faccia uccidere da
+// Vercel (spinner infinito lato browser).
+const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 150 * 1000, maxRetries: 1 }) : null;
 
 /**
  * Costruisce il blocco testuale del quadro quantitativo per il prompt,

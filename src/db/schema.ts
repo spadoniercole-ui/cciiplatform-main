@@ -118,6 +118,9 @@ export function getTabelleTenant(nomeSchema: string) {
       // stabile — cambiare selezione dopo il blocco richiede uno sblocco
       // esplicito, non un click distratto.
       rigaRilevanteBloccata: boolean('riga_rilevante_bloccata').notNull().default(false),
+      // Ricevente (ENTE): attiva lo strumento di Simulazione a levette
+      // (sostenibilità del piano) su questo scenario. Scelto alla creazione.
+      simulazioneAttiva: boolean('simulazione_attiva').notNull().default(false),
       // Separato da "stato" apposta: archiviare non deve far perdere lo
       // stato procedurale originale (BOZZA/IN_CORSO/COMPLETATO) — un
       // ripristino torna esattamente com'era, non riparte da BOZZA.

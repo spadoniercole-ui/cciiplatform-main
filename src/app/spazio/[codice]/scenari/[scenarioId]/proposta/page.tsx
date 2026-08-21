@@ -4,6 +4,13 @@ import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { PropostaScenario } from '@/components/spazio/PropostaScenario';
 import { DocumentiCorredoRedigente } from '@/components/spazio/DocumentiCorredoRedigente';
 
+// L'analisi dei documenti della proposta (Ricevente) è l'operazione AI più
+// pesante di questo flusso — due chiamate in parallelo su più PDF. Senza un
+// tetto esplicito la funzione serverless usa il default (breve) e viene uccisa
+// a metà (spinner infinito). Le altre pagine AI (brogliaccio 180, relazione
+// 120) hanno già il proprio; qui mancava.
+export const maxDuration = 300;
+
 export default async function PropostaScenarioPage({
   params,
 }: {

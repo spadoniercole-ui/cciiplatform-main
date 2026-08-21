@@ -172,6 +172,13 @@ export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> 
     sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS archiviato BOOLEAN NOT NULL DEFAULT FALSE`
   );
 
+  // Simulazione a levette (sostenibilità del piano) attivabile anche per il
+  // Ricevente, scelta alla creazione dello scenario. Default FALSE: nessun
+  // cambiamento per gli scenari già esistenti.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS simulazione_attiva BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+
   // Blocco permanente — solo per il percorso Ricevente: una volta
   // generata la Relazione finale, lo scenario si congela alla data di
   // quella relazione. Uno sblocco esplicito resta possibile, ma solo

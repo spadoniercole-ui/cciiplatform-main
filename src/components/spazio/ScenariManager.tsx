@@ -52,6 +52,7 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
     tipoSpazio === 'ENTE' ? 'RICEVUTA' : 'DA_DEFINIRE'
   );
   const [origineNuova, setOrigineNuova] = useState(tipoSpazio === 'ENTE' ? 'Azienda' : 'Studio');
+  const [simulazioneAttivaNuova, setSimulazioneAttivaNuova] = useState(false);
   const [mostraArchiviati, setMostraArchiviati] = useState(false);
   const [scenarioDaEliminare, setScenarioDaEliminare] = useState<Scenario | null>(null);
   const [confermaNome, setConfermaNome] = useState('');
@@ -119,7 +120,10 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
       aziendaSelezionata,
       nomeNuovo,
       tipoNuovo,
-      origineNuova
+      origineNuova,
+      // La simulazione a levette è sempre attiva per il Redigente; il flag
+      // conta solo per il Ricevente (RICEVUTA).
+      tipoNuovo === 'RICEVUTA' ? simulazioneAttivaNuova : true
     );
     if (!risultato.success) {
       setErrore(risultato.error || 'Impossibile creare lo scenario.');
@@ -128,6 +132,7 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
     setNomeNuovo('');
     setTipoNuovo(tipoSpazio === 'ENTE' ? 'RICEVUTA' : 'DA_DEFINIRE');
     setOrigineNuova(tipoSpazio === 'ENTE' ? 'Azienda' : 'Studio');
+    setSimulazioneAttivaNuova(false);
     setMostraForm(false);
     await caricaScenari(aziendaSelezionata);
     if (risultato.scenarioId) {
@@ -283,6 +288,26 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                   </select>
                 </div>
               </div>
+              {tipoNuovo === 'RICEVUTA' && (
+                <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                  <input
+                    type="checkbox"
+                    checked={simulazioneAttivaNuova}
+                    onChange={(e) => setSimulazioneAttivaNuova(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-bold">
+                      Attiva la simulazione per la sostenibilità del piano aziendale
+                    </span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5">
+                      Lo strumento a &quot;levette&quot; (personale, giorni di incasso/pagamento,
+                      imposte) per valutare se il piano regge. Richiede la funzione Simulazione
+                      abilitata sullo spazio.
+                    </span>
+                  </span>
+                </label>
+              )}
               <div className="flex gap-2">
                 <input
                   type="text"

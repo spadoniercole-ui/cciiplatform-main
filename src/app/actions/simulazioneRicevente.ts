@@ -26,7 +26,17 @@ import {
 import { ottieniLimitiRicevibilita } from '@/app/actions/parametriSpazio';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
-const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
+// timeout esplicito + maxRetries: 1 (non il default 2): due chiamate pesanti in
+// parallelo su PDF grandi, con due retry a 150s l'una, sforerebbero il limite
+// della funzione serverless e la farebbero uccidere da Vercel PRIMA di
+// rispondere (spinner infinito lato browser). A difesa ulteriore, un
+// AbortController con scadenza esplicita attorno alle chiamate.
+const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 150 * 1000, maxRetries: 1 }) : null;
+
+// Scadenza complessiva dell'analisi documenti, sotto il maxDuration della
+// pagina: se le chiamate AI non rientrano, si abortisce e si restituisce un
+// errore leggibile invece di far uccidere la funzione da Vercel.
+const SCADENZA_ANALISI_MS = 240 * 1000;
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -297,45 +307,59 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
 
 "modalita" deve essere esattamente "UNICA_SOLUZIONE" o "RATEALE". Prima di dichiarare l'estrazione fallita, verifica se il documento usa uno dei termini indicati sopra come equivalenti a questo ente (categoria di credito, non solo nome proprio) — se sì, l'importo relativo a quella categoria è l'importo di questo ente. Solo se davvero non c'è alcun riferimento, nemmeno tematico, a questo ente, imposta "estrazioneRiuscita": false e spiega perché in "motivoMancata" (es. "il documento non menziona questo ente né i termini a esso equivalenti" o "l'importo offerto non è quantificato").`;
 
-    const [response, responseEstrazione] = await Promise.all([
-      anthropic.messages.create({
-        model: 'claude-sonnet-5',
-        // Analisi critica su più documenti, articolata su più punti
-        // (A/B/C/D...) — con 3000 token si troncava a metà, adesso che
-        // il ragionamento esteso è disabilitato tutto il budget va
-        // davvero al testo, ma un'analisi approfondita ne consuma di
-        // più.
-        max_tokens: 6000,
-        // Senza questo, il ragionamento esteso può consumare l'intero
-        // budget di token prima di produrre testo visibile — esattamente
-        // la causa di un'analisi risultata vuota nonostante stop_reason
-        // 'max_tokens' con un solo blocco (di thinking, non di testo).
-        thinking: { type: 'disabled' },
-        messages: [
+    const controllerAnalisi = new AbortController();
+    const timerAnalisi = setTimeout(() => controllerAnalisi.abort(), SCADENZA_ANALISI_MS);
+    let response: Anthropic.Messages.Message;
+    let responseEstrazione: Anthropic.Messages.Message;
+    try {
+      [response, responseEstrazione] = await Promise.all([
+        anthropic.messages.create(
           {
-            role: 'user',
-            content: [...blocchiDocumento, { type: 'text', text: promptTestuale }],
+            model: 'claude-sonnet-5',
+            // Analisi critica su più documenti, articolata su più punti
+            // (A/B/C/D...) — con 3000 token si troncava a metà, adesso che
+            // il ragionamento esteso è disabilitato tutto il budget va
+            // davvero al testo, ma un'analisi approfondita ne consuma di
+            // più.
+            max_tokens: 6000,
+            // Senza questo, il ragionamento esteso può consumare l'intero
+            // budget di token prima di produrre testo visibile — esattamente
+            // la causa di un'analisi risultata vuota nonostante stop_reason
+            // 'max_tokens' con un solo blocco (di thinking, non di testo).
+            thinking: { type: 'disabled' },
+            messages: [
+              {
+                role: 'user',
+                content: [...blocchiDocumento, { type: 'text', text: promptTestuale }],
+              },
+            ],
           },
-        ],
-      }),
-      anthropic.messages.create({
-        model: 'claude-sonnet-5',
-        // Con il prompt esteso (alias, istruzioni sulla polarità
-        // tematica) e una motivoMancata che può essere un paragrafo
-        // intero quando l'estrazione fallisce, 1024 token rischiava di
-        // troncare il JSON a metà — un fallimento di parsing silenzioso
-        // (mai mostrato all'utente), diverso e più subdolo di
-        // un'estrazione che dichiara semplicemente di non riuscire.
-        max_tokens: 2000,
-        thinking: { type: 'disabled' },
-        messages: [
+          { signal: controllerAnalisi.signal }
+        ),
+        anthropic.messages.create(
           {
-            role: 'user',
-            content: [...blocchiDocumento, { type: 'text', text: promptEstrazione }],
+            model: 'claude-sonnet-5',
+            // Con il prompt esteso (alias, istruzioni sulla polarità
+            // tematica) e una motivoMancata che può essere un paragrafo
+            // intero quando l'estrazione fallisce, 1024 token rischiava di
+            // troncare il JSON a metà — un fallimento di parsing silenzioso
+            // (mai mostrato all'utente), diverso e più subdolo di
+            // un'estrazione che dichiara semplicemente di non riuscire.
+            max_tokens: 2000,
+            thinking: { type: 'disabled' },
+            messages: [
+              {
+                role: 'user',
+                content: [...blocchiDocumento, { type: 'text', text: promptEstrazione }],
+              },
+            ],
           },
-        ],
-      }),
-    ]);
+          { signal: controllerAnalisi.signal }
+        ),
+      ]);
+    } finally {
+      clearTimeout(timerAnalisi);
+    }
 
     const analisi = response.content
       .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
@@ -411,9 +435,15 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
     };
   } catch (error: any) {
     console.error('[analizzaDocumentiRiceventeAction] Errore:', error);
+    // Distinzione utile: se abbiamo abortito per scadenza, il messaggio deve
+    // dirlo (non "errore generico") e suggerire cosa fare.
+    const scaduto =
+      error?.name === 'APIUserAbortError' || /abort/i.test(String(error?.message || ''));
     return {
       success: false,
-      error: `Impossibile analizzare i documenti: ${error.message || error}`,
+      error: scaduto
+        ? "L'analisi ha superato il tempo massimo disponibile — riprova. Se i documenti sono molto voluminosi, carica solo le pagine rilevanti o un file per volta."
+        : `Impossibile analizzare i documenti: ${error.message || error}`,
     };
   } finally {
     // I documenti non si conservano — riuscita o fallita che sia

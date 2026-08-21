@@ -17,7 +17,10 @@ import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottienePosizioneAggiornata } from '@/app/actions/posizioneAggiornata';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
-const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
+// timeout esplicito + maxRetries: 1 (non il default 2): evita che un retry
+// lento sfori il limite della funzione serverless e la faccia uccidere da
+// Vercel (spinner infinito lato browser).
+const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 150 * 1000, maxRetries: 1 }) : null;
 
 /** Ore prima delle quali un confronto già generato è considerato ancora valido — non si rifà la ricerca web a ogni singolo livello del Brogliaccio se ne è già stata fatta una da poco. */
 const ORE_FRESCHEZZA = 24;

@@ -25,6 +25,8 @@ export interface Scenario {
   origineProposta: string;
   rigaRilevanteBloccata: boolean;
   archiviato: boolean;
+  /** Ricevente (ENTE): abilita lo strumento di Simulazione a levette (sostenibilità del piano) anche su questo scenario. Scelto alla creazione. Per il Redigente la simulazione è sempre disponibile, quindi questo flag è ininfluente lì. */
+  simulazioneAttiva: boolean;
   /** Solo percorso Ricevente — valorizzato quando la Relazione finale è stata generata. Da quel momento lo scenario è sola lettura permanente. */
   bloccatoIl: string | null;
   createdAt: string;
@@ -63,6 +65,7 @@ export async function ottieniScenari(
         origineProposta: r.origineProposta,
         rigaRilevanteBloccata: r.rigaRilevanteBloccata,
         archiviato: r.archiviato,
+        simulazioneAttiva: r.simulazioneAttiva,
         bloccatoIl: r.bloccatoIl ? r.bloccatoIl.toString() : null,
         createdAt: r.createdAt.toString(),
       })),
@@ -108,6 +111,7 @@ export async function ottieniScenarioPerId(
         origineProposta: tabelle.scenari.origineProposta,
         rigaRilevanteBloccata: tabelle.scenari.rigaRilevanteBloccata,
         archiviato: tabelle.scenari.archiviato,
+        simulazioneAttiva: tabelle.scenari.simulazioneAttiva,
         bloccatoIl: tabelle.scenari.bloccatoIl,
         createdAt: tabelle.scenari.createdAt,
         ragioneSocialeAzienda: tabelle.aziende.ragioneSociale,
@@ -133,6 +137,7 @@ export async function ottieniScenarioPerId(
         origineProposta: r.origineProposta,
         rigaRilevanteBloccata: r.rigaRilevanteBloccata,
         archiviato: r.archiviato,
+        simulazioneAttiva: r.simulazioneAttiva,
         bloccatoIl: r.bloccatoIl ? r.bloccatoIl.toString() : null,
         createdAt: r.createdAt.toString(),
         ragioneSocialeAzienda: r.ragioneSocialeAzienda,
@@ -155,7 +160,8 @@ export async function creaScenarioAction(
   aziendaId: number,
   nome: string,
   tipoProposta: TipoProposta,
-  origineProposta: string
+  origineProposta: string,
+  simulazioneAttiva: boolean = false
 ): Promise<RisultatoOperazioneScenario> {
   try {
     if (!nome.trim()) {
@@ -187,7 +193,7 @@ export async function creaScenarioAction(
 
     const inserito = await db
       .insert(tabelle.scenari)
-      .values({ aziendaId, nome: nome.trim(), tipoProposta, origineProposta })
+      .values({ aziendaId, nome: nome.trim(), tipoProposta, origineProposta, simulazioneAttiva })
       .returning({ id: tabelle.scenari.id });
 
     const nuovoScenarioId = inserito[0].id;
