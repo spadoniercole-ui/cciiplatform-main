@@ -1202,16 +1202,33 @@ export async function assicuraTabellaCategorieTipoDebito(nomeSchema: string): Pr
       attivo BOOLEAN NOT NULL DEFAULT TRUE
     )`
   );
+  // "contribuisce al totale": una categoria neutra (es. Neutro) NON alimenta i
+  // totali né i delta del confronto. Difensivo: se la colonna non c'era, la
+  // aggiungo e imposto Neutro a FALSE una tantum (senza sovrascrivere scelte
+  // future, perché lo faccio solo alla prima creazione della colonna).
+  const haContribuisce = await db.execute(
+    sql`SELECT 1 FROM information_schema.columns
+        WHERE table_schema = ${nomeSchema} AND table_name = 'categorie_tipo_debito' AND column_name = 'contribuisce'`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.categorie_tipo_debito ADD COLUMN IF NOT EXISTS contribuisce BOOLEAN NOT NULL DEFAULT TRUE`
+  );
+  if (haContribuisce.length === 0) {
+    await eseguiDdlTenant(
+      sql`UPDATE ${s}.categorie_tipo_debito SET contribuisce = FALSE WHERE codice = 'NEUTRO'`
+    );
+  }
+
   const conteggio = await db.execute(
     sql`SELECT count(*)::int AS n FROM ${s}.categorie_tipo_debito`
   );
   const n = (conteggio[0] as { n: number } | undefined)?.n ?? 0;
   if (n === 0) {
     await eseguiDdlTenant(
-      sql`INSERT INTO ${s}.categorie_tipo_debito (codice, etichetta, descrizione, ordine, attivo) VALUES
-        ('DEBITO', 'Debito', 'Debito certo da contabilizzare', 1, TRUE),
-        ('AVA', 'AVA', 'Affidato all''Agente della Riscossione', 2, TRUE),
-        ('NEUTRO', 'Neutro', 'Voce neutra ai fini del confronto', 3, TRUE)`
+      sql`INSERT INTO ${s}.categorie_tipo_debito (codice, etichetta, descrizione, ordine, attivo, contribuisce) VALUES
+        ('DEBITO', 'Debito', 'Debito certo da contabilizzare', 1, TRUE, TRUE),
+        ('AVA', 'AVA', 'Affidato all''Agente della Riscossione', 2, TRUE, TRUE),
+        ('NEUTRO', 'Neutro', 'Voce neutra ai fini del confronto', 3, TRUE, FALSE)`
     );
   }
 }

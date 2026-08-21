@@ -11,6 +11,8 @@ import { pool } from '@/lib/db';
 import { assicuraTabelleScreeningAzienda } from '@/db/provision';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
+import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
+import { ottieniCategorieTipoDebito } from '@/app/actions/categorieTipoDebito';
 import { raggruppaPerTipoDebito } from '@/lib/debitiEnte/tipoDebito';
 import { ottieniEtichetteTipoDebito } from '@/app/actions/tipoDebitoConfig';
 import { calcolaQuadroDirettrici, type QuadroDirettrici } from '@/lib/checklist/scoringDirettrici';
@@ -271,10 +273,12 @@ export async function generaScreeningAziendaAction(
 
     await assicuraTabelleScreeningAzienda(nomeSchema);
 
-    const [direttriciRis, storicoRis, debitiRis] = await Promise.all([
+    const [direttriciRis, storicoRis, debitiRis, veraRis, categorieRis] = await Promise.all([
       ottieniDirettriciEnte(nomeSchema),
       ottieniStoricoXbrlAzienda(nomeSchema, aziendaId),
       ottieniDebitiEnte(nomeSchema, aziendaId),
+      ottieniDebitiVera(nomeSchema, aziendaId),
+      ottieniCategorieTipoDebito(nomeSchema),
     ]);
 
     const direttriciTutte = direttriciRis.direttrici;
@@ -353,6 +357,46 @@ export async function generaScreeningAziendaAction(
     } else {
       blocchiContesto.push(
         "Situazione Debitoria dell'ente non ancora inserita per questa azienda."
+      );
+    }
+
+    // Verifica certo-per-certo (Posizione V.E.R.A.): confronto tra quanto
+    // l'ente ha CONTABILIZZATO (Situazione Debitoria) e quanto risulta nel file
+    // di verifica (VERA), per categoria. Il delta è il non contabilizzato che,
+    // con la proposta, andrà contabilizzato — un dato chiave per la relazione.
+    if (veraRis.success && veraRis.righe.length > 0) {
+      const formatta = (n: number) => `€ ${n.toLocaleString('it-IT')}`;
+      const etichettaCat = (cod: string) =>
+        categorieRis.categorie.find((c) => c.codice === cod)?.etichetta || cod;
+      const neutre = new Set(
+        (categorieRis.success ? categorieRis.categorie : [])
+          .filter((c) => !c.contribuisce)
+          .map((c) => c.codice)
+      );
+      const codici = Array.from(
+        new Set([
+          ...(debitiRis.success ? debitiRis.righe.map((r) => r.tipo) : []),
+          ...veraRis.righe.map((r) => r.categoria),
+        ])
+      );
+      const perCat = codici.map((cod) => {
+        const contab = (debitiRis.success ? debitiRis.righe : [])
+          .filter((r) => r.tipo === cod)
+          .reduce((a, r) => a + r.importo, 0);
+        const vera = veraRis.righe
+          .filter((r) => r.categoria === cod)
+          .reduce((a, r) => a + r.importo, 0);
+        return { cod, contab, vera, delta: vera - contab, neutra: neutre.has(cod) };
+      });
+      const testoPerCat = perCat
+        .map(
+          (x) =>
+            `${etichettaCat(x.cod)}${x.neutra ? ' (neutra)' : ''}: contabilizzato ${formatta(x.contab)}, VERA ${formatta(x.vera)}${x.neutra ? '' : `, delta ${formatta(x.delta)}`}`
+        )
+        .join('; ');
+      const deltaTotale = perCat.filter((x) => !x.neutra).reduce((a, x) => a + x.delta, 0);
+      blocchiContesto.push(
+        `Verifica certo-per-certo (Posizione VERA, dal file di verifica dell'ente): ${testoPerCat}. Delta complessivo non contabilizzato: ${formatta(deltaTotale)} — è la quota che il file di verifica riporta oltre a quanto l'ente ha già contabilizzato, e che in presenza di proposta dovrà essere contabilizzata.`
       );
     }
 
@@ -440,7 +484,7 @@ ${contestoTesto}
 Scrivi una relazione con questi paragrafi, in prosa, non elenchi puntati:
 1. Identikit dell'impresa (dal fascicolo storico: anagrafica, oggetto, storia, stato, organi).
 2. Posizione economico-patrimoniale (dal bilancio): sintesi di conto economico e stato patrimoniale, indici essenziali.
-3. Struttura del debito: quello che emerge dal bilancio, e quello che l'ente stesso ha già dichiarato di avere a credito (Situazione Debitoria) se presente — segnala esplicitamente se i due quadri sono coerenti tra loro o se qualcosa non torna.
+3. Struttura del debito: quello che emerge dal bilancio, quello che l'ente stesso ha già dichiarato di avere a credito (Situazione Debitoria contabilizzata) e, se presente, la Verifica certo-per-certo contro la Posizione VERA — commenta esplicitamente il delta per categoria (Debito, AVA), cioè il non contabilizzato che emerge dal file di verifica e che con la proposta andrà contabilizzato; segnala se i quadri sono coerenti o se qualcosa non torna.
 4. Scenario liquidatorio di base — l'ancoraggio del test di convenienza (art. 63/88 CCII): cosa otterrebbe l'ente in una liquidazione, a spanne, dai soli dati di bilancio.
 5. Eventuali segnali di incoerenza da segnalare (es. continuità aziendale dichiarata in tensione con i numeri, se presente).
 6. Cosa manca e va aggiornato prima di poter valutare la proposta — il ponte esplicito verso i dati correnti che arriveranno con la proposta stessa.

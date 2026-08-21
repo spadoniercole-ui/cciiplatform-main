@@ -12,6 +12,7 @@ import {
   creaCategoriaTipoDebitoAction,
   aggiornaCategoriaTipoDebitoAction,
   impostaAttivoCategoriaTipoDebitoAction,
+  impostaContribuisceCategoriaTipoDebitoAction,
   type CategoriaTipoDebito,
 } from '@/app/actions/categorieTipoDebito';
 
@@ -96,6 +97,18 @@ export function CategorieTipoDebitoManager({ nomeSchema }: Props) {
     setInCorso(false);
   };
 
+  const handleToggleContribuisce = async (c: CategoriaTipoDebito) => {
+    setInCorso(true);
+    const r = await impostaContribuisceCategoriaTipoDebitoAction(
+      nomeSchema,
+      c.codice,
+      !c.contribuisce
+    );
+    if (!r.success) setErrore(r.error || 'Impossibile aggiornare.');
+    else await carica();
+    setInCorso(false);
+  };
+
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
 
   return (
@@ -159,6 +172,23 @@ export function CategorieTipoDebitoManager({ nomeSchema }: Props) {
                 className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
               >
                 <Save className="w-3 h-3" /> Salva
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleContribuisce(c)}
+                disabled={inCorso}
+                title={
+                  c.contribuisce
+                    ? 'Contribuisce al totale — clic per renderla neutra'
+                    : 'Neutra (non conta nei totali) — clic per farla contribuire'
+                }
+                className={`px-2 py-1 rounded text-[9px] font-bold uppercase ${
+                  c.contribuisce
+                    ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}
+              >
+                {c.contribuisce ? 'Conta nel totale' : 'Neutra'}
               </button>
               <button
                 type="button"

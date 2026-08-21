@@ -559,9 +559,23 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
     mappaEtichette,
     ordineCategorie
   );
-  const totale = riepilogo.reduce((a, r) => a + r.totale, 0);
-  const totaleSaldo = riepilogo.reduce((a, r) => a + r.totaleSaldo, 0);
+  // Le categorie "neutre" (contribuisce = false, es. Neutro) non alimentano i
+  // totali: sono neutre rispetto a debito e AVA.
+  const nonContribuisce = new Set(categorie.filter((c) => !c.contribuisce).map((c) => c.codice));
+  const totale = riepilogo
+    .filter((r) => !nonContribuisce.has(r.tipo))
+    .reduce((a, r) => a + r.totale, 0);
+  const totaleSaldo = riepilogo
+    .filter((r) => !nonContribuisce.has(r.tipo))
+    .reduce((a, r) => a + r.totaleSaldo, 0);
   const haSaldo = righe.some((r) => r.importoVersato !== null);
+  // #2: ogni colonna mappata (non ignorata) diventa una colonna vera della
+  // tabella. Colonne opzionali presenti solo se qualche riga le valorizza.
+  const haData = righe.some((r) => !!r.data);
+  const haNote = righe.some((r) => !!r.note);
+  const chiaviExtra = Array.from(
+    new Set(righe.flatMap((r) => (r.datiExtra ? Object.keys(r.datiExtra) : [])))
+  );
 
   return (
     <div className="space-y-6">
@@ -1128,10 +1142,16 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
                   />
                 </th>
                 <th className="p-3">Voce</th>
+                {haData && <th className="p-3">Data</th>}
                 <th className="p-3">Importo</th>
                 {haSaldo && <th className="p-3">Saldo</th>}
                 <th className="p-3">Categoria</th>
-                <th className="p-3">Note</th>
+                {chiaviExtra.map((k) => (
+                  <th key={k} className="p-3">
+                    {k}
+                  </th>
+                ))}
+                {haNote && <th className="p-3">Note</th>}
                 <th className="p-3"></th>
               </tr>
             </thead>
@@ -1148,15 +1168,13 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
                   </td>
                   <td className="p-3 font-bold text-slate-900">
                     {r.voce}
-                    {r.data && (
-                      <span className="block text-[10px] font-normal text-slate-400">{r.data}</span>
-                    )}
                     {r.tracciatoId && nomiTracciato[r.tracciatoId] && (
                       <span className="block text-[9px] font-normal text-blue-400">
                         da {nomiTracciato[r.tracciatoId]}
                       </span>
                     )}
                   </td>
+                  {haData && <td className="p-3 text-slate-500 text-[11px]">{r.data || '—'}</td>}
                   <td className="p-3 text-slate-700">€ {r.importo.toLocaleString('it-IT')}</td>
                   {haSaldo && (
                     <td className="p-3 font-bold text-slate-900">
@@ -1171,23 +1189,12 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
                       {etichettaTipoDebito(r.tipo, mappaEtichette)}
                     </span>
                   </td>
-                  <td className="p-3 text-slate-500 text-[11px]">
-                    {r.note || '—'}
-                    {r.datiExtra && Object.keys(r.datiExtra).length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {Object.entries(r.datiExtra).map(([k, v]) => (
-                          <span
-                            key={k}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 text-[10px] text-slate-600"
-                            title={`${k}: ${v}`}
-                          >
-                            <span className="text-slate-400">{k}:</span>
-                            <span className="font-medium text-slate-700">{v}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </td>
+                  {chiaviExtra.map((k) => (
+                    <td key={k} className="p-3 text-slate-600 text-[11px]">
+                      {r.datiExtra?.[k] ?? '—'}
+                    </td>
+                  ))}
+                  {haNote && <td className="p-3 text-slate-500 text-[11px]">{r.note || '—'}</td>}
                   <td className="p-3">
                     <button
                       type="button"
@@ -1234,9 +1241,14 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
               {riepilogo
                 .filter((r) => r.numeroRighe > 0)
                 .map((r) => (
-                  <tr key={r.tipo}>
+                  <tr key={r.tipo} className={nonContribuisce.has(r.tipo) ? 'text-slate-400' : ''}>
                     <td className="p-3 font-bold text-slate-900" title={r.tipo}>
                       {r.etichetta}
+                      {nonContribuisce.has(r.tipo) && (
+                        <span className="ml-1.5 text-[9px] font-normal text-slate-400">
+                          (neutra, non nel totale)
+                        </span>
+                      )}
                     </td>
                     <td className="p-3 text-slate-700">{r.numeroRighe}</td>
                     <td className="p-3 text-slate-700">€ {r.totale.toLocaleString('it-IT')}</td>

@@ -18,6 +18,8 @@ export interface CategoriaTipoDebito {
   descrizione: string | null;
   ordine: number;
   attivo: boolean;
+  /** Se false, la categoria è neutra: non alimenta i totali né i delta del confronto. */
+  contribuisce: boolean;
 }
 
 export interface RisultatoCategorie {
@@ -44,7 +46,7 @@ export async function ottieniCategorieTipoDebito(nomeSchema: string): Promise<Ri
     }
     await assicuraTabellaCategorieTipoDebito(nomeSchema);
     const r = await pool.query(
-      `SELECT codice, etichetta, descrizione, ordine, attivo
+      `SELECT codice, etichetta, descrizione, ordine, attivo, contribuisce
        FROM "${nomeSchema}".categorie_tipo_debito ORDER BY ordine ASC, codice ASC`
     );
     return {
@@ -55,6 +57,7 @@ export async function ottieniCategorieTipoDebito(nomeSchema: string): Promise<Ri
         descrizione: x.descrizione,
         ordine: x.ordine,
         attivo: x.attivo === true,
+        contribuisce: x.contribuisce !== false,
       })),
     };
   } catch (error: any) {
@@ -148,6 +151,29 @@ export async function impostaAttivoCategoriaTipoDebitoAction(
     return { success: true, codice };
   } catch (error: any) {
     console.error('[impostaAttivoCategoriaTipoDebitoAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile aggiornare la categoria: ${error.message || error}`,
+    };
+  }
+}
+
+/** Imposta se la categoria contribuisce ai totali (false = neutra rispetto a debito e AVA). */
+export async function impostaContribuisceCategoriaTipoDebitoAction(
+  nomeSchema: string,
+  codice: string,
+  contribuisce: boolean
+): Promise<RisultatoOperazioneCategoria> {
+  try {
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabellaCategorieTipoDebito(nomeSchema);
+    await pool.query(
+      `UPDATE "${nomeSchema}".categorie_tipo_debito SET contribuisce = $2 WHERE codice = $1`,
+      [codice, contribuisce]
+    );
+    return { success: true, codice };
+  } catch (error: any) {
+    console.error('[impostaContribuisceCategoriaTipoDebitoAction] Errore:', error);
     return {
       success: false,
       error: `Impossibile aggiornare la categoria: ${error.message || error}`,

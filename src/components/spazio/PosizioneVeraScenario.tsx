@@ -8,7 +8,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, ClipboardCheck, Scale } from 'lucide-react';
+import { Upload, ClipboardCheck, Scale, FileDown } from 'lucide-react';
 import {
   analizzaVera,
   estraiRigheVera,
@@ -28,6 +28,7 @@ import {
 } from '@/app/actions/categorieTipoDebito';
 import { ottieniDebitiEnte, type RigaDebitoEnte } from '@/app/actions/debitiEnte';
 import { etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
+import { stampaHtml } from '@/lib/stampaTesto';
 
 interface Props {
   nomeSchema: string;
@@ -155,15 +156,17 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       ...righeVera.map((r) => r.categoria),
     ])
   );
+  const nonContribuisce = new Set(categorie.filter((c) => !c.contribuisce).map((c) => c.codice));
   const confronto = codiciPresenti
     .map((cod) => {
       const contab = righeEnte.filter((r) => r.tipo === cod).reduce((a, r) => a + r.importo, 0);
       const vera = righeVera.filter((r) => r.categoria === cod).reduce((a, r) => a + r.importo, 0);
-      return { cod, contab, vera, delta: vera - contab };
+      return { cod, contab, vera, delta: vera - contab, neutra: nonContribuisce.has(cod) };
     })
     .filter((x) => x.contab !== 0 || x.vera !== 0);
-  const totContab = confronto.reduce((a, x) => a + x.contab, 0);
-  const totVera = confronto.reduce((a, x) => a + x.vera, 0);
+  // Le categorie neutre non alimentano i totali né il delta complessivo.
+  const totContab = confronto.filter((x) => !x.neutra).reduce((a, x) => a + x.contab, 0);
+  const totVera = confronto.filter((x) => !x.neutra).reduce((a, x) => a + x.vera, 0);
 
   // VERA per categoria (dettaglio importo).
   const veraPerCategoria = codiciPresenti
@@ -172,6 +175,33 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       return { cod, numeroRighe: righe.length, totale: righe.reduce((a, r) => a + r.importo, 0) };
     })
     .filter((x) => x.numeroRighe > 0);
+
+  const handleStampaPdf = () => {
+    const esc = (s: string) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const righeConfronto = confronto
+      .map(
+        (x) => `<tr${x.neutra ? ' style="color:#94a3b8"' : ''}>
+        <td>${esc(etichettaTipoDebito(x.cod, mappaEtichette))}${x.neutra ? ' (neutra)' : ''}</td>
+        <td class="num">${euro(x.contab)}</td>
+        <td class="num">${euro(x.vera)}</td>
+        <td class="num">${x.neutra ? '—' : euro(x.delta)}</td></tr>`
+      )
+      .join('');
+    const corpo = `
+      <table>
+        <thead><tr><th>Categoria</th><th class="num">Contabilizzato (ente)</th><th class="num">VERA</th><th class="num">Delta (non contabilizzato)</th></tr></thead>
+        <tbody>
+          ${righeConfronto}
+          <tr class="tot"><td>Totale</td><td class="num">${euro(totContab)}</td><td class="num">${euro(totVera)}</td><td class="num">${euro(totVera - totContab)}</td></tr>
+        </tbody>
+      </table>
+      <p class="note">«Contabilizzato» = somma della Situazione Debitoria per categoria. «VERA» = somma del «Totale debito» (al netto del credito) del file di verifica per categoria. Le categorie neutre non alimentano i totali.</p>`;
+    stampaHtml(
+      'Verifica certo per certo — Posizione V.E.R.A.',
+      corpo,
+      `Generato il ${new Date().toLocaleString('it-IT')}`
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -288,9 +318,16 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="p-3 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
             <Scale className="w-3.5 h-3.5 text-slate-500" />
-            <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+            <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex-1">
               Verifica certo per certo
             </h3>
+            <button
+              type="button"
+              onClick={handleStampaPdf}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg transition-colors"
+            >
+              <FileDown className="w-3.5 h-3.5" /> Scarica PDF
+            </button>
           </div>
           <table className="w-full text-left text-xs">
             <thead>
@@ -303,16 +340,27 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {confronto.map((x) => (
-                <tr key={x.cod}>
+                <tr key={x.cod} className={x.neutra ? 'text-slate-400' : ''}>
                   <td className="p-3 font-bold text-slate-900" title={x.cod}>
                     {etichettaTipoDebito(x.cod, mappaEtichette)}
+                    {x.neutra && (
+                      <span className="ml-1.5 text-[9px] font-normal text-slate-400">
+                        (neutra, non nel totale)
+                      </span>
+                    )}
                   </td>
                   <td className="p-3 text-slate-700">{euro(x.contab)}</td>
                   <td className="p-3 text-slate-700">{euro(x.vera)}</td>
                   <td
-                    className={`p-3 font-bold ${Math.abs(x.delta) < 0.005 ? 'text-emerald-600' : 'text-amber-600'}`}
+                    className={`p-3 font-bold ${
+                      x.neutra
+                        ? 'text-slate-400'
+                        : Math.abs(x.delta) < 0.005
+                          ? 'text-emerald-600'
+                          : 'text-amber-600'
+                    }`}
                   >
-                    {Math.abs(x.delta) < 0.005 ? '✓ allineato' : euro(x.delta)}
+                    {x.neutra ? '—' : Math.abs(x.delta) < 0.005 ? '✓ allineato' : euro(x.delta)}
                   </td>
                 </tr>
               ))}
