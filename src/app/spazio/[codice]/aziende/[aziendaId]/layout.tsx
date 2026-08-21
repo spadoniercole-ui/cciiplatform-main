@@ -56,8 +56,30 @@ export default async function AziendaLayout({
   const anagraficaCompleta = anagraficaAziendaCompleta(
     azienda as unknown as Record<string, unknown>
   );
-  const posizioneEnteCompleta =
-    !!anagraficaEnteRis?.dati?.idEnte && (debitiRis?.righe?.length ?? 0) > 0;
+  // "Anagrafica ente compilata": STESSA regola usata dentro
+  // PosizioneEnteScenario (anagraficaCompilata) — almeno un campo tra idEnte e
+  // campo_1..campo_10 valorizzato. Prima qui si guardava solo idEnte: se
+  // l'operatore compilava i campi ma non l'id, il verde non scattava.
+  const dEnte = anagraficaEnteRis?.dati as Record<string, unknown> | undefined;
+  const anagraficaEnteCompilata =
+    !!dEnte &&
+    [
+      'idEnte',
+      'campo1',
+      'campo2',
+      'campo3',
+      'campo4',
+      'campo5',
+      'campo6',
+      'campo7',
+      'campo8',
+      'campo9',
+      'campo10',
+    ].some((k) => {
+      const v = dEnte[k];
+      return typeof v === 'string' && v.trim().length > 0;
+    });
+  const posizioneEnteCompleta = anagraficaEnteCompilata && (debitiRis?.righe?.length ?? 0) > 0;
   const analisiBilancioCompleta = (xbrlRis?.storico?.length ?? 0) > 0;
   const screeningGenerato = pendenteScreening.esiste;
   const checklistCompleta =

@@ -10,7 +10,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Building2, ArrowRight, Ban, RotateCcw, X } from 'lucide-react';
+import { Plus, Building2, ArrowRight, Ban, RotateCcw, X, Search } from 'lucide-react';
 import {
   ottieniAziende,
   creaAziendaAction,
@@ -42,6 +42,7 @@ export function AziendeManager({ nomeSchema, codice }: Props) {
   const [aziende, setAziende] = useState<Azienda[]>([]);
   const [caricamento, setCaricamento] = useState(true);
   const [erroreLista, setErroreLista] = useState<string | null>(null);
+  const [ricerca, setRicerca] = useState('');
 
   const [mostraForm, setMostraForm] = useState(false);
   const [form, setForm] = useState<FormAzienda>(FORM_VUOTO);
@@ -103,6 +104,18 @@ export function AziendeManager({ nomeSchema, codice }: Props) {
     }
     await carica();
   };
+
+  // Ricerca per ragione sociale / codice fiscale / partita IVA. Client-side:
+  // le aziende sono già tutte in memoria; quando saranno molte questo campo è
+  // il modo per ritrovarle senza scorrere l'intero elenco.
+  const q = ricerca.trim().toLowerCase();
+  const aziendeFiltrate = q
+    ? aziende.filter((a) =>
+        [a.ragioneSociale, a.codiceFiscale, a.partitaIva]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      )
+    : aziende;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -216,11 +229,34 @@ export function AziendeManager({ nomeSchema, codice }: Props) {
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl p-6">
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
-          <Building2 className="w-4 h-4 text-slate-500" />
-          <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-            Aziende esistenti ({aziende.length})
-          </h2>
+        <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3 mb-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-slate-500" />
+            <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+              Aziende esistenti (
+              {q ? `${aziendeFiltrate.length}/${aziende.length}` : aziende.length})
+            </h2>
+          </div>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={ricerca}
+              onChange={(e) => setRicerca(e.target.value)}
+              placeholder="Cerca per ragione sociale, CF o P.IVA..."
+              className="w-64 max-w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 text-slate-900"
+            />
+            {ricerca && (
+              <button
+                type="button"
+                onClick={() => setRicerca('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                title="Pulisci ricerca"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {erroreLista && (
@@ -232,9 +268,14 @@ export function AziendeManager({ nomeSchema, codice }: Props) {
         {!caricamento && !erroreLista && aziende.length === 0 && (
           <p className="text-xs text-slate-400">Nessuna azienda creata finora.</p>
         )}
+        {!caricamento && !erroreLista && aziende.length > 0 && aziendeFiltrate.length === 0 && (
+          <p className="text-xs text-slate-400">
+            Nessuna azienda corrisponde a &quot;{ricerca}&quot;.
+          </p>
+        )}
 
         <div className="space-y-2">
-          {aziende.map((azienda) => (
+          {aziendeFiltrate.map((azienda) => (
             <div
               key={azienda.id}
               className={`border rounded-lg p-3 flex flex-wrap justify-between items-center gap-3 ${
