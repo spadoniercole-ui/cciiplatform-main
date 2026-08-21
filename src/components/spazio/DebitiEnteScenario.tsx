@@ -8,6 +8,7 @@
 // indipendente rispetto a quanto l'azienda ha dichiarato nella Proposta.
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Pencil, X, Download, Upload } from 'lucide-react';
 import {
   ottieniDebitiEnte,
@@ -66,6 +67,12 @@ function parseNumeroItaliano(testo: string): number {
 }
 
 export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props) {
+  const router = useRouter();
+  // Il primo caricamento (mount) non deve forzare un refresh del layout: solo
+  // le ricariche successive a una mutazione (aggiunta/modifica/eliminazione/
+  // import/cambio modello) devono aggiornare il semaforo dei passi in alto,
+  // che vive nel layout (Server Component) e non si rilegge da solo.
+  const primoCaricamento = React.useRef(true);
   const [righe, setRighe] = useState<RigaDebitoEnte[]>([]);
   const [etichetteTipoDebito, setEtichetteTipoDebito] = useState<EtichettaTipoDebito[]>(
     TIPI_DEBITO_ENTE.map((t) => ({
@@ -133,6 +140,15 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
     } finally {
       setCaricamento(false);
       setCaricamentoArchitrave(false);
+      // Ogni mutazione (add/modifica/elimina/import/cambio modello) e ogni
+      // aggiornamento dall'assistente passano da qui: rileggiamo il semaforo
+      // dei passi solo dopo il primo caricamento, così "Posizione Ente"
+      // diventa verde appena la prima riga è salvata, senza reload manuale.
+      if (primoCaricamento.current) {
+        primoCaricamento.current = false;
+      } else {
+        router.refresh();
+      }
     }
   };
 

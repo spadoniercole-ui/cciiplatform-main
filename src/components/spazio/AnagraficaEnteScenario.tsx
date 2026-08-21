@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Save } from 'lucide-react';
 import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import {
@@ -26,6 +27,7 @@ const VUOTA: AnagraficaEnte = {
 } as AnagraficaEnte;
 
 export function AnagraficaEnteScenario({ nomeSchema, aziendaId, onSalvato }: Props) {
+  const router = useRouter();
   const [etichette, setEtichette] = useState<
     { campo: number; etichetta: string; attivo: boolean }[]
   >([]);
@@ -83,6 +85,12 @@ export function AnagraficaEnteScenario({ nomeSchema, aziendaId, onSalvato }: Pro
     if (risultato.success) {
       setSalvato(true);
       onSalvato?.(dati);
+      // Il semaforo dei passi (barra in alto) è renderizzato dal layout —
+      // un Server Component che l'App Router conserva tra una tab e l'altra
+      // e NON rilegge da solo dopo un salvataggio lato client. Senza questo
+      // refresh "Posizione Ente" resterebbe arancione finché non si ricarica
+      // a mano la pagina, pur avendo salvato l'anagrafica.
+      router.refresh();
     } else {
       setErrore(risultato.error || 'Impossibile salvare.');
     }
