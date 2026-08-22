@@ -1287,6 +1287,11 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
       created_at TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
+  // Dicitura della colonna "Stato": vuota = contabilizzato, valorizzata = non
+  // ancora contabilizzato (da lavorare per renderlo esigibile).
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS stato TEXT NOT NULL DEFAULT ''`
+  );
   await eseguiDdlTenant(
     sql`CREATE INDEX IF NOT EXISTS idx_debiti_vera_azienda ON ${s}.debiti_vera (azienda_id)`
   );

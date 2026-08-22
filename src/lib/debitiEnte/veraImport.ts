@@ -39,6 +39,16 @@ function indiceVoce(intestazioni: string[]): number {
   return i >= 0 ? i : 0;
 }
 
+// Colonna "Stato": la dicitura distingue, DENTRO VERA, i debiti già
+// contabilizzati (cella vuota) da quelli NON contabilizzati (cella valorizzata
+// — certi ma non ancora esigibili, da lavorare). La dicitura non cambia tra i
+// file VERA. Se la colonna manca (es. ADR, Gestione Separata) tutte le righe
+// sono contabilizzate.
+function indiceStato(intestazioni: string[]): number {
+  const norm = intestazioni.map(normalizzaEtichetta);
+  return norm.findIndex((h) => h === 'stato');
+}
+
 export interface SezioneVera {
   titolo: string;
   intestazioni: string[];
@@ -46,7 +56,7 @@ export interface SezioneVera {
   idxVoce: number;
   numeroRighe: number;
   totale: number;
-  righe: { voce: string; importo: number }[];
+  righe: { voce: string; importo: number; stato: string }[];
 }
 
 export interface AnalisiVera {
@@ -67,6 +77,7 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
   // dovuto alle Note di Rettifica, che l'Esito somma ma non compaiono nelle
   // righe di dettaglio.
   const idxCredito = indiceCredito(s.intestazioni);
+  const idxStato = indiceStato(s.intestazioni);
   const righe = s.righe.map((r, n) => {
     const debito = idxImporto >= 0 ? parseNumero(r[idxImporto]) : 0;
     const credito = idxCredito >= 0 ? parseNumero(r[idxCredito]) : 0;
@@ -76,6 +87,7 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
           ? testoCella(r[idxVoce])
           : `Riga ${n + 1}`,
       importo: debito - credito,
+      stato: idxStato >= 0 ? testoCella(r[idxStato]).trim() : '',
     };
   });
   const totale = righe.reduce((a, r) => a + r.importo, 0);
@@ -119,6 +131,8 @@ export interface RigaVera {
   voce: string;
   importo: number;
   categoria: string;
+  /** Dicitura della colonna Stato. Vuoto = contabilizzato; valorizzato = non ancora contabilizzato (da lavorare). */
+  stato: string;
 }
 
 /**
@@ -144,7 +158,13 @@ export function estraiRigheVera(
       continue;
     }
     for (const r of s.righe) {
-      righe.push({ sezione: s.titolo, voce: r.voce, importo: r.importo, categoria });
+      righe.push({
+        sezione: s.titolo,
+        voce: r.voce,
+        importo: r.importo,
+        categoria,
+        stato: r.stato,
+      });
     }
   }
   return { righe, titoliNonMappati: nonMappati };

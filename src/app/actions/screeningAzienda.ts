@@ -398,6 +398,24 @@ export async function generaScreeningAziendaAction(
       blocchiContesto.push(
         `Verifica certo-per-certo (Posizione VERA, dal file di verifica dell'ente): ${testoPerCat}. Delta complessivo non contabilizzato: ${formatta(deltaTotale)} — è la quota che il file di verifica riporta oltre a quanto l'ente ha già contabilizzato, e che in presenza di proposta dovrà essere contabilizzata.`
       );
+
+      // Non contabilizzato SECONDO VERA stesso: righe con la colonna "Stato"
+      // valorizzata (debiti certi ma non ancora esigibili, da lavorare).
+      const nonContab = veraRis.righe.filter((r) => r.stato && r.stato.trim() !== '');
+      if (nonContab.length > 0) {
+        const perDicitura = Array.from(
+          nonContab.reduce((m, r) => {
+            m.set(r.stato, (m.get(r.stato) || 0) + r.importo);
+            return m;
+          }, new Map<string, number>())
+        )
+          .map(([dicitura, tot]) => `${dicitura}: ${formatta(tot)}`)
+          .join('; ');
+        const totNonContab = nonContab.reduce((a, r) => a + r.importo, 0);
+        blocchiContesto.push(
+          `Debiti non ancora contabilizzati secondo VERA (colonna Stato valorizzata — certi ma non ancora esigibili, da lavorare per renderli tali): totale ${formatta(totNonContab)}, per stato di lavorazione: ${perDicitura}.`
+        );
+      }
     }
 
     const contestoTesto = blocchiContesto.join('\n');

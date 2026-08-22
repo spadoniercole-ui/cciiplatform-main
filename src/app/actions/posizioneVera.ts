@@ -89,7 +89,7 @@ export async function ottieniDebitiVera(
       return { success: false, righe: [], error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
     const r = await pool.query(
-      `SELECT id, sezione, voce, importo, categoria FROM "${nomeSchema}".debiti_vera
+      `SELECT id, sezione, voce, importo, categoria, stato FROM "${nomeSchema}".debiti_vera
        WHERE azienda_id = $1 ORDER BY id ASC`,
       [aziendaId]
     );
@@ -101,6 +101,7 @@ export async function ottieniDebitiVera(
         voce: x.voce,
         importo: Number(x.importo),
         categoria: x.categoria,
+        stato: x.stato ?? '',
       })),
     };
   } catch (error: any) {
@@ -125,9 +126,9 @@ export async function sostituisciDebitiVeraAction(
     await pool.query(`DELETE FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1`, [aziendaId]);
     for (const r of righe) {
       await pool.query(
-        `INSERT INTO "${nomeSchema}".debiti_vera (azienda_id, sezione, voce, importo, categoria)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [aziendaId, r.sezione, r.voce, r.importo, r.categoria]
+        `INSERT INTO "${nomeSchema}".debiti_vera (azienda_id, sezione, voce, importo, categoria, stato)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [aziendaId, r.sezione, r.voce, r.importo, r.categoria, r.stato ?? '']
       );
     }
     return { success: true };

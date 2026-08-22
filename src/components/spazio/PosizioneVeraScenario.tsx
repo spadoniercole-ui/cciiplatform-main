@@ -176,6 +176,23 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
     })
     .filter((x) => x.numeroRighe > 0);
 
+  // Dentro VERA: righe con "Stato" valorizzato = NON contabilizzate (certe ma
+  // non ancora esigibili, da lavorare). Cella Stato vuota = contabilizzato.
+  const righeNonContab = righeVera.filter((r) => r.stato && r.stato.trim() !== '');
+  const totContabVera = righeVera
+    .filter((r) => !r.stato || r.stato.trim() === '')
+    .reduce((a, r) => a + r.importo, 0);
+  const totNonContabVera = righeNonContab.reduce((a, r) => a + r.importo, 0);
+  const perDicitura = Array.from(
+    righeNonContab.reduce((m, r) => {
+      const cur = m.get(r.stato) || { numero: 0, totale: 0 };
+      cur.numero += 1;
+      cur.totale += r.importo;
+      m.set(r.stato, cur);
+      return m;
+    }, new Map<string, { numero: number; totale: number }>())
+  ).map(([dicitura, v]) => ({ dicitura, ...v }));
+
   const handleStampaPdf = () => {
     const esc = (s: string) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const righeConfronto = confronto
@@ -196,9 +213,21 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
         </tbody>
       </table>
       <p class="note">«Contabilizzato» = somma della Situazione Debitoria per categoria. «VERA» = somma del «Totale debito» (al netto del credito) del file di verifica per categoria. Le categorie neutre non alimentano i totali.</p>`;
+    const bloccoNonContab =
+      perDicitura.length > 0
+        ? `<h1 style="font-size:15px;margin-top:28px">Debiti non ancora contabilizzati (da lavorare)</h1>
+      <table>
+        <thead><tr><th>Stato (dicitura)</th><th class="num">Voci</th><th class="num">Importo</th></tr></thead>
+        <tbody>
+          ${perDicitura.map((d) => `<tr><td>${esc(d.dicitura)}</td><td class="num">${d.numero}</td><td class="num">${euro(d.totale)}</td></tr>`).join('')}
+          <tr class="tot"><td>Totale non contabilizzato</td><td class="num">${righeNonContab.length}</td><td class="num">${euro(totNonContabVera)}</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Righe con la colonna «Stato» valorizzata: debiti certi ma non ancora esigibili, da lavorare secondo la dicitura per renderli esigibili. Le righe con Stato vuoto sono già contabilizzate (${euro(totContabVera)}).</p>`
+        : '';
     stampaHtml(
       'Verifica certo per certo — Posizione V.E.R.A.',
-      corpo,
+      corpo + bloccoNonContab,
       `Generato il ${new Date().toLocaleString('it-IT')}`
     );
   };
@@ -380,6 +409,45 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
         </div>
       )}
 
+      {/* Debiti non ancora contabilizzati (colonna Stato valorizzata) */}
+      {righeNonContab.length > 0 && (
+        <div className="bg-white border border-amber-300 rounded-xl overflow-hidden">
+          <div className="p-3 border-b border-amber-100 bg-amber-50">
+            <h3 className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">
+              Debiti non ancora contabilizzati — da lavorare
+            </h3>
+            <p className="text-[10px] text-amber-700 mt-1">
+              Righe con la colonna «Stato» valorizzata: debiti certi ma non ancora esigibili, da
+              lavorare secondo la dicitura per renderli esigibili. Le altre righe (Stato vuoto) sono
+              già contabilizzate ({euro(totContabVera)}).
+            </p>
+          </div>
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-[10px] uppercase text-slate-500 font-bold border-b border-slate-100">
+                <th className="p-3">Stato (dicitura)</th>
+                <th className="p-3">Voci</th>
+                <th className="p-3">Importo</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {perDicitura.map((d) => (
+                <tr key={d.dicitura}>
+                  <td className="p-3 font-bold text-amber-800">{d.dicitura}</td>
+                  <td className="p-3 text-slate-700">{d.numero}</td>
+                  <td className="p-3 text-slate-700">{euro(d.totale)}</td>
+                </tr>
+              ))}
+              <tr className="bg-amber-50 font-black">
+                <td className="p-3 text-amber-900">Totale non contabilizzato</td>
+                <td className="p-3 text-amber-900">{righeNonContab.length}</td>
+                <td className="p-3 text-amber-900">{euro(totNonContabVera)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* VERA per categoria */}
       {veraPerCategoria.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -423,21 +491,36 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
                 <th className="p-3">Voce</th>
                 <th className="p-3">Importo</th>
                 <th className="p-3">Categoria</th>
+                <th className="p-3">Stato</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {righeVera.map((r) => (
-                <tr key={r.id}>
-                  <td className="p-3 text-slate-500 text-[10px]">{r.sezione}</td>
-                  <td className="p-3 text-slate-900">{r.voce}</td>
-                  <td className="p-3 text-slate-700">{euro(r.importo)}</td>
-                  <td className="p-3">
-                    <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-700">
-                      {etichettaTipoDebito(r.categoria, mappaEtichette)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {righeVera.map((r) => {
+                const nonContab = !!(r.stato && r.stato.trim() !== '');
+                return (
+                  <tr key={r.id} className={nonContab ? 'bg-amber-50/40' : ''}>
+                    <td className="p-3 text-slate-500 text-[10px]">{r.sezione}</td>
+                    <td className="p-3 text-slate-900">{r.voce}</td>
+                    <td className="p-3 text-slate-700">{euro(r.importo)}</td>
+                    <td className="p-3">
+                      <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-700">
+                        {etichettaTipoDebito(r.categoria, mappaEtichette)}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      {nonContab ? (
+                        <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-100 text-amber-800">
+                          {r.stato}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] text-emerald-600 font-bold uppercase">
+                          contabilizzato
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </details>
