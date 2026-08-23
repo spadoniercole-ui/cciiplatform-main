@@ -176,6 +176,18 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
     })
     .filter((x) => x.numeroRighe > 0);
 
+  // ESPOSIZIONE TOTALE verso l'ente = contabilizzato + da contabilizzare, sul
+  // solo perimetro che conta (categorie non neutre). È quanto l'azienda deve
+  // davvero all'ente secondo il file di verifica, nel suo complesso.
+  const veraNonNeutra = righeVera.filter((r) => !nonContribuisce.has(r.categoria));
+  const espContab = veraNonNeutra
+    .filter((r) => !r.stato || r.stato.trim() === '')
+    .reduce((a, r) => a + r.importo, 0);
+  const espDaContab = veraNonNeutra
+    .filter((r) => r.stato && r.stato.trim() !== '')
+    .reduce((a, r) => a + r.importo, 0);
+  const espTotale = espContab + espDaContab;
+
   // Dentro VERA: righe con "Stato" valorizzato = NON contabilizzate (certe ma
   // non ancora esigibili, da lavorare). Cella Stato vuota = contabilizzato.
   const righeNonContab = righeVera.filter((r) => r.stato && r.stato.trim() !== '');
@@ -205,6 +217,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       )
       .join('');
     const corpo = `
+      <p style="font-size:13px"><strong>Esposizione totale verso l'ente:</strong> ${euro(espTotale)} — di cui contabilizzato ${euro(espContab)} e da contabilizzare ${euro(espDaContab)}.</p>
       <table>
         <thead><tr><th>Categoria</th><th class="num">Contabilizzato (ente)</th><th class="num">VERA</th><th class="num">Delta (non contabilizzato)</th></tr></thead>
         <tbody>
@@ -339,6 +352,30 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
               {inElaborazione ? 'Import...' : 'Salva e importa'}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Esposizione totale verso l'ente = contabilizzato + da contabilizzare */}
+      {righeVera.length > 0 && (
+        <div className="bg-slate-900 text-white rounded-xl p-4">
+          <div className="text-[10px] uppercase tracking-wider text-slate-300 font-bold">
+            Esposizione totale verso l&apos;ente
+          </div>
+          <div className="text-2xl font-black mt-1">{euro(espTotale)}</div>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-[11px] text-slate-300">
+            <span>
+              Contabilizzato: <span className="font-bold text-white">{euro(espContab)}</span>
+            </span>
+            <span>
+              + Da contabilizzare:{' '}
+              <span className="font-bold text-amber-300">{euro(espDaContab)}</span>
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2">
+            Il totale che l&apos;azienda deve all&apos;ente comprende sia i debiti già
+            contabilizzati sia quelli ancora da contabilizzare (Stato valorizzato). Le categorie
+            neutre non sono incluse.
+          </p>
         </div>
       )}
 

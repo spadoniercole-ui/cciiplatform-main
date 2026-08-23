@@ -399,6 +399,19 @@ export async function generaScreeningAziendaAction(
         `Verifica certo-per-certo (Posizione VERA, dal file di verifica dell'ente): ${testoPerCat}. Delta complessivo non contabilizzato: ${formatta(deltaTotale)} — è la quota che il file di verifica riporta oltre a quanto l'ente ha già contabilizzato, e che in presenza di proposta dovrà essere contabilizzata.`
       );
 
+      // Esposizione totale verso l'ente = contabilizzato + da contabilizzare
+      // (perimetro non neutro): il debito complessivo dell'azienda verso l'ente.
+      const veraNonNeutra = veraRis.righe.filter((r) => !neutre.has(r.categoria));
+      const espContab = veraNonNeutra
+        .filter((r) => !r.stato || r.stato.trim() === '')
+        .reduce((a, r) => a + r.importo, 0);
+      const espDaContab = veraNonNeutra
+        .filter((r) => r.stato && r.stato.trim() !== '')
+        .reduce((a, r) => a + r.importo, 0);
+      blocchiContesto.push(
+        `Esposizione totale dell'azienda verso l'ente (dal file di verifica): ${formatta(espContab + espDaContab)} — comprensiva sia del già contabilizzato (${formatta(espContab)}) sia del da contabilizzare (${formatta(espDaContab)}). È il debito complessivo, non solo la quota già a ruolo.`
+      );
+
       // Non contabilizzato SECONDO VERA stesso: righe con la colonna "Stato"
       // valorizzata (debiti certi ma non ancora esigibili, da lavorare).
       const nonContab = veraRis.righe.filter((r) => r.stato && r.stato.trim() !== '');
