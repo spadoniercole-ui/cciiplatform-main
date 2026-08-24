@@ -58,6 +58,8 @@ export function SimulazioneRiceventeScenario({
   const [caricamento, setCaricamento] = useState(true);
   const [analisiInCorso, setAnalisiInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  // Piccolo prompt libero per questa generazione (usa-e-getta, non salvato).
+  const [istruzioniAI, setIstruzioniAI] = useState('');
 
   const carica = async () => {
     setCaricamento(true);
@@ -134,11 +136,16 @@ export function SimulazioneRiceventeScenario({
         documentiCaricati[s.id] = { nome: file.name, url: corpoUpload.url };
       }
 
-      const risultato = await analizzaDocumentiRiceventeAction(nomeSchema, scenarioId, {
-        asseverazione: documentiCaricati.asseverazione || null,
-        propostaCramDown: documentiCaricati.propostaCramDown!,
-        pianoSviluppo: documentiCaricati.pianoSviluppo || null,
-      });
+      const risultato = await analizzaDocumentiRiceventeAction(
+        nomeSchema,
+        scenarioId,
+        {
+          asseverazione: documentiCaricati.asseverazione || null,
+          propostaCramDown: documentiCaricati.propostaCramDown!,
+          pianoSviluppo: documentiCaricati.pianoSviluppo || null,
+        },
+        istruzioniAI
+      );
       if (risultato.success) {
         // L'analisi critica (testo) e l'estrazione dell'importo sono
         // due output distinti della stessa chiamata — se uno dei due
@@ -246,6 +253,23 @@ export function SimulazioneRiceventeScenario({
             </div>
           );
         })}
+
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+            Istruzioni per l&apos;AI (facoltative, solo per questa analisi)
+          </label>
+          <textarea
+            value={istruzioniAI}
+            onChange={(e) => setIstruzioniAI(e.target.value)}
+            rows={2}
+            placeholder="Es. verifica in particolare la sostenibilità del piano rispetto ai dati di settore…"
+            className="w-full p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 outline-none focus:border-blue-500"
+          />
+          <p className="text-[10px] text-slate-400 mt-1">
+            Indicazioni specifiche per questa generazione. Non sostituiscono le regole del sistema e
+            non vengono salvate.
+          </p>
+        </div>
 
         <button
           type="button"

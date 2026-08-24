@@ -36,6 +36,8 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   // Consente di lanciare l'analisi anche senza bilancio XBRL: il sistema
   // acquisisce la carenza, sviluppa sull'esistente e la evidenzia in relazione.
   const [procediSenzaXbrl, setProcediSenzaXbrl] = useState(false);
+  // Piccolo prompt libero per questa generazione (usa-e-getta, non salvato).
+  const [istruzioniAI, setIstruzioniAI] = useState('');
 
   const carica = async () => {
     setCaricamento(true);
@@ -145,7 +147,8 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
         nomeSchema,
         aziendaId,
         corpoUpload.url,
-        visuraFile.name
+        visuraFile.name,
+        istruzioniAI
       );
       if (risultato.success) {
         await carica();
@@ -266,6 +269,23 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               />
             </label>
           </div>
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+            Istruzioni per l&apos;AI (facoltative, solo per questo lancio)
+          </label>
+          <textarea
+            value={istruzioniAI}
+            onChange={(e) => setIstruzioniAI(e.target.value)}
+            rows={2}
+            placeholder="Es. concentrati sui debiti previdenziali, tieni conto della stagionalità dei ricavi…"
+            className="w-full p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 outline-none focus:border-blue-500"
+          />
+          <p className="text-[10px] text-slate-400 mt-1">
+            Indicazioni specifiche per questa generazione. Non sostituiscono le regole del sistema e
+            non vengono salvate.
+          </p>
         </div>
 
         <button

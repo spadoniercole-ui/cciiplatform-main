@@ -14,6 +14,7 @@ import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
 import { ottieniCategorieTipoDebito } from '@/app/actions/categorieTipoDebito';
 import { raggruppaPerTipoDebito } from '@/lib/debitiEnte/tipoDebito';
+import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
 import { ottieniEtichetteTipoDebito } from '@/app/actions/tipoDebitoConfig';
 import { calcolaQuadroDirettrici, type QuadroDirettrici } from '@/lib/checklist/scoringDirettrici';
 import type { SezioneChecklist, PesoDomanda } from '@/lib/checklist/ministeriale';
@@ -239,7 +240,8 @@ export async function generaScreeningAziendaAction(
   nomeSchema: string,
   aziendaId: number,
   visuraUrl: string,
-  nomeFileVisura: string
+  nomeFileVisura: string,
+  istruzioniOperatore?: string
 ): Promise<RisultatoGenerazioneScreening> {
   try {
     if (!anthropic) {
@@ -454,6 +456,8 @@ export async function generaScreeningAziendaAction(
     }
 
     const contestoTesto = blocchiContesto.join('\n');
+    // Istruzioni libere dell'operatore per questo singolo lancio (usa-e-getta).
+    const istruzioniBlocco = bloccoIstruzioniOperatore(istruzioniOperatore);
 
     // Regola di polarità condivisa da ogni sezione — l'invariante che tiene
     // il punteggio coerente: "Sì" sempre favorevole all'azienda.
@@ -489,7 +493,7 @@ ${contestoTesto}
 
 Genera da 1 a 2 domande per prodotto, MA non più di ${perSezioneMax} domande in tutto per questa sezione. Ogni domanda deve essere qualcosa che un funzionario dell'ente può verificare nei PROPRI sistemi interni per QUESTA azienda specifica — mai un giudizio generico sull'azienda che richiederebbe un'interazione diretta con essa (evita governance, competenza del management, clima interno).
 
-${REGOLA_POLARITA}
+${REGOLA_POLARITA}${istruzioniBlocco}
 
 Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esatto:
 { "domande": [ { "domanda": "Testo della domanda", "peso": "RILEVANTE" } ] }
@@ -558,7 +562,7 @@ Scrivi una relazione con questi paragrafi, in prosa, non elenchi puntati:
 5. Eventuali segnali di incoerenza da segnalare (es. continuità aziendale dichiarata in tensione con i numeri, se presente).
 6. Cosa manca e va aggiornato prima di poter valutare la proposta — il ponte esplicito verso i dati correnti che arriveranno con la proposta stessa.
 
-Non dare un giudizio legale definitivo — è una base istruttoria per chi dovrà poi leggere la proposta, non un responso.`;
+Non dare un giudizio legale definitivo — è una base istruttoria per chi dovrà poi leggere la proposta, non un responso.${istruzioniBlocco}`;
 
     const bloccoDocumento = {
       type: 'document' as const,

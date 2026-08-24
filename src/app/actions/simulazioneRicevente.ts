@@ -10,6 +10,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { del, get } from '@/lib/blobStore';
+import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
 import { pool } from '@/lib/db';
 import { assicuraTabellaSimulazioneRicevente } from '@/db/provision';
 import { ottieniScenarioPerId, verificaScenarioNonBloccato } from '@/app/actions/scenari';
@@ -95,7 +96,8 @@ export interface TreDocumentiRicevente {
 export async function analizzaDocumentiRiceventeAction(
   nomeSchema: string,
   scenarioId: number,
-  documentiNominati: TreDocumentiRicevente
+  documentiNominati: TreDocumentiRicevente,
+  istruzioniOperatore?: string
 ): Promise<RisultatoAnalisiRicevente> {
   const documenti: DocumentoPdf[] = [
     documentiNominati.asseverazione,
@@ -282,7 +284,7 @@ Struttura la risposta così:
 3. Punti di incoerenza o da verificare — cosa nei documenti non torna, è ottimistico senza giustificazione, o contraddice i dati raccolti. Questa è la parte più importante: sii specifico, cita i numeri.
 4. Una valutazione finale onesta e diretta: la proposta sembra credibile o ci sono segnali di allarme che meritano un supplemento di istruttoria.
 
-Non dare un giudizio legale sulla ricevibilità (quello lo fa già la piattaforma altrove) — il tuo compito è solo la credibilità di quello che l'azienda dichiara.`;
+Non dare un giudizio legale sulla ricevibilità (quello lo fa già la piattaforma altrove) — il tuo compito è solo la credibilità di quello che l'azienda dichiara.${bloccoIstruzioniOperatore(istruzioniOperatore)}`;
 
     // Estrazione strutturata separata dall'analisi critica — output
     // JSON puro invece di prosa, per poter confrontare il numero con
