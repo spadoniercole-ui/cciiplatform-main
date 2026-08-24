@@ -7,7 +7,11 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabelleVera } from '@/db/provision';
-import type { RigaVera } from '@/lib/debitiEnte/veraImport';
+import {
+  chiaveCombinazione,
+  type RigaVera,
+  type TrattamentoVera,
+} from '@/lib/debitiEnte/veraImport';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -186,6 +190,159 @@ export async function dimenticaTitoloVeraAction(
   }
 }
 
+// ---------------------------------------------------------------- Trattamenti
+export interface RisultatoMappaturaTrattamenti {
+  success: boolean;
+  /** chiave combinazione → trattamento */
+  mappatura: Record<string, TrattamentoVera>;
+  error?: string;
+}
+
+export async function ottieniMappaturaTrattamentiVera(
+  nomeSchema: string
+): Promise<RisultatoMappaturaTrattamenti> {
+  try {
+    if (!validaSchema(nomeSchema))
+      return { success: false, mappatura: {}, error: 'Nome schema non valido.' };
+    await assicuraTabelleVera(nomeSchema);
+    const r = await pool.query(`SELECT chiave, trattamento FROM "${nomeSchema}".vera_trattamenti`);
+    const mappatura: Record<string, TrattamentoVera> = {};
+    for (const x of r.rows) mappatura[x.chiave] = x.trattamento as TrattamentoVera;
+    return { success: true, mappatura };
+  } catch (error: any) {
+    console.error('[ottieniMappaturaTrattamentiVera] Errore:', error);
+    return {
+      success: false,
+      mappatura: {},
+      error: `Impossibile caricare: ${error.message || error}`,
+    };
+  }
+}
+
+export interface TrattamentoVeraRiga {
+  chiave: string;
+  natura: string;
+  stato: string;
+  trattamento: TrattamentoVera;
+}
+
+export interface RisultatoTrattamenti {
+  success: boolean;
+  trattamenti: TrattamentoVeraRiga[];
+  error?: string;
+}
+
+export async function ottieniTrattamentiVera(nomeSchema: string): Promise<RisultatoTrattamenti> {
+  try {
+    if (!validaSchema(nomeSchema))
+      return { success: false, trattamenti: [], error: 'Nome schema non valido.' };
+    await assicuraTabelleVera(nomeSchema);
+    const r = await pool.query(
+      `SELECT chiave, natura, stato, trattamento FROM "${nomeSchema}".vera_trattamenti ORDER BY natura ASC, stato ASC`
+    );
+    return {
+      success: true,
+      trattamenti: r.rows.map((x) => ({
+        chiave: x.chiave,
+        natura: x.natura,
+        stato: x.stato,
+        trattamento: x.trattamento as TrattamentoVera,
+      })),
+    };
+  } catch (error: any) {
+    console.error('[ottieniTrattamentiVera] Errore:', error);
+    return {
+      success: false,
+      trattamenti: [],
+      error: `Impossibile caricare: ${error.message || error}`,
+    };
+  }
+}
+
+/** Aggiunge/aggiorna il trattamento di una o più combinazioni Natura+Stato. */
+export async function salvaTrattamentiVeraAction(
+  nomeSchema: string,
+  voci: { chiave: string; natura: string; stato: string; trattamento: TrattamentoVera }[]
+): Promise<RisultatoOperazioneVera> {
+  try {
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabelleVera(nomeSchema);
+    for (const v of voci) {
+      if (!v.chiave || !v.trattamento) continue;
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".vera_trattamenti (chiave, natura, stato, trattamento)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (chiave) DO UPDATE SET natura = EXCLUDED.natura, stato = EXCLUDED.stato, trattamento = EXCLUDED.trattamento`,
+        [v.chiave, v.natura, v.stato, v.trattamento]
+      );
+    }
+    return { success: true };
+  } catch (error: any) {
+    console.error('[salvaTrattamentiVeraAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile salvare i trattamenti: ${error.message || error}`,
+    };
+  }
+}
+
+export interface RisultatoCorrezioneTrattamento {
+  success: boolean;
+  righeAggiornate?: number;
+  error?: string;
+}
+
+/** CORREGGI un trattamento e ri-applicalo alle righe già importate (per combinazione). */
+export async function aggiornaTrattamentoVeraAction(
+  nomeSchema: string,
+  chiave: string,
+  trattamento: TrattamentoVera
+): Promise<RisultatoCorrezioneTrattamento> {
+  try {
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabelleVera(nomeSchema);
+    await pool.query(
+      `UPDATE "${nomeSchema}".vera_trattamenti SET trattamento = $2 WHERE chiave = $1`,
+      [chiave, trattamento]
+    );
+    const upd = await pool.query(
+      `UPDATE "${nomeSchema}".debiti_vera SET trattamento = $2 WHERE combinazione = $1`,
+      [chiave, trattamento]
+    );
+    return { success: true, righeAggiornate: upd.rowCount ?? 0 };
+  } catch (error: any) {
+    console.error('[aggiornaTrattamentoVeraAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile correggere il trattamento: ${error.message || error}`,
+    };
+  }
+}
+
+/** DIMENTICA una combinazione: rimuove la mappatura ed elimina le sue righe per questa azienda. */
+export async function dimenticaTrattamentoVeraAction(
+  nomeSchema: string,
+  chiave: string,
+  aziendaId: number
+): Promise<RisultatoOperazioneVera> {
+  try {
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabelleVera(nomeSchema);
+    await pool.query(
+      `DELETE FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1 AND combinazione = $2`,
+      [aziendaId, chiave]
+    );
+    await pool.query(`DELETE FROM "${nomeSchema}".vera_trattamenti WHERE chiave = $1`, [chiave]);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[dimenticaTrattamentoVeraAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile dimenticare la combinazione: ${error.message || error}`,
+    };
+  }
+}
+
 export interface RigaVeraSalvata extends RigaVera {
   id: number;
 }
@@ -205,7 +362,7 @@ export async function ottieniDebitiVera(
       return { success: false, righe: [], error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
     const r = await pool.query(
-      `SELECT id, sezione, voce, importo, categoria, stato FROM "${nomeSchema}".debiti_vera
+      `SELECT id, sezione, voce, importo, categoria, stato, trattamento FROM "${nomeSchema}".debiti_vera
        WHERE azienda_id = $1 ORDER BY id ASC`,
       [aziendaId]
     );
@@ -218,6 +375,7 @@ export async function ottieniDebitiVera(
         importo: Number(x.importo),
         categoria: x.categoria,
         stato: x.stato ?? '',
+        trattamento: (x.trattamento ?? 'contabilizzato') as TrattamentoVera,
       })),
     };
   } catch (error: any) {
@@ -242,9 +400,18 @@ export async function sostituisciDebitiVeraAction(
     await pool.query(`DELETE FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1`, [aziendaId]);
     for (const r of righe) {
       await pool.query(
-        `INSERT INTO "${nomeSchema}".debiti_vera (azienda_id, sezione, voce, importo, categoria, stato)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [aziendaId, r.sezione, r.voce, r.importo, r.categoria, r.stato ?? '']
+        `INSERT INTO "${nomeSchema}".debiti_vera (azienda_id, sezione, voce, importo, categoria, stato, trattamento, combinazione)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          aziendaId,
+          r.sezione,
+          r.voce,
+          r.importo,
+          r.categoria,
+          r.stato ?? '',
+          r.trattamento ?? 'contabilizzato',
+          chiaveCombinazione(r.voce, r.stato ?? ''),
+        ]
       );
     }
     return { success: true };

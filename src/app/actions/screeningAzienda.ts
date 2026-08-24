@@ -379,11 +379,16 @@ export async function generaScreeningAziendaAction(
           ...veraRis.righe.map((r) => r.categoria),
         ])
       );
+      // Solo i trattamenti con importo noto (contabilizzato, da_contabilizzare)
+      // alimentano gli importi; "potenziale" ha importo ignoto, "ignora" è escluso.
+      const righeImporto = veraRis.righe.filter(
+        (r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare'
+      );
       const perCat = codici.map((cod) => {
         const contab = (debitiRis.success ? debitiRis.righe : [])
           .filter((r) => r.tipo === cod)
           .reduce((a, r) => a + r.importo, 0);
-        const vera = veraRis.righe
+        const vera = righeImporto
           .filter((r) => r.categoria === cod)
           .reduce((a, r) => a + r.importo, 0);
         return { cod, contab, vera, delta: vera - contab, neutra: neutre.has(cod) };
@@ -401,24 +406,24 @@ export async function generaScreeningAziendaAction(
 
       // Esposizione totale verso l'ente = contabilizzato + da contabilizzare
       // (perimetro non neutro): il debito complessivo dell'azienda verso l'ente.
-      const veraNonNeutra = veraRis.righe.filter((r) => !neutre.has(r.categoria));
+      const veraNonNeutra = righeImporto.filter((r) => !neutre.has(r.categoria));
       const espContab = veraNonNeutra
-        .filter((r) => !r.stato || r.stato.trim() === '')
+        .filter((r) => r.trattamento === 'contabilizzato')
         .reduce((a, r) => a + r.importo, 0);
       const espDaContab = veraNonNeutra
-        .filter((r) => r.stato && r.stato.trim() !== '')
+        .filter((r) => r.trattamento === 'da_contabilizzare')
         .reduce((a, r) => a + r.importo, 0);
       blocchiContesto.push(
         `Esposizione totale dell'azienda verso l'ente (dal file di verifica): ${formatta(espContab + espDaContab)} — comprensiva sia del già contabilizzato (${formatta(espContab)}) sia del da contabilizzare (${formatta(espDaContab)}). È il debito complessivo, non solo la quota già a ruolo.`
       );
 
-      // Non contabilizzato SECONDO VERA stesso: righe con la colonna "Stato"
-      // valorizzata (debiti certi ma non ancora esigibili, da lavorare).
-      const nonContab = veraRis.righe.filter((r) => r.stato && r.stato.trim() !== '');
+      // Da contabilizzare (trattamento da_contabilizzare), per stato di lavorazione.
+      const nonContab = veraRis.righe.filter((r) => r.trattamento === 'da_contabilizzare');
       if (nonContab.length > 0) {
         const perDicitura = Array.from(
           nonContab.reduce((m, r) => {
-            m.set(r.stato, (m.get(r.stato) || 0) + r.importo);
+            const k = r.stato || 'senza stato';
+            m.set(k, (m.get(k) || 0) + r.importo);
             return m;
           }, new Map<string, number>())
         )
@@ -426,7 +431,24 @@ export async function generaScreeningAziendaAction(
           .join('; ');
         const totNonContab = nonContab.reduce((a, r) => a + r.importo, 0);
         blocchiContesto.push(
-          `Debiti non ancora contabilizzati secondo VERA (colonna Stato valorizzata — certi ma non ancora esigibili, da lavorare per renderli tali): totale ${formatta(totNonContab)}, per stato di lavorazione: ${perDicitura}.`
+          `Debiti non ancora contabilizzati secondo VERA (certi ma non ancora esigibili, da lavorare per renderli tali): totale ${formatta(totNonContab)}, per stato di lavorazione: ${perDicitura}.`
+        );
+      }
+
+      // Potenziali a importo ignoto (trattamento potenziale): natura presente
+      // ma importo non ancora quantificato (es. Denunce non trasmesse).
+      const potenziali = veraRis.righe.filter((r) => r.trattamento === 'potenziale');
+      if (potenziali.length > 0) {
+        const perNatura = Array.from(
+          potenziali.reduce((m, r) => {
+            m.set(r.voce, (m.get(r.voce) || 0) + 1);
+            return m;
+          }, new Map<string, number>())
+        )
+          .map(([natura, n]) => `${natura} (${n})`)
+          .join('; ');
+        blocchiContesto.push(
+          `Posizioni potenziali a importo IGNOTO secondo VERA (natura presente ma importo non ancora quantificato — possibili passività future da monitorare): ${perNatura}. Vanno segnalate esplicitamente come rischio non ancora quantificabile.`
         );
       }
     }

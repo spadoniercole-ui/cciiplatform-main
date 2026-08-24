@@ -1292,6 +1292,25 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS stato TEXT NOT NULL DEFAULT ''`
   );
+  // Trattamento derivato dalla CATENA Natura+Stato: contabilizzato /
+  // da_contabilizzare / potenziale (importo ignoto) / ignora.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS trattamento TEXT NOT NULL DEFAULT 'contabilizzato'`
+  );
+  // Chiave della combinazione Natura+Stato di questa riga (per ri-applicare le
+  // correzioni del trattamento senza ricaricare il file).
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS combinazione TEXT NOT NULL DEFAULT ''`
+  );
+  // Mappatura (per spazio) della combinazione Natura+Stato → trattamento.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.vera_trattamenti (
+      chiave TEXT PRIMARY KEY,
+      natura TEXT NOT NULL,
+      stato TEXT NOT NULL DEFAULT '',
+      trattamento TEXT NOT NULL
+    )`
+  );
   await eseguiDdlTenant(
     sql`CREATE INDEX IF NOT EXISTS idx_debiti_vera_azienda ON ${s}.debiti_vera (azienda_id)`
   );

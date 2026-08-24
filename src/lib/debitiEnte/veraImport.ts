@@ -35,7 +35,12 @@ function indiceCredito(intestazioni: string[]): number {
 
 function indiceVoce(intestazioni: string[]): number {
   const norm = intestazioni.map(normalizzaEtichetta);
-  const i = norm.findIndex((h) => /(natura|descriz|voce|posizione|causale|gestione)/.test(h));
+  // La "voce" per VERA è la NATURA dell'omissione (F24 Non presentato, 18 -
+  // Verbale Evasione, Denunce non trasmesse…): è ciò che conta per la catena
+  // Natura+Stato. Ha PRIORITÀ su Posizione/Gestione, che sono solo identificativi.
+  let i = norm.findIndex((h) => /(natura|omission|tipolog)/.test(h));
+  if (i < 0) i = norm.findIndex((h) => /(descriz|causale|voce)/.test(h));
+  if (i < 0) i = norm.findIndex((h) => /(posizione|gestione)/.test(h));
   return i >= 0 ? i : 0;
 }
 
@@ -126,27 +131,68 @@ export async function analizzaVera(file: File, foglio?: string): Promise<Analisi
   };
 }
 
+// TRATTAMENTO della riga, deciso dalla CATENA Natura+Stato (non dal solo
+// stato): il debito è già a ruolo, ancora da mettere a ruolo, oppure una
+// posizione potenziale di cui non si conosce ancora l'importo (es. "Denunce
+// non trasmesse": natura presente, nessuno stato, nessun importo).
+export type TrattamentoVera = 'contabilizzato' | 'da_contabilizzare' | 'potenziale' | 'ignora';
+
+export const ETICHETTE_TRATTAMENTO: Record<TrattamentoVera, string> = {
+  contabilizzato: 'Contabilizzato',
+  da_contabilizzare: 'Da contabilizzare',
+  potenziale: 'Potenziale (importo ignoto)',
+  ignora: 'Ignora',
+};
+
+/** Chiave normalizzata della combinazione Natura+Stato. */
+export function chiaveCombinazione(natura: string, stato: string): string {
+  return `${normalizzaEtichetta(natura)}::${normalizzaEtichetta(stato)}`;
+}
+
+/** Trattamento suggerito per una combinazione mai vista, da confermare dall'operatore. */
+export function suggerisciTrattamento(stato: string, importo: number): TrattamentoVera {
+  if (Math.abs(importo) < 0.005) return 'potenziale'; // natura presente ma importo ignoto
+  return stato.trim() === '' ? 'contabilizzato' : 'da_contabilizzare';
+}
+
 export interface RigaVera {
   sezione: string;
   voce: string;
   importo: number;
   categoria: string;
-  /** Dicitura della colonna Stato. Vuoto = contabilizzato; valorizzato = non ancora contabilizzato (da lavorare). */
+  /** Dicitura della colonna Stato. */
   stato: string;
+  /** Trattamento derivato dalla combinazione Natura+Stato. */
+  trattamento: TrattamentoVera;
+}
+
+export interface CombinazioneVera {
+  chiave: string;
+  natura: string;
+  stato: string;
+  suggerito: TrattamentoVera;
 }
 
 /**
- * Trasforma le sezioni in righe salvabili, assegnando a ciascuna la categoria
- * mappata dal titolo. `mappaturaTitoli` è norm(titolo) → codice categoria.
- * Le sezioni con titolo non mappato vengono elencate a parte (da chiedere).
+ * Trasforma le sezioni in righe salvabili. La CATEGORIA viene dal titolo di
+ * sezione (`mappaturaTitoli`), il TRATTAMENTO dalla combinazione Natura+Stato
+ * (`mappaturaTrattamenti`, chiave → trattamento). Titoli e combinazioni non
+ * ancora mappati vengono elencati a parte per chiederli all'operatore.
  */
 export function estraiRigheVera(
   sezioni: SezioneVera[],
-  mappaturaTitoli: Record<string, string>
-): { righe: RigaVera[]; titoliNonMappati: { norm: string; label: string }[] } {
+  mappaturaTitoli: Record<string, string>,
+  mappaturaTrattamenti: Record<string, TrattamentoVera> = {}
+): {
+  righe: RigaVera[];
+  titoliNonMappati: { norm: string; label: string }[];
+  combinazioniNonMappate: CombinazioneVera[];
+} {
   const righe: RigaVera[] = [];
   const nonMappati: { norm: string; label: string }[] = [];
   const vistiNonMappati = new Set<string>();
+  const combNonMappate: CombinazioneVera[] = [];
+  const vistiComb = new Set<string>();
   for (const s of sezioni) {
     const norm = normalizzaEtichetta(s.titolo);
     const categoria = mappaturaTitoli[norm];
@@ -158,14 +204,29 @@ export function estraiRigheVera(
       continue;
     }
     for (const r of s.righe) {
+      const chiave = chiaveCombinazione(r.voce, r.stato);
+      const trattamento = mappaturaTrattamenti[chiave];
+      if (!trattamento) {
+        if (!vistiComb.has(chiave)) {
+          vistiComb.add(chiave);
+          combNonMappate.push({
+            chiave,
+            natura: r.voce,
+            stato: r.stato,
+            suggerito: suggerisciTrattamento(r.stato, r.importo),
+          });
+        }
+        continue;
+      }
       righe.push({
         sezione: s.titolo,
         voce: r.voce,
         importo: r.importo,
         categoria,
         stato: r.stato,
+        trattamento,
       });
     }
   }
-  return { righe, titoliNonMappati: nonMappati };
+  return { righe, titoliNonMappati: nonMappati, combinazioniNonMappate: combNonMappate };
 }

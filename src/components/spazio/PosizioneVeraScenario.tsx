@@ -12,8 +12,11 @@ import { Upload, ClipboardCheck, Scale, FileDown, Pencil, Trash2 } from 'lucide-
 import {
   analizzaVera,
   estraiRigheVera,
+  ETICHETTE_TRATTAMENTO,
   type SezioneVera,
   type RigaVera,
+  type TrattamentoVera,
+  type CombinazioneVera,
 } from '@/lib/debitiEnte/veraImport';
 import {
   ottieniMappaturaTitoliVera,
@@ -23,8 +26,14 @@ import {
   ottieniTitoliVera,
   aggiornaTitoloVeraAction,
   dimenticaTitoloVeraAction,
+  ottieniMappaturaTrattamentiVera,
+  ottieniTrattamentiVera,
+  salvaTrattamentiVeraAction,
+  aggiornaTrattamentoVeraAction,
+  dimenticaTrattamentoVeraAction,
   type RigaVeraSalvata,
   type TitoloVera,
+  type TrattamentoVeraRiga,
 } from '@/app/actions/posizioneVera';
 import {
   ottieniCategorieTipoDebito,
@@ -50,6 +59,19 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   const [mappaturaTitoli, setMappaturaTitoli] = useState<Record<string, string>>({});
   const [titoli, setTitoli] = useState<TitoloVera[]>([]);
   const [correzione, setCorrezione] = useState<{ norm: string; categoria: string } | null>(null);
+  const [mappaturaTrattamenti, setMappaturaTrattamenti] = useState<Record<string, TrattamentoVera>>(
+    {}
+  );
+  const [trattamenti, setTrattamenti] = useState<TrattamentoVeraRiga[]>([]);
+  const [correzioneTratt, setCorrezioneTratt] = useState<{
+    chiave: string;
+    trattamento: TrattamentoVera;
+  } | null>(null);
+  const [combinazioniDaMappare, setCombinazioniDaMappare] = useState<{
+    sezioni: SezioneVera[];
+    combinazioni: CombinazioneVera[];
+    scelte: Record<string, TrattamentoVera>;
+  } | null>(null);
   const [caricamento, setCaricamento] = useState(true);
   const [inElaborazione, setInElaborazione] = useState(false);
   const [esito, setEsito] = useState<string | null>(null);
@@ -70,18 +92,22 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   const carica = async () => {
     setCaricamento(true);
     try {
-      const [rCat, rVera, rEnte, rMap, rTit] = await Promise.all([
+      const [rCat, rVera, rEnte, rMap, rTit, rTrM, rTr] = await Promise.all([
         ottieniCategorieTipoDebito(nomeSchema),
         ottieniDebitiVera(nomeSchema, aziendaId),
         ottieniDebitiEnte(nomeSchema, aziendaId),
         ottieniMappaturaTitoliVera(nomeSchema),
         ottieniTitoliVera(nomeSchema),
+        ottieniMappaturaTrattamentiVera(nomeSchema),
+        ottieniTrattamentiVera(nomeSchema),
       ]);
       if (rCat.success) setCategorie(rCat.categorie);
       if (rVera.success) setRigheVera(rVera.righe);
       if (rEnte.success) setRigheEnte(rEnte.righe);
       if (rMap.success) setMappaturaTitoli(rMap.mappatura);
       if (rTit.success) setTitoli(rTit.titoli);
+      if (rTrM.success) setMappaturaTrattamenti(rTrM.mappatura);
+      if (rTr.success) setTrattamenti(rTr.trattamenti);
     } finally {
       setCaricamento(false);
     }
@@ -92,8 +118,12 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, aziendaId]);
 
-  const importaSezioni = async (sezioni: SezioneVera[], mappatura: Record<string, string>) => {
-    const { righe } = estraiRigheVera(sezioni, mappatura);
+  const importaSezioni = async (
+    sezioni: SezioneVera[],
+    titoliMap: Record<string, string>,
+    trattMap: Record<string, TrattamentoVera>
+  ) => {
+    const { righe } = estraiRigheVera(sezioni, titoliMap, trattMap);
     const res = await sostituisciDebitiVeraAction(nomeSchema, aziendaId, righe as RigaVera[]);
     if (!res.success) {
       setErrore(res.error || 'Impossibile salvare la posizione VERA.');
@@ -102,6 +132,33 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
     await carica();
     router.refresh();
     setEsito(`Importate ${righe.length} righe VERA da ${sezioni.length} sezioni.`);
+  };
+
+  // Router dell'import: se mancano titoli → chiede i titoli; poi se mancano
+  // combinazioni Natura+Stato → chiede i trattamenti; poi importa.
+  const procediImport = async (
+    sezioni: SezioneVera[],
+    titoliMap: Record<string, string>,
+    trattMap: Record<string, TrattamentoVera>
+  ) => {
+    const { titoliNonMappati, combinazioniNonMappate } = estraiRigheVera(
+      sezioni,
+      titoliMap,
+      trattMap
+    );
+    if (titoliNonMappati.length > 0) {
+      setTitoliDaMappare({ sezioni, titoli: titoliNonMappati, scelte: {} });
+      return;
+    }
+    if (combinazioniNonMappate.length > 0) {
+      setCombinazioniDaMappare({
+        sezioni,
+        combinazioni: combinazioniNonMappate,
+        scelte: Object.fromEntries(combinazioniNonMappate.map((c) => [c.chiave, c.suggerito])),
+      });
+      return;
+    }
+    await importaSezioni(sezioni, titoliMap, trattMap);
   };
 
   const handleFile = async (file: File) => {
@@ -114,16 +171,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
         setEsito('Nessuna sezione riconosciuta nel foglio Dettaglio Verifica.');
         return;
       }
-      const { titoliNonMappati } = estraiRigheVera(analisi.sezioni, mappaturaTitoli);
-      if (titoliNonMappati.length > 0) {
-        setTitoliDaMappare({
-          sezioni: analisi.sezioni,
-          titoli: titoliNonMappati,
-          scelte: {},
-        });
-      } else {
-        await importaSezioni(analisi.sezioni, mappaturaTitoli);
-      }
+      await procediImport(analisi.sezioni, mappaturaTitoli, mappaturaTrattamenti);
     } catch (err: any) {
       setEsito(`Impossibile leggere il file: ${err.message || err}`);
     } finally {
@@ -147,8 +195,32 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       );
       const mappaturaAgg = { ...mappaturaTitoli, ...titoliDaMappare.scelte };
       setMappaturaTitoli(mappaturaAgg);
-      await importaSezioni(titoliDaMappare.sezioni, mappaturaAgg);
+      const sezioni = titoliDaMappare.sezioni;
       setTitoliDaMappare(null);
+      await procediImport(sezioni, mappaturaAgg, mappaturaTrattamenti);
+    } finally {
+      setInElaborazione(false);
+    }
+  };
+
+  const confermaCombinazioni = async () => {
+    if (!combinazioniDaMappare) return;
+    setInElaborazione(true);
+    try {
+      await salvaTrattamentiVeraAction(
+        nomeSchema,
+        combinazioniDaMappare.combinazioni.map((c) => ({
+          chiave: c.chiave,
+          natura: c.natura,
+          stato: c.stato,
+          trattamento: combinazioniDaMappare.scelte[c.chiave],
+        }))
+      );
+      const trattAgg = { ...mappaturaTrattamenti, ...combinazioniDaMappare.scelte };
+      setMappaturaTrattamenti(trattAgg);
+      const sezioni = combinazioniDaMappare.sezioni;
+      setCombinazioniDaMappare(null);
+      await procediImport(sezioni, mappaturaTitoli, trattAgg);
     } finally {
       setInElaborazione(false);
     }
@@ -196,64 +268,123 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
     }
   };
 
+  const confermaCorrezioneTratt = async () => {
+    if (!correzioneTratt) return;
+    setInElaborazione(true);
+    setErrore(null);
+    try {
+      const res = await aggiornaTrattamentoVeraAction(
+        nomeSchema,
+        correzioneTratt.chiave,
+        correzioneTratt.trattamento
+      );
+      if (!res.success) {
+        setErrore(res.error || 'Impossibile correggere il trattamento.');
+        return;
+      }
+      setCorrezioneTratt(null);
+      await carica();
+      router.refresh();
+      setEsito(
+        `Trattamento corretto.` +
+          (res.righeAggiornate ? ` Ri-applicato a ${res.righeAggiornate} righe.` : '')
+      );
+    } finally {
+      setInElaborazione(false);
+    }
+  };
+
+  const dimenticaTratt = async (t: TrattamentoVeraRiga) => {
+    if (
+      !window.confirm(
+        `Dimenticare la combinazione «${t.natura} / ${t.stato || 'nessuno stato'}»? Verrà richiesta di nuovo al prossimo caricamento e le sue righe VERA di questa azienda saranno eliminate.`
+      )
+    )
+      return;
+    setInElaborazione(true);
+    try {
+      const res = await dimenticaTrattamentoVeraAction(nomeSchema, t.chiave, aziendaId);
+      if (!res.success) setErrore(res.error || 'Impossibile dimenticare la combinazione.');
+      await carica();
+      router.refresh();
+    } finally {
+      setInElaborazione(false);
+    }
+  };
+
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
 
-  // Confronto certo-per-certo per categoria.
+  const nonContribuisce = new Set(categorie.filter((c) => !c.contribuisce).map((c) => c.codice));
+
+  // Il TRATTAMENTO (dalla catena Natura+Stato) decide se una riga vale come
+  // importo. Solo contabilizzato e da_contabilizzare hanno un importo noto;
+  // potenziale = importo ignoto (evidenza, fuori dai totali); ignora = escluso.
+  const righeImporto = righeVera.filter(
+    (r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare'
+  );
+  const righePotenziali = righeVera.filter((r) => r.trattamento === 'potenziale');
+
+  // Confronto certo-per-certo per categoria (solo importi noti).
   const codiciPresenti = Array.from(
     new Set<string>([
       ...categorie.map((c) => c.codice),
       ...righeEnte.map((r) => r.tipo),
-      ...righeVera.map((r) => r.categoria),
+      ...righeImporto.map((r) => r.categoria),
     ])
   );
-  const nonContribuisce = new Set(categorie.filter((c) => !c.contribuisce).map((c) => c.codice));
   const confronto = codiciPresenti
     .map((cod) => {
       const contab = righeEnte.filter((r) => r.tipo === cod).reduce((a, r) => a + r.importo, 0);
-      const vera = righeVera.filter((r) => r.categoria === cod).reduce((a, r) => a + r.importo, 0);
+      const vera = righeImporto
+        .filter((r) => r.categoria === cod)
+        .reduce((a, r) => a + r.importo, 0);
       return { cod, contab, vera, delta: vera - contab, neutra: nonContribuisce.has(cod) };
     })
     .filter((x) => x.contab !== 0 || x.vera !== 0);
-  // Le categorie neutre non alimentano i totali né il delta complessivo.
   const totContab = confronto.filter((x) => !x.neutra).reduce((a, x) => a + x.contab, 0);
   const totVera = confronto.filter((x) => !x.neutra).reduce((a, x) => a + x.vera, 0);
 
-  // VERA per categoria (dettaglio importo).
+  // VERA per categoria (solo importi noti).
   const veraPerCategoria = codiciPresenti
     .map((cod) => {
-      const righe = righeVera.filter((r) => r.categoria === cod);
+      const righe = righeImporto.filter((r) => r.categoria === cod);
       return { cod, numeroRighe: righe.length, totale: righe.reduce((a, r) => a + r.importo, 0) };
     })
     .filter((x) => x.numeroRighe > 0);
 
-  // ESPOSIZIONE TOTALE verso l'ente = contabilizzato + da contabilizzare, sul
-  // solo perimetro che conta (categorie non neutre). È quanto l'azienda deve
-  // davvero all'ente secondo il file di verifica, nel suo complesso.
-  const veraNonNeutra = righeVera.filter((r) => !nonContribuisce.has(r.categoria));
+  // ESPOSIZIONE TOTALE verso l'ente = contabilizzato + da contabilizzare
+  // (perimetro non neutro). I potenziali restano fuori (importo ignoto).
+  const veraNonNeutra = righeImporto.filter((r) => !nonContribuisce.has(r.categoria));
   const espContab = veraNonNeutra
-    .filter((r) => !r.stato || r.stato.trim() === '')
+    .filter((r) => r.trattamento === 'contabilizzato')
     .reduce((a, r) => a + r.importo, 0);
   const espDaContab = veraNonNeutra
-    .filter((r) => r.stato && r.stato.trim() !== '')
+    .filter((r) => r.trattamento === 'da_contabilizzare')
     .reduce((a, r) => a + r.importo, 0);
   const espTotale = espContab + espDaContab;
 
-  // Dentro VERA: righe con "Stato" valorizzato = NON contabilizzate (certe ma
-  // non ancora esigibili, da lavorare). Cella Stato vuota = contabilizzato.
-  const righeNonContab = righeVera.filter((r) => r.stato && r.stato.trim() !== '');
-  const totContabVera = righeVera
-    .filter((r) => !r.stato || r.stato.trim() === '')
-    .reduce((a, r) => a + r.importo, 0);
+  // Da contabilizzare (trattamento da_contabilizzare), raggruppato per dicitura di Stato.
+  const righeNonContab = righeVera.filter((r) => r.trattamento === 'da_contabilizzare');
+  const totContabVera = espContab;
   const totNonContabVera = righeNonContab.reduce((a, r) => a + r.importo, 0);
   const perDicitura = Array.from(
     righeNonContab.reduce((m, r) => {
-      const cur = m.get(r.stato) || { numero: 0, totale: 0 };
+      const k = r.stato || '(nessuno stato)';
+      const cur = m.get(k) || { numero: 0, totale: 0 };
       cur.numero += 1;
       cur.totale += r.importo;
-      m.set(r.stato, cur);
+      m.set(k, cur);
       return m;
     }, new Map<string, { numero: number; totale: number }>())
   ).map(([dicitura, v]) => ({ dicitura, ...v }));
+
+  // Potenziali a importo ignoto (trattamento potenziale), raggruppati per natura.
+  const perNaturaPotenziale = Array.from(
+    righePotenziali.reduce((m, r) => {
+      m.set(r.voce, (m.get(r.voce) || 0) + 1);
+      return m;
+    }, new Map<string, number>())
+  ).map(([natura, numero]) => ({ natura, numero }));
 
   const handleStampaPdf = () => {
     const esc = (s: string) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -288,9 +419,21 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       </table>
       <p class="note">Righe con la colonna «Stato» valorizzata: debiti certi ma non ancora esigibili, da lavorare secondo la dicitura per renderli esigibili. Le righe con Stato vuoto sono già contabilizzate (${euro(totContabVera)}).</p>`
         : '';
+    const bloccoPotenziali =
+      perNaturaPotenziale.length > 0
+        ? `<h1 style="font-size:15px;margin-top:28px">Potenziali a importo ignoto</h1>
+      <table>
+        <thead><tr><th>Natura</th><th class="num">Righe</th></tr></thead>
+        <tbody>
+          ${perNaturaPotenziale.map((p) => `<tr><td>${esc(p.natura)}</td><td class="num">${p.numero}</td></tr>`).join('')}
+          <tr class="tot"><td>Totale posizioni potenziali</td><td class="num">${righePotenziali.length}</td></tr>
+        </tbody>
+      </table>
+      <p class="note">Righe con natura ma senza importo: debiti potenziali di entità ignota (possibili passività future da quantificare). Fuori dai totali.</p>`
+        : '';
     stampaHtml(
       'Verifica certo per certo — Posizione V.E.R.A.',
-      corpo + bloccoNonContab,
+      corpo + bloccoNonContab + bloccoPotenziali,
       `Generato il ${new Date().toLocaleString('it-IT')}`
     );
   };
@@ -321,7 +464,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       )}
 
       {/* Caricamento */}
-      {!titoliDaMappare && (
+      {!titoliDaMappare && !combinazioniDaMappare && (
         <label className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] uppercase rounded-lg transition-colors cursor-pointer">
           <Upload className="w-3.5 h-3.5" />
           {inElaborazione
@@ -344,7 +487,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       )}
 
       {/* Catalogo sezioni VERA riconosciute — Correggi / Dimentica */}
-      {!titoliDaMappare && titoli.length > 0 && (
+      {!titoliDaMappare && !combinazioniDaMappare && titoli.length > 0 && (
         <div className="space-y-1.5">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
             Sezioni VERA riconosciute
@@ -471,6 +614,152 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
               {inElaborazione ? 'Import...' : 'Salva e importa'}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Mappatura combinazioni Natura+Stato nuove → trattamento */}
+      {combinazioniDaMappare && (
+        <div className="bg-white border border-amber-200 rounded-xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck className="w-4 h-4 text-amber-600" />
+            <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+              Combinazioni nuove — assegna il trattamento
+            </h3>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            La catena <strong>Natura → Stato → Importo</strong> va letta insieme. Per ogni
+            combinazione mai vista scegli come trattarla. Le righe con natura ma senza importo (es.
+            «Denunce non trasmesse») sono debiti potenziali di entità ignota: vanno tenute come
+            «Potenziale». La scelta viene ricordata per i prossimi caricamenti.
+          </p>
+          <div className="space-y-1.5">
+            {combinazioniDaMappare.combinazioni.map((c) => (
+              <div key={c.chiave} className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-slate-700 flex-1 min-w-0 truncate">
+                  <span className="font-bold">{c.natura}</span>
+                  <span className="text-slate-400"> / {c.stato || 'nessuno stato'}</span>
+                </span>
+                <select
+                  value={combinazioniDaMappare.scelte[c.chiave] || ''}
+                  onChange={(e) =>
+                    setCombinazioniDaMappare({
+                      ...combinazioniDaMappare,
+                      scelte: {
+                        ...combinazioniDaMappare.scelte,
+                        [c.chiave]: e.target.value as TrattamentoVera,
+                      },
+                    })
+                  }
+                  className="p-1.5 text-xs border border-slate-200 rounded text-slate-900 bg-white"
+                >
+                  {(Object.keys(ETICHETTE_TRATTAMENTO) as TrattamentoVera[]).map((t) => (
+                    <option key={t} value={t}>
+                      {ETICHETTE_TRATTAMENTO[t]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setCombinazioniDaMappare(null)}
+              className="px-4 py-2 text-xs font-bold uppercase text-slate-500 hover:text-slate-700"
+            >
+              Annulla
+            </button>
+            <button
+              type="button"
+              onClick={confermaCombinazioni}
+              disabled={
+                inElaborazione ||
+                combinazioniDaMappare.combinazioni.some(
+                  (c) => !combinazioniDaMappare.scelte[c.chiave]
+                )
+              }
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold uppercase tracking-wider rounded-lg text-xs"
+            >
+              {inElaborazione ? 'Import...' : 'Salva e importa'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Catalogo combinazioni Natura+Stato → trattamento — Correggi / Dimentica */}
+      {!titoliDaMappare && !combinazioniDaMappare && trattamenti.length > 0 && (
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Combinazioni Natura+Stato riconosciute
+          </span>
+          {trattamenti.map((t) => (
+            <div
+              key={t.chiave}
+              className="flex items-center gap-2 flex-wrap border border-slate-200 rounded-lg px-3 py-2"
+            >
+              <span className="text-xs text-slate-700 flex-1 min-w-0 truncate">
+                <span className="font-bold">{t.natura}</span>
+                <span className="text-slate-400"> / {t.stato || 'nessuno stato'}</span>
+              </span>
+              {correzioneTratt?.chiave === t.chiave ? (
+                <>
+                  <select
+                    value={correzioneTratt.trattamento}
+                    onChange={(e) =>
+                      setCorrezioneTratt({
+                        ...correzioneTratt,
+                        trattamento: e.target.value as TrattamentoVera,
+                      })
+                    }
+                    className="p-1.5 text-xs border border-slate-200 rounded text-slate-900 bg-white"
+                  >
+                    {(Object.keys(ETICHETTE_TRATTAMENTO) as TrattamentoVera[]).map((tt) => (
+                      <option key={tt} value={tt}>
+                        {ETICHETTE_TRATTAMENTO[tt]}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={confermaCorrezioneTratt}
+                    disabled={inElaborazione}
+                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded"
+                  >
+                    Salva
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCorrezioneTratt(null)}
+                    className="px-2 py-1 text-[10px] font-bold uppercase text-slate-400 hover:text-slate-700"
+                  >
+                    Annulla
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-700">
+                    {ETICHETTE_TRATTAMENTO[t.trattamento]}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCorrezioneTratt({ chiave: t.chiave, trattamento: t.trattamento })
+                    }
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase text-blue-600 hover:bg-blue-50 rounded"
+                  >
+                    <Pencil className="w-3 h-3" /> Correggi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => dimenticaTratt(t)}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                  >
+                    <Trash2 className="w-3 h-3" /> Dimentica
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
@@ -604,6 +893,42 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
         </div>
       )}
 
+      {/* Potenziali a importo ignoto (trattamento potenziale) */}
+      {righePotenziali.length > 0 && (
+        <div className="bg-white border border-orange-300 rounded-xl overflow-hidden">
+          <div className="p-3 border-b border-orange-100 bg-orange-50">
+            <h3 className="text-[11px] font-bold text-orange-800 uppercase tracking-wider">
+              Potenziali a importo ignoto
+            </h3>
+            <p className="text-[10px] text-orange-700 mt-1">
+              Righe con natura ma senza importo (es. «Denunce non trasmesse»): debiti potenziali di
+              cui, al momento, non si conosce l&apos;entità. Non entrano nei totali ma vanno tenuti
+              d&apos;occhio — sono possibili passività future da quantificare.
+            </p>
+          </div>
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-[10px] uppercase text-slate-500 font-bold border-b border-slate-100">
+                <th className="p-3">Natura</th>
+                <th className="p-3">Righe</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {perNaturaPotenziale.map((p) => (
+                <tr key={p.natura}>
+                  <td className="p-3 font-bold text-orange-800">{p.natura}</td>
+                  <td className="p-3 text-slate-700">{p.numero}</td>
+                </tr>
+              ))}
+              <tr className="bg-orange-50 font-black">
+                <td className="p-3 text-orange-900">Totale posizioni potenziali</td>
+                <td className="p-3 text-orange-900">{righePotenziali.length}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* VERA per categoria */}
       {veraPerCategoria.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -644,35 +969,50 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
             <thead>
               <tr className="text-[10px] uppercase text-slate-500 font-bold border-b border-slate-100">
                 <th className="p-3">Sezione</th>
-                <th className="p-3">Voce</th>
+                <th className="p-3">Natura</th>
+                <th className="p-3">Stato</th>
                 <th className="p-3">Importo</th>
                 <th className="p-3">Categoria</th>
-                <th className="p-3">Stato</th>
+                <th className="p-3">Trattamento</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {righeVera.map((r) => {
-                const nonContab = !!(r.stato && r.stato.trim() !== '');
+                const rigaClasse =
+                  r.trattamento === 'potenziale'
+                    ? 'bg-orange-50/50'
+                    : r.trattamento === 'da_contabilizzare'
+                      ? 'bg-amber-50/40'
+                      : r.trattamento === 'ignora'
+                        ? 'text-slate-400'
+                        : '';
+                const trattClasse =
+                  r.trattamento === 'potenziale'
+                    ? 'bg-orange-100 text-orange-800'
+                    : r.trattamento === 'da_contabilizzare'
+                      ? 'bg-amber-100 text-amber-800'
+                      : r.trattamento === 'ignora'
+                        ? 'bg-slate-100 text-slate-500'
+                        : 'bg-emerald-100 text-emerald-700';
                 return (
-                  <tr key={r.id} className={nonContab ? 'bg-amber-50/40' : ''}>
+                  <tr key={r.id} className={rigaClasse}>
                     <td className="p-3 text-slate-500 text-[10px]">{r.sezione}</td>
                     <td className="p-3 text-slate-900">{r.voce}</td>
-                    <td className="p-3 text-slate-700">{euro(r.importo)}</td>
+                    <td className="p-3 text-slate-500 text-[11px]">{r.stato || '—'}</td>
+                    <td className="p-3 text-slate-700">
+                      {r.trattamento === 'potenziale' ? 'ignoto' : euro(r.importo)}
+                    </td>
                     <td className="p-3">
                       <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-700">
                         {etichettaTipoDebito(r.categoria, mappaEtichette)}
                       </span>
                     </td>
                     <td className="p-3">
-                      {nonContab ? (
-                        <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-100 text-amber-800">
-                          {r.stato}
-                        </span>
-                      ) : (
-                        <span className="text-[9px] text-emerald-600 font-bold uppercase">
-                          contabilizzato
-                        </span>
-                      )}
+                      <span
+                        className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${trattClasse}`}
+                      >
+                        {ETICHETTE_TRATTAMENTO[r.trattamento]}
+                      </span>
                     </td>
                   </tr>
                 );
