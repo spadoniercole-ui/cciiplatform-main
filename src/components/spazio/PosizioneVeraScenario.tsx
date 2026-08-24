@@ -8,7 +8,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, ClipboardCheck, Scale, FileDown } from 'lucide-react';
+import { Upload, ClipboardCheck, Scale, FileDown, Pencil, Trash2 } from 'lucide-react';
 import {
   analizzaVera,
   estraiRigheVera,
@@ -20,7 +20,11 @@ import {
   salvaMappaturaTitoliVeraAction,
   ottieniDebitiVera,
   sostituisciDebitiVeraAction,
+  ottieniTitoliVera,
+  aggiornaTitoloVeraAction,
+  dimenticaTitoloVeraAction,
   type RigaVeraSalvata,
+  type TitoloVera,
 } from '@/app/actions/posizioneVera';
 import {
   ottieniCategorieTipoDebito,
@@ -44,6 +48,8 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   const [righeVera, setRigheVera] = useState<RigaVeraSalvata[]>([]);
   const [righeEnte, setRigheEnte] = useState<RigaDebitoEnte[]>([]);
   const [mappaturaTitoli, setMappaturaTitoli] = useState<Record<string, string>>({});
+  const [titoli, setTitoli] = useState<TitoloVera[]>([]);
+  const [correzione, setCorrezione] = useState<{ norm: string; categoria: string } | null>(null);
   const [caricamento, setCaricamento] = useState(true);
   const [inElaborazione, setInElaborazione] = useState(false);
   const [esito, setEsito] = useState<string | null>(null);
@@ -64,16 +70,18 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   const carica = async () => {
     setCaricamento(true);
     try {
-      const [rCat, rVera, rEnte, rMap] = await Promise.all([
+      const [rCat, rVera, rEnte, rMap, rTit] = await Promise.all([
         ottieniCategorieTipoDebito(nomeSchema),
         ottieniDebitiVera(nomeSchema, aziendaId),
         ottieniDebitiEnte(nomeSchema, aziendaId),
         ottieniMappaturaTitoliVera(nomeSchema),
+        ottieniTitoliVera(nomeSchema),
       ]);
       if (rCat.success) setCategorie(rCat.categorie);
       if (rVera.success) setRigheVera(rVera.righe);
       if (rEnte.success) setRigheEnte(rEnte.righe);
       if (rMap.success) setMappaturaTitoli(rMap.mappatura);
+      if (rTit.success) setTitoli(rTit.titoli);
     } finally {
       setCaricamento(false);
     }
@@ -141,6 +149,48 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       setMappaturaTitoli(mappaturaAgg);
       await importaSezioni(titoliDaMappare.sezioni, mappaturaAgg);
       setTitoliDaMappare(null);
+    } finally {
+      setInElaborazione(false);
+    }
+  };
+
+  const confermaCorrezioneTitolo = async () => {
+    if (!correzione || !correzione.categoria) return;
+    setInElaborazione(true);
+    setErrore(null);
+    try {
+      const res = await aggiornaTitoloVeraAction(nomeSchema, correzione.norm, correzione.categoria);
+      if (!res.success) {
+        setErrore(res.error || 'Impossibile correggere la sezione.');
+        return;
+      }
+      setCorrezione(null);
+      await carica();
+      router.refresh();
+      setEsito(
+        `Sezione corretta.` +
+          (res.righeAggiornate
+            ? ` Nuova categoria ri-applicata a ${res.righeAggiornate} righe già importate.`
+            : '')
+      );
+    } finally {
+      setInElaborazione(false);
+    }
+  };
+
+  const dimenticaTitolo = async (t: TitoloVera) => {
+    if (
+      !window.confirm(
+        `Dimenticare la sezione «${t.titolo}»? La mappatura verrà rimossa (al prossimo caricamento la richiederò di nuovo) e le sue righe VERA di questa azienda saranno eliminate.`
+      )
+    )
+      return;
+    setInElaborazione(true);
+    try {
+      const res = await dimenticaTitoloVeraAction(nomeSchema, t.norm, aziendaId);
+      if (!res.success) setErrore(res.error || 'Impossibile dimenticare la sezione.');
+      await carica();
+      router.refresh();
     } finally {
       setInElaborazione(false);
     }
@@ -291,6 +341,75 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
             }}
           />
         </label>
+      )}
+
+      {/* Catalogo sezioni VERA riconosciute — Correggi / Dimentica */}
+      {!titoliDaMappare && titoli.length > 0 && (
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Sezioni VERA riconosciute
+          </span>
+          {titoli.map((t) => (
+            <div
+              key={t.norm}
+              className="flex items-center gap-2 flex-wrap border border-slate-200 rounded-lg px-3 py-2"
+            >
+              <span className="font-bold text-slate-700 text-xs flex-1 min-w-0 truncate">
+                {t.titolo}
+              </span>
+              {correzione?.norm === t.norm ? (
+                <>
+                  <select
+                    value={correzione.categoria}
+                    onChange={(e) => setCorrezione({ ...correzione, categoria: e.target.value })}
+                    className="p-1.5 text-xs border border-slate-200 rounded text-slate-900 bg-white"
+                  >
+                    {categorieAttive.map((c) => (
+                      <option key={c.codice} value={c.codice}>
+                        {c.etichetta}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={confermaCorrezioneTitolo}
+                    disabled={inElaborazione}
+                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded"
+                  >
+                    Salva
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCorrezione(null)}
+                    className="px-2 py-1 text-[10px] font-bold uppercase text-slate-400 hover:text-slate-700"
+                  >
+                    Annulla
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-700">
+                    {etichettaTipoDebito(t.categoria, mappaEtichette)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCorrezione({ norm: t.norm, categoria: t.categoria })}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase text-blue-600 hover:bg-blue-50 rounded"
+                  >
+                    <Pencil className="w-3 h-3" /> Correggi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => dimenticaTitolo(t)}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                  >
+                    <Trash2 className="w-3 h-3" /> Dimentica
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Mappatura titoli di sezione nuovi */}

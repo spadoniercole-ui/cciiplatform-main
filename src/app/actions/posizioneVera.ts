@@ -70,6 +70,122 @@ export async function salvaMappaturaTitoliVeraAction(
   }
 }
 
+export interface TitoloVera {
+  norm: string;
+  titolo: string;
+  categoria: string;
+}
+
+export interface RisultatoTitoliVera {
+  success: boolean;
+  titoli: TitoloVera[];
+  error?: string;
+}
+
+/** Elenco completo delle sezioni VERA riconosciute (titolo + categoria) — il "catalogo" su cui agiscono Correggi/Dimentica. */
+export async function ottieniTitoliVera(nomeSchema: string): Promise<RisultatoTitoliVera> {
+  try {
+    if (!validaSchema(nomeSchema))
+      return { success: false, titoli: [], error: 'Nome schema non valido.' };
+    await assicuraTabelleVera(nomeSchema);
+    const r = await pool.query(
+      `SELECT titolo_norm, titolo, categoria FROM "${nomeSchema}".vera_titoli ORDER BY titolo ASC`
+    );
+    return {
+      success: true,
+      titoli: r.rows.map((x) => ({
+        norm: x.titolo_norm,
+        titolo: x.titolo,
+        categoria: x.categoria,
+      })),
+    };
+  } catch (error: any) {
+    console.error('[ottieniTitoliVera] Errore:', error);
+    return {
+      success: false,
+      titoli: [],
+      error: `Impossibile caricare le sezioni: ${error.message || error}`,
+    };
+  }
+}
+
+export interface RisultatoCorrezioneVera {
+  success: boolean;
+  /** Righe VERA già importate a cui la nuova categoria è stata ri-applicata. */
+  righeAggiornate?: number;
+  error?: string;
+}
+
+/**
+ * CORREGGI (come nella Posizione Debitoria): cambia la categoria di una sezione
+ * VERA e la RI-APPLICA anche alle righe già importate (in ogni azienda), senza
+ * ricaricare il file. Vale per sempre: i prossimi caricamenti useranno la nuova
+ * categoria.
+ */
+export async function aggiornaTitoloVeraAction(
+  nomeSchema: string,
+  norm: string,
+  categoria: string
+): Promise<RisultatoCorrezioneVera> {
+  try {
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (!categoria) return { success: false, error: 'Scegli una categoria.' };
+    await assicuraTabelleVera(nomeSchema);
+    const ris = await pool.query(
+      `UPDATE "${nomeSchema}".vera_titoli SET categoria = $2 WHERE titolo_norm = $1 RETURNING titolo`,
+      [norm, categoria]
+    );
+    if (ris.rows.length === 0) return { success: false, error: 'Sezione non trovata.' };
+    const titolo = ris.rows[0].titolo as string;
+    const upd = await pool.query(
+      `UPDATE "${nomeSchema}".debiti_vera SET categoria = $2 WHERE sezione = $1`,
+      [titolo, categoria]
+    );
+    return { success: true, righeAggiornate: upd.rowCount ?? 0 };
+  } catch (error: any) {
+    console.error('[aggiornaTitoloVeraAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile correggere la sezione: ${error.message || error}`,
+    };
+  }
+}
+
+/**
+ * DIMENTICA (come nella Posizione Debitoria): rimuove la mappatura della
+ * sezione (così al prossimo caricamento verrà richiesta di nuovo) ed elimina le
+ * righe VERA di quella sezione per QUESTA azienda.
+ */
+export async function dimenticaTitoloVeraAction(
+  nomeSchema: string,
+  norm: string,
+  aziendaId: number
+): Promise<RisultatoOperazioneVera> {
+  try {
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabelleVera(nomeSchema);
+    const ris = await pool.query(
+      `SELECT titolo FROM "${nomeSchema}".vera_titoli WHERE titolo_norm = $1`,
+      [norm]
+    );
+    if (ris.rows.length > 0) {
+      const titolo = ris.rows[0].titolo as string;
+      await pool.query(
+        `DELETE FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1 AND sezione = $2`,
+        [aziendaId, titolo]
+      );
+    }
+    await pool.query(`DELETE FROM "${nomeSchema}".vera_titoli WHERE titolo_norm = $1`, [norm]);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[dimenticaTitoloVeraAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile dimenticare la sezione: ${error.message || error}`,
+    };
+  }
+}
+
 export interface RigaVeraSalvata extends RigaVera {
   id: number;
 }
