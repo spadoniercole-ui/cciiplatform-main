@@ -507,10 +507,26 @@ Peso ammesso: STRUTTURALE, RILEVANTE o DOCUMENTALE.`;
       return { numero: String(numero), titolo: d.nome, domande };
     };
 
-    const promptRelazione = `Sei un assistente che scrive una relazione di analisi preliminare per un ente creditore, PRIMA che arrivi una proposta di composizione negoziata della crisi — una fotografia di partenza basata sul bilancio XBRL, sul fascicolo storico allegato, e sulla Situazione Debitoria già dichiarata dall'ente.
+    // Carenza di bilancio: l'analisi si può lanciare comunque (flag lato UI),
+    // ma la relazione deve ACQUISIRE ed EVIDENZIARE, contestualizzandola,
+    // l'assenza del bilancio — non fingere numeri che non ci sono.
+    const senzaBilancio = !(storicoRis.success && storicoRis.storico.length > 0);
+    const avvisoCarenzaBilancio = senzaBilancio
+      ? `
+
+ATTENZIONE — BILANCIO XBRL ASSENTE: per questa azienda non è stato caricato alcun bilancio XBRL. Devi:
+- Aprire la relazione con un avviso esplicito che il bilancio non è disponibile e che l'analisi è quindi PRELIMINARE e PARZIALE, condotta sui soli dati a disposizione (fascicolo storico, Situazione Debitoria, Posizione VERA).
+- Nel paragrafo 2 (posizione economico-patrimoniale) NON inventare numeri: dichiara che non è valutabile dai dati di bilancio in assenza dello stesso, e ricava solo ciò che è deducibile dal fascicolo storico.
+- Nel paragrafo 4 (scenario liquidatorio) segnala che l'ancoraggio quantitativo non è possibile senza bilancio e va rifatto appena disponibile.
+- Nel paragrafo 6 mettere in cima, tra ciò che manca, il caricamento del bilancio XBRL come priorità.
+Contestualizza sempre l'assenza: cosa se ne può dire lo stesso e cosa resta sospeso finché il bilancio non arriva.`
+      : '';
+
+    const promptRelazione = `Sei un assistente che scrive una relazione di analisi preliminare per un ente creditore, PRIMA che arrivi una proposta di composizione negoziata della crisi — una fotografia di partenza basata sul bilancio XBRL (se disponibile), sul fascicolo storico allegato, e sulla Situazione Debitoria già dichiarata dall'ente.
 
 DATI GIÀ RACCOLTI:
 ${contestoTesto}
+${avvisoCarenzaBilancio}
 
 Scrivi una relazione con questi paragrafi, in prosa, non elenchi puntati:
 1. Identikit dell'impresa (dal fascicolo storico: anagrafica, oggetto, storia, stato, organi).
@@ -593,13 +609,18 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
 
     // La relazione è secondaria: se fallita/scaduta, si salva comunque il
     // questionario con una nota al posto della relazione.
-    const relazioneTesto =
+    const corpoRelazione =
       esitoRelazione.status === 'fulfilled'
         ? esitoRelazione.value.content
             .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
             .map((b) => b.text)
             .join('\n')
         : 'Relazione di inquadramento non disponibile (la generazione non è riuscita a completarla in tempo). Puoi rigenerare lo screening per riprovare.';
+    // Avviso deterministico in testa quando l'analisi è stata lanciata senza
+    // bilancio: garantito anche se il modello non lo ripetesse.
+    const relazioneTesto = senzaBilancio
+      ? `⚠️ ANALISI PRELIMINARE — BILANCIO XBRL ASSENTE\nQuesta relazione è stata generata senza bilancio XBRL: è quindi parziale e basata sui soli dati disponibili (fascicolo storico, Situazione Debitoria, Posizione VERA). Caricare il bilancio e rigenerare per l'inquadramento economico-patrimoniale completo.\n\n${corpoRelazione}`
+      : corpoRelazione;
 
     await pool.query(
       `INSERT INTO "${nomeSchema}".azienda_screening (azienda_id, direttrici_usate, sezioni, relazione_testo, nome_file_visura, generato_il)

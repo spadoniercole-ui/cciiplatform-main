@@ -33,6 +33,9 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   const [generazioneInCorso, setGenerazioneInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [esitoPreCompilazione, setEsitoPreCompilazione] = useState<string | null>(null);
+  // Consente di lanciare l'analisi anche senza bilancio XBRL: il sistema
+  // acquisisce la carenza, sviluppa sull'esistente e la evidenzia in relazione.
+  const [procediSenzaXbrl, setProcediSenzaXbrl] = useState(false);
 
   const carica = async () => {
     setCaricamento(true);
@@ -88,8 +91,10 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
       setErrore('Carica il fascicolo storico (PDF) prima di generare lo screening.');
       return;
     }
-    if (numeroXbrl === 0) {
-      setErrore('Carica almeno un bilancio XBRL prima di generare lo screening.');
+    if (numeroXbrl === 0 && !procediSenzaXbrl) {
+      setErrore(
+        'Nessun bilancio XBRL caricato. Carica un XBRL, oppure spunta «Procedi senza bilancio XBRL» qui sotto per lanciare l’analisi sui soli dati disponibili — l’assenza del bilancio verrà evidenziata nella relazione.'
+      );
       return;
     }
     setGenerazioneInCorso(true);
@@ -220,6 +225,23 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               />
             </label>
           </div>
+          {numeroXbrl === 0 && (
+            <label className="mt-2 flex items-start gap-2 text-[11px] text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={procediSenzaXbrl}
+                onChange={(e) => setProcediSenzaXbrl(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-bold text-amber-800">Procedi senza bilancio XBRL.</span>{' '}
+                Lancia l&apos;analisi sui soli dati disponibili (fascicolo storico, situazione
+                debitoria, Posizione VERA). L&apos;assenza del bilancio verrà acquisita ed
+                evidenziata, contestualizzandola, nella relazione — che resta preliminare finché il
+                bilancio non viene caricato.
+              </span>
+            </label>
+          )}
         </div>
 
         <div>
