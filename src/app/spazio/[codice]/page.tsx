@@ -4,6 +4,7 @@ import { Building2, UserCog, FolderOpen, FileText, AlertTriangle } from 'lucide-
 import { ottieniContestoAccessoSpazio, ottieniAdminSpazio } from '@/app/actions/spazi';
 import { ottieniAziende } from '@/app/actions/aziende';
 import { ottieniScenari } from '@/app/actions/scenari';
+import { ottieniUltimiScreeningSpazio } from '@/app/actions/screeningAzienda';
 
 // Dashboard di Spazio (cruscotto): aziende attive, utenti/admin, check list
 // e report — questi ultimi due ancora a zero perché i moduli non sono
@@ -34,6 +35,11 @@ export default async function DashboardSpazioPage({
     totaleScenari = conteggi.reduce((acc, r) => acc + (r.success ? r.scenari.length : 0), 0);
   }
 
+  // Ultimo report di Screening per azienda (uno solo per azienda: la
+  // rigenerazione sovrascrive, quindi qui c'è sempre e solo l'ultimo).
+  const screeningRis = await ottieniUltimiScreeningSpazio(contesto.nomeSchema);
+  const ultimiScreening = screeningRis.success ? screeningRis.screening : [];
+
   const card = [
     {
       label: 'Aziende Attive',
@@ -58,12 +64,15 @@ export default async function DashboardSpazioPage({
     },
     {
       label: 'Ultimi Report',
-      valore: 0,
+      valore: ultimiScreening.length,
       icon: FileText,
-      colore: 'text-slate-400 bg-slate-100',
-      nota: 'Modulo non ancora costruito',
+      colore: 'text-blue-600 bg-blue-50',
+      href: `/spazio/${codice}/aziende`,
     },
   ];
+
+  const fmtData = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -90,7 +99,6 @@ export default async function DashboardSpazioPage({
               <div className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
                 {c.label}
               </div>
-              {c.nota && <div className="text-[9px] text-slate-400 mt-1">{c.nota}</div>}
             </>
           );
 
@@ -111,16 +119,38 @@ export default async function DashboardSpazioPage({
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-6">
-        <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider mb-3">
-          Prossimi passi
-        </h2>
-        <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
-          <li>Indici per scenario e collegamento ISTAT</li>
-          <li>Import XBRL per scenario (storico + valori correnti)</li>
-          <li>Acquisizione della proposta e controllo di ricevibilità</li>
-          <li>Generazione Report con supporto AI</li>
-          <li>Permessi granulari per azienda e per modulo sugli Utenti</li>
-        </ul>
+        <div className="flex items-center gap-2 mb-3">
+          <FileText className="w-4 h-4 text-slate-500" />
+          <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+            Ultimi report di Screening
+          </h2>
+        </div>
+        {ultimiScreening.length === 0 ? (
+          <p className="text-xs text-slate-400">
+            Nessun report di Screening generato finora. Vai su un&apos;azienda → Screening per
+            generarne uno.
+          </p>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {ultimiScreening.map((s) => (
+              <Link
+                key={s.aziendaId}
+                href={`/spazio/${codice}/aziende/${s.aziendaId}/screening`}
+                className="flex items-center justify-between gap-3 py-2.5 group"
+              >
+                <span className="font-bold text-slate-900 text-xs group-hover:text-blue-600 transition-colors truncate">
+                  {s.ragioneSociale}
+                </span>
+                <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                  {fmtData(s.generatoIl)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
+        <p className="text-[10px] text-slate-400 mt-3">
+          Solo l&apos;ultimo report per azienda: rigenerare lo Screening sovrascrive il precedente.
+        </p>
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import {
 } from '@/app/actions/xbrlAzienda';
 import type { AnalisiXbrlResult } from '@/lib/xbrl/types';
 import { stampaTesto } from '@/lib/stampaTesto';
+import { TestoConNormativa } from '@/components/spazio/TestoConNormativa';
 
 interface Props {
   nomeSchema: string;
@@ -349,9 +350,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               </button>
             </div>
           </div>
-          <div className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
-            {stato.relazioneTesto}
-          </div>
+          <TestoConNormativa testo={stato.relazioneTesto} codice={codice} mostraRiferimenti />
         </div>
       )}
     </div>

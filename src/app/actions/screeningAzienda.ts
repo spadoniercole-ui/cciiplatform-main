@@ -236,6 +236,50 @@ export interface RisultatoGenerazioneScreening {
 
 const PESI_VALIDI: PesoDomanda[] = ['STRUTTURALE', 'RILEVANTE', 'DOCUMENTALE'];
 
+export interface UltimoScreeningSpazio {
+  aziendaId: number;
+  ragioneSociale: string;
+  generatoIl: string | null;
+}
+
+/**
+ * Per la dashboard: l'ULTIMO report di Screening per ciascuna azienda. La
+ * tabella azienda_screening tiene UNA riga per azienda (rigenerare fa UPDATE),
+ * quindi qui esce sempre e solo l'ultimo — mai lo storico. Ordinati dal più
+ * recente.
+ */
+export async function ottieniUltimiScreeningSpazio(
+  nomeSchema: string
+): Promise<{ success: boolean; screening: UltimoScreeningSpazio[]; error?: string }> {
+  try {
+    if (!validaSchema(nomeSchema)) {
+      return { success: false, screening: [], error: 'Nome schema non valido.' };
+    }
+    await assicuraTabelleScreeningAzienda(nomeSchema);
+    const r = await pool.query(
+      `SELECT s.azienda_id, a.ragione_sociale, s.generato_il
+         FROM "${nomeSchema}".azienda_screening s
+         JOIN "${nomeSchema}".aziende a ON a.id = s.azienda_id
+        ORDER BY s.generato_il DESC NULLS LAST`
+    );
+    return {
+      success: true,
+      screening: r.rows.map((x) => ({
+        aziendaId: x.azienda_id,
+        ragioneSociale: x.ragione_sociale,
+        generatoIl: x.generato_il ? new Date(x.generato_il).toISOString() : null,
+      })),
+    };
+  } catch (error: any) {
+    console.error('[ottieniUltimiScreeningSpazio] Errore:', error);
+    return {
+      success: false,
+      screening: [],
+      error: `Impossibile caricare: ${error.message || error}`,
+    };
+  }
+}
+
 export async function generaScreeningAziendaAction(
   nomeSchema: string,
   aziendaId: number,

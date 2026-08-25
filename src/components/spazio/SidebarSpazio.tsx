@@ -52,7 +52,7 @@ const VOCI_MENU: {
     soloAdmin: false,
     modulo: 'scenari',
   },
-  { id: 'normativa', label: 'Normativa CCII', icon: BookOpen, stato: 'presto', soloAdmin: false },
+  { id: 'normativa', label: 'Normativa CCII', icon: BookOpen, stato: 'pronta', soloAdmin: false },
 ];
 
 export function SidebarSpazio({ codice, descrizione, modalita, permessi }: Props) {
