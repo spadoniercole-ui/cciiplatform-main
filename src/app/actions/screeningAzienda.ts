@@ -17,6 +17,11 @@ import { raggruppaPerTipoDebito } from '@/lib/debitiEnte/tipoDebito';
 import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
 import { ottieniEtichetteTipoDebito } from '@/app/actions/tipoDebitoConfig';
 import { calcolaQuadroDirettrici, type QuadroDirettrici } from '@/lib/checklist/scoringDirettrici';
+import {
+  calcolaRiscontri,
+  type Riscontri,
+  type BilancioRiscontri,
+} from '@/lib/normativa/riscontri';
 import type { SezioneChecklist, PesoDomanda } from '@/lib/checklist/ministeriale';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -283,6 +288,87 @@ export async function ottieniUltimiScreeningSpazio(
       success: false,
       screening: [],
       error: `Impossibile caricare: ${error.message || error}`,
+    };
+  }
+}
+
+/**
+ * Riscontri normativi DETERMINISTICI per un'azienda: individua articoli e
+ * soglie «movimentati» dai dati reali (bilancio XBRL, posizione ente, VERA).
+ * Ricalcolato al volo dai dati correnti — nessuna inferenza dell'AI, nessuno
+ * stato memorizzato: sempre coerente con i dati del momento. La logica di
+ * confronto vive nella funzione pura calcolaRiscontri (src/lib/normativa).
+ */
+export async function calcolaRiscontriNormativiAzienda(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<{ success: boolean; riscontri: Riscontri | null; error?: string }> {
+  try {
+    if (!validaSchema(nomeSchema)) {
+      return { success: false, riscontri: null, error: 'Nome schema non valido.' };
+    }
+    const [storicoRis, debitiRis, veraRis, categorieRis] = await Promise.all([
+      ottieniStoricoXbrlAzienda(nomeSchema, aziendaId),
+      ottieniDebitiEnte(nomeSchema, aziendaId),
+      ottieniDebitiVera(nomeSchema, aziendaId),
+      ottieniCategorieTipoDebito(nomeSchema),
+    ]);
+
+    // Bilancio: il piu recente disponibile.
+    let bilancio: BilancioRiscontri | null = null;
+    if (storicoRis.success && storicoRis.storico.length > 0) {
+      const recente = [...storicoRis.storico].sort(
+        (a, b) => (b.annoBilancio ?? 0) - (a.annoBilancio ?? 0)
+      )[0];
+      const d = recente.datiFinanziari;
+      const violati = [...recente.indici, ...recente.altriIndici]
+        .filter((i) => i.esito === 'VIOLATO')
+        .map((i) => i.nome);
+      bilancio = {
+        anno: recente.annoBilancio,
+        totaleAttivo: d.totaleAttivo,
+        ricaviVendite: d.ricaviVendite,
+        valoreProduzione: d.valoreProduzione,
+        totaleDebiti: d.totaleDebiti,
+        debitiTributari: d.debitiTributari,
+        debitiPrevidenziali: d.debitiPrevidenziali,
+        ebitda: d.ebitda,
+        patrimonioNetto: d.patrimonioNetto,
+        utileEsercizio: d.utileEsercizio,
+        indiciViolati: violati,
+        severity: recente.severity,
+      };
+    }
+
+    // Esposizione ente: somma dei saldi delle sole categorie che contribuiscono.
+    let esposizioneEnte: number | null = null;
+    if (debitiRis.success && debitiRis.righe.length > 0) {
+      const noContrib = new Set(
+        (categorieRis.success ? categorieRis.categorie : [])
+          .filter((c) => c.contribuisce === false)
+          .map((c) => c.codice)
+      );
+      esposizioneEnte = debitiRis.righe
+        .filter((r) => !noContrib.has(r.tipo))
+        .reduce((acc, r) => acc + (r.importo - (r.importoVersato ?? 0)), 0);
+    }
+
+    // Esposizione VERA: contabilizzato + da_contabilizzare (esclude potenziale).
+    let esposizioneVera: number | null = null;
+    if (veraRis.success && veraRis.righe.length > 0) {
+      esposizioneVera = veraRis.righe
+        .filter((r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare')
+        .reduce((acc, r) => acc + r.importo, 0);
+    }
+
+    const riscontri = calcolaRiscontri({ bilancio, esposizioneEnte, esposizioneVera });
+    return { success: true, riscontri };
+  } catch (error: any) {
+    console.error('[calcolaRiscontriNormativiAzienda] Errore:', error);
+    return {
+      success: false,
+      riscontri: null,
+      error: `Impossibile calcolare i riscontri: ${error.message || error}`,
     };
   }
 }

@@ -16,6 +16,7 @@ import {
 import type { AnalisiXbrlResult } from '@/lib/xbrl/types';
 import { stampaTesto } from '@/lib/stampaTesto';
 import { TestoConNormativa } from '@/components/spazio/TestoConNormativa';
+import { RiscontriNormativi } from '@/components/spazio/RiscontriNormativi';
 
 interface Props {
   nomeSchema: string;
@@ -352,6 +353,10 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           </div>
           <TestoConNormativa testo={stato.relazioneTesto} codice={codice} mostraRiferimenti />
         </div>
+      )}
+
+      {stato?.esiste && stato.relazioneTesto && (
+        <RiscontriNormativi nomeSchema={nomeSchema} aziendaId={aziendaId} codice={codice} />
       )}
     </div>
   );
