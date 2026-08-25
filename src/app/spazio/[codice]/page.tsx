@@ -5,6 +5,7 @@ import { ottieniContestoAccessoSpazio, ottieniAdminSpazio } from '@/app/actions/
 import { ottieniAziende } from '@/app/actions/aziende';
 import { ottieniScenari } from '@/app/actions/scenari';
 import { ottieniUltimiScreeningSpazio } from '@/app/actions/screeningAzienda';
+import { UltimiReportScreening } from '@/components/spazio/UltimiReportScreening';
 
 // Dashboard di Spazio (cruscotto): aziende attive, utenti/admin, check list
 // e report — questi ultimi due ancora a zero perché i moduli non sono
@@ -71,9 +72,6 @@ export default async function DashboardSpazioPage({
     },
   ];
 
-  const fmtData = (iso: string | null) =>
-    iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
-
   return (
     <div className="space-y-6 max-w-5xl">
       <div>
@@ -118,40 +116,7 @@ export default async function DashboardSpazioPage({
         })}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-3">
-          <FileText className="w-4 h-4 text-slate-500" />
-          <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-            Ultimi report di Screening
-          </h2>
-        </div>
-        {ultimiScreening.length === 0 ? (
-          <p className="text-xs text-slate-400">
-            Nessun report di Screening generato finora. Vai su un&apos;azienda → Screening per
-            generarne uno.
-          </p>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {ultimiScreening.map((s) => (
-              <Link
-                key={s.aziendaId}
-                href={`/spazio/${codice}/aziende/${s.aziendaId}/screening`}
-                className="flex items-center justify-between gap-3 py-2.5 group"
-              >
-                <span className="font-bold text-slate-900 text-xs group-hover:text-blue-600 transition-colors truncate">
-                  {s.ragioneSociale}
-                </span>
-                <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                  {fmtData(s.generatoIl)}
-                </span>
-              </Link>
-            ))}
-          </div>
-        )}
-        <p className="text-[10px] text-slate-400 mt-3">
-          Solo l&apos;ultimo report per azienda: rigenerare lo Screening sovrascrive il precedente.
-        </p>
-      </div>
+      <UltimiReportScreening codice={codice} screening={ultimiScreening} />
     </div>
   );
 }

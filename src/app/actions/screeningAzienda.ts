@@ -239,7 +239,10 @@ const PESI_VALIDI: PesoDomanda[] = ['STRUTTURALE', 'RILEVANTE', 'DOCUMENTALE'];
 export interface UltimoScreeningSpazio {
   aziendaId: number;
   ragioneSociale: string;
+  partitaIva: string | null;
+  codiceFiscale: string | null;
   generatoIl: string | null;
+  relazioneTesto: string | null;
 }
 
 /**
@@ -257,7 +260,8 @@ export async function ottieniUltimiScreeningSpazio(
     }
     await assicuraTabelleScreeningAzienda(nomeSchema);
     const r = await pool.query(
-      `SELECT s.azienda_id, a.ragione_sociale, s.generato_il
+      `SELECT s.azienda_id, a.ragione_sociale, a.partita_iva, a.codice_fiscale,
+              s.generato_il, s.relazione_testo
          FROM "${nomeSchema}".azienda_screening s
          JOIN "${nomeSchema}".aziende a ON a.id = s.azienda_id
         ORDER BY s.generato_il DESC NULLS LAST`
@@ -267,7 +271,10 @@ export async function ottieniUltimiScreeningSpazio(
       screening: r.rows.map((x) => ({
         aziendaId: x.azienda_id,
         ragioneSociale: x.ragione_sociale,
+        partitaIva: x.partita_iva ?? null,
+        codiceFiscale: x.codice_fiscale ?? null,
         generatoIl: x.generato_il ? new Date(x.generato_il).toISOString() : null,
+        relazioneTesto: x.relazione_testo ?? null,
       })),
     };
   } catch (error: any) {
