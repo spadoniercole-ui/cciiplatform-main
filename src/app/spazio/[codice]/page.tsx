@@ -1,16 +1,20 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Building2, UserCog, FolderOpen, FileText, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { ottieniContestoAccessoSpazio, ottieniAdminSpazio } from '@/app/actions/spazi';
 import { ottieniAziende } from '@/app/actions/aziende';
 import { ottieniScenari } from '@/app/actions/scenari';
 import { ottieniUltimiScreeningSpazio } from '@/app/actions/screeningAzienda';
-import { UltimiReportScreening } from '@/components/spazio/UltimiReportScreening';
+import {
+  DashboardPannelli,
+  type RigaAzienda,
+  type RigaUtente,
+  type RigaScenario,
+} from '@/components/spazio/DashboardPannelli';
 
-// Dashboard di Spazio (cruscotto): aziende attive, utenti/admin, check list
-// e report — questi ultimi due ancora a zero perché i moduli non sono
-// stati costruiti, non perché il conteggio sia sbagliato. Meglio uno zero
-// onesto che un numero finto.
+// Dashboard di Spazio (cruscotto): quattro pannelli larghi, ciascuno con le
+// prime righe della propria attività (aziende, utenti, scenari, ultimi report
+// di screening con PDF). Niente più conteggi "nudi" o box separati: ogni
+// riquadro mostra il conteggio in alto e sotto le prime 4 voci reali.
 
 export default async function DashboardSpazioPage({
   params,
@@ -28,49 +32,58 @@ export default async function DashboardSpazioPage({
 
   const aziendeAttive = risultatoAziende.aziende.filter((a) => a.attiva).length;
 
+  // Aziende: attive prima, poi le altre; riferimenti anagrafici inclusi.
+  const aziendeOrdinaTe = [...risultatoAziende.aziende].sort(
+    (a, b) => Number(b.attiva) - Number(a.attiva)
+  );
+  const righeAziende: RigaAzienda[] = aziendeOrdinaTe.map((a) => ({
+    id: a.id,
+    ragioneSociale: a.ragioneSociale,
+    partitaIva: a.partitaIva,
+    codiceFiscale: a.codiceFiscale,
+    attiva: a.attiva,
+  }));
+
+  const righeUtenti: RigaUtente[] = risultatoAdmin.success
+    ? risultatoAdmin.admins.map((u) => ({
+        nome: u.nome,
+        cognome: u.cognome,
+        username: u.username ?? null,
+        email: u.email ?? null,
+      }))
+    : [];
+
+  // Scenari: elenco reale (con nome azienda) + conteggio totale.
   let totaleScenari: number | '—' = '—';
+  let righeScenari: RigaScenario[] = [];
   if (risultatoAziende.success) {
-    const conteggi = await Promise.all(
-      risultatoAziende.aziende.map((a) => ottieniScenari(contesto.nomeSchema, a.id))
+    const perAzienda = await Promise.all(
+      risultatoAziende.aziende.map(async (a) => ({
+        azienda: a,
+        ris: await ottieniScenari(contesto.nomeSchema, a.id),
+      }))
     );
-    totaleScenari = conteggi.reduce((acc, r) => acc + (r.success ? r.scenari.length : 0), 0);
+    totaleScenari = perAzienda.reduce(
+      (acc, x) => acc + (x.ris.success ? x.ris.scenari.length : 0),
+      0
+    );
+    righeScenari = perAzienda
+      .flatMap((x) =>
+        (x.ris.success ? x.ris.scenari : []).map((s) => ({
+          id: s.id,
+          nome: s.nome,
+          aziendaRagioneSociale: x.azienda.ragioneSociale,
+          createdAt: s.createdAt,
+        }))
+      )
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map(({ id, nome, aziendaRagioneSociale }) => ({ id, nome, aziendaRagioneSociale }));
   }
 
   // Ultimo report di Screening per azienda (uno solo per azienda: la
   // rigenerazione sovrascrive, quindi qui c'è sempre e solo l'ultimo).
   const screeningRis = await ottieniUltimiScreeningSpazio(contesto.nomeSchema);
   const ultimiScreening = screeningRis.success ? screeningRis.screening : [];
-
-  const card = [
-    {
-      label: 'Aziende Attive',
-      valore: risultatoAziende.success ? aziendeAttive : '—',
-      icon: Building2,
-      colore: 'text-blue-600 bg-blue-50',
-      href: `/spazio/${codice}/aziende`,
-    },
-    {
-      label: 'Utenti / Admin',
-      valore: risultatoAdmin.success ? risultatoAdmin.admins.length : '—',
-      icon: UserCog,
-      colore: 'text-emerald-600 bg-emerald-50',
-      href: `/spazio/${codice}/utenti`,
-    },
-    {
-      label: 'Scenari',
-      valore: totaleScenari,
-      icon: FolderOpen,
-      colore: 'text-blue-600 bg-blue-50',
-      href: `/spazio/${codice}/scenari`,
-    },
-    {
-      label: 'Ultimi Report',
-      valore: ultimiScreening.length,
-      icon: FileText,
-      colore: 'text-blue-600 bg-blue-50',
-      href: `/spazio/${codice}/aziende`,
-    },
-  ];
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -86,37 +99,16 @@ export default async function DashboardSpazioPage({
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {card.map((c) => {
-          const contenuto = (
-            <>
-              <div className={`inline-flex p-2 rounded-lg ${c.colore} mb-2`}>
-                <c.icon className="w-4 h-4" />
-              </div>
-              <div className="text-2xl font-bold text-slate-900">{c.valore}</div>
-              <div className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
-                {c.label}
-              </div>
-            </>
-          );
-
-          return c.href ? (
-            <Link
-              key={c.label}
-              href={c.href}
-              className="bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-sm transition-all"
-            >
-              {contenuto}
-            </Link>
-          ) : (
-            <div key={c.label} className="bg-white border border-slate-200 rounded-xl p-4">
-              {contenuto}
-            </div>
-          );
-        })}
-      </div>
-
-      <UltimiReportScreening codice={codice} screening={ultimiScreening} />
+      <DashboardPannelli
+        codice={codice}
+        aziende={righeAziende}
+        totaleAziendeAttive={risultatoAziende.success ? aziendeAttive : '—'}
+        utenti={righeUtenti}
+        totaleUtenti={risultatoAdmin.success ? risultatoAdmin.admins.length : '—'}
+        scenari={righeScenari}
+        totaleScenari={totaleScenari}
+        report={ultimiScreening}
+      />
     </div>
   );
 }
