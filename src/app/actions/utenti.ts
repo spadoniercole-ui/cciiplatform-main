@@ -299,3 +299,51 @@ export async function rigeneraPasswordUtenteAction(
     };
   }
 }
+
+/**
+ * Sgancia l'MFA di un operatore: azzera l'enrollment TOTP (e, se richiesto,
+ * anche il PIN). Al prossimo accesso l'operatore riconfigura l'app da capo
+ * (nuovo QR). Legata allo spazio: l'operatore viene prima verificato in
+ * utenti_spazio dello schema, poi si aggiorna la credenziale MFA centrale
+ * per la sua identità `USER:<username>`.
+ */
+export async function resettaMfaUtenteAction(
+  nomeSchema: string,
+  id: number,
+  cosa: 'AUTHENTICATOR' | 'TUTTO'
+): Promise<{ success: boolean; esisteva?: boolean; error?: string }> {
+  try {
+    const { db } = await import('@/db/client');
+    const { getTabelleTenant } = await import('@/db/schema');
+    const { eq } = await import('drizzle-orm');
+    const { pool } = await import('@/lib/db');
+    const { assicuraTabelleMfa } = await import('@/db/ensureTables');
+    const tabelle = getTabelleTenant(nomeSchema);
+
+    const righe = await db
+      .select({ username: tabelle.utenti_spazio.username })
+      .from(tabelle.utenti_spazio)
+      .where(eq(tabelle.utenti_spazio.id, id))
+      .limit(1);
+
+    if (righe.length === 0 || !righe[0].username) {
+      return { success: false, error: 'Operatore non trovato.' };
+    }
+    const identitaKey = `USER:${righe[0].username}`;
+
+    await assicuraTabelleMfa();
+    const set =
+      cosa === 'TUTTO'
+        ? 'totp_attivo = FALSE, totp_secret = NULL, pin_hash = NULL, updated_at = now()'
+        : 'totp_attivo = FALSE, totp_secret = NULL, updated_at = now()';
+    const ris = await pool.query(
+      `UPDATE public.mfa_credenziali SET ${set} WHERE identita_key = $1`,
+      [identitaKey]
+    );
+
+    return { success: true, esisteva: (ris.rowCount ?? 0) > 0 };
+  } catch (error: any) {
+    console.error('[resettaMfaUtenteAction] Errore:', error);
+    return { success: false, error: `Impossibile resettare l'MFA: ${error.message || error}` };
+  }
+}
