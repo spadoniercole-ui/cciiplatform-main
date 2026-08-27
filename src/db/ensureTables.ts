@@ -115,6 +115,51 @@ export async function assicuraTabellaSessioni(): Promise<void> {
   );
 }
 
+/**
+ * Tabelle per l'MFA a tre fattori (password + TOTP + PIN), nello schema
+ * public perché coprono TUTTI i tipi di utente (superadmin, admin di spazio,
+ * operatori), identificati da una chiave stabile `identita_key`.
+ *
+ *  - mfa_credenziali: il segreto TOTP e il PIN (hash bcrypt) per identità.
+ *  - mfa_challenge: lo stato transitorio tra password superata e sessione
+ *    creata; tiene i fattori ancora da superare e i dati per costruire poi
+ *    la sessione corretta. Breve durata, monouso.
+ */
+export async function assicuraTabelleMfa(): Promise<void> {
+  await eseguiIstruzione(`
+    CREATE TABLE IF NOT EXISTS public.mfa_credenziali (
+      identita_key TEXT PRIMARY KEY,
+      ruolo VARCHAR(50) NOT NULL,
+      workspace_id INTEGER,
+      username TEXT,
+      totp_secret TEXT,
+      totp_attivo BOOLEAN NOT NULL DEFAULT FALSE,
+      pin_hash TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )
+  `);
+  await eseguiIstruzione(`
+    CREATE TABLE IF NOT EXISTS public.mfa_challenge (
+      token VARCHAR(128) PRIMARY KEY,
+      identita_key TEXT NOT NULL,
+      ruolo VARCHAR(50) NOT NULL,
+      workspace_id INTEGER,
+      email TEXT,
+      username TEXT,
+      codice_spazio TEXT,
+      tenant_id TEXT,
+      go_to_choice BOOLEAN NOT NULL DEFAULT FALSE,
+      fattori_rimasti TEXT[] NOT NULL DEFAULT '{}',
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      expires_at TIMESTAMP NOT NULL
+    )
+  `);
+  await eseguiIstruzione(
+    `CREATE INDEX IF NOT EXISTS idx_mfa_challenge_token ON public.mfa_challenge (token)`
+  );
+}
+
 export async function assicuraTabelleSpazi(): Promise<void> {
   if (spaziInizializzati) return;
 

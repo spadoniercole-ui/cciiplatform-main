@@ -126,28 +126,42 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
     sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS numero_sedi_secondarie INTEGER NOT NULL DEFAULT 0`
   );
 
-  // Dati necessari al test delle soglie di segnalazione INPS (art. 25-novies,
-  // comma 1, lettera a) CCII), mostrato in testata allo Screening.
+  // ---- Soglie di segnalazione art. 25-novies: valori a inserimento manuale.
   //
-  // FACOLTATIVI di proposito: renderli obbligatori manderebbe in arancione
-  // l'anagrafica di ogni azienda già inserita e bloccherebbe a cascata gli
-  // step successivi (semaforo della barra passi). Se mancano, la griglia
-  // dichiara di non poter determinare l'esito — non lo inventa.
+  // Stanno sull'AZIENDA e non sullo scenario: il debito e' il punto di
+  // partenza di ogni analisi, non cambia da uno scenario all'altro. Si
+  // compilano una volta nella fase di raccolta delle informazioni azienda
+  // (scheda "Soglie di segnalazione" accanto alla Posizione V.E.R.A.) e da li'
+  // vengono riportati in ogni scenario.
   //
-  // `con_lavoratori_subordinati` è volutamente NULLABLE a tre stati:
-  // TRUE / FALSE / NULL (non dichiarato). Un booleano a due stati con default
-  // FALSE farebbe passare per "impresa senza lavoratori" ogni azienda su cui
-  // nessuno si è ancora pronunciato, applicando la soglia sbagliata (5.000 €
-  // invece del concorso 30% + 15.000 €) senza che nessuno se ne accorga.
-  await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS con_lavoratori_subordinati BOOLEAN`
-  );
-  await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS contributi_dovuti_anno_precedente NUMERIC`
-  );
-  await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS anno_contributi_dovuti INTEGER`
-  );
+  // Tutte FACOLTATIVE: obbligatorie manderebbero in arancione l'anagrafica di
+  // ogni azienda gia' inserita, bloccando a cascata gli step successivi via
+  // semaforo. Dove mancano, il motore dichiara l'esito non determinabile
+  // invece di inventarlo.
+  //
+  // `con_lavoratori_subordinati` e' NULLABLE a TRE stati: TRUE / FALSE / NULL
+  // (non dichiarato). Un booleano con default FALSE farebbe passare per
+  // "impresa senza lavoratori" ogni azienda su cui nessuno si e' pronunciato,
+  // applicando la soglia sbagliata (5.000 € invece del concorso 30% +
+  // 15.000 €) senza che nessuno se ne accorga.
+  for (const colonna of [
+    'con_lavoratori_subordinati BOOLEAN',
+    'contributi_scaduti NUMERIC',
+    'contributi_dovuti_anno_precedente NUMERIC',
+    'anno_contributi_dovuti INTEGER',
+    'sanzioni_presunte_vera NUMERIC',
+    'premi_inail NUMERIC',
+    'iva_scaduta NUMERIC',
+    'volume_affari NUMERIC',
+    'crediti_affidati_aer NUMERIC',
+    'soglie_aggiornate_al DATE',
+  ]) {
+    // Un DDL per chiamata: le stringhe multi-statement provocano rollback
+    // impliciti silenziosi.
+    await eseguiDdlTenant(
+      sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS ${sql.raw(colonna)}`
+    );
+  }
 }
 
 /**
@@ -430,6 +444,47 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.limiti_ricevibilita ADD COLUMN IF NOT EXISTS alias TEXT[] NOT NULL DEFAULT '{}'`
   );
+
+  // Collegamento CERTO fra la categoria di creditore configurata dall'utente e
+  // la soglia di legge dell'art. 25-novies.
+  //
+  // `categoria_creditore` e' testo libero: va benissimo per raggruppare i
+  // limiti di ricevibilita', ma non basta a decidere QUALE soglia applicare,
+  // perche' li' serve una corrispondenza esatta (INPS -> 30% + 15.000,
+  // INAIL -> 5.000, AdE -> 5.000 con il 10% del volume d'affari). Chi
+  // configura puo' scrivere "Enti previdenziali" o "INPS Sede di Milano".
+  //
+  // Elenco chiuso, NULL ammesso: dove non e' impostata, la griglia dichiara
+  // di non poter applicare alcuna soglia invece di indovinarne una.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.limiti_ricevibilita ADD COLUMN IF NOT EXISTS ente_25novies TEXT`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.limiti_ricevibilita DROP CONSTRAINT IF EXISTS ente_25novies_valido`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.limiti_ricevibilita ADD CONSTRAINT ente_25novies_valido
+        CHECK (ente_25novies IS NULL OR ente_25novies IN ('INPS','INAIL','AGENZIA_ENTRATE','AGENZIA_RISCOSSIONE'))`
+  );
+
+  // Riconoscimento automatico per gli spazi gia' esistenti: si valorizza solo
+  // dove categoria o alias corrispondono in modo INEQUIVOCABILE. Dove il nome
+  // e' ambiguo la colonna resta NULL e lo si dichiara a video — meglio non
+  // sapere che sapere una cosa sbagliata.
+  for (const [ente, pattern] of [
+    ['INPS', '(^|[^a-z])inps([^a-z]|$)|previdenzial'],
+    ['INAIL', '(^|[^a-z])inail([^a-z]|$)'],
+    ['AGENZIA_RISCOSSIONE', 'riscossion|agente della riscossione|(^|[^a-z])aer([^a-z]|$)'],
+    ['AGENZIA_ENTRATE', 'agenzia (delle )?entrate|erario|(^|[^a-z])iva([^a-z]|$)'],
+  ] as const) {
+    await eseguiDdlTenant(
+      sql`UPDATE ${s}.limiti_ricevibilita
+             SET ente_25novies = ${ente}
+           WHERE ente_25novies IS NULL
+             AND (lower(categoria_creditore) ~ ${pattern}
+                  OR EXISTS (SELECT 1 FROM unnest(alias) a WHERE lower(a) ~ ${pattern}))`
+    );
+  }
 
   // Limiti per RANGO LEGALE: secondo livello di corrispondenza, quando
   // la riga non combacia con nessuna categoria di creditore configurata

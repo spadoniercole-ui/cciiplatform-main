@@ -15,6 +15,7 @@ import {
   type SpazioPerScelta,
 } from '@/app/actions/spazi';
 import { Logo } from '@/components/brand/Logo';
+import { MfaPannello, type EsitoMfaCompletato } from '@/components/auth/MfaPannello';
 import { APP_VERSION, PORTABLE_VERSION } from '@/lib/appVersion';
 import { testoCopyright } from '@/lib/copyright';
 
@@ -56,6 +57,9 @@ export default function LoginPage() {
   const [caricamento, setCaricamento] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
 
+  // Step intermedio: verifica MFA (TOTP + PIN) dopo la password.
+  const [mfaAttivo, setMfaAttivo] = useState(false);
+
   // Step 2: scelta destinazione (solo per il superadmin)
   const [mostraSceltaDestinazione, setMostraSceltaDestinazione] = useState(false);
   const [spaziDisponibili, setSpaziDisponibili] = useState<SpazioPerScelta[]>([]);
@@ -73,20 +77,28 @@ export default function LoginPage() {
         setErrore(risultato.error || 'Credenziali non valide.');
         return;
       }
-
-      if (risultato.role === 'SUPERADMIN') {
-        const spazi = await ottieniSpaziPerScelta();
-        setSpaziDisponibili(spazi);
-        setDestinazioneScelta(DASHBOARD_VALUE);
-        setMostraSceltaDestinazione(true);
-      } else {
-        router.push(`/spazio/${risultato.tenantName}`);
-      }
+      // Password corretta: si prosegue con l'MFA (TOTP + PIN). La sessione
+      // viene creata solo al completamento dei fattori.
+      setMfaAttivo(true);
     } catch (err) {
       console.error('Errore durante il login:', err);
       setErrore('Errore imprevisto durante il login. Riprova.');
     } finally {
       setCaricamento(false);
+    }
+  };
+
+  // Chiamato da MfaPannello al superamento di tutti i fattori: qui c'è la
+  // navigazione post-accesso che prima era in handleSubmit.
+  const procediDopoAuth = async (esito: EsitoMfaCompletato) => {
+    setMfaAttivo(false);
+    if (esito.role === 'SUPERADMIN') {
+      const spazi = await ottieniSpaziPerScelta();
+      setSpaziDisponibili(spazi);
+      setDestinazioneScelta(DASHBOARD_VALUE);
+      setMostraSceltaDestinazione(true);
+    } else {
+      router.push(`/spazio/${esito.tenantName}`);
     }
   };
 
@@ -116,6 +128,19 @@ export default function LoginPage() {
       setCaricamento(false);
     }
   };
+
+  if (mfaAttivo) {
+    return (
+      <MfaPannello
+        onCompletato={procediDopoAuth}
+        onAnnulla={() => {
+          setMfaAttivo(false);
+          setPassword('');
+          setErrore(null);
+        }}
+      />
+    );
+  }
 
   if (mostraSceltaDestinazione) {
     return (

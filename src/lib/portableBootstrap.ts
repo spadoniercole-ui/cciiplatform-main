@@ -111,9 +111,8 @@ async function creaSpazioPortable(cfg: ConfigSpazio): Promise<SpazioCreato> {
     cellulare: cfg.admin.cellulare,
     passwordHash,
     // NIENTE passwordTemporanea: l'admin portable nasce con una password
-    // definitiva (quella di config.bat), non con una temporanea da
-    // cambiare. Il campo deve restare NULL: una stringa vuota veniva
-    // letta come "password temporanea presente" e il layout dello spazio
+    // definitiva. Il campo deve restare NULL: la stringa vuota veniva letta
+    // come "password temporanea presente" e il layout dello spazio
     // reindirizzava all'infinito al cambio password, rendendo impossibile
     // l'accesso nell'edizione portable.
     codiceConvalida,

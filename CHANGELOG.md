@@ -93,161 +93,105 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
-## 0.109.32 — 2026-08-27
+## 0.109.33 — 2026-08-27
 
-**Griglia delle soglie di segnalazione in testata allo Screening (Ricevente)**
+Costruita sopra la 0.109.31 (quella con l'MFA a tre fattori). La 0.109.32 e'
+saltata di proposito: era un ramo parallelo nato da un sorgente 0.109.30
+privo di MFA, e il numero .31 vi era stato riusato per errore. Non va
+installata. Questa e' la linea buona.
 
-Primo punto dell'analisi nello Screening dell'azienda: le prime due righe
-delle SOGLIE della Sezione Normativa (art. 25-novies, comma 1, lettera a)
-CCII) confrontate con l'esposizione dell'azienda, per anno.
+### Sicurezza dell'accesso — tre difetti, nessuno dei quali era nella .31
 
-- `src/lib/soglie25novies/calcolo.ts` — funzione pura, nessuna AI, aritmetica
-  verificabile a mano. **21 test.**
-- `src/app/actions/soglie25novies.ts` — raccoglie i dati reali; nessuno stato
-  memorizzato, la griglia si ricalcola a ogni apertura e non puo' divergere.
-- `src/components/spazio/GrigliaSoglie25Novies.tsx` — griglia in testata,
-  visibile ai soli spazi ENTE.
-- Tre campi FACOLTATIVI in anagrafica azienda: presenza di lavoratori
-  subordinati/parasubordinati, contributi dovuti nell'anno precedente, anno di
-  riferimento. Facoltativi di proposito: obbligatori avrebbero mandato in
-  arancione l'anagrafica di ogni azienda esistente, bloccando gli step
-  successivi via semaforo.
+**1. Piu' istanze del database nello stesso processo.** Next.js compila
+l'applicazione in PIU' GRAFI DI MODULI che convivono nello stesso processo:
+instrumentation, Server Action e Server Component non condividono la stessa
+copia di un modulo. Con lo stato di `portableDb.ts` in variabili di modulo
+(`let pglite`), ognuno apriva la PROPRIA istanza di PGlite — misurate TRE
+istanze distinte. Il login scriveva la sessione nella prima, il controllo
+d'accesso la cercava nella terza: accesso impossibile, senza messaggi. Piu'
+grave del login: tre istanze che salvano a turno lo stesso file cifrato si
+sovrascrivono a vicenda, e l'ultimo salvataggio cancella in silenzio il
+lavoro degli altri — perdita di dati su un'edizione che gira da chiavetta.
+Rimedio: contenitore unico su `globalThis` con chiave `Symbol.for`, piu' la
+guardia `autosaveAvviato` (ogni copia installava il proprio timer e i propri
+handler di chiusura). 3 test sul meccanismo.
 
-**La percentuale e' 30%, non 15%.** La richiesta iniziale indicava il 15%;
-il testo dell'articolo, la Sezione Normativa di questa piattaforma e la
-Gazzetta Ufficiale dicono 30% dei contributi dovuti nell'anno precedente E
-15.000 € — requisiti CONGIUNTI. Verificato alla fonte prima di implementare e
-confermato da Ercole. Il 15% nasceva verosimilmente dal 15.000 € della stessa
-riga.
+**2. Password temporanea a stringa vuota.** `portableBootstrap.ts` creava
+l'Admin con `passwordTemporanea: ''` invece di NULL; il controllo
+`!== null` leggeva la stringa vuota come "temporanea attiva" e rimandava al
+cambio password un utente che una password definitiva ce l'aveva gia'.
+Corretto sul dato e sulla regola: nuovo `src/lib/passwordTemporanea.ts`,
+definizione unica usata da entrambi i punti di controllo accesso. 4 test.
 
-**Il test si misura sui soli CONTRIBUTI, non su contributi piu' sanzioni.**
-Il delta fra Posizione V.E.R.A. e contabilizzato e', nella prassi, il calcolo
-delle sanzioni: la contabilita' dell'ente non le espone perche' si
-determinano al pagamento, VERA le propone su una presunzione. Le sanzioni
-civili possono valere il 40-60% del contributo: al numeratore, contro un
-denominatore di soli contributi, farebbero scattare "oltre soglia" per
-effetto di una presunzione nostra. Restano a video, dichiarate come
-presunzione, fuori dal test. Il motore segnala esplicitamente il caso
-`sopraSoloConSanzioni` — contributi sotto soglia, totale con sanzioni sopra —
-con l'avvertenza che le sanzioni non fondano da sole la segnalazione.
+**3. `middleware.ts` alla radice, rimosso.** Descriveva un'autenticazione che
+non esiste piu' (cookie `auth_token` JWT, rotte `/login`, `/dashboard`,
+`/smistamento`). Inerte solo perche', con la cartella `src/`, Next cerca
+`src/middleware.ts`: bastava spostarlo dentro `src/` per dirottare ogni
+richiesta su `/login`, che non esiste. Conservato in `docs/dismessi/`.
 
-**"Oltre soglia" non e' mai "segnalazione dovuta".** La fattispecie ha tre
-condizioni; il ritardo di oltre 90 giorni non e' ricavabile dai tracciati
-importati, che non portano la data di scadenza delle partite. La griglia
-dichiara sempre cosa non ha verificato e raccomanda di accertare il requisito
-temporale PRIMA di comunicare all'imprenditore e, ove nominato, all'organo di
-controllo.
+### Soglie di segnalazione art. 25-novies — tutte e sette le righe
 
-**Definizione unica del confronto V.E.R.A.** — nuovo
-`src/lib/debitiEnte/confrontoVera.ts` (**7 test**). Il numero era calcolato in
-tre punti con tre copie della regola: la schermata Posizione V.E.R.A., il
-contesto dello Screening e la griglia. Copie diverse divergono, e divergere
-qui significa mostrare due cifre diverse sulla stessa azienda a un funzionario
-dell'ente. `PosizioneVeraScenario.tsx` ora legge da qui. Un delta negativo
-(ente che ha contabilizzato piu' di quanto VERA riporti) non abbassa la base
-del test: si azzera e si dichiara.
+Nuova scheda **"Soglie di segnalazione"** a livello AZIENDA, accanto alla
+Posizione V.E.R.A. I valori stanno sull'azienda e non sullo scenario: il
+debito e' il punto di partenza di ogni analisi e non cambia da uno scenario
+all'altro. Si compilano una volta e vengono riportati in ogni scenario.
 
-**Difetto trovato in collaudo e corretto**: `categorie_tipo_debito`,
-`debiti_ente` e `debiti_vera` sono create da funzioni `assicura` chiamate
-dalle rispettive schermate; in uno spazio dove la Posizione Ente non e' mai
-stata aperta non esistono, e la griglia mostrava un errore Postgres grezzo.
-L'action ora le garantisce prima di leggere.
+- `src/lib/soglie25novies/calcolo.ts` — funzione pura, nessuna AI, tutte e
+  sette le righe verbatim dalla Sezione Normativa. **23 test.**
+- `src/lib/soglie25novies/formaAER.ts` — forma giuridica -> fattispecie AER
+  (100.000 / 200.000 / 500.000 €), letta dall'anagrafica: nessun campo nuovo.
+  Deliberatamente conservativa, restituisce null sulle forme ambigue. **5 test.**
+- Nove colonne facoltative su `aziende` per i valori a inserimento manuale.
+  `con_lavoratori_subordinati` e' NULLABLE a TRE stati: un default FALSE
+  avrebbe applicato la soglia dei 5.000 € invece del concorso 30% + 15.000 €
+  a ogni azienda non ancora dichiarata, in silenzio.
+- Ogni campo indica la FONTE DOCUMENTALE da cui si ricava: flussi UNIEMENS,
+  file V.E.R.A. richiesto all'istituto, liquidazioni periodiche IVA, estratto
+  di ruolo.
 
-Verificato: type-check (entrambi i controlli), lint, **108 test**, build
-cloud completa, piu' collaudo nel sandbox portable sullo Screening reale del
-Ricevente.
+**Aperta a entrambi i percorsi, con rese diverse.** RICEVENTE: griglia della
+sola soglia del proprio ente. REDIGENTE: paragrafo su tutte le soglie
+insieme, perche' e' l'insieme a definire quanto tempo ha l'impresa; sette
+righe in griglia sarebbero illeggibili. La pagina Posizione Ente, prima
+riservata agli spazi ENTE, ora accoglie il Redigente mostrandogli la sola
+scheda Soglie: quei valori il professionista li ha, dal file V.E.R.A.
+richiesto all'istituto o dai flussi UNIEMENS inviati.
 
-**LIMITE NOTO, da sciogliere prima di aprire spazi non-INPS.** La griglia
-mostra le righe INPS per assunzione cablata: lo spazio ENTE non dichiara da
-nessuna parte di quale ente si tratti (`anagrafica_ente_config` e' una
-struttura generica a dieci campi; gli alias servono a riconoscere l'ente nei
-documenti, non a identificarlo). Per un Ricevente INAIL o Agenzia delle
-Entrate le soglie mostrate sarebbero quelle sbagliate. Mitigazione attuale:
-ogni riga e' etichettata "Segnalazione INPS", quindi il dato e' visibilmente
-INPS e non spacciato per generico. Rimedio proposto: parametro "Ente di
-riferimento" nei Parametri di Spazio (elenco chiuso), da cui discendono la
-riga da mostrare e i campi da chiedere in anagrafica.
+**`ente_25novies` sui Limiti di Ricevibilita'.** `categoria_creditore` e'
+testo libero — ottimo per raggruppare i limiti, insufficiente a scegliere una
+soglia di legge, dove serve corrispondenza esatta. Nuova colonna a elenco
+chiuso (INPS / INAIL / AGENZIA_ENTRATE / AGENZIA_RISCOSSIONE) con vincolo
+CHECK, e riconoscimento automatico da categoria e alias per gli spazi
+esistenti, applicato SOLO ai casi inequivocabili. Dove resta NULL, nessuna
+soglia viene applicata e lo si dichiara: mostrare le soglie INPS a un
+valutatore INAIL sarebbe un dato sbagliato con l'aria di essere giusto.
 
-**NON incluso in questa consegna**: le altre cinque soglie (INAIL, Agenzia
-delle Entrate IVA, Agenzia Entrate-Riscossione nelle tre forme giuridiche) e
-la resa a PARAGRAFO per il Redigente, che a differenza del Ricevente deve
-guardarle tutte insieme e i cui dati vanno inseriti a mano (flussi UNIEMENS,
-file VERA richiesto all'istituto, dichiarazione IVA, estratto di ruolo). Le
-tre righe AER non richiederanno un campo nuovo: la forma giuridica e' gia' in
-anagrafica.
+**La percentuale e' 30%, non 15%.** Verificata alla fonte (testo dell'art.
+25-novies, Sezione Normativa, Gazzetta Ufficiale) e confermata da Ercole. I
+due requisiti sono CONGIUNTI: 30% dei contributi dovuti nell'anno precedente
+E 15.000 €.
 
-## 0.109.31 — 2026-08-26
+**Il test si misura sui soli CONTRIBUTI.** Il delta fra Posizione V.E.R.A. e
+contabilizzato e', nella prassi, il calcolo delle SANZIONI: la contabilita'
+dell'ente non le espone perche' si determinano al pagamento, VERA le propone
+su una presunzione. Valgono il 40-60% del contributo: al numeratore, contro
+un denominatore di soli contributi, farebbero scattare "oltre soglia" per
+effetto di una presunzione nostra. Restano a video, dichiarate, fuori dal
+test. Segnalato esplicitamente il caso in cui sono le sole sanzioni a
+superare la soglia.
 
-**Sicurezza dell'accesso — un difetto che rendeva impossibile entrare, e che
-sotto ne nascondeva uno peggiore**
+**"Oltre soglia" non e' mai "segnalazione dovuta".** Il ritardo di oltre 90
+giorni non e' ricavabile dai dati: sempre dichiarato fra cio' che non e'
+stato verificato, e la raccomandazione chiede di accertarlo PRIMA di
+comunicare all'imprenditore e, ove esistente, all'organo di controllo.
 
-Riaperto il progetto in un sandbox eseguibile (edizione portable: PGlite
-in-process, database cifrato su file — nessun Postgres da installare) per
-collaudare il percorso Ricevente. L'accesso non funzionava: credenziali
-corrette, e la pagina di login che si ripresenta senza un messaggio. Sotto
-c'erano due difetti distinti, il secondo molto più grave del primo.
-
-**1. Password temporanea: stringa vuota trattata come "da cambiare".**
-`portableBootstrap.ts` creava l'Admin con `passwordTemporanea: ''` invece di
-`NULL`. Il controllo era `passwordTemporanea !== null`, quindi la stringa
-vuota valeva come "password temporanea ancora attiva" e il layout dello
-spazio rimandava al cambio password un utente che una password definitiva
-ce l'aveva già. Corretto sul dato **e** sulla regola: nuovo
-`src/lib/passwordTemporanea.ts` con la definizione unica di "deve cambiare
-la password" (stringa vuota e soli spazi = nessuna password temporanea),
-usata da entrambi i punti di controllo accesso (Admin e Operatore). 6 test.
-
-**2. Più istanze del database nello stesso processo — la causa vera.**
-Corretto il punto 1, l'accesso rimbalzava ancora. La sessione risultava
-scritta e valida nel database; la stessa query, eseguita a mano sullo stesso
-file, restituiva la riga; eseguita dentro l'applicazione, zero righe.
-
-Causa: Next.js compila l'applicazione in **più grafi di moduli** che
-convivono nello stesso processo — l'hook di instrumentation, le Server
-Action e i Server Component non condividono la stessa copia di un modulo.
-Con lo stato di `portableDb.ts` tenuto in variabili di modulo (`let pglite`),
-ognuno di questi grafi apriva la **propria** istanza di PGlite. Misurato in
-sandbox: tre istanze distinte nello stesso processo. Il login scriveva la
-sessione nella prima, il controllo d'accesso della pagina la cercava nella
-terza.
-
-Il login era però solo il sintomo visibile. Più istanze che salvano a turno
-lo stesso file cifrato **si sovrascrivono a vicenda**: l'ultimo salvataggio
-cancella in silenzio il lavoro degli altri. Su un'edizione che gira da
-chiavetta e custodisce i dati di una crisi d'impresa, è perdita di dati.
-
-Rimedio: unico contenitore di stato agganciato a `globalThis` con chiave
-`Symbol.for`, così tutte le copie del modulo vedono lo stesso oggetto e
-quindi la stessa, unica istanza di PGlite. Aggiunta anche la guardia
-`autosaveAvviato`, perché ogni copia installava il proprio timer di
-salvataggio e i propri handler di chiusura del processo. 3 test sul
-meccanismo di condivisione.
-
-**3. Rimosso `middleware.ts` alla radice.** Descriveva un'autenticazione che
-non esiste più (cookie `auth_token` JWT, rotte `/login`, `/dashboard`,
-`/smistamento`, ruolo `SUPER_ADMIN`), mentre quella reale usa `session_token`
-e `/spazio/[codice]`. Era inerte solo perché, con la cartella `src/`, Next
-cerca `src/middleware.ts` e ignorava quello alla radice: bastava spostarlo
-dentro `src/` perché ogni richiesta venisse dirottata su `/login`, che non
-esiste. Conservato in `docs/dismessi/` con la nota del perché. Verificato che
-`jose` e `auth_token` non fossero usati altrove in `src/` (la dipendenza
-resta in `package.json`, da togliere in un passaggio dedicato).
-
-**Collaudo end-to-end nel sandbox** (non solo type-check e build): login
-`admin.ricevente` riuscito, Dashboard di Spazio con azienda, utente e
-scenario della demo; Aziende, Scenari, Parametri di Spazio e Normativa CCII
-tutte raggiunte; scenario "Proposta ricevuta" aperto sui suoi sei passi
-(Proposta → Posizione Aggiornata → Indici → Dati di Settore → Brogliaccio →
-Relazione).
-
-Verificato: type-check (entrambi i controlli), lint, **76 test**, build
-completa.
+Verificato: type-check (entrambi i controlli), lint, **102 test**, build
+cloud completa, piu' collaudo end-to-end nel sandbox portable attraversando
+davvero l'MFA (password, TOTP, PIN) su Ricevente e Redigente.
 
 **Nota sul changelog.** Questo file si ferma alla 0.107.0 del 10 agosto: la
-linea 0.108 → 0.109.30 (username come identità di login, tracciati debiti
-ente, Posizione V.E.R.A., semaforo dei passi, Sezione Normativa, riscontri
-deterministici) non è tracciata qui. La ricostruzione delle voci mancanti
-è un lavoro a sé, da fare.
+linea 0.108 -> 0.109.31 non e' tracciata qui. La ricostruzione delle voci
+mancanti resta da fare.
 
 ## 0.107.0 — 2026-08-10 (centocinquantasettesima consegna)
 

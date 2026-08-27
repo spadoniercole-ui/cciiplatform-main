@@ -23,9 +23,10 @@ import { cifra, decifra } from '@/lib/portableCrypto';
 // convivono nello stesso processo Node: l'hook di instrumentation, le
 // Server Action e i Server Component non condividono la stessa copia di
 // un modulo. Con lo stato tenuto in variabili di modulo (`let pglite`),
-// ognuno di questi grafi otteneva la PROPRIA istanza di PGlite.
+// ognuno di questi grafi otteneva la PROPRIA istanza di PGlite: misurate
+// TRE istanze distinte nello stesso processo.
 //
-// Le conseguenze, misurate in sandbox: la sessione scritta dal login (una
+// Conseguenze osservate in sandbox: la sessione scritta dal login (una
 // istanza) risultava inesistente al controllo d'accesso della pagina
 // (un'altra istanza), e l'accesso rimbalzava senza alcun messaggio. Ma il
 // login era solo il sintomo piu' visibile: due o piu' istanze che scrivono
@@ -34,9 +35,9 @@ import { cifra, decifra } from '@/lib/portableCrypto';
 // che gira da chiavetta e tiene i dati di una crisi d'impresa, e' una
 // perdita di dati, non un fastidio.
 //
-// Rimedio: un solo contenitore di stato appeso a `globalThis`. Tutte le
-// copie del modulo, in qualunque grafo si trovino, vedono lo STESSO
-// oggetto — quindi la stessa, unica istanza di PGlite.
+// Rimedio: un solo contenitore di stato appeso a `globalThis` con chiave
+// `Symbol.for`. Tutte le copie del modulo, in qualunque grafo si trovino,
+// vedono lo STESSO oggetto — quindi la stessa, unica istanza di PGlite.
 // ---------------------------------------------------------------------------
 
 type StatoPortable = {

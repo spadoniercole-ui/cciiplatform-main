@@ -22,10 +22,11 @@
 // visibile sopra l'altra scheda.
 
 import React, { useEffect, useState } from 'react';
-import { IdCard, Scale, Lock, ClipboardCheck } from 'lucide-react';
+import { IdCard, Scale, Lock, ClipboardCheck, Gauge } from 'lucide-react';
 import { AnagraficaEnteScenario } from '@/components/spazio/AnagraficaEnteScenario';
 import { DebitiEnteScenario } from '@/components/spazio/DebitiEnteScenario';
 import { PosizioneVeraScenario } from '@/components/spazio/PosizioneVeraScenario';
+import { SoglieSegnalazioneAzienda } from '@/components/spazio/SoglieSegnalazioneAzienda';
 import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import { ottieniAnagraficaEnte, type AnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { CHIAVI_CAMPO_ANAGRAFICA_ENTE } from '@/lib/costantiRicevibilita';
@@ -34,14 +35,20 @@ interface Props {
   nomeSchema: string;
   aziendaId: number;
   nomeAzienda: string;
+  tipoSpazio: 'ENTE' | 'NON_ENTE';
 }
 
-type Scheda = 'anagrafica' | 'debitoria' | 'vera';
+type Scheda = 'anagrafica' | 'debitoria' | 'vera' | 'soglie';
 
-const SCHEDE: { id: Scheda; label: string; icon: typeof IdCard }[] = [
-  { id: 'anagrafica', label: 'Anagrafica', icon: IdCard },
-  { id: 'debitoria', label: 'Situazione Debitoria', icon: Scale },
-  { id: 'vera', label: 'Posizione V.E.R.A.', icon: ClipboardCheck },
+// `soloEnte: false` = visibile anche al Redigente. Le Soglie di segnalazione
+// sono l'unica scheda aperta a entrambi: i valori sono a inserimento manuale
+// e il professionista li ha (file V.E.R.A. richiesto all'istituto, oppure
+// flussi UNIEMENS da cui ricava il totale annuo).
+const SCHEDE: { id: Scheda; label: string; icon: typeof IdCard; soloEnte: boolean }[] = [
+  { id: 'anagrafica', label: 'Anagrafica', icon: IdCard, soloEnte: true },
+  { id: 'debitoria', label: 'Situazione Debitoria', icon: Scale, soloEnte: true },
+  { id: 'vera', label: 'Posizione V.E.R.A.', icon: ClipboardCheck, soloEnte: true },
+  { id: 'soglie', label: 'Soglie di segnalazione', icon: Gauge, soloEnte: false },
 ];
 
 const VUOTA: AnagraficaEnte = {
@@ -74,8 +81,10 @@ function anagraficaCompilata(dati: AnagraficaEnte): boolean {
   ].some((c) => c && c.trim());
 }
 
-export function PosizioneEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props) {
-  const [scheda, setScheda] = useState<Scheda>('anagrafica');
+export function PosizioneEnteScenario({ nomeSchema, aziendaId, nomeAzienda, tipoSpazio }: Props) {
+  const eEnte = tipoSpazio === 'ENTE';
+  const schedeVisibili = SCHEDE.filter((x) => !x.soloEnte || eEnte);
+  const [scheda, setScheda] = useState<Scheda>(eEnte ? 'anagrafica' : 'soglie');
   const [etichette, setEtichette] = useState<
     { campo: number; etichetta: string; attivo: boolean }[]
   >([]);
@@ -112,8 +121,11 @@ export function PosizioneEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Pr
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {SCHEDE.map((s) => {
-          const bloccata = s.id !== 'anagrafica' && !sbloccata && !caricamento;
+        {schedeVisibili.map((s) => {
+          // Le Soglie di segnalazione non dipendono dall'Anagrafica Ente:
+          // sono valori a inserimento manuale, e per il Redigente
+          // quella scheda non esiste nemmeno.
+          const bloccata = s.id !== 'anagrafica' && s.id !== 'soglie' && !sbloccata && !caricamento;
           return (
             <button
               key={s.id}
@@ -182,6 +194,13 @@ export function PosizioneEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Pr
       )}
       {scheda === 'vera' && sbloccata && (
         <PosizioneVeraScenario nomeSchema={nomeSchema} aziendaId={aziendaId} />
+      )}
+      {scheda === 'soglie' && (
+        <SoglieSegnalazioneAzienda
+          nomeSchema={nomeSchema}
+          aziendaId={aziendaId}
+          tipoSpazio={tipoSpazio}
+        />
       )}
     </div>
   );

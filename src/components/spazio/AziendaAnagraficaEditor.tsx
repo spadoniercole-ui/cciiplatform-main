@@ -34,11 +34,6 @@ interface FormState {
   ruoloRappresentanteLegale: string;
   numeroRea: string;
   pec: string;
-  // Dati per il test delle soglie di segnalazione INPS (art. 25-novies).
-  // Stringhe/'' per il tre-stati: '' = non dichiarato.
-  conLavoratoriSubordinati: '' | 'si' | 'no';
-  contributiDovutiAnnoPrecedente: string;
-  annoContributiDovuti: string;
 }
 
 function Campo({
@@ -127,21 +122,6 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda }: Props) {
     ruoloRappresentanteLegale: azienda.ruoloRappresentanteLegale || '',
     numeroRea: azienda.numeroRea || '',
     pec: azienda.pec || '',
-    conLavoratoriSubordinati:
-      azienda.conLavoratoriSubordinati === null || azienda.conLavoratoriSubordinati === undefined
-        ? ''
-        : azienda.conLavoratoriSubordinati
-          ? 'si'
-          : 'no',
-    contributiDovutiAnnoPrecedente:
-      azienda.contributiDovutiAnnoPrecedente !== null &&
-      azienda.contributiDovutiAnnoPrecedente !== undefined
-        ? String(azienda.contributiDovutiAnnoPrecedente)
-        : '',
-    annoContributiDovuti:
-      azienda.annoContributiDovuti !== null && azienda.annoContributiDovuti !== undefined
-        ? String(azienda.annoContributiDovuti)
-        : '',
   });
   const [salvataggio, setSalvataggio] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
@@ -194,15 +174,6 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda }: Props) {
       const risultato = await modificaAziendaAction(nomeSchema, azienda.id, {
         ...form,
         capitaleSociale: form.capitaleSociale.trim() === '' ? null : Number(form.capitaleSociale),
-        // Tre-stati preservato: '' resta null, non diventa false.
-        conLavoratoriSubordinati:
-          form.conLavoratoriSubordinati === '' ? null : form.conLavoratoriSubordinati === 'si',
-        contributiDovutiAnnoPrecedente:
-          form.contributiDovutiAnnoPrecedente.trim() === ''
-            ? null
-            : Number(form.contributiDovutiAnnoPrecedente),
-        annoContributiDovuti:
-          form.annoContributiDovuti.trim() === '' ? null : Number(form.annoContributiDovuti),
       });
       if (!risultato.success) {
         setErrore(risultato.error || "Impossibile salvare l'azienda.");
@@ -367,61 +338,6 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda }: Props) {
               className={`${classeInput} font-mono max-w-[8rem]`}
             />
           </Campo>
-
-          {/* Dati per le soglie di segnalazione INPS (art. 25-novies).
-              Facoltativi: se mancano, la griglia in testata allo Screening
-              dichiara l'esito non determinabile invece di inventarlo. */}
-          <div className="border-t border-slate-100 pt-4 mt-2 space-y-4">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Soglie di segnalazione INPS — art. 25-novies
-            </p>
-            <Campo
-              label="Lavoratori subordinati o parasubordinati"
-              hint="Determina QUALE soglia si applica: con lavoratori vale il concorso 30% + 15.000 €, senza vale la sola soglia di 5.000 €. Se non dichiarato, nessuna delle due viene applicata."
-            >
-              <select
-                value={form.conLavoratoriSubordinati}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    conLavoratoriSubordinati: e.target.value as '' | 'si' | 'no',
-                  })
-                }
-                className={classeInput}
-              >
-                <option value="">Non dichiarato</option>
-                <option value="si">Sì — l&apos;impresa ha lavoratori</option>
-                <option value="no">No — impresa senza lavoratori</option>
-              </select>
-            </Campo>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Campo
-                label="Contributi dovuti nell'anno precedente"
-                hint="Totale dei contributi DOVUTI (non del debito). È la base su cui si calcola il 30%."
-              >
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.contributiDovutiAnnoPrecedente}
-                  onChange={(e) =>
-                    setForm({ ...form, contributiDovutiAnnoPrecedente: e.target.value })
-                  }
-                  className={`${classeInput} font-mono`}
-                />
-              </Campo>
-              <Campo label="Anno di riferimento" hint="Anno cui si riferisce l'importo qui accanto">
-                <input
-                  type="number"
-                  min={2000}
-                  max={2100}
-                  value={form.annoContributiDovuti}
-                  onChange={(e) => setForm({ ...form, annoContributiDovuti: e.target.value })}
-                  className={`${classeInput} font-mono max-w-[8rem]`}
-                />
-              </Campo>
-            </div>
-          </div>
         </Sezione>
 
         <Sezione

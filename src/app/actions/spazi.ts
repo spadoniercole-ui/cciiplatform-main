@@ -10,6 +10,7 @@
 // (spazi, licenze_spazio), coerente con licenze/sessioni/indici/parametri_sistema.
 
 import { revalidatePath } from 'next/cache';
+import { richiedeCambioPassword as valutaCambioPassword } from '@/lib/passwordTemporanea';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { pool } from '@/lib/db';
@@ -19,7 +20,6 @@ import { contaSpaziPerLicenza, getLicenzaPerId } from '@/app/actions/licenze';
 import { RUOLI_ADMIN_SPAZIO, type RuoloAdminSpazio } from '@/lib/ruoliAdminSpazio';
 import { generaSlug } from '@/lib/slug';
 import { generaUsernameUnivoco, usernameEsisteGlobale } from '@/lib/generaUsername';
-import { richiedeCambioPassword as valutaCambioPassword } from '@/lib/passwordTemporanea';
 
 export interface ActionResult {
   success: boolean;

@@ -1,287 +1,230 @@
 import { describe, it, expect } from 'vitest';
-import { calcolaGriglia25Novies, SOGLIE_INPS_25NOVIES } from './calcolo';
+import { calcolaSoglie25Novies, SOGLIE_25NOVIES, type DatiSoglie } from './calcolo';
 
-// I numeri di questi test vengono dal testo dell'art. 25-novies, comma 1,
-// lettera a) CCII, non da stime. Se un giorno una riforma cambia le soglie,
-// è qui che il cambiamento deve rompere qualcosa.
+// I numeri vengono dal testo dell'art. 25-novies comma 1, non da stime.
+// Se una riforma cambia una soglia, è qui che deve rompersi qualcosa.
 
-const base = {
-  conLavoratori: null as boolean | null,
-  contributiDovutiAnnoPrecedente: null as number | null,
-  annoContributiDovuti: null as number | null,
-  organoDiControlloNominato: null as boolean | null,
-  prospettiva: 'ENTE' as 'ENTE' | 'NON_ENTE',
+const vuoto: DatiSoglie = {
+  conLavoratori: null,
+  contributiScaduti: null,
+  contributiDovutiAnnoPrecedente: null,
+  annoContributiDovuti: null,
+  sanzioniPresunte: null,
+  premiInail: null,
+  ivaScaduta: null,
+  volumeAffari: null,
+  creditiAffidati: null,
+  formaAER: null,
 };
 
 describe('soglie di legge', () => {
-  it('sono quelle dell’articolo: 30%, 15.000 €, 5.000 €, 90 giorni', () => {
-    expect(SOGLIE_INPS_25NOVIES.percentualeConLavoratori).toBe(0.3);
-    expect(SOGLIE_INPS_25NOVIES.importoConLavoratori).toBe(15_000);
-    expect(SOGLIE_INPS_25NOVIES.importoSenzaLavoratori).toBe(5_000);
-    expect(SOGLIE_INPS_25NOVIES.giorniRitardo).toBe(90);
+  it('sono quelle dell’articolo', () => {
+    expect(SOGLIE_25NOVIES.inpsPercentuale).toBe(0.3);
+    expect(SOGLIE_25NOVIES.inpsImportoConLavoratori).toBe(15_000);
+    expect(SOGLIE_25NOVIES.inpsImportoSenzaLavoratori).toBe(5_000);
+    expect(SOGLIE_25NOVIES.inail).toBe(5_000);
+    expect(SOGLIE_25NOVIES.ivaImporto).toBe(5_000);
+    expect(SOGLIE_25NOVIES.ivaPercentualeVolumeAffari).toBe(0.1);
+    expect(SOGLIE_25NOVIES.ivaImportoAssoluto).toBe(20_000);
+    expect(SOGLIE_25NOVIES.aerImpresaIndividuale).toBe(100_000);
+    expect(SOGLIE_25NOVIES.aerSocietaPersone).toBe(200_000);
+    expect(SOGLIE_25NOVIES.aerAltreSocieta).toBe(500_000);
+    expect(SOGLIE_25NOVIES.giorniRitardo).toBe(90);
+  });
+
+  it('produce sette righe', () => {
+    expect(calcolaSoglie25Novies(vuoto).righe).toHaveLength(7);
   });
 });
 
-describe('impresa CON lavoratori — i due requisiti sono congiunti', () => {
-  it('sopra il 30% ma sotto i 15.000 € → NON oltre soglia', () => {
-    // 12.000 € su 20.000 dovuti: il 60%, ben oltre il 30%. Ma sotto 15.000 €.
-    const g = calcolaGriglia25Novies({
-      ...base,
+describe('INPS — i due requisiti sono congiunti', () => {
+  it('sopra il 30% ma sotto i 15.000 € → sotto soglia', () => {
+    const e = calcolaSoglie25Novies({
+      ...vuoto,
       conLavoratori: true,
-      contributiDovutiAnnoPrecedente: 20_000,
-      righe: [{ anno: 2025, contabilizzato: 12_000, sanzioniPresunte: 0 }],
+      contributiScaduti: 12_000,
+      contributiDovutiAnnoPrecedente: 20_000, // 30% = 6.000
     });
-    expect(g.oltreSoglia).toBe(false);
+    expect(e.superate).toHaveLength(0);
   });
 
-  it('sopra i 15.000 € ma sotto il 30% → NON oltre soglia', () => {
-    // 16.000 € su 1.000.000 dovuti: 1,6%, sotto il 30%.
-    const g = calcolaGriglia25Novies({
-      ...base,
+  it('sopra i 15.000 € ma sotto il 30% → sotto soglia', () => {
+    const e = calcolaSoglie25Novies({
+      ...vuoto,
       conLavoratori: true,
+      contributiScaduti: 16_000,
       contributiDovutiAnnoPrecedente: 1_000_000,
-      righe: [{ anno: 2025, contabilizzato: 16_000, sanzioniPresunte: 0 }],
     });
-    expect(g.oltreSoglia).toBe(false);
+    expect(e.superate).toHaveLength(0);
   });
 
   it('sopra entrambi → oltre soglia', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
+    const e = calcolaSoglie25Novies({
+      ...vuoto,
       conLavoratori: true,
+      contributiScaduti: 40_000,
       contributiDovutiAnnoPrecedente: 50_000, // 30% = 15.000
-      righe: [{ anno: 2025, contabilizzato: 40_000, sanzioniPresunte: 0 }],
     });
-    expect(g.oltreSoglia).toBe(true);
-    expect(g.sogliaPercentuale).toBe(15_000);
+    expect(e.superate.map((r) => r.ente)).toEqual(['INPS']);
   });
 
-  it('senza il totale dei contributi dovuti l’esito non è determinabile', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: true,
-      righe: [{ anno: 2025, contabilizzato: 900_000, sanzioniPresunte: 0 }],
-    });
-    // Esposizione enorme, ma il 30% non è calcolabile: non si afferma nulla.
-    expect(g.oltreSoglia).toBe(false);
-    expect(g.soglie[0].esito).toBe('non_determinabile');
-    expect(g.datiMancanti.some((d) => d.includes('contributi dovuti'))).toBe(true);
+  it('senza lavoratori: 5.000 € esatti non superano ("superiore a")', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, conLavoratori: false, contributiScaduti: 5_000 });
+    expect(e.superate).toHaveLength(0);
+  });
+
+  it('le due righe INPS non si applicano mai insieme', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, conLavoratori: true, contributiScaduti: 1 });
+    expect(e.righe.filter((r) => r.ente === 'INPS' && r.applicabile)).toHaveLength(1);
+  });
+
+  it('lavoratori non dichiarati: nessuna riga INPS applicata, e lo dichiara', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, contributiScaduti: 900_000 });
+    expect(e.righe.filter((r) => r.ente === 'INPS' && r.applicabile)).toHaveLength(0);
+    expect(e.datiMancanti.some((d) => d.includes('lavoratori'))).toBe(true);
   });
 });
 
-describe('impresa SENZA lavoratori — solo importo, nessuna percentuale', () => {
-  it('oltre 5.000 € → oltre soglia anche senza il dato dei contributi dovuti', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
+describe('le sanzioni presunte non entrano nel test', () => {
+  it('contributi sotto, totale con sanzioni sopra → resta sotto, ma è segnalato', () => {
+    const e = calcolaSoglie25Novies({
+      ...vuoto,
       conLavoratori: false,
-      righe: [{ anno: 2025, contabilizzato: 5_001, sanzioniPresunte: 0 }],
+      contributiScaduti: 4_000,
+      sanzioniPresunte: 2_000,
     });
-    expect(g.oltreSoglia).toBe(true);
+    expect(e.superate).toHaveLength(0);
+    expect(e.inpsSopraSoloConSanzioni).toBe(true);
   });
 
-  it('esattamente 5.000 € → NON oltre soglia (la norma dice "superiore a")', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
+  it('se i contributi bastano da soli, il flag non si accende', () => {
+    const e = calcolaSoglie25Novies({
+      ...vuoto,
       conLavoratori: false,
-      righe: [{ anno: 2025, contabilizzato: 5_000, sanzioniPresunte: 0 }],
+      contributiScaduti: 9_000,
+      sanzioniPresunte: 3_000,
     });
-    expect(g.oltreSoglia).toBe(false);
-  });
-
-  it('non chiede il dato dei contributi dovuti fra i mancanti', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: false,
-      righe: [{ anno: 2025, contabilizzato: 6_000, sanzioniPresunte: 0 }],
-    });
-    expect(g.datiMancanti.some((d) => d.includes('contributi dovuti'))).toBe(false);
+    expect(e.superate).toHaveLength(1);
+    expect(e.inpsSopraSoloConSanzioni).toBe(false);
   });
 });
 
-describe('le due righe sono alternative, mai sommabili', () => {
-  it('con lavoratori dichiarati, si applica solo la prima riga', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: true,
-      contributiDovutiAnnoPrecedente: 50_000,
-      righe: [{ anno: 2025, contabilizzato: 40_000, sanzioniPresunte: 0 }],
-    });
-    expect(g.soglie.filter((s) => s.applicabile)).toHaveLength(1);
-    expect(g.soglie[0].applicabile).toBe(true);
+describe('INAIL', () => {
+  it('oltre 5.000 € → oltre soglia', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, premiInail: 5_001 }, 'INAIL');
+    expect(e.superate).toHaveLength(1);
   });
 
-  it('senza dichiarazione, nessuna riga è applicabile e non si afferma nulla', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      righe: [{ anno: 2025, contabilizzato: 900_000, sanzioniPresunte: 0 }],
-    });
-    expect(g.soglie.filter((s) => s.applicabile)).toHaveLength(0);
-    expect(g.oltreSoglia).toBe(false);
-    expect(g.raccomandazione).toContain('lavoratori subordinati');
+  it('non dipende da altri dati', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, premiInail: 100 }, 'INAIL');
+    expect(e.righe[0].esito).toBe('sotto');
   });
 });
 
-describe('totali e ripartizione per anno', () => {
-  it('somma contabilizzato e VERA non contabilizzato, ordinando per anno', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: false,
-      righe: [
-        { anno: 2025, contabilizzato: 3_000, sanzioniPresunte: 500 },
-        { anno: 2023, contabilizzato: 1_000, sanzioniPresunte: 200 },
-        { anno: 2024, contabilizzato: 2_000, sanzioniPresunte: 0 },
-      ],
-    });
-    expect(g.righe.map((r) => r.anno)).toEqual([2023, 2024, 2025]);
-    expect(g.totaleContabilizzato).toBe(6_000);
-    expect(g.totaleSanzioniPresunte).toBe(700);
-    expect(g.totaleComplessivo).toBe(6_700);
+describe('Agenzia delle Entrate (IVA) — due vie autonome', () => {
+  it('oltre 20.000 € scatta comunque, anche senza volume d’affari', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, ivaScaduta: 20_001 }, 'AGENZIA_ENTRATE');
+    expect(e.superate).toHaveLength(1);
+    expect(e.righe[0].motivo).toContain('in ogni caso');
   });
 
-  it('le righe senza anno finiscono in fondo, concorrono ai totali, e sono dichiarate', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: false,
-      righe: [
-        { anno: null, contabilizzato: 0, sanzioniPresunte: 4_000 },
-        { anno: 2024, contabilizzato: 2_000, sanzioniPresunte: 0 },
-      ],
-    });
-    expect(g.righe[g.righe.length - 1].anno).toBeNull();
-    expect(g.totaleComplessivo).toBe(6_000);
-    expect(g.datiMancanti.some((d) => d.includes('non è attribuibile a un anno'))).toBe(true);
-  });
-});
-
-describe('la raccomandazione non afferma mai un obbligo non dimostrato', () => {
-  it('oltre soglia: chiede di accertare i 90 giorni PRIMA di comunicare', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: false,
-      organoDiControlloNominato: true,
-      righe: [{ anno: 2025, contabilizzato: 80_000, sanzioniPresunte: 0 }],
-    });
-    expect(g.raccomandazione).toContain('90 giorni');
-    expect(g.raccomandazione).toContain('collegio sindacale');
-    // Non deve mai dire che la segnalazione È dovuta.
-    expect(g.raccomandazione).not.toMatch(/segnalazione (è|e) dovuta/i);
+  it('sotto 20.000 €: servono i due requisiti congiunti', () => {
+    // 10.000 € su 80.000 di volume = 12,5%, oltre il 10% e oltre 5.000 €.
+    const e = calcolaSoglie25Novies(
+      { ...vuoto, ivaScaduta: 10_000, volumeAffari: 80_000 },
+      'AGENZIA_ENTRATE'
+    );
+    expect(e.superate).toHaveLength(1);
   });
 
-  it('senza organo di controllo nominato, il destinatario è il solo imprenditore', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: false,
-      organoDiControlloNominato: false,
-      righe: [{ anno: 2025, contabilizzato: 80_000, sanzioniPresunte: 0 }],
-    });
-    expect(g.raccomandazione).toContain('nessun organo di controllo');
+  it('sotto 20.000 € e sotto il 10% del volume → sotto soglia', () => {
+    // 10.000 € su 500.000 = 2%.
+    const e = calcolaSoglie25Novies(
+      { ...vuoto, ivaScaduta: 10_000, volumeAffari: 500_000 },
+      'AGENZIA_ENTRATE'
+    );
+    expect(e.superate).toHaveLength(0);
   });
 
-  it('il requisito dei 90 giorni è SEMPRE fra i dati mancanti, anche sotto soglia', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: false,
-      righe: [{ anno: 2025, contabilizzato: 100, sanzioniPresunte: 0 }],
-    });
-    expect(g.datiMancanti.some((d) => d.includes('90 giorni'))).toBe(true);
+  it('sotto 20.000 € senza volume d’affari → non determinabile, non "sotto"', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, ivaScaduta: 10_000 }, 'AGENZIA_ENTRATE');
+    expect(e.righe[0].esito).toBe('non_determinabile');
+    expect(e.superate).toHaveLength(0);
   });
 });
 
-describe('le sanzioni presunte NON entrano nel test', () => {
-  it('contributi sotto soglia + sanzioni che la supererebbero → resta SOTTO', () => {
-    // Impresa senza lavoratori: soglia 5.000 €.
-    // Contributi 4.000 (sotto), sanzioni presunte 2.000 → totale 6.000 (sopra).
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: false,
-      righe: [{ anno: 2025, contabilizzato: 4_000, sanzioniPresunte: 2_000 }],
-    });
-    expect(g.oltreSoglia).toBe(false);
-    expect(g.sopraSoloConSanzioni).toBe(true);
-    expect(g.totaleComplessivo).toBe(6_000);
+describe('Agenzia Entrate-Riscossione — soglia per forma giuridica', () => {
+  it('150.000 € supera per impresa individuale ma non per società di persone', () => {
+    const ind = calcolaSoglie25Novies(
+      { ...vuoto, creditiAffidati: 150_000, formaAER: 'IMPRESA_INDIVIDUALE' },
+      'AGENZIA_RISCOSSIONE'
+    );
+    expect(ind.superate).toHaveLength(1);
+
+    const soc = calcolaSoglie25Novies(
+      { ...vuoto, creditiAffidati: 150_000, formaAER: 'SOCIETA_PERSONE' },
+      'AGENZIA_RISCOSSIONE'
+    );
+    expect(soc.superate).toHaveLength(0);
   });
 
-  it('quel caso produce una raccomandazione che vieta di fondarci la segnalazione', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: false,
-      righe: [{ anno: 2025, contabilizzato: 4_000, sanzioniPresunte: 2_000 }],
-    });
-    expect(g.raccomandazione).toContain('NON fondano da sole la segnalazione');
+  it('300.000 € non supera per una S.r.l. (soglia 500.000 €)', () => {
+    const e = calcolaSoglie25Novies(
+      { ...vuoto, creditiAffidati: 300_000, formaAER: 'ALTRE_SOCIETA' },
+      'AGENZIA_RISCOSSIONE'
+    );
+    expect(e.superate).toHaveLength(0);
   });
 
-  it('con lavoratori: le sanzioni non fanno superare il 30%', () => {
-    // Contributi dovuti 100.000 → soglia 30.000.
-    // Contributi non versati 25.000 (sotto), sanzioni 10.000 → totale 35.000.
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: true,
-      contributiDovutiAnnoPrecedente: 100_000,
-      righe: [{ anno: 2025, contabilizzato: 25_000, sanzioniPresunte: 10_000 }],
-    });
-    expect(g.oltreSoglia).toBe(false);
-    expect(g.sopraSoloConSanzioni).toBe(true);
+  it('una sola delle tre righe è applicabile per volta', () => {
+    const e = calcolaSoglie25Novies(
+      { ...vuoto, creditiAffidati: 999_999, formaAER: 'SOCIETA_PERSONE' },
+      'AGENZIA_RISCOSSIONE'
+    );
+    expect(e.righe.filter((r) => r.applicabile)).toHaveLength(1);
   });
 
-  it('se i contributi da soli sono oltre soglia, l’esito non dipende dalle sanzioni', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: false,
-      righe: [{ anno: 2025, contabilizzato: 9_000, sanzioniPresunte: 3_000 }],
-    });
-    expect(g.oltreSoglia).toBe(true);
-    expect(g.sopraSoloConSanzioni).toBe(false);
-  });
-
-  it('la natura presuntiva delle sanzioni è sempre dichiarata quando ce ne sono', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: false,
-      righe: [{ anno: 2025, contabilizzato: 1_000, sanzioniPresunte: 400 }],
-    });
-    expect(g.datiMancanti.some((d) => d.includes('PRESUNZIONE'))).toBe(true);
-  });
-
-  it('senza sanzioni non si dichiara nulla di superfluo', () => {
-    const g = calcolaGriglia25Novies({
-      ...base,
-      conLavoratori: false,
-      righe: [{ anno: 2025, contabilizzato: 1_000, sanzioniPresunte: 0 }],
-    });
-    expect(g.datiMancanti.some((d) => d.includes('PRESUNZIONE'))).toBe(false);
-    expect(g.sopraSoloConSanzioni).toBe(false);
+  it('forma non riconosciuta: nessuna applicata, e lo dichiara', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, creditiAffidati: 999_999 });
+    expect(e.righe.filter((r) => r.ente === 'AGENZIA_RISCOSSIONE' && r.applicabile)).toHaveLength(
+      0
+    );
+    expect(e.datiMancanti.some((d) => d.includes('Forma giuridica'))).toBe(true);
   });
 });
 
-describe('prospettiva: la soglia è la stessa, la raccomandazione no', () => {
-  const oltre = {
-    ...base,
-    conLavoratori: false as boolean | null,
-    righe: [{ anno: 2025, contabilizzato: 80_000, sanzioniPresunte: 0 }],
-  };
-
-  it('il calcolo NON cambia fra Ente e Redigente', () => {
-    const e = calcolaGriglia25Novies({ ...oltre, prospettiva: 'ENTE' });
-    const r = calcolaGriglia25Novies({ ...oltre, prospettiva: 'NON_ENTE' });
-    expect(e.oltreSoglia).toBe(r.oltreSoglia);
-    expect(e.totaleContabilizzato).toBe(r.totaleContabilizzato);
-    expect(e.soglie.map((x) => x.esito)).toEqual(r.soglie.map((x) => x.esito));
+describe('le due letture: Ricevente e Redigente', () => {
+  it('Ricevente INAIL vede solo le righe INAIL, non quelle INPS', () => {
+    const e = calcolaSoglie25Novies(
+      { ...vuoto, conLavoratori: true, contributiScaduti: 900_000, premiInail: 100 },
+      'INAIL'
+    );
+    expect(e.righe.every((r) => r.ente === 'INAIL')).toBe(true);
+    expect(e.superate).toHaveLength(0); // l'esposizione INPS non lo riguarda
   });
 
-  it('all’Ente dice di inviare la comunicazione', () => {
-    const e = calcolaGriglia25Novies({ ...oltre, prospettiva: 'ENTE' });
-    expect(e.raccomandazione).toContain('inviare la comunicazione');
+  it('Redigente vede tutte le righe e può superarne più di una', () => {
+    const e = calcolaSoglie25Novies({
+      ...vuoto,
+      conLavoratori: false,
+      contributiScaduti: 9_000,
+      premiInail: 9_000,
+      ivaScaduta: 30_000,
+      creditiAffidati: 600_000,
+      formaAER: 'ALTRE_SOCIETA',
+    });
+    expect(e.superate.map((r) => r.ente).sort()).toEqual([
+      'AGENZIA_ENTRATE',
+      'AGENZIA_RISCOSSIONE',
+      'INAIL',
+      'INPS',
+    ]);
   });
+});
 
-  it('al Redigente NON dice di inviare nulla: lui non comunica', () => {
-    const r = calcolaGriglia25Novies({ ...oltre, prospettiva: 'NON_ENTE' });
-    expect(r.raccomandazione).not.toContain('inviare la comunicazione');
-    expect(r.raccomandazione).toContain('vincolo di tempo');
-  });
-
-  it('anche al Redigente il requisito dei 90 giorni resta non dimostrato', () => {
-    const r = calcolaGriglia25Novies({ ...oltre, prospettiva: 'NON_ENTE' });
-    expect(r.raccomandazione).toContain('90 giorni');
-    expect(r.datiMancanti.some((d) => d.includes('90 giorni'))).toBe(true);
+describe('il requisito dei 90 giorni è sempre dichiarato', () => {
+  it('anche quando tutto è sotto soglia', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, conLavoratori: false, contributiScaduti: 1 });
+    expect(e.datiMancanti.some((d) => d.includes('90 giorni'))).toBe(true);
   });
 });

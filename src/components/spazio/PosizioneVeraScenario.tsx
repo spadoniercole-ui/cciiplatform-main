@@ -42,10 +42,6 @@ import {
 import { ottieniDebitiEnte, type RigaDebitoEnte } from '@/app/actions/debitiEnte';
 import { etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
 import { stampaHtml } from '@/lib/stampaTesto';
-import {
-  calcolaConfrontoVera,
-  type TrattamentoVeraRigaConfronto,
-} from '@/lib/debitiEnte/confrontoVera';
 
 interface Props {
   nomeSchema: string;
@@ -328,32 +324,27 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   );
   const righePotenziali = righeVera.filter((r) => r.trattamento === 'potenziale');
 
-  // Confronto certo-per-certo per categoria: DEFINIZIONE UNICA in
-  // src/lib/debitiEnte/confrontoVera.ts, la stessa che alimenta la griglia
-  // delle soglie art. 25-novies in testata allo Screening. Qui non si
-  // ricalcola: due copie della stessa regola finiscono per divergere, e
-  // divergere qui significa mostrare due cifre diverse sulla stessa azienda.
-  const confrontoVera = calcolaConfrontoVera(
-    righeEnte.map((r) => ({ tipo: r.tipo, importo: r.importo })),
-    righeVera.map((r) => ({
-      categoria: r.categoria,
-      importo: r.importo,
-      trattamento: r.trattamento as TrattamentoVeraRigaConfronto,
-    })),
-    categorie.map((c) => ({ codice: c.codice, contribuisce: c.contribuisce !== false }))
+  // Confronto certo-per-certo per categoria (solo importi noti).
+  const codiciPresenti = Array.from(
+    new Set<string>([
+      ...categorie.map((c) => c.codice),
+      ...righeEnte.map((r) => r.tipo),
+      ...righeImporto.map((r) => r.categoria),
+    ])
   );
-  const confronto = confrontoVera.perCategoria.map((x) => ({
-    cod: x.codice,
-    contab: x.contabilizzato,
-    vera: x.vera,
-    delta: x.delta,
-    neutra: x.neutra,
-  }));
-  const totContab = confrontoVera.totaleContabilizzato;
-  const totVera = confrontoVera.totaleVera;
+  const confronto = codiciPresenti
+    .map((cod) => {
+      const contab = righeEnte.filter((r) => r.tipo === cod).reduce((a, r) => a + r.importo, 0);
+      const vera = righeImporto
+        .filter((r) => r.categoria === cod)
+        .reduce((a, r) => a + r.importo, 0);
+      return { cod, contab, vera, delta: vera - contab, neutra: nonContribuisce.has(cod) };
+    })
+    .filter((x) => x.contab !== 0 || x.vera !== 0);
+  const totContab = confronto.filter((x) => !x.neutra).reduce((a, x) => a + x.contab, 0);
+  const totVera = confronto.filter((x) => !x.neutra).reduce((a, x) => a + x.vera, 0);
 
   // VERA per categoria (solo importi noti).
-  const codiciPresenti = confrontoVera.perCategoria.map((x) => x.codice);
   const veraPerCategoria = codiciPresenti
     .map((cod) => {
       const righe = righeImporto.filter((r) => r.categoria === cod);

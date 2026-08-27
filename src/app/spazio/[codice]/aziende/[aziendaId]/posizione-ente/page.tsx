@@ -18,11 +18,16 @@ export default async function PosizioneEnteAziendaPage({
   if (!contesto) redirect('/');
   if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
 
-  // Solo spazi ENTE — un redigente non ha un ente che dichiara nulla su
-  // di sé, non ha senso in quel contesto.
-  if (contesto.tipoSpazio !== 'ENTE') {
-    redirect(`/spazio/${codice}/aziende/${aziendaId}`);
-  }
+  // Aperta a ENTRAMBI i percorsi, con contenuti diversi.
+  //
+  // ENTE: Anagrafica Ente, Situazione Debitoria, Posizione V.E.R.A. e Soglie
+  // di segnalazione — l'ente dichiara cio' che sa dell'impresa.
+  //
+  // NON_ENTE: la sola scheda Soglie di segnalazione. Il professionista quei
+  // valori li ha: o ha richiesto il file V.E.R.A. all'istituto, o li ricava
+  // dai flussi UNIEMENS inviati, da cui prende il totale annuo. Le altre tre
+  // schede restano fuori, perche' un redigente non ha un ente che dichiara
+  // qualcosa su di se'.
 
   const risultato = await ottieniAziendaPerId(contesto.nomeSchema, Number(aziendaId));
   if (!risultato.success || !risultato.azienda) {
@@ -34,6 +39,7 @@ export default async function PosizioneEnteAziendaPage({
       nomeSchema={contesto.nomeSchema}
       aziendaId={Number(aziendaId)}
       nomeAzienda={risultato.azienda!.ragioneSociale}
+      tipoSpazio={contesto.tipoSpazio}
     />
   );
 }

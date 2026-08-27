@@ -211,11 +211,6 @@ export function getTabelleTenant(nomeSchema: string) {
       numeroRea: text('numero_rea'),
       pec: text('pec'),
       numeroSediSecondarie: integer('numero_sedi_secondarie').notNull().default(0),
-      // Test soglie INPS art. 25-novies (vedi provision.ts per il perché del
-      // booleano a tre stati e della facoltatività).
-      conLavoratoriSubordinati: boolean('con_lavoratori_subordinati'),
-      contributiDovutiAnnoPrecedente: numeric('contributi_dovuti_anno_precedente'),
-      annoContributiDovuti: integer('anno_contributi_dovuti'),
       createdAt: timestamp('created_at').defaultNow().notNull(),
     }),
   };
