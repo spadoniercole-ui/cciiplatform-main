@@ -77,9 +77,28 @@ export default function LoginPage() {
         setErrore(risultato.error || 'Credenziali non valide.');
         return;
       }
-      // Password corretta: si prosegue con l'MFA (TOTP + PIN). La sessione
-      // viene creata solo al completamento dei fattori.
-      setMfaAttivo(true);
+      // Utenti con MFA: password corretta → si prosegue con TOTP + PIN. La
+      // sessione viene creata solo al completamento dei fattori.
+      if ('mfa' in risultato && risultato.mfa) {
+        setMfaAttivo(true);
+        return;
+      }
+      // Accesso diretto senza MFA (superadmin escluso dal controllo OTP/PIN):
+      // la sessione è già stata creata, si procede con la navigazione.
+      const diretto = risultato as {
+        role?: 'SUPERADMIN' | 'USER';
+        goToChoice?: boolean;
+        tenantName?: string | null;
+        tenantId?: string | null;
+      };
+      if (diretto.role) {
+        await procediDopoAuth({
+          role: diretto.role,
+          goToChoice: diretto.goToChoice ?? false,
+          tenantName: diretto.tenantName ?? null,
+          tenantId: diretto.tenantId ?? null,
+        });
+      }
     } catch (err) {
       console.error('Errore durante il login:', err);
       setErrore('Errore imprevisto durante il login. Riprova.');

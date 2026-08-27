@@ -16,6 +16,12 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { pool } from '@/lib/db';
 import { avviaChallengeMfa } from '@/app/actions/mfa';
+import { creaSessione } from '@/lib/sessione';
+
+// Interruttore: il SUPERADMIN di sistema è escluso dal controllo MFA (OTP/PIN)
+// e accede con la sola password, fino a nuova richiesta. Rimettere a `true`
+// per rimetterlo, come tutti gli altri utenti, nel flusso a tre fattori.
+const MFA_SUPERADMIN = false;
 
 export interface WorkspaceDinamico {
   id: string;
@@ -175,6 +181,12 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
       }
       if (!confrontoSicuro(password, SUPERADMIN_PASSWORD)) {
         return { success: false, error: 'Parola chiave Superadmin errata.' };
+      }
+
+      if (!MFA_SUPERADMIN) {
+        // Superadmin escluso dall'MFA: sessione diretta con la sola password.
+        await creaSessione('SUPERADMIN', null);
+        return { success: true, role: 'SUPERADMIN', goToChoice: true };
       }
 
       // Password OK: si passa all'MFA (TOTP + PIN). La sessione verrà creata

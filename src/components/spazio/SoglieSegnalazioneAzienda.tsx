@@ -25,6 +25,8 @@ import {
   type ValoriSoglie,
 } from '@/app/actions/soglie25novies';
 import { ETICHETTA_ENTE, type EsitoSoglie, type Ente25Novies } from '@/lib/soglie25novies/calcolo';
+import { Testata25Novies } from '@/components/spazio/Testata25Novies';
+import { annoVerifica } from '@/lib/soglie25novies/coerenza';
 
 interface Props {
   nomeSchema: string;
@@ -88,6 +90,8 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
   const [salvataggio, setSalvataggio] = useState(false);
   const [messaggio, setMessaggio] = useState<string | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
+  // Cambia a ogni salvataggio: forza il ricalcolo della Testata 25-novies in cima.
+  const [versioneDati, setVersioneDati] = useState(0);
 
   const valuta = useCallback(async () => {
     const r = await valutaSoglieAction(nomeSchema, aziendaId, tipoSpazio);
@@ -124,6 +128,7 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
     if (r.success) {
       setValori((v) => ({ ...v, soglieAggiornateAl: new Date().toISOString().slice(0, 10) }));
       setMessaggio('Valori salvati.');
+      setVersioneDati((n) => n + 1);
       await valuta();
     } else {
       setErrore(r.error ?? 'Salvataggio non riuscito.');
@@ -137,6 +142,15 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
 
   return (
     <div className="space-y-5">
+      {/* ---- Testata art. 25-novies: il verdetto, sempre in cima -------- */}
+      <Testata25Novies
+        nomeSchema={nomeSchema}
+        aziendaId={aziendaId}
+        tipoSpazio={tipoSpazio}
+        compatta
+        refreshKey={versioneDati}
+      />
+
       {/* ---- Inserimento ------------------------------------------------ */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-5">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
@@ -187,8 +201,12 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <CampoEuro
-              etichetta="Contributi scaduti e non versati"
-              fonte="Dai flussi UNIEMENS inviati all'istituto, o dal file V.E.R.A. richiesto all'INPS."
+              etichetta={`Contributi scaduti e non versati${
+                annoVerifica(valori.annoContributiDovuti) !== null
+                  ? ` (anno di verifica ${annoVerifica(valori.annoContributiDovuti)})`
+                  : ''
+              }`}
+              fonte="Dai flussi UNIEMENS inviati all'istituto, o dal file V.E.R.A. richiesto all'INPS. Si riferiscono all'anno di verifica = anno di riferimento + 1."
               valore={valori.contributiScaduti}
               onCambia={(v) => setValori({ ...valori, contributiScaduti: v })}
             />
@@ -214,7 +232,19 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
                 }
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
-              <p className="text-[10px] text-slate-400 mt-1">Anno cui si riferisce il totale.</p>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Anno dei contributi DOVUTI (base del 30%).
+                {annoVerifica(valori.annoContributiDovuti) !== null && (
+                  <>
+                    {' '}
+                    I contributi scaduti si verificano sull&apos;anno di riferimento + 1 ={' '}
+                    <strong className="text-slate-600">
+                      anno di verifica {annoVerifica(valori.annoContributiDovuti)}
+                    </strong>
+                    .
+                  </>
+                )}
+              </p>
             </div>
             <CampoEuro
               etichetta="Sanzioni presunte (V.E.R.A.)"

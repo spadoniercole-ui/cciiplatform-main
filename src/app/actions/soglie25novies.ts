@@ -22,6 +22,10 @@ import {
   type FormaAER,
 } from '@/lib/soglie25novies/calcolo';
 import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
+import { calcolaCoerenza, type EsitoCoerenza } from '@/lib/soglie25novies/coerenza';
+import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
+import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
+import { ottieniCategorieTipoDebito } from '@/app/actions/categorieTipoDebito';
 
 export interface ValoriSoglie {
   conLavoratoriSubordinati: boolean | null;
@@ -210,5 +214,94 @@ export async function valutaSoglieAction(
   } catch (error: unknown) {
     console.error('[valutaSoglieAction] Errore:', error);
     return { success: false, error: `Valutazione non riuscita: ${(error as Error).message}` };
+  }
+}
+
+export interface RisultatoCoerenzaSoglie {
+  success: boolean;
+  coerenza?: EsitoCoerenza;
+  totaleImportiMappa?: number;
+  totaleDebitoria?: number | null;
+  anniDebitoria?: number[];
+  totaleVera?: number | null;
+  error?: string;
+}
+
+/**
+ * Controlli di coerenza (non bloccanti) fra la mappa soglie e i dati
+ * oggettivi (Posizione Debitoria + VERA). Ricalcolati al volo, mai memorizzati.
+ */
+export async function verificaCoerenzaSoglieAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<RisultatoCoerenzaSoglie> {
+  try {
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+
+    const [lettura, debitiRis, veraRis, categorieRis] = await Promise.all([
+      ottieniValoriSoglieAction(nomeSchema, aziendaId),
+      ottieniDebitiEnte(nomeSchema, aziendaId),
+      ottieniDebitiVera(nomeSchema, aziendaId),
+      ottieniCategorieTipoDebito(nomeSchema),
+    ]);
+    if (!lettura.success || !lettura.valori) {
+      return { success: false, error: lettura.error };
+    }
+    const v = lettura.valori;
+
+    // Somma degli importi «da segnalazione» inseriti nella mappa.
+    const importi = [v.contributiScaduti, v.premiInail, v.ivaScaduta, v.creditiAffidatiAer];
+    const totaleImportiMappa = importi.reduce<number>((acc, n) => acc + (n ?? 0), 0);
+    const mappaCompilata = importi.some((n) => n !== null && n !== undefined);
+
+    // Esposizione + anni dalla Posizione Debitoria (solo categorie che contribuiscono).
+    let totaleDebitoria: number | null = null;
+    const anniSet = new Set<number>();
+    if (debitiRis.success && debitiRis.righe.length > 0) {
+      const noContrib = new Set(
+        (categorieRis.success ? categorieRis.categorie : [])
+          .filter((c) => c.contribuisce === false)
+          .map((c) => c.codice)
+      );
+      totaleDebitoria = debitiRis.righe
+        .filter((r) => !noContrib.has(r.tipo))
+        .reduce((acc, r) => acc + (r.importo - (r.importoVersato ?? 0)), 0);
+      for (const r of debitiRis.righe) {
+        if (r.data) {
+          const anno = Number(String(r.data).slice(0, 4));
+          if (!Number.isNaN(anno)) anniSet.add(anno);
+        }
+      }
+    }
+    const anniDebitoria = Array.from(anniSet).sort();
+
+    // Esposizione VERA (contabilizzato + da contabilizzare).
+    let totaleVera: number | null = null;
+    if (veraRis.success && veraRis.righe.length > 0) {
+      totaleVera = veraRis.righe
+        .filter((r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare')
+        .reduce((acc, r) => acc + r.importo, 0);
+    }
+
+    const coerenza = calcolaCoerenza({
+      totaleImportiMappa,
+      mappaCompilata,
+      annoRiferimento: v.annoContributiDovuti,
+      totaleDebitoria,
+      anniDebitoria,
+      totaleVera,
+    });
+
+    return {
+      success: true,
+      coerenza,
+      totaleImportiMappa,
+      totaleDebitoria,
+      anniDebitoria,
+      totaleVera,
+    };
+  } catch (error: unknown) {
+    console.error('[verificaCoerenzaSoglieAction] Errore:', error);
+    return { success: false, error: `Verifica coerenza non riuscita: ${(error as Error).message}` };
   }
 }

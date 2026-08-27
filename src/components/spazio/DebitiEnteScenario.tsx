@@ -47,6 +47,7 @@ import {
   type SezioneEstratta,
 } from '@/lib/debitiEnte/tracciatoCore';
 import { raggruppaPerTipoDebito, etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
+import { RiepilogoCategoriaAnno } from '@/components/spazio/RiepilogoCategoriaAnno';
 import { esportaDebitiEnteExcel } from '@/lib/debitiEnte/excelDebitiEnte';
 import { useDichiaraContestoAssistente } from '@/components/ContestoAssistenteContext';
 
@@ -589,6 +590,19 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
           leggerlo; ai successivi lo applico da solo, chiedendoti solo i codici mai visti.
         </p>
       </div>
+
+      {righe.length > 0 && (
+        <RiepilogoCategoriaAnno
+          titolo="Riepilogo per categoria e anno"
+          voci={righe.map((r) => ({
+            categoria: mappaEtichette[r.tipo] || etichettaTipoDebito(r.tipo),
+            anno: r.data ? Number(String(r.data).slice(0, 4)) : null,
+            importo: r.importo - (r.importoVersato ?? 0),
+          }))}
+          conAnno
+          nota="Saldo per categoria (importo − versato) distribuito per anno di riferimento della riga. Le righe senza data compaiono nella colonna «—»."
+        />
+      )}
 
       {errore && (
         <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">

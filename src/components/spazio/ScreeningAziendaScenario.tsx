@@ -17,6 +17,7 @@ import type { AnalisiXbrlResult } from '@/lib/xbrl/types';
 import { stampaTesto } from '@/lib/stampaTesto';
 import { TestoConNormativa } from '@/components/spazio/TestoConNormativa';
 import { RiscontriNormativi } from '@/components/spazio/RiscontriNormativi';
+import { Testata25Novies } from '@/components/spazio/Testata25Novies';
 
 interface Props {
   nomeSchema: string;
@@ -174,6 +175,16 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
 
   return (
     <div className="space-y-6">
+      {/* Testata art. 25-novies: il verdetto sulle soglie, PRIMA della relazione.
+          Per il ricevente è l'elemento decisivo; la relazione, sotto, corrobora. */}
+      <Testata25Novies
+        nomeSchema={nomeSchema}
+        aziendaId={aziendaId}
+        codice={codice}
+        tipoSpazio={tipoSpazio}
+        hrefScheda={`/spazio/${codice}/aziende/${aziendaId}/posizione-ente`}
+      />
+
       <div>
         <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">Screening</h2>
         <p className="text-[11px] text-slate-500 mt-1">

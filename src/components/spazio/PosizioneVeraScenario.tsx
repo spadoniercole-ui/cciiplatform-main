@@ -42,6 +42,7 @@ import {
 import { ottieniDebitiEnte, type RigaDebitoEnte } from '@/app/actions/debitiEnte';
 import { etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
 import { stampaHtml } from '@/lib/stampaTesto';
+import { RiepilogoCategoriaAnno } from '@/components/spazio/RiepilogoCategoriaAnno';
 
 interface Props {
   nomeSchema: string;
@@ -451,6 +452,23 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
           differenza è il non contabilizzato che, in presenza di proposta, andrà contabilizzato.
         </p>
       </div>
+
+      {righeVera.length > 0 && (
+        <RiepilogoCategoriaAnno
+          titolo="Riepilogo per categoria"
+          voci={righeVera
+            .filter(
+              (r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare'
+            )
+            .map((r) => ({
+              categoria: r.categoria || 'Non classificato',
+              anno: null,
+              importo: r.importo,
+            }))}
+          conAnno={false}
+          nota="Contabilizzato + da contabilizzare, per categoria. Il file V.E.R.A. non espone l'anno per riga: il controllo d'anno si fa sulla Posizione Debitoria."
+        />
+      )}
 
       {errore && (
         <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">

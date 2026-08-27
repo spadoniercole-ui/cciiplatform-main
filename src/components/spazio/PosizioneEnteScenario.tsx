@@ -26,6 +26,7 @@ import { IdCard, Scale, Lock, ClipboardCheck, Gauge } from 'lucide-react';
 import { AnagraficaEnteScenario } from '@/components/spazio/AnagraficaEnteScenario';
 import { DebitiEnteScenario } from '@/components/spazio/DebitiEnteScenario';
 import { PosizioneVeraScenario } from '@/components/spazio/PosizioneVeraScenario';
+import { Testata25Novies } from '@/components/spazio/Testata25Novies';
 import { SoglieSegnalazioneAzienda } from '@/components/spazio/SoglieSegnalazioneAzienda';
 import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import { ottieniAnagraficaEnte, type AnagraficaEnte } from '@/app/actions/anagraficaEnte';
@@ -119,6 +120,16 @@ export function PosizioneEnteScenario({ nomeSchema, aziendaId, nomeAzienda, tipo
           azienda.
         </p>
       </div>
+
+      {/* Testata art. 25-novies: sintesi trasversale in cima alla Posizione Ente. */}
+      {eEnte && (
+        <Testata25Novies
+          nomeSchema={nomeSchema}
+          aziendaId={aziendaId}
+          tipoSpazio={tipoSpazio}
+          refreshKey={scheda === 'soglie' ? 1 : 0}
+        />
+      )}
 
       <div className="flex gap-2 overflow-x-auto pb-1">
         {schedeVisibili.map((s) => {
