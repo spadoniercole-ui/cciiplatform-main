@@ -15,7 +15,8 @@ import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { pool } from '@/lib/db';
-import { avviaChallengeMfa } from '@/app/actions/mfa';
+
+const DURATA_SESSIONE_ORE = 8;
 
 export interface WorkspaceDinamico {
   id: string;
@@ -34,6 +35,39 @@ function confrontoSicuro(a: string, b: string): boolean {
     return false;
   }
   return crypto.timingSafeEqual(bufA, bufB);
+}
+
+async function creaSessione(
+  ruolo: 'SUPERADMIN' | 'USER',
+  workspaceId: number | null,
+  email?: string,
+  username?: string
+) {
+  const { assicuraTabellaSessioni } = await import('@/db/ensureTables');
+  await assicuraTabellaSessioni();
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const scadenza = new Date(Date.now() + DURATA_SESSIONE_ORE * 60 * 60 * 1000);
+
+  // Identità della sessione: lo username (chiave di login). L'email resta
+  // memorizzata solo per la visualizzazione (tracciamento azioni).
+  await pool.query(
+    'INSERT INTO sessioni (token, ruolo, workspace_id, email, username, expires_at) VALUES ($1, $2, $3, $4, $5, $6)',
+    [token, ruolo, workspaceId, email || null, username || null, scadenza]
+  );
+
+  const cookieStore = await cookies();
+  cookieStore.set('session_token', token, {
+    httpOnly: true,
+    // Secure solo in produzione E non nell'edizione portable: la portable
+    // gira su http://127.0.0.1 (HTTP semplice), e un cookie Secure verrebbe
+    // scartato dal browser su HTTP, impedendo il login (loop sulla pagina
+    // di accesso). In cloud (Vercel, HTTPS) resta Secure.
+    secure: process.env.NODE_ENV === 'production' && process.env.PORTABLE !== '1',
+    sameSite: 'lax',
+    path: '/',
+    expires: scadenza,
+  });
 }
 
 interface SchemaAdminTrovato {
@@ -177,19 +211,8 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
         return { success: false, error: 'Parola chiave Superadmin errata.' };
       }
 
-      // Password OK: si passa all'MFA (TOTP + PIN). La sessione verrà creata
-      // solo al completamento dei tre fattori.
-      const { next } = await avviaChallengeMfa({
-        identitaKey: `SUPER:${SUPERADMIN_USER}`,
-        ruolo: 'SUPERADMIN',
-        workspaceId: null,
-        email: null,
-        username: SUPERADMIN_USER,
-        codiceSpazio: null,
-        tenantId: null,
-        goToChoice: true,
-      });
-      return { success: true, mfa: true, next };
+      await creaSessione('SUPERADMIN', null);
+      return { success: true, role: 'SUPERADMIN', goToChoice: true };
     }
 
     // 2. ACCESSO ADMIN DI SPAZIO, con password hashata con bcrypt.
@@ -243,17 +266,19 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
             return { success: false, error: 'Credenziali non valide.' };
           }
 
-          const { next } = await avviaChallengeMfa({
-            identitaKey: `USER:${username}`,
-            ruolo: 'USER',
-            workspaceId: schemaAdmin.spazioId,
-            email: (utenteDb[0].email || '').toLowerCase(),
-            username,
-            codiceSpazio: schemaAdmin.codiceSpazio,
-            tenantId: String(utenteDb[0].id),
+          await creaSessione(
+            'USER',
+            schemaAdmin.spazioId,
+            (utenteDb[0].email || '').toLowerCase(),
+            username
+          );
+          return {
+            success: true,
+            role: 'USER',
             goToChoice: false,
-          });
-          return { success: true, mfa: true, next };
+            tenantName: schemaAdmin.codiceSpazio,
+            tenantId: String(utenteDb[0].id),
+          };
         }
       }
 
@@ -300,17 +325,19 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
         return { success: false, error: 'Credenziali non valide.' };
       }
 
-      const { next } = await avviaChallengeMfa({
-        identitaKey: `USER:${username}`,
-        ruolo: 'USER',
-        workspaceId: schemaUtente.spazioId,
-        email: (utenteDb[0].email || '').toLowerCase(),
-        username,
-        codiceSpazio: schemaUtente.codiceSpazio,
-        tenantId: String(utenteDb[0].id),
+      await creaSessione(
+        'USER',
+        schemaUtente.spazioId,
+        (utenteDb[0].email || '').toLowerCase(),
+        username
+      );
+      return {
+        success: true,
+        role: 'USER',
         goToChoice: false,
-      });
-      return { success: true, mfa: true, next };
+        tenantName: schemaUtente.codiceSpazio,
+        tenantId: String(utenteDb[0].id),
+      };
     } catch (dbError: any) {
       console.error('Errore connessione database utenti:', dbError);
       return {

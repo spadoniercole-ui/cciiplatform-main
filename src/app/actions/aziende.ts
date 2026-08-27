@@ -33,6 +33,10 @@ export interface Azienda {
   numeroRea: string | null;
   pec: string | null;
   numeroSediSecondarie: number;
+  /** Test soglie INPS art. 25-novies. null = non dichiarato (tre stati). */
+  conLavoratoriSubordinati: boolean | null;
+  contributiDovutiAnnoPrecedente: number | null;
+  annoContributiDovuti: number | null;
 }
 
 export interface RisultatoElencoAziende {
@@ -68,6 +72,9 @@ export interface DatiAzienda {
   numeroRea?: string;
   pec?: string;
   numeroSediSecondarie?: number;
+  conLavoratoriSubordinati?: boolean | null;
+  contributiDovutiAnnoPrecedente?: number | null;
+  annoContributiDovuti?: number | null;
 }
 
 function mappaRigaAzienda(r: any): Azienda {
@@ -93,6 +100,19 @@ function mappaRigaAzienda(r: any): Azienda {
     numeroRea: r.numeroRea ?? null,
     pec: r.pec ?? null,
     numeroSediSecondarie: r.numeroSediSecondarie ?? 0,
+    // Attenzione: `?? null` e NON `?? false`. Il terzo stato (non
+    // dichiarato) deve sopravvivere fino alla griglia, che su di esso
+    // dichiara l'esito non determinabile invece di applicare la soglia
+    // sbagliata.
+    conLavoratoriSubordinati:
+      r.conLavoratoriSubordinati === null || r.conLavoratoriSubordinati === undefined
+        ? null
+        : Boolean(r.conLavoratoriSubordinati),
+    contributiDovutiAnnoPrecedente:
+      r.contributiDovutiAnnoPrecedente === null || r.contributiDovutiAnnoPrecedente === undefined
+        ? null
+        : Number(r.contributiDovutiAnnoPrecedente),
+    annoContributiDovuti: r.annoContributiDovuti ?? null,
   };
 }
 
@@ -117,6 +137,15 @@ function valoriDaDati(dati: DatiAzienda) {
     numeroRea: dati.numeroRea?.trim() || null,
     pec: dati.pec?.trim() || null,
     numeroSediSecondarie: dati.numeroSediSecondarie ?? 0,
+    conLavoratoriSubordinati:
+      dati.conLavoratoriSubordinati === undefined ? null : dati.conLavoratoriSubordinati,
+    contributiDovutiAnnoPrecedente:
+      dati.contributiDovutiAnnoPrecedente === undefined ||
+      dati.contributiDovutiAnnoPrecedente === null
+        ? null
+        : String(dati.contributiDovutiAnnoPrecedente),
+    annoContributiDovuti:
+      dati.annoContributiDovuti === undefined ? null : dati.annoContributiDovuti,
   };
 }
 

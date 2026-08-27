@@ -125,6 +125,29 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS numero_sedi_secondarie INTEGER NOT NULL DEFAULT 0`
   );
+
+  // Dati necessari al test delle soglie di segnalazione INPS (art. 25-novies,
+  // comma 1, lettera a) CCII), mostrato in testata allo Screening.
+  //
+  // FACOLTATIVI di proposito: renderli obbligatori manderebbe in arancione
+  // l'anagrafica di ogni azienda già inserita e bloccherebbe a cascata gli
+  // step successivi (semaforo della barra passi). Se mancano, la griglia
+  // dichiara di non poter determinare l'esito — non lo inventa.
+  //
+  // `con_lavoratori_subordinati` è volutamente NULLABLE a tre stati:
+  // TRUE / FALSE / NULL (non dichiarato). Un booleano a due stati con default
+  // FALSE farebbe passare per "impresa senza lavoratori" ogni azienda su cui
+  // nessuno si è ancora pronunciato, applicando la soglia sbagliata (5.000 €
+  // invece del concorso 30% + 15.000 €) senza che nessuno se ne accorga.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS con_lavoratori_subordinati BOOLEAN`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS contributi_dovuti_anno_precedente NUMERIC`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS anno_contributi_dovuti INTEGER`
+  );
 }
 
 /**

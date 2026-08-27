@@ -16,43 +16,94 @@ import { cifra, decifra } from '@/lib/portableCrypto';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-let pglite: any = null;
-let drizzleInstance: any = null;
-let inizializzazione: Promise<void> | null = null;
-let dirty = false;
-let dataFile = '';
-let passphrase = '';
+// ---------------------------------------------------------------------------
+// STATO CONDIVISO A LIVELLO DI PROCESSO (non a livello di modulo)
+//
+// Next.js compila l'applicazione in PIU' GRAFI DI MODULI separati che
+// convivono nello stesso processo Node: l'hook di instrumentation, le
+// Server Action e i Server Component non condividono la stessa copia di
+// un modulo. Con lo stato tenuto in variabili di modulo (`let pglite`),
+// ognuno di questi grafi otteneva la PROPRIA istanza di PGlite.
+//
+// Le conseguenze, misurate in sandbox: la sessione scritta dal login (una
+// istanza) risultava inesistente al controllo d'accesso della pagina
+// (un'altra istanza), e l'accesso rimbalzava senza alcun messaggio. Ma il
+// login era solo il sintomo piu' visibile: due o piu' istanze che scrivono
+// a turno lo stesso file cifrato si sovrascrivono a vicenda, e l'ultimo
+// salvataggio cancella in silenzio il lavoro degli altri. Su un prodotto
+// che gira da chiavetta e tiene i dati di una crisi d'impresa, e' una
+// perdita di dati, non un fastidio.
+//
+// Rimedio: un solo contenitore di stato appeso a `globalThis`. Tutte le
+// copie del modulo, in qualunque grafo si trovino, vedono lo STESSO
+// oggetto — quindi la stessa, unica istanza di PGlite.
+// ---------------------------------------------------------------------------
+
+type StatoPortable = {
+  pglite: any;
+  drizzleInstance: any;
+  inizializzazione: Promise<void> | null;
+  dirty: boolean;
+  dataFile: string;
+  passphrase: string;
+  autosaveAvviato: boolean;
+};
+
+const CHIAVE_GLOBALE = Symbol.for('cciiplatform.portableDb.stato');
+
+function statoCondiviso(): StatoPortable {
+  const g = globalThis as unknown as Record<symbol, StatoPortable | undefined>;
+  if (!g[CHIAVE_GLOBALE]) {
+    g[CHIAVE_GLOBALE] = {
+      pglite: null,
+      drizzleInstance: null,
+      inizializzazione: null,
+      dirty: false,
+      dataFile: '',
+      passphrase: '',
+      autosaveAvviato: false,
+    };
+  }
+  return g[CHIAVE_GLOBALE] as StatoPortable;
+}
+
+const stato = statoCondiviso();
 
 const MUTAZIONE = /^\s*(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|COMMENT|GRANT|REVOKE)/i;
 
 function segnaModificato() {
-  dirty = true;
+  stato.dirty = true;
 }
 
 async function persistiOra(): Promise<void> {
-  if (!pglite) return;
-  const dump = await pglite.dumpDataDir();
+  if (!stato.pglite) return;
+  const dump = await stato.pglite.dumpDataDir();
   const buf = Buffer.from(await dump.arrayBuffer());
-  const enc = cifra(buf, passphrase);
-  const tmp = dataFile + '.tmp';
+  const enc = cifra(buf, stato.passphrase);
+  const tmp = stato.dataFile + '.tmp';
   fs.writeFileSync(tmp, enc);
-  fs.renameSync(tmp, dataFile); // scrittura atomica: mai un file a metà
-  dirty = false;
+  fs.renameSync(tmp, stato.dataFile); // scrittura atomica: mai un file a metà
+  stato.dirty = false;
 }
 
 /** Salvataggio periodico (solo se ci sono state modifiche) + alla chiusura
  * del processo. Il dump è di qualche MB: per un uso mono-utente locale un
  * autosave ogni pochi secondi è ampiamente sufficiente. */
 function avviaAutosave() {
+  // Una sola volta per processo: senza questa guardia ogni copia del modulo
+  // installerebbe il proprio timer e i propri handler di chiusura.
+  if (stato.autosaveAvviato) return;
+  stato.autosaveAvviato = true;
+
   const intervallo = Number(process.env.PORTABLE_AUTOSAVE_MS || 8000);
   const timer = setInterval(() => {
-    if (dirty) persistiOra().catch((e) => console.error('[portableDb] autosave fallito:', e));
+    if (stato.dirty) persistiOra().catch((e) => console.error('[portableDb] autosave fallito:', e));
   }, intervallo);
   if (typeof timer.unref === 'function') timer.unref();
 
   const chiudi = async () => {
     try {
-      if (dirty) await persistiOra();
+      if (stato.dirty) await persistiOra();
     } catch (e) {
       console.error('[portableDb] persist finale fallito:', e);
     }
@@ -69,43 +120,43 @@ function avviaAutosave() {
 }
 
 export function portableDbPronto(): boolean {
-  return !!pglite && !!drizzleInstance;
+  return !!stato.pglite && !!stato.drizzleInstance;
 }
 
 export async function initPortableDb(): Promise<void> {
-  if (pglite) return;
-  if (inizializzazione) return inizializzazione;
-  inizializzazione = (async () => {
+  if (stato.pglite) return;
+  if (stato.inizializzazione) return stato.inizializzazione;
+  stato.inizializzazione = (async () => {
     const { PGlite } = await import('@electric-sql/pglite');
     const { drizzle } = await import('drizzle-orm/pglite');
 
     const dataDir = process.env.PORTABLE_DATA_DIR || path.join(process.cwd(), 'dati');
-    dataFile = process.env.PORTABLE_DB_FILE || path.join(dataDir, 'ccii.db.enc');
-    passphrase = process.env.PORTABLE_PASSPHRASE || '';
-    if (!passphrase) {
+    stato.dataFile = process.env.PORTABLE_DB_FILE || path.join(dataDir, 'ccii.db.enc');
+    stato.passphrase = process.env.PORTABLE_PASSPHRASE || '';
+    if (!stato.passphrase) {
       throw new Error(
         'PORTABLE_PASSPHRASE mancante: l’edizione portable richiede una passphrase per cifrare il database.'
       );
     }
-    fs.mkdirSync(path.dirname(dataFile), { recursive: true });
+    fs.mkdirSync(path.dirname(stato.dataFile), { recursive: true });
 
     let fresco = false;
-    if (fs.existsSync(dataFile)) {
-      const enc = fs.readFileSync(dataFile);
+    if (fs.existsSync(stato.dataFile)) {
+      const enc = fs.readFileSync(stato.dataFile);
       let plain: Buffer;
       try {
-        plain = decifra(enc, passphrase);
+        plain = decifra(enc, stato.passphrase);
       } catch {
         throw new Error(
           'Passphrase errata o database danneggiato: impossibile aprire il database cifrato.'
         );
       }
-      pglite = await PGlite.create({ loadDataDir: new Blob([new Uint8Array(plain)]) });
+      stato.pglite = await PGlite.create({ loadDataDir: new Blob([new Uint8Array(plain)]) });
     } else {
-      pglite = await PGlite.create();
+      stato.pglite = await PGlite.create();
       fresco = true;
     }
-    drizzleInstance = drizzle(pglite);
+    stato.drizzleInstance = drizzle(stato.pglite);
     avviaAutosave();
 
     // Tabelle globali di sistema (schema public) garantite ad OGNI avvio,
@@ -124,7 +175,7 @@ export async function initPortableDb(): Promise<void> {
     }
     await persistiOra();
   })();
-  return inizializzazione;
+  return stato.inizializzazione;
 }
 
 function normalizzaRisultato(r: any) {
@@ -134,18 +185,18 @@ function normalizzaRisultato(r: any) {
 }
 
 async function eseguiQuery(text: string, params?: any[]) {
-  if (!pglite) await initPortableDb();
+  if (!stato.pglite) await initPortableDb();
   if (params && params.length) {
-    return normalizzaRisultato(await pglite.query(text, params));
+    return normalizzaRisultato(await stato.pglite.query(text, params));
   }
   try {
-    return normalizzaRisultato(await pglite.query(text));
+    return normalizzaRisultato(await stato.pglite.query(text));
   } catch (e: any) {
     // PGlite.query gestisce una singola istruzione: se il testo ne contiene
     // più d'una (raro nel codice, che segue la disciplina "un DDL per query"),
     // si ripiega su exec.
     if (/cannot insert multiple commands|multiple statements|syntax/i.test(String(e?.message))) {
-      await pglite.exec(text);
+      await stato.pglite.exec(text);
       return { rows: [], rowCount: 0, fields: [] };
     }
     throw e;
@@ -162,7 +213,7 @@ export const portablePool = {
     return eseguiQuery(text, params);
   },
   async connect() {
-    if (!pglite) await initPortableDb();
+    if (!stato.pglite) await initPortableDb();
     return {
       async query(text: string, params?: any[]) {
         if (MUTAZIONE.test(text)) segnaModificato();
@@ -174,7 +225,7 @@ export const portablePool = {
     };
   },
   async end() {
-    if (dirty) await persistiOra();
+    if (stato.dirty) await persistiOra();
   },
 };
 
@@ -188,13 +239,13 @@ export const portableDrizzle: any = new Proxy(
       if (['insert', 'update', 'delete', 'execute', 'transaction'].includes(prop)) {
         segnaModificato();
       }
-      if (!drizzleInstance) {
+      if (!stato.drizzleInstance) {
         throw new Error(
           '[portableDb] Drizzle non ancora inizializzato (init all’avvio non completato).'
         );
       }
-      const v = drizzleInstance[prop];
-      return typeof v === 'function' ? v.bind(drizzleInstance) : v;
+      const v = stato.drizzleInstance[prop];
+      return typeof v === 'function' ? v.bind(stato.drizzleInstance) : v;
     },
   }
 );

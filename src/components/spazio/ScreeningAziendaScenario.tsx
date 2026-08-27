@@ -17,6 +17,7 @@ import type { AnalisiXbrlResult } from '@/lib/xbrl/types';
 import { stampaTesto } from '@/lib/stampaTesto';
 import { TestoConNormativa } from '@/components/spazio/TestoConNormativa';
 import { RiscontriNormativi } from '@/components/spazio/RiscontriNormativi';
+import { GrigliaSoglie25Novies } from '@/components/spazio/GrigliaSoglie25Novies';
 
 interface Props {
   nomeSchema: string;
@@ -203,6 +204,18 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           <p>{errore}</p>
         </div>
       )}
+
+      {/* PRIMO PUNTO DELL'ANALISI, in testata: le soglie di segnalazione.
+          Mostrata a entrambi i percorsi, con letture diverse: all'Ente dice
+          se comunicare, al Redigente quanto tempo resta prima che la
+          segnalazione parta. Il calcolo è identico — la soglia di legge non
+          dipende da chi la guarda. */}
+      <GrigliaSoglie25Novies
+        nomeSchema={nomeSchema}
+        aziendaId={aziendaId}
+        codice={codice}
+        prospettiva={tipoSpazio === 'ENTE' ? 'ENTE' : 'NON_ENTE'}
+      />
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
         <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
