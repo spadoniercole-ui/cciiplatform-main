@@ -647,6 +647,53 @@ export async function rigeneraPasswordAdminSpazioAction(
 }
 
 /**
+ * Sgancia l'MFA di un Admin di Spazio (usato dal Superadmin in manutenzione):
+ * azzera l'enrollment TOTP e, se richiesto, il PIN. L'admin viene prima
+ * verificato in admin_workspace dello schema, poi si aggiorna la credenziale
+ * MFA centrale per la sua identità `USER:<username>`.
+ */
+export async function resettaMfaAdminAction(
+  nomeSchema: string,
+  adminId: number,
+  cosa: 'AUTHENTICATOR' | 'TUTTO'
+): Promise<{ success: boolean; esisteva?: boolean; error?: string }> {
+  try {
+    const { db } = await import('@/db/client');
+    const { getTabelleTenant } = await import('@/db/schema');
+    const { eq } = await import('drizzle-orm');
+    const { pool } = await import('@/lib/db');
+    const { assicuraTabelleMfa } = await import('@/db/ensureTables');
+    const tabelle = getTabelleTenant(nomeSchema);
+
+    const righe = await db
+      .select({ username: tabelle.admin_workspace.username })
+      .from(tabelle.admin_workspace)
+      .where(eq(tabelle.admin_workspace.id, adminId))
+      .limit(1);
+
+    if (righe.length === 0 || !righe[0].username) {
+      return { success: false, error: 'Admin non trovato in questo spazio.' };
+    }
+    const identitaKey = `USER:${righe[0].username}`;
+
+    await assicuraTabelleMfa();
+    const set =
+      cosa === 'TUTTO'
+        ? 'totp_attivo = FALSE, totp_secret = NULL, pin_hash = NULL, updated_at = now()'
+        : 'totp_attivo = FALSE, totp_secret = NULL, updated_at = now()';
+    const ris = await pool.query(
+      `UPDATE public.mfa_credenziali SET ${set} WHERE identita_key = $1`,
+      [identitaKey]
+    );
+
+    return { success: true, esisteva: (ris.rowCount ?? 0) > 0 };
+  } catch (error: any) {
+    console.error('[resettaMfaAdminAction] Errore:', error);
+    return { success: false, error: `Impossibile resettare l'MFA: ${error.message || error}` };
+  }
+}
+
+/**
  * Il superadmin (in manutenzione dello spazio) modifica l'email di contatto
  * di un Admin di Spazio. L'email NON è più la chiave di login (lo è lo
  * username), quindi cambiarla è un'operazione sicura: non tocca né

@@ -6,8 +6,8 @@
 // un problema per gli admin creati prima che questo pulsante esistesse.
 
 import React, { useState } from 'react';
-import { KeyRound, Copy, RefreshCw, Download } from 'lucide-react';
-import { rigeneraPasswordAdminSpazioAction } from '@/app/actions/spazi';
+import { KeyRound, Copy, RefreshCw, Download, Smartphone } from 'lucide-react';
+import { rigeneraPasswordAdminSpazioAction, resettaMfaAdminAction } from '@/app/actions/spazi';
 
 interface Props {
   nomeSchema: string;
@@ -21,6 +21,27 @@ export function RigeneraPasswordAdmin({ nomeSchema, adminId, email, username }: 
   const [caricamento, setCaricamento] = useState(false);
   const [passwordGenerata, setPasswordGenerata] = useState<string | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
+  const [mfaMenu, setMfaMenu] = useState(false);
+  const [mfaEsito, setMfaEsito] = useState<string | null>(null);
+
+  const handleResetMfa = async (cosa: 'AUTHENTICATOR' | 'TUTTO') => {
+    setMfaMenu(false);
+    setMfaEsito(null);
+    const r = await resettaMfaAdminAction(nomeSchema, adminId, cosa);
+    if (!r.success) {
+      setErrore(r.error || 'Reset MFA non riuscito.');
+      return;
+    }
+    const chi = username || "l'admin";
+    const base = cosa === 'TUTTO' ? 'Authenticator e PIN azzerati' : 'Authenticator sganciato';
+    setMfaEsito(
+      r.esisteva
+        ? `${base}: al prossimo accesso ${chi} riconfigurerà l'app (nuovo QR)${
+            cosa === 'TUTTO' ? ' e reimposterà il PIN' : ''
+          }.`
+        : `${base}. ${chi} non aveva ancora attivato l'MFA: configurerà tutto al primo accesso.`
+    );
+  };
 
   const handleScaricaCredenziali = () => {
     if (!passwordGenerata) return;
@@ -68,16 +89,65 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
 
   return (
     <div className="mt-2">
-      {!passwordGenerata && (
+      <div className="flex flex-wrap items-center gap-2">
+        {!passwordGenerata && (
+          <button
+            type="button"
+            onClick={handleRigenera}
+            disabled={caricamento}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold text-[10px] uppercase tracking-wider rounded-md transition-colors"
+          >
+            <KeyRound className="w-3 h-3" />
+            {caricamento ? 'Generazione...' : 'Rigenera Password'}
+          </button>
+        )}
         <button
           type="button"
-          onClick={handleRigenera}
-          disabled={caricamento}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-bold text-[10px] uppercase tracking-wider rounded-md transition-colors"
+          onClick={() => setMfaMenu((v) => !v)}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 font-bold text-[10px] uppercase tracking-wider rounded-md transition-colors ${
+            mfaMenu ? 'bg-blue-600 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+          }`}
         >
-          <KeyRound className="w-3 h-3" />
-          {caricamento ? 'Generazione...' : 'Rigenera Password'}
+          <Smartphone className="w-3 h-3" /> Reset MFA
         </button>
+      </div>
+
+      {mfaMenu && (
+        <div className="mt-1.5 text-[11px] text-slate-700 bg-blue-50 border border-blue-200 rounded-lg p-2.5">
+          <p className="text-[10px] text-slate-500 mb-2 leading-relaxed">
+            Sgancia l&apos;authenticator di questo admin (telefono perso/cambiato): al prossimo
+            accesso gli ricomparirà il QR per registrare di nuovo l&apos;app.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => handleResetMfa('AUTHENTICATOR')}
+              className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase rounded transition-colors"
+            >
+              Sgancia authenticator
+            </button>
+            <button
+              type="button"
+              onClick={() => handleResetMfa('TUTTO')}
+              className="px-2.5 py-1.5 bg-white border border-slate-300 hover:border-red-400 hover:text-red-700 text-slate-700 font-bold text-[10px] uppercase rounded transition-colors"
+            >
+              Reset completo (anche PIN)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mfaEsito && (
+        <div className="mt-1.5 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 flex items-start gap-2">
+          <span>{mfaEsito}</span>
+          <button
+            type="button"
+            onClick={() => setMfaEsito(null)}
+            className="ml-auto underline font-bold shrink-0"
+          >
+            Chiudi
+          </button>
+        </div>
       )}
 
       {errore && <p className="text-[10px] text-red-600 mt-1">{errore}</p>}
