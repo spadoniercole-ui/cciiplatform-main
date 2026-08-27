@@ -71,7 +71,7 @@ function CampoEuro({
         step="0.01"
         value={testo(valore)}
         onChange={(e) => onCambia(numero(e.target.value))}
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500"
       />
       <p className="text-[10px] text-slate-400 mt-1 leading-snug">{fonte}</p>
     </div>
@@ -174,7 +174,7 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
                   conLavoratoriSubordinati: e.target.value === '' ? null : e.target.value === 'si',
                 })
               }
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
             >
               <option value="">Non dichiarato</option>
               <option value="si">Sì — l&apos;impresa ha lavoratori</option>
@@ -212,7 +212,7 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
                 onChange={(e) =>
                   setValori({ ...valori, annoContributiDovuti: numero(e.target.value) })
                 }
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
               <p className="text-[10px] text-slate-400 mt-1">Anno cui si riferisce il totale.</p>
             </div>
