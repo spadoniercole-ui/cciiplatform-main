@@ -13,9 +13,14 @@ import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { generaDumpDatiAction } from '@/app/actions/dumpDati';
 import { azzeraDatabaseCompletoAction } from '@/app/actions/azzeraDatabase';
+import { generaBackupCompletoAction, type RisultatoBackup } from '@/app/actions/backupDatabase';
 
 export function ModuloParametri() {
   const [dumpInCorso, setDumpInCorso] = useState(false);
+  const [backupInCorso, setBackupInCorso] = useState(false);
+  const [passphraseBackup, setPassphraseBackup] = useState('');
+  const [passphraseConferma, setPassphraseConferma] = useState('');
+  const [esitoBackup, setEsitoBackup] = useState<RisultatoBackup | null>(null);
   const [azzeramentoInCorso, setAzzeramentoInCorso] = useState(false);
   const [confermaAzzeramento, setConfermaAzzeramento] = useState('');
 
@@ -44,6 +49,39 @@ export function ModuloParametri() {
       toast.error('Errore durante la generazione del dump.');
     } finally {
       setDumpInCorso(false);
+    }
+  };
+
+  const handleBackup = async () => {
+    if (passphraseBackup !== passphraseConferma) return;
+    setBackupInCorso(true);
+    setEsitoBackup(null);
+    try {
+      const r = await generaBackupCompletoAction(passphraseBackup || undefined);
+      setEsitoBackup(r);
+      if (r.success && r.contenuto && r.nomeFile) {
+        // Scaricamento sul PC di chi sta operando: e' l'unico "locale" che
+        // esista nell'edizione cloud, dove il filesystem del server e'
+        // effimero. Nel portable il file viene ANCHE scritto su disco, e il
+        // percorso torna in `percorsoLocale`.
+        const blob = r.cifrato
+          ? new Blob([Uint8Array.from(atob(r.contenuto), (c) => c.charCodeAt(0))], {
+              type: 'application/octet-stream',
+            })
+          : new Blob([r.contenuto], { type: 'application/sql' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = r.nomeFile;
+        a.click();
+        URL.revokeObjectURL(url);
+        setPassphraseBackup('');
+        setPassphraseConferma('');
+      }
+    } catch (e) {
+      setEsitoBackup({ success: false, error: String(e) });
+    } finally {
+      setBackupInCorso(false);
     }
   };
 
@@ -91,7 +129,7 @@ export function ModuloParametri() {
             Dati e Manutenzione
           </h2>
           <p className="text-[11px] text-gray-400 font-mono">
-            Dump portabile ed azzeramento completo del database.
+            Dump portabile, backup completo ed azzeramento del database.
           </p>
         </div>
       </div>
@@ -112,6 +150,104 @@ export function ModuloParametri() {
           >
             {dumpInCorso ? 'Generazione in corso...' : 'Scarica dump dati'}
           </button>
+        </div>
+
+        <div className="space-y-3 pt-4 border-t border-gray-100">
+          <span className="text-xs font-mono font-bold text-gray-400 uppercase block">
+            Backup Completo del Database
+          </span>
+          <p className="text-xs font-mono text-gray-500">
+            Backup vero: schema, dati, vincoli, indici e valori correnti delle sequenze —
+            sufficiente a ricostruire il database da zero senza il codice applicativo. Diverso dal
+            dump qui sopra, che contiene i soli dati.
+          </p>
+          <p className="text-xs font-mono text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+            Il file contiene le credenziali: hash delle password, segreti TOTP, hash dei PIN e
+            sessioni. È una copia dell&apos;autenticazione a tre fattori. Va custodito come si
+            custodisce una password — o cifrato qui sotto.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-mono font-bold text-gray-400 uppercase block mb-1">
+                Passphrase di cifratura
+              </label>
+              <input
+                type="password"
+                value={passphraseBackup}
+                onChange={(e) => setPassphraseBackup(e.target.value)}
+                placeholder="vuota = file in chiaro"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl font-mono text-xs"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-mono font-bold text-gray-400 uppercase block mb-1">
+                Ripeti la passphrase
+              </label>
+              <input
+                type="password"
+                value={passphraseConferma}
+                onChange={(e) => setPassphraseConferma(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl font-mono text-xs"
+              />
+            </div>
+          </div>
+          {passphraseBackup !== passphraseConferma && (
+            <p className="text-[11px] font-mono text-red-600">Le due passphrase non coincidono.</p>
+          )}
+          {passphraseBackup.length > 0 && (
+            <p className="text-[11px] font-mono text-gray-500">
+              AES-256-GCM. Senza questa passphrase il backup è irrecuperabile: non esiste alcun modo
+              di rileggerlo, nemmeno da parte nostra.
+            </p>
+          )}
+
+          <button
+            onClick={handleBackup}
+            disabled={backupInCorso || passphraseBackup !== passphraseConferma}
+            className="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white font-mono text-xs font-bold uppercase rounded-xl transition-all"
+          >
+            {backupInCorso ? 'Generazione in corso...' : 'Genera e scarica backup'}
+          </button>
+
+          {esitoBackup && esitoBackup.success && (
+            <div className="text-[11px] font-mono space-y-1 border border-gray-200 rounded-xl p-3">
+              <p className="text-gray-700">
+                {esitoBackup.schemi} schemi · {esitoBackup.tabelle} tabelle ·{' '}
+                {esitoBackup.righe?.toLocaleString('it-IT')} righe ·{' '}
+                {Math.round((esitoBackup.byte ?? 0) / 1024).toLocaleString('it-IT')} KB
+                {esitoBackup.cifrato ? ' · cifrato' : ' · in chiaro'}
+              </p>
+              {esitoBackup.integrita?.integro ? (
+                <p className="text-emerald-700">
+                  Controllo d&apos;integrità superato: ogni tabella del catalogo è presente e con
+                  tutte le sue righe.
+                </p>
+              ) : (
+                <div className="text-red-700 space-y-1">
+                  <p className="font-bold">
+                    Controllo d&apos;integrità NON superato — non considerare valido questo file.
+                  </p>
+                  {esitoBackup.integrita?.tabelleMancanti.map((t) => (
+                    <p key={t}>Tabella assente: {t}</p>
+                  ))}
+                  {esitoBackup.integrita?.righeIncoerenti.map((r) => (
+                    <p key={r.tabella}>
+                      {r.tabella}: attese {r.attese} righe, scritte {r.scritte}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {esitoBackup.percorsoLocale && (
+                <p className="text-gray-500">
+                  Scritto anche su disco: {esitoBackup.percorsoLocale}
+                </p>
+              )}
+            </div>
+          )}
+          {esitoBackup && !esitoBackup.success && (
+            <p className="text-[11px] font-mono text-red-700">{esitoBackup.error}</p>
+          )}
         </div>
 
         <div className="space-y-3 pt-4 border-t border-red-100">

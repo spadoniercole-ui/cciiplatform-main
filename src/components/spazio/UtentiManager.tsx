@@ -8,13 +8,12 @@
 // su quali aziende un operatore lavora.
 
 import React, { useEffect, useState } from 'react';
-import { Users, Ban, RotateCcw, KeyRound, ShieldCheck, Copy, Smartphone } from 'lucide-react';
+import { Users, Ban, RotateCcw, KeyRound, ShieldCheck, Copy } from 'lucide-react';
 import {
   ottieniUtentiSpazio,
   disabilitaUtenteSpazioAction,
   riattivaUtenteSpazioAction,
   rigeneraPasswordUtenteAction,
-  resettaMfaUtenteAction,
   type UtenteSpazio,
 } from '@/app/actions/utenti';
 import { ottieniAziende, type Azienda } from '@/app/actions/aziende';
@@ -47,27 +46,6 @@ export function UtentiManager({ nomeSchema }: Props) {
     utenteId: number;
     password: string;
   } | null>(null);
-  const [mfaMenuId, setMfaMenuId] = useState<number | null>(null);
-  const [mfaEsito, setMfaEsito] = useState<{ utenteId: number; testo: string } | null>(null);
-
-  const handleResetMfa = async (utente: UtenteSpazio, cosa: 'AUTHENTICATOR' | 'TUTTO') => {
-    setMfaMenuId(null);
-    const r = await resettaMfaUtenteAction(nomeSchema, utente.id, cosa);
-    if (!r.success) {
-      alert(r.error || 'Reset MFA non riuscito.');
-      return;
-    }
-    const chi = utente.username || "l'operatore";
-    const base = cosa === 'TUTTO' ? 'Authenticator e PIN azzerati' : 'Authenticator sganciato';
-    setMfaEsito({
-      utenteId: utente.id,
-      testo: r.esisteva
-        ? `${base}: al prossimo accesso ${chi} riconfigurerà l'app (nuovo QR)${
-            cosa === 'TUTTO' ? ' e reimposterà il PIN' : ''
-          }.`
-        : `${base}. ${chi} non aveva ancora attivato l'MFA: configurerà tutto al primo accesso.`,
-    });
-  };
 
   const carica = async () => {
     setCaricamento(true);
@@ -230,14 +208,6 @@ export function UtentiManager({ nomeSchema }: Props) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setMfaMenuId(mfaMenuId === utente.id ? null : utente.id)}
-                    className={`p-1.5 ${mfaMenuId === utente.id ? 'text-blue-600' : 'text-slate-400 hover:text-blue-600'}`}
-                    title="Reset MFA / sgancia authenticator"
-                  >
-                    <Smartphone className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => handleToggleStato(utente)}
                     className="p-1.5 text-slate-400 hover:text-red-600"
                     title={utente.attivo ? 'Disabilita' : 'Riattiva'}
@@ -250,54 +220,6 @@ export function UtentiManager({ nomeSchema }: Props) {
                   </button>
                 </div>
               </div>
-
-              {mfaMenuId === utente.id && (
-                <div className="mt-1.5 ml-3 text-[11px] text-slate-700 bg-blue-50 border border-blue-200 rounded-lg p-2.5">
-                  <div className="flex items-center gap-1.5 font-bold text-blue-800 mb-1.5">
-                    <Smartphone className="w-3.5 h-3.5" /> Reset dei fattori MFA
-                  </div>
-                  <p className="text-[10px] text-slate-500 mb-2 leading-relaxed">
-                    Usalo se l&apos;operatore ha perso o cambiato il telefono. Al prossimo accesso
-                    gli ricomparirà il QR per registrare di nuovo l&apos;app.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleResetMfa(utente, 'AUTHENTICATOR')}
-                      className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase rounded transition-colors"
-                    >
-                      Sgancia authenticator
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleResetMfa(utente, 'TUTTO')}
-                      className="px-2.5 py-1.5 bg-white border border-slate-300 hover:border-red-400 hover:text-red-700 text-slate-700 font-bold text-[10px] uppercase rounded transition-colors"
-                    >
-                      Reset completo (anche PIN)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMfaMenuId(null)}
-                      className="ml-auto text-[10px] text-slate-400 hover:text-slate-600 underline font-bold"
-                    >
-                      Annulla
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {mfaEsito?.utenteId === utente.id && (
-                <div className="mt-1.5 ml-3 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 flex items-start gap-2">
-                  <span>{mfaEsito.testo}</span>
-                  <button
-                    type="button"
-                    onClick={() => setMfaEsito(null)}
-                    className="ml-auto underline font-bold shrink-0"
-                  >
-                    Chiudi
-                  </button>
-                </div>
-              )}
 
               {passwordAppenaGenerata?.utenteId === utente.id && (
                 <div className="mt-1.5 ml-3 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-center gap-2">

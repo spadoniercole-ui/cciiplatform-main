@@ -93,6 +93,72 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.34 — 2026-09-07
+
+**Backup vero del database, nei Parametri di sistema del Superadmin**
+
+Fino a ieri esisteva solo `dumpDati.ts`: SOLI INSERT, nessuno schema, pensato
+per migrare verso un database gia' inizializzato dal codice applicativo.
+Quello e' un export. Un backup deve poter ricostruire il database da zero
+SENZA il codice, perche' il giorno in cui serve un backup e' il giorno in cui
+non si puo' dare per scontato di avere il resto.
+
+**Contenuto**: CREATE SCHEMA, sequenze, CREATE TABLE con tipi/default/NOT
+NULL, INSERT di ogni riga, vincoli (PK, FK, UNIQUE, CHECK), indici, e
+`setval()` con i valori correnti delle sequenze.
+
+`pg_dump` non e' utilizzabile: su Vercel non si installano binari a runtime.
+Lo schema viene percio' ricostruito dal catalogo — ma non "a occhio": si usano
+`pg_get_constraintdef` e `pg_indexes.indexdef`, cioe' le funzioni con cui
+Postgres stampa le proprie definizioni.
+
+**Due direttrici, come richiesto.** Scaricamento sul PC di chi opera —
+l'unico "locale" possibile nell'edizione cloud, dove il filesystem del server
+e' effimero e un file scritto li' sparirebbe. E, nell'edizione portable,
+ANCHE scrittura su disco in `PORTABLE_BACKUP_DIR` (default: cartella `backup`
+accanto al database), con scrittura atomica .tmp + rinomina.
+
+**Cifratura AES-256-GCM** con passphrase, riusando `portableCrypto.ts`. Il
+file contiene hash delle password, segreti TOTP, hash dei PIN e sessioni: e'
+una copia dell'autenticazione a tre fattori, e l'interfaccia lo dice a chiare
+lettere. La passphrase di cifratura del file e la password di accesso al
+sistema sono cose distinte e separate: non si incontrano mai, ne' nel codice
+ne' nell'interfaccia.
+
+**Vincoli applicati DOPO i dati**: prima, una chiave esterna verso una tabella
+non ancora popolata farebbe fallire il ripristino a meta'.
+
+**Il backup e' verificato ripristinandolo davvero.** La generazione sta in
+`src/lib/backup/genera.ts`, separata dal pool: la Server Action le passa il
+database di produzione, i test le passano un PGlite temporaneo. Un solo
+generatore, e quel generatore e' provato. I test creano un database con
+dentro tutto cio' che di solito rompe un dump (SERIAL, FK, UNIQUE, CHECK,
+colonna array, jsonb, testo con apostrofi), generano il backup, lo eseguono su
+un database VUOTO e verificano che il secondo sia identico al primo.
+
+**Due difetti trovati proprio da quel test, entrambi invisibili a occhio:**
+
+1. *Le sequenze venivano create dopo le tabelle.* Ma i `DEFAULT nextval(...)`
+   delle colonne SERIAL le referenziano: il ripristino falliva alla prima
+   CREATE TABLE con "relation does not exist". Ora si creano prima e il valore
+   corrente si imposta in fondo, a dati caricati.
+2. *Un array vuoto produceva `ARRAY[]`*, che Postgres rifiuta ("cannot
+   determine type of empty array"). Ora usa `'{}'`. Tocca direttamente la
+   colonna `alias TEXT[]` dei Limiti di Ricevibilita': un'azienda senza alias
+   avrebbe fatto fallire il ripristino dell'INTERO database.
+
+**Controllo d'integrita'** a ogni generazione: confronta l'inventario del
+catalogo con cio' che e' stato davvero scritto, tabella per tabella e riga per
+riga, e lo mostra nell'interfaccia. Un dump troncato ha esattamente l'aspetto
+di uno riuscito.
+
+Verificato: type-check (entrambi i controlli), lint, **122 test** (di cui 20
+sul backup, con ripristino reale su PGlite), build cloud completa.
+
+**Non collaudato nell'interfaccia**: il pulsante nei Parametri di sistema non
+e' stato provato a mano in sandbox. La generazione sottostante e' verificata
+end-to-end dai test; l'involucro no.
+
 ## 0.109.33 — 2026-08-27
 
 Costruita sopra la 0.109.31 (quella con l'MFA a tre fattori). La 0.109.32 e'
