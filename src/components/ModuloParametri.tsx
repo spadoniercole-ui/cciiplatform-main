@@ -14,6 +14,11 @@ import { toast } from 'sonner';
 import { generaDumpDatiAction } from '@/app/actions/dumpDati';
 import { azzeraDatabaseCompletoAction } from '@/app/actions/azzeraDatabase';
 import { generaBackupCompletoAction, type RisultatoBackup } from '@/app/actions/backupDatabase';
+import {
+  provaRipristinoAction,
+  ripristinaDatabaseAction,
+  type RisultatoRipristino,
+} from '@/app/actions/ripristinaDatabase';
 
 export function ModuloParametri() {
   const [dumpInCorso, setDumpInCorso] = useState(false);
@@ -21,10 +26,22 @@ export function ModuloParametri() {
   const [passphraseBackup, setPassphraseBackup] = useState('');
   const [passphraseConferma, setPassphraseConferma] = useState('');
   const [esitoBackup, setEsitoBackup] = useState<RisultatoBackup | null>(null);
+  // Ripristino. `provaOk` è la guardia: il pulsante definitivo resta spento
+  // finché il file non ha superato l'esecuzione su un database temporaneo.
+  const [fileRipristino, setFileRipristino] = useState<{ nome: string; contenuto: string } | null>(
+    null
+  );
+  const [passphraseRipristino, setPassphraseRipristino] = useState('');
+  const [provaOk, setProvaOk] = useState(false);
+  const [provaInCorso, setProvaInCorso] = useState(false);
+  const [ripristinoInCorso, setRipristinoInCorso] = useState(false);
+  const [confermaRipristino, setConfermaRipristino] = useState('');
+  const [esitoRipristino, setEsitoRipristino] = useState<RisultatoRipristino | null>(null);
   const [azzeramentoInCorso, setAzzeramentoInCorso] = useState(false);
   const [confermaAzzeramento, setConfermaAzzeramento] = useState('');
 
   const FRASE_CONFERMA = 'AZZERA TUTTO';
+  const FRASE_RIPRISTINO = 'RIPRISTINA E SOVRASCRIVI';
 
   const handleScaricaDump = async () => {
     setDumpInCorso(true);
@@ -85,6 +102,79 @@ export function ModuloParametri() {
     }
   };
 
+  const scaricaTesto = (nome: string, contenuto: string) => {
+    const url = URL.createObjectURL(new Blob([contenuto], { type: 'application/sql' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nome;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileRipristino = async (f: File | null) => {
+    setProvaOk(false);
+    setEsitoRipristino(null);
+    setConfermaRipristino('');
+    if (!f) {
+      setFileRipristino(null);
+      return;
+    }
+    setFileRipristino({ nome: f.name, contenuto: await f.text() });
+  };
+
+  const handleProva = async () => {
+    if (!fileRipristino) return;
+    setProvaInCorso(true);
+    setEsitoRipristino(null);
+    try {
+      const r = await provaRipristinoAction(
+        fileRipristino.contenuto,
+        passphraseRipristino || undefined
+      );
+      setEsitoRipristino(r);
+      setProvaOk(r.success);
+    } catch (e) {
+      setEsitoRipristino({
+        success: false,
+        fase: 'prova',
+        databaseIntatto: true,
+        problemi: [String(e)],
+      });
+      setProvaOk(false);
+    } finally {
+      setProvaInCorso(false);
+    }
+  };
+
+  const handleRipristina = async () => {
+    if (!fileRipristino || !provaOk || confermaRipristino !== FRASE_RIPRISTINO) return;
+    setRipristinoInCorso(true);
+    try {
+      const r = await ripristinaDatabaseAction(
+        fileRipristino.contenuto,
+        passphraseRipristino || undefined
+      );
+      setEsitoRipristino(r);
+      // Il backup dello stato precedente viene scaricato SUBITO e da solo:
+      // è l'unica via di ritorno se il ripristino è andato storto, e in quel
+      // momento nessuno ha la lucidità di ricordarsi di premere un pulsante.
+      if (r.backupSicurezza) {
+        scaricaTesto(r.backupSicurezza.nomeFile, r.backupSicurezza.contenuto);
+      }
+      setConfermaRipristino('');
+      setProvaOk(false);
+    } catch (e) {
+      setEsitoRipristino({
+        success: false,
+        fase: 'esecuzione',
+        databaseIntatto: false,
+        problemi: [String(e)],
+      });
+    } finally {
+      setRipristinoInCorso(false);
+    }
+  };
+
   const handleAzzeraDatabase = async () => {
     if (confermaAzzeramento !== FRASE_CONFERMA) return;
     setAzzeramentoInCorso(true);
@@ -129,7 +219,7 @@ export function ModuloParametri() {
             Dati e Manutenzione
           </h2>
           <p className="text-[11px] text-gray-400 font-mono">
-            Dump portabile, backup completo ed azzeramento del database.
+            Dump portabile, backup, ripristino ed azzeramento del database.
           </p>
         </div>
       </div>
@@ -247,6 +337,119 @@ export function ModuloParametri() {
           )}
           {esitoBackup && !esitoBackup.success && (
             <p className="text-[11px] font-mono text-red-700">{esitoBackup.error}</p>
+          )}
+        </div>
+
+        <div className="space-y-3 pt-4 border-t border-gray-100">
+          <span className="text-xs font-mono font-bold text-gray-400 uppercase block">
+            Ripristino da Backup
+          </span>
+          <p className="text-xs font-mono text-gray-500">
+            Ricostruisce l&apos;intero database dal file di backup. Il contenuto attuale viene
+            cancellato e sostituito.
+          </p>
+          <p className="text-xs font-mono text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3">
+            L&apos;ordine dei passi è pensato per rendere reversibile un errore: il file viene prima
+            validato ed <span className="font-bold">eseguito su un database temporaneo</span>; se
+            non funziona lì, ci si ferma senza aver toccato nulla. Solo dopo viene salvato lo stato
+            corrente — scaricato automaticamente — e infine si sostituisce.
+          </p>
+
+          <div>
+            <label className="text-[10px] font-mono font-bold text-gray-400 uppercase block mb-1">
+              File di backup (.sql o .sql.enc)
+            </label>
+            <input
+              type="file"
+              accept=".sql,.enc,.txt"
+              onChange={(e) => void handleFileRipristino(e.target.files?.[0] ?? null)}
+              className="w-full text-xs font-mono file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-gray-900 file:text-white file:font-bold file:uppercase file:text-[10px]"
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] font-mono font-bold text-gray-400 uppercase block mb-1">
+              Passphrase (solo se il file è cifrato)
+            </label>
+            <input
+              type="password"
+              value={passphraseRipristino}
+              onChange={(e) => {
+                setPassphraseRipristino(e.target.value);
+                setProvaOk(false);
+              }}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl font-mono text-xs"
+            />
+          </div>
+
+          <button
+            onClick={() => void handleProva()}
+            disabled={!fileRipristino || provaInCorso}
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-mono text-xs font-bold uppercase rounded-xl transition-all"
+          >
+            {provaInCorso ? 'Verifica in corso...' : '1. Verifica il file'}
+          </button>
+
+          {esitoRipristino && (
+            <div
+              className={`text-[11px] font-mono space-y-1 border rounded-xl p-3 ${
+                esitoRipristino.success
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  : 'border-red-200 bg-red-50 text-red-800'
+              }`}
+            >
+              {esitoRipristino.intestazione && (
+                <p>
+                  Backup della versione {esitoRipristino.intestazione.versioneApp ?? '?'}, generato
+                  il {esitoRipristino.intestazione.generatoIl?.slice(0, 10) ?? '?'} —{' '}
+                  {esitoRipristino.intestazione.tabelle ?? '?'} tabelle,{' '}
+                  {esitoRipristino.intestazione.righe?.toLocaleString('it-IT') ?? '?'} righe.
+                </p>
+              )}
+              {esitoRipristino.fase === 'prova' && esitoRipristino.success && (
+                <p className="font-bold">
+                  Il file è valido ed è stato eseguito con successo su un database di prova. Il
+                  database reale non è stato toccato.
+                </p>
+              )}
+              {esitoRipristino.fase === 'completato' && (
+                <p className="font-bold">
+                  Ripristino completato: {esitoRipristino.tabelleRipristinate} tabelle. La sessione
+                  corrente non è più valida — occorre rientrare.
+                </p>
+              )}
+              {esitoRipristino.problemi?.map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
+              {!esitoRipristino.databaseIntatto && !esitoRipristino.success && (
+                <p className="font-bold">
+                  Il database NON è integro. Conservare il file scaricato automaticamente qui
+                  accanto: contiene lo stato precedente al ripristino.
+                </p>
+              )}
+            </div>
+          )}
+
+          {provaOk && (
+            <div className="space-y-2 pt-2">
+              <p className="text-xs font-mono text-red-600 font-bold">
+                Confermando, il contenuto attuale del database viene cancellato.
+              </p>
+              <input
+                type="text"
+                value={confermaRipristino}
+                onChange={(e) => setConfermaRipristino(e.target.value)}
+                placeholder={`Scrivi "${FRASE_RIPRISTINO}" per abilitare`}
+                className="w-full px-3 py-2 border border-red-200 rounded-xl font-mono text-xs"
+              />
+              <button
+                onClick={() => void handleRipristina()}
+                disabled={confermaRipristino !== FRASE_RIPRISTINO || ripristinoInCorso}
+                className="px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white font-mono text-xs font-bold uppercase rounded-xl transition-all"
+              >
+                {ripristinoInCorso ? 'Ripristino in corso...' : '2. Ripristina ora'}
+              </button>
+            </div>
           )}
         </div>
 

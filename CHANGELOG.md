@@ -93,6 +93,68 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.35 — 2026-09-07
+
+**Ripristino da backup, nei Parametri di sistema del Superadmin**
+
+Ieri e' arrivato il backup; mancava il pezzo che lo rende utile. Un backup che
+non si sa rimettere dentro e' un file che rassicura senza proteggere — e
+nell'edizione portable non c'e' nemmeno un `psql` a cui ricorrere, quindi
+l'istruzione di ripristino scritta nell'intestazione del file li' non era
+nemmeno eseguibile.
+
+**L'ORDINE DEI PASSI e' la funzione.** Il ripristino cancella tutto e
+riscrive: l'unica cosa che lo rende accettabile e' che si validi prima e si
+cancelli dopo.
+
+1. si decifra e si valida il file, senza toccare niente;
+2. lo si ESEGUE su un database PGlite temporaneo — se non gira li', non
+   girera' nemmeno in produzione, e ci si ferma con il database intatto;
+3. si genera un backup di sicurezza dello stato corrente, **scaricato
+   automaticamente**: e' l'unica via di ritorno, e nel momento in cui serve
+   nessuno ha la lucidita' di ricordarsi di premere un pulsante;
+4. SOLO ORA si azzera;
+5. si esegue il ripristino;
+6. si ricontano le tabelle.
+
+Il passo 2 e' il motivo per cui questa funzione puo' essere messa in mano a
+qualcuno: la prova che il file funzioni avviene su una copia usa-e-getta.
+L'interfaccia tiene spento il pulsante definitivo finche' quella prova non e'
+passata, e chiede poi una frase esatta ("RIPRISTINA E SOVRASCRIVI").
+
+Ogni esito riporta `databaseIntatto`, cioe' se l'errore e' recuperabile: la
+prima informazione che serve a chi legge un messaggio di errore in quel
+momento.
+
+**Validazione preventiva** — nuovo `src/lib/backup/leggi.ts` (**9 test**).
+Riconosce da solo se il file e' cifrato; verifica la firma del backup;
+intercetta il troncamento (un backup completo finisce sempre con COMMIT) e la
+manomissione, confrontando cio' che l'intestazione dichiara con cio' che nel
+file c'e' davvero. Una passphrase errata non produce testo plausibile: AES-GCM
+ha un tag di autenticazione e fallisce prima.
+
+**Ciclo completo verificato sui dati veri** — nuovo `ciclo.test.ts`
+(**3 test**): si costruisce un database, si fa il backup, si AZZERA davvero,
+si ripristina, e si controlla che tutto sia tornato — conteggi, contenuto
+(apostrofi e array compresi) e operativita' (un INSERT dopo il ripristino
+prende l'id giusto). Piu': un backup del database ripristinato e' identico al
+primo, e un file troncato viene fermato prima che qualcosa venga cancellato.
+
+**Collaudato a schermo, flusso reale nel sandbox portable**: accesso
+Superadmin con password + PIN, generazione del backup (3 schemi, 64 tabelle,
+66 righe, controllo d'integrita' superato, file scritto anche su disco),
+ricaricamento dello stesso file, verifica preventiva superata ("il database
+reale non e' stato toccato"), e infine ripristino completato con il backup di
+sicurezza sceso da solo.
+
+**Limite noto**: sul cloud le funzioni hanno un tetto di durata; su un
+database molto grande il ripristino puo' interrompersi a meta'. In quel caso
+l'esito lo dichiara e il backup di sicurezza e' gia' sul disco di chi opera.
+Nel portable il limite non esiste.
+
+Verificato: type-check (entrambi i controlli), lint, **140 test**, build
+completa.
+
 ## 0.109.34 — 2026-09-07
 
 **Backup vero del database, nei Parametri di sistema del Superadmin**
