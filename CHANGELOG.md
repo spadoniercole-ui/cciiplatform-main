@@ -159,6 +159,53 @@ sul backup, con ripristino reale su PGlite), build cloud completa.
 e' stato provato a mano in sandbox. La generazione sottostante e' verificata
 end-to-end dai test; l'involucro no.
 
+### Superadmin: solo PIN come secondo fattore, e limitazione dei tentativi
+
+**Il TOTP e' escluso per il solo ruolo SUPERADMIN.** Admin di Spazio e
+Operatori restano invariati, con TOTP + PIN.
+
+Il ragionamento, per non doverlo ricostruire fra sei mesi. Il Superadmin non
+ha una riga nel database e la sua password vive nelle variabili d'ambiente:
+e' quindi gia' immune a tutta la classe di minacce che passa dal database —
+injection, dump rubato, backup smarrito. Nemmeno il backup completo introdotto
+in questa stessa versione lo contiene.
+
+Resta pero' esposto dalla porta d'ingresso, che e' pubblica: la sua password
+e' una stringa statica, in chiaro nella configurazione, senza scadenza ne'
+rotazione. Se finisce fuori — accesso al progetto di hosting, log di build,
+uno screenshot durante una dimostrazione — chi la ottiene entra, e non resta
+traccia di nulla.
+
+Il secondo fattore serve a QUESTO, e il suo valore non sta nel meccanismo ma
+nel fatto che il secondo segreto viva in un POSTO DIVERSO dal primo: la
+password nell'ambiente, l'hash del PIN nel database. Due vie di
+compromissione distinte, nessuna sufficiente da sola. Il TOTP aggiunge poco a
+questa separazione (anche il suo segreto sta nel database) e costa molto in
+attrito. Il PIN da solo copre quasi tutto il beneficio.
+
+**Limitazione dei tentativi** — nuovo `src/lib/tentativiAccesso.ts`, 5
+tentativi poi blocco di 15 minuti. Prima non esisteva alcun limite: si poteva
+provare all'infinito, alla velocita' della rete. Il messaggio d'errore non
+distingue "utente inesistente" da "password errata", per non confermare a chi
+prova che il nome utente e' quello giusto. Lo stato sta su `globalThis`
+(stessa ragione di portableDb.ts) e non nel database, per non regalare a chi
+attacca una scrittura per ogni tentativo. **6 test.** Limite dichiarato nel
+file: il conteggio e' per processo, quindi frena chi prova da un punto solo,
+non un attacco distribuito.
+
+**Etichetta dei passaggi corretta.** Diceva "Fattore 2 di 2" al Superadmin,
+che di passaggi ne ha uno: il conteggio era cablato nel componente. Ora
+`passo` e `totale` vengono dal server, con una colonna `fattori_totali` sulla
+challenge — `fattori_rimasti` non basta, perche' si accorcia a ogni passo
+superato.
+
+**Collaudato in sandbox, ciclo completo:** Superadmin -> "Verifica di
+sicurezza · Fattore 1 di 1", nessun QR, imposta il PIN ed entra alla scelta
+della destinazione; alla riapertura il PIN viene RICHIESTO (non reimpostato) e
+fa accedere. Admin di Spazio -> "Verifica in due passaggi · Fattore 1 di 2"
+con l'app authenticator, invariato. Tentativi: quattro rifiuti normali, blocco
+al quinto.
+
 ## 0.109.33 — 2026-08-27
 
 Costruita sopra la 0.109.31 (quella con l'MFA a tre fattori). La 0.109.32 e'

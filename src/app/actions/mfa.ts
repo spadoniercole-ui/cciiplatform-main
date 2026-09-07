@@ -35,6 +35,7 @@ interface RigaChallenge {
   tenant_id: string | null;
   go_to_choice: boolean;
   fattori_rimasti: string[];
+  fattori_totali: number | null;
 }
 
 function cookieOpts(scadenza: Date) {
@@ -79,8 +80,35 @@ export async function avviaChallengeMfa(d: DatiAvvioChallenge): Promise<{ next: 
     }
   }
 
+  // ---------------------------------------------------------------------
+  // COMPOSIZIONE DEI FATTORI — diversa per il SUPERADMIN
+  //
+  // Il Superadmin non ha una riga nel database e la sua password vive nelle
+  // variabili d'ambiente: e' quindi gia' immune a tutta la classe di
+  // minacce che passa dal database (injection, dump rubato, backup
+  // smarrito). Nemmeno il backup completo lo contiene.
+  //
+  // Resta pero' esposto dalla porta d'ingresso, che e' pubblica: la sua
+  // password e' una stringa statica, in chiaro nella configurazione, senza
+  // scadenza ne' rotazione. Se finisce fuori — accesso al progetto di
+  // hosting, log di build, uno screenshot durante una dimostrazione — chi la
+  // ottiene entra, e non resta traccia di nulla.
+  //
+  // Il secondo fattore serve a questo, e il suo valore non sta nel
+  // meccanismo ma nel fatto che il secondo segreto viva in un POSTO DIVERSO
+  // dal primo: la password nell'ambiente, l'hash del PIN nel database. Due
+  // vie di compromissione distinte, nessuna delle due sufficiente da sola.
+  //
+  // Il TOTP aggiunge poco a questa separazione (l'hash del PIN sta gia' nel
+  // database, come il segreto TOTP) e costa molto in attrito: app
+  // authenticator, QR, segreto da recuperare al cambio di telefono. Per il
+  // solo Superadmin viene percio' escluso; per Admin di Spazio e Operatori
+  // resta invariato, perche' quelli nel database ci sono eccome.
   const fattori: FattoreMfa[] = [];
-  fattori.push(totpAttivo ? 'TOTP' : 'TOTP_ENROLL');
+  const soloPin = d.ruolo === 'SUPERADMIN';
+  if (!soloPin) {
+    fattori.push(totpAttivo ? 'TOTP' : 'TOTP_ENROLL');
+  }
   fattori.push(pinPresente ? 'PIN' : 'PIN_SETUP');
 
   const token = crypto.randomBytes(32).toString('hex');
@@ -89,8 +117,8 @@ export async function avviaChallengeMfa(d: DatiAvvioChallenge): Promise<{ next: 
   await pool.query('DELETE FROM public.mfa_challenge WHERE expires_at < now()');
   await pool.query(
     `INSERT INTO public.mfa_challenge
-       (token, identita_key, ruolo, workspace_id, email, username, codice_spazio, tenant_id, go_to_choice, fattori_rimasti, expires_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+       (token, identita_key, ruolo, workspace_id, email, username, codice_spazio, tenant_id, go_to_choice, fattori_rimasti, expires_at, fattori_totali)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
     [
       token,
       d.identitaKey,
@@ -103,6 +131,7 @@ export async function avviaChallengeMfa(d: DatiAvvioChallenge): Promise<{ next: 
       d.goToChoice,
       fattori,
       scadenza,
+      fattori.length,
     ]
   );
 
@@ -118,7 +147,7 @@ async function leggiChallenge(): Promise<RigaChallenge | null> {
   if (!token) return null;
   const r = await pool.query(
     `SELECT token, identita_key, ruolo, workspace_id, email, username, codice_spazio,
-            tenant_id, go_to_choice, fattori_rimasti
+            tenant_id, go_to_choice, fattori_rimasti, fattori_totali
        FROM public.mfa_challenge
       WHERE token = $1 AND expires_at > now()`,
     [token]
@@ -146,7 +175,14 @@ export async function mfaStato(): Promise<StatoMfa> {
       enroll = { segreto: secret, otpauthUri: uri, qrDataUrl };
     }
   }
-  return { attivo: true, fase, username: ch.username, enroll };
+  // Il totale non è una costante: dipende da quanti fattori questa identità
+  // deve superare. `fattori_rimasti` si accorcia a ogni passo superato, e la
+  // challenge nasce con la lista completa: il totale si ricava da quanti ne
+  // restano più quanti ne sono già stati fatti.
+  const rimasti = ch.fattori_rimasti.length;
+  const totale = Math.max(rimasti, ch.fattori_totali ?? rimasti);
+  const passo = totale - rimasti + 1;
+  return { attivo: true, fase, username: ch.username, enroll, passo, totale };
 }
 
 /** Toglie il primo fattore; se non ne restano, crea la sessione reale. */

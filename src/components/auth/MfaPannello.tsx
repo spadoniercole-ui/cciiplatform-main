@@ -100,7 +100,12 @@ export function MfaPannello({ onCompletato, onAnnulla }: Props) {
   };
 
   const fase: FattoreMfa | undefined = stato?.fase;
-  const passo = fase === 'TOTP_ENROLL' || fase === 'TOTP' ? 1 : fase ? 2 : 0;
+  // Passo e totale vengono dal server: il numero di fattori dipende dal
+  // ruolo (il Superadmin ha il solo PIN). Una costante scritta qui
+  // mentirebbe, come faceva annunciando "Fattore 2 di 2" davanti a un
+  // passaggio solo.
+  const totale = stato?.totale ?? 2;
+  const passo = stato?.passo ?? (fase === 'TOTP_ENROLL' || fase === 'TOTP' ? 1 : fase ? 2 : 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-slate-950 to-blue-900 flex items-center justify-center p-4 relative overflow-hidden">
@@ -110,7 +115,8 @@ export function MfaPannello({ onCompletato, onAnnulla }: Props) {
             <ShieldCheck className="w-6 h-6" />
           </div>
           <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
-            Verifica in due passaggi · Fattore {passo} di 2
+            {totale > 1 ? 'Verifica in due passaggi · ' : 'Verifica di sicurezza · '}
+            Fattore {passo} di {totale}
           </p>
         </div>
 

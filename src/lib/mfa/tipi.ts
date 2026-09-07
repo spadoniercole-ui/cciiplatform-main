@@ -21,6 +21,16 @@ export interface StatoMfa {
   fase?: FattoreMfa;
   username?: string | null;
   enroll?: { segreto: string; otpauthUri: string; qrDataUrl: string };
+  /**
+   * Passo corrente e totale dei fattori di QUESTA challenge.
+   *
+   * Vengono dal server e non da una regola cablata nel componente: il numero
+   * di fattori dipende dal ruolo (il Superadmin ha il solo PIN), e una
+   * costante "di 2" scritta nell'interfaccia mentirebbe — come faceva,
+   * annunciando "Fattore 2 di 2" davanti a un passaggio solo.
+   */
+  passo?: number;
+  totale?: number;
 }
 
 export type RispostaPassoMfa =

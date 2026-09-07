@@ -158,6 +158,13 @@ export async function assicuraTabelleMfa(): Promise<void> {
   await eseguiIstruzione(
     `CREATE INDEX IF NOT EXISTS idx_mfa_challenge_token ON public.mfa_challenge (token)`
   );
+  // Numero di fattori con cui la challenge è NATA. Serve a mostrare
+  // "Fattore 1 di N" con la N giusta: il Superadmin ha il solo PIN, gli altri
+  // ruoli TOTP + PIN. Ricavarlo da `fattori_rimasti` non basta, perché quella
+  // lista si accorcia a ogni passo superato.
+  await eseguiIstruzione(
+    `ALTER TABLE public.mfa_challenge ADD COLUMN IF NOT EXISTS fattori_totali INTEGER`
+  );
 }
 
 export async function assicuraTabelleSpazi(): Promise<void> {

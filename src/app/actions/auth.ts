@@ -10,6 +10,12 @@
 // revocabile da un logout reale.
 
 import { getTabelleTenant } from '@/db/schema';
+import {
+  controllaTentativi,
+  registraFallimento,
+  azzeraTentativi,
+  MINUTI_BLOCCO,
+} from '@/lib/tentativiAccesso';
 import { eq } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
@@ -173,9 +179,31 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
         console.error('SUPERADMIN_PASSWORD non configurata nel server.');
         return { success: false, error: 'Accesso superadmin non configurato sul server.' };
       }
-      if (!confrontoSicuro(password, SUPERADMIN_PASSWORD)) {
-        return { success: false, error: 'Parola chiave Superadmin errata.' };
+      // Limitazione dei tentativi: fino a oggi non ce n'era alcuna, e la
+      // password del Superadmin e' una stringa statica su una porta pubblica.
+      const chiaveTentativi = `SUPER:${SUPERADMIN_USER}`;
+      const controllo = controllaTentativi(chiaveTentativi);
+      if (controllo.bloccato) {
+        const minuti = Math.ceil(controllo.secondiRimanenti / 60);
+        return {
+          success: false,
+          error: `Troppi tentativi falliti. Riprovare fra ${minuti} ${minuti === 1 ? 'minuto' : 'minuti'}.`,
+        };
       }
+
+      if (!confrontoSicuro(password, SUPERADMIN_PASSWORD)) {
+        const esito = registraFallimento(chiaveTentativi);
+        // Il messaggio non cambia in base al fatto che l'utente esista: dire
+        // "utente corretto, password errata" confermerebbe a chi prova che
+        // il nome e' quello giusto.
+        return {
+          success: false,
+          error: esito.bloccato
+            ? `Troppi tentativi falliti. Accesso Superadmin bloccato per ${MINUTI_BLOCCO} minuti.`
+            : 'Parola chiave Superadmin errata.',
+        };
+      }
+      azzeraTentativi(chiaveTentativi);
 
       // Password OK: si passa all'MFA (TOTP + PIN). La sessione verrà creata
       // solo al completamento dei tre fattori.
