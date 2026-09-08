@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { leggiBackup, sembraCifrato } from './leggi';
+import { leggiBackup, sembraCifrato, rimuoviTransazione } from './leggi';
 
 // Questa validazione è ciò che sta FRA il file caricato e l'azzeramento del
 // database. Se lascia passare un file rotto, si cancella tutto per poi
@@ -96,5 +96,36 @@ describe('validazione del backup', () => {
   it('rifiuta un file vuoto', () => {
     expect(leggiBackup('').valido).toBe(false);
     expect(leggiBackup('   ').valido).toBe(false);
+  });
+});
+
+describe('isolamento della transazione', () => {
+  it('rimuove BEGIN e COMMIT che racchiudono lo script', () => {
+    const pulito = rimuoviTransazione(BUONO);
+    expect(pulito).not.toMatch(/^\s*BEGIN;\s*$/m);
+    expect(pulito).not.toMatch(/^\s*COMMIT;\s*$/m);
+  });
+
+  it('NESSUN COMMIT sopravvive, ovunque si trovi', () => {
+    // È il punto su cui si regge la sicurezza della prova a vuoto: un COMMIT
+    // rimasto in mezzo chiuderebbe la nostra transazione e renderebbe
+    // definitiva la cancellazione che volevamo solo simulare.
+    const insidioso =
+      'BEGIN;\nCREATE TABLE a (i int);\nCOMMIT;\nINSERT INTO a VALUES (1);\nCOMMIT;';
+    const pulito = rimuoviTransazione(insidioso);
+    expect(/^\s*COMMIT\s*;/im.test(pulito)).toBe(false);
+    expect(pulito).toContain('CREATE TABLE a');
+    expect(pulito).toContain('INSERT INTO a');
+  });
+
+  it('rimuove anche ROLLBACK e le altre forme di controllo transazione', () => {
+    const p = rimuoviTransazione('START TRANSACTION;\nSELECT 1;\nROLLBACK;\nEND;');
+    expect(p.replace(/\s/g, '')).toBe('SELECT1;');
+  });
+
+  it('non tocca le istruzioni che CONTENGONO quelle parole', () => {
+    // Una riga di dati con dentro la parola "commit" non deve sparire.
+    const p = rimuoviTransazione(`INSERT INTO t (nota) VALUES ('commit del piano');`);
+    expect(p).toContain('commit del piano');
   });
 });

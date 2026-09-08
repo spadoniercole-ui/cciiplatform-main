@@ -3,54 +3,76 @@
 // RIPRISTINO COMPLETO del database da un file di backup.
 //
 // È l'operazione più distruttiva della piattaforma: cancella tutto e
-// riscrive. L'unica cosa che la rende accettabile è l'ORDINE dei passi.
+// riscrive. Ciò che la rende accettabile è l'ORDINE dei passi — si valida
+// prima e si cancella dopo — e il fatto che si possa provare senza rischiare.
 //
-//   1. si decifra e si valida il file, senza toccare niente;
-//   2. lo si esegue in un database TEMPORANEO in memoria — se non gira lì,
-//      non girerà nemmeno in produzione, e ci si ferma con il database
-//      ancora intatto;
-//   3. si genera un backup di sicurezza dello stato corrente;
-//   4. SOLO ORA si azzera;
-//   5. si esegue il ripristino;
-//   6. si ricontano le righe, tabella per tabella.
+// ---------------------------------------------------------------------------
+// COME SI PROVA UN RIPRISTINO SENZA FARLO
 //
-// Validare prima e cancellare dopo è ciò che rende reversibile un errore. Il
-// passo 2 in particolare è il motivo per cui questa funzione può essere
-// offerta a un utente: la prova che il file funzioni avviene su una copia
-// usa-e-getta, non sui dati veri.
+// La prima versione avviava un PGlite temporaneo (Postgres compilato in WASM)
+// e ci eseguiva lo script. Funzionava nell'edizione portable e NON sul cloud:
+// in una funzione serverless gli asset WASM vanno tracciati a parte e
+// l'inizializzazione costa secondi e memoria, contro un tetto di durata. Il
+// risultato era una Server Action che moriva senza risposta, con il browser a
+// mostrare "An unexpected response was received from the server" proprio sul
+// pulsante che precede la cancellazione del database.
 //
-// PGlite è Postgres compilato in WASM: eseguire lì lo script è una prova
-// reale, non una simulazione.
+// Non serviva un secondo motore: PostgreSQL sa gia' fare le prove a vuoto,
+// perche' anche le istruzioni di struttura (CREATE, DROP, ALTER) sono
+// transazionali. Si apre una transazione, si esegue tutto — cancellazione
+// compresa — si guarda com'e' andata, e si annulla con ROLLBACK. Il database
+// torna esattamente com'era.
+//
+// E' migliore su ogni fronte: nessun WASM da tracciare, nessuna
+// inizializzazione da secondi, stesso codice nelle due edizioni, e una prova
+// PIU' FEDELE — gira sullo stesso motore e sulla stessa versione di Postgres
+// che ospita i dati, e verifica anche la cancellazione dello schema
+// esistente, che su un database vuoto non poteva emergere.
+//
+// Il costo e' un blocco temporaneo sulle tabelle durante la prova,
+// accettabile per un'operazione da Superadmin. Se la connessione cade a
+// meta', Postgres annulla tutto da se': e' il comportamento predefinito.
+//
+// NOTA CRITICA: lo script del backup contiene un proprio BEGIN/COMMIT. Va
+// rimosso (`rimuoviTransazione`), altrimenti quel COMMIT chiuderebbe la
+// NOSTRA transazione e la prova a vuoto diventerebbe una cancellazione vera.
+// ---------------------------------------------------------------------------
 
 import { pool } from '@/lib/db';
 import { decifra } from '@/lib/portableCrypto';
-import { leggiBackup, sembraCifrato, type IntestazioneBackup } from '@/lib/backup/leggi';
+import {
+  leggiBackup,
+  sembraCifrato,
+  rimuoviTransazione,
+  type IntestazioneBackup,
+} from '@/lib/backup/leggi';
 import { generaBackupCompletoAction } from '@/app/actions/backupDatabase';
 
 export interface RisultatoRipristino {
   success: boolean;
-  /** Fase raggiunta: dice all'utente FIN DOVE si è arrivati. */
   fase:
     | 'lettura'
     | 'validazione'
     | 'prova'
     | 'backup_sicurezza'
-    | 'azzeramento'
     | 'esecuzione'
     | 'verifica'
     | 'completato';
-  /** true se il database NON è stato toccato: l'errore è recuperabile. */
+  /** true se il database NON e' stato toccato: l'errore e' recuperabile. */
   databaseIntatto: boolean;
   intestazione?: IntestazioneBackup;
   problemi?: string[];
   tabelleRipristinate?: number;
   righeRipristinate?: number;
-  /** Backup dello stato precedente, da conservare prima di procedere. */
   backupSicurezza?: { nomeFile: string; contenuto: string; byte: number };
   error?: string;
 }
 
-/** Decifra se serve e valida. Non tocca il database. */
+type Client = {
+  query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+  release: () => void;
+};
+
 async function preparaScript(
   contenutoFile: string,
   passphrase?: string
@@ -70,7 +92,7 @@ async function preparaScript(
       testo = decifra(Buffer.from(contenutoFile, 'base64'), passphrase).toString('utf8');
     } catch {
       // AES-GCM ha un tag di autenticazione: una passphrase errata fallisce
-      // qui, non produce testo plausibile. È una buona notizia.
+      // qui, non produce testo plausibile.
       return {
         ok: false,
         problemi: [
@@ -82,15 +104,35 @@ async function preparaScript(
 
   const esito = leggiBackup(testo);
   if (!esito.valido) return { ok: false, problemi: esito.problemi };
-  return { ok: true, sql: testo, intestazione: esito.intestazione };
+  return { ok: true, sql: rimuoviTransazione(testo), intestazione: esito.intestazione };
+}
+
+/** Istruzioni di cancellazione dello schema esistente. */
+async function istruzioniAzzeramento(client: Client): Promise<string[]> {
+  const schemi = await client.query(
+    `SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant\\_%'`
+  );
+  const tabelle = await client.query(
+    `SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'`
+  );
+  return [
+    ...schemi.rows.map((s) => `DROP SCHEMA IF EXISTS "${String(s.nspname)}" CASCADE`),
+    ...tabelle.rows.map((t) => `DROP TABLE IF EXISTS "public"."${String(t.tablename)}" CASCADE`),
+  ];
+}
+
+async function contaTabelle(client: Client): Promise<number> {
+  const t = await client.query(
+    `SELECT count(*)::int AS n FROM pg_catalog.pg_tables
+      WHERE schemaname = 'public' OR schemaname LIKE 'tenant\\_%'`
+  );
+  return Number((t.rows[0] as { n: number })?.n ?? 0);
 }
 
 /**
- * Prova il ripristino a vuoto: valida il file ed esegue lo script su un
- * database temporaneo. NON tocca il database di produzione.
- *
- * Va chiamata prima di `ripristinaDatabaseAction`, e l'interfaccia non
- * consente di procedere finché questa non è passata.
+ * Prova il ripristino a vuoto: esegue TUTTA l'operazione — cancellazione
+ * compresa — dentro una transazione che viene poi annullata. Il database
+ * resta esattamente com'era.
  */
 export async function provaRipristinoAction(
   contenutoFile: string,
@@ -101,16 +143,40 @@ export async function provaRipristinoAction(
     return { success: false, fase: 'validazione', databaseIntatto: true, problemi: prep.problemi };
   }
 
-  // Il caricamento di PGlite è tenuto SEPARATO dall'esecuzione della prova.
-  // Se fallisce (asset WASM non risolvibili in un ambiente serverless mal
-  // configurato) non è un file di backup difettoso: è la piattaforma che non
-  // può eseguire la verifica. Confondere le due cose davanti al pulsante che
-  // precede la cancellazione del database sarebbe grave — e nella prima
-  // versione questa distinzione non c'era: l'errore usciva dal confine della
-  // Server Action e il browser mostrava un messaggio in inglese, senza causa.
-  let PGliteClasse: typeof import('@electric-sql/pglite').PGlite;
+  let client: Client;
   try {
-    ({ PGlite: PGliteClasse } = await import('@electric-sql/pglite'));
+    client = (await pool.connect()) as Client;
+  } catch (error: unknown) {
+    return {
+      success: false,
+      fase: 'prova',
+      databaseIntatto: true,
+      problemi: [`Connessione al database non riuscita: ${(error as Error).message}`],
+    };
+  }
+
+  try {
+    await client.query('BEGIN');
+    try {
+      for (const istruzione of await istruzioniAzzeramento(client)) {
+        await client.query(istruzione);
+      }
+      await client.query(prep.sql);
+      const tabelle = await contaTabelle(client);
+
+      return {
+        success: true,
+        fase: 'prova',
+        databaseIntatto: true,
+        intestazione: prep.intestazione,
+        tabelleRipristinate: tabelle,
+      };
+    } finally {
+      // SEMPRE, anche in caso di successo: questa è una prova, non il
+      // ripristino. Il `finally` garantisce l'annullamento anche quando si
+      // esce dal blocco `try` con un return.
+      await client.query('ROLLBACK');
+    }
   } catch (error: unknown) {
     return {
       success: false,
@@ -118,54 +184,28 @@ export async function provaRipristinoAction(
       databaseIntatto: true,
       intestazione: prep.intestazione,
       problemi: [
-        'La verifica preventiva non è eseguibile su questo ambiente: il motore di prova non è disponibile.',
-        `Dettaglio tecnico: ${(error as Error).message}`,
-        'Il file ha superato i controlli formali, ma NON è stato provato davvero. Il database non è stato toccato.',
-      ],
-    };
-  }
-
-  try {
-    const prova = await new PGliteClasse();
-    try {
-      await prova.exec(prep.sql);
-      const t = await prova.query<{ n: number }>(
-        `SELECT count(*)::int AS n FROM pg_catalog.pg_tables
-          WHERE schemaname = 'public' OR schemaname LIKE 'tenant\\_%'`
-      );
-      return {
-        success: true,
-        fase: 'prova',
-        databaseIntatto: true,
-        intestazione: prep.intestazione,
-        tabelleRipristinate: t.rows[0]?.n ?? 0,
-      };
-    } finally {
-      await prova.close();
-    }
-  } catch (error: unknown) {
-    return {
-      success: false,
-      fase: 'prova',
-      databaseIntatto: true,
-      problemi: [
         `Lo script non è eseguibile: ${(error as Error).message}`,
-        'Il database non è stato toccato.',
+        'La prova è stata annullata: il database non è stato toccato.',
       ],
     };
+  } finally {
+    client.release();
   }
 }
 
 /**
- * Ripristino vero. Rifà da capo la validazione e la prova — non si fida di
- * una chiamata precedente, perché fra la prova e la conferma il file
- * caricato potrebbe essere cambiato.
+ * Ripristino vero. Rifà da capo validazione e prova — non si fida di una
+ * chiamata precedente, perché fra la prova e la conferma il file caricato
+ * potrebbe essere cambiato.
+ *
+ * Cancellazione ed esecuzione avvengono in UN'UNICA transazione: o riesce
+ * tutto, o il database resta com'era. Non esiste più lo stato intermedio
+ * "azzerato ma non ripristinato" della versione precedente.
  */
 export async function ripristinaDatabaseAction(
   contenutoFile: string,
   passphrase?: string
 ): Promise<RisultatoRipristino> {
-  // ---- 1-2. Validazione e prova, database ancora intatto -----------------
   const prova = await provaRipristinoAction(contenutoFile, passphrase);
   if (!prova.success) return prova;
 
@@ -174,11 +214,9 @@ export async function ripristinaDatabaseAction(
     return { success: false, fase: 'validazione', databaseIntatto: true, problemi: prep.problemi };
   }
 
-  // ---- 3. Backup di sicurezza dello stato corrente -----------------------
-  // Se il ripristino si interrompe a metà — un limite di durata sul cloud, un
-  // vincolo inatteso — questo file è l'unica via di ritorno. Si genera IN
-  // CHIARO di proposito: chiedere una seconda passphrase in un momento di
-  // emergenza è un modo per perdere anche quella.
+  // Backup di sicurezza dello stato corrente. In chiaro di proposito:
+  // chiedere una seconda passphrase in un momento di emergenza è un modo per
+  // perdere anche quella.
   let backupSicurezza: RisultatoRipristino['backupSicurezza'];
   try {
     const b = await generaBackupCompletoAction();
@@ -205,85 +243,70 @@ export async function ripristinaDatabaseAction(
     };
   }
 
-  // ---- 4. Azzeramento ----------------------------------------------------
-  // Da qui in poi il database NON è più intatto.
+  let client: Client;
   try {
-    const schemi = await pool.query(
-      `SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant\\_%'`
-    );
-    for (const s of schemi.rows) {
-      await pool.query(`DROP SCHEMA IF EXISTS "${String(s.nspname)}" CASCADE`);
-    }
-    const tab = await pool.query(
-      `SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'`
-    );
-    for (const t of tab.rows) {
-      await pool.query(`DROP TABLE IF EXISTS "public"."${String(t.tablename)}" CASCADE`);
-    }
-  } catch (error: unknown) {
-    return {
-      success: false,
-      fase: 'azzeramento',
-      databaseIntatto: false,
-      backupSicurezza,
-      problemi: [
-        `Azzeramento non riuscito: ${(error as Error).message}`,
-        'Conservare il backup di sicurezza qui accanto.',
-      ],
-    };
-  }
-
-  // ---- 5. Esecuzione -----------------------------------------------------
-  try {
-    await pool.query(prep.sql);
+    client = (await pool.connect()) as Client;
   } catch (error: unknown) {
     return {
       success: false,
       fase: 'esecuzione',
-      databaseIntatto: false,
+      databaseIntatto: true,
       backupSicurezza,
-      problemi: [
-        `Ripristino interrotto: ${(error as Error).message}`,
-        'Il database è in uno stato incompleto. Ripetere l’operazione con il backup di sicurezza scaricato qui accanto.',
-      ],
+      problemi: [`Connessione al database non riuscita: ${(error as Error).message}`],
     };
   }
 
-  // ---- 6. Riconteggio ----------------------------------------------------
-  // Un ripristino che dice "fatto" senza aver ricontato è la stessa promessa
-  // non verificata di un backup mai provato.
   try {
-    const t = await pool.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM pg_catalog.pg_tables
-        WHERE schemaname = 'public' OR schemaname LIKE 'tenant\\_%'`
-    );
-    const tabelle = t.rows[0]?.n ?? 0;
-    const attese = prova.intestazione?.tabelle ?? null;
+    await client.query('BEGIN');
+    try {
+      for (const istruzione of await istruzioniAzzeramento(client)) {
+        await client.query(istruzione);
+      }
+      await client.query(prep.sql);
 
-    const problemi: string[] = [];
-    if (attese !== null && tabelle !== attese) {
-      problemi.push(
-        `Il backup dichiarava ${attese} tabelle, nel database ripristinato ce ne sono ${tabelle}.`
-      );
+      const tabelle = await contaTabelle(client);
+      const attese = prova.intestazione?.tabelle ?? null;
+
+      if (attese !== null && tabelle !== attese) {
+        // Discrepanza: si annulla, invece di lasciare un database dubbio.
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          fase: 'verifica',
+          databaseIntatto: true,
+          backupSicurezza,
+          problemi: [
+            `Il backup dichiarava ${attese} tabelle, dopo il ripristino ne risultano ${tabelle}.`,
+            'L’operazione è stata annullata: il database è rimasto quello di prima.',
+          ],
+        };
+      }
+
+      await client.query('COMMIT');
+      return {
+        success: true,
+        fase: 'completato',
+        databaseIntatto: false,
+        intestazione: prova.intestazione,
+        tabelleRipristinate: tabelle,
+        righeRipristinate: prova.intestazione?.righe ?? undefined,
+        backupSicurezza,
+      };
+    } catch (error: unknown) {
+      await client.query('ROLLBACK');
+      return {
+        success: false,
+        fase: 'esecuzione',
+        // Annullata per intero: il database è quello di prima.
+        databaseIntatto: true,
+        backupSicurezza,
+        problemi: [
+          `Ripristino non riuscito: ${(error as Error).message}`,
+          'L’operazione è stata annullata per intero: il database è rimasto quello di prima.',
+        ],
+      };
     }
-
-    return {
-      success: problemi.length === 0,
-      fase: problemi.length === 0 ? 'completato' : 'verifica',
-      databaseIntatto: false,
-      intestazione: prova.intestazione,
-      tabelleRipristinate: tabelle,
-      righeRipristinate: prova.intestazione?.righe ?? undefined,
-      backupSicurezza,
-      problemi: problemi.length ? problemi : undefined,
-    };
-  } catch (error: unknown) {
-    return {
-      success: false,
-      fase: 'verifica',
-      databaseIntatto: false,
-      backupSicurezza,
-      problemi: [`Verifica finale non riuscita: ${(error as Error).message}`],
-    };
+  } finally {
+    client.release();
   }
 }

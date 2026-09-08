@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { generaScriptBackup, type Esecutore } from './genera';
-import { leggiBackup } from './leggi';
+import { leggiBackup, rimuoviTransazione } from './leggi';
 import { intestazione } from './formato';
 
 // Il ciclo completo, su database veri: si costruisce, si fa il backup, si
@@ -148,6 +148,83 @@ describe('ciclo completo: backup → azzeramento → ripristino', () => {
     // Il database non è stato toccato: i dati ci sono ancora.
     const n = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM tenant_uno.aziende`);
     expect(n.rows[0].n).toBe(2);
+
+    await db.close();
+  }, 90000);
+});
+
+describe('prova a vuoto tramite transazione annullata', () => {
+  // È il meccanismo che ha sostituito il PGlite temporaneo, e il punto in cui
+  // un errore sarebbe catastrofico: se il ROLLBACK non tenesse, la "prova"
+  // cancellerebbe il database invece di simularne la cancellazione.
+
+  it('esegue cancellazione e ripristino, poi ANNULLA tutto', async () => {
+    const db = await popolato();
+    const { testo } = await fileDiBackup(db);
+    const script = rimuoviTransazione(testo);
+
+    await db.exec('BEGIN');
+    // cancellazione, come fa l'action
+    const schemi = await db.query<{ nspname: string }>(
+      `SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant\\_%'`
+    );
+    for (const s of schemi.rows) await db.exec(`DROP SCHEMA IF EXISTS "${s.nspname}" CASCADE`);
+    await db.exec(script);
+
+    // Dentro la transazione il ripristino è avvenuto.
+    const dentro = await db.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM tenant_uno.aziende`
+    );
+    expect(dentro.rows[0].n).toBe(2);
+
+    await db.exec('ROLLBACK');
+
+    // Fuori, tutto com'era: i dati originali, non quelli ripristinati.
+    const dopo = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM tenant_uno.aziende`);
+    expect(dopo.rows[0].n).toBe(2);
+    const scenari = await db.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM tenant_uno.scenari`
+    );
+    expect(scenari.rows[0].n).toBe(3);
+
+    await db.close();
+  }, 90000);
+
+  it('un file difettoso lascia il database intatto dopo il ROLLBACK', async () => {
+    const db = await popolato();
+    const rotto = 'CREATE TABLE tenant_uno.x (i int);\nQUESTA NON E SQL;';
+
+    await db.exec('BEGIN');
+    const schemi = await db.query<{ nspname: string }>(
+      `SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant\\_%'`
+    );
+    for (const s of schemi.rows) await db.exec(`DROP SCHEMA IF EXISTS "${s.nspname}" CASCADE`);
+    await expect(db.exec(rotto)).rejects.toThrow();
+    await db.exec('ROLLBACK');
+
+    // Lo schema cancellato dentro la transazione è tornato.
+    const dopo = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM tenant_uno.aziende`);
+    expect(dopo.rows[0].n).toBe(2);
+
+    await db.close();
+  }, 90000);
+
+  it('senza rimuoviTransazione, il COMMIT dello script renderebbe definitiva la cancellazione', async () => {
+    // Questo test documenta PERCHÉ rimuoviTransazione esiste. Si esegue lo
+    // script COL suo COMMIT: quel COMMIT chiude la nostra transazione, e il
+    // ROLLBACK successivo non ha più nulla da annullare.
+    const db = await popolato();
+    const { testo } = await fileDiBackup(db);
+
+    await db.exec('BEGIN');
+    await db.exec(`DROP SCHEMA IF EXISTS "tenant_uno" CASCADE`);
+    await db.exec(testo); // NON ripulito: contiene BEGIN e COMMIT
+    await db.exec('ROLLBACK');
+
+    // Il ripristino è rimasto: la transazione era già stata chiusa dal COMMIT
+    // interno. Se qui il ripristino fosse fallito, i dati sarebbero perduti.
+    const dopo = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM tenant_uno.aziende`);
+    expect(dopo.rows[0].n).toBe(2);
 
     await db.close();
   }, 90000);

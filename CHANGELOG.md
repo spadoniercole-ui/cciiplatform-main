@@ -93,6 +93,53 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.37 — 2026-09-08
+
+**La prova del ripristino non usa piu' un secondo motore di database**
+
+La 0.109.36 non ha risolto: stesso errore "An unexpected response was
+received from the server", verificato da Ercole sul deploy cloud della .36.
+Il tracing degli asset era corretto (301 file di PGlite inclusi), ma il
+problema era piu' a monte: **avviare un Postgres in WASM dentro una funzione
+serverless non e' praticabile** — inizializzazione da secondi e memoria
+significativa, contro un tetto di durata. Una funzione che sfora produce
+esattamente quel messaggio.
+
+**Non serviva un secondo motore.** PostgreSQL sa gia' fare le prove a vuoto,
+perche' anche le istruzioni di struttura (CREATE, DROP, ALTER) sono
+transazionali. La verifica preventiva ora apre una transazione sul database
+REALE, esegue tutto — cancellazione dello schema esistente e ripristino
+completo — conta le tabelle, e annulla con ROLLBACK. Il database torna
+esattamente com'era.
+
+Migliore su ogni fronte: nessun WASM da tracciare, nessuna inizializzazione
+costosa, stesso codice nelle due edizioni, e una prova PIU' FEDELE — gira
+sullo stesso motore e sulla stessa versione di Postgres che ospita i dati, e
+verifica anche la cancellazione dello schema esistente, che sul database vuoto
+di PGlite non poteva emergere.
+
+**`rimuoviTransazione`** — il perno della sicurezza di questo meccanismo. Lo
+script del backup contiene un proprio BEGIN/COMMIT: se restasse, quel COMMIT
+chiuderebbe la NOSTRA transazione e la prova a vuoto diventerebbe una
+cancellazione vera. Vengono rimossi BEGIN, COMMIT, ROLLBACK, START
+TRANSACTION ed END ovunque compaiano, non solo in coda. **4 test**, fra cui
+uno che verifica che una riga di dati contenente la parola "commit" non venga
+toccata.
+
+**Il ripristino vero e' ora ATOMICO.** Cancellazione ed esecuzione avvengono
+in un'unica transazione: o riesce tutto, o il database resta com'era. Sparisce
+lo stato intermedio "azzerato ma non ripristinato" della versione precedente,
+e con esso il caso peggiore — un'interruzione a meta' che lasciava il
+database svuotato. Anche la discrepanza nel conteggio finale delle tabelle ora
+provoca un ROLLBACK invece di lasciare un database dubbio.
+
+**3 test nuovi sul meccanismo** (7 in tutto sul ciclo): la prova esegue
+davvero e poi annulla, lasciando i dati originali; un file difettoso lascia il
+database intatto; e — a documentare perche' `rimuoviTransazione` esiste — che
+senza di essa il COMMIT interno rende definitiva la cancellazione.
+
+Verificato: type-check, lint, **147 test**, build cloud completa.
+
 ## 0.109.36 — 2026-09-07
 
 **Correzione: la verifica del ripristino non funzionava sul cloud**

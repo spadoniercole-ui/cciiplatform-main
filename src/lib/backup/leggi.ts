@@ -124,3 +124,25 @@ export function leggiBackup(contenuto: string): EsitoLettura {
 
   return { valido: problemi.length === 0, problemi, intestazione, conteggi };
 }
+
+/**
+ * Toglie dallo script il BEGIN e il COMMIT che lo racchiudono.
+ *
+ * ATTENZIONE — questa funzione è il perno della sicurezza della prova a
+ * vuoto, e merita di essere letta con attenzione prima di toccarla.
+ *
+ * La verifica preventiva esegue il ripristino dentro una transazione che poi
+ * viene annullata con ROLLBACK: il database torna com'era. Ma se lo script
+ * conservasse il proprio `COMMIT;`, quel COMMIT chiuderebbe la NOSTRA
+ * transazione, rendendo definitiva la cancellazione che volevamo solo
+ * simulare. La "prova a vuoto" distruggerebbe il database.
+ *
+ * Per lo stesso motivo si rimuove ogni COMMIT e ROLLBACK ovunque compaia,
+ * non solo in coda: basta uno in mezzo al file per spezzare l'isolamento.
+ */
+export function rimuoviTransazione(sql: string): string {
+  return sql
+    .split('\n')
+    .filter((riga) => !/^\s*(BEGIN|COMMIT|ROLLBACK|START TRANSACTION|END)\s*;\s*$/i.test(riga))
+    .join('\n');
+}
