@@ -47,11 +47,25 @@ async function eSuperadmin(): Promise<boolean> {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  if (!(await eSuperadmin())) {
+  const body = (await request.json()) as HandleUploadBody;
+
+  // ---------------------------------------------------------------------
+  // ATTENZIONE: questa rotta riceve DUE chiamate diverse.
+  //
+  //  1. 'blob.generate-client-token' — dal BROWSER, per chiedere il permesso
+  //     di caricare. Porta i cookie di sessione: qui il controllo va fatto.
+  //  2. 'blob.upload-completed' — dai server dello storage, a caricamento
+  //     concluso. È una chiamata macchina-a-macchina e NON porta cookie.
+  //
+  // Applicare il controllo di sessione anche alla seconda la faceva fallire
+  // con 403; lo storage riprovava, e il browser restava in attesa indefinita,
+  // con l'aria di essersi bloccato. L'autenticità della seconda chiamata è
+  // già verificata da `handleUpload`, che ne controlla la firma: il controllo
+  // di ruolo appartiene solo al primo passo.
+  // ---------------------------------------------------------------------
+  if (body?.type === 'blob.generate-client-token' && !(await eSuperadmin())) {
     return NextResponse.json({ error: 'Operazione riservata al Superadmin.' }, { status: 403 });
   }
-
-  const body = (await request.json()) as HandleUploadBody;
 
   try {
     const risultato = await handleUpload({

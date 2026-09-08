@@ -93,6 +93,38 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.41 — 2026-09-08
+
+**Il caricamento diretto restava in attesa infinita**
+
+Segnalato da Ercole: dopo la 0.109.40 la verifica si fermava su "Caricamento
+del file in corso..." senza concludersi mai.
+
+Causa: la rotta `/api/backup-upload` riceve **due chiamate diverse**, e io
+avevo applicato lo stesso controllo a entrambe.
+
+  1. `blob.generate-client-token` — dal BROWSER, per chiedere il permesso di
+     caricare. Porta i cookie di sessione.
+  2. `blob.upload-completed` — dai server dello storage, a caricamento
+     concluso. E' macchina-a-macchina e NON porta alcun cookie.
+
+Il controllo "sei il Superadmin?" respingeva la seconda con 403. Lo storage la
+ritentava, il caricamento non veniva mai dato per concluso, e il browser
+restava in attesa indefinita. Il controllo di ruolo si applica ora al solo
+primo passo; l'autenticita' del secondo e' gia' verificata da `handleUpload`,
+che ne controlla la firma.
+
+**Tetto di attesa esplicito**, perche' nessuna attesa possa piu' essere
+infinita qualunque ne sia la causa: dopo due minuti il caricamento si
+interrompe con un messaggio leggibile, che indica anche la variabile
+`BLOB_READ_WRITE_TOKEN` fra le cose da verificare. Meglio un errore
+comprensibile che una rotella che gira per sempre.
+
+Corretta anche la sovrapposizione dei due messaggi di attesa, che comparivano
+insieme.
+
+Verificato: type-check, lint, **147 test**, build cloud completa.
+
 ## 0.109.40 — 2026-09-08
 
 **Ripristino: i file grandi non passano piu' dalla Server Action**

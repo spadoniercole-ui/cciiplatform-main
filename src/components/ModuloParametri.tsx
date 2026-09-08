@@ -189,11 +189,28 @@ export function ModuloParametri() {
 
     setCaricamentoInCorso(true);
     try {
-      const blob = await upload(`backup-ripristino-${Date.now()}.txt`, fileRipristino.contenuto, {
+      // Tetto di attesa esplicito. Senza, un caricamento che non si conclude
+      // mai lascia l'interfaccia in attesa indefinita, indistinguibile da un
+      // blocco: è già successo, per una chiamata di completamento respinta
+      // che veniva ritentata all'infinito. Meglio un errore leggibile dopo
+      // due minuti che una rotella che gira per sempre.
+      const caricamento = upload(`backup-ripristino-${Date.now()}.txt`, fileRipristino.contenuto, {
         access: 'public',
         handleUploadUrl: '/api/backup-upload',
         contentType: 'text/plain',
       });
+      const scadenza = new Promise<never>((_, rifiuta) =>
+        setTimeout(
+          () =>
+            rifiuta(
+              new Error(
+                'Caricamento del file non concluso entro due minuti. Verificare che la variabile BLOB_READ_WRITE_TOKEN sia configurata sul server.'
+              )
+            ),
+          120_000
+        )
+      );
+      const blob = await Promise.race([caricamento, scadenza]);
       return blob.url;
     } finally {
       setCaricamentoInCorso(false);
@@ -480,7 +497,7 @@ export function ModuloParametri() {
             <p className="text-[11px] font-mono text-gray-500">Caricamento del file in corso...</p>
           )}
 
-          {provaInCorso && (
+          {provaInCorso && !caricamentoInCorso && (
             <p className="text-[11px] font-mono text-gray-500">
               La verifica esegue l&apos;intero ripristino dentro una transazione che verrà poi
               annullata: su un database di dimensioni reali può richiedere qualche decina di
