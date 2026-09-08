@@ -93,6 +93,48 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.42 — 2026-09-08
+
+**Caricamento del backup a frammenti: via la dipendenza dallo storage esterno**
+
+Nella 0.109.41 il tetto di attesa ha fatto il suo lavoro e ha prodotto un
+messaggio leggibile, ma il caricamento continuava a non concludersi. La
+strada dello storage esterno porta con se' due dipendenze fuori dal nostro
+controllo:
+
+  - una variabile d'ambiente (`BLOB_READ_WRITE_TOKEN`) da configurare sul
+    progetto;
+  - una chiamata di conferma che arriva DAI server dello storage VERSO il
+    deploy — e sulle anteprime la protezione degli accessi di Vercel la
+    blocca, per cui il caricamento non risulta mai concluso.
+
+**Rimossa del tutto.** Il file viene ora spezzato dal browser in parti da
+1,5 MB e inviato con piu' Server Action normali; il server le ricompone.
+Nessun servizio esterno, nessuna variabile d'ambiente, nessuna chiamata in
+entrata: funziona ovunque funzioni l'applicazione, edizione portable
+compresa. La rotta `/api/backup-upload` e' stata eliminata.
+
+Le parti stanno in una tabella di appoggio (`public.backup_frammenti`) e
+vengono eliminate appena il file e' ricomposto: contengono le credenziali
+della piattaforma e non devono sopravvivere all'operazione. A ogni
+caricamento vengono ripuliti anche i residui piu' vecchi di un'ora, cosi'
+un'operazione interrotta non lascia nulla dietro di se'.
+
+**La ricomposizione verifica di avere TUTTE le parti** — numero e sequenza —
+e altrimenti si rifiuta con un messaggio esplicito. Un file ricomposto da
+frammenti incompleti sarebbe indistinguibile da un backup corrotto, e su un
+ripristino e' esattamente cio' che non deve accadere.
+
+L'avanzamento e' visibile a schermo ("2 di 4 parti") invece di una attesa
+muta.
+
+**6 test** sulla divisione e ricomposizione: il file torna identico dopo il
+giro, ogni parte resta sotto il limite, i casi di confine sulla dimensione
+esatta, e la ricomposizione corretta anche se le chiamate si concludono in
+ordine diverso da quello di invio.
+
+Verificato: type-check, lint, **153 test**, build cloud completa.
+
 ## 0.109.41 — 2026-09-08
 
 **Il caricamento diretto restava in attesa infinita**

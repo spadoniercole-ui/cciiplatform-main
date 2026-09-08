@@ -10,7 +10,7 @@
 // due funzioni reali: Dump e Azzeramento.
 
 import React, { useState } from 'react';
-import { upload } from '@vercel/blob/client';
+import { inviaFrammentoBackupAction } from '@/app/actions/frammentiBackup';
 import { toast } from 'sonner';
 import { generaDumpDatiAction } from '@/app/actions/dumpDati';
 import { azzeraDatabaseCompletoAction } from '@/app/actions/azzeraDatabase';
@@ -36,6 +36,7 @@ export function ModuloParametri() {
     grande: boolean;
   } | null>(null);
   const [caricamentoInCorso, setCaricamentoInCorso] = useState(false);
+  const [avanzamento, setAvanzamento] = useState<{ fatti: number; totale: number } | null>(null);
   const [passphraseRipristino, setPassphraseRipristino] = useState('');
   const [provaOk, setProvaOk] = useState(false);
   const [provaInCorso, setProvaInCorso] = useState(false);
@@ -148,6 +149,9 @@ export function ModuloParametri() {
   // storage. Il valore è prudenziale: al contenuto si somma la codifica del
   // protocollo delle Server Action.
   const LIMITE_INVIO_DIRETTO = 3_000_000;
+  // Dimensione di ogni frammento. Ben sotto il limite della piattaforma
+  // (~4,5 MB) perché al contenuto si somma la codifica del protocollo.
+  const DIMENSIONE_FRAMMENTO = 1_500_000;
 
   const handleFileRipristino = async (f: File | null) => {
     setProvaOk(false);
@@ -182,38 +186,38 @@ export function ModuloParametri() {
     setFileRipristino({ nome: f.name, contenuto, file: f, grande });
   };
 
-  /** Restituisce ciò che va passato alle action: il contenuto, o un indirizzo. */
+  /**
+   * Restituisce ciò che va passato alle action: il contenuto se sta in una
+   * sola richiesta, altrimenti un riferimento ai frammenti caricati.
+   *
+   * I file grandi non possono attraversare una Server Action — la
+   * piattaforma di hosting respinge i corpi sopra i ~4,5 MB prima ancora di
+   * invocare la funzione — quindi si spezzano e si inviano a pezzi. Nessun
+   * servizio esterno: solo più chiamate normali.
+   */
   const riferimentoDelFile = async (): Promise<string> => {
     if (!fileRipristino) throw new Error('Nessun file selezionato.');
     if (!fileRipristino.grande) return fileRipristino.contenuto;
 
+    const contenuto = fileRipristino.contenuto;
+    const totale = Math.ceil(contenuto.length / DIMENSIONE_FRAMMENTO);
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
     setCaricamentoInCorso(true);
+    setAvanzamento({ fatti: 0, totale });
     try {
-      // Tetto di attesa esplicito. Senza, un caricamento che non si conclude
-      // mai lascia l'interfaccia in attesa indefinita, indistinguibile da un
-      // blocco: è già successo, per una chiamata di completamento respinta
-      // che veniva ritentata all'infinito. Meglio un errore leggibile dopo
-      // due minuti che una rotella che gira per sempre.
-      const caricamento = upload(`backup-ripristino-${Date.now()}.txt`, fileRipristino.contenuto, {
-        access: 'public',
-        handleUploadUrl: '/api/backup-upload',
-        contentType: 'text/plain',
-      });
-      const scadenza = new Promise<never>((_, rifiuta) =>
-        setTimeout(
-          () =>
-            rifiuta(
-              new Error(
-                'Caricamento del file non concluso entro due minuti. Verificare che la variabile BLOB_READ_WRITE_TOKEN sia configurata sul server.'
-              )
-            ),
-          120_000
-        )
-      );
-      const blob = await Promise.race([caricamento, scadenza]);
-      return blob.url;
+      for (let i = 0; i < totale; i++) {
+        const pezzo = contenuto.slice(i * DIMENSIONE_FRAMMENTO, (i + 1) * DIMENSIONE_FRAMMENTO);
+        const r = await inviaFrammentoBackupAction(id, i, totale, pezzo);
+        if (!r.success) {
+          throw new Error(r.error || `Invio del frammento ${i + 1} di ${totale} non riuscito.`);
+        }
+        setAvanzamento({ fatti: i + 1, totale });
+      }
+      return `frammenti:${id}`;
     } finally {
       setCaricamentoInCorso(false);
+      setAvanzamento(null);
     }
   };
 
@@ -494,7 +498,10 @@ export function ModuloParametri() {
           )}
 
           {caricamentoInCorso && (
-            <p className="text-[11px] font-mono text-gray-500">Caricamento del file in corso...</p>
+            <p className="text-[11px] font-mono text-gray-500">
+              Caricamento del file
+              {avanzamento ? `: ${avanzamento.fatti} di ${avanzamento.totale} parti` : ''}...
+            </p>
           )}
 
           {provaInCorso && !caricamentoInCorso && (

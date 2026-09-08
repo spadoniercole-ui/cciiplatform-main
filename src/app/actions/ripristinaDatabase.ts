@@ -47,6 +47,7 @@ import {
   type IntestazioneBackup,
 } from '@/lib/backup/leggi';
 import { generaBackupCompletoAction } from '@/app/actions/backupDatabase';
+import { assemblaFrammenti, eliminaFrammenti } from '@/app/actions/frammentiBackup';
 
 export interface RisultatoRipristino {
   success: boolean;
@@ -78,32 +79,29 @@ type Client = {
  *
  * Due strade, perché i file grandi non possono attraversare una Server
  * Action: sopra i ~4,5 MB la piattaforma di hosting respinge la richiesta
- * prima ancora di invocare la funzione. In quel caso il browser carica il
- * file direttamente sullo storage e ci passa solo l'INDIRIZZO; qui lo si va a
- * leggere, e la lettura da parte del server non ha quel limite.
+ * prima ancora di invocare la funzione. In quel caso il browser spezza il
+ * file in frammenti, li invia con più chiamate, e qui passa solo un
+ * riferimento `frammenti:<id>` che viene ricomposto.
  *
- * Il file viene sempre eliminato dallo storage dopo l'uso: contiene tutte le
+ * I frammenti vengono sempre eliminati dopo l'uso: contengono tutte le
  * credenziali della piattaforma, e la regola qui è che i file caricati non si
  * conservano mai.
  */
+const PREFISSO_FRAMMENTI = 'frammenti:';
+
 async function recuperaContenuto(riferimento: string): Promise<string> {
-  if (!/^https?:\/\//.test(riferimento)) return riferimento;
-  const r = await fetch(riferimento);
-  if (!r.ok) {
-    throw new Error(`Lettura del file caricato non riuscita (HTTP ${r.status}).`);
-  }
-  return r.text();
+  if (!riferimento.startsWith(PREFISSO_FRAMMENTI)) return riferimento;
+  return assemblaFrammenti(riferimento.slice(PREFISSO_FRAMMENTI.length));
 }
 
-/** Elimina il file temporaneo dallo storage. Non deve mai bloccare il flusso. */
+/**
+ * Elimina i frammenti temporanei. Non deve mai bloccare il flusso, ma non va
+ * saltata: contengono le credenziali della piattaforma e non devono
+ * sopravvivere all'operazione.
+ */
 async function eliminaTemporaneo(riferimento: string): Promise<void> {
-  if (!/^https?:\/\//.test(riferimento)) return;
-  try {
-    const { del } = await import('@vercel/blob');
-    await del(riferimento);
-  } catch (e) {
-    console.error('[ripristino] eliminazione del file temporaneo non riuscita:', e);
-  }
+  if (!riferimento.startsWith(PREFISSO_FRAMMENTI)) return;
+  await eliminaFrammenti(riferimento.slice(PREFISSO_FRAMMENTI.length));
 }
 
 async function preparaScript(
