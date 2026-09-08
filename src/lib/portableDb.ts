@@ -185,18 +185,88 @@ function normalizzaRisultato(r: any) {
   return { rows, rowCount, fields: r?.fields ?? [] };
 }
 
+/**
+ * Il testo contiene più di un'istruzione SQL?
+ *
+ * Conta i punti e virgola SEGUITI da altro contenuto, ignorando quelli
+ * dentro stringhe letterali e dentro i commenti di riga: un backup è pieno
+ * di entrambi, e scambiare un punto e virgola dentro una ragione sociale per
+ * un separatore di istruzioni porterebbe a spezzare il testo nel punto
+ * sbagliato.
+ */
+export function contieneMultiIstruzione(text: string): boolean {
+  let inStringa = false;
+  let inCommento = false;
+  // Diventa true dopo un punto e virgola: da lì in poi, il primo carattere
+  // che sia SQL vero (non spazio, non commento) significa che le istruzioni
+  // sono più d'una.
+  let dopoPuntoEVirgola = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+
+    if (inCommento) {
+      if (c === '\n') inCommento = false;
+      continue;
+    }
+
+    if (inStringa) {
+      if (c === "'") {
+        if (text[i + 1] === "'")
+          i++; // apice raddoppiato: fa parte del testo
+        else inStringa = false;
+      }
+      continue;
+    }
+
+    // Inizio di un commento di riga: quel che segue non è SQL da eseguire.
+    if (c === '-' && text[i + 1] === '-') {
+      inCommento = true;
+      i++;
+      continue;
+    }
+
+    if (c === ';') {
+      dopoPuntoEVirgola = true;
+      continue;
+    }
+
+    if (c === "'") {
+      if (dopoPuntoEVirgola) return true;
+      inStringa = true;
+      continue;
+    }
+
+    // Un carattere di SQL vero dopo un punto e virgola chiude la questione.
+    if (dopoPuntoEVirgola && !/\s/.test(c)) return true;
+  }
+
+  return false;
+}
+
 async function eseguiQuery(text: string, params?: any[]) {
   if (!stato.pglite) await initPortableDb();
   if (params && params.length) {
     return normalizzaRisultato(await stato.pglite.query(text, params));
   }
+  // Multi-istruzione: si decide PRIMA di eseguire, non dopo un fallimento.
+  //
+  // La versione precedente tentava `query()` e ripiegava su `exec()` solo
+  // quando l'errore diceva "cannot insert multiple commands". Dentro una
+  // TRANSAZIONE quel primo tentativo fallito abortisce la transazione: la
+  // exec successiva trovava tutto già compromesso e restituiva "current
+  // transaction is aborted", nascondendo l'errore vero. È emerso sul
+  // ripristino da backup, dove lo script arriva come un unico testo con
+  // centinaia di istruzioni.
+  if (contieneMultiIstruzione(text)) {
+    await stato.pglite.exec(text);
+    return { rows: [], rowCount: 0, fields: [] };
+  }
+
   try {
     return normalizzaRisultato(await stato.pglite.query(text));
   } catch (e: any) {
-    // PGlite.query gestisce una singola istruzione: se il testo ne contiene
-    // più d'una (raro nel codice, che segue la disciplina "un DDL per query"),
-    // si ripiega su exec.
-    if (/cannot insert multiple commands|multiple statements|syntax/i.test(String(e?.message))) {
+    if (/cannot insert multiple commands|multiple statements/i.test(String(e?.message))) {
       await stato.pglite.exec(text);
       return { rows: [], rowCount: 0, fields: [] };
     }

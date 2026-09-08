@@ -148,10 +148,10 @@ export function ModuloParametri() {
   // ancora di invocare la funzione — e si passa al caricamento diretto sullo
   // storage. Il valore è prudenziale: al contenuto si somma la codifica del
   // protocollo delle Server Action.
-  const LIMITE_INVIO_DIRETTO = 3_000_000;
+  const LIMITE_INVIO_DIRETTO = 250_000;
   // Dimensione di ogni frammento. Ben sotto il limite della piattaforma
   // (~4,5 MB) perché al contenuto si somma la codifica del protocollo.
-  const DIMENSIONE_FRAMMENTO = 1_500_000;
+  const DIMENSIONE_FRAMMENTO = 250_000;
 
   const handleFileRipristino = async (f: File | null) => {
     setProvaOk(false);
@@ -166,10 +166,24 @@ export function ModuloParametri() {
     // che salvavano i backup cifrati in BINARIO anziché in base64. Si legge
     // sempre l'array di byte e si decide dal CONTENUTO, non dal nome.
     const byte = new Uint8Array(await f.arrayBuffer());
-    const stampabile = byte.every((b) => (b >= 32 && b < 127) || b === 10 || b === 13 || b === 9);
+
+    // Il criterio è "sono byte UTF-8 validi?", NON "sono caratteri ASCII".
+    // La prima versione controllava che ogni byte fosse ASCII stampabile: un
+    // backup in chiaro contiene accenti (è, à) nei propri commenti, quindi
+    // veniva scambiato per binario, ricodificato in base64, e il server lo
+    // dichiarava cifrato chiedendo una passphrase inesistente.
+    // `fatal: true` fa fallire la decodifica sui byte non validi: è
+    // esattamente la domanda giusta.
+    let testoUtf8: string | null = null;
+    try {
+      testoUtf8 = new TextDecoder('utf-8', { fatal: true }).decode(byte);
+    } catch {
+      testoUtf8 = null;
+    }
+
     let contenuto: string;
-    if (stampabile) {
-      contenuto = new TextDecoder('utf-8').decode(byte);
+    if (testoUtf8 !== null) {
+      contenuto = testoUtf8;
     } else {
       let binario = '';
       for (let i = 0; i < byte.length; i += 8192) {
