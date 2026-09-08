@@ -73,6 +73,39 @@ type Client = {
   release: () => void;
 };
 
+/**
+ * Recupera il contenuto del backup.
+ *
+ * Due strade, perché i file grandi non possono attraversare una Server
+ * Action: sopra i ~4,5 MB la piattaforma di hosting respinge la richiesta
+ * prima ancora di invocare la funzione. In quel caso il browser carica il
+ * file direttamente sullo storage e ci passa solo l'INDIRIZZO; qui lo si va a
+ * leggere, e la lettura da parte del server non ha quel limite.
+ *
+ * Il file viene sempre eliminato dallo storage dopo l'uso: contiene tutte le
+ * credenziali della piattaforma, e la regola qui è che i file caricati non si
+ * conservano mai.
+ */
+async function recuperaContenuto(riferimento: string): Promise<string> {
+  if (!/^https?:\/\//.test(riferimento)) return riferimento;
+  const r = await fetch(riferimento);
+  if (!r.ok) {
+    throw new Error(`Lettura del file caricato non riuscita (HTTP ${r.status}).`);
+  }
+  return r.text();
+}
+
+/** Elimina il file temporaneo dallo storage. Non deve mai bloccare il flusso. */
+async function eliminaTemporaneo(riferimento: string): Promise<void> {
+  if (!/^https?:\/\//.test(riferimento)) return;
+  try {
+    const { del } = await import('@vercel/blob');
+    await del(riferimento);
+  } catch (e) {
+    console.error('[ripristino] eliminazione del file temporaneo non riuscita:', e);
+  }
+}
+
 async function preparaScript(
   contenutoFile: string,
   passphrase?: string
@@ -138,7 +171,19 @@ export async function provaRipristinoAction(
   contenutoFile: string,
   passphrase?: string
 ): Promise<RisultatoRipristino> {
-  const prep = await preparaScript(contenutoFile, passphrase);
+  let contenuto: string;
+  try {
+    contenuto = await recuperaContenuto(contenutoFile);
+  } catch (error: unknown) {
+    return {
+      success: false,
+      fase: 'lettura',
+      databaseIntatto: true,
+      problemi: [(error as Error).message],
+    };
+  }
+
+  const prep = await preparaScript(contenuto, passphrase);
   if (!prep.ok) {
     return { success: false, fase: 'validazione', databaseIntatto: true, problemi: prep.problemi };
   }
@@ -209,7 +254,19 @@ export async function ripristinaDatabaseAction(
   const prova = await provaRipristinoAction(contenutoFile, passphrase);
   if (!prova.success) return prova;
 
-  const prep = await preparaScript(contenutoFile, passphrase);
+  let contenuto: string;
+  try {
+    contenuto = await recuperaContenuto(contenutoFile);
+  } catch (error: unknown) {
+    return {
+      success: false,
+      fase: 'lettura',
+      databaseIntatto: true,
+      problemi: [(error as Error).message],
+    };
+  }
+
+  const prep = await preparaScript(contenuto, passphrase);
   if (!prep.ok) {
     return { success: false, fase: 'validazione', databaseIntatto: true, problemi: prep.problemi };
   }
@@ -283,6 +340,7 @@ export async function ripristinaDatabaseAction(
       }
 
       await client.query('COMMIT');
+      await eliminaTemporaneo(contenutoFile);
       return {
         success: true,
         fase: 'completato',

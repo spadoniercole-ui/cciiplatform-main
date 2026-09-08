@@ -93,6 +93,81 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.40 — 2026-09-08
+
+**Ripristino: i file grandi non passano piu' dalla Server Action**
+
+Dato decisivo fornito da Ercole: il suo backup pesa **4.370 KB**. In binario;
+ricodificato per la spedizione diventa circa 5,8 MB. Vercel impone un limite
+FISSO di circa 4,5 MB al corpo delle richieste verso le funzioni serverless —
+dell'infrastruttura, non dell'applicazione — e agisce PRIMA che la richiesta
+raggiunga il codice. La funzione non veniva nemmeno invocata, nei log non
+compariva nulla, e il browser mostrava soltanto "An unexpected response was
+received from the server". Nessuna delle correzioni precedenti poteva
+cambiare questo, ed e' il motivo per cui sembravano tutte inefficaci.
+
+**Caricamento diretto sullo storage.** Nuova rotta
+`src/app/api/backup-upload/route.ts` che rilascia al browser il permesso di
+caricare il file DIRETTAMENTE su Vercel Blob, senza attraversare la funzione.
+Al server arriva poi solo l'indirizzo, e la lettura lato server non ha quel
+limite.
+
+L'instradamento e' automatico e invisibile: sotto i 3 MB il contenuto viaggia
+come prima (piu' semplice, nessun file temporaneo); sopra, si passa dal
+caricamento diretto, con l'indicazione a schermo di cosa sta accadendo.
+
+**Sicurezza.** Il file contiene tutte le credenziali della piattaforma,
+quindi: il permesso di caricare e' rilasciato SOLO a un Superadmin con
+sessione valida (verificata sulla tabella `sessioni`); il nome del file lo
+decide il server, non il browser; e il file viene ELIMINATO subito dopo
+l'elaborazione, coerentemente con la regola della piattaforma — i file
+caricati non si conservano mai.
+
+Verificato: type-check, lint, **147 test**, build cloud completa con la nuova
+rotta presente (`ƒ /api/backup-upload`).
+
+**Nota.** La rotta richiede `BLOB_READ_WRITE_TOKEN` fra le variabili
+d'ambiente. E' la stessa gia' usata dal resto della piattaforma per i
+documenti caricati: se il caricamento dei PDF funziona, funziona anche questo.
+
+## 0.109.39 — 2026-09-08
+
+**Il giro di andata e ritorno dei backup CIFRATI era rotto**
+
+Difetto certo, dimostrato in laboratorio, e riguarda esattamente i file
+`.sql.enc`.
+
+Il backup cifrato veniva SALVATO in binario: `atob()` decodificava il base64
+prodotto dal server e il file finiva sul disco come byte grezzi. Al ripristino
+lo stesso file veniva RILETTO con `f.text()`, cioe' decodificato come UTF-8.
+I due passaggi non sono l'inverso l'uno dell'altro: ogni byte non valido in
+UTF-8 diventa un carattere di sostituzione. Misurato su un caso di prova:
+**metà dei byte perduti**. Il server riceveva rumore.
+
+Corretto ai due capi. Il file cifrato viene ora salvato come TESTO base64,
+cosi' che quel che si scarica sia esattamente quel che si ricarica. E la
+lettura e' tollerante ai file gia' prodotti dalle versioni 0.109.34-0.109.38:
+si legge sempre l'array di byte e si decide dal CONTENUTO, non dal nome — se
+e' base64 stampabile lo si usa cosi' com'e', se sono byte grezzi li si
+ricodifica.
+
+**Guardia sulla dimensione allineata al limite VERO.** Era a 20 MB, tarata sul
+`bodySizeLimit` di Next (25 MB). Ma Vercel impone un limite FISSO di circa
+4,5 MB al corpo delle richieste verso le funzioni serverless: e'
+dell'infrastruttura, non dell'applicazione, e agisce PRIMA che la richiesta
+raggiunga il codice. Un file piu' grande viene respinto senza che la funzione
+venga invocata e senza lasciare traccia nei log — con la stessa identica
+firma degli altri guasti di questa serie. La guardia e' ora a 4 MB e spiega
+che non e' aggirabile da li', indicando le alternative (psql, oppure
+l'edizione portable, che non ha il limite).
+
+Verificato: type-check, lint, **147 test**, build cloud completa.
+
+**Se l'errore persiste**, la dimensione del file di backup e' l'informazione
+che manca: sopra i ~4,5 MB serve un'altra strada per farlo arrivare al server
+(caricamento diretto su Vercel Blob dal browser, che aggira il limite), ed e'
+un lavoro a se'.
+
 ## 0.109.38 — 2026-09-08
 
 **Il tetto di durata mancava sulla pagina Parametri di sistema**

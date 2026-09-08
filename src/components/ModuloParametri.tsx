@@ -10,6 +10,7 @@
 // due funzioni reali: Dump e Azzeramento.
 
 import React, { useState } from 'react';
+import { upload } from '@vercel/blob/client';
 import { toast } from 'sonner';
 import { generaDumpDatiAction } from '@/app/actions/dumpDati';
 import { azzeraDatabaseCompletoAction } from '@/app/actions/azzeraDatabase';
@@ -28,9 +29,13 @@ export function ModuloParametri() {
   const [esitoBackup, setEsitoBackup] = useState<RisultatoBackup | null>(null);
   // Ripristino. `provaOk` è la guardia: il pulsante definitivo resta spento
   // finché il file non ha superato l'esecuzione su un database temporaneo.
-  const [fileRipristino, setFileRipristino] = useState<{ nome: string; contenuto: string } | null>(
-    null
-  );
+  const [fileRipristino, setFileRipristino] = useState<{
+    nome: string;
+    contenuto: string;
+    file: File;
+    grande: boolean;
+  } | null>(null);
+  const [caricamentoInCorso, setCaricamentoInCorso] = useState(false);
   const [passphraseRipristino, setPassphraseRipristino] = useState('');
   const [provaOk, setProvaOk] = useState(false);
   const [provaInCorso, setProvaInCorso] = useState(false);
@@ -81,11 +86,22 @@ export function ModuloParametri() {
         // esista nell'edizione cloud, dove il filesystem del server e'
         // effimero. Nel portable il file viene ANCHE scritto su disco, e il
         // percorso torna in `percorsoLocale`.
-        const blob = r.cifrato
-          ? new Blob([Uint8Array.from(atob(r.contenuto), (c) => c.charCodeAt(0))], {
-              type: 'application/octet-stream',
-            })
-          : new Blob([r.contenuto], { type: 'application/sql' });
+        // Il file cifrato viene salvato come TESTO base64, non come byte
+        // grezzi.
+        //
+        // Prima veniva decodificato con atob() e scritto in binario; al
+        // ripristino il file veniva riletto con f.text(), cioè decodificato
+        // come UTF-8. I due passaggi non sono l'inverso l'uno dell'altro:
+        // ogni byte non valido in UTF-8 diventa un carattere di
+        // sostituzione, e il contenuto torna indietro irrecuperabile —
+        // misurato: metà dei byte perduti. Il server riceveva rumore e non
+        // riconosceva più il file come un backup.
+        //
+        // Tenendolo in base64 il giro si chiude: quel che si scarica è
+        // esattamente quel che si ricarica.
+        const blob = new Blob([r.contenuto], {
+          type: r.cifrato ? 'text/plain' : 'application/sql',
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -116,7 +132,22 @@ export function ModuloParametri() {
   // rifiutata dall'infrastruttura PRIMA di arrivare al codice, e il browser
   // mostra un errore generico che non dice nulla della causa. Meglio
   // fermarsi qui e spiegarlo.
-  const LIMITE_FILE_MB = 20;
+  // Vercel impone un limite FISSO di circa 4,5 MB al corpo delle richieste
+  // verso le funzioni serverless. Non è il `bodySizeLimit` di Next (25 MB):
+  // quello è un limite applicativo, questo è dell'infrastruttura, e agisce
+  // PRIMA che la richiesta raggiunga il codice. Un file più grande viene
+  // rifiutato dalla piattaforma, la funzione non viene nemmeno invocata, e
+  // nei log del server non compare nulla: il browser mostra soltanto
+  // "An unexpected response was received from the server".
+  //
+  // Fermarsi qui, con un messaggio comprensibile, è meglio che mandare una
+  // richiesta destinata a essere respinta senza spiegazioni.
+  // Oltre questa dimensione il contenuto non viaggia dentro una Server
+  // Action — Vercel respinge il corpo delle richieste sopra i ~4,5 MB, prima
+  // ancora di invocare la funzione — e si passa al caricamento diretto sullo
+  // storage. Il valore è prudenziale: al contenuto si somma la codifica del
+  // protocollo delle Server Action.
+  const LIMITE_INVIO_DIRETTO = 3_000_000;
 
   const handleFileRipristino = async (f: File | null) => {
     setProvaOk(false);
@@ -126,21 +157,47 @@ export function ModuloParametri() {
       setFileRipristino(null);
       return;
     }
-    const mb = f.size / (1024 * 1024);
-    if (mb > LIMITE_FILE_MB) {
-      setFileRipristino(null);
-      setEsitoRipristino({
-        success: false,
-        fase: 'lettura',
-        databaseIntatto: true,
-        problemi: [
-          `Il file pesa ${mb.toFixed(1)} MB e supera il limite di ${LIMITE_FILE_MB} MB per il caricamento da questa pagina.`,
-          'Su un database di queste dimensioni il ripristino va eseguito direttamente sul server con psql, oppure dall’edizione portable, che non ha questo limite.',
-        ],
-      });
-      return;
+
+    // Lettura tollerante ai file prodotti dalle versioni 0.109.34-0.109.38,
+    // che salvavano i backup cifrati in BINARIO anziché in base64. Si legge
+    // sempre l'array di byte e si decide dal CONTENUTO, non dal nome.
+    const byte = new Uint8Array(await f.arrayBuffer());
+    const stampabile = byte.every((b) => (b >= 32 && b < 127) || b === 10 || b === 13 || b === 9);
+    let contenuto: string;
+    if (stampabile) {
+      contenuto = new TextDecoder('utf-8').decode(byte);
+    } else {
+      let binario = '';
+      for (let i = 0; i < byte.length; i += 8192) {
+        binario += String.fromCharCode(...byte.subarray(i, i + 8192));
+      }
+      contenuto = btoa(binario);
     }
-    setFileRipristino({ nome: f.name, contenuto: await f.text() });
+
+    // Sopra la soglia il contenuto non può viaggiare dentro una Server
+    // Action: la piattaforma respinge la richiesta prima di invocare la
+    // funzione. In quel caso il file verrà caricato direttamente sullo
+    // storage e al server passerà solo l'indirizzo.
+    const grande = contenuto.length > LIMITE_INVIO_DIRETTO;
+    setFileRipristino({ nome: f.name, contenuto, file: f, grande });
+  };
+
+  /** Restituisce ciò che va passato alle action: il contenuto, o un indirizzo. */
+  const riferimentoDelFile = async (): Promise<string> => {
+    if (!fileRipristino) throw new Error('Nessun file selezionato.');
+    if (!fileRipristino.grande) return fileRipristino.contenuto;
+
+    setCaricamentoInCorso(true);
+    try {
+      const blob = await upload(`backup-ripristino-${Date.now()}.txt`, fileRipristino.contenuto, {
+        access: 'public',
+        handleUploadUrl: '/api/backup-upload',
+        contentType: 'text/plain',
+      });
+      return blob.url;
+    } finally {
+      setCaricamentoInCorso(false);
+    }
   };
 
   const handleProva = async () => {
@@ -149,7 +206,7 @@ export function ModuloParametri() {
     setEsitoRipristino(null);
     try {
       const r = await provaRipristinoAction(
-        fileRipristino.contenuto,
+        await riferimentoDelFile(),
         passphraseRipristino || undefined
       );
       setEsitoRipristino(r);
@@ -172,7 +229,7 @@ export function ModuloParametri() {
     setRipristinoInCorso(true);
     try {
       const r = await ripristinaDatabaseAction(
-        fileRipristino.contenuto,
+        await riferimentoDelFile(),
         passphraseRipristino || undefined
       );
       setEsitoRipristino(r);
@@ -405,11 +462,23 @@ export function ModuloParametri() {
 
           <button
             onClick={() => void handleProva()}
-            disabled={!fileRipristino || provaInCorso}
+            disabled={!fileRipristino || provaInCorso || caricamentoInCorso}
             className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-mono text-xs font-bold uppercase rounded-xl transition-all"
           >
             {provaInCorso ? 'Verifica in corso...' : '1. Verifica il file'}
           </button>
+
+          {fileRipristino?.grande && !provaInCorso && (
+            <p className="text-[11px] font-mono text-gray-500">
+              File di {(fileRipristino.file.size / (1024 * 1024)).toFixed(1)} MB: verrà caricato
+              direttamente sullo storage, perché sopra i ~4,5 MB il server non può riceverlo in una
+              richiesta diretta. Viene eliminato subito dopo l&apos;elaborazione.
+            </p>
+          )}
+
+          {caricamentoInCorso && (
+            <p className="text-[11px] font-mono text-gray-500">Caricamento del file in corso...</p>
+          )}
 
           {provaInCorso && (
             <p className="text-[11px] font-mono text-gray-500">
