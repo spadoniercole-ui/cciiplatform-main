@@ -47,7 +47,7 @@ import {
   type IntestazioneBackup,
 } from '@/lib/backup/leggi';
 import { generaBackupCompletoAction } from '@/app/actions/backupDatabase';
-import { assemblaFrammenti, eliminaFrammenti } from '@/app/actions/frammentiBackup';
+import { assemblaFrammenti, eliminaFrammenti } from '@/lib/backup/frammentiServer';
 
 export interface RisultatoRipristino {
   success: boolean;
@@ -181,7 +181,22 @@ export async function provaRipristinoAction(
     };
   }
 
-  const prep = await preparaScript(contenuto, passphrase);
+  // preparaScript era fuori da qualunque try: un'eccezione qui (memoria
+  // esaurita su un file grande, un'espressione regolare che esplode)
+  // usciva dal confine della Server Action, e in produzione Next nasconde il
+  // messaggio lasciando solo un digest. Nessuna eccezione deve poter uscire
+  // di qui senza una spiegazione leggibile.
+  let prep: Awaited<ReturnType<typeof preparaScript>>;
+  try {
+    prep = await preparaScript(contenuto, passphrase);
+  } catch (error: unknown) {
+    return {
+      success: false,
+      fase: 'validazione',
+      databaseIntatto: true,
+      problemi: [`Lettura del file non riuscita: ${(error as Error).message}`],
+    };
+  }
   if (!prep.ok) {
     return { success: false, fase: 'validazione', databaseIntatto: true, problemi: prep.problemi };
   }
@@ -264,7 +279,17 @@ export async function ripristinaDatabaseAction(
     };
   }
 
-  const prep = await preparaScript(contenuto, passphrase);
+  let prep: Awaited<ReturnType<typeof preparaScript>>;
+  try {
+    prep = await preparaScript(contenuto, passphrase);
+  } catch (error: unknown) {
+    return {
+      success: false,
+      fase: 'validazione',
+      databaseIntatto: true,
+      problemi: [`Lettura del file non riuscita: ${(error as Error).message}`],
+    };
+  }
   if (!prep.ok) {
     return { success: false, fase: 'validazione', databaseIntatto: true, problemi: prep.problemi };
   }

@@ -449,9 +449,12 @@ export function ModuloParametri() {
           </p>
           <p className="text-xs font-mono text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3">
             L&apos;ordine dei passi è pensato per rendere reversibile un errore: il file viene prima
-            validato ed <span className="font-bold">eseguito su un database temporaneo</span>; se
-            non funziona lì, ci si ferma senza aver toccato nulla. Solo dopo viene salvato lo stato
-            corrente — scaricato automaticamente — e infine si sostituisce.
+            validato ed{' '}
+            <span className="font-bold">
+              eseguito dentro una transazione che viene poi annullata
+            </span>
+            ; se non funziona lì, ci si ferma senza aver toccato nulla. Solo dopo viene salvato lo
+            stato corrente — scaricato automaticamente — e infine si sostituisce.
           </p>
 
           <div>
@@ -491,9 +494,9 @@ export function ModuloParametri() {
 
           {fileRipristino?.grande && !provaInCorso && (
             <p className="text-[11px] font-mono text-gray-500">
-              File di {(fileRipristino.file.size / (1024 * 1024)).toFixed(1)} MB: verrà caricato
-              direttamente sullo storage, perché sopra i ~4,5 MB il server non può riceverlo in una
-              richiesta diretta. Viene eliminato subito dopo l&apos;elaborazione.
+              File di {(fileRipristino.file.size / (1024 * 1024)).toFixed(1)} MB: verrà inviato in
+              più parti, perché sopra i ~4,5 MB il server non può riceverlo in una richiesta sola.
+              Le parti vengono eliminate subito dopo l&apos;elaborazione.
             </p>
           )}
 

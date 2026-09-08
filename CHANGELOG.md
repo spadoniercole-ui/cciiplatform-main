@@ -93,6 +93,46 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.43 — 2026-09-08
+
+**Difetto di SICUREZZA nel caricamento a frammenti, e eccezioni che
+uscivano senza spiegazione**
+
+**1. Il backup era scaricabile da chiunque.** In un file `'use server'` OGNI
+funzione esportata diventa un endpoint richiamabile dal browser. Avevo
+esportato `assemblaFrammenti` ed `eliminaFrammenti` da
+`src/app/actions/frammentiBackup.ts`: la prima restituisce il backup
+completo, cioe' **tutte le credenziali della piattaforma** — hash delle
+password, segreti TOTP, hash dei PIN, sessioni di ogni spazio. Chiunque
+avesse indovinato un identificativo di caricamento poteva ottenerle.
+
+Spostate in `src/lib/backup/frammentiServer.ts`, fuori da `'use server'`:
+restano funzioni di servizio del server, non raggiungibili da fuori.
+Nel file delle action resta la sola `inviaFrammentoBackupAction`.
+
+Il controllo `check:use-server` non poteva intercettarlo: verifica che non
+vengano esportati valori NON-funzione, e queste erano funzioni async
+regolari. E' un limite del controllo, che copre un errore diverso.
+
+**2. Eccezioni fuori dal confine della Server Action.** `preparaScript` era
+chiamata fuori da qualunque `try` in entrambe le action: un'eccezione li' —
+memoria esaurita su un file grande, un'espressione regolare che esplode —
+usciva dal confine, e in produzione Next nasconde il messaggio lasciando
+solo un digest ("The specific message is omitted in production builds").
+E' quello che si e' visto a schermo. Ora nessuna eccezione puo' uscire senza
+una spiegazione leggibile in italiano.
+
+**3. Testi a schermo rimasti indietro.** L'interfaccia parlava ancora di
+"caricato direttamente sullo storage" e di "database temporaneo", entrambi
+non piu' veri dopo le due riscritture precedenti. Una sostituzione di testo
+non era andata a segno e non me ne ero accorto.
+
+Verificato: type-check, lint, **153 test**, build cloud completa.
+
+**Se l'errore persiste**, il digest mostrato a schermo compare nei log di
+Vercel (Deployments -> Functions) accanto al messaggio vero: e' l'unica cosa
+che manca per chiudere.
+
 ## 0.109.42 — 2026-09-08
 
 **Caricamento del backup a frammenti: via la dipendenza dallo storage esterno**
