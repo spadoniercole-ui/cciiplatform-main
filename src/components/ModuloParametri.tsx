@@ -288,7 +288,7 @@ export function ModuloParametri() {
                 value={passphraseBackup}
                 onChange={(e) => setPassphraseBackup(e.target.value)}
                 placeholder="vuota = file in chiaro"
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl font-mono text-xs"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl font-mono text-xs text-gray-900 bg-white"
               />
             </div>
             <div>
@@ -299,7 +299,7 @@ export function ModuloParametri() {
                 type="password"
                 value={passphraseConferma}
                 onChange={(e) => setPassphraseConferma(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl font-mono text-xs"
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl font-mono text-xs text-gray-900 bg-white"
               />
             </div>
           </div>
@@ -384,7 +384,7 @@ export function ModuloParametri() {
               type="file"
               accept=".sql,.enc,.txt"
               onChange={(e) => void handleFileRipristino(e.target.files?.[0] ?? null)}
-              className="w-full text-xs font-mono file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-gray-900 file:text-white file:font-bold file:uppercase file:text-[10px]"
+              className="w-full text-xs font-mono text-gray-900 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-gray-900 file:text-white file:font-bold file:uppercase file:text-[10px]"
             />
           </div>
 
@@ -399,7 +399,7 @@ export function ModuloParametri() {
                 setPassphraseRipristino(e.target.value);
                 setProvaOk(false);
               }}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl font-mono text-xs"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl font-mono text-xs text-gray-900 bg-white"
             />
           </div>
 
@@ -410,6 +410,14 @@ export function ModuloParametri() {
           >
             {provaInCorso ? 'Verifica in corso...' : '1. Verifica il file'}
           </button>
+
+          {provaInCorso && (
+            <p className="text-[11px] font-mono text-gray-500">
+              La verifica esegue l&apos;intero ripristino dentro una transazione che verrà poi
+              annullata: su un database di dimensioni reali può richiedere qualche decina di
+              secondi. Non chiudere la pagina.
+            </p>
+          )}
 
           {esitoRipristino && (
             <div
@@ -461,7 +469,7 @@ export function ModuloParametri() {
                 value={confermaRipristino}
                 onChange={(e) => setConfermaRipristino(e.target.value)}
                 placeholder={`Scrivi "${FRASE_RIPRISTINO}" per abilitare`}
-                className="w-full px-3 py-2 border border-red-200 rounded-xl font-mono text-xs"
+                className="w-full px-3 py-2 border border-red-200 rounded-xl font-mono text-xs text-gray-900 bg-white"
               />
               <button
                 onClick={() => void handleRipristina()}
@@ -490,7 +498,7 @@ export function ModuloParametri() {
               value={confermaAzzeramento}
               onChange={(e) => setConfermaAzzeramento(e.target.value)}
               placeholder={`Scrivi "${FRASE_CONFERMA}" per abilitare`}
-              className="flex-1 p-2.5 bg-gray-50 border border-red-200 rounded-xl font-mono text-xs outline-none focus:bg-white focus:border-red-500 transition-all"
+              className="flex-1 p-2.5 bg-gray-50 border border-red-200 rounded-xl font-mono text-xs text-gray-900 outline-none focus:bg-white focus:border-red-500 transition-all"
             />
             <button
               onClick={handleAzzeraDatabase}

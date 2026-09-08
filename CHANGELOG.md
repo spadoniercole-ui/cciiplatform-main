@@ -93,6 +93,41 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.38 — 2026-09-08
+
+**Il tetto di durata mancava sulla pagina Parametri di sistema**
+
+Terzo tentativo su questo errore, e questa volta la causa e' fuori dal codice
+del ripristino. Le Server Action ereditano il tetto di durata dalla PAGINA che
+le invoca. `src/app/superadmin/Parametri/page.tsx` non dichiarava
+`maxDuration`, quindi valeva il predefinito della piattaforma di hosting —
+pochi secondi. Backup, verifica e ripristino di un database reale lo superano,
+e una funzione che sfora non restituisce nulla: il browser mostra soltanto
+"An unexpected response was received from the server".
+
+E' la stessa firma degli altri due guasti, il che spiega perche' le correzioni
+precedenti sembravano non avere effetto: erano corrette entrambe, ma sotto
+c'era ancora questo.
+
+Le altre pagine con operazioni lunghe (Screening, Proposta, Relazione,
+Brogliaccio) dichiarano gia' `maxDuration`; questa era rimasta indietro.
+Impostato a 300 secondi.
+
+Aggiunto anche un avviso durante la verifica: su un database reale l'attesa e'
+di qualche decina di secondi, e senza indicazioni il silenzio e'
+indistinguibile da un blocco.
+
+**Campi invisibili — bianco su bianco.** Il `body` ha `color: white` (serve
+alla pagina di accesso, su fondo scuro), quindi ogni campo su fondo chiaro
+deve dichiarare il proprio colore del testo. I campi introdotti con le Soglie
+di segnalazione e con backup/ripristino non lo facevano: testo bianco su
+bianco, leggibile solo mentre selezionato. Comprese le <option> dei menu a
+tendina e il nome del file scelto, che risultava invisibile facendo sembrare
+che nessun file fosse stato selezionato. Corretti 11 campi; i componenti piu'
+vecchi usavano gia' `text-slate-900`.
+
+Verificato: type-check, lint, **147 test**, build cloud completa.
+
 ## 0.109.37 — 2026-09-08
 
 **La prova del ripristino non usa piu' un secondo motore di database**

@@ -45,6 +45,14 @@ const VUOTI: ValoriSoglie = {
   soglieAggiornateAl: null,
 };
 
+// Il `body` dell'applicazione ha `color: white` (sfondo scuro della pagina di
+// accesso). Ogni campo su fondo chiaro DEVE quindi dichiarare il proprio
+// colore del testo: senza, eredita il bianco e diventa invisibile — bianco su
+// bianco, con il valore leggibile solo mentre è selezionato. Vale anche per
+// le <option> dei menu a tendina, che ereditano dallo stesso punto.
+const CLASSE_CAMPO =
+  'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500';
+
 const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
 const testo = (n: number | null) => (n === null || n === undefined ? '' : String(n));
 const numero = (v: string): number | null => (v.trim() === '' ? null : Number(v));
@@ -71,7 +79,7 @@ function CampoEuro({
         step="0.01"
         value={testo(valore)}
         onChange={(e) => onCambia(numero(e.target.value))}
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+        className={`${CLASSE_CAMPO} font-mono`}
       />
       <p className="text-[10px] text-slate-400 mt-1 leading-snug">{fonte}</p>
     </div>
@@ -174,11 +182,17 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
                   conLavoratoriSubordinati: e.target.value === '' ? null : e.target.value === 'si',
                 })
               }
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className={CLASSE_CAMPO}
             >
-              <option value="">Non dichiarato</option>
-              <option value="si">Sì — l&apos;impresa ha lavoratori</option>
-              <option value="no">No — impresa senza lavoratori</option>
+              <option value="" className="text-slate-900">
+                Non dichiarato
+              </option>
+              <option value="si" className="text-slate-900">
+                Sì — l&apos;impresa ha lavoratori
+              </option>
+              <option value="no" className="text-slate-900">
+                No — impresa senza lavoratori
+              </option>
             </select>
             <p className="text-[10px] text-slate-400 mt-1 leading-snug">
               Decide quale soglia si applica: con lavoratori vale il concorso 30% + 15.000 €, senza
@@ -212,7 +226,7 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
                 onChange={(e) =>
                   setValori({ ...valori, annoContributiDovuti: numero(e.target.value) })
                 }
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className={`${CLASSE_CAMPO} font-mono`}
               />
               <p className="text-[10px] text-slate-400 mt-1">Anno cui si riferisce il totale.</p>
             </div>
