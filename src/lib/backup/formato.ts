@@ -18,7 +18,39 @@ export function quotaIdentificatore(nome: string): string {
  * appiattiti a testo, tornano indietro diversi da come sono partiti:
  * bytea, array, jsonb, date, numeri non finiti.
  */
-export function serializzaValore(valore: unknown): string {
+/**
+ * @param tipo `udt_name` della colonna (es. 'jsonb', '_text', 'int4').
+ *
+ * Il tipo della COLONNA e non quello del valore, perche' il valore da solo
+ * non basta a distinguere i casi. Una colonna `jsonb` che contiene un array
+ * JSON viene restituita dal driver come array JavaScript, identica a una
+ * colonna `text[]`: serializzarla come `ARRAY[...]` produce un jsonb[] e il
+ * ripristino fallisce con
+ *   column "..." is of type jsonb but expression is of type jsonb[]
+ * Difetto reale, emerso su `spazi.direttrici_ente_strutturate`.
+ */
+export function serializzaValore(valore: unknown, tipo?: string): string {
+  if (valore === null || valore === undefined) return 'NULL';
+
+  if (tipo) {
+    // Array Postgres: udt_name comincia con '_' (es. '_text' per text[]).
+    if (tipo.startsWith('_')) {
+      const elementi = Array.isArray(valore) ? valore : [valore];
+      if (elementi.length === 0) return `'{}'`;
+      const base = tipo.slice(1);
+      return `ARRAY[${elementi.map((v) => serializzaValore(v, base)).join(', ')}]::${base}[]`;
+    }
+    // JSON: si serializza il valore INTERO come JSON, qualunque forma abbia.
+    if (tipo === 'json' || tipo === 'jsonb') {
+      return `'${JSON.stringify(valore).replace(/'/g, "''")}'::${tipo}`;
+    }
+  }
+
+  return serializzaSenzaTipo(valore);
+}
+
+/** Ripiego quando il tipo della colonna non e' noto. */
+function serializzaSenzaTipo(valore: unknown): string {
   if (valore === null || valore === undefined) return 'NULL';
 
   if (typeof valore === 'number') {
@@ -44,7 +76,7 @@ export function serializzaValore(valore: unknown): string {
   // la generazione sembrava corretta finché non si è provato a rieseguirla.
   if (Array.isArray(valore)) {
     if (valore.length === 0) return `'{}'`;
-    return `ARRAY[${valore.map((v) => serializzaValore(v)).join(', ')}]`;
+    return `ARRAY[${valore.map((v) => serializzaSenzaTipo(v)).join(', ')}]`;
   }
 
   if (typeof valore === 'object') {

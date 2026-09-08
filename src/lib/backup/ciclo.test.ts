@@ -28,6 +28,17 @@ async function popolato(): Promise<PGlite> {
       alias TEXT[] NOT NULL DEFAULT '{}',
       dati JSONB
     );
+    CREATE TABLE public.spazi (
+      id SERIAL PRIMARY KEY,
+      nome TEXT NOT NULL,
+      -- Colonna jsonb che CONTIENE un array: il driver la restituisce come
+      -- array JavaScript, indistinguibile da una colonna text[]. È il caso
+      -- che faceva fallire il ripristino con
+      --   column "..." is of type jsonb but expression is of type jsonb[]
+      direttrici_ente_strutturate JSONB,
+      alias TEXT[] NOT NULL DEFAULT '{}'
+    );
+
     CREATE TABLE tenant_uno.scenari (
       id SERIAL PRIMARY KEY,
       azienda_id INTEGER NOT NULL REFERENCES tenant_uno.aziende(id) ON DELETE CASCADE,
@@ -38,8 +49,28 @@ async function popolato(): Promise<PGlite> {
       ('Alfa S.p.A.', '{}', NULL);
     INSERT INTO tenant_uno.scenari (azienda_id, titolo) VALUES
       (1, 'Primo scenario'), (1, 'Secondo'), (2, 'Terzo');
+
+    INSERT INTO public.spazi (nome, direttrici_ente_strutturate, alias) VALUES
+      ('Ente', '[{"nome":"Direttrice A"},{"nome":"L''Officina"}]', ARRAY['INPS','Enti previdenziali']),
+      ('Studio', '{"chiave":"valore"}', '{}'),
+      ('Senza', NULL, ARRAY['X']);
   `);
   return db;
+}
+
+/** Azzeramento, identico a quello della Server Action: schemi tenant E
+ *  tabelle globali. Ometterne una metà lascia dati che poi vanno in
+ *  conflitto con il ripristino — errore in cui erano incorsi questi stessi
+ *  test prima di avere una tabella in `public`. */
+async function azzera(db: PGlite): Promise<void> {
+  const schemi = await db.query<{ nspname: string }>(
+    `SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant\\_%'`
+  );
+  for (const s of schemi.rows) await db.exec(`DROP SCHEMA IF EXISTS "${s.nspname}" CASCADE`);
+  const tab = await db.query<{ tablename: string }>(
+    `SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'`
+  );
+  for (const t of tab.rows) await db.exec(`DROP TABLE IF EXISTS "public"."${t.tablename}" CASCADE`);
 }
 
 /** Riproduce ciò che fa la Server Action: intestazione + BEGIN/COMMIT. */
@@ -72,16 +103,7 @@ describe('ciclo completo: backup → azzeramento → ripristino', () => {
 
     // AZZERAMENTO: stessa logica dell'action (DROP SCHEMA CASCADE + DROP
     // TABLE su public), sullo stesso database che poi si ripristina.
-    const schemi = await originale.query<{ nspname: string }>(
-      `SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant\\_%'`
-    );
-    for (const s of schemi.rows)
-      await originale.exec(`DROP SCHEMA IF EXISTS "${s.nspname}" CASCADE`);
-    const tab = await originale.query<{ tablename: string }>(
-      `SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'`
-    );
-    for (const t of tab.rows)
-      await originale.exec(`DROP TABLE IF EXISTS "public"."${t.tablename}" CASCADE`);
+    await azzera(originale);
 
     // Vuoto davvero.
     const dopoAzzeramento = await originale.query<{ n: number }>(
@@ -123,10 +145,7 @@ describe('ciclo completo: backup → azzeramento → ripristino', () => {
     const db = await popolato();
     const primo = await fileDiBackup(db);
 
-    const schemi = await db.query<{ nspname: string }>(
-      `SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant\\_%'`
-    );
-    for (const s of schemi.rows) await db.exec(`DROP SCHEMA IF EXISTS "${s.nspname}" CASCADE`);
+    await azzera(db);
     await db.exec(primo.testo);
 
     const secondo = await fileDiBackup(db);
@@ -165,10 +184,7 @@ describe('prova a vuoto tramite transazione annullata', () => {
 
     await db.exec('BEGIN');
     // cancellazione, come fa l'action
-    const schemi = await db.query<{ nspname: string }>(
-      `SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant\\_%'`
-    );
-    for (const s of schemi.rows) await db.exec(`DROP SCHEMA IF EXISTS "${s.nspname}" CASCADE`);
+    await azzera(db);
     await db.exec(script);
 
     // Dentro la transazione il ripristino è avvenuto.
@@ -195,10 +211,7 @@ describe('prova a vuoto tramite transazione annullata', () => {
     const rotto = 'CREATE TABLE tenant_uno.x (i int);\nQUESTA NON E SQL;';
 
     await db.exec('BEGIN');
-    const schemi = await db.query<{ nspname: string }>(
-      `SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant\\_%'`
-    );
-    for (const s of schemi.rows) await db.exec(`DROP SCHEMA IF EXISTS "${s.nspname}" CASCADE`);
+    await azzera(db);
     await expect(db.exec(rotto)).rejects.toThrow();
     await db.exec('ROLLBACK');
 
@@ -217,7 +230,7 @@ describe('prova a vuoto tramite transazione annullata', () => {
     const { testo } = await fileDiBackup(db);
 
     await db.exec('BEGIN');
-    await db.exec(`DROP SCHEMA IF EXISTS "tenant_uno" CASCADE`);
+    await azzera(db);
     await db.exec(testo); // NON ripulito: contiene BEGIN e COMMIT
     await db.exec('ROLLBACK');
 
@@ -227,5 +240,38 @@ describe('prova a vuoto tramite transazione annullata', () => {
     expect(dopo.rows[0].n).toBe(2);
 
     await db.close();
+  }, 90000);
+});
+
+describe('colonne jsonb che contengono array', () => {
+  it('sopravvivono al giro completo senza cambiare tipo', async () => {
+    // Il difetto reale trovato sul database di produzione: il ripristino
+    // falliva perché una colonna jsonb veniva riscritta come jsonb[].
+    const originale = await popolato();
+    const backup = await fileDiBackup(originale);
+
+    const ripristinato = await PGlite.create();
+    await ripristinato.exec(backup.testo);
+
+    const r = await ripristinato.query<{
+      direttrici_ente_strutturate: { nome: string }[];
+      alias: string[];
+    }>(`SELECT direttrici_ente_strutturate, alias FROM public.spazi WHERE nome = 'Ente'`);
+    expect(r.rows[0].direttrici_ente_strutturate).toEqual([
+      { nome: 'Direttrice A' },
+      { nome: "L'Officina" },
+    ]);
+    expect(r.rows[0].alias).toEqual(['INPS', 'Enti previdenziali']);
+
+    // E il tipo della colonna deve essere rimasto jsonb, non jsonb[].
+    const t = await ripristinato.query<{ udt_name: string }>(
+      `SELECT udt_name FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='spazi'
+          AND column_name='direttrici_ente_strutturate'`
+    );
+    expect(t.rows[0].udt_name).toBe('jsonb');
+
+    await originale.close();
+    await ripristinato.close();
   }, 90000);
 });

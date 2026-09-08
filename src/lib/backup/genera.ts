@@ -81,6 +81,11 @@ export async function generaScriptBackup(esegui: Esecutore): Promise<RisultatoGe
     );
   }
 
+  // Tipi delle colonne, raccolti mentre si costruisce la struttura e usati
+  // poi per serializzare i dati: il tipo del VALORE non basta a distinguere
+  // una colonna jsonb che contiene un array da una colonna array vera.
+  const tipiColonne = new Map<string, Map<string, string>>();
+
   // ---- Struttura ---------------------------------------------------------
   for (const schema of schemi) {
     for (const tabella of tabellePerSchema.get(schema) ?? []) {
@@ -92,6 +97,12 @@ export async function generaScriptBackup(esegui: Esecutore): Promise<RisultatoGe
           ORDER BY ordinal_position`,
         [schema, tabella]
       );
+
+      const tipiTabella = new Map<string, string>();
+      for (const c of col) {
+        tipiTabella.set(String(c.column_name), String(c.udt_name));
+      }
+      tipiColonne.set(`${schema}.${tabella}`, tipiTabella);
 
       const colonne = col.map((c) => {
         let tipo = String(c.data_type);
@@ -133,9 +144,10 @@ export async function generaScriptBackup(esegui: Esecutore): Promise<RisultatoGe
       }
       const colonne = Object.keys(righe[0]);
       const elenco = colonne.map((c) => q(c)).join(', ');
+      const tipi = tipiColonne.get(chiave);
       let n = 0;
       for (const riga of righe) {
-        const valori = colonne.map((c) => serializzaValore(riga[c]));
+        const valori = colonne.map((c) => serializzaValore(riga[c], tipi?.get(c)));
         parti.push(
           `INSERT INTO ${q(schema)}.${q(tabella)} (${elenco}) VALUES (${valori.join(', ')});`
         );

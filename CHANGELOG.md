@@ -93,6 +93,47 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.45 — 2026-09-08
+
+**Colonne jsonb che contengono array: difetto del GENERATORE di backup**
+
+Con la 0.109.44 il ripristino sul cloud e' finalmente arrivato in fondo alla
+catena — file caricato in parti, ricomposto, decifrato, intestazione letta
+(70 tabelle, 343 righe) — e ha prodotto un errore vero e specifico:
+
+    column "direttrici_ente_strutturate" is of type jsonb
+    but expression is of type jsonb[]
+
+Il difetto non era nel ripristino ma nel BACKUP. `serializzaValore` decideva
+in base al tipo del VALORE, non della COLONNA. Ma `spazi.direttrici_ente_strutturate`
+e' una colonna `jsonb` che contiene un array JSON: il driver la restituisce
+come array JavaScript, **indistinguibile da una colonna `text[]`**. Veniva
+quindi riscritta come `ARRAY[...]`, cioe' `jsonb[]`, e il ripristino la
+rifiutava.
+
+Ogni backup generato finora contiene quell'errore: si rigenera, non si ripara.
+
+**Corretto alla radice.** Il generatore raccoglie ora l'`udt_name` di ogni
+colonna mentre costruisce la struttura, e lo passa al serializzatore:
+
+  - `udt_name` che comincia con `_` -> array Postgres vero, con il tipo
+    dichiarato esplicitamente (`ARRAY[...]::text[]`);
+  - `json` / `jsonb` -> il valore INTERO serializzato come JSON, qualunque
+    forma abbia;
+  - tutto il resto -> come prima.
+
+**8 test nuovi** (168 in tutto), fra cui il ciclo completo su un database che
+contiene proprio quella forma di dato: dopo il ripristino il contenuto e'
+identico e la colonna e' ancora `jsonb`, non `jsonb[]`.
+
+**Difetto trovato nei test stessi.** Aggiungendo una tabella in `public` al
+banco di prova, tre test hanno iniziato a fallire con "duplicate key": il
+loro azzeramento cancellava solo gli schemi tenant, non le tabelle globali —
+mentre la Server Action le cancella entrambe. I test verificavano quindi meno
+di quanto sembrava. Ora usano un azzeramento unico, identico a quello reale.
+
+Verificato: type-check, lint, **168 test**, build completa.
+
 ## 0.109.44 — 2026-09-08
 
 **Ripristino da backup: funzionante, riprodotto e collaudato end-to-end**

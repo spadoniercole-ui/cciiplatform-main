@@ -135,3 +135,44 @@ describe('intestazione e nome file', () => {
     expect(n).not.toContain(':');
   });
 });
+
+describe('serializzazione guidata dal TIPO DELLA COLONNA', () => {
+  it('una colonna jsonb che contiene un array resta jsonb', () => {
+    // Il caso reale: spazi.direttrici_ente_strutturate è jsonb e contiene un
+    // array JSON. Il driver la restituisce come array JavaScript, identica a
+    // una colonna text[]. Senza il tipo della colonna veniva serializzata
+    // come ARRAY[...] e il ripristino falliva con
+    //   column "..." is of type jsonb but expression is of type jsonb[]
+    const valore = [{ nome: 'Direttrice A' }, { nome: 'Direttrice B' }];
+    const sql = serializzaValore(valore, 'jsonb');
+    expect(sql).toContain('::jsonb');
+    expect(sql).not.toContain('ARRAY[');
+  });
+
+  it('una colonna jsonb che contiene un oggetto resta jsonb', () => {
+    expect(serializzaValore({ a: 1 }, 'jsonb')).toBe(`'{"a":1}'::jsonb`);
+  });
+
+  it('una colonna jsonb con apostrofi non spezza il file', () => {
+    expect(serializzaValore({ n: "L'Officina" }, 'jsonb')).toBe(`'{"n":"L''Officina"}'::jsonb`);
+  });
+
+  it('una colonna array VERA diventa ARRAY, con il tipo dichiarato', () => {
+    const sql = serializzaValore(['INPS', 'Enti previdenziali'], '_text');
+    expect(sql).toBe(`ARRAY['INPS', 'Enti previdenziali']::text[]`);
+  });
+
+  it('una colonna array vuota resta il letterale vuoto', () => {
+    expect(serializzaValore([], '_text')).toBe(`'{}'`);
+  });
+
+  it('NULL resta NULL qualunque sia il tipo', () => {
+    expect(serializzaValore(null, 'jsonb')).toBe('NULL');
+    expect(serializzaValore(null, '_text')).toBe('NULL');
+  });
+
+  it('senza tipo si torna al comportamento precedente', () => {
+    expect(serializzaValore('testo')).toBe("'testo'");
+    expect(serializzaValore(42, 'int4')).toBe('42');
+  });
+});
