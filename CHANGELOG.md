@@ -93,6 +93,46 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.36 — 2026-09-07
+
+**Correzione: la verifica del ripristino non funzionava sul cloud**
+
+Segnalato da Ercole con l'errore "An unexpected response was received from
+the server" sul pulsante "1. Verifica il file". Difetto mio, e con una causa
+precisa: **la 0.109.35 era stata collaudata solo nell'edizione portable.**
+
+In `next.config.mjs`, `serverExternalPackages: ['@electric-sql/pglite']` e
+`outputFileTracingIncludes` erano dentro il ramo `PORTABLE`. Ma la verifica
+preventiva del ripristino usa PGlite anche sul cloud, per eseguire il backup
+su un database temporaneo prima di toccare quello vero. Nella build cloud il
+pacchetto veniva inglobato da webpack, la risoluzione degli asset WASM si
+rompeva, e l'import dinamico dentro la Server Action moriva a runtime: la
+funzione non restituiva nulla e il browser mostrava un errore generico in
+inglese — proprio sul pulsante che precede la cancellazione del database.
+
+Le due direttive sono ora applicate a ENTRAMBE le edizioni. Verificato sul
+build cloud: **301 file di PGlite tracciati** per la pagina Parametri,
+`pglite.wasm`, `initdb.wasm` e `pglite.data` compresi. Prima: nessuno.
+
+**Un errore non deve piu' poter uscire senza spiegazione.** Il caricamento di
+PGlite e' ora separato dall'esecuzione della prova: se il motore non e'
+disponibile, l'action lo dice in italiano, distingue "la piattaforma non puo'
+eseguire la verifica" da "il file di backup e' difettoso" — confonderle
+davanti a quel pulsante sarebbe grave — e dichiara che il database non e'
+stato toccato.
+
+**Guardia sulla dimensione del file.** Il backup viaggia come argomento di
+una Server Action, che ha un tetto (25MB). Oltre quella soglia la chiamata
+viene rifiutata dall'infrastruttura PRIMA di arrivare al codice, con lo stesso
+errore generico e indistinguibile. Ora il file viene fermato lato interfaccia
+sopra i 20MB, spiegando la causa e indicando le alternative (psql sul server,
+oppure l'edizione portable, che non ha questo limite).
+
+Verificato: type-check, lint, **140 test**, build cloud completa.
+
+**Da provare per primo**: "1. Verifica il file" sul cloud, che e' il percorso
+che falliva.
+
 ## 0.109.35 — 2026-09-07
 
 **Ripristino da backup, nei Parametri di sistema del Superadmin**

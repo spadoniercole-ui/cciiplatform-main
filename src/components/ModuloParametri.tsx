@@ -111,12 +111,33 @@ export function ModuloParametri() {
     URL.revokeObjectURL(url);
   };
 
+  // Il file viaggia come argomento di una Server Action, che ha un tetto di
+  // dimensione (bodySizeLimit, 25MB). Oltre quella soglia la chiamata viene
+  // rifiutata dall'infrastruttura PRIMA di arrivare al codice, e il browser
+  // mostra un errore generico che non dice nulla della causa. Meglio
+  // fermarsi qui e spiegarlo.
+  const LIMITE_FILE_MB = 20;
+
   const handleFileRipristino = async (f: File | null) => {
     setProvaOk(false);
     setEsitoRipristino(null);
     setConfermaRipristino('');
     if (!f) {
       setFileRipristino(null);
+      return;
+    }
+    const mb = f.size / (1024 * 1024);
+    if (mb > LIMITE_FILE_MB) {
+      setFileRipristino(null);
+      setEsitoRipristino({
+        success: false,
+        fase: 'lettura',
+        databaseIntatto: true,
+        problemi: [
+          `Il file pesa ${mb.toFixed(1)} MB e supera il limite di ${LIMITE_FILE_MB} MB per il caricamento da questa pagina.`,
+          'Su un database di queste dimensioni il ripristino va eseguito direttamente sul server con psql, oppure dall’edizione portable, che non ha questo limite.',
+        ],
+      });
       return;
     }
     setFileRipristino({ nome: f.name, contenuto: await f.text() });

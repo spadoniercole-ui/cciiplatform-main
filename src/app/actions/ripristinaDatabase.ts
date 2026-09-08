@@ -101,9 +101,32 @@ export async function provaRipristinoAction(
     return { success: false, fase: 'validazione', databaseIntatto: true, problemi: prep.problemi };
   }
 
+  // Il caricamento di PGlite è tenuto SEPARATO dall'esecuzione della prova.
+  // Se fallisce (asset WASM non risolvibili in un ambiente serverless mal
+  // configurato) non è un file di backup difettoso: è la piattaforma che non
+  // può eseguire la verifica. Confondere le due cose davanti al pulsante che
+  // precede la cancellazione del database sarebbe grave — e nella prima
+  // versione questa distinzione non c'era: l'errore usciva dal confine della
+  // Server Action e il browser mostrava un messaggio in inglese, senza causa.
+  let PGliteClasse: typeof import('@electric-sql/pglite').PGlite;
   try {
-    const { PGlite } = await import('@electric-sql/pglite');
-    const prova = await new PGlite();
+    ({ PGlite: PGliteClasse } = await import('@electric-sql/pglite'));
+  } catch (error: unknown) {
+    return {
+      success: false,
+      fase: 'prova',
+      databaseIntatto: true,
+      intestazione: prep.intestazione,
+      problemi: [
+        'La verifica preventiva non è eseguibile su questo ambiente: il motore di prova non è disponibile.',
+        `Dettaglio tecnico: ${(error as Error).message}`,
+        'Il file ha superato i controlli formali, ma NON è stato provato davvero. Il database non è stato toccato.',
+      ],
+    };
+  }
+
+  try {
+    const prova = await new PGliteClasse();
     try {
       await prova.exec(prep.sql);
       const t = await prova.query<{ n: number }>(
