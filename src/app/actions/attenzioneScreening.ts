@@ -48,13 +48,37 @@ export async function ottieniAttenzioneScreeningAction(
     if (az.rows.length === 0) return { success: false, error: 'Azienda non trovata.' };
     const a = az.rows[0];
 
+    // ---- Esposizione verso l'ente ----------------------------------------
+    // Somma del debito contabilizzato sulle sole categorie che concorrono al
+    // totale: è il numero da confrontare con la soglia di legge per stabilire
+    // se il debito è "importante".
+    const esp = await pool
+      .query(
+        `SELECT COALESCE(SUM(d.importo), 0) AS totale
+         FROM "${nomeSchema}".debiti_ente d
+         JOIN "${nomeSchema}".categorie_tipo_debito c ON c.codice = d.tipo
+        WHERE d.azienda_id = $1 AND c.attivo = TRUE AND c.contribuisce = TRUE`,
+        [aziendaId]
+      )
+      .catch(() => ({ rows: [{ totale: 0 }] }));
+    const contabilizzato = Number(esp.rows[0]?.totale ?? 0);
+    const esposizione = contabilizzato > 0 ? contabilizzato : num(a.contributi_scaduti);
+
     // ---- Soglie di segnalazione ------------------------------------------
     const dati: DatiSoglie = {
       conLavoratori:
         a.con_lavoratori_subordinati === null || a.con_lavoratori_subordinati === undefined
           ? null
           : Boolean(a.con_lavoratori_subordinati),
-      contributiScaduti: num(a.contributi_scaduti),
+      // La colonna manuale se c'è; altrimenti l'esposizione effettivamente
+      // caricata (Situazione Debitoria e Posizione V.E.R.A.).
+      //
+      // Senza questo ripiego il file V.E.R.A. non arrivava MAI al calcolo
+      // delle soglie: finisce in `debiti_vera`, mentre il test leggeva solo
+      // la colonna `contributi_scaduti` dell'anagrafica. Chi caricava il
+      // V.E.R.A. dalla Verifica salute azienda si vedeva dire "soglie non
+      // determinabili" pur avendo fornito l'esposizione.
+      contributiScaduti: num(a.contributi_scaduti) ?? esposizione ?? null,
       contributiDovutiAnnoPrecedente: num(a.contributi_dovuti_anno_precedente),
       annoContributiDovuti: null,
       sanzioniPresunte: num(a.sanzioni_presunte_vera),
@@ -79,22 +103,6 @@ export async function ottieniAttenzioneScreeningAction(
     // Soglia di legge applicabile, per stabilire se il debito è "importante".
     const rigaApplicabile = applicabili[0];
     const sogliaApplicabile = rigaApplicabile ? estraiSogliaNumerica(rigaApplicabile.valore) : null;
-
-    // ---- Esposizione verso l'ente ----------------------------------------
-    // Somma del debito contabilizzato sulle sole categorie che concorrono al
-    // totale: è il numero da confrontare con la soglia di legge per stabilire
-    // se il debito è "importante".
-    const esp = await pool
-      .query(
-        `SELECT COALESCE(SUM(d.importo), 0) AS totale
-         FROM "${nomeSchema}".debiti_ente d
-         JOIN "${nomeSchema}".categorie_tipo_debito c ON c.codice = d.tipo
-        WHERE d.azienda_id = $1 AND c.attivo = TRUE AND c.contribuisce = TRUE`,
-        [aziendaId]
-      )
-      .catch(() => ({ rows: [{ totale: 0 }] }));
-    const contabilizzato = Number(esp.rows[0]?.totale ?? 0);
-    const esposizione = contabilizzato > 0 ? contabilizzato : num(a.contributi_scaduti);
 
     // ---- Bilancio XBRL ----------------------------------------------------
     // Ogni lettura qui è OPZIONALE: queste tabelle nascono solo quando la

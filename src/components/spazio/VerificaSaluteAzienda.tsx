@@ -38,7 +38,7 @@ import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreen
 import { salvaAnalisiXbrlAziendaAction } from '@/app/actions/xbrlAzienda';
 import { analizzaVera, estraiRigheVera } from '@/lib/debitiEnte/veraImport';
 import { sostituisciDebitiVeraAction } from '@/app/actions/posizioneVera';
-import { salvaValoriSoglieAction } from '@/app/actions/soglie25novies';
+import { salvaValoriSoglieParzialeAction } from '@/app/actions/soglie25novies';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
 import type { Attenzione } from '@/lib/screening/indicatore';
 
@@ -191,17 +191,16 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
       // ---- I due valori della soglia INPS --------------------------------
       if (conLavoratori !== '' || contributiDovuti.trim() !== '') {
         setAvanzamento('Salvataggio dei valori per le soglie...');
-        await salvaValoriSoglieAction(nomeSchema, c.aziendaId, {
-          conLavoratoriSubordinati: conLavoratori === '' ? null : conLavoratori === 'si',
-          contributiScaduti: null,
+        // Salvataggio PARZIALE: si scrivono solo i due valori raccolti qui.
+        // Con quello completo si azzererebbero premi INAIL, IVA e volume
+        // d'affari già inseriti — una funzione di triage non deve poter
+        // distruggere il lavoro di un'istruttoria.
+        await salvaValoriSoglieParzialeAction(nomeSchema, c.aziendaId, {
+          conLavoratoriSubordinati: conLavoratori === '' ? undefined : conLavoratori === 'si',
           contributiDovutiAnnoPrecedente:
-            contributiDovuti.trim() === '' ? null : Number(contributiDovuti),
-          annoContributiDovuti: new Date().getFullYear() - 1,
-          sanzioniPresunteVera: null,
-          premiInail: null,
-          ivaScaduta: null,
-          volumeAffari: null,
-          creditiAffidatiAer: null,
+            contributiDovuti.trim() === '' ? undefined : Number(contributiDovuti),
+          annoContributiDovuti:
+            contributiDovuti.trim() === '' ? undefined : new Date().getFullYear() - 1,
           soglieAggiornateAl: new Date().toISOString().slice(0, 10),
         });
       }

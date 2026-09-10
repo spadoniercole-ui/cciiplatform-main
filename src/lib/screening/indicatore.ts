@@ -216,10 +216,15 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   }
 
   if (input.sogliaSuperata === null) {
+    // Il messaggio deve distinguere due cose che si somigliano soltanto nel
+    // nome: gli IMPORTI DI LEGGE stanno nei Parametri di Spazio, i VALORI
+    // DELL'AZIENDA da confrontare con quegli importi stanno altrove. Scrivere
+    // "valori non inseriti nella scheda dedicata" mandava chi aveva appena
+    // compilato i Parametri a cercare un errore che non c'era.
     daAccertare.push(
-      'Soglie di segnalazione non determinabili: valori non inseriti nella scheda dedicata.'
+      'Esposizione previdenziale dell’azienda non disponibile: carica la Posizione V.E.R.A. oppure inserisci i contributi scaduti nella scheda Soglie di segnalazione dell’azienda. (Non si tratta dei Parametri di Spazio, che contengono gli importi di legge.)'
     );
-    lacunePortanti.push('Soglie di segnalazione non determinabili.');
+    lacunePortanti.push('Esposizione previdenziale non disponibile.');
   } else {
     determinate++;
   }

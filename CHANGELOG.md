@@ -93,6 +93,40 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.51 — 2026-09-10
+
+**Il file V.E.R.A. non arrivava mai al test delle soglie**
+
+Segnalato da Ercole: soglie compilate correttamente nei Parametri di Spazio,
+e l'indicatore che continuava a dire "valori non inseriti nella scheda
+dedicata". Non era un fraintendimento suo — erano tre difetti sovrapposti,
+tutti miei.
+
+**1. Il V.E.R.A. caricato non veniva letto dal test.** La Posizione V.E.R.A.
+finisce in `debiti_vera`, ma `calcolaSoglie25Novies` leggeva i contributi
+scaduti SOLO dalla colonna manuale `contributi_scaduti` dell'anagrafica — che
+la Verifica salute azienda lascia vuota, fidandosi del file. Risultato: chi
+caricava il V.E.R.A. si sentiva dire che l'esposizione non era disponibile
+pur avendola appena fornita. Ora, in mancanza del valore manuale, si usa
+l'esposizione effettivamente caricata (Situazione Debitoria e V.E.R.A.).
+
+**2. Il messaggio confondeva due cose che si somigliano solo nel nome.** Gli
+IMPORTI DI LEGGE stanno nei Parametri di Spazio; i VALORI DELL'AZIENDA da
+confrontare con quegli importi stanno altrove. Scrivere "valori non inseriti
+nella scheda dedicata" mandava chi aveva appena compilato i Parametri a
+cercare un errore che non c'era. Il messaggio ora dice esattamente cosa
+manca, dove si inserisce, e che NON si tratta dei Parametri di Spazio.
+
+**3. La Verifica salute azienda cancellava valori altrui.**
+`salvaValoriSoglieAction` scrive tutti e nove i campi; la pagina di verifica
+ne conosce due e passava `null` per gli altri, azzerando premi INAIL, IVA e
+volume d'affari eventualmente inseriti in istruttoria. Nuova
+`salvaValoriSoglieParzialeAction`: scrive solo ciò che riceve, e distingue
+`undefined` ("non fornito, lascia com'è") da `null` ("cancella"). Una
+funzione di triage non deve poter distruggere il lavoro di un'istruttoria.
+
+Verificato: type-check, lint, **192 test**, build cloud completa.
+
 ## 0.109.50 — 2026-09-10
 
 **Tre riscontri dal collaudo sul campo di Ercole**

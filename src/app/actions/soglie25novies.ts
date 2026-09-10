@@ -93,6 +93,55 @@ export async function ottieniValoriSoglieAction(
   }
 }
 
+/**
+ * Salva SOLO i valori forniti, lasciando intatti gli altri.
+ *
+ * Serve alla Verifica salute azienda, che conosce due valori su nove: usando
+ * il salvataggio completo scriverebbe `null` su tutti gli altri, cancellando
+ * premi INAIL, IVA e volume d'affari già inseriti da qualcun altro. Una
+ * funzione di triage non deve poter distruggere il lavoro di un'istruttoria.
+ */
+export async function salvaValoriSoglieParzialeAction(
+  nomeSchema: string,
+  aziendaId: number,
+  valori: Partial<ValoriSoglie>
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+
+    const colonne: Record<keyof ValoriSoglie, string> = {
+      conLavoratoriSubordinati: 'con_lavoratori_subordinati',
+      contributiScaduti: 'contributi_scaduti',
+      contributiDovutiAnnoPrecedente: 'contributi_dovuti_anno_precedente',
+      annoContributiDovuti: 'anno_contributi_dovuti',
+      sanzioniPresunteVera: 'sanzioni_presunte_vera',
+      premiInail: 'premi_inail',
+      ivaScaduta: 'iva_scaduta',
+      volumeAffari: 'volume_affari',
+      creditiAffidatiAer: 'crediti_affidati_aer',
+      soglieAggiornateAl: 'soglie_aggiornate_al',
+    };
+
+    const set: string[] = [];
+    const params: unknown[] = [aziendaId];
+    for (const [chiave, colonna] of Object.entries(colonne)) {
+      const v = valori[chiave as keyof ValoriSoglie];
+      // `undefined` = non fornito, si lascia com'è. `null` esplicito =
+      // cancellazione voluta.
+      if (v === undefined) continue;
+      params.push(v);
+      set.push(`${colonna} = $${params.length}`);
+    }
+    if (set.length === 0) return { success: true };
+
+    await pool.query(`UPDATE "${nomeSchema}".aziende SET ${set.join(', ')} WHERE id = $1`, params);
+    return { success: true };
+  } catch (error: unknown) {
+    console.error('[salvaValoriSoglieParzialeAction] Errore:', error);
+    return { success: false, error: `Salvataggio non riuscito: ${(error as Error).message}` };
+  }
+}
+
 export async function salvaValoriSoglieAction(
   nomeSchema: string,
   aziendaId: number,
