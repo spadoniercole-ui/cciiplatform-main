@@ -34,8 +34,10 @@ import {
   promuoviAziendaAction,
   registraEsitoVerificaAction,
   ottieniStoricoVerificheAction,
+  archiviaVerificaAction,
   type RigaVerifica,
 } from '@/app/actions/aziendaInVerifica';
+import { valutaValidita } from '@/lib/screening/validitaVerifica';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { generaScreeningAziendaAction } from '@/app/actions/screeningAzienda';
 import { salvaAnalisiXbrlAziendaAction } from '@/app/actions/xbrlAzienda';
@@ -96,7 +98,11 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
   const [contributiDovuti, setContributiDovuti] = useState('');
   const [avanzamento, setAvanzamento] = useState<string | null>(null);
   const [problemiPresaInCarico, setProblemiPresaInCarico] = useState<string[]>([]);
-  const [storico, setStorico] = useState<(RigaVerifica & { presaInCarico: boolean })[]>([]);
+  const [storico, setStorico] = useState<
+    (RigaVerifica & { presaInCarico: boolean; archiviata: boolean; motivo: string | null })[]
+  >([]);
+  const [motivoArchiviazione, setMotivoArchiviazione] = useState('');
+  const [mostraArchiviazione, setMostraArchiviazione] = useState(false);
 
   // Lo storico rende vera la promessa fatta a schermo — "la verifica resta
   // consultabile" — che finora non lo era: esito e data stavano nel
@@ -256,6 +262,24 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
    * e screening e check list restano generabili dalla scheda azienda come
    * si è sempre fatto.
    */
+  const archivia = async () => {
+    if (!aziendaId) return;
+    setInCorso(true);
+    setErrore(null);
+    const r = await archiviaVerificaAction(nomeSchema, aziendaId, motivoArchiviazione);
+    setInCorso(false);
+    if (!r.success) {
+      setErrore(r.error ?? 'Archiviazione non riuscita.');
+      return;
+    }
+    setMostraArchiviazione(false);
+    setMotivoArchiviazione('');
+    setFase('caricamento');
+    setDati(null);
+    setAttenzione(null);
+    setAziendaId(null);
+  };
+
   const procedi = async () => {
     if (!aziendaId) return;
     setInCorso(true);
@@ -522,14 +546,26 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
 
           {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}
 
-          <button
-            onClick={() => void confermaEValuta()}
-            disabled={inCorso || !dati.ragioneSociale}
-            className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-800 disabled:bg-slate-300"
-          >
-            <Check className="w-3.5 h-3.5" />
-            {inCorso ? 'Valutazione in corso...' : 'Conferma e valuta'}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => {
+                setFase('caricamento');
+                setDati(null);
+                setNonTrovati([]);
+              }}
+              className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              ← Indietro
+            </button>
+            <button
+              onClick={() => void confermaEValuta()}
+              disabled={inCorso || !dati.ragioneSociale}
+              className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-800 disabled:bg-slate-300"
+            >
+              <Check className="w-3.5 h-3.5" />
+              {inCorso ? 'Valutazione in corso...' : 'Conferma e valuta'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -540,7 +576,13 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
           </h3>
           <div className="divide-y divide-slate-100">
             {storico.slice(0, 15).map((v) => (
-              <div key={v.id} className="flex items-center justify-between gap-3 py-2">
+              // Cliccabile: una verifica che non si può riaprire è un elenco
+              // di sola lettura, non una traccia consultabile.
+              <a
+                key={v.id}
+                href={`/spazio/${codice}/aziende/${v.id}`}
+                className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
+              >
                 <span className="min-w-0">
                   <span className="block text-xs font-bold text-slate-900 truncate">
                     {v.ragioneSociale}
@@ -565,10 +607,31 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
                     </span>
                   )}
                   <span className="text-[10px] text-slate-500">
-                    {v.presaInCarico ? 'presa in carico' : 'in sospeso'}
+                    {v.archiviata
+                      ? 'archiviata'
+                      : v.presaInCarico
+                        ? 'presa in carico'
+                        : 'in sospeso'}
                   </span>
+                  {(() => {
+                    const val = valutaValidita(v.eseguitaIl);
+                    return (
+                      <span
+                        className={`text-[10px] ${
+                          val.stato === 'da_rivedere'
+                            ? 'text-amber-700 font-bold'
+                            : val.stato === 'in_scadenza'
+                              ? 'text-amber-600'
+                              : 'text-slate-400'
+                        }`}
+                      >
+                        {val.etichetta}
+                      </span>
+                    );
+                  })()}
+                  <ArrowRight className="w-3 h-3 text-slate-300" />
                 </span>
-              </div>
+              </a>
             ))}
           </div>
         </div>
@@ -637,6 +700,14 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
               >
                 <ArrowRight className="w-3.5 h-3.5" />
                 {inCorso ? 'Preparazione in corso...' : 'Procedi con questa azienda'}
+              </button>
+              <button
+                onClick={() => {
+                  setFase('conferma');
+                }}
+                className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
+                ← Indietro
               </button>
               <button
                 onClick={() => {

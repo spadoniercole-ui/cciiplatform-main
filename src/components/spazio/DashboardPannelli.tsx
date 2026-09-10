@@ -23,6 +23,8 @@ export interface RigaVerificaDashboard {
   ragioneSociale: string;
   partitaIva: string | null;
   esito: string | null;
+  presaInCarico: boolean;
+  archiviata: boolean;
 }
 
 export interface RigaScenario {
@@ -160,14 +162,23 @@ export function DashboardPannelli({
           icon={Stethoscope}
           colore="text-amber-600 bg-amber-50"
           label="Aziende da verificare"
-          totale={verifiche.length}
+          totale={verifiche.filter((v) => !v.presaInCarico && !v.archiviata).length}
         />
         {verifiche.length === 0 ? (
-          <Vuoto testo="Nessuna verifica in sospeso." />
+          <Vuoto testo="Nessuna verifica eseguita." />
         ) : (
           <div className="divide-y divide-slate-100">
+            {/* Si mostrano TUTTE le verifiche, non solo quelle in sospeso: una
+                verifica conclusa spariva dalla dashboard, e la traccia
+                promessa a schermo non era da nessuna parte. Il numero in
+                testa resta il conteggio di quelle che aspettano una
+                decisione — è quello che serve come coda di lavoro. */}
             {verifiche.slice(0, MAX).map((v) => (
-              <div key={v.id} className="flex items-center justify-between gap-3 py-2">
+              <a
+                key={v.id}
+                href={`/spazio/${codice}/aziende/${v.id}`}
+                className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
+              >
                 <span className="min-w-0">
                   <span className="block font-bold text-slate-900 text-xs truncate">
                     {v.ragioneSociale}
@@ -191,7 +202,7 @@ export function DashboardPannelli({
                     {v.esito === 'ATTENZIONE_MINIMA' ? 'Minima' : v.esito.toLowerCase()}
                   </span>
                 )}
-              </div>
+              </a>
             ))}
           </div>
         )}

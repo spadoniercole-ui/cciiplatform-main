@@ -166,6 +166,17 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
     sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS verifica_eseguita_il TIMESTAMP`
   );
 
+  // Archiviazione della verifica: decidere di NON procedere è una decisione
+  // amministrativa quanto decidere di procedere, e va registrata con il suo
+  // motivo. Senza, la coda di lavoro cresce all'infinito e nessuno sa perché
+  // una posizione è stata lasciata andare.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS verifica_archiviata BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS verifica_motivo TEXT`
+  );
+
   // ---- Soglie di segnalazione art. 25-novies: valori a inserimento manuale.
   //
   // Stanno sull'AZIENDA e non sullo scenario: il debito e' il punto di

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
 import { ottieniContestoAccessoSpazio, ottieniAdminSpazio } from '@/app/actions/spazi';
 import { ottieniAziende } from '@/app/actions/aziende';
-import { ottieniAziendeInVerificaAction, type RigaVerifica } from '@/app/actions/aziendaInVerifica';
+import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { ottieniScenari } from '@/app/actions/scenari';
 import { ottieniUltimiScreeningSpazio } from '@/app/actions/screeningAzienda';
 import {
@@ -10,6 +10,7 @@ import {
   type RigaAzienda,
   type RigaUtente,
   type RigaScenario,
+  type RigaVerificaDashboard,
 } from '@/components/spazio/DashboardPannelli';
 
 // Dashboard di Spazio (cruscotto): quattro pannelli larghi, ciascuno con le
@@ -29,7 +30,7 @@ export default async function DashboardSpazioPage({
   const [risultatoAdmin, risultatoAziende, verificheRis] = await Promise.all([
     ottieniAdminSpazio(contesto.nomeSchema),
     ottieniAziende(contesto.nomeSchema),
-    ottieniAziendeInVerificaAction(contesto.nomeSchema),
+    ottieniStoricoVerificheAction(contesto.nomeSchema),
   ]);
 
   const aziendeAttive = risultatoAziende.aziende.filter((a) => a.attiva).length;
@@ -109,11 +110,13 @@ export default async function DashboardSpazioPage({
         totaleUtenti={risultatoAdmin.success ? risultatoAdmin.admins.length : '—'}
         verifiche={
           verificheRis.success && verificheRis.righe
-            ? verificheRis.righe.map((v: RigaVerifica) => ({
+            ? verificheRis.righe.map((v: RigaVerificaDashboard) => ({
                 id: v.id,
                 ragioneSociale: v.ragioneSociale,
                 partitaIva: v.partitaIva,
                 esito: v.esito,
+                presaInCarico: v.presaInCarico,
+                archiviata: v.archiviata,
               }))
             : []
         }

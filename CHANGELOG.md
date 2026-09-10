@@ -93,6 +93,69 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.57 — 2026-09-10
+
+**Archiviazione con motivo e scadenza del giudizio**
+
+**"Non procedo" con il motivo.** Decidere di non procedere e' una decisione
+amministrativa quanto decidere di procedere, e finora non lasciava traccia:
+la posizione restava nella coda per sempre, e fra sei mesi nessuno sapeva
+perche' fosse stata lasciata andare. Ora si archivia indicando il motivo —
+obbligatorio, perche' un'archiviazione senza spiegazione e' indistinguibile
+da una dimenticanza. Le archiviate escono dalla coda ma restano nello storico
+con il loro motivo, e si possono riaprire.
+
+**Scadenza del giudizio** — nuovo `src/lib/screening/validitaVerifica.ts`,
+**6 test**. Un'azienda sotto soglia a settembre puo' superarla a marzo:
+l'esito registrato invecchiava in silenzio, e un elenco di verifiche vecchie
+era indistinguibile da uno di verifiche fatte ieri.
+
+Ogni verifica mostra ora la propria eta': *recente*, *in scadenza*
+nell'ultimo mese di validita', *da rivedere* oltre i sei mesi. L'avviso
+arriva PRIMA della scadenza, non dopo: avvisare dopo e' inutile, serve il
+tempo di rifarla. La soglia non e' una regola di legge ma una convenzione di
+lavoro, ed e' scritto nel file.
+
+Casi di confine coperti dai test: una data futura (fuso orario, orologio del
+server) non produce numeri negativi, e "mai verificata" equivale a "da
+rivedere" invece di passare per buona.
+
+Verificato: type-check, lint, **206 test**, build cloud e portable complete,
+piu' collaudo a schermo di pagina di triage e pannello di dashboard.
+
+**Non incluso**: lo spostamento della posizione debitoria dall'azienda allo
+scenario. E' un lavoro strutturale con una migrazione dei dati esistenti
+dietro, e farlo a fine giornata sarebbe il modo migliore per romperlo.
+
+## 0.109.56 — 2026-09-10
+
+**Tre correzioni all'usabilità del triage**
+
+**1. Le verifiche eseguite non comparivano in dashboard.** Il pannello
+mostrava solo le posizioni in sospeso: appena una veniva presa in carico
+spariva, e la traccia promessa a schermo non era da nessuna parte. Ora il
+pannello elenca TUTTE le verifiche con il loro esito e il loro stato, mentre
+il numero in testa resta il conteggio di quelle che aspettano una decisione —
+è quello che serve come coda di lavoro.
+
+**2. Le righe non erano cliccabili.** Un elenco di verifiche che non si
+possono riaprire è di sola lettura, non una traccia consultabile. Ora ogni
+riga porta alla scheda azienda, sia in dashboard sia nella pagina di triage.
+
+**3. Mancava il tasto Indietro.** Aggiunto sia nella schermata di conferma
+dei dati (si torna al caricamento della visura) sia in quella dell'esito (si
+torna ai dati e ai documenti). Prima l'unica via d'uscita era ricominciare
+da capo.
+
+**Difetto trovato dal type-check.** Un import sostituito male in
+`page.tsx` aveva fatto cadere l'inferenza dei tipi sull'intero file: otto
+errori apparentemente scollegati, tutti figli di un unico simbolo non
+risolto. Vale la pena ricordarlo: quando gli errori di tipo esplodono in
+punti che non si sono toccati, la causa è quasi sempre un import rotto più in
+alto.
+
+Verificato: type-check, lint, **200 test**, build cloud completa.
+
 ## 0.109.55 — 2026-09-10
 
 **Il "Procedi" falliva in silenzio, e la verifica non era consultabile**

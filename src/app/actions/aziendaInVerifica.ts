@@ -134,6 +134,57 @@ export async function creaAziendaInVerificaAction(
   }
 }
 
+/**
+ * Archivia la verifica con il motivo della decisione.
+ *
+ * Decidere di NON procedere è una decisione amministrativa quanto decidere
+ * di procedere. Senza registrarla, la coda di lavoro cresce all'infinito e
+ * fra sei mesi nessuno sa perché quella posizione è stata lasciata andare —
+ * né che qualcuno l'aveva guardata.
+ */
+export async function archiviaVerificaAction(
+  nomeSchema: string,
+  aziendaId: number,
+  motivo: string
+): Promise<RisultatoVerifica> {
+  try {
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (!motivo || motivo.trim().length < 3) {
+      // Il motivo è obbligatorio: un'archiviazione senza spiegazione è
+      // indistinguibile da una dimenticanza.
+      return { success: false, error: 'Indicare il motivo della decisione.' };
+    }
+    await pool.query(
+      `UPDATE "${nomeSchema}".aziende
+          SET verifica_archiviata = TRUE, verifica_motivo = $2, verifica_eseguita_il = now()
+        WHERE id = $1`,
+      [aziendaId, motivo.trim()]
+    );
+    return { success: true, aziendaId };
+  } catch (error: unknown) {
+    console.error('[archiviaVerificaAction] Errore:', error);
+    return { success: false, error: `Archiviazione non riuscita: ${(error as Error).message}` };
+  }
+}
+
+/** Riporta una verifica archiviata nella coda di lavoro. */
+export async function riapriVerificaAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<RisultatoVerifica> {
+  try {
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await pool.query(
+      `UPDATE "${nomeSchema}".aziende SET verifica_archiviata = FALSE WHERE id = $1`,
+      [aziendaId]
+    );
+    return { success: true, aziendaId };
+  } catch (error: unknown) {
+    console.error('[riapriVerificaAction] Errore:', error);
+    return { success: false, error: `Riapertura non riuscita: ${(error as Error).message}` };
+  }
+}
+
 /** Registra l'esito della verifica, senza promuovere la posizione. */
 export async function registraEsitoVerificaAction(
   nomeSchema: string,
@@ -194,14 +245,19 @@ export interface RigaVerifica {
  */
 export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise<{
   success: boolean;
-  righe?: (RigaVerifica & { presaInCarico: boolean })[];
+  righe?: (RigaVerifica & {
+    presaInCarico: boolean;
+    archiviata: boolean;
+    motivo: string | null;
+  })[];
   error?: string;
 }> {
   try {
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const r = await pool
       .query(
-        `SELECT id, ragione_sociale, partita_iva, verifica_esito, verifica_eseguita_il, in_verifica
+        `SELECT id, ragione_sociale, partita_iva, verifica_esito, verifica_eseguita_il,
+                in_verifica, verifica_archiviata, verifica_motivo
            FROM "${nomeSchema}".aziende
           WHERE verifica_eseguita_il IS NOT NULL
           ORDER BY verifica_eseguita_il DESC`
@@ -218,6 +274,8 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
           ? new Date(x.verifica_eseguita_il as string).toISOString()
           : null,
         presaInCarico: !x.in_verifica,
+        archiviata: Boolean(x.verifica_archiviata),
+        motivo: x.verifica_motivo ? String(x.verifica_motivo) : null,
       })),
     };
   } catch (error: unknown) {
@@ -235,7 +293,7 @@ export async function ottieniAziendeInVerificaAction(
       .query(
         `SELECT id, ragione_sociale, partita_iva, verifica_esito, verifica_eseguita_il
            FROM "${nomeSchema}".aziende
-          WHERE in_verifica = TRUE
+          WHERE in_verifica = TRUE AND verifica_archiviata = FALSE
           ORDER BY verifica_eseguita_il DESC NULLS LAST`
       )
       .catch(() => ({ rows: [] as Record<string, unknown>[] }));

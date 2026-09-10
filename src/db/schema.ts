@@ -215,6 +215,8 @@ export function getTabelleTenant(nomeSchema: string) {
       inVerifica: boolean('in_verifica').notNull().default(false),
       verificaEsito: text('verifica_esito'),
       verificaEseguitaIl: timestamp('verifica_eseguita_il'),
+      verificaArchiviata: boolean('verifica_archiviata').notNull().default(false),
+      verificaMotivo: text('verifica_motivo'),
       createdAt: timestamp('created_at').defaultNow().notNull(),
     }),
   };
