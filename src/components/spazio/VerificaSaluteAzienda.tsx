@@ -23,7 +23,7 @@
 // Il costo che si voleva abbattere non era il salvataggio: erano i quindici
 // campi da digitare. Quelli ora arrivano dalla visura.
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Stethoscope, Upload, Check, AlertTriangle, ArrowRight } from 'lucide-react';
 import {
   estraiAnagraficaDaVisuraAction,
@@ -33,6 +33,8 @@ import {
   creaAziendaInVerificaAction,
   promuoviAziendaAction,
   registraEsitoVerificaAction,
+  ottieniStoricoVerificheAction,
+  type RigaVerifica,
 } from '@/app/actions/aziendaInVerifica';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { generaScreeningAziendaAction } from '@/app/actions/screeningAzienda';
@@ -48,7 +50,7 @@ interface Props {
   codice: string;
 }
 
-type Fase = 'caricamento' | 'conferma' | 'esito';
+type Fase = 'caricamento' | 'conferma' | 'esito' | 'presa_in_carico';
 
 const CAMPI: { chiave: keyof AnagraficaEstratta; label: string; numerico?: boolean }[] = [
   { chiave: 'ragioneSociale', label: 'Ragione sociale' },
@@ -93,6 +95,17 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
   const [conLavoratori, setConLavoratori] = useState<'' | 'si' | 'no'>('');
   const [contributiDovuti, setContributiDovuti] = useState('');
   const [avanzamento, setAvanzamento] = useState<string | null>(null);
+  const [problemiPresaInCarico, setProblemiPresaInCarico] = useState<string[]>([]);
+  const [storico, setStorico] = useState<(RigaVerifica & { presaInCarico: boolean })[]>([]);
+
+  // Lo storico rende vera la promessa fatta a schermo — "la verifica resta
+  // consultabile" — che finora non lo era: esito e data stavano nel
+  // database e non esistevano per l'utente.
+  useEffect(() => {
+    void ottieniStoricoVerificheAction(nomeSchema).then((r) => {
+      if (r.success && r.righe) setStorico(r.righe);
+    });
+  }, [nomeSchema, fase]);
 
   const caricaVisura = async (f: File | null) => {
     if (!f) return;
@@ -247,39 +260,73 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
     if (!aziendaId) return;
     setInCorso(true);
     setErrore(null);
+    const problemi: string[] = [];
+
     try {
-      if (fileVisura) {
-        setAvanzamento('Generazione di screening e check list — un minuto circa...');
+      if (!fileVisura) {
+        problemi.push(
+          'Visura non disponibile in questa sessione: screening e check list non sono stati generati.'
+        );
+      } else {
+        setAvanzamento('Caricamento della visura...');
+        let urlVisura: string | null = null;
         try {
           const fd = new FormData();
           fd.append('file', fileVisura);
           fd.append('codice', codice);
           const up = await fetch('/api/blob-upload', { method: 'POST', body: fd });
-          const corpo = await up.json();
-          if (up.ok && !corpo.error) {
+          const corpo = await up.json().catch(() => ({}));
+          if (!up.ok || corpo.error) {
+            // PRIMA questo caso era silenzioso: si proseguiva e si navigava
+            // via, e l'operatore si ritrovava sulla scheda azienda senza
+            // screening e senza sapere perché. Un fallimento che non lascia
+            // messaggio è peggio di un errore.
+            problemi.push(
+              `Caricamento della visura non riuscito: ${corpo.error ?? `HTTP ${up.status}`}`
+            );
+          } else {
+            urlVisura = corpo.url as string;
+          }
+        } catch (e) {
+          problemi.push(`Caricamento della visura non riuscito: ${String(e)}`);
+        }
+
+        if (urlVisura) {
+          setAvanzamento('Generazione di screening e check list — un minuto circa...');
+          try {
             const g = await generaScreeningAziendaAction(
               nomeSchema,
               aziendaId,
-              corpo.url,
+              urlVisura,
               fileVisura.name
             );
-            if (!g.success) {
-              setErrore(
-                `Azienda presa in carico. Screening non generato: ${g.error ?? 'errore'} — si può generare dalla scheda azienda.`
-              );
-            }
+            if (!g.success) problemi.push(`Screening non generato: ${g.error ?? 'errore'}`);
+          } catch (e) {
+            problemi.push(`Screening non generato: ${String(e)}`);
           }
-        } catch (e) {
-          setErrore(
-            `Azienda presa in carico. Screening non generato: ${String(e)} — si può generare dalla scheda azienda.`
-          );
         }
       }
 
       setAvanzamento('Presa in carico...');
       const r = await promuoviAziendaAction(nomeSchema, aziendaId);
-      if (r.success) window.location.href = `/spazio/${codice}/aziende/${aziendaId}`;
-      else setErrore(r.error ?? 'Operazione non riuscita.');
+      if (!r.success) {
+        setErrore(r.error ?? 'Presa in carico non riuscita.');
+        return;
+      }
+
+      if (problemi.length === 0) {
+        // Tutto riuscito: si va direttamente alla scheda, dove screening e
+        // check list sono pronti.
+        window.location.href = `/spazio/${codice}/aziende/${aziendaId}`;
+        return;
+      }
+
+      // Qualcosa non è andato: l'azienda è comunque presa in carico, ma NON
+      // si naviga via. L'operatore deve vedere cosa manca e decidere lui
+      // quando spostarsi — altrimenti scoprirebbe l'assenza dello screening
+      // solo più tardi, senza sapere perché.
+      setProblemiPresaInCarico(problemi);
+      setFase('presa_in_carico');
     } finally {
       setInCorso(false);
       setAvanzamento(null);
@@ -483,6 +530,78 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
             <Check className="w-3.5 h-3.5" />
             {inCorso ? 'Valutazione in corso...' : 'Conferma e valuta'}
           </button>
+        </div>
+      )}
+
+      {fase === 'caricamento' && storico.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider mb-3">
+            Verifiche già eseguite
+          </h3>
+          <div className="divide-y divide-slate-100">
+            {storico.slice(0, 15).map((v) => (
+              <div key={v.id} className="flex items-center justify-between gap-3 py-2">
+                <span className="min-w-0">
+                  <span className="block text-xs font-bold text-slate-900 truncate">
+                    {v.ragioneSociale}
+                  </span>
+                  <span className="block text-[10px] text-slate-400 font-mono">
+                    {v.partitaIva ? `P.IVA ${v.partitaIva} · ` : ''}
+                    {v.eseguitaIl ? new Date(v.eseguitaIl).toLocaleDateString('it-IT') : ''}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2 shrink-0">
+                  {v.esito && (
+                    <span
+                      className={`text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 ${
+                        v.esito === 'ROSSO'
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : v.esito === 'GIALLO'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}
+                    >
+                      {v.esito === 'ATTENZIONE_MINIMA' ? 'Minima' : v.esito.toLowerCase()}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-slate-500">
+                    {v.presaInCarico ? 'presa in carico' : 'in sospeso'}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {fase === 'presa_in_carico' && (
+        <div className="bg-white border border-amber-200 rounded-xl p-5 space-y-3">
+          <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+            Azienda presa in carico, con riserva
+          </h3>
+          <p className="text-[11px] text-slate-600 leading-relaxed">
+            La posizione è entrata fra quelle in lavorazione, ma la preparazione automatica non è
+            riuscita del tutto:
+          </p>
+          <ul className="space-y-1">
+            {problemiPresaInCarico.map((p, i) => (
+              <li key={i} className="text-[11px] text-amber-800 leading-relaxed flex gap-2">
+                <span className="text-amber-500 shrink-0">—</span>
+                <span>{p}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Screening e check list si generano dalla scheda azienda, come si è sempre fatto: nulla è
+            andato perduto, manca solo la preparazione automatica.
+          </p>
+          <a
+            href={`/spazio/${codice}/aziende/${aziendaId}`}
+            className="inline-flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700"
+          >
+            <ArrowRight className="w-3.5 h-3.5" />
+            Vai alla scheda azienda
+          </a>
         </div>
       )}
 

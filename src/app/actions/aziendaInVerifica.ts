@@ -184,6 +184,48 @@ export interface RigaVerifica {
   eseguitaIl: string | null;
 }
 
+/**
+ * Storico delle verifiche: TUTTE, comprese quelle già promosse.
+ *
+ * Il pannello di dashboard mostra solo le posizioni in sospeso — è una coda
+ * di lavoro. Ma la schermata di triage promette che "la verifica resta
+ * consultabile", e finora quella promessa non era mantenuta: esito e data
+ * erano nel database e non esistevano per l'utente.
+ */
+export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise<{
+  success: boolean;
+  righe?: (RigaVerifica & { presaInCarico: boolean })[];
+  error?: string;
+}> {
+  try {
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    const r = await pool
+      .query(
+        `SELECT id, ragione_sociale, partita_iva, verifica_esito, verifica_eseguita_il, in_verifica
+           FROM "${nomeSchema}".aziende
+          WHERE verifica_eseguita_il IS NOT NULL
+          ORDER BY verifica_eseguita_il DESC`
+      )
+      .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+    return {
+      success: true,
+      righe: r.rows.map((x) => ({
+        id: Number(x.id),
+        ragioneSociale: String(x.ragione_sociale),
+        partitaIva: x.partita_iva ? String(x.partita_iva) : null,
+        esito: x.verifica_esito ? String(x.verifica_esito) : null,
+        eseguitaIl: x.verifica_eseguita_il
+          ? new Date(x.verifica_eseguita_il as string).toISOString()
+          : null,
+        presaInCarico: !x.in_verifica,
+      })),
+    };
+  } catch (error: unknown) {
+    console.error('[ottieniStoricoVerificheAction] Errore:', error);
+    return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
+  }
+}
+
 export async function ottieniAziendeInVerificaAction(
   nomeSchema: string
 ): Promise<{ success: boolean; righe?: RigaVerifica[]; error?: string }> {

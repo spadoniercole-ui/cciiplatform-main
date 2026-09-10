@@ -93,6 +93,39 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.55 — 2026-09-10
+
+**Il "Procedi" falliva in silenzio, e la verifica non era consultabile**
+
+Due rilievi dal collaudo di Ercole, entrambi miei.
+
+**1. Fallimento silenzioso della preparazione automatica.** Nella 0.109.54
+gestivo con un messaggio l'errore dello screening, ma NON quello del
+caricamento della visura: se il caricamento falliva, si proseguiva, si
+promuoveva l'azienda e si navigava via senza dire nulla. L'operatore si
+ritrovava sulla scheda senza screening e senza sapere perché — ed e'
+esattamente cosa e' successo: "passato subito", nessun avviso, nessun
+report nuovo in dashboard.
+
+Ora ogni esito e' visibile. Se qualcosa non riesce, l'azienda viene comunque
+presa in carico ma **non si naviga via**: compare una schermata "Azienda
+presa in carico, con riserva" che elenca cosa non e' riuscito, ricorda che
+screening e check list restano generabili dalla scheda, e lascia all'operatore
+il momento in cui spostarsi. Un fallimento che non lascia messaggio e' peggio
+di un errore.
+
+**2. "La verifica resta consultabile" non era vero.** Lo scrivevamo a
+schermo, ma il pannello di dashboard mostra solo le posizioni in sospeso: una
+verifica conclusa spariva. Esito e data erano nel database e non esistevano
+per l'utente.
+
+Nuova `ottieniStoricoVerificheAction` e un elenco "Verifiche gia' eseguite"
+nella pagina di triage, con esito colorato, data e stato (presa in carico /
+in sospeso). Il pannello di dashboard resta una coda di lavoro; lo storico e'
+la traccia.
+
+Verificato: type-check, lint, **200 test**, build cloud completa.
+
 ## 0.109.54 — 2026-09-10
 
 **Dopo il triage: screening e check list gia' pronti**
