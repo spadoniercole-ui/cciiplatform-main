@@ -35,6 +35,10 @@ import {
   registraEsitoVerificaAction,
 } from '@/app/actions/aziendaInVerifica';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
+import { salvaAnalisiXbrlAziendaAction } from '@/app/actions/xbrlAzienda';
+import { analizzaVera, estraiRigheVera } from '@/lib/debitiEnte/veraImport';
+import { sostituisciDebitiVeraAction } from '@/app/actions/posizioneVera';
+import { salvaValoriSoglieAction } from '@/app/actions/soglie25novies';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
 import type { Attenzione } from '@/lib/screening/indicatore';
 
@@ -74,6 +78,17 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
   const [dati, setDati] = useState<AnagraficaEstratta | null>(null);
   const [aziendaId, setAziendaId] = useState<number | null>(null);
   const [attenzione, setAttenzione] = useState<Attenzione | null>(null);
+  // I due documenti che danno sostanza all'indicatore. Con la sola visura le
+  // dimensioni portanti — bilancio ed esposizione — mancano entrambe, e
+  // l'esito sarebbe rosso sempre: un semaforo che dice sempre la stessa cosa
+  // non è un semaforo.
+  const [fileXbrl, setFileXbrl] = useState<File | null>(null);
+  const [fileVera, setFileVera] = useState<File | null>(null);
+  // Valori che la soglia INPS richiede e che nessun documento porta: i
+  // contributi DOVUTI vengono dai flussi UNIEMENS, non dal file V.E.R.A.
+  const [conLavoratori, setConLavoratori] = useState<'' | 'si' | 'no'>('');
+  const [contributiDovuti, setContributiDovuti] = useState('');
+  const [avanzamento, setAvanzamento] = useState<string | null>(null);
 
   const caricaVisura = async (f: File | null) => {
     if (!f) return;
@@ -131,6 +146,67 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
         return;
       }
       setAziendaId(c.aziendaId);
+      // ---- I documenti, prima della valutazione --------------------------
+      // Ogni caricamento è indipendente: se uno fallisce, l'indicatore lo
+      // registra come dimensione mancante e lo dichiara. Meglio un giudizio
+      // parziale e onesto che nessun giudizio.
+
+      if (fileXbrl) {
+        setAvanzamento('Analisi del bilancio XBRL...');
+        try {
+          // Via la rotta dedicata, non chiamando la libreria da qui:
+          // `analizzaFileXbrl` legge le mappature dei tag dal database, e
+          // importarla in un componente client trascinerebbe `pg` nel bundle
+          // del browser — la build fallisce con "Can't resolve 'fs'".
+          const fd = new FormData();
+          fd.append('file', fileXbrl);
+          const resp = await fetch('/api/xbrl/parse', { method: 'POST', body: fd });
+          const esito = await resp.json();
+          if (!resp.ok || !esito.success) {
+            throw new Error(esito.error || 'Analisi non riuscita.');
+          }
+          await salvaAnalisiXbrlAziendaAction(nomeSchema, c.aziendaId, esito);
+        } catch (e) {
+          setErrore(`Bilancio XBRL non analizzabile: ${String(e)}`);
+        }
+      }
+
+      if (fileVera) {
+        setAvanzamento('Lettura della Posizione V.E.R.A....');
+        try {
+          const analisi = await analizzaVera(fileVera);
+          // Mappature vuote: in fase di triage non si chiede all'operatore di
+          // classificare titoli e trattamenti. Le righe non riconosciute
+          // restano tali e la classificazione fine si fa più avanti, nella
+          // scheda Posizione V.E.R.A., se la posizione viene presa in carico.
+          const { righe } = estraiRigheVera(analisi.sezioni, {}, {});
+          if (righe.length > 0) {
+            await sostituisciDebitiVeraAction(nomeSchema, c.aziendaId, righe);
+          }
+        } catch (e) {
+          setErrore(`File V.E.R.A. non leggibile: ${String(e)}`);
+        }
+      }
+
+      // ---- I due valori della soglia INPS --------------------------------
+      if (conLavoratori !== '' || contributiDovuti.trim() !== '') {
+        setAvanzamento('Salvataggio dei valori per le soglie...');
+        await salvaValoriSoglieAction(nomeSchema, c.aziendaId, {
+          conLavoratoriSubordinati: conLavoratori === '' ? null : conLavoratori === 'si',
+          contributiScaduti: null,
+          contributiDovutiAnnoPrecedente:
+            contributiDovuti.trim() === '' ? null : Number(contributiDovuti),
+          annoContributiDovuti: new Date().getFullYear() - 1,
+          sanzioniPresunteVera: null,
+          premiInail: null,
+          ivaScaduta: null,
+          volumeAffari: null,
+          creditiAffidatiAer: null,
+          soglieAggiornateAl: new Date().toISOString().slice(0, 10),
+        });
+      }
+
+      setAvanzamento('Calcolo dell’indicatore...');
       const a = await ottieniAttenzioneScreeningAction(nomeSchema, c.aziendaId);
       if (a.success && a.attenzione) {
         setAttenzione(a.attenzione);
@@ -141,6 +217,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
       setErrore(String(e));
     } finally {
       setInCorso(false);
+      setAvanzamento(null);
     }
   };
 
@@ -250,6 +327,97 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
               );
             })}
           </div>
+
+          <div className="border-t border-slate-100 pt-4 space-y-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
+                Documenti per l&apos;analisi
+              </p>
+              <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
+                Senza questi due l&apos;indicatore non ha né il bilancio né l&apos;esposizione, e
+                l&apos;esito resta &laquo;approfondimenti necessari&raquo; per forza. Sono
+                facoltativi — ma è da qui che il semaforo prende significato.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Bilancio XBRL
+                </label>
+                <input
+                  type="file"
+                  accept=".xbrl,.xml"
+                  onChange={(e) => setFileXbrl(e.target.files?.[0] ?? null)}
+                  className="w-full text-xs font-mono text-slate-900 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 file:font-bold file:uppercase file:text-[10px]"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Da qui patrimonio netto e indici CCII.
+                </p>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Posizione V.E.R.A.
+                </label>
+                <input
+                  type="file"
+                  accept=".xls,.xlsx"
+                  onChange={(e) => setFileVera(e.target.files?.[0] ?? null)}
+                  className="w-full text-xs font-mono text-slate-900 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 file:font-bold file:uppercase file:text-[10px]"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Da qui l&apos;esposizione.</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
+                Soglia di segnalazione
+              </p>
+              <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
+                Due valori che nessun documento porta: i contributi{' '}
+                <span className="font-bold">dovuti</span> vengono dai flussi UNIEMENS, non dal file
+                V.E.R.A.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Lavoratori subordinati o parasubordinati
+                </label>
+                <select
+                  value={conLavoratori}
+                  onChange={(e) => setConLavoratori(e.target.value as '' | 'si' | 'no')}
+                  className={CLASSE_CAMPO}
+                >
+                  <option value="">Non dichiarato</option>
+                  <option value="si">Sì</option>
+                  <option value="no">No</option>
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Decide quale soglia si applica: 30% + 15.000 € oppure 5.000 €.
+                </p>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Contributi dovuti nell&apos;anno precedente
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={contributiDovuti}
+                  onChange={(e) => setContributiDovuti(e.target.value)}
+                  className={`${CLASSE_CAMPO} font-mono`}
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Totale dovuto, non il debito: è la base del 30%.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}
 
           <button
             onClick={() => void confermaEValuta()}

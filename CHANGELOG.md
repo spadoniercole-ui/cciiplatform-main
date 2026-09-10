@@ -93,6 +93,38 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.49 — 2026-09-10
+
+**Verifica salute azienda: mancavano XBRL e V.E.R.A. — rosso perenne**
+
+Segnalato da Ercole, ed e' una mancanza mia: la richiesta iniziale era
+"visura, XBRL e V.E.R.A.", e la 0.109.48 chiedeva solo la visura. Con quella
+sola l'indicatore non ha ne' bilancio ne' esposizione: le due dimensioni
+PORTANTI mancano entrambe, e l'esito e' "approfondimenti necessari" per
+forza. Un semaforo che dice sempre la stessa cosa non e' un semaforo.
+
+Aggiunti alla schermata di conferma:
+
+  - **Bilancio XBRL** -> patrimonio netto e indici CCII. Analizzato via la
+    rotta `/api/xbrl/parse` gia' esistente, non chiamando la libreria dal
+    componente: `analizzaFileXbrl` legge le mappature dei tag dal database, e
+    importarla in un client component trascina `pg` nel bundle del browser —
+    la build fallisce con "Can't resolve 'fs'". Difetto trovato dalla build.
+  - **Posizione V.E.R.A.** -> l'esposizione. Le mappature di titoli e
+    trattamenti restano vuote: in fase di triage non si chiede all'operatore
+    di classificare, la classificazione fine si fa nella scheda dedicata se
+    la posizione viene presa in carico.
+  - **Due valori per la soglia INPS**: presenza di lavoratori
+    subordinati/parasubordinati e contributi DOVUTI nell'anno precedente.
+    Nessun documento li porta — i contributi dovuti vengono dai flussi
+    UNIEMENS, non dal file V.E.R.A.
+
+Ogni caricamento e' indipendente e facoltativo: se uno fallisce, l'indicatore
+registra quella dimensione come mancante e lo dichiara. Meglio un giudizio
+parziale e onesto che nessun giudizio.
+
+Verificato: type-check, lint, **189 test**, build cloud completa.
+
 ## 0.109.48 — 2026-09-10
 
 **"Verifica salute azienda": il triage prima dell'istruttoria**
