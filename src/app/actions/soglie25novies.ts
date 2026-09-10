@@ -14,6 +14,7 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabelleParametriSpazio } from '@/db/provision';
+import { ottieniParametriSoglieAction } from '@/app/actions/parametriSoglie';
 import {
   calcolaSoglie25Novies,
   type DatiSoglie,
@@ -195,9 +196,12 @@ export async function valutaSoglieAction(
       formaAER: lettura.formaAER ?? null,
     };
 
+    // Soglie configurate per lo spazio, non costanti.
+    const par = await ottieniParametriSoglieAction(nomeSchema);
     const esito = calcolaSoglie25Novies(
       dati,
-      tipoSpazio === 'ENTE' ? (ente ?? undefined) : undefined
+      tipoSpazio === 'ENTE' ? (ente ?? undefined) : undefined,
+      par.parametri
     );
 
     if (tipoSpazio === 'ENTE' && ente === null) {

@@ -231,7 +231,14 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   }
 
   if (input.coloreQualitativo === null || input.coloreQualitativo === 'grigio') {
-    daAccertare.push('Quadro qualitativo non compilato (Check List / Direttrici).');
+    // NON si elenca fra le cose da accertare.
+    //
+    // È una dimensione accessoria: può solo peggiorare l'esito, mai
+    // migliorarlo, quindi la sua assenza non cambia nulla del giudizio. E la
+    // Check List si compila DOPO — è il passo successivo del percorso — per
+    // cui dire "non è compilata" a chi ha appena caricato i documenti è
+    // un'ovvietà che occupa spazio e distrae dalle lacune che contano
+    // davvero. Concorre solo alla copertura, che resta dichiarata.
   } else {
     determinate++;
   }

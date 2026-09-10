@@ -50,11 +50,53 @@ export async function creaAziendaInVerificaAction(
 
     if (esistente.rows.length > 0) {
       const id = Number(esistente.rows[0].id);
+      // Si RIEMPIONO i campi ancora vuoti con quelli appena confermati, ma
+      // non si sovrascrive nulla di già valorizzato: una verifica di triage
+      // non deve poter modificare l'anagrafica di una posizione in
+      // lavorazione, dove quei dati sono stati controllati da qualcuno.
+      //
+      // Prima si aggiornava solo la data, e il risultato era che rifacendo
+      // una verifica su un'azienda già vista i dati letti dalla visura —
+      // l'anno di costituzione fra tutti — venivano mostrati a schermo,
+      // confermati dall'operatore, e poi silenziosamente buttati via:
+      // l'indicatore continuava a dichiararli mancanti.
       await pool.query(
-        `UPDATE "${nomeSchema}".aziende
-            SET verifica_eseguita_il = now()
-          WHERE id = $1`,
-        [id]
+        `UPDATE "${nomeSchema}".aziende SET
+           ragione_sociale = COALESCE(NULLIF(ragione_sociale, ''), $2),
+           forma_giuridica = COALESCE(forma_giuridica, $3),
+           codice_fiscale = COALESCE(codice_fiscale, $4),
+           partita_iva = COALESCE(partita_iva, $5),
+           codice_ateco = COALESCE(codice_ateco, $6),
+           numero_rea = COALESCE(numero_rea, $7),
+           capitale_sociale = COALESCE(capitale_sociale, $8),
+           indirizzo_sede_legale = COALESCE(indirizzo_sede_legale, $9),
+           citta = COALESCE(citta, $10),
+           provincia = COALESCE(provincia, $11),
+           cap = COALESCE(cap, $12),
+           rappresentante_legale = COALESCE(rappresentante_legale, $13),
+           ruolo_rappresentante_legale = COALESCE(ruolo_rappresentante_legale, $14),
+           pec = COALESCE(pec, $15),
+           anno_costituzione = COALESCE(anno_costituzione, $16),
+           verifica_eseguita_il = now()
+         WHERE id = $1`,
+        [
+          id,
+          dati.ragioneSociale.trim(),
+          dati.formaGiuridica,
+          dati.codiceFiscale,
+          dati.partitaIva,
+          dati.codiceAteco,
+          dati.numeroRea,
+          dati.capitaleSociale,
+          dati.indirizzoSedeLegale,
+          dati.citta,
+          dati.provincia,
+          dati.cap,
+          dati.rappresentanteLegale,
+          dati.ruoloRappresentanteLegale,
+          dati.pec,
+          dati.annoCostituzione,
+        ]
       );
       return { success: true, aziendaId: id };
     }

@@ -50,6 +50,13 @@ export function ParametriSpazioManager({ codice, tipoSpazio }: Props) {
         ]
       : []),
     {
+      href: `/spazio/${codice}/parametri/soglie`,
+      icon: Scale,
+      titolo: 'Soglie di segnalazione (art. 25-novies)',
+      descrizione:
+        'Gli importi di legge oltre cui scatta la segnalazione. Modificabili perché una riforma non imponga un aggiornamento del programma; il valore di legge resta sempre a vista.',
+    },
+    {
       href: `/spazio/${codice}/parametri/tab-xbrl`,
       icon: FileSpreadsheet,
       titolo: 'Tab XBRL',

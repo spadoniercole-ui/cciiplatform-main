@@ -68,7 +68,11 @@ describe('l’assenza di dati è un segnale, non una neutralità', () => {
     // triage significa restituire sempre lo stesso rosso, cioè rumore.
     const a = calcolaAttenzione({ ...completo, coloreQualitativo: null });
     expect(a.esito).toBe('ATTENZIONE_MINIMA');
-    expect(a.daAccertare.some((d) => d.includes('qualitativo'))).toBe(true);
+    // E NON viene nemmeno elencato: la Check List si compila dopo, dirlo a
+    // chi ha appena caricato i documenti è un'ovvietà che distrae dalle
+    // lacune che contano. Concorre solo alla copertura.
+    expect(a.daAccertare.some((d) => d.includes('qualitativo'))).toBe(false);
+    expect(a.copertura.determinate).toBeLessThan(a.copertura.totali);
   });
 
   it('le lacune PORTANTI invece bloccano: soglie o bilancio', () => {
@@ -86,10 +90,10 @@ describe('l’assenza di dati è un segnale, non una neutralità', () => {
     ).toBe('Approfondimenti necessari');
   });
 
-  it('soglia superata + lacuna ACCESSORIA: etichetta secca, lacuna comunque dichiarata', () => {
+  it('soglia superata + quadro qualitativo assente: etichetta secca, nessuna lacuna elencata', () => {
     const a = calcolaAttenzione({ ...completo, sogliaSuperata: true, coloreQualitativo: null });
     expect(a.etichetta).toBe('Criticità rilevante');
-    expect(a.daAccertare.length).toBeGreaterThan(0);
+    expect(a.daAccertare).toHaveLength(0);
   });
 
   it('patrimonio negativo + lacuna PORTANTE: l’etichetta le dice insieme', () => {
@@ -200,13 +204,13 @@ describe('i due registri coesistono senza gerarchia', () => {
   it('fatto accertato e lacuna compaiono INSIEME, non uno al posto dell’altro', () => {
     const a = calcolaAttenzione({
       ...completo,
-      sogliaSuperata: true, // fatto
-      coloreQualitativo: null, // lacuna
+      patrimonioNetto: -1, // fatto accertato
+      sogliaSuperata: null, // lacuna portante
     });
     expect(a.accertato.length).toBeGreaterThan(0);
     expect(a.daAccertare.length).toBeGreaterThan(0);
-    expect(a.accertato.join(' ')).toContain('soglia');
-    expect(a.daAccertare.join(' ')).toContain('qualitativo');
+    expect(a.accertato.join(' ')).toContain('Patrimonio netto');
+    expect(a.daAccertare.join(' ')).toContain('Soglie');
   });
 
   it('l’etichetta li dice insieme quando la lacuna è PORTANTE', () => {

@@ -93,6 +93,54 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.50 — 2026-09-10
+
+**Tre riscontri dal collaudo sul campo di Ercole**
+
+**1. L'anno di costituzione veniva letto e poi buttato via.** La visura lo
+riportava correttamente (2024), l'operatore lo confermava, e l'indicatore
+continuava a dichiararlo mancante. Causa: il ramo "azienda gia' presente".
+Se quella partita IVA era gia' stata verificata, il record veniva riusato
+aggiornando SOLO la data della verifica; tutti i dati appena confermati
+finivano nel nulla.
+
+Ora i campi ancora vuoti vengono riempiti con quelli confermati, ma quelli
+gia' valorizzati NON si sovrascrivono: una verifica di triage non deve poter
+modificare l'anagrafica di una posizione in lavorazione, dove quei dati li ha
+controllati qualcuno.
+
+**2. Il quadro qualitativo non compare piu' fra le cose "da accertare".** E'
+una dimensione accessoria — puo' solo peggiorare l'esito, mai migliorarlo — e
+la Check List si compila DOPO, e' il passo successivo del percorso. Dirlo a
+chi ha appena caricato i documenti e' un'ovvieta' che occupa spazio e
+distrae dalle lacune che contano. Continua a incidere sulla copertura, che
+resta dichiarata.
+
+**3. Le soglie passano nei Parametri di Spazio.** Nuova sezione
+"Soglie di segnalazione (art. 25-novies)" con tutti e undici i valori:
+percentuale e importo INPS, INAIL, IVA (importo, percentuale del volume
+d'affari, importo assoluto), le tre soglie AER per forma giuridica, e i
+giorni di ritardo.
+
+Gli importi sono di LEGGE, non nostri: sono modificabili perche' una riforma
+non debba imporre un aggiornamento del programma, non perche' ogni ente
+scelga le proprie soglie. L'interfaccia mostra percio' **sempre il valore di
+legge accanto a quello impostato**, evidenzia gli scostamenti in ambra con un
+avviso in testa, e consente di ripristinare il singolo valore o tutti
+insieme: uno scostamento deve restare riconoscibile, non diventare la nuova
+normalita' che nessuno ricorda di aver introdotto.
+
+I parametri sono collegati alle due action che calcolano davvero — indicatore
+di attenzione e valutazione delle soglie — altrimenti la pagina sarebbe una
+configurazione senza effetto. **3 test nuovi** proprio su questo: senza
+parametri valgono i valori di legge, un parametro modificato cambia davvero
+l'esito, e i parametri non forniti restano quelli di legge.
+
+Il salvataggio rifiuta valori negativi o non numerici: una soglia a zero
+renderebbe "oltre soglia" qualunque esposizione, anche di un euro.
+
+Verificato: type-check, lint, **192 test**, build cloud completa.
+
 ## 0.109.49 — 2026-09-10
 
 **Verifica salute azienda: mancavano XBRL e V.E.R.A. — rosso perenne**

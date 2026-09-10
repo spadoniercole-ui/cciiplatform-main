@@ -449,6 +449,35 @@ export async function assicuraTabellaPosizioneAggiornata(nomeSchema: string): Pr
 export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promise<void> {
   const s = sql.identifier(nomeSchema);
 
+  // Soglie di segnalazione art. 25-novies, configurabili per spazio.
+  //
+  // Gli importi sono di LEGGE, non nostri: i valori predefiniti sono quelli
+  // dell'articolo, e la tabella esiste perché una riforma non debba imporre
+  // una nuova release. Chi modifica un valore qui cambia l'esito di una
+  // valutazione: l'interfaccia lo dice, mostra sempre il valore di legge
+  // accanto a quello impostato, e consente di ripristinarlo.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_soglie_25novies (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      inps_percentuale NUMERIC NOT NULL DEFAULT 0.30,
+      inps_importo_con_lavoratori NUMERIC NOT NULL DEFAULT 15000,
+      inps_importo_senza_lavoratori NUMERIC NOT NULL DEFAULT 5000,
+      inail NUMERIC NOT NULL DEFAULT 5000,
+      iva_importo NUMERIC NOT NULL DEFAULT 5000,
+      iva_percentuale_volume_affari NUMERIC NOT NULL DEFAULT 0.10,
+      iva_importo_assoluto NUMERIC NOT NULL DEFAULT 20000,
+      aer_impresa_individuale NUMERIC NOT NULL DEFAULT 100000,
+      aer_societa_persone NUMERIC NOT NULL DEFAULT 200000,
+      aer_altre_societa NUMERIC NOT NULL DEFAULT 500000,
+      giorni_ritardo INTEGER NOT NULL DEFAULT 90,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now(),
+      CONSTRAINT riga_unica CHECK (id = 1)
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`INSERT INTO ${s}.parametri_soglie_25novies (id) VALUES (1) ON CONFLICT (id) DO NOTHING`
+  );
+
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.indici_abilitati (
       id SERIAL PRIMARY KEY,

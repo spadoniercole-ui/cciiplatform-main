@@ -14,6 +14,7 @@ import {
 } from '@/db/provision';
 import { calcolaAttenzione, type Attenzione } from '@/lib/screening/indicatore';
 import { calcolaSoglie25Novies, type DatiSoglie } from '@/lib/soglie25novies/calcolo';
+import { ottieniParametriSoglieAction } from '@/app/actions/parametriSoglie';
 import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
 
 export interface RisultatoAttenzione {
@@ -63,7 +64,10 @@ export async function ottieniAttenzioneScreeningAction(
       creditiAffidati: num(a.crediti_affidati_aer),
       formaAER: formaAERdaAnagrafica(a.forma_giuridica),
     };
-    const soglie = calcolaSoglie25Novies(dati);
+    // Le soglie configurate per lo spazio, non le costanti: altrimenti la
+    // pagina dei Parametri sarebbe una configurazione senza effetto.
+    const par = await ottieniParametriSoglieAction(nomeSchema);
+    const soglie = calcolaSoglie25Novies(dati, undefined, par.parametri);
     const applicabili = soglie.righe.filter((r) => r.applicabile);
     // null = nessuna riga applicabile o esito non determinabile: il perimetro
     // non è chiuso, e l'indicatore deve saperlo.

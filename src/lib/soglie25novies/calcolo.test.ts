@@ -228,3 +228,30 @@ describe('il requisito dei 90 giorni è sempre dichiarato', () => {
     expect(e.datiMancanti.some((d) => d.includes('90 giorni'))).toBe(true);
   });
 });
+
+describe('soglie configurate per spazio', () => {
+  it('senza parametri si applicano i valori di legge', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, conLavoratori: false, contributiScaduti: 5_001 });
+    expect(e.superate).toHaveLength(1);
+  });
+
+  it('un parametro modificato cambia davvero l’esito', () => {
+    // La configurabilità esiste perché una riforma non imponga una nuova
+    // release. Ma serve a poco se poi il motore continua a usare le
+    // costanti: questo test verifica che i parametri arrivino davvero.
+    const e = calcolaSoglie25Novies(
+      { ...vuoto, conLavoratori: false, contributiScaduti: 5_001 },
+      undefined,
+      { inpsImportoSenzaLavoratori: 10_000 }
+    );
+    expect(e.superate).toHaveLength(0);
+  });
+
+  it('i parametri non forniti restano quelli di legge', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, premiInail: 5_001 }, 'INAIL', {
+      inpsImportoSenzaLavoratori: 999_999,
+    });
+    // INAIL non è stato toccato: resta 5.000 €.
+    expect(e.superate).toHaveLength(1);
+  });
+});

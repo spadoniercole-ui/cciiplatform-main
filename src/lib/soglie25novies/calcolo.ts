@@ -139,20 +139,32 @@ const val = (n: number | null | undefined): number | null =>
  * @param soloEnte se valorizzato, restituisce le sole righe di quell'ente
  *                 (uso Ricevente). Omesso = tutte (uso Redigente).
  */
-export function calcolaSoglie25Novies(dati: DatiSoglie, soloEnte?: Ente25Novies): EsitoSoglie {
+/**
+ * @param parametri soglie configurate per lo spazio. Omesse = valori di
+ *        legge. Esistono perché una riforma non imponga una nuova release,
+ *        non perché ogni ente scelga le proprie soglie.
+ */
+export function calcolaSoglie25Novies(
+  dati: DatiSoglie,
+  soloEnte?: Ente25Novies,
+  // `-readonly` e il tipo number: senza, `as const` rende i valori letterali
+  // (5000 e non number) e un parametro diverso non sarebbe assegnabile.
+  parametri?: Partial<{ -readonly [K in keyof typeof SOGLIE_25NOVIES]: number }>
+): EsitoSoglie {
+  const S = { ...SOGLIE_25NOVIES, ...(parametri ?? {}) };
   const righe: RigaSoglia[] = [];
   const datiMancanti: string[] = [];
 
   // Il requisito temporale non e' mai dimostrabile con i dati odierni.
   datiMancanti.push(
-    `Requisito del ritardo di oltre ${SOGLIE_25NOVIES.giorniRitardo} giorni: non ricavabile dai dati disponibili, che non portano la data di scadenza delle singole partite.`
+    `Requisito del ritardo di oltre ${S.giorniRitardo} giorni: non ricavabile dai dati disponibili, che non portano la data di scadenza delle singole partite.`
   );
 
   // ---- INPS -----------------------------------------------------------
   const contributi = val(dati.contributiScaduti);
   const dovuti = val(dati.contributiDovutiAnnoPrecedente);
   const sanzioni = val(dati.sanzioniPresunte) ?? 0;
-  const sogliaPerc = dovuti !== null ? dovuti * SOGLIE_25NOVIES.inpsPercentuale : null;
+  const sogliaPerc = dovuti !== null ? dovuti * S.inpsPercentuale : null;
 
   let inpsSopraSoloConSanzioni = false;
 
@@ -168,16 +180,15 @@ export function calcolaSoglie25Novies(dati: DatiSoglie, soloEnte?: Ente25Novies)
         'Manca il totale dei contributi dovuti nell’anno precedente: il 30% non è calcolabile, quindi il concorso dei due requisiti non è verificabile.';
     } else {
       const oltrePerc = contributi > sogliaPerc;
-      const oltreImp = contributi > SOGLIE_25NOVIES.inpsImportoConLavoratori;
+      const oltreImp = contributi > S.inpsImportoConLavoratori;
       esito = oltrePerc && oltreImp ? 'sopra' : 'sotto';
       motivo =
         `Contributi ${euro(contributi)} — 30% dei dovuti: ${euro(sogliaPerc)} (${oltrePerc ? 'superato' : 'non superato'}); ` +
-        `${euro(SOGLIE_25NOVIES.inpsImportoConLavoratori)} (${oltreImp ? 'superato' : 'non superato'}). ` +
+        `${euro(S.inpsImportoConLavoratori)} (${oltreImp ? 'superato' : 'non superato'}). ` +
         `Requisiti congiunti: ${esito === 'sopra' ? 'entrambi superati' : 'non entrambi superati'}.`;
       if (applicabile && esito === 'sotto' && sanzioni > 0) {
         const tot = contributi + sanzioni;
-        inpsSopraSoloConSanzioni =
-          tot > sogliaPerc && tot > SOGLIE_25NOVIES.inpsImportoConLavoratori;
+        inpsSopraSoloConSanzioni = tot > sogliaPerc && tot > S.inpsImportoConLavoratori;
       }
     }
     righe.push({
@@ -199,14 +210,13 @@ export function calcolaSoglie25Novies(dati: DatiSoglie, soloEnte?: Ente25Novies)
     let esito: EsitoSoglia = 'non_determinabile';
     let motivo = 'Contributi previdenziali scaduti non inseriti: esito non determinabile.';
     if (contributi !== null) {
-      const oltre = contributi > SOGLIE_25NOVIES.inpsImportoSenzaLavoratori;
+      const oltre = contributi > S.inpsImportoSenzaLavoratori;
       esito = oltre ? 'sopra' : 'sotto';
       motivo =
-        `Contributi ${euro(contributi)} — soglia ${euro(SOGLIE_25NOVIES.inpsImportoSenzaLavoratori)}: ` +
+        `Contributi ${euro(contributi)} — soglia ${euro(S.inpsImportoSenzaLavoratori)}: ` +
         `${oltre ? 'superata' : 'non superata'}. Nessun vincolo percentuale per questa fattispecie.`;
       if (applicabile && !oltre && sanzioni > 0) {
-        inpsSopraSoloConSanzioni =
-          contributi + sanzioni > SOGLIE_25NOVIES.inpsImportoSenzaLavoratori;
+        inpsSopraSoloConSanzioni = contributi + sanzioni > S.inpsImportoSenzaLavoratori;
       }
     }
     righe.push({
@@ -238,9 +248,9 @@ export function calcolaSoglie25Novies(dati: DatiSoglie, soloEnte?: Ente25Novies)
     let esito: EsitoSoglia = 'non_determinabile';
     let motivo = 'Premi assicurativi non versati non inseriti: esito non determinabile.';
     if (premi !== null) {
-      const oltre = premi > SOGLIE_25NOVIES.inail;
+      const oltre = premi > S.inail;
       esito = oltre ? 'sopra' : 'sotto';
-      motivo = `Premi ${euro(premi)} — soglia ${euro(SOGLIE_25NOVIES.inail)}: ${oltre ? 'superata' : 'non superata'}.`;
+      motivo = `Premi ${euro(premi)} — soglia ${euro(S.inail)}: ${oltre ? 'superata' : 'non superata'}.`;
     }
     righe.push({
       ente: 'INAIL',
@@ -263,19 +273,19 @@ export function calcolaSoglie25Novies(dati: DatiSoglie, soloEnte?: Ente25Novies)
     let esito: EsitoSoglia = 'non_determinabile';
     let motivo = 'Debito IVA scaduto non inserito: esito non determinabile.';
     if (iva !== null) {
-      const viaAssoluta = iva > SOGLIE_25NOVIES.ivaImportoAssoluto;
+      const viaAssoluta = iva > S.ivaImportoAssoluto;
       if (viaAssoluta) {
         esito = 'sopra';
-        motivo = `IVA scaduta ${euro(iva)} — oltre ${euro(SOGLIE_25NOVIES.ivaImportoAssoluto)}: segnalazione dovuta in ogni caso, senza vincolo percentuale.`;
+        motivo = `IVA scaduta ${euro(iva)} — oltre ${euro(S.ivaImportoAssoluto)}: segnalazione dovuta in ogni caso, senza vincolo percentuale.`;
       } else if (volume === null) {
-        motivo = `IVA scaduta ${euro(iva)} — sotto ${euro(SOGLIE_25NOVIES.ivaImportoAssoluto)}. Manca il volume d’affari: il requisito del 10% non è calcolabile.`;
+        motivo = `IVA scaduta ${euro(iva)} — sotto ${euro(S.ivaImportoAssoluto)}. Manca il volume d’affari: il requisito del 10% non è calcolabile.`;
       } else {
-        const sogliaVol = volume * SOGLIE_25NOVIES.ivaPercentualeVolumeAffari;
-        const oltreImp = iva > SOGLIE_25NOVIES.ivaImporto;
+        const sogliaVol = volume * S.ivaPercentualeVolumeAffari;
+        const oltreImp = iva > S.ivaImporto;
         const oltrePerc = iva >= sogliaVol;
         esito = oltreImp && oltrePerc ? 'sopra' : 'sotto';
         motivo =
-          `IVA scaduta ${euro(iva)} — ${euro(SOGLIE_25NOVIES.ivaImporto)} (${oltreImp ? 'superato' : 'non superato'}); ` +
+          `IVA scaduta ${euro(iva)} — ${euro(S.ivaImporto)} (${oltreImp ? 'superato' : 'non superato'}); ` +
           `10% del volume d’affari: ${euro(sogliaVol)} (${oltrePerc ? 'raggiunto' : 'non raggiunto'}). ` +
           `Requisiti congiunti: ${esito === 'sopra' ? 'entrambi soddisfatti' : 'non entrambi soddisfatti'}.`;
       }
@@ -299,19 +309,19 @@ export function calcolaSoglie25Novies(dati: DatiSoglie, soloEnte?: Ente25Novies)
     const forme: { forma: FormaAER; soglia: number; ambito: string; valore: string }[] = [
       {
         forma: 'IMPRESA_INDIVIDUALE',
-        soglia: SOGLIE_25NOVIES.aerImpresaIndividuale,
+        soglia: S.aerImpresaIndividuale,
         ambito: 'Segnalazione Agenzia Entrate-Riscossione — imprese individuali',
         valore: '> 100.000 €',
       },
       {
         forma: 'SOCIETA_PERSONE',
-        soglia: SOGLIE_25NOVIES.aerSocietaPersone,
+        soglia: S.aerSocietaPersone,
         ambito: 'Segnalazione Agenzia Entrate-Riscossione — società di persone',
         valore: '> 200.000 €',
       },
       {
         forma: 'ALTRE_SOCIETA',
-        soglia: SOGLIE_25NOVIES.aerAltreSocieta,
+        soglia: S.aerAltreSocieta,
         ambito: 'Segnalazione Agenzia Entrate-Riscossione — altre società',
         valore: '> 500.000 €',
       },
