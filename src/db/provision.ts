@@ -126,6 +126,23 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
     sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS numero_sedi_secondarie INTEGER NOT NULL DEFAULT 0`
   );
 
+  // Anno di costituzione — OBBLIGATORIO in anagrafica.
+  //
+  // Serve a distinguere due assenze che a video si somigliano: un bilancio
+  // XBRL che manca perché l'impresa è appena nata, e uno che manca perché i
+  // bilanci non sono stati depositati. Il secondo caso è di per sé un
+  // segnale, il primo no. Senza questo dato l'indicatore di attenzione non
+  // può fare la distinzione e dichiara il perimetro non circoscrivibile.
+  //
+  // Nullable a livello di colonna (le aziende già inserite non ce l'hanno e
+  // non si inventa una data), ma obbligatorio nella regola di completezza:
+  // l'anagrafica di quelle aziende risulterà incompleta finché non viene
+  // compilato. È il comportamento voluto — costringe a colmare il dato — ma
+  // ha un effetto immediato sul semaforo di ogni azienda esistente.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS anno_costituzione INTEGER`
+  );
+
   // ---- Soglie di segnalazione art. 25-novies: valori a inserimento manuale.
   //
   // Stanno sull'AZIENDA e non sullo scenario: il debito e' il punto di

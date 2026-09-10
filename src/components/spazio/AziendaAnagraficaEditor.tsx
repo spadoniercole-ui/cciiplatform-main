@@ -34,6 +34,7 @@ interface FormState {
   ruoloRappresentanteLegale: string;
   numeroRea: string;
   pec: string;
+  annoCostituzione: string;
 }
 
 function Campo({
@@ -122,6 +123,10 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda }: Props) {
     ruoloRappresentanteLegale: azienda.ruoloRappresentanteLegale || '',
     numeroRea: azienda.numeroRea || '',
     pec: azienda.pec || '',
+    annoCostituzione:
+      azienda.annoCostituzione !== null && azienda.annoCostituzione !== undefined
+        ? String(azienda.annoCostituzione)
+        : '',
   });
   const [salvataggio, setSalvataggio] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
@@ -174,6 +179,8 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda }: Props) {
       const risultato = await modificaAziendaAction(nomeSchema, azienda.id, {
         ...form,
         capitaleSociale: form.capitaleSociale.trim() === '' ? null : Number(form.capitaleSociale),
+        annoCostituzione:
+          form.annoCostituzione.trim() === '' ? null : Number(form.annoCostituzione),
       });
       if (!risultato.success) {
         setErrore(risultato.error || "Impossibile salvare l'azienda.");
@@ -277,6 +284,20 @@ export function AziendaAnagraficaEditor({ nomeSchema, azienda }: Props) {
                 step="0.01"
                 value={form.capitaleSociale}
                 onChange={(e) => setForm({ ...form, capitaleSociale: e.target.value })}
+                className={`${classeInput} font-mono`}
+              />
+            </Campo>
+            <Campo
+              label="Anno di costituzione"
+              obbligatorio
+              hint="Distingue un bilancio assente perché l'impresa è appena nata da uno assente perché non è stato depositato: senza, l'indicatore di attenzione non può fare la differenza."
+            >
+              <input
+                type="number"
+                min={1900}
+                max={2100}
+                value={form.annoCostituzione}
+                onChange={(e) => setForm({ ...form, annoCostituzione: e.target.value })}
                 className={`${classeInput} font-mono`}
               />
             </Campo>

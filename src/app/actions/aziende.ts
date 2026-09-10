@@ -33,6 +33,7 @@ export interface Azienda {
   numeroRea: string | null;
   pec: string | null;
   numeroSediSecondarie: number;
+  annoCostituzione: number | null;
 }
 
 export interface RisultatoElencoAziende {
@@ -68,6 +69,7 @@ export interface DatiAzienda {
   numeroRea?: string;
   pec?: string;
   numeroSediSecondarie?: number;
+  annoCostituzione?: number | null;
 }
 
 function mappaRigaAzienda(r: any): Azienda {
@@ -93,6 +95,7 @@ function mappaRigaAzienda(r: any): Azienda {
     numeroRea: r.numeroRea ?? null,
     pec: r.pec ?? null,
     numeroSediSecondarie: r.numeroSediSecondarie ?? 0,
+    annoCostituzione: r.annoCostituzione ?? null,
   };
 }
 
@@ -117,6 +120,7 @@ function valoriDaDati(dati: DatiAzienda) {
     numeroRea: dati.numeroRea?.trim() || null,
     pec: dati.pec?.trim() || null,
     numeroSediSecondarie: dati.numeroSediSecondarie ?? 0,
+    annoCostituzione: dati.annoCostituzione === undefined ? null : dati.annoCostituzione,
   };
 }
 

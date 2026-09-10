@@ -211,6 +211,7 @@ export function getTabelleTenant(nomeSchema: string) {
       numeroRea: text('numero_rea'),
       pec: text('pec'),
       numeroSediSecondarie: integer('numero_sedi_secondarie').notNull().default(0),
+      annoCostituzione: integer('anno_costituzione'),
       createdAt: timestamp('created_at').defaultNow().notNull(),
     }),
   };

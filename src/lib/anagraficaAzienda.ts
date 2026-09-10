@@ -27,6 +27,9 @@ export const CAMPI_OBBLIGATORI_AZIENDA: CampoAnagrafica[] = [
   { chiave: 'rappresentanteLegale', label: 'Rappresentante Legale' },
   { chiave: 'ruoloRappresentanteLegale', label: 'Ruolo del rappresentante' },
   { chiave: 'pec', label: 'PEC' },
+  // Obbligatorio: senza, non si distingue un bilancio assente per giovane età
+  // da uno assente per mancato deposito. Vedi src/lib/screening/indicatore.ts.
+  { chiave: 'annoCostituzione', label: 'Anno di costituzione' },
 ];
 
 /** true se un valore (stringa/numero) è considerato "compilato". */

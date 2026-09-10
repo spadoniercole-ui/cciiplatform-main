@@ -93,6 +93,107 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.47 — 2026-09-10
+
+**Il semaforo passa in testata allo SCREENING, non alla relazione**
+
+L'indicatore si calcola dai dati — anagrafica, soglie, XBRL, quadro
+qualitativo — e quindi esiste PRIMA di qualunque generazione AI. Legarlo alla
+relazione lo rendeva visibile solo dopo aver speso una chiamata al modello,
+per leggere un giudizio che era gia' li'. Ora e' il primo elemento della
+pagina.
+
+**Due difetti che solo il collaudo a schermo poteva trovare** — e che erano
+la ragione per cui, nella 0.109.46, il semaforo non compariva affatto:
+
+  - la tabella dello storico XBRL si chiama `xbrl_storico_azienda`, non
+    `xbrl_storico`;
+  - ogni lettura dell'indicatore e' OPZIONALE, perche' quelle tabelle
+    nascono solo quando la rispettiva scheda viene usata la prima volta. Una
+    tabella assente significa "dato non disponibile" — informazione
+    legittima per l'indicatore — non un errore che debba far fallire il
+    calcolo e sparire il semaforo dalla pagina.
+
+**Collaudato a schermo** su un'azienda demo senza dati, dove restituisce
+esattamente cio' che deve: rosso, "Approfondimenti necessari", "Perimetro non
+circoscrivibile con i dati disponibili", copertura 0 su 4, colonna
+ACCERTATO vuota e colonna DA ACCERTARE con i quattro elementi mancanti
+elencati. Nessuna etichetta di colore nel testo.
+
+Verificato anche l'effetto annunciato del campo obbligatorio: la scheda
+Anagrafica risulta incompleta (arancione) sulle aziende gia' inserite finche'
+l'anno di costituzione non viene compilato.
+
+Verificato: type-check, lint, **187 test**, build completa.
+
+## 0.109.46 — 2026-09-10
+
+**Indicatore sintetico di attenzione, e il colore esce dal testo dello
+Screening**
+
+Il colore della valutazione veniva scritto DENTRO la relazione: il prompt
+riceveva `Severità CCII: YELLOW` e l'AI se lo portava nel testo. Un dato
+travestito da parola, per giunta in inglese.
+
+**Nuovo `src/lib/screening/indicatore.ts`** — funzione pura, **19 test**.
+Sintetizza copertura informativa, soglie di segnalazione, equilibrio
+patrimoniale e finanziario, quadro qualitativo.
+
+**Non e' una media ponderata**, e la scelta e' documentata nel file perche'
+sopravviva a chi lo leggera' fra sei mesi:
+
+  1. NON C'E' UNA POPOLAZIONE DI RIFERIMENTO: si valuta un'azienda alla
+     volta, quindi non esiste la distribuzione rispetto a cui standardizzare.
+     Qualunque normalizzazione sarebbe una soglia decisa da noi e presentata
+     come statistica.
+  2. LE GRANDEZZE NON SONO COMPENSABILI: una media direbbe che un buon
+     patrimonio netto compensa il superamento della soglia dell'art.
+     25-novies, che e' un fatto giuridico. Produrrebbe un verde su
+     un'azienda che l'ente e' tenuto a segnalare.
+  3. I DATI MANCANO QUASI SEMPRE: in un indicatore compensatorio il dato
+     mancante diventa implicitamente un valore favorevole — verde per
+     assenza di prove.
+
+Si adotta una regola GERARCHICA e NON COMPENSATORIA: ogni livello puo'
+peggiorare l'esito, nessuno puo' migliorarlo.
+
+**L'assenza di dati e' un segnale.** Se il perimetro non e' circoscrivibile
+l'esito e' ROSSO — "approfondimenti necessari" — non uno stato grigio che
+lascerebbe un fascicolo incompleto in silenzio.
+
+**Anno di costituzione, nuovo campo OBBLIGATORIO in anagrafica.** Distingue
+un bilancio assente perche' l'impresa e' giovane da uno assente perche' non
+depositato: il secondo e' di per se' un segnale. Ma la giovane eta' NON
+giustifica nulla quando l'esposizione supera la soglia di legge applicabile —
+non un numero inventato, la soglia dell'art. 25-novies gia' configurata.
+**Effetto immediato: l'anagrafica di ogni azienda gia' inserita risulta
+incompleta finche' il campo non viene compilato**, con il semaforo in
+arancione e gli step successivi bloccati. E' voluto.
+
+**Non e' una probabilita' di default**, ed e' scritto anche a video: la
+popolazione e' gia' il risultato di una selezione di aziende non virtuose, e
+condizionare su quella selezione rende le frequenze non trasferibili. Misura
+PRIORITA' DI ATTENZIONE. Per la stessa ragione l'esito migliore non e' un
+verde pieno ma "nessuna criticita' rilevata con i dati disponibili".
+
+**Due registri separati: gravita' e azione.** Il colore dice quanto e' grave;
+l'ordine delle azioni direbbe cosa fare prima — ma se con un fascicolo
+incompleto la comunicazione parta o si attenda dipende dall'ufficio e dal
+dirigente. L'indicatore restituisce percio' due elenchi AFFIANCATI e senza
+gerarchia, "Accertato" e "Da accertare", e l'etichetta li tiene insieme:
+"Criticita' rilevante che potrebbe richiedere approfondimenti" quando
+coesistono, "Criticita' rilevante" secca quando il quadro e' completo. Un
+test verifica che in nessun caso compaiano imperativi procedurali.
+
+**Nel prompt** il colore e' sostituito dai fatti ("Indici CCII oltre soglia:
+2 (…)") e c'e' il divieto esplicito di usare etichette di colore.
+
+Verificato: type-check, lint, **187 test**, build cloud e portable complete.
+
+**NON collaudato a schermo**: il semaforo compare in testata alla relazione,
+e la relazione esiste solo dopo una generazione AI — che il sandbox non puo'
+fare senza chiave API. Il motore e' coperto dai test; la resa grafica no.
+
 ## 0.109.45 — 2026-09-08
 
 **Colonne jsonb che contengono array: difetto del GENERATORE di backup**

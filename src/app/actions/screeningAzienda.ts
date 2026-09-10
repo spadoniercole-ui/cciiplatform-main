@@ -444,6 +444,13 @@ export async function generaScreeningAziendaAction(
       const precedente = ordinatoDesc[1];
       const d = ultimo.datiFinanziari;
       const formatta = (n: number) => `€ ${n.toLocaleString('it-IT')}`;
+      // I FATTI al posto dell'etichetta di colore. Prima qui si passava
+      // "Severità CCII: YELLOW", e l'AI se la portava dentro il testo della
+      // relazione: un dato travestito da parola, per giunta in inglese. La
+      // sintesi visiva ora sta in testata; qui vanno solo i fatti.
+      const nomiViolati = [...ultimo.indici, ...ultimo.altriIndici]
+        .filter((i) => i.esito === 'VIOLATO')
+        .map((i) => i.nome);
 
       // Prima solo 5 macro-aggregati su 22 campi già disponibili — il
       // resto del bilancio (immobilizzazioni, disponibilità liquide,
@@ -456,7 +463,7 @@ export async function generaScreeningAziendaAction(
         `Stato patrimoniale — Attivo: totale attivo ${formatta(d.totaleAttivo)}, immobilizzazioni ${formatta(d.immobilizzazioni)}, attivo circolante ${formatta(d.attivoCircolante)}, disponibilità liquide ${formatta(d.disponibilitaLiquide)}, crediti verso clienti ${formatta(d.creditiClienti)}.`
       );
       blocchiContesto.push(
-        `Stato patrimoniale — Passivo: patrimonio netto ${formatta(d.patrimonioNetto)}, totale debiti ${formatta(d.totaleDebiti)} (di cui verso banche ${formatta(d.debitiBanche)}, verso fornitori ${formatta(d.debitiFornitori)}, tributari ${formatta(d.debitiTributari)}, previdenziali ${formatta(d.debitiPrevidenziali)}), passivo corrente ${formatta(d.passivoCorrente)}. Severità CCII: ${ultimo.severity}.`
+        `Stato patrimoniale — Passivo: patrimonio netto ${formatta(d.patrimonioNetto)}, totale debiti ${formatta(d.totaleDebiti)} (di cui verso banche ${formatta(d.debitiBanche)}, verso fornitori ${formatta(d.debitiFornitori)}, tributari ${formatta(d.debitiTributari)}, previdenziali ${formatta(d.debitiPrevidenziali)}), passivo corrente ${formatta(d.passivoCorrente)}. Indici CCII oltre soglia: ${nomiViolati.length === 0 ? 'nessuno' : `${nomiViolati.length} (${nomiViolati.join(', ')})`}.`
       );
       if (precedente) {
         const dp = precedente.datiFinanziari;
@@ -699,6 +706,7 @@ Scrivi una relazione con questi paragrafi, in prosa, non elenchi puntati:
 5. Eventuali segnali di incoerenza da segnalare (es. continuità aziendale dichiarata in tensione con i numeri, se presente).
 6. Cosa manca e va aggiornato prima di poter valutare la proposta — il ponte esplicito verso i dati correnti che arriveranno con la proposta stessa.
 
+Non usare MAI etichette di colore (verde, giallo, rosso, GREEN, YELLOW, RED) né semafori a parole: la sintesi visiva è mostrata a parte, in testata alla relazione. Qui si scrivono i fatti e il loro significato.
 Non dare un giudizio legale definitivo — è una base istruttoria per chi dovrà poi leggere la proposta, non un responso.${istruzioniBlocco}`;
 
     const bloccoDocumento = {

@@ -17,6 +17,9 @@ import type { AnalisiXbrlResult } from '@/lib/xbrl/types';
 import { stampaTesto } from '@/lib/stampaTesto';
 import { TestoConNormativa } from '@/components/spazio/TestoConNormativa';
 import { RiscontriNormativi } from '@/components/spazio/RiscontriNormativi';
+import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
+import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
+import type { Attenzione } from '@/lib/screening/indicatore';
 
 interface Props {
   nomeSchema: string;
@@ -28,6 +31,7 @@ interface Props {
 export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSpazio }: Props) {
   const router = useRouter();
   const [stato, setStato] = useState<StatoScreeningAzienda | null>(null);
+  const [attenzione, setAttenzione] = useState<Attenzione | null>(null);
   const [numeroXbrl, setNumeroXbrl] = useState(0);
   const [caricamento, setCaricamento] = useState(true);
   const [caricamentoXbrl, setCaricamentoXbrl] = useState(false);
@@ -54,6 +58,13 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   };
 
   useEffect(() => {
+    // L'indicatore si ricalcola a ogni apertura: non è memorizzato, quindi
+    // non può divergere dai dati. Un fallimento qui non deve impedire di
+    // leggere la relazione.
+    void ottieniAttenzioneScreeningAction(nomeSchema, aziendaId).then((r) => {
+      if (r.success && r.attenzione) setAttenzione(r.attenzione);
+    });
+
     carica();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, aziendaId]);
@@ -203,6 +214,13 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           <p>{errore}</p>
         </div>
       )}
+
+      {/* PRIMO ELEMENTO DELLA PAGINA, non della relazione.
+          L'indicatore si calcola dai dati — anagrafica, soglie, XBRL, quadro
+          qualitativo — e quindi esiste PRIMA di qualunque generazione AI.
+          Legarlo alla relazione lo avrebbe reso visibile solo dopo aver speso
+          una chiamata al modello, per leggere un giudizio che era già lì. */}
+      {attenzione && <SemaforoAttenzione attenzione={attenzione} />}
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
         <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
