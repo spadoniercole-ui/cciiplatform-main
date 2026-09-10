@@ -93,6 +93,46 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.54 — 2026-09-10
+
+**Dopo il triage: screening e check list gia' pronti**
+
+Il triage non e' solo un filtro, e' istruttoria gia' avviata. Chi supera il
+filtro arriva alla scheda azienda con l'analisi fatta, e gli resta solo cio'
+che richiede il suo giudizio: caricare i debiti e rispondere alla check list.
+
+Premendo "Procedi con questa azienda" la visura viene inviata alla
+generazione dello screening, che produce **anche la check list** — le domande
+nascono dallo screening, quindi sono gia' quelle giuste per quell'azienda
+invece di un questionario generico.
+
+**L'operatore non compie un passo in piu'**: non sceglie di generare, non
+deve sapere cosa sia. Preme "Procedi" e trova tutto pronto. L'attesa —
+un minuto circa — e' pero' DICHIARATA, non nascosta: nasconderla creerebbe il
+caso peggiore, cioe' l'operatore che apre la scheda dopo dieci secondi, non
+trova nulla, e non sa se stia arrivando o se sia andato storto qualcosa.
+
+**Se la generazione fallisce, l'azienda viene promossa lo stesso.** Chiave API
+assente, direttrici non configurate, visura illeggibile: il triage non deve
+poter bloccare la presa in carico di una posizione. Il messaggio lo dice e
+indica che screening e check list restano generabili dalla scheda azienda.
+
+**Marcati come preliminari.** Nascono senza posizione debitoria e senza le
+risposte della check list: sono una fotografia parziale per costruzione, e
+l'interfaccia lo scrive. Il rischio da evitare e' che qualcuno li legga come
+definitivi.
+
+**Chi NON procede non consuma nulla**: nessuna generazione, nessuna chiamata
+al modello. Solo per le posizioni che passano il filtro.
+
+Verificato: type-check, lint, **200 test**, build completa.
+
+**Prossimo passo concordato**: spostare la posizione debitoria dall'azienda
+allo scenario. Il V.E.R.A. e' la fotografia dell'esposizione certificata
+(comprese partite in lavorazione e sanzioni) e vale per tutti gli scenari; il
+contabilizzato e' la base su cui si valuta una proposta specifica, e li'
+appartiene. E' un lavoro strutturale con una migrazione dietro.
+
 ## 0.109.53 — 2026-09-10
 
 **L'indicatore valutava TUTTE le soglie, non quella del proprio ente**

@@ -35,6 +35,7 @@ import {
   registraEsitoVerificaAction,
 } from '@/app/actions/aziendaInVerifica';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
+import { generaScreeningAziendaAction } from '@/app/actions/screeningAzienda';
 import { salvaAnalisiXbrlAziendaAction } from '@/app/actions/xbrlAzienda';
 import { analizzaVera, estraiRigheVera } from '@/lib/debitiEnte/veraImport';
 import { sostituisciDebitiVeraAction } from '@/app/actions/posizioneVera';
@@ -84,6 +85,9 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
   // non è un semaforo.
   const [fileXbrl, setFileXbrl] = useState<File | null>(null);
   const [fileVera, setFileVera] = useState<File | null>(null);
+  // La visura serve di nuovo al momento del "Procedi": lo screening la usa
+  // come documento di partenza.
+  const [fileVisura, setFileVisura] = useState<File | null>(null);
   // Valori che la soglia INPS richiede e che nessun documento porta: i
   // contributi DOVUTI vengono dai flussi UNIEMENS, non dal file V.E.R.A.
   const [conLavoratori, setConLavoratori] = useState<'' | 'si' | 'no'>('');
@@ -92,6 +96,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
 
   const caricaVisura = async (f: File | null) => {
     if (!f) return;
+    setFileVisura(f);
     setInCorso(true);
     setErrore(null);
     try {
@@ -220,13 +225,65 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
     }
   };
 
+  /**
+   * Promuove la posizione E prepara screening e check list.
+   *
+   * L'operatore non deve compiere un passo in più: preme "Procedi" e trova
+   * l'azienda con l'analisi già fatta. La check list nasce dallo screening,
+   * quindi le domande sono già quelle giuste per quell'azienda invece di un
+   * questionario generico.
+   *
+   * L'attesa è dichiarata, non nascosta: nasconderla creerebbe il caso
+   * peggiore — l'operatore che apre la scheda dopo dieci secondi, non trova
+   * nulla, e non sa se stia arrivando o se sia andato storto qualcosa.
+   *
+   * Se la generazione fallisce — chiave API assente, direttrici non
+   * configurate, visura illeggibile — l'azienda viene promossa LO STESSO:
+   * il triage non deve poter bloccare la presa in carico di una posizione,
+   * e screening e check list restano generabili dalla scheda azienda come
+   * si è sempre fatto.
+   */
   const procedi = async () => {
     if (!aziendaId) return;
     setInCorso(true);
-    const r = await promuoviAziendaAction(nomeSchema, aziendaId);
-    setInCorso(false);
-    if (r.success) window.location.href = `/spazio/${codice}/aziende/${aziendaId}`;
-    else setErrore(r.error ?? 'Operazione non riuscita.');
+    setErrore(null);
+    try {
+      if (fileVisura) {
+        setAvanzamento('Generazione di screening e check list — un minuto circa...');
+        try {
+          const fd = new FormData();
+          fd.append('file', fileVisura);
+          fd.append('codice', codice);
+          const up = await fetch('/api/blob-upload', { method: 'POST', body: fd });
+          const corpo = await up.json();
+          if (up.ok && !corpo.error) {
+            const g = await generaScreeningAziendaAction(
+              nomeSchema,
+              aziendaId,
+              corpo.url,
+              fileVisura.name
+            );
+            if (!g.success) {
+              setErrore(
+                `Azienda presa in carico. Screening non generato: ${g.error ?? 'errore'} — si può generare dalla scheda azienda.`
+              );
+            }
+          }
+        } catch (e) {
+          setErrore(
+            `Azienda presa in carico. Screening non generato: ${String(e)} — si può generare dalla scheda azienda.`
+          );
+        }
+      }
+
+      setAvanzamento('Presa in carico...');
+      const r = await promuoviAziendaAction(nomeSchema, aziendaId);
+      if (r.success) window.location.href = `/spazio/${codice}/aziende/${aziendaId}`;
+      else setErrore(r.error ?? 'Operazione non riuscita.');
+    } finally {
+      setInCorso(false);
+      setAvanzamento(null);
+    }
   };
 
   return (
@@ -443,9 +500,16 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
             <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">E adesso?</h3>
             <p className="text-[11px] text-slate-500 leading-relaxed">
               La verifica è registrata: resta consultabile anche se decidi di non proseguire, ed è
-              la traccia di chi ha guardato questa posizione e quando. Procedendo, l&apos;azienda
-              entra fra quelle in lavorazione e potrai completarne i dati e aprire uno scenario.
+              la traccia di chi ha guardato questa posizione e quando.
             </p>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Procedendo, l&apos;azienda entra fra quelle in lavorazione e vengono generati{' '}
+              <span className="font-bold">screening e check list</span> — un minuto circa. Li
+              troverai già pronti nella scheda: sono <span className="font-bold">preliminari</span>,
+              perché nascono senza la posizione debitoria e senza le tue risposte, e si rigenerano
+              quando avrai completato quei due passaggi.
+            </p>
+            {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => void procedi()}
@@ -453,7 +517,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
                 className="flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700 disabled:bg-slate-300"
               >
                 <ArrowRight className="w-3.5 h-3.5" />
-                Procedi con questa azienda
+                {inCorso ? 'Preparazione in corso...' : 'Procedi con questa azienda'}
               </button>
               <button
                 onClick={() => {
