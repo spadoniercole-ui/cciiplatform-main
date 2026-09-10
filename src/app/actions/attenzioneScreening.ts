@@ -13,7 +13,11 @@ import {
   assicuraTabelleVera,
 } from '@/db/provision';
 import { calcolaAttenzione, type Attenzione } from '@/lib/screening/indicatore';
-import { calcolaSoglie25Novies, type DatiSoglie } from '@/lib/soglie25novies/calcolo';
+import {
+  calcolaSoglie25Novies,
+  type DatiSoglie,
+  type Ente25Novies,
+} from '@/lib/soglie25novies/calcolo';
 import { ottieniParametriSoglieAction } from '@/app/actions/parametriSoglie';
 import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
 
@@ -119,7 +123,31 @@ export async function ottieniAttenzioneScreeningAction(
     // Le soglie configurate per lo spazio, non le costanti: altrimenti la
     // pagina dei Parametri sarebbe una configurazione senza effetto.
     const par = await ottieniParametriSoglieAction(nomeSchema);
-    const soglie = calcolaSoglie25Novies(dati, undefined, par.parametri);
+    // L'ENTE DI RIFERIMENTO dello spazio: uno spazio ENTE valuta SOLO la
+    // propria soglia.
+    //
+    // Passando `undefined` si valutavano TUTTE le righe — INPS, INAIL,
+    // Agenzia delle Entrate, Agente della Riscossione — e per uno spazio INPS
+    // le altre tre non hanno e non avranno mai dati: restavano non
+    // determinabili, e una sola di quelle azzerava l'intero esito. Il
+    // risultato era che l'esposizione INPS, anche caricata e corretta, non
+    // veniva mai guardata: "approfondimenti necessari" perpetuo.
+    //
+    // È la stessa regola che avevo scritto nel motore e non applicata qui.
+    const enteRis = await pool
+      .query(
+        `SELECT DISTINCT ente_25novies FROM "${nomeSchema}".limiti_ricevibilita
+          WHERE ente_25novies IS NOT NULL`
+      )
+      .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+    // Un solo ente configurato: è quello dello spazio. Più d'uno (o nessuno)
+    // significa spazio non ENTE, o configurazione ambigua: si valuta tutto.
+    const enteSpazio =
+      enteRis.rows.length === 1
+        ? (String(enteRis.rows[0].ente_25novies) as Ente25Novies)
+        : undefined;
+
+    const soglie = calcolaSoglie25Novies(dati, enteSpazio, par.parametri);
     const applicabili = soglie.righe.filter((r) => r.applicabile);
     // null = nessuna riga applicabile o esito non determinabile: il perimetro
     // non è chiuso, e l'indicatore deve saperlo.
@@ -127,6 +155,16 @@ export async function ottieniAttenzioneScreeningAction(
       applicabili.length === 0 || soglie.nonDeterminabili.length > 0
         ? null
         : soglie.superate.length > 0;
+
+    // Se l'esito non è determinabile, il motivo va detto con precisione:
+    // "manca l'esposizione" e "l'ente di riferimento non è configurato" sono
+    // due problemi diversi che si risolvono in due posti diversi.
+    const motivoSoglieMancanti =
+      applicabili.length === 0
+        ? enteSpazio === undefined
+          ? 'Ente di riferimento non configurato: collega una riga dei Limiti di Ricevibilità a un ente dell’art. 25-novies.'
+          : 'Nessuna soglia applicabile: dichiara in anagrafica la presenza di lavoratori subordinati/parasubordinati.'
+        : null;
 
     // Soglia di legge applicabile, per stabilire se il debito è "importante".
     const rigaApplicabile = applicabili[0];
@@ -165,20 +203,29 @@ export async function ottieniAttenzioneScreeningAction(
     const coloreQualitativo =
       (check.rows[0]?.colore as 'verde' | 'giallo' | 'rosso' | 'grigio' | undefined) ?? null;
 
-    return {
-      success: true,
-      attenzione: calcolaAttenzione({
-        annoCostituzione: num(a.anno_costituzione),
-        annoCorrente: new Date().getFullYear(),
-        xbrlPresente,
-        patrimonioNetto,
-        indiciViolati,
-        sogliaSuperata,
-        esposizione,
-        sogliaApplicabile,
-        coloreQualitativo,
-      }),
-    };
+    const attenzione = calcolaAttenzione({
+      annoCostituzione: num(a.anno_costituzione),
+      annoCorrente: new Date().getFullYear(),
+      xbrlPresente,
+      patrimonioNetto,
+      indiciViolati,
+      sogliaSuperata,
+      esposizione,
+      sogliaApplicabile,
+      coloreQualitativo,
+    });
+
+    // Il motivo preciso al posto di quello generico: "manca l'esposizione" e
+    // "l'ente di riferimento non è configurato" si risolvono in due posti
+    // diversi, e mandare l'operatore nel posto sbagliato è quanto è già
+    // successo con i Parametri di Spazio.
+    if (motivoSoglieMancanti) {
+      attenzione.daAccertare = attenzione.daAccertare.map((d) =>
+        d.startsWith('Esposizione previdenziale') ? motivoSoglieMancanti : d
+      );
+    }
+
+    return { success: true, attenzione };
   } catch (error: unknown) {
     console.error('[ottieniAttenzioneScreeningAction] Errore:', error);
     return { success: false, error: `Indicatore non calcolabile: ${(error as Error).message}` };

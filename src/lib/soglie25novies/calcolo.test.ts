@@ -255,3 +255,36 @@ describe('soglie configurate per spazio', () => {
     expect(e.superate).toHaveLength(1);
   });
 });
+
+describe('valutare TUTTE le soglie azzera l’esito di uno spazio ENTE', () => {
+  // Difetto reale, costato tre giri di correzioni: l'indicatore passava
+  // `undefined` come ente e valutava tutte e quattro le righe. Per uno
+  // spazio INPS le altre tre non hanno e non avranno mai dati, restano
+  // "non determinabili", e una sola basta a rendere l'esito complessivo
+  // indeterminato. L'esposizione INPS, anche caricata e corretta, non
+  // veniva mai guardata.
+
+  const soloInps = {
+    ...vuoto,
+    conLavoratori: false,
+    contributiScaduti: 80_000,
+  };
+
+  it('senza ente: le righe degli altri enti restano non determinabili', () => {
+    const e = calcolaSoglie25Novies(soloInps);
+    expect(e.nonDeterminabili.length).toBeGreaterThan(0);
+  });
+
+  it('con ente INPS: nessuna riga non determinabile, e la soglia è superata', () => {
+    const e = calcolaSoglie25Novies(soloInps, 'INPS');
+    expect(e.nonDeterminabili).toHaveLength(0);
+    expect(e.superate).toHaveLength(1);
+  });
+
+  it('lo spazio INAIL non guarda l’esposizione INPS', () => {
+    const e = calcolaSoglie25Novies(soloInps, 'INAIL');
+    expect(e.superate).toHaveLength(0);
+    // E dichiara la propria lacuna, non quella altrui.
+    expect(e.nonDeterminabili).toHaveLength(1);
+  });
+});

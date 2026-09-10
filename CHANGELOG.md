@@ -93,6 +93,42 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.53 — 2026-09-10
+
+**L'indicatore valutava TUTTE le soglie, non quella del proprio ente**
+
+Questa era la causa vera, e le tre correzioni precedenti — pur risolvendo
+difetti reali — non potevano toglierla.
+
+`ottieniAttenzioneScreeningAction` chiamava `calcolaSoglie25Novies(dati,
+undefined, ...)`: senza ente, il motore valuta tutte e quattro le righe —
+INPS, INAIL, Agenzia delle Entrate, Agente della Riscossione. Per uno spazio
+INPS le altre tre non hanno e non avranno mai dati: restano "non
+determinabili", e **una sola basta** a rendere indeterminato l'esito
+complessivo. L'esposizione INPS, anche caricata e corretta, non veniva mai
+guardata.
+
+E' la stessa regola che avevo scritto nel motore — "uno spazio ENTE valuta
+SOLO la propria soglia" — e non applicata qui.
+
+Ora l'ente si legge da `ente_25novies` sui Limiti di Ricevibilita': un solo
+ente configurato significa spazio ENTE, e si valuta quella riga sola. Nessuno
+o piu' d'uno significa spazio NON_ENTE o configurazione ambigua, e si valuta
+tutto.
+
+**3 test** che bloccano il ritorno del difetto: senza ente le righe altrui
+restano non determinabili; con ente INPS l'esito e' netto e la soglia
+risulta superata; uno spazio INAIL non guarda l'esposizione INPS e dichiara
+la propria lacuna, non quella altrui.
+
+**Messaggio piu' preciso.** "Manca l'esposizione" e "l'ente di riferimento
+non e' configurato" sono due problemi diversi che si risolvono in due posti
+diversi: ora l'indicatore dice quale dei due e', invece di mandare
+l'operatore a cercare nel posto sbagliato — che e' gia' successo con i
+Parametri di Spazio.
+
+Verificato: type-check, lint, **200 test**, build cloud completa.
+
 ## 0.109.52 — 2026-09-10
 
 **Il file V.E.R.A. veniva caricato e scartato per intero**
