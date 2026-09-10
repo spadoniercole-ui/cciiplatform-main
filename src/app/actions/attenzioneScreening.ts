@@ -49,20 +49,48 @@ export async function ottieniAttenzioneScreeningAction(
     const a = az.rows[0];
 
     // ---- Esposizione verso l'ente ----------------------------------------
-    // Somma del debito contabilizzato sulle sole categorie che concorrono al
-    // totale: è il numero da confrontare con la soglia di legge per stabilire
-    // se il debito è "importante".
+    // Due fonti, in ordine di attendibilità.
+    //
+    // 1) SITUAZIONE DEBITORIA (`debiti_ente`): quanto l'ente ha
+    //    contabilizzato. È il dato certo, e vince quando c'è.
+    // 2) POSIZIONE V.E.R.A. (`debiti_vera`): il file di verifica. È l'unica
+    //    fonte disponibile nella Verifica salute azienda, dove la Situazione
+    //    Debitoria non è ancora stata caricata.
+    //
+    // Guardare solo la prima era il difetto: chi caricava il V.E.R.A. dal
+    // triage si vedeva dire che l'esposizione non era disponibile pur
+    // avendola appena fornita.
     const esp = await pool
       .query(
         `SELECT COALESCE(SUM(d.importo), 0) AS totale
-         FROM "${nomeSchema}".debiti_ente d
-         JOIN "${nomeSchema}".categorie_tipo_debito c ON c.codice = d.tipo
-        WHERE d.azienda_id = $1 AND c.attivo = TRUE AND c.contribuisce = TRUE`,
+           FROM "${nomeSchema}".debiti_ente d
+           JOIN "${nomeSchema}".categorie_tipo_debito c ON c.codice = d.tipo
+          WHERE d.azienda_id = $1 AND c.attivo = TRUE AND c.contribuisce = TRUE`,
         [aziendaId]
       )
       .catch(() => ({ rows: [{ totale: 0 }] }));
     const contabilizzato = Number(esp.rows[0]?.totale ?? 0);
-    const esposizione = contabilizzato > 0 ? contabilizzato : num(a.contributi_scaduti);
+
+    // Sul V.E.R.A. il join sulle categorie è VOLUTAMENTE permissivo: in fase
+    // di triage i titoli non vengono mappati (non si chiede all'operatore di
+    // classificare per fare una verifica), quindi la categoria è spesso
+    // assente. Un join stretto escluderebbe l'intero file e riporterebbe
+    // zero. Si escludono solo le categorie esplicitamente NON contributive.
+    const espVera = await pool
+      .query(
+        `SELECT COALESCE(SUM(v.importo), 0) AS totale
+           FROM "${nomeSchema}".debiti_vera v
+           LEFT JOIN "${nomeSchema}".categorie_tipo_debito c ON c.codice = v.categoria
+          WHERE v.azienda_id = $1
+            AND v.trattamento IN ('contabilizzato', 'da_contabilizzare')
+            AND (c.contribuisce IS NULL OR c.contribuisce = TRUE)`,
+        [aziendaId]
+      )
+      .catch(() => ({ rows: [{ totale: 0 }] }));
+    const daVera = Number(espVera.rows[0]?.totale ?? 0);
+
+    const esposizione =
+      contabilizzato > 0 ? contabilizzato : daVera > 0 ? daVera : num(a.contributi_scaduti);
 
     // ---- Soglie di segnalazione ------------------------------------------
     const dati: DatiSoglie = {

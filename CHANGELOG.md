@@ -93,6 +93,41 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.52 — 2026-09-10
+
+**Il file V.E.R.A. veniva caricato e scartato per intero**
+
+La 0.109.51 correggeva un difetto vero ma non quello decisivo — me ne mancava
+uno sotto, e ne mancava un altro sotto ancora.
+
+**1. `estraiRigheVera` senza mappature scartava TUTTO.** È il comportamento
+corretto per l'istruttoria: una riga il cui titolo o la cui combinazione
+natura/stato non è stata classificata non deve entrare in una posizione
+debitoria a insaputa di nessuno. Ma nella Verifica salute azienda le
+mappature sono vuote di proposito — non si chiede all'operatore di
+classificare per fare un triage — quindi lo scarto era totale: **zero righe
+prodotte**, file caricato e ignorato in silenzio.
+
+Nuova modalità `triage`: le righe vengono conservate, la categoria resta
+VUOTA (non si inventa una classificazione che nessuno ha dato) e il
+trattamento è quello SUGGERITO dalla catena natura/stato, lo stesso che
+l'interfaccia propone all'operatore. **5 test**, fra cui quello che dimostra
+il difetto: senza mappature il comportamento normale restituisce 0 righe, in
+triage ne restituisce 2 per 15.000 €.
+
+**2. L'esposizione veniva calcolata solo dalla Situazione Debitoria.** Il
+V.E.R.A. finisce in `debiti_vera`, ma la query leggeva `debiti_ente`. Ora
+guarda entrambe, in ordine di attendibilità: la Situazione Debitoria vince
+quando c'è (è il contabilizzato dell'ente), altrimenti si usa il V.E.R.A., che
+nel triage è l'unica fonte disponibile.
+
+Sul V.E.R.A. il join sulle categorie è volutamente permissivo — si escludono
+solo quelle esplicitamente NON contributive — perché in triage la categoria è
+assente: un join stretto avrebbe escluso l'intero file riportando zero, cioè
+lo stesso guasto di prima con un'altra faccia.
+
+Verificato: type-check, lint, **197 test**, build cloud completa.
+
 ## 0.109.51 — 2026-09-10
 
 **Il file V.E.R.A. non arrivava mai al test delle soglie**

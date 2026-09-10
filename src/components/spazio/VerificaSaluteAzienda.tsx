@@ -179,7 +179,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
           // classificare titoli e trattamenti. Le righe non riconosciute
           // restano tali e la classificazione fine si fa più avanti, nella
           // scheda Posizione V.E.R.A., se la posizione viene presa in carico.
-          const { righe } = estraiRigheVera(analisi.sezioni, {}, {});
+          const { righe } = estraiRigheVera(analisi.sezioni, {}, {}, true);
           if (righe.length > 0) {
             await sostituisciDebitiVeraAction(nomeSchema, c.aziendaId, righe);
           }

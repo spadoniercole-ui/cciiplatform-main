@@ -182,7 +182,25 @@ export interface CombinazioneVera {
 export function estraiRigheVera(
   sezioni: SezioneVera[],
   mappaturaTitoli: Record<string, string>,
-  mappaturaTrattamenti: Record<string, TrattamentoVera> = {}
+  mappaturaTrattamenti: Record<string, TrattamentoVera> = {},
+  /**
+   * Modalità TRIAGE: le righe senza mappatura non vengono scartate.
+   *
+   * Il comportamento normale è corretto per l'istruttoria — una riga il cui
+   * titolo o la cui combinazione natura/stato non è stata classificata non
+   * deve entrare in una posizione debitoria a insaputa di nessuno.
+   *
+   * Ma nella Verifica salute azienda non si chiede all'operatore di mappare
+   * nulla: si carica il file per sapere se la posizione vada guardata. Con
+   * le mappature vuote lo scarto era TOTALE — nessuna riga prodotta, file
+   * caricato e ignorato, e l'indicatore che dichiarava l'esposizione non
+   * disponibile pur avendola appena ricevuta.
+   *
+   * In questa modalità la categoria resta vuota (nessuna classificazione
+   * inventata) e il trattamento è quello SUGGERITO dalla catena
+   * natura/stato, lo stesso che l'interfaccia propone all'operatore.
+   */
+  triage = false
 ): {
   righe: RigaVera[];
   titoliNonMappati: { norm: string; label: string }[];
@@ -201,11 +219,13 @@ export function estraiRigheVera(
         vistiNonMappati.add(norm);
         nonMappati.push({ norm, label: s.titolo });
       }
-      continue;
+      // In triage si prosegue con categoria vuota: si registra l'importo
+      // senza attribuirgli una classificazione che nessuno ha dato.
+      if (!triage) continue;
     }
     for (const r of s.righe) {
       const chiave = chiaveCombinazione(r.voce, r.stato);
-      const trattamento = mappaturaTrattamenti[chiave];
+      let trattamento = mappaturaTrattamenti[chiave];
       if (!trattamento) {
         if (!vistiComb.has(chiave)) {
           vistiComb.add(chiave);
@@ -216,13 +236,14 @@ export function estraiRigheVera(
             suggerito: suggerisciTrattamento(r.stato, r.importo),
           });
         }
-        continue;
+        if (!triage) continue;
+        trattamento = suggerisciTrattamento(r.stato, r.importo);
       }
       righe.push({
         sezione: s.titolo,
         voce: r.voce,
         importo: r.importo,
-        categoria,
+        categoria: categoria ?? '',
         stato: r.stato,
         trattamento,
       });
