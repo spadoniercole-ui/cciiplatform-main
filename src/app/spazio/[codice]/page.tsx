@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
 import { ottieniContestoAccessoSpazio, ottieniAdminSpazio } from '@/app/actions/spazi';
 import { ottieniAziende } from '@/app/actions/aziende';
+import { ottieniAziendeInVerificaAction, type RigaVerifica } from '@/app/actions/aziendaInVerifica';
 import { ottieniScenari } from '@/app/actions/scenari';
 import { ottieniUltimiScreeningSpazio } from '@/app/actions/screeningAzienda';
 import {
@@ -25,9 +26,10 @@ export default async function DashboardSpazioPage({
   const contesto = await ottieniContestoAccessoSpazio(codice);
   if (!contesto) redirect('/');
 
-  const [risultatoAdmin, risultatoAziende] = await Promise.all([
+  const [risultatoAdmin, risultatoAziende, verificheRis] = await Promise.all([
     ottieniAdminSpazio(contesto.nomeSchema),
     ottieniAziende(contesto.nomeSchema),
+    ottieniAziendeInVerificaAction(contesto.nomeSchema),
   ]);
 
   const aziendeAttive = risultatoAziende.aziende.filter((a) => a.attiva).length;
@@ -105,6 +107,16 @@ export default async function DashboardSpazioPage({
         totaleAziendeAttive={risultatoAziende.success ? aziendeAttive : '—'}
         utenti={righeUtenti}
         totaleUtenti={risultatoAdmin.success ? risultatoAdmin.admins.length : '—'}
+        verifiche={
+          verificheRis.success && verificheRis.righe
+            ? verificheRis.righe.map((v: RigaVerifica) => ({
+                id: v.id,
+                ragioneSociale: v.ragioneSociale,
+                partitaIva: v.partitaIva,
+                esito: v.esito,
+              }))
+            : []
+        }
         scenari={righeScenari}
         totaleScenari={totaleScenari}
         report={ultimiScreening}

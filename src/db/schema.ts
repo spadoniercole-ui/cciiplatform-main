@@ -212,6 +212,9 @@ export function getTabelleTenant(nomeSchema: string) {
       pec: text('pec'),
       numeroSediSecondarie: integer('numero_sedi_secondarie').notNull().default(0),
       annoCostituzione: integer('anno_costituzione'),
+      inVerifica: boolean('in_verifica').notNull().default(false),
+      verificaEsito: text('verifica_esito'),
+      verificaEseguitaIl: timestamp('verifica_eseguita_il'),
       createdAt: timestamp('created_at').defaultNow().notNull(),
     }),
   };

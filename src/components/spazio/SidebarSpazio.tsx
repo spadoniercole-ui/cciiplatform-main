@@ -11,7 +11,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Building2, Users, FolderOpen, Settings2, BookOpen } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Building2,
+  Users,
+  FolderOpen,
+  Settings2,
+  BookOpen,
+  Stethoscope,
+} from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
 
 type LivelloPermesso = 'NESSUNO' | 'LETTURA' | 'SCRITTURA';
@@ -43,6 +51,13 @@ const VOCI_MENU: {
     soloAdmin: true,
   },
   { id: 'utenti', label: 'Utenti', icon: Users, stato: 'pronta', soloAdmin: true },
+  {
+    id: 'verifica-salute',
+    label: 'Verifica salute azienda',
+    icon: Stethoscope,
+    stato: 'pronta',
+    soloAdmin: true,
+  },
   { id: 'aziende', label: 'Aziende', icon: Building2, stato: 'pronta', soloAdmin: true },
   {
     id: 'scenari',

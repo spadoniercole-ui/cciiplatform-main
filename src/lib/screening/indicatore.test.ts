@@ -60,18 +60,41 @@ describe('l’assenza di dati è un segnale, non una neutralità', () => {
     expect(a.daAccertare.some((d) => d.includes('Soglie'))).toBe(true);
   });
 
-  it('quadro qualitativo non compilato → approfondimenti necessari', () => {
+  it('quadro qualitativo non compilato: si dichiara, ma NON blocca il giudizio', () => {
+    // È una dimensione ACCESSORIA: può solo peggiorare l'esito, mai
+    // migliorarlo, quindi la sua assenza non può capovolgere un giudizio —
+    // al più lo lascia più mite del vero. Contarla fra le lacune bloccanti
+    // mandava in rosso aziende che rosse non erano: su uno strumento di
+    // triage significa restituire sempre lo stesso rosso, cioè rumore.
     const a = calcolaAttenzione({ ...completo, coloreQualitativo: null });
-    expect(a.esito).toBe('ROSSO');
-    expect(a.etichetta).toBe('Approfondimenti necessari');
+    expect(a.esito).toBe('ATTENZIONE_MINIMA');
+    expect(a.daAccertare.some((d) => d.includes('qualitativo'))).toBe(true);
   });
 
-  it('un fatto accertato prevale su "servono approfondimenti"', () => {
-    // Soglia superata E dati mancanti: si dichiara la soglia, che è certa,
-    // non la mancanza di dati.
+  it('le lacune PORTANTI invece bloccano: soglie o bilancio', () => {
+    expect(calcolaAttenzione({ ...completo, sogliaSuperata: null }).etichetta).toBe(
+      'Approfondimenti necessari'
+    );
+    expect(
+      calcolaAttenzione({
+        ...completo,
+        annoCostituzione: 2005,
+        xbrlPresente: false,
+        patrimonioNetto: null,
+        indiciViolati: null,
+      }).etichetta
+    ).toBe('Approfondimenti necessari');
+  });
+
+  it('soglia superata + lacuna ACCESSORIA: etichetta secca, lacuna comunque dichiarata', () => {
     const a = calcolaAttenzione({ ...completo, sogliaSuperata: true, coloreQualitativo: null });
+    expect(a.etichetta).toBe('Criticità rilevante');
+    expect(a.daAccertare.length).toBeGreaterThan(0);
+  });
+
+  it('patrimonio negativo + lacuna PORTANTE: l’etichetta le dice insieme', () => {
+    const a = calcolaAttenzione({ ...completo, patrimonioNetto: -1, sogliaSuperata: null });
     expect(a.etichetta).toBe('Criticità rilevante che potrebbe richiedere approfondimenti');
-    expect(a.daAccertare.length).toBeGreaterThan(0); // dichiarati comunque
   });
 });
 
@@ -186,9 +209,13 @@ describe('i due registri coesistono senza gerarchia', () => {
     expect(a.daAccertare.join(' ')).toContain('qualitativo');
   });
 
-  it('l’etichetta li dice insieme quando ci sono entrambi', () => {
-    const a = calcolaAttenzione({ ...completo, sogliaSuperata: true, coloreQualitativo: null });
+  it('l’etichetta li dice insieme quando la lacuna è PORTANTE', () => {
+    // Patrimonio negativo (fatto) + soglie non determinabili (lacuna
+    // portante): entrambe le cose nella stessa etichetta.
+    const a = calcolaAttenzione({ ...completo, patrimonioNetto: -1, sogliaSuperata: null });
     expect(a.etichetta).toBe('Criticità rilevante che potrebbe richiedere approfondimenti');
+    expect(a.accertato.length).toBeGreaterThan(0);
+    expect(a.daAccertare.length).toBeGreaterThan(0);
   });
 
   it('con il quadro completo l’etichetta resta secca', () => {

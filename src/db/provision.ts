@@ -143,6 +143,29 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
     sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS anno_costituzione INTEGER`
   );
 
+  // Stato "in verifica": l'azienda esiste come record ma non è ancora una
+  // posizione in lavorazione.
+  //
+  // Nasce dalla funzione "Verifica salute azienda", che serve al triage: si
+  // caricano visura, XBRL e V.E.R.A., si ottiene l'indicatore, e SOLO se si
+  // decide di procedere l'azienda diventa attiva. Il costo di guardare una
+  // posizione scende da quindici campi digitati a due o tre da confermare.
+  //
+  // Perché comunque un record, e non un calcolo al volo: se un funzionario
+  // guarda l'indicatore e decide di NON procedere, ha preso una decisione
+  // amministrativa, e senza traccia non resta memoria di chi ha verificato
+  // cosa. In un ente è la traccia che protegge il funzionario. Inoltre i
+  // documenti caricati vengono sempre eliminati dopo l'elaborazione: senza
+  // esito salvato, due funzionari sulla stessa azienda otterrebbero report
+  // diversi e nessuno dei due sarebbe ricostruibile.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS in_verifica BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS verifica_esito TEXT`);
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS verifica_eseguita_il TIMESTAMP`
+  );
+
   // ---- Soglie di segnalazione art. 25-novies: valori a inserimento manuale.
   //
   // Stanno sull'AZIENDA e non sullo scenario: il debito e' il punto di

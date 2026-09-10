@@ -93,6 +93,69 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.48 — 2026-09-10
+
+**"Verifica salute azienda": il triage prima dell'istruttoria**
+
+Il costo era invertito: bisognava codificare un'azienda — quindici campi
+obbligatori — PRIMA di sapere se valesse la pena occuparsene. Per un ente che
+riceve molte posizioni e ne analizza poche e' il contrario di come si lavora.
+
+**Correzione dell'indicatore: lacune PORTANTI e ACCESSORIE.** Difetto vero,
+emerso discutendo il nuovo flusso. La regola di copertura contava tutte le
+dimensioni allo stesso modo, ma per costruzione non lo sono: il quadro
+qualitativo puo' solo PEGGIORARE l'esito, mai migliorarlo, quindi la sua
+assenza non puo' capovolgere un giudizio — al piu' lo lascia piu' mite del
+vero. Contarla fra le lacune bloccanti mandava in rosso aziende che rosse non
+erano, e su uno strumento di triage significa restituire sempre lo stesso
+rosso, cioe' rumore.
+
+Ora solo soglia del proprio ente e bilancio bloccano il giudizio. Il quadro
+qualitativo resta dichiarato in "Da accertare" senza determinare l'esito.
+(Nota emersa nella stessa discussione: uno spazio ENTE valuta SOLO la propria
+soglia, quindi le righe degli altri enti non entrano nel calcolo e non
+possono mancare — la copertura reale e' piu' alta di quanto sembrasse.)
+
+**Nuova voce in sidebar** fra Utenti e Aziende. Si carica la visura camerale,
+il modello estrae i quindici campi, l'operatore **conferma** — non si salva
+nulla senza conferma, perche' su un'anagrafica un errore non resta isolato ma
+si trascina in tutto il resto, a partire dalla soglia AER che dipende dalla
+forma giuridica — e si ottiene subito l'indicatore.
+
+**Perche' l'azienda viene comunque salvata**, invece di calcolare tutto al
+volo senza scrivere nulla:
+
+  - decidere di NON procedere e' a sua volta una decisione amministrativa:
+    senza traccia non resta memoria di chi ha verificato cosa, e in un ente
+    e' la traccia che protegge chi decide;
+  - i documenti caricati vengono sempre eliminati dopo l'elaborazione: senza
+    esito salvato, due funzionari sulla stessa azienda otterrebbero report
+    diversi e nessuno ricostruibile;
+  - un secondo percorso che ricalcola esposizione, soglie e indici finirebbe
+    per divergere da quello esistente — e' successo tre volte in questo
+    progetto.
+
+Il costo da abbattere non era il salvataggio: erano i quindici campi
+digitati. Quelli ora arrivano dalla visura, e ne restano due o tre da
+correggere.
+
+Nuovo stato `in_verifica` sull'azienda, con esito e data. Un'impresa gia'
+presente (per P.IVA o codice fiscale) viene riusata, non duplicata.
+"Procedi con questa azienda" la promuove a posizione in lavorazione.
+
+**In dashboard il pannello "Utenti / Admin" e' sostituito da "Aziende da
+verificare"**, con l'esito colorato accanto a ciascuna: in dashboard serve
+piu' sapere cosa aspetta una decisione che l'elenco degli utenti, che cambia
+raramente e ha gia' la sua pagina.
+
+Collaudato a schermo: pannello nuovo presente, vecchio rimosso, voce in
+sidebar, pagina raggiungibile e funzionante. **L'estrazione dalla visura NON
+e' collaudata**: richiede la chiave API, che il sandbox non ha. Se
+l'estrazione non e' disponibile la pagina non si blocca — i campi restano
+compilabili a mano.
+
+Verificato: type-check, lint, **189 test**, build cloud e portable complete.
+
 ## 0.109.47 — 2026-09-10
 
 **Il semaforo passa in testata allo SCREENING, non alla relazione**

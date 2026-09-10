@@ -82,6 +82,30 @@
 // stati depositati". Il secondo caso è di per sé un segnale. Ma la giovane
 // età NON è una scusante quando l'esposizione supera la soglia di legge.
 
+// ---------------------------------------------------------------------------
+// DIMENSIONI PORTANTI E DIMENSIONI ACCESSORIE
+//
+// Non tutte le dimensioni pesano allo stesso modo sulla possibilità di
+// esprimere un giudizio, e trattarle come equivalenti era un errore della
+// prima stesura.
+//
+// PORTANTI — la soglia di segnalazione dell'ente e il bilancio. Senza queste
+// il perimetro non è circoscrivibile e l'esito è "approfondimenti
+// necessari".
+//
+// ACCESSORIA — il quadro qualitativo (Check List / Direttrici). Per come è
+// costruito l'indicatore, il quadro qualitativo può soltanto PEGGIORARE
+// l'esito, mai migliorarlo. La sua assenza non può quindi capovolgere un
+// giudizio: al più lo lascia più mite del vero. Contarla fra le lacune
+// bloccanti mandava in rosso aziende che rosse non erano — e su uno
+// strumento di triage significa restituire sempre lo stesso rosso, cioè
+// rumore.
+//
+// Nota sulle soglie: uno spazio ENTE valuta SOLO la propria. Le righe degli
+// altri enti non entrano nel calcolo e non possono quindi mancare: la
+// copertura reale è più alta di quanto una lettura frettolosa suggerisca.
+// ---------------------------------------------------------------------------
+
 export type EsitoAttenzione = 'ROSSO' | 'GIALLO' | 'ATTENZIONE_MINIMA';
 
 /** Anni entro cui l'assenza di bilanci depositati è spiegabile con l'età. */
@@ -142,6 +166,8 @@ const DIMENSIONI_TOTALI = 4; // copertura, soglie, equilibrio, qualitativo
 export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   const accertato: string[] = [];
   const daAccertare: string[] = [];
+  // Solo le lacune PORTANTI impediscono di circoscrivere il perimetro.
+  const lacunePortanti: string[] = [];
   let determinate = 0;
 
   // ---- Livello 0: copertura informativa --------------------------------
@@ -164,6 +190,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   if (!input.xbrlPresente) {
     if (input.annoCostituzione === null) {
       daAccertare.push('Bilancio XBRL non caricato.');
+      lacunePortanti.push('Bilancio XBRL non caricato.');
     } else if (giovane && !debitoOltreSoglia) {
       // Unico caso in cui l'assenza di bilancio non è un segnale: impresa
       // giovane E esposizione sotto la soglia di legge.
@@ -176,11 +203,13 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
         `Bilancio XBRL assente e impresa di costituzione recente (${input.annoCostituzione}), MA l’esposizione supera la soglia di legge: la giovane età non spiega l’esposizione.`
       );
       daAccertare.push('Bilancio XBRL non caricato.');
+      lacunePortanti.push('Bilancio XBRL non caricato.');
     } else {
       accertato.push(
         `Bilancio XBRL assente per un’impresa costituita nel ${input.annoCostituzione}: l’età non giustifica il mancato deposito.`
       );
       daAccertare.push('Bilancio XBRL non caricato o bilanci non depositati.');
+      lacunePortanti.push('Bilancio XBRL non caricato o bilanci non depositati.');
     }
   } else {
     determinate++;
@@ -190,6 +219,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
     daAccertare.push(
       'Soglie di segnalazione non determinabili: valori non inseriti nella scheda dedicata.'
     );
+    lacunePortanti.push('Soglie di segnalazione non determinabili.');
   } else {
     determinate++;
   }
@@ -216,7 +246,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
       // La formula lunga solo dove ci sono davvero lacune: con il quadro
       // completo "potrebbe richiedere approfondimenti" sarebbe fuorviante,
       // perché non c'è nulla da approfondire.
-      etichetta: etichettaCriticita(daAccertare),
+      etichetta: etichettaCriticita(lacunePortanti),
       fattoreDeterminante: 'Soglia di segnalazione superata',
       accertato,
       daAccertare,
@@ -228,7 +258,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
     accertato.unshift('Patrimonio netto negativo dall’ultimo bilancio disponibile.');
     return {
       esito: 'ROSSO',
-      etichetta: etichettaCriticita(daAccertare),
+      etichetta: etichettaCriticita(lacunePortanti),
       fattoreDeterminante: 'Patrimonio netto negativo',
       accertato,
       daAccertare,
@@ -240,7 +270,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   // Se i dati non circoscrivono il perimetro, il valutatore deve richiedere
   // documentazione: è un'azione dovuta, quindi rosso. Non un "grigio", che
   // permetterebbe a un fascicolo incompleto di restare in silenzio.
-  if (daAccertare.length > 0) {
+  if (lacunePortanti.length > 0) {
     return {
       esito: 'ROSSO',
       etichetta: 'Approfondimenti necessari',
@@ -256,7 +286,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
     accertato.unshift(`${input.indiciViolati} indici CCII oltre soglia.`);
     return {
       esito: 'ROSSO',
-      etichetta: etichettaCriticita(daAccertare),
+      etichetta: etichettaCriticita(lacunePortanti),
       fattoreDeterminante: 'Indici CCII oltre soglia',
       accertato,
       daAccertare,

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Building2, UserCog, FolderOpen, FileText, Printer } from 'lucide-react';
+import { Building2, UserCog, FolderOpen, FileText, Printer, Stethoscope } from 'lucide-react';
 import { stampaTesto } from '@/lib/stampaTesto';
 import type { UltimoScreeningSpazio } from '@/app/actions/screeningAzienda';
 
@@ -18,6 +18,13 @@ export interface RigaUtente {
   username: string | null;
   email: string | null;
 }
+export interface RigaVerificaDashboard {
+  id: number;
+  ragioneSociale: string;
+  partitaIva: string | null;
+  esito: string | null;
+}
+
 export interface RigaScenario {
   id: number;
   nome: string;
@@ -30,6 +37,7 @@ interface Props {
   totaleAziendeAttive: number | '—';
   utenti: RigaUtente[];
   totaleUtenti: number | '—';
+  verifiche?: RigaVerificaDashboard[];
   scenari: RigaScenario[];
   totaleScenari: number | '—';
   report: UltimoScreeningSpazio[];
@@ -88,6 +96,7 @@ export function DashboardPannelli({
   totaleAziendeAttive,
   utenti,
   totaleUtenti,
+  verifiche = [],
   scenari,
   totaleScenari,
   report,
@@ -141,39 +150,52 @@ export function DashboardPannelli({
         <VediTutti href={`/spazio/${codice}/aziende`} testo="Tutte le aziende" />
       </div>
 
-      {/* Utenti / Admin */}
+      {/* Aziende da verificare — al posto del pannello Utenti.
+          È il triage: posizioni guardate ma non ancora prese in carico. In
+          dashboard serve più sapere cosa aspetta una decisione che
+          l'elenco degli utenti, che cambia raramente e ha già la sua
+          pagina. */}
       <div className="bg-white border border-slate-200 rounded-xl p-4">
         <Intestazione
-          icon={UserCog}
-          colore="text-emerald-600 bg-emerald-50"
-          label="Utenti / Admin"
-          totale={totaleUtenti}
+          icon={Stethoscope}
+          colore="text-amber-600 bg-amber-50"
+          label="Aziende da verificare"
+          totale={verifiche.length}
         />
-        {utenti.length === 0 ? (
-          <Vuoto testo="Nessun utente." />
+        {verifiche.length === 0 ? (
+          <Vuoto testo="Nessuna verifica in sospeso." />
         ) : (
           <div className="divide-y divide-slate-100">
-            {utenti.slice(0, MAX).map((u, i) => {
-              const nomeCompleto = `${u.nome} ${u.cognome}`.trim() || u.username || u.email || '—';
-              const secondario = u.username || u.email || null;
-              return (
-                <div key={i} className="flex items-center justify-between gap-3 py-2">
-                  <span className="min-w-0">
-                    <span className="block font-bold text-slate-900 text-xs truncate">
-                      {nomeCompleto}
-                    </span>
-                    {secondario && (
-                      <span className="block text-[10px] text-slate-400 font-mono truncate">
-                        {secondario}
-                      </span>
-                    )}
+            {verifiche.slice(0, MAX).map((v) => (
+              <div key={v.id} className="flex items-center justify-between gap-3 py-2">
+                <span className="min-w-0">
+                  <span className="block font-bold text-slate-900 text-xs truncate">
+                    {v.ragioneSociale}
                   </span>
-                </div>
-              );
-            })}
+                  {v.partitaIva && (
+                    <span className="block text-[10px] text-slate-400 font-mono truncate">
+                      P.IVA {v.partitaIva}
+                    </span>
+                  )}
+                </span>
+                {v.esito && (
+                  <span
+                    className={`text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 whitespace-nowrap ${
+                      v.esito === 'ROSSO'
+                        ? 'bg-red-50 text-red-700 border-red-200'
+                        : v.esito === 'GIALLO'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    }`}
+                  >
+                    {v.esito === 'ATTENZIONE_MINIMA' ? 'Minima' : v.esito.toLowerCase()}
+                  </span>
+                )}
+              </div>
+            ))}
           </div>
         )}
-        <VediTutti href={`/spazio/${codice}/utenti`} testo="Tutti gli utenti" />
+        <VediTutti href={`/spazio/${codice}/verifica-salute`} testo="Verifica salute azienda" />
       </div>
 
       {/* Scenari */}
