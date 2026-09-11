@@ -212,6 +212,13 @@ export async function ottieniAttenzioneScreeningAction(
       esposizione,
       sogliaApplicabile,
       coloreQualitativo,
+      // Il dettaglio di COSA è stato superato, con i numeri: il motivo che il
+      // motore ha già composto riga per riga, non una frase riassuntiva.
+      dettaglioSoglieSuperate: soglie.superate.map(
+        (r) => `${r.ambito} — soglia ${r.valore}. ${r.motivo}`
+      ),
+      ritardoOltre90Giorni: dati.ritardoOltre90Giorni,
+      periodiInRitardo: num(a.periodi_in_ritardo),
     });
 
     // Il motivo preciso al posto di quello generico: "manca l'esposizione" e

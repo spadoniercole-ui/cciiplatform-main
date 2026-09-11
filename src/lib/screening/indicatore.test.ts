@@ -90,10 +90,23 @@ describe('l’assenza di dati è un segnale, non una neutralità', () => {
     ).toBe('Approfondimenti necessari');
   });
 
-  it('soglia superata + quadro qualitativo assente: etichetta secca, nessuna lacuna elencata', () => {
-    const a = calcolaAttenzione({ ...completo, sogliaSuperata: true, coloreQualitativo: null });
+  it('soglia superata + quadro qualitativo assente: il qualitativo non si elenca', () => {
+    const a = calcolaAttenzione({
+      ...completo,
+      sogliaSuperata: true,
+      coloreQualitativo: null,
+      ritardoOltre90Giorni: true, // accertato: non produce lacune
+    });
     expect(a.etichetta).toBe('Criticità rilevante');
     expect(a.daAccertare).toHaveLength(0);
+  });
+
+  it('col ritardo NON accertato, la lacuna compare — ed è una lacuna vera', () => {
+    // Il requisito esiste e non è stato verificato: dirlo è diverso dal
+    // segnalare che manca la Check List, che non cambierebbe il giudizio.
+    const a = calcolaAttenzione({ ...completo, sogliaSuperata: true, coloreQualitativo: null });
+    expect(a.daAccertare.join(' ')).toContain('Elenco Deleghe');
+    expect(a.daAccertare.join(' ')).not.toContain('qualitativo');
   });
 
   it('patrimonio negativo + lacuna PORTANTE: l’etichetta le dice insieme', () => {
@@ -241,5 +254,58 @@ describe('i due registri coesistono senza gerarchia', () => {
       // per primo, perché la prassi non è univoca nell'ente.
       expect(testo).not.toMatch(/prima di|occorre richiedere|si deve attendere|procedere con/);
     }
+  });
+});
+
+describe('il semaforo dice QUALE soglia, non "almeno una"', () => {
+  it('riporta il dettaglio quando c’è', () => {
+    // "Almeno una soglia risulta superata" è vero e inutile: obbliga il
+    // valutatore a cercare altrove quale e con quali numeri — e un dato che
+    // costringe a cercarlo altrove è un dato che non abbiamo dato.
+    const a = calcolaAttenzione({
+      ...completo,
+      sogliaSuperata: true,
+      dettaglioSoglieSuperate: [
+        'INPS — soglia > 30% dei dovuti e > 15.000 €. Contributi 496.544 € oltre entrambe.',
+      ],
+    });
+    expect(a.accertato[0]).toContain('496.544');
+    expect(a.accertato[0]).not.toContain('Almeno una');
+  });
+
+  it('senza dettaglio si torna alla frase generica, non si tace', () => {
+    const a = calcolaAttenzione({ ...completo, sogliaSuperata: true });
+    expect(a.accertato[0]).toContain('Almeno una soglia');
+  });
+
+  it('il ritardo accertato compare fra gli elementi ACCERTATI', () => {
+    const a = calcolaAttenzione({
+      ...completo,
+      sogliaSuperata: true,
+      ritardoOltre90Giorni: true,
+      periodiInRitardo: 44,
+    });
+    expect(a.accertato.join(' ')).toContain('44 periodi');
+  });
+
+  it('il ritardo non accertato resta fra le cose DA ACCERTARE', () => {
+    const a = calcolaAttenzione({
+      ...completo,
+      sogliaSuperata: true,
+      ritardoOltre90Giorni: null,
+    });
+    expect(a.daAccertare.join(' ')).toContain('Elenco Deleghe');
+  });
+
+  it('un ritardo accertato ASSENTE non viene né vantato né lamentato', () => {
+    // false = accertato e non presente: non è una lacuna, e non è un
+    // elemento a carico. Non deve comparire da nessuna delle due parti.
+    const a = calcolaAttenzione({
+      ...completo,
+      sogliaSuperata: true,
+      ritardoOltre90Giorni: false,
+    });
+    expect(a.accertato.join(' ')).not.toContain('Ritardo di oltre 90');
+    expect(a.daAccertare.join(' ')).not.toContain('Elenco Deleghe');
   });
 });

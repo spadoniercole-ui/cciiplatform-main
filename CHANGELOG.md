@@ -93,6 +93,38 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.63 — 2026-09-11
+
+**Il semaforo dice QUALE soglia, e dichiara il ritardo accertato**
+
+Rilievo di Ercole: "Almeno una soglia di segnalazione risulta superata" e'
+vero e inutile. Il dato preciso lo abbiamo — quale ente, quale soglia, con
+quali importi — e mostrarne un riassunto obbliga il valutatore a cercarlo
+altrove. Un dato che costringe a cercarlo altrove e' un dato che non abbiamo
+dato.
+
+Ora l'elemento accertato riporta ambito, soglia di legge e il motivo gia'
+composto dal motore riga per riga, con gli importi. La frase generica resta
+solo come ripiego se il dettaglio manca: meglio dire poco che tacere.
+
+**Il terzo requisito compare fra gli ACCERTATI.** Il ritardo di oltre 90
+giorni, ora che l'Elenco Deleghe lo rende verificabile, e' un requisito
+soddisfatto e va dichiarato come tale — con il numero di periodi. Finora
+restava invisibile: la piattaforma lo dava per non accertabile e, diventato
+accertabile, tacerlo sarebbe stato peggio.
+
+Tre stati distinti, non due:
+  - **accertato e presente** -> fra gli elementi a carico, con i periodi;
+  - **non accertato** (manca l'Elenco Deleghe) -> fra le cose da accertare;
+  - **accertato e ASSENTE** -> ne' l'uno ne' l'altro: non e' una lacuna, e non
+    e' un elemento a carico.
+
+**6 test nuovi** (236 in tutto), fra cui quello sul terzo stato — il caso che
+in questi giorni e' sfuggito piu' volte, perche' `false` e `null` si
+somigliano finche' non si guarda cosa significano.
+
+Verificato: type-check, lint, **236 test**, build cloud completa.
+
 ## 0.109.62 — 2026-09-11
 
 **La vecchia migrazione ripartiva e faceva cadere tutto**

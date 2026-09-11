@@ -133,6 +133,24 @@ export interface IngressoIndicatore {
   sogliaApplicabile: number | null;
   /** Colore del quadro qualitativo (Check List / Direttrici). */
   coloreQualitativo: 'verde' | 'giallo' | 'rosso' | 'grigio' | null;
+  /**
+   * Dettaglio delle soglie superate: quale, con quali numeri.
+   *
+   * "Almeno una soglia risulta superata" è vero e inutile: il valutatore
+   * deve sapere QUALE e con quali importi, altrimenti deve andarselo a
+   * cercare altrove — e un dato che costringe a cercarlo altrove è un dato
+   * che non abbiamo dato.
+   */
+  dettaglioSoglieSuperate?: string[];
+  /**
+   * Il terzo requisito: ritardo di oltre 90 giorni nel versamento.
+   *
+   * Va dichiarato fra gli elementi ACCERTATI quando risulta soddisfatto:
+   * finora la piattaforma lo dava per non verificabile, e ora che
+   * l'Elenco Deleghe lo rende accertabile tacerlo sarebbe peggio.
+   */
+  ritardoOltre90Giorni?: boolean | null;
+  periodiInRitardo?: number | null;
 }
 
 export interface Attenzione {
@@ -252,7 +270,28 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
 
   // ---- Livello 1: vincoli giuridici ------------------------------------
   if (input.sogliaSuperata === true) {
-    accertato.unshift('Almeno una soglia di segnalazione dell’art. 25-novies risulta superata.');
+    const dettaglio = input.dettaglioSoglieSuperate ?? [];
+    accertato.unshift(
+      dettaglio.length > 0
+        ? dettaglio.join(' ')
+        : 'Almeno una soglia di segnalazione dell’art. 25-novies risulta superata.'
+    );
+
+    // Il terzo requisito, ora che è accertabile.
+    // `false` = accertato e ASSENTE: non è una lacuna e non è un elemento a
+    // carico, quindi non compare da nessuna delle due parti.
+    if (input.ritardoOltre90Giorni === true) {
+      accertato.push(
+        input.periodiInRitardo
+          ? `Ritardo di oltre 90 giorni nel versamento, accertato su ${input.periodiInRitardo} periodi.`
+          : 'Ritardo di oltre 90 giorni nel versamento, accertato.'
+      );
+    } else if (input.ritardoOltre90Giorni === null || input.ritardoOltre90Giorni === undefined) {
+      daAccertare.push(
+        'Ritardo di oltre 90 giorni nel versamento: serve l’Elenco Deleghe (F24), che porta la data di versamento.'
+      );
+    }
+
     return {
       esito: 'ROSSO',
       // La formula lunga solo dove ci sono davvero lacune: con il quadro
