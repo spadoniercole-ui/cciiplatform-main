@@ -53,33 +53,21 @@ export async function ottieniAttenzioneScreeningAction(
     const a = az.rows[0];
 
     // ---- Esposizione verso l'ente ----------------------------------------
-    // Due fonti, in ordine di attendibilità.
+    // A livello AZIENDA la fonte è la Posizione V.E.R.A., non la Situazione
+    // Debitoria.
     //
-    // 1) SITUAZIONE DEBITORIA (`debiti_ente`): quanto l'ente ha
-    //    contabilizzato. È il dato certo, e vince quando c'è.
-    // 2) POSIZIONE V.E.R.A. (`debiti_vera`): il file di verifica. È l'unica
-    //    fonte disponibile nella Verifica salute azienda, dove la Situazione
-    //    Debitoria non è ancora stata caricata.
+    // Il V.E.R.A. è il documento con cui l'istituto certifica lo stato del
+    // passivo: comprende le partite in lavorazione e le sanzioni, ed è la
+    // fotografia dell'esposizione reale — stabile, valida per tutti gli
+    // scenari. Il contabilizzato è un'altra grandezza, che risponde a
+    // un'altra domanda ("su cosa si fanno i conti quando arriva una
+    // proposta"), ed è per questo che la Situazione Debitoria è tornata
+    // dentro lo scenario. Leggerla qui significherebbe far dipendere il
+    // triage da un dato che appartiene a un momento successivo.
     //
-    // Guardare solo la prima era il difetto: chi caricava il V.E.R.A. dal
-    // triage si vedeva dire che l'esposizione non era disponibile pur
-    // avendola appena fornita.
-    const esp = await pool
-      .query(
-        `SELECT COALESCE(SUM(d.importo), 0) AS totale
-           FROM "${nomeSchema}".debiti_ente d
-           JOIN "${nomeSchema}".categorie_tipo_debito c ON c.codice = d.tipo
-          WHERE d.azienda_id = $1 AND c.attivo = TRUE AND c.contribuisce = TRUE`,
-        [aziendaId]
-      )
-      .catch(() => ({ rows: [{ totale: 0 }] }));
-    const contabilizzato = Number(esp.rows[0]?.totale ?? 0);
-
-    // Sul V.E.R.A. il join sulle categorie è VOLUTAMENTE permissivo: in fase
-    // di triage i titoli non vengono mappati (non si chiede all'operatore di
-    // classificare per fare una verifica), quindi la categoria è spesso
-    // assente. Un join stretto escluderebbe l'intero file e riporterebbe
-    // zero. Si escludono solo le categorie esplicitamente NON contributive.
+    // Il join sulle categorie è permissivo: in triage i titoli non sono
+    // mappati, quindi la categoria è spesso assente, e un join stretto
+    // escluderebbe l'intero file riportando zero.
     const espVera = await pool
       .query(
         `SELECT COALESCE(SUM(v.importo), 0) AS totale
@@ -93,8 +81,9 @@ export async function ottieniAttenzioneScreeningAction(
       .catch(() => ({ rows: [{ totale: 0 }] }));
     const daVera = Number(espVera.rows[0]?.totale ?? 0);
 
-    const esposizione =
-      contabilizzato > 0 ? contabilizzato : daVera > 0 ? daVera : num(a.contributi_scaduti);
+    // Il valore inserito a mano ha comunque la precedenza: è una
+    // dichiarazione esplicita dell'operatore, non una deduzione.
+    const esposizione = num(a.contributi_scaduti) ?? (daVera > 0 ? daVera : null);
 
     // ---- Soglie di segnalazione ------------------------------------------
     const dati: DatiSoglie = {

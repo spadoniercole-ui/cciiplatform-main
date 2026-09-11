@@ -38,7 +38,7 @@ interface Props {
   tipoSpazio: 'ENTE' | 'NON_ENTE';
 }
 
-type Scheda = 'anagrafica' | 'debitoria' | 'vera' | 'soglie';
+type Scheda = 'anagrafica' | 'vera' | 'soglie';
 
 // `soloEnte: false` = visibile anche al Redigente. Le Soglie di segnalazione
 // sono l'unica scheda aperta a entrambi: i valori sono a inserimento manuale
@@ -46,7 +46,6 @@ type Scheda = 'anagrafica' | 'debitoria' | 'vera' | 'soglie';
 // flussi UNIEMENS da cui ricava il totale annuo).
 const SCHEDE: { id: Scheda; label: string; icon: typeof IdCard; soloEnte: boolean }[] = [
   { id: 'anagrafica', label: 'Anagrafica', icon: IdCard, soloEnte: true },
-  { id: 'debitoria', label: 'Situazione Debitoria', icon: Scale, soloEnte: true },
   { id: 'vera', label: 'Posizione V.E.R.A.', icon: ClipboardCheck, soloEnte: true },
   { id: 'soglie', label: 'Soglie di segnalazione', icon: Gauge, soloEnte: false },
 ];
@@ -185,13 +184,12 @@ export function PosizioneEnteScenario({ nomeSchema, aziendaId, nomeAzienda, tipo
           onSalvato={(nuoviDati) => setDati(nuoviDati)}
         />
       )}
-      {scheda === 'debitoria' && sbloccata && (
-        <DebitiEnteScenario
-          nomeSchema={nomeSchema}
-          aziendaId={aziendaId}
-          nomeAzienda={nomeAzienda}
-        />
-      )}
+      {/* La Situazione Debitoria si e' spostata nello scenario: il
+          contabilizzato e' la base dei conti al momento della proposta,
+          legato a un evento e a una data. Qui resta la Posizione V.E.R.A.,
+          che certifica l'esposizione complessiva e vale per tutti gli
+          scenari. Le righe gia' caricate a questo livello non sono state
+          toccate: ogni scenario puo' riprenderle. */}
       {scheda === 'vera' && sbloccata && (
         <PosizioneVeraScenario nomeSchema={nomeSchema} aziendaId={aziendaId} />
       )}

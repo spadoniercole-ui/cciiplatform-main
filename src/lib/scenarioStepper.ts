@@ -17,6 +17,7 @@ import {
   FlaskConical,
   NotebookText,
   Sparkles,
+  Scale,
 } from 'lucide-react';
 
 export interface PassoScenario {
@@ -43,6 +44,16 @@ export const PASSI_SCENARIO_RICEVUTA: PassoScenario[] = [
   },
   {
     numero: 1,
+    id: 'situazione-debitoria',
+    label: 'Situazione Debitoria',
+    descrizione:
+      'Il debito contabilizzato dall\u2019ente per questa azienda, alla data di questa valutazione. \u00c8 la base su cui si fanno i conti quando arriva una proposta: legato a un evento e a una data, quindi vive qui e non sull\u2019azienda \u2014 dove resta invece la Posizione V.E.R.A., che certifica l\u2019esposizione complessiva comprese le partite in lavorazione e le sanzioni.',
+    modulo: null,
+    stato: 'pronta',
+    icon: Scale,
+  },
+  {
+    numero: 2,
     id: 'posizione-aggiornata',
     label: 'Posizione Aggiornata',
     descrizione:
@@ -52,7 +63,7 @@ export const PASSI_SCENARIO_RICEVUTA: PassoScenario[] = [
     icon: ClipboardEdit,
   },
   {
-    numero: 2,
+    numero: 3,
     id: 'indici',
     label: 'Indici',
     descrizione:
@@ -62,7 +73,7 @@ export const PASSI_SCENARIO_RICEVUTA: PassoScenario[] = [
     icon: TrendingUp,
   },
   {
-    numero: 3,
+    numero: 4,
     id: 'settore',
     label: 'Dati di Settore',
     descrizione:
@@ -72,7 +83,7 @@ export const PASSI_SCENARIO_RICEVUTA: PassoScenario[] = [
     icon: BarChart3,
   },
   {
-    numero: 4,
+    numero: 5,
     id: 'brogliaccio',
     label: 'Brogliaccio',
     descrizione:
@@ -82,7 +93,7 @@ export const PASSI_SCENARIO_RICEVUTA: PassoScenario[] = [
     icon: NotebookText,
   },
   {
-    numero: 5,
+    numero: 6,
     id: 'relazione',
     label: 'Relazione',
     descrizione:

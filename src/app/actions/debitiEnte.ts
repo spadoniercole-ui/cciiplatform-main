@@ -55,9 +55,16 @@ export interface RisultatoElencoDebitiEnte {
   error?: string;
 }
 
+/**
+ * @param scenarioId righe di QUELLO scenario. Omesso = righe non ancora
+ *        attribuite a uno scenario, cioè la posizione caricata a livello
+ *        azienda prima che la Situazione Debitoria si spostasse nello
+ *        scenario. Restano leggibili e riprendibili, non si perdono.
+ */
 export async function ottieniDebitiEnte(
   nomeSchema: string,
-  aziendaId: number
+  aziendaId: number,
+  scenarioId?: number
 ): Promise<RisultatoElencoDebitiEnte> {
   try {
     if (!validaSchema(nomeSchema)) {
@@ -67,8 +74,11 @@ export async function ottieniDebitiEnte(
 
     const risultato = await pool.query(
       `SELECT id, azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida
-       FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1 ORDER BY id ASC`,
-      [aziendaId]
+       FROM "${nomeSchema}".debiti_ente
+       WHERE azienda_id = $1
+         AND ${scenarioId === undefined ? 'scenario_id IS NULL' : 'scenario_id = $2'}
+       ORDER BY id ASC`,
+      scenarioId === undefined ? [aziendaId] : [aziendaId, scenarioId]
     );
 
     return {
@@ -109,7 +119,8 @@ export interface RisultatoOperazioneDebitoEnte {
 export async function aggiungiRigaDebitoEnteAction(
   nomeSchema: string,
   aziendaId: number,
-  dati: DatiRigaDebitoEnte
+  dati: DatiRigaDebitoEnte,
+  scenarioId?: number
 ): Promise<RisultatoOperazioneDebitoEnte> {
   try {
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
@@ -125,10 +136,11 @@ export async function aggiungiRigaDebitoEnteAction(
         ? JSON.stringify(dati.datiExtra)
         : null;
     await pool.query(
-      `INSERT INTO "${nomeSchema}".debiti_ente (azienda_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      `INSERT INTO "${nomeSchema}".debiti_ente (azienda_id, scenario_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         aziendaId,
+        scenarioId ?? null,
         dati.voce.trim(),
         dati.importo,
         dati.importoVersato,
@@ -210,13 +222,91 @@ export async function eliminaDebitiPerTracciatoAzienda(
 }
 
 /** Elimina TUTTE le righe di un'azienda — usata prima di un reimport Excel, stesso principio già in uso per la Proposta. */
-export async function eliminaTuttiDebitiEnteAction(
+/**
+ * Copia nello scenario le righe non ancora attribuite — la posizione
+ * caricata a livello azienda prima che la Situazione Debitoria si
+ * spostasse nello scenario.
+ *
+ * COPIA, non sposta: le righe originali restano dove sono, così un secondo
+ * scenario sulla stessa azienda può riprenderle a sua volta e nessuno perde
+ * il riferimento. È anche ciò che rende l'operazione ripetibile senza
+ * conseguenze se qualcuno la lancia due volte per errore — la seconda volta
+ * non trova nulla da fare, perché lo scenario ha già le sue righe.
+ */
+export async function riprendiDebitiAziendaInScenarioAction(
+  nomeSchema: string,
+  aziendaId: number,
+  scenarioId: number
+): Promise<{ success: boolean; copiate?: number; error?: string }> {
+  try {
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabellaDebitiEnte(nomeSchema);
+
+    const gia = await pool.query(
+      `SELECT count(*)::int AS n FROM "${nomeSchema}".debiti_ente WHERE scenario_id = $1`,
+      [scenarioId]
+    );
+    if (Number(gia.rows[0]?.n ?? 0) > 0) {
+      return {
+        success: false,
+        error:
+          'Lo scenario ha già una propria posizione debitoria: svuotarla prima di riprendere quella dell’azienda.',
+      };
+    }
+
+    const r = await pool.query(
+      `INSERT INTO "${nomeSchema}".debiti_ente
+         (azienda_id, scenario_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida)
+       SELECT azienda_id, $2, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida
+         FROM "${nomeSchema}".debiti_ente
+        WHERE azienda_id = $1 AND scenario_id IS NULL`,
+      [aziendaId, scenarioId]
+    );
+    return { success: true, copiate: r.rowCount ?? 0 };
+  } catch (error: unknown) {
+    console.error('[riprendiDebitiAziendaInScenarioAction] Errore:', error);
+    return { success: false, error: `Operazione non riuscita: ${(error as Error).message}` };
+  }
+}
+
+/** Quante righe non attribuite esistono per questa azienda. */
+export async function contaDebitiAziendaNonAttribuitiAction(
   nomeSchema: string,
   aziendaId: number
+): Promise<{ success: boolean; righe?: number; totale?: number; error?: string }> {
+  try {
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabellaDebitiEnte(nomeSchema);
+    const r = await pool.query(
+      `SELECT count(*)::int AS n, COALESCE(SUM(importo), 0) AS tot
+         FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1 AND scenario_id IS NULL`,
+      [aziendaId]
+    );
+    return {
+      success: true,
+      righe: Number(r.rows[0]?.n ?? 0),
+      totale: Number(r.rows[0]?.tot ?? 0),
+    };
+  } catch (error: unknown) {
+    return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
+  }
+}
+
+export async function eliminaTuttiDebitiEnteAction(
+  nomeSchema: string,
+  aziendaId: number,
+  scenarioId?: number
 ): Promise<RisultatoOperazioneDebitoEnte> {
   try {
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    await pool.query(`DELETE FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1`, [aziendaId]);
+    // Si svuota SOLO l'ambito richiesto: svuotare lo scenario non deve
+    // toccare la posizione dell'azienda, né quella di un altro scenario.
+    await pool.query(
+      `DELETE FROM "${nomeSchema}".debiti_ente
+        WHERE azienda_id = $1
+          AND ${scenarioId === undefined ? 'scenario_id IS NULL' : 'scenario_id = $2'}`,
+      scenarioId === undefined ? [aziendaId] : [aziendaId, scenarioId]
+    );
     return { success: true };
   } catch (error: any) {
     console.error('[eliminaTuttiDebitiEnteAction] Errore:', error);

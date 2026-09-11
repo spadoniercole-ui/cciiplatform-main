@@ -1197,6 +1197,37 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
     sql`ALTER TABLE ${s}.debiti_ente ADD COLUMN IF NOT EXISTS codice_guida TEXT`
   );
 
+  // ---- SCENARIO_ID: la Situazione Debitoria torna nello scenario --------
+  //
+  // Attenzione a chi legge: questo file contiene, poco sopra, la migrazione
+  // OPPOSTA — da scenario ad azienda — con la motivazione "il debito che
+  // l'ente dichiara non cambia da uno scenario all'altro". Non è
+  // un'oscillazione: è cambiata la tesi.
+  //
+  // Allora l'argomento era la STABILITÀ del dato. Oggi l'argomento è la sua
+  // FUNZIONE: la fotografia stabile dell'esposizione è la Posizione
+  // V.E.R.A. — documento ufficiale dell'istituto, che comprende le partite
+  // in lavorazione e le sanzioni — mentre il CONTABILIZZATO è la base su cui
+  // si fanno i conti quando arriva una proposta specifica, a una data
+  // specifica. È legato a un evento, quindi appartiene allo scenario.
+  //
+  // NON si crea una tabella nuova: si aggiunge una colonna. Creare una terza
+  // tabella lascerebbe in giro `debiti_ente_per_scenario_legacy`,
+  // `debiti_ente` e la nuova, con dati in tutte e tre e nessuna certezza su
+  // quale valga per una data azienda. E un eventuale ripensamento futuro ne
+  // produrrebbe una quarta.
+  //
+  // Le righe esistenti restano con scenario_id NULL e continuano a essere
+  // leggibili: sono la "posizione caricata a livello azienda", che ogni
+  // scenario può riprendere con una copia esplicita. Nulla viene distrutto.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_ente ADD COLUMN IF NOT EXISTS scenario_id INTEGER
+        REFERENCES ${s}.scenari(id) ON DELETE CASCADE`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_debiti_ente_scenario ON ${s}.debiti_ente (scenario_id)`
+  );
+
   // Migrazione dati "best effort", una tantum: per ogni azienda, se la
   // nuova tabella è ancora vuota, copia TUTTE le righe dello scenario
   // (della stessa azienda) aggiornato più di recente — un'azienda con

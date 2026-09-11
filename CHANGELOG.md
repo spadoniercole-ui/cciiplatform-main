@@ -93,6 +93,55 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.58 — 2026-09-11
+
+**La Situazione Debitoria torna nello scenario**
+
+Il contabilizzato e' la base su cui si fanno i conti quando arriva una
+proposta: e' legato a un evento e a una data, quindi appartiene allo
+scenario. La fotografia stabile dell'esposizione resta la Posizione
+V.E.R.A. — documento con cui l'istituto certifica lo stato del passivo,
+comprese le partite in lavorazione e le sanzioni — che vive a livello
+azienda e vale per tutti gli scenari.
+
+**Nota per chi legge il codice fra sei mesi**: `provision.ts` contiene, poco
+sopra, la migrazione OPPOSTA — da scenario ad azienda, con la motivazione "il
+debito che l'ente dichiara non cambia da uno scenario all'altro". Non e'
+un'oscillazione, e' cambiata la tesi: allora l'argomento era la STABILITA'
+del dato, oggi e' la sua FUNZIONE. Entrambe le motivazioni sono scritte nel
+file, accanto al codice che le applica.
+
+**Nessuna tabella nuova: una colonna.** Creare una terza tabella avrebbe
+lasciato in giro `debiti_ente_per_scenario_legacy`, `debiti_ente` e la nuova,
+con dati in tutte e tre e nessuna certezza su quale valesse per una data
+azienda — e un ripensamento futuro ne avrebbe prodotta una quarta. Si aggiunge
+`scenario_id`, nullable.
+
+**Le posizioni esistenti non vengono toccate.** Restano con `scenario_id`
+NULL e continuano a essere leggibili. Ogni scenario che non ha ancora una
+propria posizione mostra un avviso con quante righe e per quale importo sono
+disponibili, e offre "Riprendi in questo scenario". Le righe vengono
+**copiate**, non spostate: un secondo scenario sulla stessa azienda puo'
+riprenderle a sua volta, e lanciare l'operazione due volte per errore non
+produce danni.
+
+**Cancellazione per ambito**: svuotare la posizione di uno scenario non tocca
+quella dell'azienda ne' quella di un altro scenario.
+
+**L'esposizione del triage passa al V.E.R.A.** L'indicatore di attenzione
+leggeva la Situazione Debitoria: ora che si e' spostata, leggerla a livello
+azienda significherebbe far dipendere il triage da un dato che appartiene a
+un momento successivo. Il valore inserito a mano mantiene comunque la
+precedenza: e' una dichiarazione esplicita dell'operatore, non una deduzione.
+
+**Stepper del Ricevente**: nuovo passo "Situazione Debitoria" in posizione 1,
+con i successivi rinumerati. La scheda sparisce dal livello azienda, dove
+resta la Posizione V.E.R.A.
+
+Verificato: type-check, lint, **206 test**, build cloud e portable complete,
+piu' collaudo a schermo: la scheda non c'e' piu' sull'azienda, la V.E.R.A. c'e'
+ancora, e il nuovo passo compare nello scenario.
+
 ## 0.109.57 — 2026-09-10
 
 **Archiviazione con motivo e scadenza del giudizio**

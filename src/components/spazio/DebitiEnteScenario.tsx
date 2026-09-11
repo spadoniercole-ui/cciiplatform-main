@@ -54,6 +54,13 @@ interface Props {
   nomeSchema: string;
   aziendaId: number;
   nomeAzienda: string;
+  /**
+   * Scenario di appartenenza. Omesso = si sta guardando la posizione
+   * caricata a livello azienda prima che la Situazione Debitoria si
+   * spostasse nello scenario: resta leggibile, e ogni scenario può
+   * riprenderla.
+   */
+  scenarioId?: number;
 }
 
 const RUOLI_OPZIONI: { valore: RuoloColonna; label: string }[] = [
@@ -73,7 +80,7 @@ function parseNumeroItaliano(testo: string): number {
   return Number.isNaN(numero) ? 0 : numero;
 }
 
-export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props) {
+export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenarioId }: Props) {
   const router = useRouter();
   const primoCaricamento = React.useRef(true);
 
@@ -144,7 +151,7 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
     setCaricamento(true);
     try {
       const [rDebiti, rCat, rTrac] = await Promise.all([
-        ottieniDebitiEnte(nomeSchema, aziendaId),
+        ottieniDebitiEnte(nomeSchema, aziendaId, scenarioId),
         ottieniCategorieTipoDebito(nomeSchema),
         ottieniTracciatiDebitiEnte(nomeSchema),
       ]);
@@ -191,7 +198,7 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
     setErrore(null);
     const risultato = rigaInModifica
       ? await modificaRigaDebitoEnteAction(nomeSchema, rigaInModifica, form)
-      : await aggiungiRigaDebitoEnteAction(nomeSchema, aziendaId, form);
+      : await aggiungiRigaDebitoEnteAction(nomeSchema, aziendaId, form, scenarioId);
     if (!risultato.success) {
       setErrore(
         risultato.error || `Impossibile ${rigaInModifica ? 'modificare' : 'aggiungere'} la riga.`
@@ -285,17 +292,22 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda }: Props
     let salvate = 0;
     const erroriSalvataggio: string[] = [];
     for (const r of importate) {
-      const res = await aggiungiRigaDebitoEnteAction(nomeSchema, aziendaId, {
-        voce: r.voce,
-        importo: r.importo,
-        importoVersato: r.importoVersato,
-        tipo: r.tipo,
-        note: r.note,
-        data: r.data,
-        datiExtra: r.datiExtra,
-        tracciatoId: tracciato.id,
-        codiceGuida: r.codiceGuida,
-      });
+      const res = await aggiungiRigaDebitoEnteAction(
+        nomeSchema,
+        aziendaId,
+        {
+          voce: r.voce,
+          importo: r.importo,
+          importoVersato: r.importoVersato,
+          tipo: r.tipo,
+          note: r.note,
+          data: r.data,
+          datiExtra: r.datiExtra,
+          tracciatoId: tracciato.id,
+          codiceGuida: r.codiceGuida,
+        },
+        scenarioId
+      );
       if (res.success) salvate++;
       else erroriSalvataggio.push(res.error || 'errore');
     }
