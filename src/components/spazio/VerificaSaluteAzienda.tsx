@@ -110,6 +110,17 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
   const [fileInadempienze, setFileInadempienze] = useState<File | null>(null);
   const [nd, setNd] = useState({ denunce: false, deleghe: false, inadempienze: false });
   const [esitoFogli, setEsitoFogli] = useState<string[]>([]);
+  /**
+   * Data a cui la verifica è riferita.
+   *
+   * Non è un dettaglio di comodo: da questa data discendono TRE cose —
+   * quali periodi sono già esigibili (un periodo scade l'ultimo giorno del
+   * mese successivo), quale sia l'anno precedente per il 30%, e da quanto
+   * tempo un versamento è in ritardo. Usare implicitamente "oggi"
+   * significava fare quei conti alla cieca e non poterli rifare domani
+   * ottenendo lo stesso risultato.
+   */
+  const [dataVerifica, setDataVerifica] = useState(() => new Date().toISOString().slice(0, 10));
   const [avanzamento, setAvanzamento] = useState<string | null>(null);
   const [problemiPresaInCarico, setProblemiPresaInCarico] = useState<string[]>([]);
   const [storico, setStorico] = useState<
@@ -235,7 +246,8 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
       let ritardo90: boolean | null = null;
       let periodiRitardo: number | null = null;
       let mancanti: string | null = null;
-      const annoPrec = new Date().getFullYear() - 1;
+      const riferimento = new Date(`${dataVerifica}T12:00:00Z`);
+      const annoPrec = riferimento.getUTCFullYear() - 1;
 
       let righeDenunce: Awaited<ReturnType<typeof leggiElencoDenunce>>['righe'] = [];
       if (fileDenunce) {
@@ -245,7 +257,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
           note.push(`Elenco denunce non riconosciuto: mancano ${r.colonneMancanti.join(', ')}.`);
         } else {
           righeDenunce = r.righe;
-          const a = analizzaDenunce(r.righe, new Date(), annoPrec);
+          const a = analizzaDenunce(r.righe, riferimento, annoPrec);
           dovutoAnnoPrec = a.dovutoPerAnno[annoPrec] ?? null;
           if (a.periodiMancanti.length > 0) {
             mancanti = a.periodiMancanti.join(', ');
@@ -286,7 +298,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
         if (r.colonneMancanti) {
           note.push(`Elenco Deleghe non riconosciuto: mancano ${r.colonneMancanti.join(', ')}.`);
         } else {
-          const c = analizzaVersamenti(righeDenunce, r.righe, new Date());
+          const c = analizzaVersamenti(righeDenunce, r.righe, riferimento);
           periodiRitardo = c.oltre90Giorni.length + c.maiVersati.length;
           ritardo90 = periodiRitardo > 0;
           note.push(
@@ -326,7 +338,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
           ritardoOltre90Giorni: ritardo90 ?? undefined,
           periodiInRitardo: periodiRitardo ?? undefined,
           denunceNonPresentate: mancanti ?? undefined,
-          soglieAggiornateAl: new Date().toISOString().slice(0, 10),
+          soglieAggiornateAl: dataVerifica,
         });
       }
 
@@ -598,6 +610,24 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
             </div>
 
             <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                Data di verifica
+              </label>
+              <input
+                type="date"
+                value={dataVerifica}
+                onChange={(e) => setDataVerifica(e.target.value)}
+                className={`${CLASSE_CAMPO} font-mono max-w-[12rem]`}
+              />
+              <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                Da questa data discendono tre cose: quali periodi sono già esigibili (un periodo
+                scade l&apos;ultimo giorno del mese successivo), quale sia l&apos;anno precedente
+                per il 30%, e da quanto un versamento è in ritardo. Cambiandola, i conti si rifanno
+                su quella data.
+              </p>
+            </div>
+
+            <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
                 Fogli INPS
               </p>
@@ -664,52 +694,81 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
               </div>
             ))}
 
-            <div className="border-t border-slate-100 pt-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
-                Soglia di segnalazione
-              </p>
-              <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
-                Servono solo se l&apos;Elenco denunce non è disponibile: con quel foglio i
-                contributi dovuti si leggono da lì, e il valore letto ha la precedenza su quello
-                digitato.
-              </p>
-            </div>
+            {/* Il dato dei contributi dovuti si CHIEDE solo se l'Elenco denunce
+                non c'è. Con quel foglio caricato il numero si legge da lì —
+                dato dell'ente, non trascrizione — e chiederlo comunque
+                inviterebbe a digitare un valore che verrebbe poi ignorato. */}
+            {!fileDenunce && (
+              <div className="border-t border-slate-100 pt-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
+                  Soglia di segnalazione
+                </p>
+                <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
+                  Servono solo se l&apos;Elenco denunce non è disponibile: con quel foglio i
+                  contributi dovuti si leggono da lì, e il valore letto ha la precedenza su quello
+                  digitato.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Lavoratori subordinati o parasubordinati
+                    </label>
+                    <select
+                      value={conLavoratori}
+                      onChange={(e) => setConLavoratori(e.target.value as '' | 'si' | 'no')}
+                      className={CLASSE_CAMPO}
+                    >
+                      <option value="">Non dichiarato</option>
+                      <option value="si">Sì</option>
+                      <option value="no">No</option>
+                    </select>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Decide quale soglia si applica: 30% + 15.000 € oppure 5.000 €.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      Contributi dovuti nell&apos;anno precedente
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={contributiDovuti}
+                      onChange={(e) => setContributiDovuti(e.target.value)}
+                      className={`${CLASSE_CAMPO} font-mono`}
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Totale dovuto, non il debito: è la base del 30%.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                  Lavoratori subordinati o parasubordinati
-                </label>
-                <select
-                  value={conLavoratori}
-                  onChange={(e) => setConLavoratori(e.target.value as '' | 'si' | 'no')}
-                  className={CLASSE_CAMPO}
-                >
-                  <option value="">Non dichiarato</option>
-                  <option value="si">Sì</option>
-                  <option value="no">No</option>
-                </select>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Decide quale soglia si applica: 30% + 15.000 € oppure 5.000 €.
+            {fileDenunce && (
+              <div className="border-t border-slate-100 pt-3">
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  I contributi dovuti dell&apos;anno precedente verranno letti dall&apos;Elenco
+                  denunce: non c&apos;è nulla da digitare. La presenza di lavoratori resta invece da
+                  dichiarare — nessun foglio la riporta.
                 </p>
+                <div className="mt-3 max-w-md">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    Lavoratori subordinati o parasubordinati
+                  </label>
+                  <select
+                    value={conLavoratori}
+                    onChange={(e) => setConLavoratori(e.target.value as '' | 'si' | 'no')}
+                    className={CLASSE_CAMPO}
+                  >
+                    <option value="">Non dichiarato</option>
+                    <option value="si">Sì</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                  Contributi dovuti nell&apos;anno precedente
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={contributiDovuti}
-                  onChange={(e) => setContributiDovuti(e.target.value)}
-                  className={`${CLASSE_CAMPO} font-mono`}
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Totale dovuto, non il debito: è la base del 30%.
-                </p>
-              </div>
-            </div>
+            )}
           </div>
 
           {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}

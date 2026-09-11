@@ -93,6 +93,37 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.60 — 2026-09-11
+
+**Data di verifica, e il dato manuale sparisce quando c'è il foglio**
+
+Due rilievi di Ercole, collegati fra loro.
+
+**La data di verifica mancava.** L'aveva chiesta e non l'avevo messa: usavo in
+silenzio la data di sistema. Non e' un dettaglio di comodo — da quella data
+discendono TRE cose: quali periodi sono gia' esigibili (un periodo scade
+l'ultimo giorno del mese successivo), quale sia l'anno precedente per il 30%,
+e da quanto tempo un versamento e' in ritardo. Con "oggi" implicito quei conti
+si facevano alla cieca e non erano rifacibili: la stessa verifica, domani,
+avrebbe dato numeri diversi senza che nulla lo dichiarasse.
+
+Ora e' un campo, precompilato a oggi. Cambiandola i conti si rifanno su quella
+data.
+
+**Il campo manuale dei contributi dovuti compare solo se l'Elenco denunce non
+c'e'.** Con quel foglio caricato il numero si legge da li' — dato dell'ente,
+non trascrizione — e chiederlo comunque invitava a digitare un valore che
+sarebbe stato poi ignorato. Resta invece la dichiarazione sulla presenza di
+lavoratori: nessuno dei fogli la riporta.
+
+**Nota di ambiente, non del progetto.** Durante il lavoro `npm install` non
+aveva completato e `npx tsc` ha scaricato TypeScript 6 dal registro, facendo
+fallire il type-check su una deprecazione di `tsconfig` (`baseUrl`). Il
+progetto dichiara `^5` e usa 5.9.3: ho annullato la modifica al tsconfig che
+avevo iniziato a fare, perche' correggeva un problema che non esisteva.
+
+Verificato: type-check, lint, **226 test**, build cloud completa.
+
 ## 0.109.59 — 2026-09-11
 
 **Triage completo: i tre fogli INPS, e il terzo requisito diventa accertabile**
