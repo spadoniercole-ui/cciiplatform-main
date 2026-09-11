@@ -93,6 +93,36 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.66 — 2026-09-11
+
+**La visura trattenuta veniva distrutta anche quando lo screening falliva**
+
+Segnalato da Ercole: la visura non arrivava dal triage e ha dovuto
+ricaricarla.
+
+Causa: l'eliminazione del file stava in un blocco `finally` — "riuscita o
+fallita che sia la generazione, il file non deve restare li'" — e nella
+0.109.65 ho aggiunto la conservazione senza guardare in quale ramo avvenisse
+la distruzione. Bastava una generazione non riuscita (crediti esauriti, AI non
+raggiungibile) perche' la visura appena fornita venisse distrutta lo stesso:
+**proprio il caso in cui la conservazione serviva.**
+
+La regola corretta, ora esplicita: **si distrugge quando il documento ha
+finito il suo lavoro, non quando il lavoro e' stato soltanto tentato.**
+
+Resta fermo tutto il resto — un file caricato ORA per questa generazione si
+elimina comunque, riuscita o fallita che sia: e' stato fornito per questa
+operazione, non deve sopravviverle, e l'operatore ce l'ha ancora sul proprio
+computer.
+
+Estratta in `conservazioneVisura.ts` con **3 test** che coprono i tre casi
+distinti. E' il secondo errore di fila sullo stesso punto — la prima volta non
+avevo guardato dove avveniva l'eliminazione, la seconda l'avrei rifatto: una
+condizione dentro un `finally` non e' raggiungibile da nessun test, e finche'
+resta li' continuera' a sfuggire.
+
+Verificato: type-check, lint, **245 test**, build cloud completa.
+
 ## 0.109.65 — 2026-09-11
 
 **La visura resta fino allo screening, e i documenti si chiedono solo se

@@ -17,6 +17,7 @@ import { raggruppaPerTipoDebito } from '@/lib/debitiEnte/tipoDebito';
 import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
 import { ottieniEtichetteTipoDebito } from '@/app/actions/tipoDebitoConfig';
 import { calcolaQuadroDirettrici, type QuadroDirettrici } from '@/lib/checklist/scoringDirettrici';
+import { deveEliminareVisura } from '@/lib/screening/conservazioneVisura';
 import {
   calcolaRiscontri,
   type Riscontri,
@@ -380,6 +381,7 @@ export async function generaScreeningAziendaAction(
   nomeFileVisura: string,
   istruzioniOperatore?: string
 ): Promise<RisultatoGenerazioneScreening> {
+  let generazioneRiuscita = false;
   try {
     if (!anthropic) {
       return {
@@ -816,6 +818,7 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
       );
     }
 
+    generazioneRiuscita = true;
     return { success: true, sezioni, relazioneTesto };
   } catch (error: any) {
     console.error('[generaScreeningAziendaAction] Errore:', error);
@@ -824,18 +827,32 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
       error: `Impossibile generare lo screening: ${error.message || error}`,
     };
   } finally {
-    // I documenti non si conservano — riuscita o fallita che sia la
-    // generazione, il file caricato su Blob non deve restare lì. Stesso
-    // principio già applicato in Simulazione Ricevente.
-    try {
-      await del(visuraUrl);
-      // E si dimentica il riferimento alla visura trattenuta dal triage: un
-      // puntatore a un file eliminato è peggio di nessun puntatore, perché la
-      // schermata direbbe "visura disponibile" e la generazione fallirebbe.
-      const { dimenticaVisuraTriageAction } = await import('@/app/actions/visuraTriage');
-      await dimenticaVisuraTriageAction(nomeSchema, aziendaId);
-    } catch (erroreEliminazione) {
-      console.error('[generaScreeningAziendaAction] Errore eliminazione blob:', erroreEliminazione);
+    // I documenti non si conservano: il file su Blob non deve restare lì.
+    //
+    // MA la visura TRATTENUTA dal triage fa eccezione se la generazione è
+    // FALLITA. L'eliminazione stava in questo `finally` senza distinguere
+    // l'esito: bastava una generazione non riuscita — crediti esauriti, AI
+    // non raggiungibile — perché la visura appena fornita venisse distrutta
+    // lo stesso, e la si dovesse ricaricare a mano. Cioè proprio nel caso in
+    // cui la conservazione serviva.
+    //
+    // La regola corretta: si distrugge quando il documento ha finito il suo
+    // lavoro, non quando il lavoro è stato tentato.
+    const eraTrattenuta = await visuraEraTrattenuta(nomeSchema, aziendaId, visuraUrl);
+    if (deveEliminareVisura(generazioneRiuscita, eraTrattenuta)) {
+      try {
+        await del(visuraUrl);
+        // Insieme al file si azzera il riferimento: un puntatore a un file
+        // eliminato è peggio di nessun puntatore, perché la schermata direbbe
+        // "visura disponibile" e la generazione fallirebbe.
+        const { dimenticaVisuraTriageAction } = await import('@/app/actions/visuraTriage');
+        await dimenticaVisuraTriageAction(nomeSchema, aziendaId);
+      } catch (erroreEliminazione) {
+        console.error(
+          '[generaScreeningAziendaAction] Errore eliminazione blob:',
+          erroreEliminazione
+        );
+      }
     }
   }
 }
@@ -1089,5 +1106,27 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
       risposteInvertite: 0,
       error: `Impossibile correggere la polarità: ${error.message || error}`,
     };
+  }
+}
+
+/**
+ * La visura in uso è quella trattenuta dal triage?
+ *
+ * Serve a distinguere due casi che nel `finally` si somigliavano: un file
+ * caricato adesso per questa generazione — che si elimina comunque — e la
+ * visura conservata dal triage, che su una generazione fallita deve
+ * sopravvivere.
+ */
+async function visuraEraTrattenuta(
+  nomeSchema: string,
+  aziendaId: number,
+  url: string
+): Promise<boolean> {
+  try {
+    const { ottieniVisuraTriageAction } = await import('@/app/actions/visuraTriage');
+    const r = await ottieniVisuraTriageAction(nomeSchema, aziendaId);
+    return !!r.visura && r.visura.url === url;
+  } catch {
+    return false;
   }
 }
