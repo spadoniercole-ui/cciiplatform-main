@@ -93,6 +93,71 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.59 — 2026-09-11
+
+**Triage completo: i tre fogli INPS, e il terzo requisito diventa accertabile**
+
+**Blocco rimosso.** La Posizione Ente restava aperta in attesa della
+posizione debitoria, che nella 0.109.58 si e' spostata nello scenario: il
+vincolo era rimasto qui e teneva chiuso lo Screening con l'operatore che aveva
+gia' fatto tutto. Ora basta l'Anagrafica Ente compilata.
+
+**Tre fogli nuovi nel triage**, ciascuno con il flag "non disponibile" — un
+documento che manca viene ESCLUSO dalle verifiche, non lasciato in attesa:
+
+  - **Elenco denunce (UNIEMENS)** -> contributi dovuti per anno e denunce non
+    presentate;
+  - **Lista Inadempienze** -> il non versato certificato dall'istituto;
+  - **Elenco Deleghe (F24)** -> le date di versamento.
+
+**Il terzo requisito dell'art. 25-novies era sempre "non verificabile".** Ora
+non lo e' piu'. Ma attenzione alla distinzione che ha richiesto il terzo file:
+l'Elenco denunce da' la data di PRESENTAZIONE del flusso, che misura la
+condotta dichiarativa — un'azienda puo' presentare tutto puntualmente e non
+versare un euro, ed e' esattamente il caso del campione reale (denunce a zero
+giorni di ritardo, 496.544 EUR non versati). La norma parla di VERSAMENTO, e
+il versamento sta nelle Deleghe.
+
+Due scadenze diverse, ora distinte: **F24 il 16 del mese successivo**,
+**denuncia l'ultimo giorno del mese successivo**.
+
+**La finestra del dovuto.** A una data di verifica sono esigibili solo i
+periodi la cui scadenza e' passata: all'11/09/2026 luglio si', agosto no.
+Senza la finestra si sommavano periodi non ancora esigibili. E i periodi
+mancanti DENTRO la finestra non valgono zero: sono denunce non presentate, un
+segnale, elencate a parte.
+
+**Un periodo mai versato conta come ritardo in corso.** Non ha "giorni di
+ritardo" misurabili, ma il ritardo c'e': trattarlo come non calcolabile
+avrebbe escluso proprio i casi peggiori. Sul campione reale sono 44 periodi
+su 44.
+
+**Esclusioni dichiarate, mai silenziose.** Si lavora solo su **DM10**: le
+rettifiche DMR correggono i DM ma non sono versamenti della gestione. E si
+escludono le righe stornate o ripartite su altre gestioni — nel campione 4
+righe per 49.006 EUR, di cui 29.620 su un solo periodo, che contate facevano
+risultare pagato cio' che pagato non era. Righe e importi esclusi compaiono a
+video con il motivo.
+
+**MAI NOSTRE ELABORAZIONI — principio fissato da Ercole.** La distinzione che
+lo rende applicabile: AGGREGARE un dato ufficiale (sommare i saldi, calcolarne
+il 30%) resta tracciabile riga per riga fino al file dell'ente; RICOSTRUIRE
+una grandezza che l'ente non ha mai certificato produce una cifra che esiste
+solo qui. Il residuo dovuto-meno-versato (793.762 EUR sul campione) e' percio'
+uscito dal giudizio: il debito complessivo e' quello della Lista Inadempienze,
+496.544 EUR, che l'INPS dichiara. Il residuo resta calcolato per il solo scopo
+di rilevare uno scostamento, ed e' documentato come non utilizzabile. Anche
+l'importo in ritardo aggrega ora il DOVUTO dichiarato, non la differenza.
+
+**26 test nuovi** (226 in tutto), scritti sui file reali forniti da Ercole e
+non su esempi inventati. Fra questi: che la media dei ritardi NON sostituisce
+il test (undici periodi puntuali e uno a 300 giorni danno media 25, ma la
+norma guarda il singolo versamento); che gli accrediti di un anno non
+compensano i debiti di un altro; che i valori letti dai fogli hanno la
+precedenza su quelli digitati.
+
+Verificato: type-check, lint, **226 test**, build cloud completa.
+
 ## 0.109.58 — 2026-09-11
 
 **La Situazione Debitoria torna nello scenario**

@@ -15,6 +15,7 @@ const vuoto: DatiSoglie = {
   volumeAffari: null,
   creditiAffidati: null,
   formaAER: null,
+  ritardoOltre90Giorni: null,
 };
 
 describe('soglie di legge', () => {

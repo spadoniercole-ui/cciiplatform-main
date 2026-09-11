@@ -108,6 +108,10 @@ export async function ottieniAttenzioneScreeningAction(
       volumeAffari: num(a.volume_affari),
       creditiAffidati: num(a.crediti_affidati_aer),
       formaAER: formaAERdaAnagrafica(a.forma_giuridica),
+      ritardoOltre90Giorni:
+        a.ritardo_oltre_90_giorni === null || a.ritardo_oltre_90_giorni === undefined
+          ? null
+          : Boolean(a.ritardo_oltre_90_giorni),
     };
     // Le soglie configurate per lo spazio, non le costanti: altrimenti la
     // pagina dei Parametri sarebbe una configurazione senza effetto.

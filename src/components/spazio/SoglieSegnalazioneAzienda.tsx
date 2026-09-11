@@ -43,6 +43,9 @@ const VUOTI: ValoriSoglie = {
   volumeAffari: null,
   creditiAffidatiAer: null,
   soglieAggiornateAl: null,
+  ritardoOltre90Giorni: null,
+  periodiInRitardo: null,
+  denunceNonPresentate: null,
 };
 
 // Il `body` dell'applicazione ha `color: white` (sfondo scuro della pagina di

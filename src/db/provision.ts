@@ -206,6 +206,11 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
     'volume_affari NUMERIC',
     'crediti_affidati_aer NUMERIC',
     'soglie_aggiornate_al DATE',
+    // Terzo requisito dell'art. 25-novies, accertato dall'Elenco Deleghe.
+    // NULL = non accertato, diverso da FALSE = accertato e assente.
+    'ritardo_oltre_90_giorni BOOLEAN',
+    'periodi_in_ritardo INTEGER',
+    'denunce_non_presentate TEXT',
   ]) {
     // Un DDL per chiamata: le stringhe multi-statement provocano rollback
     // impliciti silenziosi.

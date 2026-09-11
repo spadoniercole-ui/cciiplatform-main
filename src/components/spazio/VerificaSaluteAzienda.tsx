@@ -38,6 +38,12 @@ import {
   type RigaVerifica,
 } from '@/app/actions/aziendaInVerifica';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
+import {
+  leggiElencoDenunce,
+  leggiElencoDeleghe,
+  leggiListaInadempienze,
+} from '@/lib/denunce/lettura';
+import { analizzaDenunce, analizzaInadempienze, analizzaVersamenti } from '@/lib/denunce/analisi';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { generaScreeningAziendaAction } from '@/app/actions/screeningAzienda';
 import { salvaAnalisiXbrlAziendaAction } from '@/app/actions/xbrlAzienda';
@@ -96,6 +102,14 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
   // contributi DOVUTI vengono dai flussi UNIEMENS, non dal file V.E.R.A.
   const [conLavoratori, setConLavoratori] = useState<'' | 'si' | 'no'>('');
   const [contributiDovuti, setContributiDovuti] = useState('');
+  // I tre fogli INPS. `null` = non ancora scelto; il flag "non disponibile"
+  // dice che il documento non c'è e va escluso dalle verifiche, invece di
+  // lasciare l'indicatore in attesa di qualcosa che non arriverà.
+  const [fileDenunce, setFileDenunce] = useState<File | null>(null);
+  const [fileDeleghe, setFileDeleghe] = useState<File | null>(null);
+  const [fileInadempienze, setFileInadempienze] = useState<File | null>(null);
+  const [nd, setNd] = useState({ denunce: false, deleghe: false, inadempienze: false });
+  const [esitoFogli, setEsitoFogli] = useState<string[]>([]);
   const [avanzamento, setAvanzamento] = useState<string | null>(null);
   const [problemiPresaInCarico, setProblemiPresaInCarico] = useState<string[]>([]);
   const [storico, setStorico] = useState<
@@ -212,19 +226,106 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
         }
       }
 
+      // ---- I tre fogli INPS ----------------------------------------------
+      // Da qui vengono i numeri che prima si digitavano a mano, e il terzo
+      // requisito dell'art. 25-novies che finora non era accertabile.
+      const note: string[] = [];
+      let dovutoAnnoPrec: number | null = null;
+      let nonVersato: number | null = null;
+      let ritardo90: boolean | null = null;
+      let periodiRitardo: number | null = null;
+      let mancanti: string | null = null;
+      const annoPrec = new Date().getFullYear() - 1;
+
+      let righeDenunce: Awaited<ReturnType<typeof leggiElencoDenunce>>['righe'] = [];
+      if (fileDenunce) {
+        setAvanzamento('Lettura dell’Elenco denunce...');
+        const r = await leggiElencoDenunce(fileDenunce);
+        if (r.colonneMancanti) {
+          note.push(`Elenco denunce non riconosciuto: mancano ${r.colonneMancanti.join(', ')}.`);
+        } else {
+          righeDenunce = r.righe;
+          const a = analizzaDenunce(r.righe, new Date(), annoPrec);
+          dovutoAnnoPrec = a.dovutoPerAnno[annoPrec] ?? null;
+          if (a.periodiMancanti.length > 0) {
+            mancanti = a.periodiMancanti.join(', ');
+            note.push(
+              `Denunce non presentate per ${a.periodiMancanti.length} periodi: ${mancanti}.`
+            );
+          }
+          note.push(
+            `Contributi dovuti ${annoPrec}: ${Math.round(dovutoAnnoPrec ?? 0).toLocaleString('it-IT')} € (ultimo periodo esigibile ${a.ultimoPeriodoDovuto}).`
+          );
+        }
+      }
+
+      if (fileInadempienze) {
+        setAvanzamento('Lettura della Lista Inadempienze...');
+        const r = await leggiListaInadempienze(fileInadempienze);
+        if (r.colonneMancanti) {
+          note.push(
+            `Lista Inadempienze non riconosciuta: mancano ${r.colonneMancanti.join(', ')}.`
+          );
+        } else {
+          const b = analizzaInadempienze(r.righe);
+          nonVersato = b.totaleNonVersato;
+          note.push(
+            `Non versato certificato: ${Math.round(nonVersato).toLocaleString('it-IT')} €.`
+          );
+          if (b.anniConSaldoNegativo.length > 0) {
+            note.push(
+              `Anni con accrediti superiori agli addebiti (non compensati): ${b.anniConSaldoNegativo.join(', ')}.`
+            );
+          }
+        }
+      }
+
+      if (fileDeleghe && righeDenunce.length > 0) {
+        setAvanzamento('Lettura dell’Elenco Deleghe...');
+        const r = await leggiElencoDeleghe(fileDeleghe);
+        if (r.colonneMancanti) {
+          note.push(`Elenco Deleghe non riconosciuto: mancano ${r.colonneMancanti.join(', ')}.`);
+        } else {
+          const c = analizzaVersamenti(righeDenunce, r.righe, new Date());
+          periodiRitardo = c.oltre90Giorni.length + c.maiVersati.length;
+          ritardo90 = periodiRitardo > 0;
+          note.push(
+            `Ritardo oltre 90 giorni: ${periodiRitardo} periodi, per ${Math.round(c.dovutoInRitardo).toLocaleString('it-IT')} € di contributi dovuti.`
+          );
+          for (const sc of c.scartate) {
+            note.push(
+              `Escluse ${sc.righe} righe (${Math.round(sc.importo).toLocaleString('it-IT')} €): ${sc.motivo}`
+            );
+          }
+        }
+      } else if (fileDeleghe) {
+        note.push(
+          'Elenco Deleghe ignorato: serve anche l’Elenco denunce per attribuire i periodi.'
+        );
+      }
+
+      setEsitoFogli(note);
+
       // ---- I due valori della soglia INPS --------------------------------
-      if (conLavoratori !== '' || contributiDovuti.trim() !== '') {
+      if (conLavoratori !== '' || contributiDovuti.trim() !== '' || note.length > 0) {
         setAvanzamento('Salvataggio dei valori per le soglie...');
         // Salvataggio PARZIALE: si scrivono solo i due valori raccolti qui.
         // Con quello completo si azzererebbero premi INAIL, IVA e volume
         // d'affari già inseriti — una funzione di triage non deve poter
         // distruggere il lavoro di un'istruttoria.
+        // I valori letti dai fogli hanno la precedenza su quelli digitati:
+        // vengono da un documento dell'ente, non da una trascrizione.
         await salvaValoriSoglieParzialeAction(nomeSchema, c.aziendaId, {
           conLavoratoriSubordinati: conLavoratori === '' ? undefined : conLavoratori === 'si',
           contributiDovutiAnnoPrecedente:
-            contributiDovuti.trim() === '' ? undefined : Number(contributiDovuti),
+            dovutoAnnoPrec ??
+            (contributiDovuti.trim() === '' ? undefined : Number(contributiDovuti)),
           annoContributiDovuti:
-            contributiDovuti.trim() === '' ? undefined : new Date().getFullYear() - 1,
+            dovutoAnnoPrec !== null || contributiDovuti.trim() !== '' ? annoPrec : undefined,
+          contributiScaduti: nonVersato ?? undefined,
+          ritardoOltre90Giorni: ritardo90 ?? undefined,
+          periodiInRitardo: periodiRitardo ?? undefined,
+          denunceNonPresentate: mancanti ?? undefined,
           soglieAggiornateAl: new Date().toISOString().slice(0, 10),
         });
       }
@@ -498,12 +599,79 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
 
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
+                Fogli INPS
+              </p>
+              <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
+                Da qui vengono i contributi dovuti, il non versato certificato e il ritardo di oltre
+                90 giorni — il terzo requisito dell&apos;art. 25-novies, che senza l&apos;Elenco
+                Deleghe non è accertabile. Sono dati dell&apos;istituto: nessuna elaborazione
+                nostra. Se un foglio non è disponibile, spuntalo: verrà escluso dalle verifiche
+                invece di lasciare l&apos;indicatore in attesa.
+              </p>
+            </div>
+
+            {[
+              {
+                k: 'denunce' as const,
+                label: 'Elenco denunce (UNIEMENS)',
+                hint: 'Contributi dovuti per anno e denunce non presentate.',
+                file: fileDenunce,
+                set: setFileDenunce,
+              },
+              {
+                k: 'inadempienze' as const,
+                label: 'Lista Inadempienze',
+                hint: 'Il non versato certificato dall’istituto.',
+                file: fileInadempienze,
+                set: setFileInadempienze,
+              },
+              {
+                k: 'deleghe' as const,
+                label: 'Elenco Deleghe (F24)',
+                hint: 'Date di versamento: da qui il ritardo oltre 90 giorni. Solo DM10.',
+                file: fileDeleghe,
+                set: setFileDeleghe,
+              },
+            ].map((f) => (
+              <div key={f.k} className="border-t border-slate-100 pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    {f.label}
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[10px] text-slate-500 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={nd[f.k]}
+                      onChange={(e) => {
+                        setNd({ ...nd, [f.k]: e.target.checked });
+                        if (e.target.checked) f.set(null);
+                      }}
+                    />
+                    non disponibile
+                  </label>
+                </div>
+                {!nd[f.k] && (
+                  <input
+                    type="file"
+                    accept=".xls,.xlsx"
+                    onChange={(e) => f.set(e.target.files?.[0] ?? null)}
+                    className="w-full mt-1 text-xs font-mono text-slate-900 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 file:font-bold file:uppercase file:text-[10px]"
+                  />
+                )}
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {nd[f.k] ? 'Escluso dalle verifiche.' : f.hint}
+                </p>
+              </div>
+            ))}
+
+            <div className="border-t border-slate-100 pt-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
                 Soglia di segnalazione
               </p>
               <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
-                Due valori che nessun documento porta: i contributi{' '}
-                <span className="font-bold">dovuti</span> vengono dai flussi UNIEMENS, non dal file
-                V.E.R.A.
+                Servono solo se l&apos;Elenco denunce non è disponibile: con quel foglio i
+                contributi dovuti si leggono da lì, e il valore letto ha la precedenza su quello
+                digitato.
               </p>
             </div>
 
@@ -670,6 +838,26 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
 
       {fase === 'esito' && (
         <div className="space-y-4">
+          {esitoFogli.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl p-5">
+              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider mb-2">
+                Letto dai fogli INPS
+              </h3>
+              <ul className="space-y-1">
+                {esitoFogli.map((n, i) => (
+                  <li key={i} className="text-[11px] text-slate-600 leading-relaxed flex gap-2">
+                    <span className="text-slate-400 shrink-0">—</span>
+                    <span>{n}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                Tutti dati dell&apos;istituto, aggregati riga per riga dai fogli caricati: il conto
+                è rifacibile sul file di partenza.
+              </p>
+            </div>
+          )}
+
           {attenzione ? (
             <SemaforoAttenzione attenzione={attenzione} />
           ) : (

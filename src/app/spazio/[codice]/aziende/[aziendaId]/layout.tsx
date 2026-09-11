@@ -5,7 +5,6 @@ import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniConteggioScreeningPendente } from '@/app/actions/screeningAzienda';
 import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
-import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniStatoAnalisiBilancioStep } from '@/app/actions/analisiBilancioStep';
 import { anagraficaAziendaCompleta } from '@/lib/anagraficaAzienda';
@@ -45,14 +44,12 @@ export default async function AziendaLayout({
 
   // Segnali di completamento, tutti in parallelo. La Posizione Ente esiste
   // solo per gli spazi ENTE.
-  const [pendenteScreening, anagraficaEnteRis, debitiRis, xbrlRis, statoAnalisiBilancio] =
-    await Promise.all([
-      ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
-      isEnte ? ottieniAnagraficaEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
-      isEnte ? ottieniDebitiEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
-      ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
-      ottieniStatoAnalisiBilancioStep(contesto.nomeSchema, aziendaNum),
-    ]);
+  const [pendenteScreening, anagraficaEnteRis, xbrlRis, statoAnalisiBilancio] = await Promise.all([
+    ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
+    isEnte ? ottieniAnagraficaEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
+    ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
+    ottieniStatoAnalisiBilancioStep(contesto.nomeSchema, aziendaNum),
+  ]);
   const domandeMancanti = pendenteScreening.totali - pendenteScreening.risposte;
 
   // Completamento dei passi (unica fonte del semaforo).
@@ -82,7 +79,20 @@ export default async function AziendaLayout({
       const v = dEnte[k];
       return typeof v === 'string' && v.trim().length > 0;
     });
-  const posizioneEnteCompleta = anagraficaEnteCompilata && (debitiRis?.righe?.length ?? 0) > 0;
+  // "Posizione Ente completa" NON richiede più le righe di debito.
+  //
+  // La Situazione Debitoria si è spostata nello scenario: il contabilizzato è
+  // la base dei conti al momento della proposta, non un dato dell'azienda.
+  // Il blocco però era rimasto qui, e teneva chiuso lo Screening in attesa di
+  // qualcosa che a questo livello non si carica più — con l'operatore che
+  // aveva fatto tutto il necessario e vedeva il passo restare aperto.
+  //
+  // Quel che serve a questo livello è l'Anagrafica Ente compilata (chi è
+  // l'ente per questa azienda) e, se c'è, la Posizione V.E.R.A. — che è la
+  // fotografia certificata dell'esposizione. La V.E.R.A. resta facoltativa:
+  // la sua assenza la dichiara l'indicatore di attenzione, non un blocco che
+  // impedisce di proseguire.
+  const posizioneEnteCompleta = anagraficaEnteCompilata;
   // "Analisi Bilancio" verde: le due sotto-sezioni (Configurazione XBRL e
   // Indici) sono un sottoinsieme dei parametri di spazio — non c'è nulla di
   // pesante da caricare qui. Basta che l'operatore le abbia aperte
@@ -130,7 +140,7 @@ export default async function AziendaLayout({
     label: 'Screening',
     stato: !passi123Verdi ? 'bloccato' : screeningGenerato ? 'completo' : 'attivo',
     motivo: isEnte
-      ? 'Completa prima Anagrafica, Posizione Ente e Analisi Bilancio.'
+      ? 'Completa prima Anagrafica, Anagrafica Ente e Analisi Bilancio.'
       : 'Completa prima Anagrafica e Analisi Bilancio.',
   });
   steps.push({

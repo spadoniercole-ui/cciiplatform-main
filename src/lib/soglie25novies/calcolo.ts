@@ -97,6 +97,18 @@ export interface DatiSoglie {
   creditiAffidati: number | null;
   /** Dall'anagrafica azienda; null = forma giuridica non riconosciuta. */
   formaAER: FormaAER | null;
+  /**
+   * Ritardo di oltre 90 giorni nel versamento: il TERZO requisito.
+   *
+   * Finora era sempre `null` — "non ricavabile dai dati disponibili" — perché
+   * nessun documento portava la data di versamento. L'Elenco Deleghe (F24) la
+   * porta, e con quella il requisito diventa accertabile.
+   *
+   * Attenzione a non confonderlo con il ritardo nella PRESENTAZIONE della
+   * denuncia: un'azienda può presentare tutti i flussi puntualmente e non
+   * versare un euro. La norma parla di versamento.
+   */
+  ritardoOltre90Giorni: boolean | null;
 }
 
 export type EsitoSoglia = 'sotto' | 'sopra' | 'non_determinabile';
@@ -155,10 +167,12 @@ export function calcolaSoglie25Novies(
   const righe: RigaSoglia[] = [];
   const datiMancanti: string[] = [];
 
-  // Il requisito temporale non e' mai dimostrabile con i dati odierni.
-  datiMancanti.push(
-    `Requisito del ritardo di oltre ${S.giorniRitardo} giorni: non ricavabile dai dati disponibili, che non portano la data di scadenza delle singole partite.`
-  );
+  // Il requisito temporale: accertabile solo con l'Elenco Deleghe (F24).
+  if (dati.ritardoOltre90Giorni === null) {
+    datiMancanti.push(
+      `Requisito del ritardo di oltre ${S.giorniRitardo} giorni: non accertato. Serve l’Elenco Deleghe (F24), che porta la data di versamento.`
+    );
+  }
 
   // ---- INPS -----------------------------------------------------------
   const contributi = val(dati.contributiScaduti);

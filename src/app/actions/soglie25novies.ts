@@ -35,6 +35,10 @@ export interface ValoriSoglie {
   volumeAffari: number | null;
   creditiAffidatiAer: number | null;
   soglieAggiornateAl: string | null;
+  /** Terzo requisito art. 25-novies, accertato dall'Elenco Deleghe. */
+  ritardoOltre90Giorni: boolean | null;
+  periodiInRitardo: number | null;
+  denunceNonPresentate: string | null;
 }
 
 export interface RisultatoValoriSoglie {
@@ -59,7 +63,8 @@ export async function ottieniValoriSoglieAction(
     const r = await pool.query(
       `SELECT con_lavoratori_subordinati, contributi_scaduti, contributi_dovuti_anno_precedente,
               anno_contributi_dovuti, sanzioni_presunte_vera, premi_inail, iva_scaduta,
-              volume_affari, crediti_affidati_aer, soglie_aggiornate_al, forma_giuridica
+              volume_affari, crediti_affidati_aer, soglie_aggiornate_al, forma_giuridica,
+              ritardo_oltre_90_giorni, periodi_in_ritardo, denunce_non_presentate
          FROM "${nomeSchema}".aziende WHERE id = $1`,
       [aziendaId]
     );
@@ -83,6 +88,12 @@ export async function ottieniValoriSoglieAction(
         soglieAggiornateAl: a.soglie_aggiornate_al
           ? new Date(a.soglie_aggiornate_al).toISOString().slice(0, 10)
           : null,
+        ritardoOltre90Giorni:
+          a.ritardo_oltre_90_giorni === null || a.ritardo_oltre_90_giorni === undefined
+            ? null
+            : Boolean(a.ritardo_oltre_90_giorni),
+        periodiInRitardo: num(a.periodi_in_ritardo),
+        denunceNonPresentate: a.denunce_non_presentate ? String(a.denunce_non_presentate) : null,
       },
       formaAER: formaAERdaAnagrafica(a.forma_giuridica),
       formaGiuridicaTesto: a.forma_giuridica ?? null,
@@ -120,6 +131,9 @@ export async function salvaValoriSoglieParzialeAction(
       volumeAffari: 'volume_affari',
       creditiAffidatiAer: 'crediti_affidati_aer',
       soglieAggiornateAl: 'soglie_aggiornate_al',
+      ritardoOltre90Giorni: 'ritardo_oltre_90_giorni',
+      periodiInRitardo: 'periodi_in_ritardo',
+      denunceNonPresentate: 'denunce_non_presentate',
     };
 
     const set: string[] = [];
@@ -243,6 +257,7 @@ export async function valutaSoglieAction(
       volumeAffari: v.volumeAffari,
       creditiAffidati: v.creditiAffidatiAer,
       formaAER: lettura.formaAER ?? null,
+      ritardoOltre90Giorni: null,
     };
 
     // Soglie configurate per lo spazio, non costanti.
