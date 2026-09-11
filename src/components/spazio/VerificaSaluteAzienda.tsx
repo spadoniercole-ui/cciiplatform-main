@@ -347,6 +347,12 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
       if (a.success && a.attenzione) {
         setAttenzione(a.attenzione);
         await registraEsitoVerificaAction(nomeSchema, c.aziendaId, a.attenzione.esito);
+      } else {
+        // PRIMA questo caso era muto: l'esito mostrava "Indicatore non
+        // calcolabile con i dati inseriti" — una frase che accusa i dati
+        // quando il problema può essere tutt'altro — e il motivo vero
+        // restava nel risultato scartato.
+        setErrore(a.error ?? 'Indicatore non calcolato: causa non riportata dal server.');
       }
       setFase('esito');
     } catch (e) {
@@ -955,6 +961,12 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
                 className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50"
               >
                 ← Indietro
+              </button>
+              <button
+                onClick={() => setMostraArchiviazione(true)}
+                className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
+                Non procedo
               </button>
               <button
                 onClick={() => {

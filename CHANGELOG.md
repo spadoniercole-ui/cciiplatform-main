@@ -93,6 +93,37 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.61 — 2026-09-11
+
+**L'indicatore falliva in silenzio, e "Non procedo" era sparito**
+
+Sul collaudo cloud di Ercole la lettura dei fogli funzionava perfettamente —
+tutti i numeri estratti — ma sotto compariva "Indicatore non calcolabile con i
+dati inseriti". Una frase che accusa i dati mentre il problema era un altro:
+`ottieniAttenzioneScreeningAction` tornava un errore e il risultato veniva
+**scartato senza leggerlo**. Stesso difetto gia' corretto due volte altrove.
+
+Ora l'errore vero viene mostrato, e la frase di ripiego rimanda ad esso invece
+di incolpare i dati, precisando che quanto letto dai fogli e' comunque stato
+salvato.
+
+**Difesa aggiunta**: l'action assicura ora anche la tabella `aziende`. Le
+colonne delle soglie e del ritardo vengono aggiunte li', e questa action le
+legge: se l'azienda arriva da un percorso che non le ha ancora create, la
+SELECT fallisce e l'indicatore non si calcola. E' la causa piu' probabile del
+caso cloud.
+
+**Riprodotto in sandbox** con i tre file reali: lettura corretta (418.709 EUR
+dovuti 2025, 496.544 EUR non versati, 44 periodi oltre 90 giorni, 17 righe
+escluse) e indicatore calcolato. Il guasto cloud non si riproduce li', il che
+conferma che dipende dallo stato di quel database — e ora l'errore lo dira'.
+
+**"Non procedo" era sparito** dalla schermata di esito: perso in una delle
+riscritture successive alla 0.109.57, che lo aveva introdotto insieme
+all'archiviazione con motivo. Ripristinato.
+
+Verificato: type-check, lint, **226 test**, build cloud e portable complete.
+
 ## 0.109.60 — 2026-09-11
 
 **Data di verifica, e il dato manuale sparisce quando c'è il foglio**

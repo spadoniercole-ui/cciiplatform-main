@@ -8,6 +8,7 @@
 
 import { pool } from '@/lib/db';
 import {
+  assicuraTabellaAziende,
   assicuraTabellaCategorieTipoDebito,
   assicuraTabellaDebitiEnte,
   assicuraTabelleVera,
@@ -37,6 +38,11 @@ export async function ottieniAttenzioneScreeningAction(
 ): Promise<RisultatoAttenzione> {
   try {
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    // Anche la tabella aziende: le colonne delle soglie e del ritardo
+    // vengono aggiunte lì, e questa action le legge. Se l'azienda è stata
+    // creata da un percorso che non le ha ancora aggiunte, la SELECT fallisce
+    // e l'indicatore non si calcola — senza che nulla dica perché.
+    await assicuraTabellaAziende(nomeSchema);
     await assicuraTabellaCategorieTipoDebito(nomeSchema);
     await assicuraTabellaDebitiEnte(nomeSchema);
     await assicuraTabelleVera(nomeSchema);
