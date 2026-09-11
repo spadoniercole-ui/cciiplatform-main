@@ -93,6 +93,39 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.62 — 2026-09-11
+
+**La vecchia migrazione ripartiva e faceva cadere tutto**
+
+Con l'errore finalmente visibile (0.109.61) la causa e' emersa subito:
+
+    relation "debiti_ente_per_scenario_legacy" already exists
+
+**Difetto mio, e previsto da me stesso.** Nella 0.109.58 avevo scritto che
+creare nuove tabelle avrebbe portato a migrazioni a catena, e avevo scelto di
+aggiungere una colonna proprio per evitarlo. Poi non ho considerato che
+`scenario_id` ERA il segnale che faceva scattare la vecchia migrazione
+scenario -> azienda: rimettendo la colonna, su ogni database gia' migrato
+quella migrazione ripartiva e tentava di rinominare `debiti_ente` in una
+tabella di archivio che esiste gia'.
+
+L'errore faceva cadere OGNI operazione che passa da `assicuraTabellaDebitiEnte`
+— fra cui il calcolo dell'indicatore, che restava "non calcolabile" mentre la
+lettura dei fogli funzionava perfettamente.
+
+**La regola corretta**: la tabella legacy e' la prova che la migrazione e' gia'
+avvenuta. Se c'e', non si tocca nulla. La presenza di `scenario_id` non e' piu'
+un segnale valido, perche' dalla 0.109.58 la colonna esiste di nuovo per
+disegno.
+
+Estratta in `src/lib/migrazioni/debitiEnteLegacy.ts` con **4 test**: database
+mai migrato (si rinomina), gia' migrato con scenario_id tornato (NON si
+rinomina — il caso reale), nessuna colonna, e l'idempotenza. Non e' una
+condizione da due righe: e' il punto in cui il progetto si e' gia' fatto male
+una volta, e merita di essere isolato e coperto.
+
+Verificato: type-check, lint, **230 test**, build cloud completa.
+
 ## 0.109.61 — 2026-09-11
 
 **L'indicatore falliva in silenzio, e "Non procedo" era sparito**

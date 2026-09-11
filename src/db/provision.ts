@@ -1,5 +1,6 @@
 import { db } from './client';
 import { sql } from 'drizzle-orm';
+import { deveRinominareInLegacy } from '@/lib/migrazioni/debitiEnteLegacy';
 import { getTabelleTenant } from './schema';
 
 // Ogni istruzione DDL è una query separata, non un unico blocco
@@ -1150,7 +1151,29 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
             WHERE table_schema = ${nomeSchema} AND table_name = 'debiti_ente' AND column_name = 'scenario_id'`
       )
     ).length > 0;
-  if (vecchiaHaScenarioId) {
+  // La migrazione scenario -> azienda si esegue UNA SOLA VOLTA. La presenza
+  // di `scenario_id` non e' piu' un segnale valido: dalla 0.109.58 la colonna
+  // c'e' di nuovo, perche' la Situazione Debitoria e' tornata nello scenario.
+  //
+  // Senza questa guardia, rimettere `scenario_id` faceva ripartire la vecchia
+  // migrazione su database gia' migrati: tentava di rinominare `debiti_ente`
+  // in una tabella legacy che esiste gia', e l'errore
+  //   relation "debiti_ente_per_scenario_legacy" already exists
+  // faceva fallire OGNI operazione che passa di qui — fra cui il calcolo
+  // dell'indicatore di attenzione, che restava "non calcolabile" senza dire
+  // perche'.
+  //
+  // Se la tabella legacy esiste, la migrazione e' gia' avvenuta: non si tocca
+  // nulla. E' il caso di ogni database in esercizio.
+  const legacyGiaPresente =
+    (
+      await db.execute(
+        sql`SELECT 1 FROM information_schema.tables
+            WHERE table_schema = ${nomeSchema} AND table_name = 'debiti_ente_per_scenario_legacy'`
+      )
+    ).length > 0;
+
+  if (deveRinominareInLegacy(vecchiaHaScenarioId, legacyGiaPresente)) {
     await eseguiDdlTenant(
       sql`ALTER TABLE ${s}.debiti_ente RENAME TO debiti_ente_per_scenario_legacy`
     );
