@@ -17,6 +17,8 @@ import type { AnalisiXbrlResult } from '@/lib/xbrl/types';
 import { stampaTesto } from '@/lib/stampaTesto';
 import { TestoConNormativa } from '@/components/spazio/TestoConNormativa';
 import { RiscontriNormativi } from '@/components/spazio/RiscontriNormativi';
+import { ottieniVisuraTriageAction } from '@/app/actions/visuraTriage';
+import { statoRichiestaDocumenti } from '@/lib/screening/documentiGiaPresenti';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import type { Attenzione } from '@/lib/screening/indicatore';
@@ -42,6 +44,18 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   // Consente di lanciare l'analisi anche senza bilancio XBRL: il sistema
   // acquisisce la carenza, sviluppa sull'esistente e la evidenzia in relazione.
   const [procediSenzaXbrl, setProcediSenzaXbrl] = useState(false);
+  /**
+   * Visura trattenuta dal triage e scelta dell'operatore.
+   *
+   * Quando i documenti ci sono già, chiederli di nuovo è una richiesta che
+   * non ha senso: si chiede invece SE aggiornarli. `null` = non ha ancora
+   * risposto; `false` = procede con quello che c'è, e i caricamenti restano
+   * nascosti.
+   */
+  const [visuraTriage, setVisuraTriage] = useState<{ nome: string; caricataIl: string } | null>(
+    null
+  );
+  const [vuoleAggiornare, setVuoleAggiornare] = useState<boolean | null>(null);
   // Piccolo prompt libero per questa generazione (usa-e-getta, non salvato).
   const [istruzioniAI, setIstruzioniAI] = useState('');
 
@@ -58,6 +72,12 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   };
 
   useEffect(() => {
+    void ottieniVisuraTriageAction(nomeSchema, aziendaId).then((r) => {
+      if (r.success && r.visura) {
+        setVisuraTriage({ nome: r.visura.nome, caricataIl: r.visura.caricataIl });
+      }
+    });
+
     // L'indicatore si ricalcola a ogni apertura: non è memorizzato, quindi
     // non può divergere dai dati. Un fallimento qui non deve impedire di
     // leggere la relazione.
@@ -102,7 +122,10 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   };
 
   const handleGenera = async () => {
-    if (!visuraFile) {
+    // La visura trattenuta dal triage vale quanto una appena caricata: è lo
+    // stesso documento, fornito poche schermate prima. Richiederla di nuovo
+    // sarebbe chiedere due volte lo stesso file nello stesso percorso.
+    if (!visuraFile && !visuraTriage) {
       setErrore('Carica il fascicolo storico (PDF) prima di generare lo screening.');
       return;
     }
@@ -120,24 +143,43 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
       // percorso (vedi il commento in api/blob-upload/route.ts). Torna
       // a valere il limite di 4,5MB sul corpo della richiesta, prudente
       // per una visura camerale.
-      const formData = new FormData();
-      formData.append('file', visuraFile);
-      formData.append('codice', codice);
-      const rispostaUpload = await fetch('/api/blob-upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const corpoUpload = await rispostaUpload.json();
-      if (!rispostaUpload.ok || corpoUpload.error) {
-        setErrore(corpoUpload.error || 'Impossibile caricare il fascicolo storico.');
-        return;
+      // Si carica SOLO se l'operatore ha scelto un file nuovo. Altrimenti si
+      // riusa quella trattenuta dal triage: stesso documento, nessun secondo
+      // caricamento, nessun secondo consumo di banda.
+      let urlDaUsare: string;
+      let nomeDaUsare: string;
+      if (visuraFile) {
+        const formData = new FormData();
+        formData.append('file', visuraFile);
+        formData.append('codice', codice);
+        const rispostaUpload = await fetch('/api/blob-upload', {
+          method: 'POST',
+          body: formData,
+        });
+        const corpoUpload = await rispostaUpload.json();
+        if (!rispostaUpload.ok || corpoUpload.error) {
+          setErrore(corpoUpload.error || 'Impossibile caricare il fascicolo storico.');
+          return;
+        }
+        urlDaUsare = corpoUpload.url;
+        nomeDaUsare = visuraFile.name;
+      } else {
+        const r = await ottieniVisuraTriageAction(nomeSchema, aziendaId);
+        if (!r.success || !r.visura) {
+          setErrore(
+            'La visura raccolta nella verifica non è più disponibile: carica il fascicolo storico.'
+          );
+          return;
+        }
+        urlDaUsare = r.visura.url;
+        nomeDaUsare = r.visura.nome;
       }
       if (tipoSpazio === 'NON_ENTE') {
         const risultato = await generaPreCompilazioneMinisterialeAction(
           nomeSchema,
           aziendaId,
-          corpoUpload.url,
-          visuraFile.name
+          urlDaUsare,
+          nomeDaUsare
         );
         if (risultato.success) {
           setEsitoPreCompilazione(
@@ -159,8 +201,8 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
       const risultato = await generaScreeningAziendaAction(
         nomeSchema,
         aziendaId,
-        corpoUpload.url,
-        visuraFile.name,
+        urlDaUsare,
+        nomeDaUsare,
         istruzioniAI
       );
       if (risultato.success) {
@@ -227,7 +269,74 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           Documenti di partenza
         </h3>
 
-        <div>
+        {/* Quando i documenti ci sono già, chiederli di nuovo è una richiesta
+            che non ha senso. Si chiede invece SE aggiornarli: al "no" si
+            genera con quello che c'è, e i caricamenti restano nascosti. */}
+        {statoRichiestaDocumenti(!!visuraTriage, numeroXbrl, vuoleAggiornare) ===
+          'chiedi_se_aggiornare' && (
+          <div className="border border-sky-200 bg-sky-50 rounded-xl p-4 space-y-3">
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Per questa azienda ci sono già i documenti raccolti nella verifica:
+              {visuraTriage && (
+                <>
+                  {' '}
+                  <span className="font-bold">visura camerale</span> ({visuraTriage.nome}, del{' '}
+                  {new Date(visuraTriage.caricataIl).toLocaleDateString('it-IT')})
+                </>
+              )}
+              {visuraTriage && numeroXbrl > 0 && ' e'}
+              {numeroXbrl > 0 && (
+                <>
+                  {' '}
+                  <span className="font-bold">
+                    {numeroXbrl} bilancio{numeroXbrl > 1 ? ' XBRL' : ' XBRL'}
+                  </span>
+                </>
+              )}
+              .
+            </p>
+            <p className="text-xs font-bold text-slate-900">
+              Vuoi aggiornare i dati della CCIAA e la Posizione V.E.R.A. prima di generare?
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setVuoleAggiornare(true)}
+                className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              >
+                Sì, carico i file aggiornati
+              </button>
+              <button
+                onClick={() => setVuoleAggiornare(false)}
+                className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-900 text-white hover:bg-slate-800"
+              >
+                No, procedi con quelli che hai
+              </button>
+            </div>
+          </div>
+        )}
+
+        {statoRichiestaDocumenti(!!visuraTriage, numeroXbrl, vuoleAggiornare) ===
+          'procedi_con_esistenti' && (
+          <p className="text-[11px] text-slate-500">
+            Si procede con i documenti già raccolti.{' '}
+            <button
+              onClick={() => setVuoleAggiornare(true)}
+              className="text-sky-700 font-bold hover:underline"
+            >
+              Voglio comunque aggiornarli
+            </button>
+          </p>
+        )}
+
+        <div
+          className={
+            ['chiedi_documenti', 'mostra_caricamenti'].includes(
+              statoRichiestaDocumenti(!!visuraTriage, numeroXbrl, vuoleAggiornare)
+            )
+              ? undefined
+              : 'hidden'
+          }
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs text-slate-700">
               Bilancio XBRL — {numeroXbrl > 0 ? `${numeroXbrl} caricato/i` : 'nessuno ancora'}

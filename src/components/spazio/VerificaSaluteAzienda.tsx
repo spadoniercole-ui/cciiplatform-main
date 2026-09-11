@@ -46,6 +46,7 @@ import {
 import { analizzaDenunce, analizzaInadempienze, analizzaVersamenti } from '@/lib/denunce/analisi';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { generaScreeningAziendaAction } from '@/app/actions/screeningAzienda';
+import { registraVisuraTriageAction } from '@/app/actions/visuraTriage';
 import { salvaAnalisiXbrlAziendaAction } from '@/app/actions/xbrlAzienda';
 import { analizzaVera, estraiRigheVera } from '@/lib/debitiEnte/veraImport';
 import { sostituisciDebitiVeraAction } from '@/app/actions/posizioneVera';
@@ -436,6 +437,10 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
             );
           } else {
             urlVisura = corpo.url as string;
+            // Trattenuta fino allo screening: se la generazione non parte o
+            // fallisce, la visura resta disponibile e lo screening non la
+            // richiede di nuovo. La elimina la generazione stessa.
+            await registraVisuraTriageAction(nomeSchema, aziendaId, urlVisura, fileVisura.name);
           }
         } catch (e) {
           problemi.push(`Caricamento della visura non riuscito: ${String(e)}`);

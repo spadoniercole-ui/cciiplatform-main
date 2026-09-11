@@ -829,6 +829,11 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
     // principio già applicato in Simulazione Ricevente.
     try {
       await del(visuraUrl);
+      // E si dimentica il riferimento alla visura trattenuta dal triage: un
+      // puntatore a un file eliminato è peggio di nessun puntatore, perché la
+      // schermata direbbe "visura disponibile" e la generazione fallirebbe.
+      const { dimenticaVisuraTriageAction } = await import('@/app/actions/visuraTriage');
+      await dimenticaVisuraTriageAction(nomeSchema, aziendaId);
     } catch (erroreEliminazione) {
       console.error('[generaScreeningAziendaAction] Errore eliminazione blob:', erroreEliminazione);
     }

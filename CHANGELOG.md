@@ -93,6 +93,48 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.65 — 2026-09-11
+
+**La visura resta fino allo screening, e i documenti si chiedono solo se
+vanno aggiornati**
+
+Rilievo di Ercole: lo Screening richiedeva file che l'azienda aveva gia'
+fornito nel triage, poche schermate prima. E aveva ragione anche sulla forma:
+non "carica i documenti", ma "vuoi aggiornarli?".
+
+**La visura viene trattenuta.** La piattaforma elimina sempre i documenti dopo
+l'elaborazione, e applicata alla lettera quella regola faceva distruggere la
+visura subito dopo l'estrazione — per poi richiederla due schermate dopo.
+
+Deroga circoscritta e dichiarata: riguarda SOLO la visura (atto pubblico del
+Registro Imprese, non documento riservato), dura il tempo di un passaggio, e
+l'eliminazione avviene DENTRO la generazione dello screening — non affidata a
+una pulizia periodica che qualcuno puo' dimenticare di configurare. Insieme al
+file si azzera il riferimento: un puntatore a un file eliminato e' peggio di
+nessun puntatore, perche' la schermata direbbe "disponibile" e la generazione
+fallirebbe.
+
+**La domanda al posto della richiesta.** Se ci sono documenti pregressi, la
+schermata li elenca e chiede se aggiornarli: al "si" compaiono i caricamenti,
+al "no" si genera con quello che c'e'. Se non c'e' nulla di pregresso, si
+torna alla richiesta normale — chiedere "vuoi aggiornare?" a chi non ha
+caricato niente sarebbe peggio del problema che si voleva risolvere.
+
+**La condizione e' stata estratta e coperta** (`documentiGiaPresenti.ts`,
+**6 test**). Era una condizione dentro il JSX: nessun test poteva
+raggiungerla, e verificarla richiedeva un'azienda con i documenti giusti — che
+nel sandbox non si puo' costruire, perche' il caricamento su Blob non
+funziona in portable. Estrarla ha trasformato una condizione non verificabile
+in una regola dimostrata, incluso il caso di confine in cui i documenti
+spariscono fra una schermata e l'altra.
+
+**Lancio di prova** eseguito: su un'azienda senza documenti pregressi la
+schermata si comporta come prima, senza regressioni. Il blocco della domanda
+non e' verificabile in sandbox per il motivo detto sopra — e' coperto dai
+test della regola, non dall'esecuzione.
+
+Verificato: type-check, lint, **242 test**, build cloud e portable complete.
+
 ## 0.109.64 — 2026-09-11
 
 **La colonna del ritardo non era nella SELECT**

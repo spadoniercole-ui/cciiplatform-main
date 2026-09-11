@@ -212,6 +212,17 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
     'ritardo_oltre_90_giorni BOOLEAN',
     'periodi_in_ritardo INTEGER',
     'denunce_non_presentate TEXT',
+    // Visura caricata nel triage, TRATTENUTA fino alla generazione dello
+    // screening e poi eliminata. Deroga consapevole alla regola per cui i
+    // documenti non si conservano mai: senza, la visura appena fornita
+    // verrebbe distrutta e lo screening la richiederebbe di nuovo — un file
+    // richiesto due volte nello stesso percorso.
+    //
+    // La deroga è circoscritta: una visura è un atto pubblico del Registro
+    // Imprese, e la conservazione dura il tempo di un passaggio, non oltre.
+    'visura_triage_url TEXT',
+    'visura_triage_nome TEXT',
+    'visura_triage_il TIMESTAMP',
   ]) {
     // Un DDL per chiamata: le stringhe multi-statement provocano rollback
     // impliciti silenziosi.
