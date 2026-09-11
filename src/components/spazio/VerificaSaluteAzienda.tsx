@@ -327,7 +327,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
         // distruggere il lavoro di un'istruttoria.
         // I valori letti dai fogli hanno la precedenza su quelli digitati:
         // vengono da un documento dell'ente, non da una trascrizione.
-        await salvaValoriSoglieParzialeAction(nomeSchema, c.aziendaId, {
+        const salv = await salvaValoriSoglieParzialeAction(nomeSchema, c.aziendaId, {
           conLavoratoriSubordinati: conLavoratori === '' ? undefined : conLavoratori === 'si',
           contributiDovutiAnnoPrecedente:
             dovutoAnnoPrec ??
@@ -340,6 +340,13 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
           denunceNonPresentate: mancanti ?? undefined,
           soglieAggiornateAl: dataVerifica,
         });
+        // Se il salvataggio fallisce, i valori letti dai fogli non arrivano
+        // all'indicatore e l'esito risulta incoerente con il riepilogo — che
+        // mostra i numeri mentre il semaforo li dichiara mancanti. Va detto.
+        if (!salv.success) {
+          note.push(`Valori non salvati: ${salv.error ?? 'errore non riportato'}.`);
+          setEsitoFogli([...note]);
+        }
       }
 
       setAvanzamento('Calcolo dell’indicatore...');

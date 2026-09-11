@@ -51,7 +51,8 @@ export async function ottieniAttenzioneScreeningAction(
     const az = await pool.query(
       `SELECT anno_costituzione, forma_giuridica, con_lavoratori_subordinati,
               contributi_scaduti, contributi_dovuti_anno_precedente, sanzioni_presunte_vera,
-              premi_inail, iva_scaduta, volume_affari, crediti_affidati_aer
+              premi_inail, iva_scaduta, volume_affari, crediti_affidati_aer,
+              ritardo_oltre_90_giorni, periodi_in_ritardo
          FROM "${nomeSchema}".aziende WHERE id = $1`,
       [aziendaId]
     );

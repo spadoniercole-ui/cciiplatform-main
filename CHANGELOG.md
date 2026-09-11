@@ -93,6 +93,43 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.64 — 2026-09-11
+
+**La colonna del ritardo non era nella SELECT**
+
+Contraddizione segnalata da Ercole, e lampante: il riepilogo diceva "44
+periodi oltre 90 giorni" e il semaforo, due centimetri sotto, chiedeva di
+caricare l'Elenco Deleghe — che era gia' caricato, in un punto che avevo
+costruito io.
+
+Causa: nella 0.109.63 la colonna `ritardo_oltre_90_giorni` veniva LETTA dal
+risultato della query ma non era stata aggiunta alla SELECT. Due sostituzioni
+automatiche non erano andate a segno e non le avevo verificate: il valore
+arrivava sempre `undefined`, cioe' "non accertato".
+
+**Aggiunto il controllo sull'esito del salvataggio.** I valori letti dai fogli
+venivano scritti senza guardare se la scrittura fosse riuscita: se fallisce,
+l'indicatore non li vede e l'esito risulta incoerente con il riepilogo. Ora un
+fallimento compare fra le note.
+
+**Lancio di prova prima del rilascio** — richiesta esplicita di Ercole, e
+avrebbe intercettato questo difetto da sola. Il triage e' stato eseguito
+end-to-end nel sandbox con i tre file reali, e l'output verificato riga per
+riga:
+
+    ACCERTATO
+      - Segnalazione INPS — imprese CON lavoratori — soglia > 30% dei
+        contributi dovuti nell'anno precedente E > 15.000 EUR. Contributi
+        496.544 EUR — 30% dei dovuti: 125.613 EUR (superato); 15.000 EUR
+        (superato). Requisiti congiunti: entrambi superati.
+      - Ritardo di oltre 90 giorni nel versamento, accertato su 44 periodi.
+    DA ACCERTARE
+      - Anno di costituzione non dichiarato.
+      - Bilancio XBRL non caricato.
+
+Verificato: type-check, lint, **236 test**, build cloud completa, piu' il
+lancio di prova end-to-end con verifica dell'output.
+
 ## 0.109.63 — 2026-09-11
 
 **Il semaforo dice QUALE soglia, e dichiara il ritardo accertato**
