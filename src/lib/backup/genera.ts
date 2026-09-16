@@ -161,6 +161,19 @@ export async function generaScriptBackup(esegui: Esecutore): Promise<RisultatoGe
   // ---- Vincoli, DOPO i dati ---------------------------------------------
   // Prima dei dati, una chiave esterna verso una tabella non ancora popolata
   // farebbe fallire il ripristino a meta'.
+  //
+  // SI ESCLUDONO i vincoli di tipo 'n' (NOT NULL). Da PostgreSQL 17 la
+  // nullabilita' compare anche in `pg_constraint` come vincolo con un nome
+  // proprio, ma qui e' gia' scritta nella definizione della colonna
+  // (`is_nullable` -> NOT NULL, sopra). Emetterla due volte produceva
+  //   cannot create not-null constraint "..." on column "id"
+  // e faceva fallire l'INTERO ripristino — difetto emerso sulla tabella di
+  // archivio `debiti_ente_per_scenario_legacy`, dove la doppia dichiarazione
+  // entrava in conflitto.
+  //
+  // La nullabilita' appartiene alla colonna, non ai vincoli da riapplicare
+  // dopo i dati: quelli servono per chiavi, unicita' e CHECK, che i dati
+  // devono poter violare temporaneamente durante il caricamento.
   parti.push('-- ---------- VINCOLI ----------');
   for (const schema of schemi) {
     const v = await esegui(
@@ -168,7 +181,7 @@ export async function generaScriptBackup(esegui: Esecutore): Promise<RisultatoGe
               pg_get_constraintdef(c.oid) AS definizione
          FROM pg_catalog.pg_constraint c
          JOIN pg_catalog.pg_namespace n ON n.oid = c.connamespace
-        WHERE n.nspname = $1 AND c.conrelid <> 0
+        WHERE n.nspname = $1 AND c.conrelid <> 0 AND c.contype <> 'n'
         ORDER BY CASE c.contype WHEN 'p' THEN 1 WHEN 'u' THEN 2 WHEN 'c' THEN 3 ELSE 4 END`,
       [schema]
     );

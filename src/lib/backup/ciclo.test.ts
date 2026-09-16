@@ -275,3 +275,58 @@ describe('colonne jsonb che contengono array', () => {
     await ripristinato.close();
   }, 90000);
 });
+
+describe('vincoli di nullabilità', () => {
+  // Difetto reale, emerso sul backup di produzione (105 tabelle, 594 righe):
+  //   cannot create not-null constraint "debiti_ente_id_not_null"
+  //   on column "id" of table "debiti_ente_per_scenario_legacy"
+  // Da PostgreSQL 17 la nullabilità compare anche in `pg_constraint` con un
+  // nome proprio. Il generatore la scriveva DUE volte: una nella definizione
+  // di colonna e una come vincolo riapplicato dopo i dati.
+
+  it('il backup non riapplica NOT NULL come vincolo separato', async () => {
+    const db = await PGlite.create();
+    await db.exec(`
+      CREATE SCHEMA IF NOT EXISTS tenant_uno;
+      CREATE TABLE tenant_uno.archivio (
+        id SERIAL PRIMARY KEY,
+        etichetta TEXT NOT NULL,
+        nota TEXT
+      );
+      INSERT INTO tenant_uno.archivio (etichetta, nota) VALUES ('a', NULL), ('b', 'x');
+    `);
+    const { testo } = await fileDiBackup(db);
+
+    // La nullabilità sta nella colonna...
+    expect(testo).toMatch(/"etichetta"\s+text\s+NOT NULL/i);
+    // ...e NON fra i vincoli riapplicati dopo i dati.
+    expect(testo).not.toMatch(/ADD CONSTRAINT[^;]*NOT NULL/i);
+
+    await db.close();
+  }, 90000);
+
+  it('il ripristino conserva comunque la nullabilità', async () => {
+    // Escludere il vincolo non deve significare perdere il NOT NULL: se si
+    // perdesse, il database ripristinato accetterebbe righe che l'originale
+    // rifiutava.
+    const db = await PGlite.create();
+    await db.exec(`
+      CREATE SCHEMA IF NOT EXISTS tenant_uno;
+      CREATE TABLE tenant_uno.archivio (
+        id SERIAL PRIMARY KEY,
+        etichetta TEXT NOT NULL
+      );
+      INSERT INTO tenant_uno.archivio (etichetta) VALUES ('a');
+    `);
+    const { testo } = await fileDiBackup(db);
+
+    const ripristinato = await PGlite.create();
+    await ripristinato.exec(testo);
+    await expect(
+      ripristinato.exec(`INSERT INTO tenant_uno.archivio (etichetta) VALUES (NULL)`)
+    ).rejects.toThrow();
+
+    await db.close();
+    await ripristinato.close();
+  }, 90000);
+});

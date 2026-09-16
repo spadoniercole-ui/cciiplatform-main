@@ -93,6 +93,40 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.67 — 2026-09-16
+
+**Il ripristino falliva sui vincoli di nullabilita'**
+
+Segnalato da Ercole sulla verifica di un backup di produzione (105 tabelle,
+594 righe):
+
+    cannot create not-null constraint "debiti_ente_id_not_null"
+    on column "id" of table "debiti_ente_per_scenario_legacy"
+
+Causa: da PostgreSQL 17 la nullabilita' di una colonna compare anche in
+`pg_constraint`, come vincolo con un nome proprio. Il generatore del backup
+raccoglieva TUTTI i vincoli e li riapplicava dopo i dati — quindi scriveva il
+NOT NULL **due volte**: una nella definizione di colonna (da `is_nullable`) e
+una come `ALTER TABLE ... ADD CONSTRAINT`. Sulla tabella di archivio la doppia
+dichiarazione entrava in conflitto e faceva fallire l'intero ripristino.
+
+I vincoli di tipo `n` sono ora esclusi dalla fase successiva ai dati. La
+distinzione, scritta nel codice: la nullabilita' appartiene alla COLONNA;
+quelli riapplicati dopo i dati servono per chiavi, unicita' e CHECK — vincoli
+che il caricamento deve poter violare temporaneamente.
+
+**2 test nuovi** (247 in tutto), scritti sul caso reale: il backup non emette
+piu' NOT NULL fra i vincoli riapplicati, **e** il database ripristinato
+conserva comunque la nullabilita' — perche' escludere il vincolo non deve
+significare perderlo, altrimenti il ripristino accetterebbe righe che
+l'originale rifiutava.
+
+Verificato: type-check, lint, **247 test**, build cloud completa.
+
+**Nota**: il difetto era nel GENERATORE, quindi i backup gia' prodotti lo
+contengono. Vanno rigenerati con questa versione prima di poter essere
+ripristinati.
+
 ## 0.109.66 — 2026-09-11
 
 **La visura trattenuta veniva distrutta anche quando lo screening falliva**
