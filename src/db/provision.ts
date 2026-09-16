@@ -1267,6 +1267,49 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
     sql`CREATE INDEX IF NOT EXISTS idx_debiti_ente_scenario ON ${s}.debiti_ente (scenario_id)`
   );
 
+  // ---- POSIZIONI DEBITORIE DEL TRIAGE ----------------------------------
+  //
+  // Generiche per costruzione: righe con categoria e tre anni, senza alcuna
+  // presunzione sull'ente. I tracciati INPS compilano QUESTE righe più in
+  // fretta, non una struttura propria — altrimenti ogni ente nuovo avrebbe
+  // richiesto una variante.
+  //
+  // `riferimento_anno_precedente` è il termine di paragone che la soglia di
+  // quella categoria richiede: i contributi dovuti per il previdenziale, il
+  // volume d'affari per il fiscale. Nullo dove la soglia è assoluta.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.debiti_triage (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      descrizione TEXT NOT NULL,
+      categoria TEXT NOT NULL,
+      importo_anno_corrente NUMERIC,
+      importo_anno_precedente NUMERIC,
+      importo_anno_meno2 NUMERIC,
+      riferimento_anno_precedente NUMERIC,
+      prospetto_id INTEGER,
+      creato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_debiti_triage_azienda ON ${s}.debiti_triage (azienda_id)`
+  );
+
+  // Prospetti caricati: la mappatura delle colonne vive qui, e viene
+  // sostituita quando la struttura del file cambia. Le righe portano il
+  // `prospetto_id`, così due insiemi costruiti con mappature diverse
+  // restano distinguibili invece di mescolarsi in silenzio.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.prospetti_triage (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      nome_file TEXT NOT NULL,
+      mappatura JSONB,
+      righe_importate INTEGER NOT NULL DEFAULT 0,
+      caricato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+
   // Migrazione dati "best effort", una tantum: per ogni azienda, se la
   // nuova tabella è ancora vuota, copia TUTTE le righe dello scenario
   // (della stessa azienda) aggiornato più di recente — un'azienda con

@@ -18,7 +18,11 @@ export default async function VerificaSalutePage({
 
   return (
     <main className="p-6 max-w-5xl mx-auto">
-      <VerificaSaluteAzienda nomeSchema={contesto.nomeSchema} codice={codice} />
+      <VerificaSaluteAzienda
+        nomeSchema={contesto.nomeSchema}
+        codice={codice}
+        tipoSpazio={contesto.tipoSpazio}
+      />
     </main>
   );
 }

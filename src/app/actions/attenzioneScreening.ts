@@ -21,6 +21,7 @@ import {
 } from '@/lib/soglie25novies/calcolo';
 import { ottieniParametriSoglieAction } from '@/app/actions/parametriSoglie';
 import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
+import { sintetizzaSoglie } from '@/lib/soglie25novies/sintesi';
 
 export interface RisultatoAttenzione {
   success: boolean;
@@ -151,10 +152,25 @@ export async function ottieniAttenzioneScreeningAction(
     const applicabili = soglie.righe.filter((r) => r.applicabile);
     // null = nessuna riga applicabile o esito non determinabile: il perimetro
     // non è chiuso, e l'indicatore deve saperlo.
-    const sogliaSuperata =
-      applicabili.length === 0 || soglie.nonDeterminabili.length > 0
-        ? null
-        : soglie.superate.length > 0;
+    // UN FATTO ACCERTATO NON SI PERDE PER UNA LACUNA ALTROVE.
+    //
+    // Prima bastava UNA riga non determinabile perché l'intero esito
+    // diventasse indeterminato. Per uno spazio ENTE, che valuta una sola
+    // soglia, era indifferente. Per il REDIGENTE no: lui valuta tutte e
+    // quattro le soglie — deve sapere se l'impresa rischia la segnalazione da
+    // INPS, INAIL, Agenzia Entrate o Agente della Riscossione — e con quattro
+    // righe la probabilità che almeno una manchi è alta. L'esito sarebbe
+    // stato "approfondimenti necessari" quasi sempre, cioè rumore.
+    //
+    // La regola: se una soglia RISULTA superata, è un fatto, e vale anche se
+    // altre restano da accertare. Solo quando nessuna è superata e qualcuna
+    // non è determinabile non si può concludere — perché la risposta
+    // potrebbe stare proprio in quella mancante.
+    const sogliaSuperata = sintetizzaSoglie(
+      applicabili.length,
+      soglie.superate.length,
+      soglie.nonDeterminabili.length
+    );
 
     // Se l'esito non è determinabile, il motivo va detto con precisione:
     // "manca l'esposizione" e "l'ente di riferimento non è configurato" sono

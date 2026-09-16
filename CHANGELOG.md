@@ -93,6 +93,112 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.69 — 2026-09-16
+
+**Le posizioni debitorie diventano la struttura; i fogli INPS una
+scorciatoia**
+
+Due correzioni di impianto volute da Ercole, entrambe strutturali.
+
+**1. Il bilancio non regge il test delle soglie.** Regola fissata: l'XBRL
+serve alla fotografia d'insieme, agli indici e alle rappresentazioni
+grafiche; le soglie si calcolano SOLO su numeri reali caricati, riferiti a
+tre anni — anno di elaborazione del triage, precedente e ancora precedente,
+quest'ultimo per il trend.
+
+Il motivo e' strutturale, non di qualita' dei dati: la voce D.13 dello schema
+civilistico e' "debiti verso istituti di previdenza e di sicurezza sociale" e
+mette INPS e INAIL nella stessa riga. Nessuna azienda li separa, perche' il
+bilancio non glielo chiede. Un test che riguarda un ente solo non puo'
+poggiare su un dato che ne contiene due.
+
+**2. I tre fogli INPS non possono essere l'impianto portante.** Sono artefatti
+di QUELL'ente: l'Agenzia delle Entrate ha il cassetto fiscale e le LIPE,
+l'INAIL i propri estratti, un ente commerciale niente di simile. Costruirci
+sopra avrebbe richiesto una variante per ogni ente nuovo.
+
+La via generica diventa la struttura: **righe con categoria, tre anni e
+provenienza**, senza presunzioni sull'ente. I fogli INPS compilano QUESTE
+stesse righe piu' in fretta — stessa destinazione, percorso piu' breve — e
+sono etichettati come scorciatoia valida per un ente solo. Il motore delle
+soglie non sa da dove arrivino i numeri: e' cio' che rende l'aggiunta di un
+ente una configurazione invece che uno sviluppo.
+
+**Le soglie non hanno tutte la stessa forma.** INPS misura il 30% dei
+contributi DOVUTI, l'Agenzia delle Entrate il 10% del VOLUME D'AFFARI, INAIL
+e AER importi assoluti. La riga porta percio', accanto al debito, il termine
+di paragone che quella categoria richiede — e solo dove serve: chiederlo su
+una riga commerciale sarebbe chiedere un dato inutile.
+
+**Cinque categorie**: previdenziale, assicurativo, fiscale (creditori pubblici
+qualificati, concorrono al test) piu' commerciale e altri (fuori soglia, ma
+necessari al totale, agli indici e al rapporto fra creditori privati e debito
+complessivo degli artt. 63 e 88). Previdenziale e assicurativo restano
+DISTINTI, proprio perche' il bilancio li accorpa.
+
+**9 test sul modello**, fra cui: commerciali e altri non entrano nella soglia
+ma restano nel totale; il termine di paragone si somma fra piu' posizioni
+della stessa categoria e torna NULL se nessuna lo porta (zero darebbe una
+soglia del 30% pari a zero, rendendo "oltre soglia" qualunque importo); la
+variazione fra anni e' NULL senza anno precedente, perche' zero direbbe
+"stabile" e qui non si sa.
+
+**Lancio di prova** eseguito end-to-end: la domanda "hai prospetti?" compare,
+la tabella mostra le cinque categorie e i tre anni ricavati dalla data di
+verifica, la colonna del riferimento c'e', e il semaforo resta corretto.
+
+Verificato: type-check, lint, **261 test**, build cloud e portable complete.
+
+**NON incluso**: il caricamento dei prospetti liberi con mappatura delle
+colonne. La scelta "Si, ho dei prospetti" lo dichiara apertamente e rimanda
+all'inserimento manuale — sono le stesse righe, e quando i prospetti
+arriveranno compileranno esattamente quella tabella. Consegnare meta' funzione
+spacciandola per intera sarebbe stato peggio.
+
+## 0.109.68 — 2026-09-16
+
+**Il triage vale anche per il Redigente**
+
+Analisi richiesta da Ercole: verificare se le implementazioni fatte per il
+Ricevente siano mutuabili o richiedano una variante. Esito: **il triage e'
+riusabile quasi per intero**, perche' il Redigente dispone degli stessi
+documenti di partenza — visura, XBRL e V.E.R.A. direttamente, mentre deleghe
+di pagamento, denunce mensili e debito contabilizzato si prelevano dal
+Cassetto Previdenziale bidirezionale dell'azienda.
+
+Nessuno dei componenti del triage distingueva i due percorsi. Da qui tre
+difetti, tutti corretti.
+
+**1. Il "Procedi" generava lo screening sbagliato.** Chiamava sempre
+`generaScreeningAziendaAction` — la versione Ricevente, basata sulle
+direttrici dell'ente. Un Redigente si ritrovava l'analisi dell'altro
+percorso. Ora biforca come gia' fa la schermata Screening: per NON_ENTE la
+pre-compilazione della Check List Ministeriale.
+
+**2. Un fatto accertato si perdeva per una lacuna altrove.** Bastava UNA riga
+di soglia non determinabile perche' l'intero esito diventasse indeterminato.
+Per lo spazio ENTE, che valuta una sola soglia, era indifferente; per il
+Redigente, che le valuta tutte e quattro — deve sapere se l'impresa rischia la
+segnalazione da INPS, INAIL, Agenzia Entrate o Agente della Riscossione —
+avrebbe prodotto "approfondimenti necessari" quasi sempre, **nascondendo una
+soglia effettivamente superata dietro la mancanza di un dato che riguardava un
+altro ente.**
+
+La regola, ora isolata in `sintesi.ts` con **5 test**: una soglia superata e'
+un FATTO e vale anche con lacune altrove; solo quando nessuna risulta superata
+E qualcosa manca non si conclude, perche' la risposta potrebbe stare proprio
+nel dato mancante.
+
+**3. La provenienza dei fogli non era indicata.** Il Redigente ha accesso agli
+stessi dati ma deve sapere dove prenderli: la schermata ora indica il Cassetto
+Previdenziale bidirezionale per NON_ENTE.
+
+Verificato: type-check, lint, **252 test**, build cloud completa.
+
+**Resta da decidere**: la voce "Verifica salute azienda" e' oggi visibile a
+entrambi i percorsi senza filtro. Ora e' una scelta coerente, ma era stata
+presa per omissione.
+
 ## 0.109.67 — 2026-09-16
 
 **Il ripristino falliva sui vincoli di nullabilita'**

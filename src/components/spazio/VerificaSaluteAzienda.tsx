@@ -46,17 +46,27 @@ import {
 import { analizzaDenunce, analizzaInadempienze, analizzaVersamenti } from '@/lib/denunce/analisi';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { generaScreeningAziendaAction } from '@/app/actions/screeningAzienda';
+import { generaPreCompilazioneMinisterialeAction } from '@/app/actions/checklistMinisterialeAzienda';
 import { registraVisuraTriageAction } from '@/app/actions/visuraTriage';
 import { salvaAnalisiXbrlAziendaAction } from '@/app/actions/xbrlAzienda';
 import { analizzaVera, estraiRigheVera } from '@/lib/debitiEnte/veraImport';
 import { sostituisciDebitiVeraAction } from '@/app/actions/posizioneVera';
 import { salvaValoriSoglieParzialeAction } from '@/app/actions/soglie25novies';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
+import { DebitiTriage } from '@/components/spazio/DebitiTriage';
 import type { Attenzione } from '@/lib/screening/indicatore';
 
 interface Props {
   nomeSchema: string;
   codice: string;
+  /**
+   * Il triage è identico per i due percorsi — stessi documenti di partenza,
+   * stesso motore — ma cio' che si GENERA al "Procedi" no: il Ricevente
+   * ottiene lo screening sulle direttrici del proprio ente, il Redigente la
+   * pre-compilazione della Check List Ministeriale. Senza questa
+   * distinzione un Redigente si ritrovava lo screening dell'altro percorso.
+   */
+  tipoSpazio: 'ENTE' | 'NON_ENTE';
 }
 
 type Fase = 'caricamento' | 'conferma' | 'esito' | 'presa_in_carico';
@@ -82,7 +92,7 @@ const CAMPI: { chiave: keyof AnagraficaEstratta; label: string; numerico?: boole
 const CLASSE_CAMPO =
   'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500';
 
-export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
+export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props) {
   const [fase, setFase] = useState<Fase>('caricamento');
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
@@ -449,13 +459,25 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
         if (urlVisura) {
           setAvanzamento('Generazione di screening e check list — un minuto circa...');
           try {
-            const g = await generaScreeningAziendaAction(
-              nomeSchema,
-              aziendaId,
-              urlVisura,
-              fileVisura.name
-            );
-            if (!g.success) problemi.push(`Screening non generato: ${g.error ?? 'errore'}`);
+            const g =
+              tipoSpazio === 'NON_ENTE'
+                ? await generaPreCompilazioneMinisterialeAction(
+                    nomeSchema,
+                    aziendaId,
+                    urlVisura,
+                    fileVisura.name
+                  )
+                : await generaScreeningAziendaAction(
+                    nomeSchema,
+                    aziendaId,
+                    urlVisura,
+                    fileVisura.name
+                  );
+            if (!g.success) {
+              problemi.push(
+                `${tipoSpazio === 'NON_ENTE' ? 'Check List' : 'Screening'} non generata: ${g.error ?? 'errore'}`
+              );
+            }
           } catch (e) {
             problemi.push(`Screening non generato: ${String(e)}`);
           }
@@ -645,16 +667,32 @@ export function VerificaSaluteAzienda({ nomeSchema, codice }: Props) {
               </p>
             </div>
 
-            <div>
+            <div className="border-t border-slate-100 pt-4">
+              <DebitiTriage
+                nomeSchema={nomeSchema}
+                aziendaId={aziendaId}
+                dataVerifica={dataVerifica}
+              />
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
               <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
                 Fogli INPS
+                <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
+                  — scorciatoia, valida solo per questo ente
+                </span>
               </p>
               <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
-                Da qui vengono i contributi dovuti, il non versato certificato e il ritardo di oltre
-                90 giorni — il terzo requisito dell&apos;art. 25-novies, che senza l&apos;Elenco
-                Deleghe non è accertabile. Sono dati dell&apos;istituto: nessuna elaborazione
-                nostra. Se un foglio non è disponibile, spuntalo: verrà escluso dalle verifiche
-                invece di lasciare l&apos;indicatore in attesa.
+                Compilano le posizioni qui sopra senza digitarle, e in più portano il ritardo di
+                oltre 90 giorni — il terzo requisito dell&apos;art. 25-novies, che senza
+                l&apos;Elenco Deleghe non è accertabile. Sono dati dell&apos;istituto: nessuna
+                elaborazione nostra. Se un foglio non è disponibile, spuntalo: verrà escluso dalle
+                verifiche invece di lasciare l&apos;indicatore in attesa.
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                {tipoSpazio === 'NON_ENTE'
+                  ? 'Tutti e tre si scaricano dal Cassetto Previdenziale bidirezionale dell’azienda, insieme al debito contabilizzato: vi si accede con le credenziali del cliente.'
+                  : 'Tutti e tre provengono dai sistemi dell’istituto.'}
               </p>
             </div>
 
