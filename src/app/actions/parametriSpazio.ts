@@ -113,6 +113,12 @@ export interface LimiteRicevibilita {
   categoriaCreditore: string;
   /** Nomi alternativi che puntano allo stesso limite — "INPS" può comparire come "Enti previdenziali", "Ente previdenziale", ecc. a seconda di chi scrive la riga. */
   alias: string[];
+  /**
+   * Chi valuta con questa soglia. Determina quali righe dell'art. 25-novies
+   * si applicano: un creditore pubblico valuta la propria, un soggetto non
+   * pubblico le valuta tutte.
+   */
+  ente25Novies: string | null;
   percentualeMinima: number;
   unicaSoluzioneAmmessa: boolean;
   rateizzazioneAmmessa: boolean;
@@ -168,7 +174,7 @@ export async function ottieniLimitiRicevibilita(
         [CATEGORIA_SENTINELLA_ENTE]
       );
       const rigaEnte = await pool.query(
-        `SELECT id, categoria_creditore, percentuale_minima, unica_soluzione_ammessa, rateizzazione_ammessa, note, valore_liquidazione_stimato, alias
+        `SELECT id, categoria_creditore, percentuale_minima, unica_soluzione_ammessa, rateizzazione_ammessa, note, valore_liquidazione_stimato, alias, ente_25novies
          FROM "${nomeSchema}".limiti_ricevibilita WHERE categoria_creditore = $1`,
         [CATEGORIA_SENTINELLA_ENTE]
       );
@@ -176,7 +182,7 @@ export async function ottieniLimitiRicevibilita(
     }
 
     const esistenti = await pool.query(
-      `SELECT id, categoria_creditore, percentuale_minima, unica_soluzione_ammessa, rateizzazione_ammessa, note, valore_liquidazione_stimato, alias
+      `SELECT id, categoria_creditore, percentuale_minima, unica_soluzione_ammessa, rateizzazione_ammessa, note, valore_liquidazione_stimato, alias, ente_25novies
        FROM "${nomeSchema}".limiti_ricevibilita WHERE categoria_creditore != $1`,
       [CATEGORIA_SENTINELLA_ENTE]
     );
@@ -193,7 +199,7 @@ export async function ottieniLimitiRicevibilita(
         );
       }
       const dopoInserimento = await pool.query(
-        `SELECT id, categoria_creditore, percentuale_minima, unica_soluzione_ammessa, rateizzazione_ammessa, note, valore_liquidazione_stimato, alias
+        `SELECT id, categoria_creditore, percentuale_minima, unica_soluzione_ammessa, rateizzazione_ammessa, note, valore_liquidazione_stimato, alias, ente_25novies
          FROM "${nomeSchema}".limiti_ricevibilita WHERE categoria_creditore != $1`,
         [CATEGORIA_SENTINELLA_ENTE]
       );
@@ -335,6 +341,7 @@ function mappaRigaLimite(r: any): LimiteRicevibilita {
     id: r.id,
     categoriaCreditore: r.categoria_creditore,
     alias: r.alias || [],
+    ente25Novies: r.ente_25novies ? String(r.ente_25novies) : null,
     percentualeMinima: r.percentuale_minima,
     unicaSoluzioneAmmessa: r.unica_soluzione_ammessa,
     rateizzazioneAmmessa: r.rateizzazione_ammessa,
@@ -356,6 +363,7 @@ export async function aggiornaLimiteRicevibilitaAction(
     note: string | null;
     valoreLiquidazioneStimato?: number | null;
     alias?: string[];
+    ente25Novies?: string | null;
   }
 ): Promise<RisultatoOperazioneParametri> {
   try {
@@ -365,7 +373,8 @@ export async function aggiornaLimiteRicevibilitaAction(
     await pool.query(
       `UPDATE "${nomeSchema}".limiti_ricevibilita
        SET percentuale_minima = $1, unica_soluzione_ammessa = $2, rateizzazione_ammessa = $3, note = $4,
-           valore_liquidazione_stimato = $5, alias = $6
+           valore_liquidazione_stimato = $5, alias = $6,
+           ente_25novies = COALESCE($7, ente_25novies)
        WHERE id = $7`,
       [
         dati.percentualeMinima,
@@ -374,6 +383,7 @@ export async function aggiornaLimiteRicevibilitaAction(
         dati.note,
         dati.valoreLiquidazioneStimato ?? null,
         dati.alias ?? [],
+        dati.ente25Novies ?? null,
         id,
       ]
     );

@@ -47,9 +47,28 @@
 // ---------------------------------------------------------------------------
 
 /** Enti tenuti alla segnalazione. Elenco chiuso. */
-export type Ente25Novies = 'INPS' | 'INAIL' | 'AGENZIA_ENTRATE' | 'AGENZIA_RISCOSSIONE';
+/**
+ * Chi opera nello spazio.
+ *
+ * I primi quattro sono creditori pubblici qualificati: ciascuno valuta la
+ * PROPRIA soglia, perche' sta decidendo se segnalare.
+ *
+ * `NON_PUBBLICO` e' un soggetto che analizza la situazione in ottica CCII
+ * senza essere creditore qualificato — il professionista che redige, o un
+ * terzo che deve valutare l'impatto di una proposta. Per lui le soglie
+ * servono TUTTE: un'azienda con dipendenti e' obbligatoriamente in relazione
+ * con INPS, INAIL e Agenzia delle Entrate, e li' si gioca la differenza fra
+ * uno stralcio commerciale — dove nella peggiore ipotesi e' il creditore ad
+ * assorbire l'insussistenza — e una posizione previdenziale, che ha risvolti
+ * su pensioni e sostegni al reddito e richiede percentuali diverse. Capire
+ * il debito previdenziale, assicurativo e fiscale e' percio' il primo passo
+ * di qualunque proposta seria.
+ */
+export type Ente25Novies =
+  'INPS' | 'INAIL' | 'AGENZIA_ENTRATE' | 'AGENZIA_RISCOSSIONE' | 'NON_PUBBLICO';
 
 export const ETICHETTA_ENTE: Record<Ente25Novies, string> = {
+  NON_PUBBLICO: 'Soggetto non pubblico (analisi in ottica CCII)',
   INPS: 'INPS',
   INAIL: 'INAIL',
   AGENZIA_ENTRATE: 'Agenzia delle Entrate',
@@ -367,7 +386,12 @@ export function calcolaSoglie25Novies(
     }
   }
 
-  const filtrate = soloEnte ? righe.filter((r) => r.ente === soloEnte) : righe;
+  // NON_PUBBLICO non e' un ente con una propria soglia: filtrare su quel
+  // valore non troverebbe nessuna riga e l'esito sarebbe "nessuna soglia
+  // applicabile" — falso, perche' per lui sono pertinenti TUTTE. Un creditore
+  // pubblico valuta la propria; chi analizza le valuta tutte.
+  const filtrate =
+    soloEnte && soloEnte !== 'NON_PUBBLICO' ? righe.filter((r) => r.ente === soloEnte) : righe;
   const applicabili = filtrate.filter((r) => r.applicabile);
 
   return {
@@ -376,6 +400,8 @@ export function calcolaSoglie25Novies(
     nonDeterminabili: applicabili.filter((r) => r.esito === 'non_determinabile'),
     datiMancanti,
     inpsSopraSoloConSanzioni:
-      inpsSopraSoloConSanzioni && (!soloEnte || soloEnte === 'INPS') ? true : false,
+      inpsSopraSoloConSanzioni && (!soloEnte || soloEnte === 'INPS' || soloEnte === 'NON_PUBBLICO')
+        ? true
+        : false,
   };
 }

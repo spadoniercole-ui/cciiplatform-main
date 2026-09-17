@@ -93,6 +93,56 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.70 — 2026-09-17
+
+**Chi opera nello spazio si sceglie, e le strutture dei prospetti non si
+mescolano fra enti**
+
+Il canale con l'INPS resta preferenziale, ma non esclude gli altri enti ne' i
+soggetti che devono valutare una proposta. Serviva dirlo esplicitamente,
+invece di lasciarlo dedurre.
+
+**Selezione dell'ente nei Limiti di Ricevibilita'.** Il campo `ente_25novies`
+esisteva gia' come enum con vincolo, ma nessuna interfaccia lo faceva
+scegliere: si valorizzava solo per riconoscimento automatico dagli alias, e
+dove il nome era ambiguo restava vuoto — con l'effetto, gia' visto, di far
+valutare tutte e quattro le soglie e renderle indeterminate. Ora e' una scelta
+esplicita, con l'alias mantenuto come gancio.
+
+**Agenzia delle Entrate e Agenzia Entrate-Riscossione restano DISTINTE**, non
+accorpate in un flag solo: hanno soglie diverse — IVA e 10% del volume
+d'affari la prima, carichi affidati con soglie per forma giuridica la seconda.
+Unirle avrebbe significato non sapere quale applicare, e riprodurre il difetto
+delle soglie altrui indeterminate corretto nella 0.109.68.
+
+**Nuovo valore `NON_PUBBLICO`.** Non e' un creditore qualificato: e' chi
+analizza la situazione in ottica CCII — il professionista che redige, o un
+terzo che valuta l'impatto di una proposta. Per lui le soglie servono TUTTE, e
+il motore non filtra. La ragione, scritta nel codice: un'azienda con
+dipendenti e' obbligatoriamente in relazione con INPS, INAIL e Agenzia delle
+Entrate, e li' si gioca la differenza fra uno stralcio commerciale — dove
+nella peggiore ipotesi e' il creditore ad assorbire l'insussistenza — e una
+posizione previdenziale, che ha risvolti su pensioni e sostegni al reddito e
+richiede percentuali diverse.
+
+**Strutture dei prospetti memorizzate per ENTE e firma.** Nuova tabella
+`strutture_prospetto` con chiave unica (ente, firma). La firma delle
+intestazioni da sola non basta: nello spazio di un soggetto non pubblico
+arrivano prospetti di tutti e quattro gli enti, e due tracciati diversi
+possono avere intestazioni simili. Senza l'ente nella chiave, un estratto
+INAIL erediterebbe la mappatura di un tracciato INPS.
+
+**1 test nuovo** (262 in tutto): NON_PUBBLICO non filtra e vede anche la riga
+INAIL, mentre lo spazio INPS vede solo la propria.
+
+**Lancio di prova** eseguito: il selettore compare nei Limiti di
+Ricevibilita' con tutte e cinque le voci.
+
+Verificato: type-check, lint, **262 test**, build cloud e portable complete.
+
+**NON incluso**: il caricamento dei prospetti con riconoscimento della firma e
+mappatura delle colonne. La tabella che lo sorregge c'e'; l'interfaccia no.
+
 ## 0.109.69 — 2026-09-16
 
 **Le posizioni debitorie diventano la struttura; i fogli INPS una

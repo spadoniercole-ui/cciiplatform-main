@@ -85,6 +85,7 @@ export function RicevibilitaManager({ nomeSchema, tipoSpazio }: Props) {
       note: aggiornato.note,
       valoreLiquidazioneStimato: aggiornato.valoreLiquidazioneStimato,
       alias: aggiornato.alias,
+      ente25Novies: aggiornato.ente25Novies,
     });
   };
 
@@ -185,6 +186,39 @@ export function RicevibilitaManager({ nomeSchema, tipoSpazio }: Props) {
               placeholder="Note (facoltativo)..."
               className="w-full mt-2 p-1.5 text-[11px] bg-slate-50 border border-slate-200 rounded outline-none focus:border-blue-500 text-slate-700"
             />
+            <div className="mt-2">
+              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                Ente dell&apos;art. 25-novies
+              </label>
+              {/* Determina QUALI soglie si applicano: un creditore pubblico
+                    valuta la propria, un soggetto non pubblico le valuta
+                    tutte. Senza questa scelta il motore non sa filtrare e
+                    dichiara indeterminate soglie che non lo sono. */}
+              <select
+                value={l.ente25Novies ?? ''}
+                onChange={(e) =>
+                  void handleAggiornaLimite(
+                    l,
+                    'ente25Novies',
+                    e.target.value === '' ? null : e.target.value
+                  )
+                }
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900"
+              >
+                <option value="">Non specificato</option>
+                <option value="INPS">INPS</option>
+                <option value="INAIL">INAIL</option>
+                <option value="AGENZIA_ENTRATE">Agenzia delle Entrate</option>
+                <option value="AGENZIA_RISCOSSIONE">Agenzia Entrate-Riscossione</option>
+                <option value="NON_PUBBLICO">Soggetto non pubblico — valuta tutte le soglie</option>
+              </select>
+              <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
+                Agenzia delle Entrate e Agenzia Entrate-Riscossione restano distinte: hanno soglie
+                diverse — IVA e volume d&apos;affari la prima, carichi affidati per forma giuridica
+                la seconda.
+              </p>
+            </div>
+
             <div className="mt-2">
               <label className="text-[10px] text-slate-400 block mb-1">
                 Alias — altri nomi o termini con cui questo creditore può comparire in un documento,

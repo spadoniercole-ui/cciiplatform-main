@@ -30,3 +30,28 @@ describe('sintesi di più soglie in un solo esito', () => {
     expect(sintetizzaSoglie(0, 0, 3)).toBeNull();
   });
 });
+
+describe('chi valuta quali soglie', () => {
+  it('NON_PUBBLICO non filtra: le soglie pertinenti sono tutte', async () => {
+    const { calcolaSoglie25Novies } = await import('./calcolo');
+    const dati = {
+      conLavoratori: true,
+      contributiScaduti: 500_000,
+      contributiDovutiAnnoPrecedente: 400_000,
+      annoContributiDovuti: 2025,
+      sanzioniPresunte: null,
+      premiInail: 9_000,
+      ivaScaduta: null,
+      volumeAffari: null,
+      creditiAffidati: null,
+      formaAER: null,
+      ritardoOltre90Giorni: null,
+    };
+    const tutte = calcolaSoglie25Novies(dati, 'NON_PUBBLICO');
+    const soloInps = calcolaSoglie25Novies(dati, 'INPS');
+    // Chi analizza vede anche la riga INAIL; l'INPS solo la propria.
+    expect(tutte.righe.length).toBeGreaterThan(soloInps.righe.length);
+    expect(tutte.superate.length).toBeGreaterThanOrEqual(2);
+    expect(soloInps.superate).toHaveLength(1);
+  });
+});

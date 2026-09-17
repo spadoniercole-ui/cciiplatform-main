@@ -561,7 +561,7 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   );
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.limiti_ricevibilita ADD CONSTRAINT ente_25novies_valido
-        CHECK (ente_25novies IS NULL OR ente_25novies IN ('INPS','INAIL','AGENZIA_ENTRATE','AGENZIA_RISCOSSIONE'))`
+        CHECK (ente_25novies IS NULL OR ente_25novies IN ('INPS','INAIL','AGENZIA_ENTRATE','AGENZIA_RISCOSSIONE','NON_PUBBLICO'))`
   );
 
   // Riconoscimento automatico per gli spazi gia' esistenti: si valorizza solo
@@ -1299,11 +1299,37 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
   // sostituita quando la struttura del file cambia. Le righe portano il
   // `prospetto_id`, così due insiemi costruiti con mappature diverse
   // restano distinguibili invece di mescolarsi in silenzio.
+  // ---- STRUTTURE DEI PROSPETTI, PER ENTE -------------------------------
+  //
+  // La mappatura delle colonne si riconosce dalla FIRMA delle intestazioni,
+  // ma la firma da sola non basta: nello spazio di un soggetto non pubblico
+  // arrivano prospetti di tutti e quattro gli enti, e due tracciati diversi
+  // possono avere intestazioni simili. Senza l'ente nella chiave, un estratto
+  // INAIL erediterebbe la mappatura di un tracciato INPS — il "mischione" che
+  // non serve a nessuno.
+  //
+  // Chiave: ente + firma. Cosi' ogni ente accumula il proprio repertorio di
+  // strutture, e il riconoscimento resta dentro il suo perimetro.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.strutture_prospetto (
+      id SERIAL PRIMARY KEY,
+      ente TEXT NOT NULL,
+      firma TEXT NOT NULL,
+      nome_riconosciuto TEXT,
+      mappatura JSONB NOT NULL,
+      volte_usata INTEGER NOT NULL DEFAULT 0,
+      creata_il TIMESTAMP NOT NULL DEFAULT now(),
+      ultima_volta TIMESTAMP,
+      CONSTRAINT uq_struttura_ente_firma UNIQUE (ente, firma)
+    )`
+  );
+
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.prospetti_triage (
       id SERIAL PRIMARY KEY,
       azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
       nome_file TEXT NOT NULL,
+      ente TEXT,
       mappatura JSONB,
       righe_importate INTEGER NOT NULL DEFAULT 0,
       caricato_il TIMESTAMP NOT NULL DEFAULT now()
