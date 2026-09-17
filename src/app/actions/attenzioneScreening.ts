@@ -175,6 +175,14 @@ export async function ottieniAttenzioneScreeningAction(
     // Se l'esito non è determinabile, il motivo va detto con precisione:
     // "manca l'esposizione" e "l'ente di riferimento non è configurato" sono
     // due problemi diversi che si risolvono in due posti diversi.
+    // Il motore scrive gia', riga per riga, PERCHE' un esito non e'
+    // determinabile. Buttarlo via e sostituirlo con una frase generica
+    // mandava l'operatore a caricare un file che aveva gia' caricato — e' gia'
+    // successo due volte. Qui si usa il motivo vero.
+    const motiviNonDeterminabili = soglie.nonDeterminabili
+      .map((r) => r.motivo)
+      .filter((m) => m && m.trim() !== '');
+
     const motivoSoglieMancanti =
       applicabili.length === 0
         ? enteSpazio === undefined
@@ -242,9 +250,10 @@ export async function ottieniAttenzioneScreeningAction(
     // "l'ente di riferimento non è configurato" si risolvono in due posti
     // diversi, e mandare l'operatore nel posto sbagliato è quanto è già
     // successo con i Parametri di Spazio.
-    if (motivoSoglieMancanti) {
+    const sostituto = motivoSoglieMancanti ?? motiviNonDeterminabili[0] ?? null;
+    if (sostituto) {
       attenzione.daAccertare = attenzione.daAccertare.map((d) =>
-        d.startsWith('Esposizione previdenziale') ? motivoSoglieMancanti : d
+        d.startsWith('Esposizione previdenziale') ? sostituto : d
       );
     }
 

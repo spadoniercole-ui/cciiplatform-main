@@ -93,6 +93,63 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.71 — 2026-09-17
+
+**Due famiglie di tracciati dello stesso ente, e un messaggio che mandava
+nella direzione sbagliata**
+
+Collaudo di Ercole con file prelevati da un punto diverso del sistema INPS.
+Quattro difetti, in ordine di gravita'.
+
+**1. Il messaggio nominava il dato sbagliato.** Il riquadro diceva "esposizione
+previdenziale non disponibile: carica la Posizione V.E.R.A." mentre
+l'esposizione era li', 1.213.831 EUR letti dalla Lista Inadempienze e scritti
+due righe sopra. Mancavano i contributi DOVUTI, dalle denunce non riconosciute.
+
+Il motore scrive gia', riga per riga, il motivo vero di ogni esito non
+determinabile; l'indicatore lo buttava via e lo sostituiva con una frase
+generica. E' la terza volta che lo stesso difetto si presenta: un messaggio
+scritto a monte che ignora il motivo disponibile a valle. Ora si usa il
+motivo del motore.
+
+**2. La soglia assoluta veniva taciuta.** Con i contributi dovuti ignoti, il
+concorso dei due requisiti non e' verificabile — formalmente corretto, ma
+tacere che 1,2 milioni superano di settanta volte i 15.000 nasconde
+l'informazione piu' rilevante dietro una formula. Ora il motivo dichiara il
+superamento assoluto E la ragione per cui il 30% non e' calcolabile.
+
+**3. Un anno senza denunce compariva come "0 EUR".** Sembra un dato rilevato ed
+e' assenza di dato. Su un'azienda che non presenta denunce da due anni la
+differenza e' tutto: ora si scrive che nel file non c'e' nessuna denuncia per
+quell'anno, non che il dovuto e' zero.
+
+**4. Varianti dello stesso tracciato.** Lo stesso dato esce dai sistemi
+dell'Istituto con intestazioni diverse secondo il punto di prelievo: dal
+Cassetto "Periodo comp." / "Data present.", da INPS-CPC "Periodo Competenza" /
+"Data di Trasmissione". Il lettore ne riconosceva una sola e rifiutava un file
+corretto dicendo che mancavano colonne che c'erano, con altro nome. Ora c'e' un
+repertorio di varianti, e il periodo si legge in entrambi i versi (09/2024 e
+2024/09).
+
+**Il file F24 di INPS-CPC non e' una variante: e' un altro dato.** Porta anno,
+posizione e importo pagato, senza periodo di competenza ne' data di
+versamento — quindi il ritardo di oltre 90 giorni NON e' calcolabile, perche'
+si misura sul singolo versamento. Viene riconosciuto e dichiarato come tale,
+indicando che serve l'Elenco Deleghe del Cassetto: e' il massimo dettaglio
+ottenibile senza passare dall'Agenzia delle Entrate, dove diventa mestiere di
+altri.
+
+**5 test nuovi** (267 in tutto), scritti sui file reali forniti da Ercole:
+entrambe le famiglie di intestazioni, il periodo nei due versi, l'anno senza
+denunce che non vale zero, i 19 periodi mancanti del caso reale, e la soglia
+assoluta dichiarata sia quando e' superata sia quando non lo e'.
+
+**Lancio di prova** con i file della famiglia INPS-CPC: il messaggio ora
+riporta "Soglia assoluta di 15.000 EUR: 1.213.831 EUR — SUPERATA. Manca invece
+il totale dei contributi dovuti...".
+
+Verificato: type-check, lint, **267 test**, build cloud e portable complete.
+
 ## 0.109.70 — 2026-09-17
 
 **Chi opera nello spazio si sceglie, e le strutture dei prospetti non si

@@ -42,6 +42,7 @@ import {
   leggiElencoDenunce,
   leggiElencoDeleghe,
   leggiListaInadempienze,
+  eF24Aggregato,
 } from '@/lib/denunce/lettura';
 import { analizzaDenunce, analizzaInadempienze, analizzaVersamenti } from '@/lib/denunce/analisi';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
@@ -276,8 +277,14 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               `Denunce non presentate per ${a.periodiMancanti.length} periodi: ${mancanti}.`
             );
           }
+          // ZERO NON E' UN NUMERO, QUI. "Contributi dovuti 2025: 0 €" sembra
+          // un dato rilevato e invece e' assenza di dato: nel file non c'era
+          // nessuna denuncia per quell'anno. Su un'azienda che non presenta
+          // denunce da due anni la differenza e' tutto.
           note.push(
-            `Contributi dovuti ${annoPrec}: ${Math.round(dovutoAnnoPrec ?? 0).toLocaleString('it-IT')} € (ultimo periodo esigibile ${a.ultimoPeriodoDovuto}).`
+            dovutoAnnoPrec === null
+              ? `Contributi dovuti ${annoPrec}: nessuna denuncia presente nel file per quell’anno — il dato non è zero, semplicemente non c’è (ultimo periodo esigibile ${a.ultimoPeriodoDovuto}).`
+              : `Contributi dovuti ${annoPrec}: ${Math.round(dovutoAnnoPrec).toLocaleString('it-IT')} € (ultimo periodo esigibile ${a.ultimoPeriodoDovuto}).`
           );
         }
       }
@@ -303,7 +310,11 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         }
       }
 
-      if (fileDeleghe && righeDenunce.length > 0) {
+      if (fileDeleghe && (await eF24Aggregato(fileDeleghe))) {
+        note.push(
+          'Il file F24 caricato è l’aggregato per anno di INPS-CPC: porta anno, posizione e importo pagato, senza periodo di competenza né data di versamento. Con questo il ritardo di oltre 90 giorni non è calcolabile — serve l’Elenco Deleghe del Cassetto, che è il massimo dettaglio ottenibile senza passare dall’Agenzia delle Entrate.'
+        );
+      } else if (fileDeleghe && righeDenunce.length > 0) {
         setAvanzamento('Lettura dell’Elenco Deleghe...');
         const r = await leggiElencoDeleghe(fileDeleghe);
         if (r.colonneMancanti) {

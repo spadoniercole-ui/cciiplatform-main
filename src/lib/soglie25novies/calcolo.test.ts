@@ -289,3 +289,40 @@ describe('valutare TUTTE le soglie azzera l’esito di uno spazio ENTE', () => {
     expect(e.nonDeterminabili).toHaveLength(1);
   });
 });
+
+describe('soglia assoluta quando il 30% non è calcolabile', () => {
+  it('dichiara il superamento assoluto invece di tacere', () => {
+    // Caso reale: 1.213.831 € di non versato certificato, denunce assenti
+    // quindi contributi dovuti ignoti. Il concorso dei due requisiti non è
+    // verificabile — ma tacere che la soglia assoluta è superata di settanta
+    // volte nasconde l'informazione più rilevante dietro una formula
+    // formalmente corretta.
+    const e = calcolaSoglie25Novies(
+      {
+        ...vuoto,
+        conLavoratori: true,
+        contributiScaduti: 1_213_831,
+        contributiDovutiAnnoPrecedente: null,
+      },
+      'INPS'
+    );
+    const riga = e.righe.find((r) => r.ambito.includes('CON lavoratori'));
+    expect(riga?.esito).toBe('non_determinabile');
+    expect(riga?.motivo).toContain('SUPERATA');
+    expect(riga?.motivo).toContain('contributi dovuti');
+  });
+
+  it('se la soglia assoluta NON è superata, lo dice ugualmente', () => {
+    const e = calcolaSoglie25Novies(
+      {
+        ...vuoto,
+        conLavoratori: true,
+        contributiScaduti: 8_000,
+        contributiDovutiAnnoPrecedente: null,
+      },
+      'INPS'
+    );
+    const riga = e.righe.find((r) => r.ambito.includes('CON lavoratori'));
+    expect(riga?.motivo).toContain('non superata');
+  });
+});

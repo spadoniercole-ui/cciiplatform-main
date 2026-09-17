@@ -209,8 +209,16 @@ export function calcolaSoglie25Novies(
     if (contributi === null) {
       motivo = 'Contributi previdenziali scaduti non inseriti: esito non determinabile.';
     } else if (sogliaPerc === null) {
+      // Il concorso dei due requisiti non e' verificabile, ma la soglia
+      // ASSOLUTA e' un fatto e va detto: tacere che 1,2 milioni superano di
+      // settanta volte i 15.000 perche' manca l'altro requisito nasconde
+      // l'informazione piu' rilevante dietro una formula corretta.
+      const oltreAssoluta = contributi > S.inpsImportoConLavoratori;
       motivo =
-        'Manca il totale dei contributi dovuti nell’anno precedente: il 30% non è calcolabile, quindi il concorso dei due requisiti non è verificabile.';
+        `Soglia assoluta di ${euro(S.inpsImportoConLavoratori)}: ${euro(contributi)} — ` +
+        `${oltreAssoluta ? 'SUPERATA' : 'non superata'}. ` +
+        'Manca invece il totale dei contributi dovuti nell’anno precedente: il 30% non è ' +
+        'calcolabile, quindi il concorso dei due requisiti non è verificabile.';
     } else {
       const oltrePerc = contributi > sogliaPerc;
       const oltreImp = contributi > S.inpsImportoConLavoratori;

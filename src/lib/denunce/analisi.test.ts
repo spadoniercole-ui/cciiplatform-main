@@ -296,3 +296,52 @@ describe('mai nostre elaborazioni: solo dati ufficiali', () => {
     expect(a.dovutoInRitardo).toBe(10_000);
   });
 });
+
+describe('varianti dello stesso tracciato, stesso ente', () => {
+  // Lo stesso dato esce dai sistemi dell'Istituto con intestazioni diverse a
+  // seconda del punto di prelievo. Il caso reale: dal Cassetto arriva
+  // "Periodo comp." 09/2024, da INPS-CPC "Periodo Competenza" 2024/09.
+  // Riconoscerne una sola significava rifiutare un file corretto dicendo che
+  // mancavano colonne che c'erano, con altro nome.
+
+  const verifica = new Date(Date.UTC(2026, 8, 17));
+
+  it('il periodo si legge in entrambi i versi', () => {
+    const cassetto = analizzaDenunce(
+      [{ periodo: '09/2024', dataPresentazione: '18/10/2024', saldo: 11_332 }],
+      verifica,
+      2024
+    );
+    const cpc = analizzaDenunce(
+      [{ periodo: '2024/09', dataPresentazione: '18/10/2024', saldo: 11_332 }],
+      verifica,
+      2024
+    );
+    expect(cassetto.dovutoPerAnno[2024]).toBe(11_332);
+    expect(cpc.dovutoPerAnno[2024]).toBe(11_332);
+  });
+
+  it('un anno senza denunce NON compare come zero', () => {
+    // "Contributi dovuti 2025: 0 €" sembra un dato rilevato e invece è
+    // assenza di dato. Su un'azienda che non presenta denunce da due anni la
+    // differenza è tutto.
+    const a = analizzaDenunce(
+      [{ periodo: '09/2024', dataPresentazione: '18/10/2024', saldo: 11_332 }],
+      verifica,
+      2025
+    );
+    expect(a.dovutoPerAnno[2025]).toBeUndefined();
+    expect(a.dovutoPerAnno[2024]).toBe(11_332);
+  });
+
+  it('i periodi mancanti dentro la finestra vengono elencati', () => {
+    const a = analizzaDenunce(
+      [{ periodo: '09/2024', dataPresentazione: '18/10/2024', saldo: 11_332 }],
+      verifica,
+      2025
+    );
+    // Da 01/2025 a 07/2026 (ultimo esigibile al 17/09/2026): 19 periodi.
+    expect(a.periodiMancanti).toHaveLength(19);
+    expect(a.periodiMancanti[0]).toBe('01/2025');
+  });
+});

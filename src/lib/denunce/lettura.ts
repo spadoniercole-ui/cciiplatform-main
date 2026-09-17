@@ -63,25 +63,75 @@ export interface EsitoLettura<T> {
   colonneMancanti?: string[];
 }
 
-const COL_DENUNCE = ['Periodo comp.', 'Data present.', 'Saldo'];
+// VARIANTI DELLO STESSO TRACCIATO.
+//
+// Lo stesso dato esce dai sistemi dell'Istituto con intestazioni diverse a
+// seconda del punto da cui lo si preleva: dal Cassetto e' "Periodo comp." /
+// "Data present.", da INPS-CPC e' "Periodo Competenza" / "Data di
+// Trasmissione". Cambia anche il verso del periodo — 09/2024 contro 2024/09 —
+// ma quello lo scanner accetta gia' in entrambi i sensi.
+//
+// Riconoscere una variante sola significava rifiutare un file corretto
+// dicendo che mancavano colonne che c'erano, con altro nome.
+const VARIANTI_DENUNCE: string[][] = [
+  ['Periodo comp.', 'Data present.', 'Saldo'],
+  ['Periodo Competenza', 'Data di Trasmissione', 'Saldo'],
+];
 
 export async function leggiElencoDenunce(file: File): Promise<EsitoLettura<RigaDenuncia>> {
   const { aoa } = await leggiFoglioAoa(file);
-  const t = trovaIntestazione(aoa, COL_DENUNCE);
-  if (!t) return { righe: [], colonneMancanti: COL_DENUNCE };
 
+  let t: ReturnType<typeof trovaIntestazione> = null;
+  let colonne: string[] = VARIANTI_DENUNCE[0];
+  for (const v of VARIANTI_DENUNCE) {
+    const trovata = trovaIntestazione(aoa, v);
+    if (trovata) {
+      t = trovata;
+      colonne = v;
+      break;
+    }
+  }
+  if (!t) {
+    // Si dichiarano le colonne della PRIMA variante: elencarle tutte
+    // confonderebbe. Il messaggio dice comunque che il tracciato non e'
+    // riconosciuto, non che il file e' sbagliato.
+    return { righe: [], colonneMancanti: VARIANTI_DENUNCE[0] };
+  }
+
+  const [colPeriodo, colData, colSaldo] = colonne;
   const righe: RigaDenuncia[] = [];
   for (let r = t.riga + 1; r < aoa.length; r++) {
     const riga = aoa[r] ?? [];
-    const periodo = String(riga[t.indici['Periodo comp.']] ?? '').trim();
-    if (!/^\d{1,2}\/\d{4}$/.test(periodo)) continue;
+    const periodo = String(riga[t.indici[colPeriodo]] ?? '').trim();
+    // Entrambi i versi: MM/AAAA dal Cassetto, AAAA/MM da INPS-CPC.
+    if (!/^\d{1,2}\/\d{4}$/.test(periodo) && !/^\d{4}\/\d{1,2}$/.test(periodo)) continue;
     righe.push({
       periodo,
-      dataPresentazione: data(riga[t.indici['Data present.']]),
-      saldo: numero(riga[t.indici['Saldo']]),
+      dataPresentazione: data(riga[t.indici[colData]]),
+      saldo: numero(riga[t.indici[colSaldo]]),
     });
   }
   return { righe };
+}
+
+/**
+ * Il file F24 di INPS-CPC e' un aggregato per ANNO: porta anno, posizione e
+ * importo pagato, senza periodo di competenza ne' data di versamento.
+ *
+ * Non e' una variante dell'Elenco Deleghe: e' un altro dato. Con questo il
+ * ritardo di oltre 90 giorni NON e' calcolabile, perche' il ritardo si misura
+ * sul singolo versamento. Riconoscerlo serve a dirlo, invece di lasciar
+ * credere che il file sia stato accettato.
+ */
+export async function eF24Aggregato(file: File): Promise<boolean> {
+  try {
+    const { aoa } = await leggiFoglioAoa(file);
+    const conPeriodo = trovaIntestazione(aoa, ['Periodo comp.']);
+    const aggregato = trovaIntestazione(aoa, ['Anno', 'Importo Pagato']);
+    return !conPeriodo && !!aggregato;
+  } catch {
+    return false;
+  }
 }
 
 const COL_DELEGHE = ['Periodo comp.', 'Data versamento', 'Importo', 'Codice tributo'];
