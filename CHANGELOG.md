@@ -93,6 +93,43 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.72 — 2026-09-20
+
+**Cruscotto di sintesi in testata alla scheda azienda**
+
+Idea di Ercole: chi torna su una posizione dopo settimane, o ne lavora molte,
+non deve ricostruire a mente dove era rimasto. Una striscia compatta con
+semaforo, fattore determinante, copertura informativa e data.
+
+**In testata e non nella sola Anagrafica**: chi torna non entra sempre da li',
+spesso apre direttamente lo Screening o la Posizione Ente.
+
+**Il rischio che la componente evita.** Numeri di una verifica vecchia,
+mostrati come se fossero di oggi, sono PEGGIO di nessun numero: chi apre la
+scheda li legge come stato attuale e riparte da li'. La data e lo stato di
+validita' stanno percio' accanto ai numeri, non sepolti altrove; oltre i sei
+mesi i numeri restano leggibili ma attenuati, con l'avviso che una posizione
+previdenziale cambia in quel tempo.
+
+**I valori si RICALCOLANO, non si memorizzano.** L'indicatore e' costruito
+cosi' di proposito: non essendo salvato non puo' divergere dai dati.
+Conservarne una copia nel cruscotto avrebbe reintrodotto il problema che si
+era evitato — un pannello che mostra numeri che il resto della piattaforma ha
+gia' superato.
+
+Se non c'e' mai stata una verifica non si mostra nulla: un cruscotto vuoto
+occuperebbe spazio senza dire niente. E si mostrano POCHE cose — quindici
+numeri non rinfrescano la memoria, la sovraccaricano.
+
+Verificato: type-check, lint, **267 test**, build cloud e portable complete.
+
+**Collaudo a schermo PARZIALE.** Il sandbox portable non arriva a una scheda
+azienda con verifica completata: il caricamento su Blob non funziona li', e
+il percorso si ferma alla schermata "presa in carico, con riserva" — che
+peraltro funziona e dichiara il motivo ("Solo file PDF sono ammessi",
+sollevato da un file di prova sbagliato). Il cruscotto e' verificato a
+livello di compilazione e di innesto nel layout, non visto con dati reali.
+
 ## 0.109.71 — 2026-09-17
 
 **Due famiglie di tracciati dello stesso ente, e un messaggio che mandava

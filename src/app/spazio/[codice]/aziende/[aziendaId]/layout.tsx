@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { CruscottoAzienda } from '@/components/spazio/CruscottoAzienda';
 import Link from 'next/link';
 import { ArrowLeft, Check, Lock, Users } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
@@ -204,6 +205,12 @@ export default async function AziendaLayout({
           </span>
         </div>
       </div>
+
+      {/* Cruscotto di sintesi: rinfresca la memoria a chi torna sulla
+          posizione dopo settimane, o a chi ne lavora molte. Sta in testata e
+          non nella sola Anagrafica perché chi torna non entra sempre da lì.
+          Se non c'è mai stata una verifica non si mostra nulla. */}
+      <CruscottoAzienda nomeSchema={contesto.nomeSchema} aziendaId={aziendaNum} />
 
       {/* Barra dei passi: sequenza logica dell'analisi a sinistra, Operatori a
           destra. Semaforo: grigio = bloccato, arancione = da fare, verde = fatto. */}
