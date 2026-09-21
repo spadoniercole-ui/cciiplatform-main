@@ -38,7 +38,7 @@ import {
   type RigaVerifica,
 } from '@/app/actions/aziendaInVerifica';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
-import { riconosciProspetto } from '@/lib/denunce/lettura';
+import { riconosciProspetto, leggiRuoli } from '@/lib/denunce/lettura';
 import { accumulaFile, togliFile } from '@/lib/file/accumula';
 import type { RigaDebitoTriage } from '@/lib/debitiTriage/modello';
 import type { MappaturaProspetto } from '@/lib/debitiTriage/mappatura';
@@ -124,6 +124,12 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
   // restavano solo sullo schermo, e il pulsante di salvataggio diceva di
   // confermare prima i dati — cioè di perderle.
   const [righeDebiti, setRigheDebiti] = useState<RigaDebitoTriage[]>([]);
+  // Le scelte fatte sulle sovrapposizioni. Quella fra V.E.R.A. ed elenchi
+  // decide cosa si salva come non versato: la applica questa pagina.
+  const [scelteFonti, setScelteFonti] = useState<Record<string, string>>({});
+  // Una sovrapposizione fra documenti non risolta blocca la conferma: si
+  // sommerebbero due descrizioni dello stesso debito.
+  const [conflittoAperto, setConflittoAperto] = useState(false);
   const [struttureDaSalvare, setStruttureDaSalvare] = useState<
     { ente: string; firma: string; mappatura: MappaturaProspetto; nome: string }[]
   >([]);
@@ -250,6 +256,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       let fileDelegheDettaglio: File | null = null;
       let fileF24Aggregato: File | null = null;
       let fileInadempienze: File | null = null;
+      let fileRuoli: File | null = null;
       for (const f of fileProspetti) {
         const tipo = await riconosciProspetto(f);
         if (tipo === 'VERA' && !fileVera) fileVera = f;
@@ -261,6 +268,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         else if (tipo === 'DELEGHE' && !fileDelegheDettaglio) fileDelegheDettaglio = f;
         else if (tipo === 'F24_AGGREGATO' && !fileF24Aggregato) fileF24Aggregato = f;
         else if (tipo === 'INADEMPIENZE' && !fileInadempienze) fileInadempienze = f;
+        else if (tipo === 'RUOLI' && !fileRuoli) fileRuoli = f;
         else if (tipo === 'SCONOSCIUTO') {
           // Dichiarato, non scartato in silenzio: il file c'era, e chi l'ha
           // caricato deve sapere che non è stato usato.
@@ -365,16 +373,51 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             `Lista Inadempienze non riconosciuta: mancano ${r.colonneMancanti.join(', ')}.`
           );
         } else {
-          const b = analizzaInadempienze(r.righe);
+          // Con i ruoli caricati, le partite già iscritte a ruolo si escludono:
+          // sono rappresentate dai residui dei ruoli. Contarle qui e lì
+          // raddoppierebbe il debito.
+          const b = analizzaInadempienze(r.righe, { escludiIscritteARuolo: !!fileRuoli });
           nonVersato = b.totaleNonVersato;
+          // Scritta secca, questa cifra si leggeva come IL debito anche quando
+          // non lo era: chi si fermava alla prima riga non arrivava alla nota
+          // che la correggeva.
           note.push(
-            `Non versato certificato: ${Math.round(nonVersato).toLocaleString('it-IT')} €.`
+            scelteFonti['vera:elenchi'] === 'VERA'
+              ? `Lista Inadempienze: ${Math.round(nonVersato).toLocaleString('it-IT')} € — non usati come debito: la fonte scelta è il V.E.R.A., che li comprende.`
+              : fileRuoli
+                ? `Lista Inadempienze, partite non ancora iscritte a ruolo: ${Math.round(nonVersato).toLocaleString('it-IT')} €.`
+                : `Non versato certificato: ${Math.round(nonVersato).toLocaleString('it-IT')} €.`
           );
+          if (b.esclusePerRuolo.righe > 0) {
+            note.push(
+              `${b.esclusePerRuolo.righe} inadempienze escluse perché già iscritte a ruolo (${Math.round(b.esclusePerRuolo.importo).toLocaleString('it-IT')} €): il loro importo è rappresentato dai residui dei Ruoli Esattoriali, al netto di sgravi e pagamenti.`
+            );
+          }
           if (b.anniConSaldoNegativo.length > 0) {
             note.push(
               `Anni con accrediti superiori agli addebiti (non compensati): ${b.anniConSaldoNegativo.join(', ')}.`
             );
           }
+        }
+      }
+
+      // ---- Ruoli esattoriali: residui aperti, credito dell'ente ----------
+      // Si somma tutto il residuo, qualunque sia la data di notifica: una
+      // cartella del 2021 ancora aperta è debito di oggi.
+      if (fileRuoli) {
+        setAvanzamento('Lettura dei Ruoli Esattoriali...');
+        const ru = await leggiRuoli(fileRuoli);
+        if (ru.colonneMancanti) {
+          note.push(
+            `Ruoli esattoriali non riconosciuti: mancano ${ru.colonneMancanti.join(', ')}.`
+          );
+        } else {
+          nonVersato = (nonVersato ?? 0) + ru.residuo;
+          note.push(
+            scelteFonti['vera:elenchi'] === 'VERA'
+              ? `Ruoli esattoriali: ${ru.cartelle} cartelle, residuo ${Math.round(ru.residuo).toLocaleString('it-IT')} € — non sommati: la fonte scelta è il V.E.R.A., che li comprende.`
+              : `Ruoli esattoriali: ${ru.cartelle} cartelle, residuo ${Math.round(ru.residuo).toLocaleString('it-IT')} € — credito dell’ente che le ha iscritte, sommato al non versato.`
+          );
         }
       }
 
@@ -406,6 +449,15 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         );
       }
 
+      if (scelteFonti['vera:elenchi'] === 'VERA') {
+        note.push(
+          'Fonte del debito: il V.E.R.A., per scelta. Inadempienze e ruoli non sono stati sommati, perché già compresi.'
+        );
+      } else if (scelteFonti['vera:elenchi'] === 'ELENCHI') {
+        note.push(
+          'Fonte del debito: inadempienze e ruoli, per scelta. Il V.E.R.A. non è stato sommato: resta consultabile nella sua scheda.'
+        );
+      }
       setEsitoFogli(note);
 
       // ---- I due valori della soglia INPS --------------------------------
@@ -424,7 +476,12 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             (contributiDovuti.trim() === '' ? undefined : Number(contributiDovuti)),
           annoContributiDovuti:
             dovutoAnnoPrec !== null || contributiDovuti.trim() !== '' ? annoPrec : undefined,
-          contributiScaduti: nonVersato ?? undefined,
+          // Scelto il V.E.R.A., il non versato degli elenchi NON si salva:
+          // l'indicatore userà l'esposizione del V.E.R.A., che li comprende.
+          // Prima gli elenchi vincevano sempre, e il V.E.R.A. spariva in
+          // silenzio anche quando era la fonte che si voleva usare.
+          contributiScaduti:
+            scelteFonti['vera:elenchi'] === 'VERA' ? undefined : (nonVersato ?? undefined),
           ritardoOltre90Giorni: ritardo90 ?? undefined,
           periodiInRitardo: periodiRitardo ?? undefined,
           denunceNonPresentate: mancanti ?? undefined,
@@ -769,6 +826,8 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                 onProspetti={setFileProspetti}
                 onTogliProspetto={(f) => setFileProspetti((prev) => togliFile(prev, f))}
                 onRighe={setRigheDebiti}
+                onConflitto={setConflittoAperto}
+                onScelte={setScelteFonti}
                 onStruttura={(st) => setStruttureDaSalvare((prev) => [...prev, st])}
               />
             </div>
@@ -796,6 +855,12 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             </div>
           </div>
 
+          {conflittoAperto && (
+            <p className="text-[11px] font-bold text-red-700">
+              Conferma bloccata: c&apos;è una sovrapposizione fra documenti da risolvere, più sopra.
+            </p>
+          )}
+
           {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}
 
           <div className="flex flex-wrap gap-3">
@@ -811,7 +876,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             </button>
             <button
               onClick={() => void confermaEValuta()}
-              disabled={inCorso || !dati.ragioneSociale}
+              disabled={inCorso || !dati.ragioneSociale || conflittoAperto}
               className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-800 disabled:bg-slate-300"
             >
               <Check className="w-3.5 h-3.5" />

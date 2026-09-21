@@ -14,6 +14,7 @@
 import React, { useMemo, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import {
+  categoriaDaEnte,
   estraiRighe,
   firmaIntestazioni,
   type FormaProspetto,
@@ -49,7 +50,12 @@ const CLASSE =
 export function PannelloMappatura({ nomeFile, aoa, proposta, anni, onApplica, onAnnulla }: Props) {
   const [m, setM] = useState<MappaturaProspetto>(proposta);
   const [ente, setEnte] = useState('');
-  const [categoriaDaColonna, setCategoriaDaColonna] = useState(proposta.colCategoria !== null);
+  // Si parte SEMPRE da "tutto il file". Prima il pannello passava da solo alla
+  // modalità riga per riga quando trovava una colonna tipo "Natura": la
+  // categoria proposta dall'ente allora non contava, e il risultato era zero
+  // posizioni con tutte le righe scartate. Chi carica sceglie; la colonna
+  // trovata resta pronta se la vuole.
+  const [categoriaDaColonna, setCategoriaDaColonna] = useState(false);
 
   const intestazione = (aoa[m.rigaIntestazione] ?? []).map((c) => String(c ?? ''));
   const anteprima = aoa.slice(m.rigaIntestazione + 1, m.rigaIntestazione + 6);
@@ -122,7 +128,18 @@ export function PannelloMappatura({ nomeFile, aoa, proposta, anni, onApplica, on
           Di quale ente è il prospetto
           <select
             value={ente}
-            onChange={(e) => setEnte(e.target.value)}
+            onChange={(e) => {
+              const valore = e.target.value;
+              setEnte(valore);
+              // Un credito di un ente non è mai commerciale: si propone la
+              // categoria dell'ente, senza sovrascrivere una scelta già fatta.
+              // L'aggiornamento parte dallo stato CORRENTE — da uno vecchio, un
+              // cambio successivo di forma cancellava la proposta.
+              const proposta = categoriaDaEnte(valore);
+              if (proposta) {
+                setM((prev) => (prev.categoriaFile ? prev : { ...prev, categoriaFile: proposta }));
+              }
+            }}
             className={`${CLASSE} mt-1 w-full`}
           >
             <option value="">Scegli…</option>
@@ -138,11 +155,12 @@ export function PannelloMappatura({ nomeFile, aoa, proposta, anni, onApplica, on
           Forma del prospetto
           <select
             value={m.forma}
-            onChange={(e) => setM({ ...m, forma: e.target.value as FormaProspetto })}
+            onChange={(e) => setM((prev) => ({ ...prev, forma: e.target.value as FormaProspetto }))}
             className={`${CLASSE} mt-1 w-full`}
           >
             <option value="RIEPILOGO">Riepilogo — una colonna per anno</option>
             <option value="DETTAGLIO">Dettaglio — una riga per movimento, con una data</option>
+            <option value="SALDO">Saldo — residui ancora aperti a oggi</option>
           </select>
         </label>
       </div>
@@ -159,12 +177,12 @@ export function PannelloMappatura({ nomeFile, aoa, proposta, anni, onApplica, on
                   type="checkbox"
                   checked={m.colonneAnno.includes(c.i)}
                   onChange={(e) =>
-                    setM({
-                      ...m,
+                    setM((prev) => ({
+                      ...prev,
                       colonneAnno: e.target.checked
-                        ? [...m.colonneAnno, c.i]
-                        : m.colonneAnno.filter((x) => x !== c.i),
-                    })
+                        ? [...prev.colonneAnno, c.i]
+                        : prev.colonneAnno.filter((x) => x !== c.i),
+                    }))
                   }
                 />
                 {c.t}
@@ -176,13 +194,39 @@ export function PannelloMappatura({ nomeFile, aoa, proposta, anni, onApplica, on
             {anni.precedente} e {anni.meno2}.
           </p>
         </div>
+      ) : m.forma === 'SALDO' ? (
+        <div className="space-y-1">
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+            Colonna del residuo
+            <select
+              value={m.colImporto ?? ''}
+              onChange={(e) =>
+                setM((prev) => ({ ...prev, colImporto: scegliColonna(e.target.value) }))
+              }
+              className={`${CLASSE} mt-1 w-full sm:w-1/2`}
+            >
+              <option value="">—</option>
+              {colonne.map((c) => (
+                <option key={c.i} value={c.i}>
+                  {c.t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-[10px] leading-relaxed text-slate-400">
+            Tutti i residui vanno nel {anni.corrente}, qualunque sia la data: una partita ancora
+            aperta è debito di oggi, e la data dice solo quando è nata.
+          </p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
             Colonna della data o del periodo
             <select
               value={m.colData ?? ''}
-              onChange={(e) => setM({ ...m, colData: scegliColonna(e.target.value) })}
+              onChange={(e) =>
+                setM((prev) => ({ ...prev, colData: scegliColonna(e.target.value) }))
+              }
               className={`${CLASSE} mt-1 w-full`}
             >
               <option value="">—</option>
@@ -197,7 +241,9 @@ export function PannelloMappatura({ nomeFile, aoa, proposta, anni, onApplica, on
             Colonna dell&apos;importo
             <select
               value={m.colImporto ?? ''}
-              onChange={(e) => setM({ ...m, colImporto: scegliColonna(e.target.value) })}
+              onChange={(e) =>
+                setM((prev) => ({ ...prev, colImporto: scegliColonna(e.target.value) }))
+              }
               className={`${CLASSE} mt-1 w-full`}
             >
               <option value="">—</option>
@@ -216,7 +262,9 @@ export function PannelloMappatura({ nomeFile, aoa, proposta, anni, onApplica, on
           Colonna della descrizione (facoltativa)
           <select
             value={m.colDescrizione ?? ''}
-            onChange={(e) => setM({ ...m, colDescrizione: scegliColonna(e.target.value) })}
+            onChange={(e) =>
+              setM((prev) => ({ ...prev, colDescrizione: scegliColonna(e.target.value) }))
+            }
             className={`${CLASSE} mt-1 w-full sm:w-1/2`}
           >
             <option value="">—</option>
@@ -232,6 +280,12 @@ export function PannelloMappatura({ nomeFile, aoa, proposta, anni, onApplica, on
       {/* La categoria: per tutto il file, oppure da una colonna. */}
       <div className="space-y-2">
         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">Categoria</p>
+        {proposta.colCategoria !== null && !categoriaDaColonna && (
+          <p className="text-[10px] text-slate-500">
+            C&apos;è una colonna «{colonne[proposta.colCategoria]?.t}»: se la categoria cambia riga
+            per riga, scegli la seconda opzione e usala.
+          </p>
+        )}
         <div className="flex flex-wrap gap-4 text-[11px] text-slate-700">
           <label className="flex items-center gap-1.5">
             <input
@@ -255,7 +309,10 @@ export function PannelloMappatura({ nomeFile, aoa, proposta, anni, onApplica, on
           <select
             value={m.categoriaFile ?? ''}
             onChange={(e) =>
-              setM({ ...m, categoriaFile: (e.target.value || null) as CategoriaDebito | null })
+              setM((prev) => ({
+                ...prev,
+                categoriaFile: (e.target.value || null) as CategoriaDebito | null,
+              }))
             }
             className={`${CLASSE} w-full sm:w-1/2`}
           >
@@ -270,7 +327,9 @@ export function PannelloMappatura({ nomeFile, aoa, proposta, anni, onApplica, on
           <div className="space-y-2">
             <select
               value={m.colCategoria ?? ''}
-              onChange={(e) => setM({ ...m, colCategoria: scegliColonna(e.target.value) })}
+              onChange={(e) =>
+                setM((prev) => ({ ...prev, colCategoria: scegliColonna(e.target.value) }))
+              }
               className={`${CLASSE} w-full sm:w-1/2`}
             >
               <option value="">Colonna che indica la natura…</option>
@@ -288,13 +347,13 @@ export function PannelloMappatura({ nomeFile, aoa, proposta, anni, onApplica, on
                     <select
                       value={m.mappaCategorie[v] ?? ''}
                       onChange={(e) =>
-                        setM({
-                          ...m,
+                        setM((prev) => ({
+                          ...prev,
                           mappaCategorie: {
-                            ...m.mappaCategorie,
+                            ...prev.mappaCategorie,
                             [v]: e.target.value as CategoriaDebito,
                           },
-                        })
+                        }))
                       }
                       className={`${CLASSE} w-1/2`}
                     >

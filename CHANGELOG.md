@@ -93,6 +93,134 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.77 — 2026-09-21
+
+**Il V.E.R.A. non sparisce piu' in silenzio**
+
+La 0.109.76 gestiva due sovrapposizioni — due saldi dello stesso ente,
+tabella contro fogli — ma non la terza: il V.E.R.A. caricato insieme alla
+Lista Inadempienze o ai Ruoli Esattoriali, con la tabella senza righe
+previdenziali.
+
+Verificato nel codice, il difetto non era un conteggio doppio ma una SCELTA
+SILENZIOSA: gli elenchi finivano nel non versato, che l'indicatore legge
+prima del V.E.R.A., e il V.E.R.A. veniva ignorato senza che nessuno lo
+sapesse. E' il default silenzioso che la regola di Ercole vieta.
+
+Ora e' la terza sovrapposizione (`vera:elenchi`): il V.E.R.A. comprende
+inadempienze e ruoli, e la conferma resta bloccata finche' non si sceglie
+quale fonte rappresenta il debito. La scelta arriva alla pagina, che la
+applica: scelto il V.E.R.A., il non versato degli elenchi non si salva e
+l'indicatore usa l'esposizione del V.E.R.A. Il riepilogo dichiara la fonte
+scelta, e le note di inadempienze e ruoli lo rispettano invece di dire
+"sommato" quando non lo sono.
+
+**Nota non piu' fuorviante**: "Non versato certificato: 1.213.831 EUR"
+compariva secca anche quando quella cifra non era la fonte usata, e chi si
+fermava alla prima riga non arrivava alla nota che la correggeva.
+
+**4 test nuovi** (322 in tutto): V.E.R.A. con inadempienze, V.E.R.A. con
+ruoli, il solo V.E.R.A. senza scelte, inadempienze e ruoli senza V.E.R.A. che
+si riconciliano da soli.
+
+**Lancio di prova** con i tre file insieme: avviso comparso, conferma
+bloccata, sbloccata dopo la scelta, fonte dichiarata nel riepilogo.
+
+**Sull'ambiente di collaudo**, due scoperte. Ogni avvio del sandbox falliva
+al primo colpo perche' il comando che fermava i server precedenti conteneva il
+proprio stesso bersaglio e uccideva se' stesso: ora non succede piu'. E le
+operazioni lunghe — build completa, test, lint insieme — superavano il tempo
+massimo di un singolo comando e si interrompevano senza output: ora sono
+spezzate, la build gira in background e se ne attende la fine.
+
+Verificato: type-check, lint, **322 test**, build cloud e portable complete.
+
+## 0.109.76 — 2026-09-21
+
+**Ruoli esattoriali, forma "saldo", sovrapposizioni fermate — e l'elenco dei
+file che non sparisce piu'**
+
+Collaudo di Ercole: riconoscimento e mappatura funzionavano ("in estasi"),
+poi tutto sembrava perso ("in depressione"). Tre problemi, piu' quattro
+trovati dal lancio di prova.
+
+**1. L'elenco dei file spariva.** "Prospetti" e "a mano" erano due viste
+alternative: aggiungere le righe di un prospetto passava alla vista manuale e
+NASCONDEVA l'elenco — i file c'erano ancora, ma non si vedevano, e il secondo
+file da mappare diventava irraggiungibile. Ora convivono: sopra i file con il
+loro stato, sotto la tabella che raccoglie tutto.
+
+**2. I ruoli degli anni passati venivano scartati.** Trattata come
+"dettaglio", la lista dei ruoli vedeva le cartelle notificate nel 2019, 2021
+e 2022 come "fuori dal triage". Ma una cartella ancora aperta e' debito di
+OGGI: la data dice solo quando e' nata. Movimenti e residui si somigliano
+nella forma e sono opposti nel significato. Nuova forma **SALDO**: residui
+aperti, tutti nell'anno del triage; gli altri anni restano vuoti, perche' una
+fotografia di oggi non dice com'era il debito un anno fa.
+
+I **Ruoli Esattoriali** sono ora un tipo riconosciuto, senza bisogno di
+mappatura, e si leggono come saldo. Il credito resta dell'ente che l'ha
+iscritto a ruolo — INPS se il ruolo e' INPS, mai commerciale: l'Agente della
+Riscossione lo incassa, non ne e' titolare (regola fissata da Ercole).
+
+**3. Inadempienze e ruoli contati due volte.** Scoperto sui dati: la Lista
+Inadempienze ha una colonna "Fase di Lavorazione", e 139 righe su 147 sono
+"INADEMPIENZA ISCRITTA A RUOLO" — cioe' gia' dentro i ruoli. Non si incrocia
+per periodo e codice: i due file non parlano la stessa lingua (periodi contro
+cartelle, importi con e senza sanzioni). Si usa il campo dell'istituto: con
+i ruoli caricati, le partite gia' a ruolo si escludono e si dichiara quante e
+per quanto. Una riga ha la fase vuota: senza l'informazione non si esclude.
+
+**Rete di sicurezza per i casi senza regola** — "un warning grande come una
+casa", nelle parole di Ercole. Due situazioni fermano la conferma finche' non
+si sceglie:
+  - due SALDI dello stesso ente mappati a mano;
+  - posizioni previdenziali in tabella E fogli dell'istituto sullo stesso
+    debito — la tabella avrebbe avuto la precedenza in silenzio.
+Nessun default silenzioso: il pulsante di conferma resta disabilitato.
+
+**Trovati dal lancio di prova**, tutti prima della consegna:
+
+**a. La categoria proposta dall'ente non veniva mai inserita.**
+L'inserimento non era andato a segno, e un controllo superficiale l'aveva
+scambiato per buono perche' la parola "Previdenziale" compariva comunque fra
+le opzioni.
+
+**b. Il pannello sceglieva da solo la modalita' "riga per riga"** trovando
+una colonna tipo "Natura": la proposta dall'ente allora non contava, e il
+risultato era zero posizioni. Ora si parte sempre da "tutto il file", con un
+suggerimento se una colonna utilizzabile c'e'.
+
+**c. Aggiornamenti da uno stato vecchio.** Cambiare l'ente e poi la forma
+cancellava la categoria appena proposta. Tutti gli aggiornamenti della
+mappatura partono ora dallo stato corrente.
+
+**d. Ricaduta silenziosa.** In modalita' riga per riga, un valore non
+tradotto ricadeva sulla categoria del file: un'IVA non tradotta finiva in
+"previdenziale", mentre l'interfaccia diceva "non usare". Ora viene scartata
+e dichiarata.
+
+Correzione di un numero dato a Ercole durante l'analisi: le righe di dati
+delle inadempienze sono 147 (non 148 — la 148a del foglio e' un'etichetta di
+fondo pagina), di cui 139 a ruolo e 8 no.
+
+**Test nuovi**: forma saldo, categoria dall'ente, ruoli riconosciuti e
+sommati su tutte le date, esclusione delle 139 righe sul file reale,
+sovrapposizioni (saldi dello stesso ente, enti diversi, tabella contro fogli,
+tabella solo commerciale), nessuna ricaduta silenziosa. **318 test** in tutto.
+
+**Lancio di prova sullo scenario di Ercole**: sei file caricati insieme, i
+ruoli riconosciuti da soli, un prospetto sconosciuto mappato a saldo con
+l'ente INPS, la categoria proposta; dopo "aggiungi alla tabella" l'elenco dei
+file resta visibile, la tabella sotto, l'avviso di sovrapposizione compare e
+la conferma e' bloccata.
+
+Nota sull'ambiente: i collaudi si inceppavano a ogni giro sull'MFA gia'
+registrato. Ora la chiave si conserva alla prima registrazione e i codici si
+generano da li'.
+
+Verificato: type-check, lint, **318 test**, build cloud e portable complete.
+
 ## 0.109.75 — 2026-09-21
 
 **I file caricati in due tempi non si perdono piu'**

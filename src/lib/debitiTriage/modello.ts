@@ -135,6 +135,12 @@ export interface RigaDebitoTriage {
   riferimentoAnnoPrecedente: number | null;
   /** Prospetto da cui la riga proviene; null se inserita a mano. */
   prospettoId: number | null;
+  /**
+   * Nome del file da cui la riga è stata estratta, durante il triage. Serve a
+   * togliere tutte le righe di un file quando si risolve una sovrapposizione.
+   * Non si salva: dopo la conferma la provenienza è `prospettoId`.
+   */
+  origine?: string;
 }
 
 /** I tre anni, ricavati dalla data di verifica: nulla da chiedere. */
@@ -258,4 +264,107 @@ export function valoriSoglieDaPosizioni(righe: RigaDebitoTriage[]): {
     ivaScaduta: somma('FISCALE'),
     volumeAffari: riferimentoDi(righe, 'FISCALE'),
   };
+}
+
+// ---------------------------------------------------------------------------
+// SOVRAPPOSIZIONI
+//
+// Il rischio segnalato da Ercole: caricare due documenti che descrivono lo
+// stesso debito e sommarli. Dove esiste una regola che li concilia — le
+// inadempienze già iscritte a ruolo si escludono se ci sono i ruoli — la si
+// applica. Dove non esiste, si FERMA la conferma e si chiede di scegliere:
+// nessun default silenzioso.
+
+export interface Sovrapposizione {
+  chiave: string;
+  titolo: string;
+  spiegazione: string;
+  scelte: { valore: string; etichetta: string }[];
+}
+
+export interface FileMappato {
+  nome: string;
+  ente: string;
+  forma: string;
+}
+
+export function trovaSovrapposizioni(
+  righe: RigaDebitoTriage[],
+  mappati: FileMappato[],
+  tipiRiconosciuti: string[]
+): Sovrapposizione[] {
+  const out: Sovrapposizione[] = [];
+
+  // 1. Due saldi dello stesso ente: descrivono entrambi il debito aperto oggi.
+  const perEnte = new Map<string, FileMappato[]>();
+  for (const f of mappati.filter((x) => x.forma === 'SALDO')) {
+    perEnte.set(f.ente, [...(perEnte.get(f.ente) ?? []), f]);
+  }
+  for (const [ente, files] of perEnte) {
+    if (files.length < 2) continue;
+    out.push({
+      chiave: `saldo:${ente}`,
+      titolo: `Due saldi dello stesso ente (${ente})`,
+      spiegazione: `«${files[0].nome}» e «${files[1].nome}» descrivono entrambi il debito aperto oggi verso lo stesso ente. Se uno contiene l’altro, sommarli raddoppia il debito.`,
+      scelte: [
+        { valore: 'PRIMO', etichetta: `Tieni solo «${files[0].nome}»` },
+        { valore: 'SECONDO', etichetta: `Tieni solo «${files[1].nome}»` },
+        { valore: 'ENTRAMBI', etichetta: 'Tienili entrambi: non si sovrappongono' },
+      ],
+    });
+  }
+
+  // 2. Posizioni previdenziali in tabella E fogli dell'istituto sullo stesso
+  //    debito. La tabella avrebbe la precedenza in silenzio, e i fogli
+  //    verrebbero ignorati senza che nessuno lo sappia.
+  const prevInTabella = righe.some(
+    (r) => r.categoria === 'PREVIDENZIALE' && r.importoAnnoCorrente !== null
+  );
+  // 3. V.E.R.A. insieme a Lista Inadempienze o Ruoli Esattoriali.
+  //    Il V.E.R.A. è la fotografia completa della posizione e li comprende
+  //    entrambi, senza una chiave che permetta di togliere la parte comune.
+  //    Fino alla 0.109.76 questo caso NON era segnalato: gli elenchi
+  //    finivano nel non versato, che l'indicatore legge prima del V.E.R.A.,
+  //    e il V.E.R.A. veniva ignorato senza che nessuno lo sapesse — il
+  //    default silenzioso che la regola di Ercole vieta.
+  const haVera = tipiRiconosciuti.includes('VERA');
+  const haElenchi = tipiRiconosciuti.includes('INADEMPIENZE') || tipiRiconosciuti.includes('RUOLI');
+  if (haVera && haElenchi) {
+    out.push({
+      chiave: 'vera:elenchi',
+      titolo: 'Il V.E.R.A. comprende già inadempienze e ruoli',
+      spiegazione:
+        'Il V.E.R.A. è la fotografia completa della posizione: contiene le partite della Lista Inadempienze e quelle iscritte a ruolo. Sommati, lo stesso importo verrebbe contato più volte. Scegli quale fonte rappresenta il debito.',
+      scelte: [
+        {
+          valore: 'VERA',
+          etichetta:
+            'Usa il V.E.R.A. — l’esposizione complessiva; inadempienze e ruoli non si sommano',
+        },
+        {
+          valore: 'ELENCHI',
+          etichetta:
+            'Usa inadempienze e ruoli — il dettaglio per partita, già riconciliato fra loro; il V.E.R.A. non si somma',
+        },
+      ],
+    });
+  }
+
+  const fogli = tipiRiconosciuti.filter((t) => ['INADEMPIENZE', 'RUOLI', 'VERA'].includes(t));
+  if (prevInTabella && fogli.length > 0) {
+    out.push({
+      chiave: 'prev:fogli',
+      titolo: 'Debito previdenziale da due fonti',
+      spiegazione:
+        'In tabella ci sono posizioni previdenziali, e hai caricato anche i fogli dell’istituto che descrivono lo stesso debito. Non si possono sommare: bisogna scegliere quale usare.',
+      scelte: [
+        {
+          valore: 'TABELLA',
+          etichetta: 'Usa la tabella — i fogli non contano per il previdenziale',
+        },
+        { valore: 'FOGLI', etichetta: 'Usa i fogli dell’istituto — togli le righe previdenziali' },
+      ],
+    });
+  }
+  return out;
 }

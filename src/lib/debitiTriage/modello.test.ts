@@ -146,3 +146,81 @@ describe('dalla tabella al test delle soglie', () => {
     expect(v.premiInail).toBeNull();
   });
 });
+
+describe('sovrapposizioni fra documenti', () => {
+  it('due saldi dello stesso ente fermano la conferma', async () => {
+    const { trovaSovrapposizioni } = await import('./modello');
+    const s = trovaSovrapposizioni(
+      [],
+      [
+        { nome: 'ruoli.xlsx', ente: 'INPS', forma: 'SALDO' },
+        { nome: 'estratto.xlsx', ente: 'INPS', forma: 'SALDO' },
+      ],
+      []
+    );
+    expect(s).toHaveLength(1);
+    expect(s[0].scelte.map((x) => x.valore)).toEqual(['PRIMO', 'SECONDO', 'ENTRAMBI']);
+  });
+
+  it('due saldi di enti DIVERSI non sono una sovrapposizione', async () => {
+    const { trovaSovrapposizioni } = await import('./modello');
+    const s = trovaSovrapposizioni(
+      [],
+      [
+        { nome: 'inps.xlsx', ente: 'INPS', forma: 'SALDO' },
+        { nome: 'inail.xlsx', ente: 'INAIL', forma: 'SALDO' },
+      ],
+      []
+    );
+    expect(s).toHaveLength(0);
+  });
+
+  it('tabella previdenziale + fogli dell’istituto: si deve scegliere', async () => {
+    // Senza questa domanda la tabella avrebbe la precedenza in silenzio, e i
+    // fogli verrebbero ignorati senza che nessuno lo sappia.
+    const { trovaSovrapposizioni } = await import('./modello');
+    const s = trovaSovrapposizioni(
+      [riga({ categoria: 'PREVIDENZIALE', importoAnnoCorrente: 47_233 })],
+      [],
+      ['INADEMPIENZE']
+    );
+    expect(s.map((x) => x.chiave)).toEqual(['prev:fogli']);
+  });
+
+  it('tabella solo commerciale + fogli INPS: nessuna sovrapposizione', async () => {
+    const { trovaSovrapposizioni } = await import('./modello');
+    const s = trovaSovrapposizioni(
+      [riga({ categoria: 'COMMERCIALE', importoAnnoCorrente: 300_000 })],
+      [],
+      ['INADEMPIENZE', 'RUOLI']
+    );
+    expect(s).toHaveLength(0);
+  });
+});
+
+describe('V.E.R.A. insieme agli elenchi dell’Istituto', () => {
+  // Fino alla 0.109.76 non era segnalato: gli elenchi finivano nel non
+  // versato, letto prima del V.E.R.A., e il V.E.R.A. spariva in silenzio.
+  it('V.E.R.A. + inadempienze: si chiede di scegliere', async () => {
+    const { trovaSovrapposizioni } = await import('./modello');
+    const s = trovaSovrapposizioni([], [], ['VERA', 'INADEMPIENZE']);
+    expect(s.some((x) => x.chiave === 'vera:elenchi')).toBe(true);
+  });
+
+  it('V.E.R.A. + ruoli: si chiede di scegliere', async () => {
+    const { trovaSovrapposizioni } = await import('./modello');
+    const s = trovaSovrapposizioni([], [], ['VERA', 'RUOLI']);
+    expect(s.some((x) => x.chiave === 'vera:elenchi')).toBe(true);
+  });
+
+  it('il solo V.E.R.A. non richiede scelte', async () => {
+    const { trovaSovrapposizioni } = await import('./modello');
+    expect(trovaSovrapposizioni([], [], ['VERA'])).toHaveLength(0);
+  });
+
+  it('inadempienze + ruoli senza V.E.R.A.: si riconciliano da soli, nessuna scelta', async () => {
+    const { trovaSovrapposizioni } = await import('./modello');
+    const s = trovaSovrapposizioni([], [], ['INADEMPIENZE', 'RUOLI']);
+    expect(s.some((x) => x.chiave === 'vera:elenchi')).toBe(false);
+  });
+});

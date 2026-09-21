@@ -56,6 +56,18 @@ export interface RigaInadempienza {
   inizioPeriodo: string;
   importoAddebitato: number;
   importoAccreditato: number;
+  /**
+   * Fase di lavorazione dell'istituto. Dice se la partita è già passata a
+   * ruolo — ed è la chiave per non contarla due volte quando si carica anche
+   * l'elenco dei Ruoli Esattoriali. Facoltativa: estrazioni diverse possono
+   * non riportarla.
+   */
+  fase?: string | null;
+}
+
+/** La partita risulta già iscritta a ruolo? */
+export function iscrittaARuolo(r: RigaInadempienza): boolean {
+  return /ISCRITT[AO]\s+A\s+RUOLO/i.test(String(r.fase ?? ''));
 }
 
 export interface PeriodoDovuto {
@@ -192,6 +204,8 @@ export interface AnalisiInadempienze {
   nettoPerAnno: Record<number, number>;
   /** Somma dei netti annuali positivi: il debito complessivo non versato. */
   totaleNonVersato: number;
+  /** Partite escluse perché già rappresentate dai Ruoli Esattoriali. */
+  esclusePerRuolo: { righe: number; importo: number };
   /** Anni in cui gli accrediti superano gli addebiti: da segnalare, non da sottrarre. */
   anniConSaldoNegativo: number[];
 }
@@ -205,9 +219,30 @@ export interface AnalisiInadempienze {
  * cancellare da un accredito del 2022 un debito del 2025. Sono partite
  * diverse, e compensarle darebbe un non versato più basso del vero.
  */
-export function analizzaInadempienze(righe: RigaInadempienza[]): AnalisiInadempienze {
+export function analizzaInadempienze(
+  righe: RigaInadempienza[],
+  /**
+   * Con i Ruoli Esattoriali caricati, le partite già iscritte a ruolo si
+   * ESCLUDONO: sono rappresentate dai residui dei ruoli, al netto di sgravi
+   * e pagamenti. Contarle qui e lì raddoppierebbe il debito — sul caso reale,
+   * 139 righe su 148.
+   *
+   * Non si incrocia per periodo e codice: i due file non parlano la stessa
+   * lingua — le inadempienze sono per periodo, i ruoli per cartella, e una
+   * cartella ne contiene più d'uno. Si usa il campo "Fase di Lavorazione",
+   * che è un dato dell'istituto e dice già come stanno le cose.
+   */
+  opzioni: { escludiIscritteARuolo?: boolean } = {}
+): AnalisiInadempienze {
   const netto: Record<number, number> = {};
+  let esclRighe = 0;
+  let esclImporto = 0;
   for (const r of righe) {
+    if (opzioni.escludiIscritteARuolo && iscrittaARuolo(r)) {
+      esclRighe++;
+      esclImporto += r.importoAddebitato - r.importoAccreditato;
+      continue;
+    }
     const p = scomponi(r.inizioPeriodo);
     if (!p) continue;
     netto[p.anno] = (netto[p.anno] ?? 0) + (r.importoAddebitato - r.importoAccreditato);
@@ -216,7 +251,12 @@ export function analizzaInadempienze(righe: RigaInadempienza[]): AnalisiInadempi
     .filter(([, v]) => v < 0)
     .map(([a]) => Number(a));
   const totale = Object.values(netto).reduce((s, v) => s + Math.max(0, v), 0);
-  return { nettoPerAnno: netto, totaleNonVersato: totale, anniConSaldoNegativo: anniNeg };
+  return {
+    nettoPerAnno: netto,
+    totaleNonVersato: totale,
+    anniConSaldoNegativo: anniNeg,
+    esclusePerRuolo: { righe: esclRighe, importo: esclImporto },
+  };
 }
 
 // ---------------------------------------------------------------------------

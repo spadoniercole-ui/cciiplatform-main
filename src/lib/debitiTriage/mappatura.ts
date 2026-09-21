@@ -36,7 +36,19 @@
 
 import type { CategoriaDebito, RigaDebitoTriage } from './modello';
 
-export type FormaProspetto = 'RIEPILOGO' | 'DETTAGLIO';
+/**
+ * RIEPILOGO — una colonna per anno.
+ * DETTAGLIO — una riga per movimento, con una data: si somma per anno.
+ * SALDO     — una fotografia di residui ancora aperti: si somma TUTTO
+ *             nell'anno del triage, qualunque sia la data.
+ *
+ * La terza forma è nata da un errore: la lista dei ruoli trattata come
+ * dettaglio vedeva le cartelle notificate nel 2019, 2021 e 2022 come "fuori
+ * dal triage" e le scartava — mentre una cartella ancora aperta è debito di
+ * OGGI, e la data dice solo quando è nata. Movimenti e residui si somigliano
+ * nella forma e sono opposti nel significato.
+ */
+export type FormaProspetto = 'RIEPILOGO' | 'DETTAGLIO' | 'SALDO';
 
 export interface MappaturaProspetto {
   forma: FormaProspetto;
@@ -198,8 +210,11 @@ const normalizza = (v: unknown) =>
 
 function categoriaDi(riga: unknown[], m: MappaturaProspetto): CategoriaDebito | null {
   if (m.colCategoria !== null) {
-    const chiave = normalizza(riga[m.colCategoria]);
-    return m.mappaCategorie[chiave] ?? m.categoriaFile;
+    // In modalità riga per riga conta SOLO la traduzione scelta. Un valore
+    // non tradotto non ricade sulla categoria del file: l'interfaccia lo
+    // presenta come "non usare", e con la ricaduta un'IVA non tradotta
+    // finiva in "previdenziale" — il contrario di quanto mostrato.
+    return m.mappaCategorie[normalizza(riga[m.colCategoria])] ?? null;
   }
   return m.categoriaFile;
 }
@@ -284,6 +299,37 @@ export function estraiRighe(
     return { righe, scartate: esporta(scarti), anniFuoriFinestra: [...fuori].sort() };
   }
 
+  // ---- SALDO: residui aperti, tutti nell'anno del triage ---------------
+  // Gli altri due anni restano vuoti: una fotografia di oggi non dice com'era
+  // il debito un anno fa, e inventarlo sarebbe peggio che lasciarlo vuoto.
+  if (m.forma === 'SALDO') {
+    if (m.colImporto === null) {
+      return {
+        righe: [],
+        scartate: [{ motivo: 'colonna dell’importo non indicata', quante: dati.length }],
+        anniFuoriFinestra: [],
+      };
+    }
+    const perCat = new Map<CategoriaDebito, RigaDebitoTriage>();
+    for (const riga of dati) {
+      if (!riga || riga.every((c) => c === null || String(c).trim() === '')) continue;
+      const cat = categoriaDi(riga, m);
+      if (!cat) {
+        scarta('categoria non attribuita');
+        continue;
+      }
+      const v = numero(riga[m.colImporto]);
+      if (v === null) {
+        scarta('importo non leggibile');
+        continue;
+      }
+      const r = perCat.get(cat) ?? nuova(nomeFile, cat);
+      r.importoAnnoCorrente = (r.importoAnnoCorrente ?? 0) + v;
+      perCat.set(cat, r);
+    }
+    return { righe: [...perCat.values()], scartate: esporta(scarti), anniFuoriFinestra: [] };
+  }
+
   // ---- DETTAGLIO: si somma per categoria e per anno -------------------
   // Raggruppare per descrizione darebbe una riga per mese ("contributi
   // gennaio", "contributi febbraio"...): inutile per un triage. Il
@@ -331,4 +377,29 @@ export function estraiRighe(
 
 function esporta(scarti: Record<string, number>) {
   return Object.entries(scarti).map(([motivo, quante]) => ({ motivo, quante }));
+}
+
+/**
+ * Categoria proposta a partire dall'ente del prospetto.
+ *
+ * I debiti verso un ente sono sempre crediti di quell'ente, mai commerciali —
+ * anche quando li incassa l'Agente della Riscossione: un ruolo INPS è
+ * credito INPS. È una PROPOSTA: chi carica può cambiarla.
+ */
+export function categoriaDaEnte(ente: string): CategoriaDebito | null {
+  switch (ente) {
+    case 'INPS':
+      return 'PREVIDENZIALE';
+    case 'INAIL':
+      return 'ASSICURATIVO';
+    case 'AGENZIA_ENTRATE':
+      return 'FISCALE';
+    // L'Agente della Riscossione non è titolare di nessun credito: incassa per
+    // conto dell'ente che ha iscritto a ruolo. Proporre una categoria vorrebbe
+    // dire indovinare di chi è il credito — si lascia scegliere.
+    case 'AGENZIA_RISCOSSIONE':
+      return null;
+    default:
+      return null;
+  }
 }

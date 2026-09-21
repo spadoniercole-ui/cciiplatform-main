@@ -164,3 +164,75 @@ describe('importi all’italiana', () => {
     expect(leggiImportoItaliano(v)).toBe(atteso);
   });
 });
+
+describe('forma SALDO — residui aperti a oggi', () => {
+  const ruoli = [
+    ['ID Cartella', 'Data Stato', 'Residuo'],
+    ['A', '19/01/2026', 45434.52],
+    ['B', '29/06/2022', 6484.48],
+    ['C', '03/11/2021', 11668.26],
+    ['D', '02/10/2019', 4712.89],
+  ];
+
+  it('somma TUTTI i residui, qualunque sia la data', () => {
+    // Trattata come dettaglio, questa lista scartava 2019, 2021 e 2022 come
+    // "fuori dal triage": ma una cartella ancora aperta è debito di OGGI.
+    const m: MappaturaProspetto = {
+      ...proponiMappatura(ruoli),
+      forma: 'SALDO',
+      colImporto: 2,
+      categoriaFile: 'PREVIDENZIALE',
+    };
+    const e = estraiRighe(ruoli, m, anni, null, 'ruoli.xlsx');
+    expect(e.righe).toHaveLength(1);
+    expect(Math.round((e.righe[0].importoAnnoCorrente ?? 0) * 100) / 100).toBe(68_300.15);
+    expect(e.anniFuoriFinestra).toEqual([]);
+  });
+
+  it('gli anni precedenti restano vuoti: una fotografia di oggi non dice il passato', () => {
+    const m: MappaturaProspetto = {
+      ...proponiMappatura(ruoli),
+      forma: 'SALDO',
+      colImporto: 2,
+      categoriaFile: 'PREVIDENZIALE',
+    };
+    const e = estraiRighe(ruoli, m, anni, null, 'ruoli.xlsx');
+    expect(e.righe[0].importoAnnoPrecedente).toBeNull();
+    expect(e.righe[0].importoAnnoMeno2).toBeNull();
+  });
+});
+
+describe('categoria proposta dall’ente', () => {
+  it('un credito di un ente non è mai commerciale', async () => {
+    const { categoriaDaEnte } = await import('./mappatura');
+    expect(categoriaDaEnte('INPS')).toBe('PREVIDENZIALE');
+    expect(categoriaDaEnte('INAIL')).toBe('ASSICURATIVO');
+    // L'Agente della Riscossione incassa per conto d'altri: non si propone
+    // una categoria, perché sarebbe indovinare di chi è il credito.
+    expect(categoriaDaEnte('AGENZIA_RISCOSSIONE')).toBeNull();
+    expect(categoriaDaEnte('ALTRO')).toBeNull();
+  });
+});
+
+describe('categoria riga per riga: niente ricadute silenziose', () => {
+  it('un valore non tradotto viene SCARTATO, non attribuito alla categoria del file', () => {
+    // L'interfaccia mostra "non usare" per i valori non tradotti. Con la
+    // ricaduta sulla categoria del file, un'IVA non tradotta finiva in
+    // "previdenziale": il contrario di quanto mostrato.
+    const foglio = [
+      ['Natura', 'Data', 'Importo'],
+      ['INPS', '16/02/2025', 1000],
+      ['IVA', '16/03/2025', 500],
+    ];
+    const m: MappaturaProspetto = {
+      ...proponiMappatura(foglio),
+      colCategoria: 0,
+      categoriaFile: 'PREVIDENZIALE',
+      mappaCategorie: { inps: 'PREVIDENZIALE' }, // IVA non tradotta
+    };
+    const e = estraiRighe(foglio, m, anni, null, 'x');
+    expect(e.righe).toHaveLength(1);
+    expect(e.righe[0].importoAnnoPrecedente).toBe(1000); // l'IVA non c'è
+    expect(e.scartate[0].motivo).toContain('categoria');
+  });
+});

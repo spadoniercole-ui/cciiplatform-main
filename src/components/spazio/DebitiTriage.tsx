@@ -11,14 +11,17 @@
 // solo come ci si arriva.
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Save, Table2, PencilLine } from 'lucide-react';
+import { Plus, Trash2, Save, Table2, PencilLine, AlertTriangle } from 'lucide-react';
 import {
   CATEGORIE,
   anniDelTriage,
   andamento,
   totalePerCategoria,
+  trovaSovrapposizioni,
   type CategoriaDebito,
+  type FileMappato,
   type RigaDebitoTriage,
+  type Sovrapposizione,
 } from '@/lib/debitiTriage/modello';
 import {
   ottieniDebitiTriageAction,
@@ -47,6 +50,14 @@ interface Props {
   prospetti?: File[];
   onProspetti?: (file: File[]) => void;
   onTogliProspetto?: (file: File) => void;
+  /**
+   * Le scelte fatte sulle sovrapposizioni. Alcune si applicano qui, togliendo
+   * righe dalla tabella; quella fra V.E.R.A. ed elenchi invece la deve
+   * applicare la pagina, perché riguarda cosa si salva come non versato.
+   */
+  onScelte?: (scelte: Record<string, string>) => void;
+  /** Una sovrapposizione aperta blocca la conferma: la pagina lo deve sapere. */
+  onConflitto?: (aperto: boolean) => void;
   /**
    * La tabella comunica le proprie righe alla pagina, che le salva insieme
    * all'azienda alla conferma. Senza, le posizioni inserite prima che
@@ -85,6 +96,8 @@ export function DebitiTriage({
   prospetti = [],
   onProspetti,
   onTogliProspetto,
+  onConflitto,
+  onScelte,
   onRighe,
   onStruttura,
 }: Props) {
@@ -95,6 +108,8 @@ export function DebitiTriage({
     proposta: MappaturaProspetto;
   } | null>(null);
   const [notaStruttura, setNotaStruttura] = useState<Record<string, string>>({});
+  const [mappati, setMappati] = useState<FileMappato[]>([]);
+  const [scelte, setScelte] = useState<Record<string, string>>({});
   const [tipi, setTipi] = useState<Record<string, TipoProspetto>>({});
   const anni = anniDelTriage(new Date(`${dataVerifica}T12:00:00Z`));
   const [haProspetti, setHaProspetti] = useState<boolean | null>(null);
@@ -112,6 +127,35 @@ export function DebitiTriage({
     });
   }, [nomeSchema, aziendaId]);
 
+  const sovrapposizioni = trovaSovrapposizioni(righe, mappati, Object.values(tipi)).filter(
+    (x) => !scelte[x.chiave]
+  );
+
+  useEffect(() => {
+    onConflitto?.(sovrapposizioni.length > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sovrapposizioni.length]);
+
+  /** Applica la scelta: toglie dalla tabella quello che si è deciso di non usare. */
+  const risolvi = (x: Sovrapposizione, valore: string) => {
+    if (x.chiave.startsWith('saldo:')) {
+      const ente = x.chiave.slice(6);
+      const files = mappati.filter((m) => m.forma === 'SALDO' && m.ente === ente);
+      const daTogliere =
+        valore === 'PRIMO' ? files[1]?.nome : valore === 'SECONDO' ? files[0]?.nome : null;
+      if (daTogliere) {
+        setRighe(righe.filter((r) => r.origine !== daTogliere));
+        setMappati(mappati.filter((m) => m.nome !== daTogliere));
+      }
+    }
+    if (x.chiave === 'prev:fogli' && valore === 'FOGLI') {
+      setRighe(righe.filter((r) => r.categoria !== 'PREVIDENZIALE'));
+    }
+    const nuove = { ...scelte, [x.chiave]: valore };
+    setScelte(nuove);
+    onScelte?.(nuove);
+  };
+
   useEffect(() => {
     onRighe?.(righe);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,7 +168,8 @@ export function DebitiTriage({
   };
 
   /** Aggiunge le righe estratte, togliendo l'eventuale riga vuota iniziale. */
-  const aggiungiEstratte = (nuove: RigaDebitoTriage[]) => {
+  const aggiungiEstratte = (nuove: RigaDebitoTriage[], origine?: string) => {
+    if (origine) nuove = nuove.map((r) => ({ ...r, origine }));
     const esistenti = righe.filter(
       (r) =>
         r.descrizione.trim() !== '' ||
@@ -172,6 +217,32 @@ export function DebitiTriage({
           agli indici.
         </p>
       </div>
+
+      {/* Grande come una casa, e blocca la conferma finché non si sceglie:
+          sommare due documenti sullo stesso debito lo raddoppia. */}
+      {sovrapposizioni.map((x) => (
+        <div key={x.chiave} className="space-y-3 rounded-xl border-2 border-red-400 bg-red-50 p-4">
+          <p className="flex items-center gap-2 text-sm font-bold text-red-900">
+            <AlertTriangle className="h-5 w-5" />
+            {x.titolo}
+          </p>
+          <p className="text-xs leading-relaxed text-red-900">{x.spiegazione}</p>
+          <p className="text-[11px] font-bold text-red-800">
+            Finché non scegli, la verifica non si può confermare.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {x.scelte.map((c) => (
+              <button
+                key={c.valore}
+                onClick={() => risolvi(x, c.valore)}
+                className="rounded-lg border border-red-300 bg-white px-3 py-2 text-[11px] font-bold text-red-900 hover:bg-red-100"
+              >
+                {c.etichetta}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
 
       {haProspetti === null && (
         <div className="space-y-3 rounded-xl border border-sky-200 bg-sky-50 p-4">
@@ -272,11 +343,13 @@ export function DebitiTriage({
                       className={`shrink-0 font-bold ${
                         !t
                           ? 'text-slate-400'
-                          : t === 'SCONOSCIUTO'
-                            ? 'text-amber-700'
-                            : t === 'F24_AGGREGATO'
-                              ? 'text-amber-600'
-                              : 'text-emerald-700'
+                          : t === 'SCONOSCIUTO' && notaStruttura[f.name]?.startsWith('mappato')
+                            ? 'text-emerald-700'
+                            : t === 'SCONOSCIUTO'
+                              ? 'text-amber-700'
+                              : t === 'F24_AGGREGATO'
+                                ? 'text-amber-600'
+                                : 'text-emerald-700'
                       }`}
                     >
                       <button
@@ -286,7 +359,14 @@ export function DebitiTriage({
                       >
                         ×
                       </button>
-                      {t ? ETICHETTA_PROSPETTO[t] : 'riconoscimento...'}
+                      {/* Un file mappato non è più "non riconosciuto": lo è stato,
+                          da chi l'ha caricato. Continuare a dirlo in ambra
+                          lasciava credere che non fosse stato usato. */}
+                      {t === 'SCONOSCIUTO' && notaStruttura[f.name]?.startsWith('mappato')
+                        ? 'Mappato'
+                        : t
+                          ? ETICHETTA_PROSPETTO[t]
+                          : 'riconoscimento...'}
                       {t === 'SCONOSCIUTO' &&
                         !notaStruttura[f.name]?.startsWith('riconosciuto') && (
                           <button
@@ -309,14 +389,17 @@ export function DebitiTriage({
               proposta={inMappatura.proposta}
               anni={anni}
               onApplica={({ righe: estratte, ente, mappatura, firma }) => {
-                aggiungiEstratte(estratte);
+                aggiungiEstratte(estratte, inMappatura.nome);
+                setMappati((prev) => [
+                  ...prev.filter((x) => x.nome !== inMappatura.nome),
+                  { nome: inMappatura.nome, ente, forma: mappatura.forma },
+                ]);
                 onStruttura?.({ ente, firma, mappatura, nome: inMappatura.nome });
                 setNotaStruttura({
                   ...notaStruttura,
                   [inMappatura.nome]: `mappato: ${estratte.length} posizioni aggiunte`,
                 });
                 setInMappatura(null);
-                setHaProspetti(false);
               }}
               onAnnulla={() => setInMappatura(null)}
             />
@@ -326,15 +409,21 @@ export function DebitiTriage({
             correggi prima che entrino nel calcolo.
           </p>
           <button
-            onClick={() => setHaProspetti(false)}
+            onClick={() => setRighe([...righe, vuota()])}
             className="text-[11px] font-bold text-sky-700 hover:underline"
           >
-            Integra a mano
+            Aggiungi una posizione a mano
           </button>
         </div>
       )}
 
-      {haProspetti === false && (
+      {/* La tabella compare in ENTRAMBI i casi. Prima "prospetti" e "a mano"
+          erano due viste alternative: aggiungere le righe di un prospetto
+          passava alla vista manuale e NASCONDEVA l'elenco dei file — i file
+          c'erano ancora, ma non si vedevano più, e il secondo file da mappare
+          diventava irraggiungibile. Ora convivono: sopra i file, sotto la
+          tabella che raccoglie tutto. */}
+      {haProspetti !== null && (
         <div className="space-y-3">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[56rem] text-xs">

@@ -175,6 +175,8 @@ export async function leggiListaInadempienze(file: File): Promise<EsitoLettura<R
   const { aoa } = await leggiFoglioAoa(file);
   const t = trovaIntestazione(aoa, COL_INADEMPIENZE);
   if (!t) return { righe: [], colonneMancanti: COL_INADEMPIENZE };
+  // Facoltativa: serve a escludere le partite già passate a ruolo.
+  const idxFase = (aoa[t.riga] ?? []).map(normalizza).findIndex((x) => x.startsWith('fasedi'));
 
   const righe: RigaInadempienza[] = [];
   for (let r = t.riga + 1; r < aoa.length; r++) {
@@ -185,6 +187,7 @@ export async function leggiListaInadempienze(file: File): Promise<EsitoLettura<R
       inizioPeriodo: periodo,
       importoAddebitato: numero(riga[t.indici['Importo Addebitato']]),
       importoAccreditato: numero(riga[t.indici['Importo Accreditato']]),
+      fase: idxFase >= 0 ? String(riga[idxFase] ?? '').trim() : null,
     });
   }
   return { righe };
@@ -209,7 +212,7 @@ export async function leggiListaInadempienze(file: File): Promise<EsitoLettura<R
 // che non lo è.
 
 export type TipoProspetto =
-  'DENUNCE' | 'DELEGHE' | 'F24_AGGREGATO' | 'INADEMPIENZE' | 'VERA' | 'SCONOSCIUTO';
+  'RUOLI' | 'DENUNCE' | 'DELEGHE' | 'F24_AGGREGATO' | 'INADEMPIENZE' | 'VERA' | 'SCONOSCIUTO';
 
 export async function riconosciProspetto(file: File): Promise<TipoProspetto> {
   let aoa: unknown[][];
@@ -221,6 +224,7 @@ export async function riconosciProspetto(file: File): Promise<TipoProspetto> {
     return 'SCONOSCIUTO';
   }
 
+  if (trovaIntestazione(aoa, COL_RUOLI)) return 'RUOLI';
   if (
     trovaIntestazione(aoa, ['Anno', 'Importo Pagato']) &&
     !trovaIntestazione(aoa, ['Periodo comp.'])
@@ -246,6 +250,7 @@ export async function riconosciProspetto(file: File): Promise<TipoProspetto> {
 }
 
 export const ETICHETTA_PROSPETTO: Record<TipoProspetto, string> = {
+  RUOLI: 'Ruoli esattoriali',
   DENUNCE: 'Elenco denunce (UNIEMENS)',
   DELEGHE: 'Elenco deleghe (F24 per periodo)',
   F24_AGGREGATO: 'F24 aggregato per anno',
@@ -253,3 +258,35 @@ export const ETICHETTA_PROSPETTO: Record<TipoProspetto, string> = {
   VERA: 'Posizione V.E.R.A.',
   SCONOSCIUTO: 'Struttura non riconosciuta',
 };
+
+// ---------------------------------------------------------------------------
+// RUOLI ESATTORIALI
+//
+// Elenco delle cartelle affidate all'Agente della Riscossione. È una
+// FOTOGRAFIA di residui ancora aperti, non un elenco di movimenti: una
+// cartella notificata nel 2021 con residuo è debito di OGGI, e la data dice
+// solo quando è nata. Si somma quindi tutto il residuo, qualunque sia la data.
+//
+// Il credito resta dell'ente che l'ha iscritto a ruolo — INPS se il ruolo è
+// INPS — e non è mai commerciale. L'Agente della Riscossione lo incassa, non
+// ne è il titolare.
+
+const COL_RUOLI = ['ID Cartella/Avviso', 'Residuo'];
+
+export async function leggiRuoli(
+  file: File
+): Promise<{ residuo: number; cartelle: number; colonneMancanti?: string[] }> {
+  const { aoa } = await leggiFoglioAoa(file);
+  const t = trovaIntestazione(aoa, COL_RUOLI);
+  if (!t) return { residuo: 0, cartelle: 0, colonneMancanti: COL_RUOLI };
+  let residuo = 0;
+  let cartelle = 0;
+  for (let r = t.riga + 1; r < aoa.length; r++) {
+    const riga = aoa[r] ?? [];
+    const id = String(riga[t.indici['ID Cartella/Avviso']] ?? '').trim();
+    if (!id) continue;
+    residuo += numero(riga[t.indici['Residuo']]);
+    cartelle++;
+  }
+  return { residuo, cartelle };
+}
