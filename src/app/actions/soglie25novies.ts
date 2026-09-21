@@ -270,7 +270,7 @@ export async function valutaSoglieAction(
 
     if (tipoSpazio === 'ENTE' && ente === null) {
       esito.datiMancanti.unshift(
-        'Ente di riferimento non determinato: nessuna riga dei Limiti di Ricevibilità è collegata a un ente dell’art. 25-novies, oppure più righe puntano a enti diversi. Nessuna soglia è stata applicata.'
+        'Ente di riferimento non determinato: nessuna riga dei Parametri di riscontro della proposta è collegata a un ente dell’art. 25-novies, oppure più righe puntano a enti diversi. Nessuna soglia è stata applicata.'
       );
     }
 

@@ -191,7 +191,7 @@ export function CheckListAziendaScenario({ nomeSchema, aziendaId, codice }: Prop
           </span>
           <p className="text-[10px] text-slate-400 mt-1">
             Somma dei pesi delle domande con No, meno la somma dei pesi di quelle con Sì — 0 o
-            negativo è un quadro solido, più sale più pesano le criticità.
+            negativo indica assenza di criticità nette, più sale più pesano le criticità.
           </p>
         </div>
       )}

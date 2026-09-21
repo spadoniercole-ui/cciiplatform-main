@@ -151,6 +151,8 @@ export type EsitoSoglia = 'sotto' | 'sopra' | 'non_determinabile';
 
 export interface RigaSoglia {
   ente: Ente25Novies;
+  /** Identificativo nel registro delle fonti (src/lib/registroFonti). */
+  fonte?: string;
   ambito: string;
   descrizione: string;
   valore: string;
@@ -296,6 +298,7 @@ export function calcolaSoglie25Novies(
         ' L’ente invia la segnalazione entro 60 giorni dal verificarsi dei presupposti (art. 25-novies, comma 2, lett. b).';
     righe.push({
       ente: 'INPS',
+      fonte: 'CCII-25novies-c1-a',
       ambito: 'Segnalazione INPS — imprese CON lavoratori',
       descrizione:
         'Ritardo di oltre 90 giorni nel versamento di contributi previdenziali di ammontare superiore alla soglia (entrambi i requisiti).',
@@ -334,6 +337,7 @@ export function calcolaSoglie25Novies(
         ' L’ente invia la segnalazione entro 60 giorni dal verificarsi dei presupposti (art. 25-novies, comma 2, lett. b).';
     righe.push({
       ente: 'INPS',
+      fonte: 'CCII-25novies-c1-a',
       ambito: 'Segnalazione INPS — imprese SENZA lavoratori',
       descrizione: 'Ritardo di oltre 90 giorni nel versamento di contributi previdenziali.',
       valore: '> 5.000 €',
@@ -377,6 +381,7 @@ export function calcolaSoglie25Novies(
         ' L’ente invia la segnalazione entro 60 giorni dal verificarsi dei presupposti (art. 25-novies, comma 2, lett. b).';
     righe.push({
       ente: 'INAIL',
+      fonte: 'CCII-25novies-c1-b',
       ambito: 'Segnalazione INAIL',
       descrizione: 'Debito per premi assicurativi scaduto da oltre 90 giorni e non versato.',
       valore: '> 5.000 €',
@@ -428,6 +433,7 @@ export function calcolaSoglie25Novies(
     }
     righe.push({
       ente: 'AGENZIA_ENTRATE',
+      fonte: 'CCII-25novies-c1-c',
       ambito: 'Segnalazione Agenzia delle Entrate (IVA)',
       descrizione:
         'Debito IVA scaduto e non versato risultante dalle liquidazioni periodiche, superiore alla soglia e comunque non inferiore al 10% del volume d’affari dell’anno precedente; segnalazione in ogni caso oltre 20.000 €.',
@@ -483,6 +489,7 @@ export function calcolaSoglie25Novies(
           ' L’ente invia la segnalazione entro 60 giorni dal verificarsi dei presupposti (art. 25-novies, comma 2, lett. b).';
       righe.push({
         ente: 'AGENZIA_RISCOSSIONE',
+        fonte: 'CCII-25novies-c1-d',
         ambito: f.ambito,
         descrizione: 'Crediti affidati, scaduti da oltre 90 giorni.',
         valore: f.valore,

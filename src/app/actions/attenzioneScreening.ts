@@ -198,7 +198,7 @@ export async function ottieniAttenzioneScreeningAction(
     const motivoSoglieMancanti =
       applicabili.length === 0
         ? enteSpazio === undefined
-          ? 'Ente di riferimento non configurato: collega una riga dei Limiti di Ricevibilità a un ente dell’art. 25-novies.'
+          ? 'Ente di riferimento non configurato: collega una riga dei Parametri di riscontro della proposta a un ente dell’art. 25-novies.'
           : 'Nessuna soglia applicabile: dichiara in anagrafica la presenza di lavoratori subordinati/parasubordinati.'
         : null;
 

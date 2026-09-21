@@ -197,8 +197,8 @@ export function BrogliaccioEnteScenario({
           />
         ) : (
           <p className="text-xs text-slate-400">
-            Non ancora generato — raccoglie Anagrafica Ente, Check List, Situazione Debitoria e
-            l&apos;esito di ricevibilità della riga rilevante della Proposta.
+            Non ancora generato — raccoglie Anagrafica Ente, Check List, Situazione Debitoria e il
+            riscontro con i parametri dell&apos;ente sulla riga rilevante della Proposta.
           </p>
         )}
       </div>
@@ -282,8 +282,8 @@ export function BrogliaccioEnteScenario({
           ) : (
             <>
               <p className="text-xs text-blue-900 mb-2">
-                Gli indici suggeriscono spazi di manovra da esplorare — vuoi simulare la solidità
-                della proposta?
+                Gli indici suggeriscono spazi di manovra da esplorare — vuoi simulare la copertura
+                dei flussi della proposta?
               </p>
               <div className="flex gap-2">
                 <button

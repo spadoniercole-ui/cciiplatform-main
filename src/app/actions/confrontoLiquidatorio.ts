@@ -110,7 +110,7 @@ export async function generaConfrontoLiquidatorioSeNecessarioAction(
         ? debitiRis.righe.reduce((acc, r) => acc + saldoRigaDebitoEnte(r), 0)
         : null;
 
-    const prompt = `Sei un assistente che aiuta un ente creditore a valutare il criterio di convenienza previsto dagli artt. 63 e 88 del Codice della Crisi d'Impresa e dell'Insolvenza (CCII) — una proposta di composizione negoziata è ricevibile solo se offre al creditore non meno di quanto otterrebbe in una liquidazione giudiziale.
+    const prompt = `Sei un assistente che aiuta un ente creditore a valutare il criterio di convenienza previsto dagli artt. 63 e 88 del Codice della Crisi d'Impresa e dell'Insolvenza (CCII) — il trattamento offerto al creditore va messo a confronto con quanto otterrebbe in una liquidazione giudiziale.
 
 Cerca sul web, e usa nella risposta:
 1. I tassi di recupero medi (recovery rate) tipici della liquidazione giudiziale in Italia per il settore ATECO dell'azienda${azienda?.codiceAteco ? ` (codice ${azienda.codiceAteco})` : ' (non specificato, usa dati generali per PMI italiane)'}, distinti per rango di credito se disponibili (privilegiato, chirografario).
@@ -131,7 +131,7 @@ Scrivi un paragrafo (200-350 parole, prosa continua, non elenchi puntati) intito
 - Riporti i tassi di recupero di settore trovati, con la fonte.
 - Stimi (o confermi, se già presente sopra) il valore che questo ente otterrebbe in liquidazione giudiziale.
 - Richiami sinteticamente il criterio legale ex artt. 63/88 CCII.
-Non dare un giudizio finale sulla ricevibilità di QUESTA specifica proposta — quello lo fa la piattaforma altrove con il numero effettivamente offerto: qui serve solo il termine di paragone (quanto si otterrebbe in liquidazione), non il confronto con l'offerta.`;
+Non esprimere valutazioni su QUESTA specifica proposta — il riscontro con il numero effettivamente offerto lo fa la piattaforma altrove: qui serve solo il termine di paragone (quanto si otterrebbe in liquidazione), non il confronto con l'offerta.`;
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-5',
@@ -270,7 +270,7 @@ Scrivi un paragrafo (200-350 parole, prosa continua, non elenchi puntati) intito
 - Riporti i tassi di recupero di settore trovati, con la fonte, distinti per rango dove possibile.
 - Stimi il valore che i creditori otterrebbero complessivamente nella liquidazione giudiziale dell'azienda (in euro se la massa debitoria è nota, altrimenti in percentuale).
 - Richiami sinteticamente il criterio legale ex artt. 63/88 CCII come vincolo minimo che la proposta dovrà rispettare.
-Non dare un giudizio finale sulla convenienza della proposta concreta — le percentuali offerte riga per riga sono altrove: qui serve solo il termine di paragone (quanto si otterrebbe in liquidazione), che il professionista userà come pavimento nella costruzione della proposta.`;
+Non dare un giudizio finale sulla convenienza della proposta concreta — le percentuali offerte riga per riga sono altrove: qui serve solo il termine di paragone (quanto si otterrebbe in liquidazione), che il professionista userà come termine di confronto nella costruzione della proposta.`;
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-5',

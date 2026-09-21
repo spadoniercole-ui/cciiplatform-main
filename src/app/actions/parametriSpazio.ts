@@ -146,7 +146,7 @@ const CATEGORIE_DEFAULT = [
   {
     categoria: 'INPS',
     percentuale: 100,
-    note: 'Non considera ricevibile una proposta sotto il 100%, in unica soluzione o a rate.',
+    note: 'Parametro dell’ente: proposta non coerente sotto il 100%, in unica soluzione o a rate.',
   },
   { categoria: 'Agenzia Entrate', percentuale: 0, note: null },
   { categoria: 'Banche', percentuale: 0, note: null },
@@ -169,7 +169,7 @@ export async function ottieniLimitiRicevibilita(
       // inutilizzate, se lo spazio torna NON_ENTE in futuro).
       await pool.query(
         `INSERT INTO "${nomeSchema}".limiti_ricevibilita (categoria_creditore, percentuale_minima, note)
-         VALUES ($1, 0, 'Soglia unica di ricevibilità per questo ente.')
+         VALUES ($1, 0, 'Soglia unica di riscontro per questo ente.')
          ON CONFLICT (categoria_creditore) DO NOTHING`,
         [CATEGORIA_SENTINELLA_ENTE]
       );

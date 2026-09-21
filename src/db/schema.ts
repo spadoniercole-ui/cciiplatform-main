@@ -129,6 +129,12 @@ export function getTabelleTenant(nomeSchema: string) {
       // finale è generata, da quel momento lo scenario è sola lettura
       // permanente. Sempre null per il Redigente.
       bloccatoIl: timestamp('bloccato_il'),
+      // Inquadramento della proposta: strumento, data di deposito
+      // (AAAA-MM-GG) e correzione a mano della quota degli altri aderenti
+      // (0..1). Tutti facoltativi — vedi src/lib/proposta/inquadramento.ts.
+      strumentoProposta: text('strumento_proposta'),
+      dataDepositoProposta: text('data_deposito_proposta'),
+      quotaAltriAderentiManuale: numeric('quota_altri_aderenti_manuale'),
       createdAt: timestamp('created_at').defaultNow().notNull(),
     }),
 

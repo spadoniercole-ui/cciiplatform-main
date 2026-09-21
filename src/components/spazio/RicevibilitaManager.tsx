@@ -1,9 +1,10 @@
 'use client';
 
-// Limiti di ricevibilità della proposta per categoria di creditore —
+// Parametri di riscontro della proposta per categoria di creditore —
 // estratto da Parametri di Spazio (che era diventata chilometrica) in una
 // pagina dedicata, stesso principio già applicato alla Check List.
 
+import { QUALIFICAZIONE_RISCONTRO_PARAMETRI } from '@/lib/lessico/lessico';
 import React, { useEffect, useState } from 'react';
 import { useDichiaraContestoAssistente } from '@/components/ContestoAssistenteContext';
 import { ShieldCheck, Plus } from 'lucide-react';
@@ -28,7 +29,7 @@ export function RicevibilitaManager({ nomeSchema, tipoSpazio }: Props) {
   useDichiaraContestoAssistente({
     pagina: 'parametri',
     nomeSchema,
-    sezioneParametri: 'Limiti di ricevibilità',
+    sezioneParametri: 'Parametri di riscontro della proposta',
   });
   const [limiti, setLimiti] = useState<LimiteRicevibilita[]>([]);
   const [limitiRango, setLimitiRango] = useState<LimiteRicevibilitaRango[]>([]);
@@ -104,15 +105,16 @@ export function RicevibilitaManager({ nomeSchema, tipoSpazio }: Props) {
         <ShieldCheck className="w-4 h-4 text-blue-600" />
         <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
           {tipoSpazio === 'ENTE'
-            ? 'Soglia di ricevibilità'
-            : 'Limiti di ricevibilità della proposta'}
+            ? 'Soglia di riscontro della proposta'
+            : 'Parametri di riscontro della proposta'}
         </h2>
       </div>
       <p className="text-[11px] text-slate-500">
         {tipoSpazio === 'ENTE'
-          ? 'Un solo valore, non una categoria per creditore — questo spazio rappresenta un ente a scopo singolo, conta solo la soglia con cui questo ente valuta le proposte che riceve. Criterio corretto ex CCII: ricevibile se offre non meno di quanto si otterrebbe in liquidazione giudiziale.'
-          : 'Criterio corretto ex CCII: una proposta è ricevibile se offre al creditore non meno di quanto otterrebbe in liquidazione giudiziale — non una percentuale minima fissa. Se per una categoria è stato stimato un valore di liquidazione (in euro), è quello il test principale; la % minima resta un pavimento aggiuntivo solo se impostata sopra zero.'}
+          ? 'Un solo valore, non una categoria per creditore — questo spazio rappresenta un ente a scopo singolo, conta solo la soglia con cui questo ente valuta le proposte che riceve. Termine di confronto ex CCII: quanto il creditore otterrebbe in liquidazione giudiziale.'
+          : 'Termine di confronto ex CCII: quanto il creditore otterrebbe in liquidazione giudiziale — non una percentuale minima fissa. Se per una categoria è stato stimato un valore di liquidazione (in euro), è quello il confronto principale; la % minima resta un parametro aggiuntivo solo se impostata sopra zero.'}
       </p>
+      <p className="text-[11px] text-slate-500 italic">{QUALIFICAZIONE_RISCONTRO_PARAMETRI}</p>
 
       {errore && (
         <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">

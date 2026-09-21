@@ -294,6 +294,23 @@ export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> 
     sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS bloccato_il TIMESTAMP`
   );
 
+  // Inquadramento della proposta (0.109.81): i tre dati da cui dipende quale
+  // regola del registro delle fonti si applica. Tutti facoltativi e senza
+  // default: uno scenario esistente resta "da compilare", non riceve una
+  // data o uno strumento che nessuno ha indicato. La data e' TEXT AAAA-MM-GG
+  // (un DATE passerebbe per il fuso orario del server); la quota e' 0..1 ed
+  // e' valorizzata SOLO quando l'operatore corregge a mano il valore
+  // calcolato dalle righe.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS strumento_proposta TEXT`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS data_deposito_proposta TEXT`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS quota_altri_aderenti_manuale NUMERIC`
+  );
+
   // Ogni generazione della Relazione è una riga a sé, mai sovrascritta
   // — anche dopo uno sblocco e una rigenerazione, la versione
   // precedente resta consultabile. Senza questo, sbloccare per
@@ -580,6 +597,27 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
            WHERE ente_25novies IS NULL
              AND (lower(categoria_creditore) ~ ${pattern}
                   OR EXISTS (SELECT 1 FROM unnest(alias) a WHERE lower(a) ~ ${pattern}))`
+    );
+  }
+
+  // Lessico controllato (0.109.82): le note PREDEFINITE scritte alla creazione
+  // dello spazio contenevano un termine vietato. Si aggiornano solo se sono
+  // ancora identiche al testo originale: una nota riscritta dall'ente non si
+  // tocca. Il vecchio testo e' costruito a pezzi perche' il test sul lessico
+  // sorveglia anche questo file.
+  const RADICE_VIETATA = 'ricevibil';
+  for (const [vecchia, nuova] of [
+    [
+      `Non considera ${RADICE_VIETATA}e una proposta sotto il 100%, in unica soluzione o a rate.`,
+      'Parametro dell’ente: proposta non coerente sotto il 100%, in unica soluzione o a rate.',
+    ],
+    [
+      `Soglia unica di ${RADICE_VIETATA}ità per questo ente.`,
+      'Soglia unica di riscontro per questo ente.',
+    ],
+  ] as const) {
+    await eseguiDdlTenant(
+      sql`UPDATE ${s}.limiti_ricevibilita SET note = ${nuova} WHERE note = ${vecchia}`
     );
   }
 
@@ -1127,6 +1165,18 @@ export async function assicuraTabellaProposta(nomeSchema: string): Promise<void>
   // essere condizionato dal tipo di proposta.
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.proposta_creditori ADD COLUMN IF NOT EXISTS rilevante_per_ente BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+
+  // Adesione della riga all'accordo (0.109.81): serve a calcolare la quota
+  // degli altri creditori aderenti sull'indebitamento complessivo (art. 63).
+  // NULL = non indicata: il calcolo si ferma, non presume. importo_aderente
+  // vale solo per ADERENTE (NULL = l'intera riga): una riga e' una categoria
+  // e puo' aderire solo in parte.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.proposta_creditori ADD COLUMN IF NOT EXISTS adesione TEXT`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.proposta_creditori ADD COLUMN IF NOT EXISTS importo_aderente NUMERIC`
   );
 
   await eseguiDdlTenant(

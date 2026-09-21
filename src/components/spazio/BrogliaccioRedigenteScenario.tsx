@@ -102,7 +102,7 @@ export function BrogliaccioRedigenteScenario({ nomeSchema, scenarioId }: Props) 
               Confronto con lo scenario liquidatorio pronto
               {confronto.generatoIl &&
                 ` (${new Date(confronto.generatoIl).toLocaleDateString('it-IT')})`}{' '}
-              — la Relazione lo userà come pavimento minimo (artt. 63/88 CCII), senza ricerca in
+              — la Relazione lo userà come termine di confronto (artt. 63/88 CCII), senza ricerca in
               diretta al lancio.
             </>
           ) : confronto.errore ? (

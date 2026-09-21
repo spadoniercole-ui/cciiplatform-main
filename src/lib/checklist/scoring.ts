@@ -45,7 +45,7 @@ function etichettaDaCriticita(
   if (percentuale === null) return { etichetta: 'Non ancora valutabile', colore: 'grigio' };
   if (percentuale === 0) return { etichetta: 'Nessuna criticità rilevata', colore: 'verde' };
   if (percentuale <= soglie.solido)
-    return { etichetta: 'Piano solido, alcune aree di attenzione', colore: 'verde' };
+    return { etichetta: 'Criticità contenute, alcune aree di attenzione', colore: 'verde' };
   if (percentuale <= soglie.daRafforzare)
     return { etichetta: 'Piano da rafforzare su più punti', colore: 'giallo' };
   return { etichetta: 'Criticità strutturali rilevanti', colore: 'rosso' };

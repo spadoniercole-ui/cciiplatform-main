@@ -93,6 +93,184 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.82 — 2026-09-21
+
+**Fase 3: il lessico controllato di Libra diventa un dato del sistema**
+
+**1. Il lessico come dati** — `src/lib/lessico/lessico.ts`: i 19 termini della
+parte C di Libra, nelle quattro classi (vietato in automatico, consentito con
+qualificazione, consentito tecnico, riservato al professionista), ciascuno con
+il modello che ne riconosce le flessioni, la formula sostitutiva e la
+qualificazione obbligatoria. `cercaTerminiLessico()` li trova in un testo: e' il
+primo controllo del revisore a regole (fase 4).
+
+**2. Un test sorveglia i testi dell'applicativo** —
+`lessico.sorgenti.test.ts` fallisce se uno dei sei termini senza usi innocenti
+(ricevibile, ammissibile, solido, pavimento minimo, omologabile, segnalazione
+dovuta) ricompare in un testo a schermo, in un prompt per l'AI o in un PDF.
+Commenti e nomi interni (tabelle, tipi, proprieta') non contano: nessun utente
+li legge, e rinominarli sarebbe una migrazione senza beneficio. Gli altri
+termini dipendono dal contesto («crisi» in «composizione negoziata della crisi»
+e' una citazione) e li esaminera' il revisore sugli output generati.
+
+**3. Nuova nomenclatura (scelta di Ercole).** La verifica della piattaforma
+confronta l'offerta con i parametri dell'ente, non la completezza dei
+documenti: vale la formula che Libra da' per «conforme».
+- «Limiti di ricevibilita'» → **«Parametri di riscontro della proposta»**
+- «Esito ricevibilita'» → **«Riscontro con i parametri dell'ente»**
+- «Ricevibile / Non ricevibile» → **«Coerente / Non coerente con i parametri
+  configurati»**, con la qualificazione obbligatoria accanto
+- Giudizio finale del Ricevente: «Coerente con i parametri — documentazione
+  completa / incompleta / documenti di supporto assenti», «Non coerente con i
+  parametri configurati»
+- Check List: «Piano solido…» → «Criticita' contenute, alcune aree di
+  attenzione»; «Quadro solido» → «Nessuna criticita' netta rilevata»
+- «pavimento minimo» → «termine di confronto (valore stimato, non soglia
+  legale)»; indici: «Solidita' patrimoniale» → «Struttura patrimoniale»
+Toccati 27 file, prompt compresi. Le note predefinite dei
+parametri gia' salvate negli spazi esistenti si aggiornano da sole, ma solo se
+identiche al testo originale: una nota riscritta dall'ente non si tocca.
+
+**4. Intenzioni di voto (precisazione di Ercole).** L'adesione e' un'intenzione
+di voto sulla proposta nel suo insieme, con due momenti a specchio.
+- Ricevente: la tabella diventa un promemoria facoltativo; la quota si ricava
+  dall'attestazione e si inserisce a mano; l'ente non si esprime sul voto altrui.
+- Redigente: «intenzioni di voto raccolte». Con voti incompleti il pannello
+  mostra i favorevoli certi e quelli ancora possibili: se stanno dallo stesso
+  lato del 25% la soglia e' gia' determinata, senza presumere nulla; se stanno
+  ai due lati, la regola si ferma e lo dice.
+
+Limiti noti: l'AI puo' ancora scrivere un termine vietato nei testi che genera
+— lo intercettera' il revisore (fase 4); «sostenibile» resta nel nome della
+Simulazione e in 21 file, da rivedere etichetta per etichetta.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable.
+
+## 0.109.81 — 2026-09-21
+
+**Fase 2, secondo passo: le regole del registro delle fonti arrivano nella scheda Proposta**
+
+Le due regole collaudate nella 0.109.80 non erano collegate all'interfaccia
+perche' alla proposta mancavano i dati da cui dipendono. Ora ci sono.
+
+**1. Inquadramento della proposta** — nuovo pannello in testa alla scheda
+Proposta, per entrambi i percorsi (`InquadramentoProposta.tsx`). Tre dati nuovi
+sullo scenario, tutti facoltativi e senza default: uno scenario esistente resta
+"da compilare".
+- **Strumento scelto**: elenco completo — accordi degli artt. 57, 60 e 61 (con
+  transazione ex art. 63), accordo transattivo in composizione negoziata
+  (art. 23, c. 2-bis), concordato preventivo, piano di ristrutturazione soggetto
+  a omologazione, altro. Dove non c'e' una regola collaudata il pannello mostra
+  «Regola non ancora nel registro delle fonti» e nessun parametro.
+- **Data di deposito**: decide la versione dell'art. 63 (dal 28/09/2024: 50/60;
+  prima: 30/40). Conta la data della proposta, non quella di oggi.
+- **Quota degli altri aderenti**: calcolata dalle righe, correggibile a mano. Se
+  il valore a mano e quello calcolato stanno ai due lati del 25% — cioe' se la
+  correzione cambia la soglia — compare un avviso esplicito.
+
+**2. Adesione riga per riga.** Per calcolare la quota serviva un dato che la
+proposta non aveva. Ogni riga si classifica come creditore pubblico (conta
+nell'indebitamento, mai fra gli "altri"), altro creditore che aderisce (anche
+per un importo parziale: una riga e' una categoria) o che non aderisce. Basta
+una riga non indicata e il calcolo si ferma dicendo quale: nessun default
+silenzioso. La piattaforma PROPONE "pubblico" — dalla mappatura dei Limiti di
+Ricevibilita', dalla riga rilevante per l'ente o dal nome della categoria — ma
+la proposta compare evidenziata e vale solo se confermata salvando.
+
+**3. Due formule.** La formula mostrata e' quella del percorso: Ricevente per
+una proposta ricevuta, Redigente per una da definire. In composizione negoziata
+il Ricevente vede il perimetro per l'ente del proprio spazio (per uno spazio
+INPS: fuori perimetro, non va istruita come transazione contributiva); il
+Redigente lo vede per i quattro enti.
+
+**4. Fonti in chiaro.** Ogni esito elenca le voci del registro che lo
+sostengono. Il regime transitorio del D.L. 69/2023 compare con il parametro ma
+marcato «non ancora riscontrata», con l'avviso sulla decorrenza da verificare.
+Per gli accordi resta l'avviso che le percentuali di adesione degli artt. 57,
+60 e 61 non sono ancora nel registro.
+
+**5. Riscontro numerico, non giudizio.** Per le righe dei creditori pubblici il
+pannello affianca la percentuale offerta al parametro («inferiore» / «non
+inferiore»), ricordando che l'art. 63 si misura al netto di sanzioni e
+interessi e che il riscontro non dice se l'omologazione forzosa sia
+applicabile.
+
+Tecnica: logica pura in `src/lib/proposta/inquadramento.ts` (19 test), azioni
+in `src/app/actions/inquadramentoProposta.ts`; colonne nuove
+`scenari.strumento_proposta`, `data_deposito_proposta`,
+`quota_altri_aderenti_manuale` e `proposta_creditori.adesione`,
+`importo_aderente`, con migrazione idempotente (cloud e portable). Il pannello
+resta montato durante la rilettura delle righe, per non perdere cio' che si sta
+compilando.
+
+Limiti noti: l'importazione da Excel sostituisce le righe e quindi azzera le
+adesioni; inquadramento e adesioni non entrano ancora nel PDF della proposta
+ne' nella Relazione AI. `prettier --check` fallisce su
+`src/lib/constants/ccii-thresholds.json`, che contiene TypeScript e non JSON:
+preesistente, non toccato.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable; lancio di prova sulla portable nei due spazi, Ricevente e Redigente.
+
+## 0.109.80 — 2026-09-21
+
+**Fase 2: il registro delle fonti, e le prime regole di decisione**
+
+Porta nella piattaforma le indicazioni di Libra verificate. Solo cio' che e'
+confermato e deterministico: cio' che richiede campi nuovi nella scheda
+Proposta o scelte di lessico resta per le versioni successive.
+
+**1. Registro delle fonti come dati** (`src/lib/registroFonti/fonti.ts`).
+Ogni voce ha identificativo stabile, atto, data di efficacia, stato (vigente,
+transitorio, abrogato, prassi, da verificare) e il modo in cui e' stata
+verificata. Tre regole: una voce vigente deve avere l'atto; una data di
+aggiornamento di una banca dati non e' una data di efficacia; cio' che non e'
+riscontrato entra come "da verificare" e non puo' sostenere un esito. Non
+sostituisce la sezione Normativa, che resta divulgativa: il registro e' la
+fonte che il motore cita.
+
+Correzioni verificate: l'art. 63 e' in vigore dal **28/09/2024** (D.Lgs.
+136/2024, art. 16, comma 6); la vigenza "dal 12 agosto 2026", ripetuta da Libra
+in quattro consegne e poi ritirata da Libra stesso, non esiste. La disciplina
+transitoria del D.L. 69/2023 (30/40%) si chiude il 27/09/2024; resta da
+verificare se il suo denominatore comprenda sanzioni e interessi. Gli accordi
+degli artt. 57, 60 e 61 entrano come "da verificare": riportati da Libra, non
+ancora riscontrati.
+
+**2. Il motore delle soglie cita la sua fonte.** Ogni riga porta
+l'identificativo della lettera dell'art. 25-novies che la sostiene. Un test
+controlla che ogni fonte citata esista e possa sostenere un esito.
+
+**3. Due regole di decisione, per Ricevente e Redigente**
+(`src/lib/registroFonti/regole.ts`). Ogni regola restituisce due formule: la
+stessa norma letta da chi riceve e da chi costruisce la proposta produce
+messaggi diversi.
+- **Parametri del cram down (art. 63)**: la soglia si sceglie in base alla
+  data della PROPOSTA, non di oggi. Dal 28/09/2024: 50% con altri aderenti
+  almeno al 25%, altrimenti 60% e dieci anni, esclusi sanzioni e interessi.
+  Prima: 30% o 40%. Senza data o senza quota degli aderenti la regola si
+  blocca invece di scegliere. Non dichiara mai il cram down "applicabile".
+- **Perimetro della transazione in composizione negoziata (art. 23, c.
+  2-bis)**: solo tributi e carichi dell'Agente della Riscossione; INPS e
+  INAIL esclusi, senza omologazione forzosa. Al Ricevente: "non rientra nel
+  perimetro, non va istruito come transazione ex art. 63". Al Redigente: "va
+  trattato con un altro strumento: accordo con transazione ex art. 63, piano
+  di ristrutturazione soggetto a omologazione, concordato".
+
+Le due regole sono pronte e collaudate, ma non ancora collegate
+all'interfaccia: servono i campi della scheda Proposta (data di deposito,
+quota degli aderenti, strumento scelto), che sono il prossimo passo.
+
+**4. Correzione nel changelog.** La voce che fondava il Test Pratico
+sull'art. 13, comma 2 — norma abrogata dal D.Lgs. 83/2022 — dichiara ora
+l'errore e il riferimento giusto, il decreto 23 aprile 2026. Primo rilievo
+di Libra.
+
+**Test**: 15 nuovi. **353 test** in tutto.
+
+Verificato: type-check, lint, **353 test**, build cloud e portable complete.
+
 ## 0.109.79 — 2026-09-21
 
 **Lettera a): importo e ritardo sullo stesso debito**
@@ -2818,7 +2996,7 @@ costruire davvero, Relazione con raccomandazioni sui parametri da
 modificare) — questa consegna è solo il primo pezzo, verificato da
 solo prima di proseguire.
 
-- **Motore di calcolo del Test Pratico** (art. 13, comma 2 CCII) —
+- **Motore di calcolo del Test Pratico** (decreto dirigenziale 23 aprile 2026; la prima stesura di questa voce indicava l'art. 13, comma 2 CCII, norma abrogata dal D.Lgs. 83/2022 — errore segnalato da Libra, corretto in 0.109.80) —
   costruito leggendo il testo ufficiale (Sezione I del documento guida
   ministeriale, Decreto dirigenziale 23 aprile 2026, Bollettino
   Ufficiale n. 10/2026, recuperato direttamente dalla piattaforma

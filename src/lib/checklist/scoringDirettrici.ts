@@ -79,7 +79,8 @@ function etichettaDaPunteggio(punteggio: number | null): {
   coloreEtichetta: 'verde' | 'giallo' | 'rosso' | 'grigio';
 } {
   if (punteggio === null) return { etichetta: 'Non ancora valutabile', coloreEtichetta: 'grigio' };
-  if (punteggio <= 0) return { etichetta: 'Quadro solido', coloreEtichetta: 'verde' };
+  if (punteggio <= 0)
+    return { etichetta: 'Nessuna criticità netta rilevata', coloreEtichetta: 'verde' };
   if (punteggio <= 30) return { etichetta: 'Da approfondire', coloreEtichetta: 'giallo' };
   return { etichetta: 'Criticità rilevanti', coloreEtichetta: 'rosso' };
 }

@@ -201,11 +201,11 @@ export async function generaLivello1BrogliaccioAction(
     if (rigaRilevante && esitoRis.success && esitoRis.esito) {
       const esitoRiga = esitoRis.esito.righe.find((r) => r.id === rigaRilevante.id);
       paragrafi.push(
-        `PROPOSTA: riga rilevante "${rigaRilevante.categoriaCreditore}", offerta ${rigaRilevante.percentualeOfferta}% su € ${rigaRilevante.importoDovuto.toLocaleString('it-IT')} dovuti (modalità ${rigaRilevante.modalita}). Esito: ${esitoRiga?.ricevibile ? 'RICEVIBILE' : 'NON RICEVIBILE'} — ${esitoRiga?.motivazione || 'motivazione non disponibile'}.`
+        `PROPOSTA: riga rilevante "${rigaRilevante.categoriaCreditore}", offerta ${rigaRilevante.percentualeOfferta}% su € ${rigaRilevante.importoDovuto.toLocaleString('it-IT')} dovuti (modalità ${rigaRilevante.modalita}). Esito: ${esitoRiga?.ricevibile ? 'COERENTE CON I PARAMETRI CONFIGURATI' : 'NON COERENTE CON I PARAMETRI CONFIGURATI'} — ${esitoRiga?.motivazione || 'motivazione non disponibile'}.`
       );
     } else {
       paragrafi.push(
-        'PROPOSTA: nessuna riga ancora segnata come rilevante per questo ente — il giudizio di ricevibilità non è ancora disponibile.'
+        'PROPOSTA: nessuna riga ancora segnata come rilevante per questo ente — il riscontro con i parametri dell’ente non è ancora disponibile.'
       );
     }
 

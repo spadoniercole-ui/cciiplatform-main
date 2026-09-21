@@ -57,7 +57,7 @@ export default function SuperadminPage() {
     {
       chiave: 'DSCR_SOGLIA_MINIMA',
       valore: '1.0',
-      descrizione: 'Rapporto di copertura del debito minimo ammissibile',
+      descrizione: 'Rapporto di copertura del debito: valore minimo di riferimento',
     },
     {
       chiave: 'PATRIMONIO_NETTO_MINIMO',

@@ -137,11 +137,11 @@ export function ChecklistPesiManager({ nomeSchema }: Props) {
                 Il quadro finale è calcolato così: si sommano i pesi delle domande già risposte con
                 &quot;No&quot;, si divide per la somma dei pesi di tutte le domande già risposte (Sì
                 o No), e il risultato è la <strong>percentuale di criticità</strong>. Sotto la
-                soglia &quot;Solido&quot; il piano è etichettato solido; tra le due soglie, da
-                rafforzare; sopra la seconda soglia, criticità rilevanti. Spostare una domanda da
-                Documentale a Strutturale la rende molto più incisiva su questo calcolo — usalo con
-                cautela, e sempre con il confronto di un professionista prima di un uso reale verso
-                terzi.
+                soglia &quot;Criticità contenute&quot; il piano riceve quell’etichetta; tra le due
+                soglie, da rafforzare; sopra la seconda soglia, criticità rilevanti. Spostare una
+                domanda da Documentale a Strutturale la rende molto più incisiva su questo calcolo —
+                usalo con cautela, e sempre con il confronto di un professionista prima di un uso
+                reale verso terzi.
               </p>
             </div>
           </div>
@@ -191,7 +191,7 @@ export function ChecklistPesiManager({ nomeSchema }: Props) {
           </div>
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-              Soglia &quot;Solido&quot; (%)
+              Soglia &quot;Criticità contenute&quot; (%)
             </label>
             <input
               type="number"

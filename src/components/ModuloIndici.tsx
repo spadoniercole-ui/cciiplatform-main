@@ -202,7 +202,7 @@ export function ModuloIndici() {
               <option value="ALL">TUTTE LE CATEGORIE</option>
               <option value="REDDITIVITÀ">REDDITIVITÀ</option>
               <option value="LIQUIDITÀ">LIQUIDITÀ E SOLVIBILITÀ</option>
-              <option value="SOLIDITÀ">SOLIDITÀ PATRIMONIALE</option>
+              <option value="SOLIDITÀ">STRUTTURA PATRIMONIALE</option>
               <option value="ROTAZIONE">ROTAZIONE E DURATA</option>
               <option value="CCII">INDICI SPECIFICI CCII</option>
               <option value="BENCHMARK">INDICI DI BENCHMARK (ISTAT)</option>

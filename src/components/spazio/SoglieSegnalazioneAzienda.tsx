@@ -376,8 +376,9 @@ function GrigliaRicevente({ esito }: { esito: EsitoSoglie }) {
       <div className="flex items-start gap-2 text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3">
         <Info className="w-4 h-4 shrink-0 mt-0.5" />
         <p>
-          Nessuna soglia applicata. Verificare che una riga dei Limiti di Ricevibilità sia collegata
-          a un ente dell&apos;art. 25-novies e che i dati richiesti siano compilati.
+          Nessuna soglia applicata. Verificare che una riga dei Parametri di riscontro della
+          proposta sia collegata a un ente dell&apos;art. 25-novies e che i dati richiesti siano
+          compilati.
         </p>
       </div>
     );

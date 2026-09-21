@@ -428,7 +428,7 @@ export async function verificaRicevibilitaProposta(
                 ...rigaSintetica,
                 ricevibile: false,
                 motivazione:
-                  'Carica ed analizza la proposta di cram down prima di poter verificare la ricevibilità.',
+                  'Carica ed analizza la proposta di cram down prima di poter eseguire il riscontro con i parametri dell’ente.',
               },
             ],
             complessivamenteRicevibile: false,
@@ -629,14 +629,14 @@ export async function verificaRicevibilitaProposta(
     console.error('[verificaRicevibilitaProposta] Errore:', error);
     return {
       success: false,
-      error: `Impossibile verificare la ricevibilità: ${error.message || error}`,
+      error: `Impossibile eseguire il riscontro con i parametri: ${error.message || error}`,
     };
   }
 }
 
 // ============================================================================
 // Relazione finale con supporto AI: legge insieme quadro qualitativo della
-// Check List e verifica di ricevibilità della proposta.
+// Check List e riscontro della proposta con i parametri configurati.
 // ============================================================================
 
 export interface RisultatoRelazioneProposta {
@@ -765,7 +765,7 @@ export async function generaRelazionePropostaAction(
       if (!esitoRisultato.success || !esitoRisultato.esito) {
         return {
           success: false,
-          error: esitoRisultato.error || 'Impossibile verificare la ricevibilità.',
+          error: esitoRisultato.error || 'Impossibile eseguire il riscontro con i parametri.',
         };
       }
       // Per RICEVUTA la riga sintetica è sempre presente (costruita
@@ -891,13 +891,13 @@ export async function generaRelazionePropostaAction(
     // per il Ricevente. Nel Redigente la relazione presenta la proposta e
     // la sua sostenibilità, senza alcun verdetto di ricevibilità.
     const regolaAnalisi = isRicevuta
-      ? 'quadro qualitativo della Check List, quadro quantitativo da XBRL se presente, e verifica di ricevibilità della proposta'
+      ? 'quadro qualitativo della Check List, quadro quantitativo da XBRL se presente, e riscontro della proposta con i parametri configurati'
       : 'quadro qualitativo della Check List, quadro quantitativo da XBRL se presente, e la proposta ai creditori così come strutturata';
     const sintesiTesto = isRicevuta
-      ? "esito complessivo: proposta ricevibile o non ricevibile secondo i parametri configurati, e perché, tenendo conto sia del quadro qualitativo sia di quello quantitativo se disponibile — se è indicata una RIGA RILEVANTE PER L'ENTE DESTINATARIO, apri con l'esito su quella riga specifica, prima di tutto il resto"
+      ? "esito complessivo: proposta coerente o non coerente con i parametri configurati, e perché, tenendo conto sia del quadro qualitativo sia di quello quantitativo se disponibile — se è indicata una RIGA RILEVANTE PER L'ENTE DESTINATARIO, apri con l'esito su quella riga specifica, prima di tutto il resto"
       : 'esito complessivo sulla sostenibilità e sulla convenienza del piano proposto, e perché, tenendo conto sia del quadro qualitativo sia di quello quantitativo se disponibile';
     const sezione2Titolo = isRicevuta
-      ? 'VERIFICA DI RICEVIBILITÀ PER CATEGORIA DI CREDITORE E PER RANGO LEGALE (dettaglio riga per riga, poi il riepilogo per rango — prededucibili, privilegiati, chirografari, postergati: sono le famiglie che contano in un confronto con la liquidazione giudiziale)'
+      ? 'RISCONTRO CON I PARAMETRI CONFIGURATI PER CATEGORIA DI CREDITORE E PER RANGO LEGALE (dettaglio riga per riga, poi il riepilogo per rango — prededucibili, privilegiati, chirografari, postergati: sono le famiglie che contano in un confronto con la liquidazione giudiziale)'
       : 'STRUTTURA DELLA PROPOSTA PER CATEGORIA DI CREDITORE E PER RANGO LEGALE (dettaglio riga per riga di quanto offerto, poi il riepilogo per rango — prededucibili, privilegiati, chirografari, postergati: le famiglie che contano in un confronto con la liquidazione giudiziale)';
 
     const systemInstruction = `
@@ -967,21 +967,21 @@ REGOLE TASSATIVE DI REDAZIONE:
     const rigaRilevante = esito?.righe.find((r) => r.rilevantePerEnte);
     const focusEnte =
       isRicevuta && rigaRilevante
-        ? `\nRIGA RILEVANTE PER L'ENTE DESTINATARIO DI QUESTA PROPOSTA: "${rigaRilevante.categoriaCreditore}" (dovuto € ${rigaRilevante.importoDovuto.toLocaleString('it-IT')}, offerta ${rigaRilevante.percentualeOfferta}%, ${rigaRilevante.ricevibile ? 'RICEVIBILE' : 'NON RICEVIBILE'} — ${rigaRilevante.motivazione}). Questo ente valuta SOLO la propria posizione, non l'intera proposta: la Sintesi Esecutiva deve aprire con l'esito su QUESTA riga specifica; le altre righe/categorie servono solo come contesto per giudicare se il piano nel suo complesso regge, non sono oggetto di valutazione per questo destinatario.\n`
+        ? `\nRIGA RILEVANTE PER L'ENTE DESTINATARIO DI QUESTA PROPOSTA: "${rigaRilevante.categoriaCreditore}" (dovuto € ${rigaRilevante.importoDovuto.toLocaleString('it-IT')}, offerta ${rigaRilevante.percentualeOfferta}%, ${rigaRilevante.ricevibile ? 'COERENTE CON I PARAMETRI CONFIGURATI' : 'NON COERENTE CON I PARAMETRI CONFIGURATI'} — ${rigaRilevante.motivazione}). Questo ente valuta SOLO la propria posizione, non l'intera proposta: la Sintesi Esecutiva deve aprire con l'esito su QUESTA riga specifica; le altre righe/categorie servono solo come contesto per giudicare se il piano nel suo complesso regge, non sono oggetto di valutazione per questo destinatario.\n`
         : '';
 
     // Blocco proposta: con verdetto di ricevibilità solo per il Ricevente;
     // per il Redigente è la sola struttura dell'offerta, senza verdetto.
     const bloccoProposta = isRicevuta
-      ? `VERIFICA DI RICEVIBILITÀ (per categoria di creditore):
+      ? `RISCONTRO CON I PARAMETRI CONFIGURATI (per categoria di creditore):
 ${righeProposta
   .map((r) => {
     const e = r as EsitoRigaProposta;
-    return `- ${r.categoriaCreditore}: dovuto € ${r.importoDovuto.toLocaleString('it-IT')}, offerta ${r.percentualeOfferta}%, modalità ${r.modalita === 'UNICA_SOLUZIONE' ? 'unica soluzione' : 'rateale'}${r.numeroRate ? ` (${r.numeroRate} rate)` : ''} — ${e.ricevibile ? 'RICEVIBILE' : 'NON RICEVIBILE'} (${e.motivazione})`;
+    return `- ${r.categoriaCreditore}: dovuto € ${r.importoDovuto.toLocaleString('it-IT')}, offerta ${r.percentualeOfferta}%, modalità ${r.modalita === 'UNICA_SOLUZIONE' ? 'unica soluzione' : 'rateale'}${r.numeroRate ? ` (${r.numeroRate} rate)` : ''} — ${e.ricevibile ? 'COERENTE CON I PARAMETRI CONFIGURATI' : 'NON COERENTE CON I PARAMETRI CONFIGURATI'} (${e.motivazione})`;
   })
   .join('\n')}
 
-ESITO COMPLESSIVO: ${esito && esito.complessivamenteRicevibile ? 'RICEVIBILE' : 'NON RICEVIBILE'}`
+ESITO COMPLESSIVO: ${esito && esito.complessivamenteRicevibile ? 'COERENTE CON I PARAMETRI CONFIGURATI' : 'NON COERENTE CON I PARAMETRI CONFIGURATI'}`
       : `PROPOSTA AI CREDITORI (per categoria di creditore) — quanto lo studio propone di offrire:
 ${righeProposta
   .map(

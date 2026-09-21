@@ -82,7 +82,7 @@ export async function calcolaGiudizioFinaleRicevente(
         success: true,
         giudizio: {
           livello: 'non_ricevibile',
-          etichetta: 'Non ricevibile',
+          etichetta: 'Non coerente con i parametri configurati',
           coloreEtichetta: 'rosso',
           motivazione:
             "L'importo offerto non raggiunge la soglia configurata per questo ente — un fatto numerico, non modificabile dalla completezza documentale.",
@@ -96,7 +96,7 @@ export async function calcolaGiudizioFinaleRicevente(
         success: true,
         giudizio: {
           livello: 'ricevibile',
-          etichetta: 'Ricevibile',
+          etichetta: 'Coerente con i parametri — documentazione completa',
           coloreEtichetta: 'verde',
           motivazione: 'Soglia numerica rispettata, documentazione di supporto completa.',
           documentiMancanti: [],
@@ -108,7 +108,7 @@ export async function calcolaGiudizioFinaleRicevente(
         success: true,
         giudizio: {
           livello: 'ricevibile_con_riserva',
-          etichetta: 'Ricevibile con riserva',
+          etichetta: 'Coerente con i parametri — documentazione incompleta',
           coloreEtichetta: 'giallo',
           motivazione: `Soglia numerica rispettata, ma manca: ${documentiMancanti[0]}.`,
           documentiMancanti,
@@ -119,7 +119,7 @@ export async function calcolaGiudizioFinaleRicevente(
       success: true,
       giudizio: {
         livello: 'ricevibile_con_riserva_grave',
-        etichetta: 'Ricevibile con riserva grave',
+        etichetta: 'Coerente con i parametri — documenti di supporto assenti',
         coloreEtichetta: 'rosso',
         motivazione: `Soglia numerica rispettata, ma mancano entrambi i documenti di supporto: ${documentiMancanti.join(', ')}.`,
         documentiMancanti,

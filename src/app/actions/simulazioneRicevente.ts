@@ -193,7 +193,7 @@ export async function analizzaDocumentiRiceventeAction(
       const esitoRigaRilevante = esitoRis.esito.righe.find((r) => r.id === rigaRilevante.id);
       if (esitoRigaRilevante) {
         blocchiContesto.push(
-          `Esito di ricevibilità già calcolato dalla piattaforma per quella riga: ${esitoRigaRilevante.ricevibile ? 'RICEVIBILE' : 'NON RICEVIBILE'} — ${esitoRigaRilevante.motivazione}.`
+          `Riscontro con i parametri dell’ente già calcolato dalla piattaforma per quella riga: ${esitoRigaRilevante.ricevibile ? 'COERENTE CON I PARAMETRI CONFIGURATI' : 'NON COERENTE CON I PARAMETRI CONFIGURATI'} — ${esitoRigaRilevante.motivazione}.`
         );
       }
     }
@@ -284,7 +284,7 @@ Struttura la risposta così:
 3. Punti di incoerenza o da verificare — cosa nei documenti non torna, è ottimistico senza giustificazione, o contraddice i dati raccolti. Questa è la parte più importante: sii specifico, cita i numeri.
 4. Una valutazione finale onesta e diretta: la proposta sembra credibile o ci sono segnali di allarme che meritano un supplemento di istruttoria.
 
-Non dare un giudizio legale sulla ricevibilità (quello lo fa già la piattaforma altrove) — il tuo compito è solo la credibilità di quello che l'azienda dichiara.${bloccoIstruzioniOperatore(istruzioniOperatore)}`;
+Non esprimere valutazioni giuridiche sulla proposta (il riscontro con i parametri dell’ente lo fa già la piattaforma altrove) — il tuo compito è solo la credibilità di quello che l'azienda dichiara.${bloccoIstruzioniOperatore(istruzioniOperatore)}`;
 
     // Estrazione strutturata separata dall'analisi critica — output
     // JSON puro invece di prosa, per poter confrontare il numero con

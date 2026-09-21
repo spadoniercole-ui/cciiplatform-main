@@ -32,7 +32,10 @@ export function ParametriSpazioManager({ codice, tipoSpazio }: Props) {
     {
       href: `/spazio/${codice}/parametri/ricevibilita`,
       icon: ShieldCheck,
-      titolo: tipoSpazio === 'ENTE' ? 'Limiti di ricevibilità' : 'Percentuale media di proposta',
+      titolo:
+        tipoSpazio === 'ENTE'
+          ? 'Parametri di riscontro della proposta'
+          : 'Percentuale media di proposta',
       descrizione:
         tipoSpazio === 'ENTE'
           ? 'Valore di liquidazione e % minima per categoria di creditore.'

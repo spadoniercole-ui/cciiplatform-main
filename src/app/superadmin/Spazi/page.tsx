@@ -331,7 +331,7 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
             Tipo di spazio
           </span>
           <p className="text-[10px] text-slate-400">
-            ENTE riduce i limiti di ricevibilità a una sola soglia (invece delle N categorie) e
+            ENTE riduce i parametri di riscontro a una sola soglia (invece delle N categorie) e
             cambia il feedback sulla Proposta — condiziona più moduli, non solo un&apos;etichetta.
           </p>
           <div className="flex gap-4">

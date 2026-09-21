@@ -117,7 +117,7 @@ Struttura il documento così:
 1. Intestazione con i dati del professionista attestatore e dell'azienda (usa segnaposto dove non forniti) e dichiarazione di indipendenza.
 2. Oggetto: attestazione della veridicità dei dati aziendali su cui si fonda la proposta, sulla base della documentazione contabile e dei bilanci esaminati.
 3. Attestazione di coerenza e sostenibilità del piano/proposta rispetto ai flussi a regime e all'indebitamento, richiamando il test pratico (Sezione I) e l'esito della Check List Ministeriale ove disponibili nel quadro.
-4. Confronto con lo scenario liquidatorio come pavimento minimo di soddisfazione dei creditori, se il dato è presente nel quadro.
+4. Confronto con lo scenario liquidatorio come termine di confronto per il soddisfacimento dei creditori (valore stimato, non soglia legale), se il dato è presente nel quadro.
 5. Conclusione con la dichiarazione asseverativa finale, data e firma (segnaposto).
 ${ISTRUZIONI_COMUNI}`,
 
