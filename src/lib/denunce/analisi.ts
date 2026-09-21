@@ -63,6 +63,8 @@ export interface RigaInadempienza {
    * non riportarla.
    */
   fase?: string | null;
+  /** Fine periodo, formato AAAA/MM. Se manca si usa l'inizio. */
+  finePeriodo?: string | null;
 }
 
 /** La partita risulta già iscritta a ruolo? */
@@ -438,4 +440,51 @@ export function analizzaVersamenti(
     dovutoInRitardo: [...oltre90, ...maiVersati].reduce((s, p) => s + p.dovuto, 0),
     scartate,
   };
+}
+
+/**
+ * Le partite RIMASTE ALL'INPS, divise per anzianità.
+ *
+ * Regola fissata da Ercole: il ritardo di oltre 90 giorni della lettera a) si
+ * misura solo sulle partite non passate a ruolo — "reputo improcedibile
+ * pensare qualcosa di diverso". I requisiti sono congiunti e riguardano lo
+ * STESSO debito: prima il ritardo si ricavava dalle deleghe su tutti i
+ * periodi non versati, compresi quelli già consegnati all'Agente della
+ * Riscossione, e l'importo dalle sole partite rimaste. Due debiti diversi per
+ * due requisiti che la norma vuole congiunti.
+ *
+ * Qui il ritardo si ricava dalla partita stessa: una partita in Lista
+ * Inadempienze è per definizione non versata, e la scadenza di versamento è
+ * il 16 del mese successivo al periodo. Si usa la FINE del periodo — la
+ * scadenza più tarda — così una partita su più mesi non risulta più vecchia
+ * di quanto sia.
+ */
+export function partiteInpsPerAnzianita(
+  righe: RigaInadempienza[],
+  dataVerifica: Date,
+  giorni = 90
+): { scadute: RigaInadempienza[]; recenti: RigaInadempienza[]; aRuolo: RigaInadempienza[] } {
+  const scadute: RigaInadempienza[] = [];
+  const recenti: RigaInadempienza[] = [];
+  const aRuolo: RigaInadempienza[] = [];
+  for (const r of righe) {
+    if (iscrittaARuolo(r)) {
+      aRuolo.push(r);
+      continue;
+    }
+    const periodo = String(r.finePeriodo || r.inizioPeriodo);
+    const m = periodo.match(/^(\d{4})\/(\d{1,2})$/);
+    if (!m) {
+      // Periodo illeggibile: non si inventa un'anzianità. Resta fra le
+      // recenti, quindi fuori dalla soglia, e non gonfia il debito.
+      recenti.push(r);
+      continue;
+    }
+    const anno = Number(m[1]);
+    const mese = Number(m[2]);
+    const scadenza = mese === 12 ? Date.UTC(anno + 1, 0, 16) : Date.UTC(anno, mese, 16);
+    const giorniDiRitardo = Math.floor((dataVerifica.getTime() - scadenza) / 86_400_000);
+    (giorniDiRitardo > giorni ? scadute : recenti).push(r);
+  }
+  return { scadute, recenti, aRuolo };
 }

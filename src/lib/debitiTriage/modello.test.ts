@@ -115,7 +115,7 @@ describe('dalla tabella al test delle soglie', () => {
       }),
       riga({ categoria: 'ASSICURATIVO', importoAnnoCorrente: 9_000 }),
       riga({
-        categoria: 'FISCALE',
+        categoria: 'IVA',
         importoAnnoCorrente: 30_000,
         riferimentoAnnoPrecedente: 900_000,
       }),
@@ -222,5 +222,29 @@ describe('V.E.R.A. insieme agli elenchi dell’Istituto', () => {
     const { trovaSovrapposizioni } = await import('./modello');
     const s = trovaSovrapposizioni([], [], ['INADEMPIENZE', 'RUOLI']);
     expect(s.some((x) => x.chiave === 'vera:elenchi')).toBe(false);
+  });
+});
+
+describe('IVA separata dagli altri tributi', () => {
+  // La soglia dell'Agenzia delle Entrate riguarda solo l'IVA da LIPE: con
+  // un'unica categoria "Fiscale", anche IRES o IRAP finivano nella soglia.
+  it('IRES e IRAP non entrano nella soglia IVA', async () => {
+    const { valoriSoglieDaPosizioni } = await import('./modello');
+    const v = valoriSoglieDaPosizioni([
+      riga({
+        categoria: 'FISCALE',
+        importoAnnoCorrente: 80_000,
+        riferimentoAnnoPrecedente: 900_000,
+      }),
+    ]);
+    expect(v.ivaScaduta).toBeNull();
+    expect(v.volumeAffari).toBeNull();
+  });
+
+  it('gli altri tributi restano nel totale, fuori soglia', async () => {
+    const { esposizioneQualificata, totalePerCategoria } = await import('./modello');
+    const righe = [riga({ categoria: 'FISCALE', importoAnnoCorrente: 80_000 })];
+    expect(totalePerCategoria(righe, 'corrente').FISCALE).toBe(80_000);
+    expect(esposizioneQualificata(righe).FISCALE).toBe(0);
   });
 });

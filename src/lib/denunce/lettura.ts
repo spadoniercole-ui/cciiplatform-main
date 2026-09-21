@@ -177,6 +177,8 @@ export async function leggiListaInadempienze(file: File): Promise<EsitoLettura<R
   if (!t) return { righe: [], colonneMancanti: COL_INADEMPIENZE };
   // Facoltativa: serve a escludere le partite già passate a ruolo.
   const idxFase = (aoa[t.riga] ?? []).map(normalizza).findIndex((x) => x.startsWith('fasedi'));
+  // Facoltativa: la fine del periodo dà la scadenza di versamento più tarda.
+  const idxFine = (aoa[t.riga] ?? []).map(normalizza).findIndex((x) => x.startsWith('fineperiodo'));
 
   const righe: RigaInadempienza[] = [];
   for (let r = t.riga + 1; r < aoa.length; r++) {
@@ -188,6 +190,7 @@ export async function leggiListaInadempienze(file: File): Promise<EsitoLettura<R
       importoAddebitato: numero(riga[t.indici['Importo Addebitato']]),
       importoAccreditato: numero(riga[t.indici['Importo Accreditato']]),
       fase: idxFase >= 0 ? String(riga[idxFase] ?? '').trim() : null,
+      finePeriodo: idxFine >= 0 ? String(riga[idxFine] ?? '').trim() || null : null,
     });
   }
   return { righe };
@@ -270,23 +273,47 @@ export const ETICHETTA_PROSPETTO: Record<TipoProspetto, string> = {
 // Il credito resta dell'ente che l'ha iscritto a ruolo — INPS se il ruolo è
 // INPS — e non è mai commerciale. L'Agente della Riscossione lo incassa, non
 // ne è il titolare.
+//
+// MA ai fini dell'art. 25-novies la titolarità non decide la soglia. Una
+// volta consegnata all'Agente della Riscossione, per l'ente la partita è
+// chiusa: resta solo in attesa del riversamento di quanto riscosso (così per
+// l'INAIL secondo la circolare n. 28/2023, e per l'INPS secondo Ercole). Il
+// ruolo esce quindi dalla soglia dell'ente — lettera a) — e rileva solo per
+// quella dell'Agente della Riscossione — lettera d).
 
 const COL_RUOLI = ['ID Cartella/Avviso', 'Residuo'];
 
-export async function leggiRuoli(
-  file: File
-): Promise<{ residuo: number; cartelle: number; colonneMancanti?: string[] }> {
+export async function leggiRuoli(file: File): Promise<{
+  residuo: number;
+  /** Parte congelata dal giudice in attesa del merito: non esigibile. */
+  sospeso: number;
+  cartelle: number;
+  colonneMancanti?: string[];
+}> {
   const { aoa } = await leggiFoglioAoa(file);
   const t = trovaIntestazione(aoa, COL_RUOLI);
-  if (!t) return { residuo: 0, cartelle: 0, colonneMancanti: COL_RUOLI };
+  if (!t) return { residuo: 0, sospeso: 0, cartelle: 0, colonneMancanti: COL_RUOLI };
+  // "Sospeso" e' la parte del debito congelata da un giudice in attesa
+  // dell'udienza di merito (chiarimento di Ercole). Sul file reale e'
+  // COMPRESA nel residuo — una cartella con 45.434,52 EUR iscritti ha lo
+  // stesso importo come residuo e come sospeso — quindi va sottratta, non
+  // ignorata.
+  const intest = (aoa[t.riga] ?? []).map((c) =>
+    String(c ?? '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+  );
+  const idxSospeso = intest.findIndex((c) => c === 'sospeso');
   let residuo = 0;
+  let sospeso = 0;
   let cartelle = 0;
   for (let r = t.riga + 1; r < aoa.length; r++) {
     const riga = aoa[r] ?? [];
     const id = String(riga[t.indici['ID Cartella/Avviso']] ?? '').trim();
     if (!id) continue;
     residuo += numero(riga[t.indici['Residuo']]);
+    if (idxSospeso >= 0) sospeso += numero(riga[idxSospeso]);
     cartelle++;
   }
-  return { residuo, cartelle };
+  return { residuo, sospeso, cartelle };
 }

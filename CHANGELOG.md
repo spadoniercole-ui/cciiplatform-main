@@ -93,6 +93,119 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.79 — 2026-09-21
+
+**Lettera a): importo e ritardo sullo stesso debito**
+
+Chiude il punto aperto lasciato dichiarato nella 0.109.78. Regola fissata da
+Ercole: il ritardo di oltre 90 giorni si misura solo sulle partite rimaste
+all'INPS, cioe' non passate a ruolo — "reputo improcedibile pensare qualcosa
+di diverso".
+
+**Il difetto.** I requisiti della lettera a) sono congiunti, ma venivano
+verificati su due debiti diversi: l'importo sulle partite non a ruolo, il
+ritardo dalle deleghe su TUTTI i periodi non versati, compresi quelli gia'
+consegnati all'Agente della Riscossione. Il ritardo poteva quindi risultare
+integrato grazie a debito che per l'Istituto e' chiuso.
+
+**La soluzione, piu' precisa della norma letta come "c'e' un ritardo".** La
+lettera a) chiede un AMMONTARE in ritardo oltre 90 giorni superiore alle
+soglie. Per le partite rimaste all'INPS il ritardo si ricava dalla partita
+stessa: una partita in Lista Inadempienze e' per definizione non versata, e la
+scadenza di versamento e' il 16 del mese successivo. Alla soglia INPS
+concorrono quindi le sole partite non a ruolo **scadute da oltre 90 giorni**,
+con la stessa regola di somma di prima; le piu' recenti si dichiarano ma non
+entrano. Si usa la FINE del periodo, cioe' la scadenza piu' tarda, cosi' una
+partita su piu' mesi non risulta piu' vecchia del vero. Un periodo
+illeggibile non riceve un'anzianita' inventata: resta fuori dalla soglia.
+
+Le deleghe restano utili quando la Lista Inadempienze non c'e'. Quando c'e',
+non sovrascrivono piu' il ritardo, e la loro nota e' presentata come dato
+complessivo.
+
+**Sulla San Michele** l'esito non cambia, ma ora e' fondato: 8 partite rimaste
+all'INPS, di cui 7 con importo, scadute da 705 a 979 giorni, per 92.026,30 EUR;
+l'ottava e' del 2012 a saldo zero. Il ritardo risulta integrato su queste
+stesse partite, non sui 141 periodi delle deleghe.
+
+**Test**: 6 nuovi, fra cui quello sul file reale — 139 partite a ruolo, 7
+scadute oltre 90 giorni per 92.026,30 EUR. **338 test** in tutto.
+
+Verificato: type-check, lint, **338 test**, build cloud e portable complete,
+lancio di prova sulla San Michele.
+
+## 0.109.78 — 2026-09-21
+
+**Fase 1 della reingegnerizzazione: il motore delle soglie allineato al
+registro delle fonti**
+
+Prima delle cinque fasi concordate con Ercole dopo le consegne di Libra
+(registro delle fonti, informazioni decisive, lessico, revisore, mappa dei
+percorsi). Tocca solo il motore dell'art. 25-novies e la lettura dei fogli.
+
+**1. Il ritardo di oltre 90 giorni e' un requisito PER FATTISPECIE.** Era un
+campo unico, ricavato dalle deleghe INPS e riportato come lacuna generale.
+Ora e' verificato riga per riga: INPS con l'Elenco Deleghe, INAIL e Agente
+della Riscossione con i propri dati — oggi assenti, quindi dichiarati non
+verificati. **Non si applica all'IVA**, che ha una disciplina temporale propria
+(verifica di Libra, parte B). Un importo oltre soglia non basta piu': senza
+ritardo i presupposti non sono integrati, con ritardo non verificato l'esito
+non e' determinabile. E se il ritardo e' assente la risposta e' negativa anche
+quando manca il 30%, perche' i requisiti sono congiunti.
+
+**2. I ruoli escono dalla soglia INPS.** Regola chiarita da Ercole: una volta
+consegnata la partita all'Agente della Riscossione, per l'Istituto e' chiusa e
+resta solo l'attesa del riversamento — come per l'INAIL secondo la circolare
+n. 28/2023. Il credito resta dell'INPS, ma ai fini dell'art. 25-novies rileva
+solo per la soglia dell'Agente (lettera d). Conseguenza piu' ampia del
+previsto: le inadempienze iscritte a ruolo escono dalla lettera a) SEMPRE,
+anche senza il file dei ruoli. Prima si escludevano solo per evitare il doppio
+conteggio con quel file.
+
+**3. Lettera d) con i suoi requisiti.** I residui dei ruoli vanno sulla soglia
+dell'Agente della Riscossione **al netto della parte sospesa**: "Sospeso" e' il
+debito congelato dal giudice in attesa del merito (chiarimento di Ercole), e
+un debito sotto contenzioso non e' "definitivamente accertato" come la norma
+richiede. Sul file reale il sospeso e' compreso nel residuo — una cartella con
+45.434,52 EUR iscritti ha lo stesso importo come residuo e come sospeso — quindi
+si sottrae. La rateizzazione interrompe il conteggio sul debito originario;
+data di affidamento (dal 1° luglio 2022), scadenza e stato di rateizzazione
+non sono in nessun file caricato, e l'esito sopra soglia si dichiara non
+determinabile.
+
+**4. L'IVA separata dagli altri tributi.** La soglia dell'Agenzia delle
+Entrate riguarda solo il debito IVA da liquidazioni periodiche (LIPE). Con
+un'unica categoria "Fiscale" anche IRES e IRAP finivano nella soglia IVA. Ora
+ci sono due categorie: **"IVA da liquidazioni periodiche"**, qualificata, e
+**"Altri tributi"**, fuori soglia salvo affidamento all'Agente. Modifica delle
+categorie concordate: le posizioni gia' salvate come "Fiscale" non alimentano
+piu' la soglia IVA e vanno ricategorizzate.
+
+**5. Lessico e termini.** "Segnalazione dovuta" sparisce dal motore: il motivo
+dell'IVA la scriveva trenta righe sotto la regola che la vieta. Al suo posto
+"presupposti oggettivi rilevati". Ogni esito sopra soglia riporta il termine di
+invio dell'ente: 60 giorni per INPS, INAIL e Agente della Riscossione, 150 per
+l'IVA dalla scadenza della LIPE. L'applicabilita' nel tempo (comma 4) e'
+dichiarata come non verificata.
+
+**Lancio di prova sulla San Michele** (Lista Inadempienze, Ruoli, denunce e
+deleghe del Cassetto): soglia INPS calcolata sulle sole 8 partite non a ruolo,
+92.026 EUR; 139 partite escluse con il motivo; ruoli 70.099 EUR di residuo,
+51.919 EUR sospesi ed esclusi, 18.180 EUR sulla soglia dell'Agente con i
+requisiti non verificabili dichiarati.
+
+**Punto aperto emerso dal lancio**: il ritardo oltre 90 giorni e' calcolato su
+tutti i periodi non versati, compresi quelli gia' passati a ruolo. I requisiti
+della lettera a) sono congiunti e dovrebbero riguardare lo stesso debito — le
+sole partite non a ruolo. Sulla San Michele l'esito non cambia; su altri casi
+potrebbe. Lasciato dichiarato invece di improvvisare un incrocio fra file.
+
+**Test**: 11 test del motore aggiornati — verificavano soglie superate sul
+solo importo — piu' 12 nuovi sulla regola temporale, sul lessico e sulla
+separazione dell'IVA. **332 test** in tutto.
+
+Verificato: type-check, lint, **332 test**, build cloud e portable complete.
+
 ## 0.109.77 — 2026-09-21
 
 **Il V.E.R.A. non sparisce piu' in silenzio**

@@ -1,8 +1,10 @@
+import fs from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import {
   analizzaDenunce,
   analizzaInadempienze,
   analizzaVersamenti,
+  partiteInpsPerAnzianita,
   scadenzaLegale,
   scadenzaVersamento,
 } from './analisi';
@@ -344,4 +346,68 @@ describe('varianti dello stesso tracciato, stesso ente', () => {
     expect(a.periodiMancanti).toHaveLength(19);
     expect(a.periodiMancanti[0]).toBe('01/2025');
   });
+});
+
+describe('lettera a): ritardo misurato sulle sole partite rimaste all’INPS', () => {
+  // Regola di Ercole: importo e ritardo sono requisiti congiunti e devono
+  // riguardare lo stesso debito — le partite non passate a ruolo.
+  const verifica = new Date(Date.UTC(2026, 8, 21));
+  const p = (periodo: string, importo: number, fase = 'EMESSO MODELLO UL13/AUT MANUALE') => ({
+    inizioPeriodo: periodo,
+    finePeriodo: periodo,
+    importoAddebitato: importo,
+    importoAccreditato: 0,
+    fase,
+  });
+
+  it('le partite a ruolo escono, comunque vecchie', () => {
+    const a = partiteInpsPerAnzianita(
+      [p('2020/01', 50_000, 'INADEMPIENZA ISCRITTA A RUOLO')],
+      verifica
+    );
+    expect(a.aRuolo).toHaveLength(1);
+    expect(a.scadute).toHaveLength(0);
+  });
+
+  it('una partita scaduta da oltre 90 giorni conta', () => {
+    // 2024/09: scadenza 16/10/2024, ben oltre 90 giorni al 21/09/2026.
+    expect(partiteInpsPerAnzianita([p('2024/09', 11_225.1)], verifica).scadute).toHaveLength(1);
+  });
+
+  it('una partita recente resta fuori dalla soglia', () => {
+    // 2026/07: scadenza 16/08/2026, 36 giorni al 21/09/2026.
+    const a = partiteInpsPerAnzianita([p('2026/07', 8_000)], verifica);
+    expect(a.recenti).toHaveLength(1);
+    expect(a.scadute).toHaveLength(0);
+  });
+
+  it('si usa la FINE del periodo: la scadenza più tarda', () => {
+    // Una partita da 2026/03 a 2026/07: con la fine, scadenza 16/08/2026 →
+    // ancora recente. Con l'inizio sarebbe risultata più vecchia del vero.
+    const a = partiteInpsPerAnzianita(
+      [{ ...p('2026/03', 5_000), finePeriodo: '2026/07' }],
+      verifica
+    );
+    expect(a.recenti).toHaveLength(1);
+  });
+
+  it('periodo illeggibile: nessuna anzianità inventata, resta fuori', () => {
+    const a = partiteInpsPerAnzianita([{ ...p('xx', 1_000), finePeriodo: null }], verifica);
+    expect(a.scadute).toHaveLength(0);
+  });
+});
+
+describe('sul file reale della San Michele', () => {
+  const file = '/mnt/user-data/uploads/INPS-CPC_Lista_Inadempienze.xlsx';
+  it.skipIf(!fs.existsSync(file))(
+    '7 partite rimaste all’INPS scadute oltre 90 giorni, per 92.026,30 €',
+    async () => {
+      const { leggiListaInadempienze } = await import('./lettura');
+      const r = await leggiListaInadempienze(new File([fs.readFileSync(file)], 'x.xlsx'));
+      const a = partiteInpsPerAnzianita(r.righe, new Date(Date.UTC(2026, 8, 21)));
+      const tot = analizzaInadempienze(a.scadute).totaleNonVersato;
+      expect(a.aRuolo).toHaveLength(139);
+      expect(Math.round(tot * 100) / 100).toBe(92_026.3);
+    }
+  );
 });

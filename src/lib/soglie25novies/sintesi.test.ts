@@ -45,7 +45,9 @@ describe('chi valuta quali soglie', () => {
       volumeAffari: null,
       creditiAffidati: null,
       formaAER: null,
-      ritardoOltre90Giorni: null,
+      ritardoOltre90Giorni: true,
+      ritardoInail: true,
+      requisitiAerVerificati: true,
     };
     const tutte = calcolaSoglie25Novies(dati, 'NON_PUBBLICO');
     const soloInps = calcolaSoglie25Novies(dati, 'INPS');

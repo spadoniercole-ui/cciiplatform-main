@@ -15,7 +15,11 @@ const vuoto: DatiSoglie = {
   volumeAffari: null,
   creditiAffidati: null,
   formaAER: null,
-  ritardoOltre90Giorni: null,
+  // I test sugli importi dichiarano soddisfatti i requisiti temporali: qui si
+  // verifica la logica delle soglie. Il tempo ha i suoi test, più sotto.
+  ritardoOltre90Giorni: true,
+  ritardoInail: true,
+  requisitiAerVerificati: true,
 };
 
 describe('soglie di legge', () => {
@@ -126,7 +130,7 @@ describe('Agenzia delle Entrate (IVA) — due vie autonome', () => {
   it('oltre 20.000 € scatta comunque, anche senza volume d’affari', () => {
     const e = calcolaSoglie25Novies({ ...vuoto, ivaScaduta: 20_001 }, 'AGENZIA_ENTRATE');
     expect(e.superate).toHaveLength(1);
-    expect(e.righe[0].motivo).toContain('in ogni caso');
+    expect(e.righe[0].motivo).toContain('via alternativa');
   });
 
   it('sotto 20.000 €: servono i due requisiti congiunti', () => {
@@ -223,10 +227,94 @@ describe('le due letture: Ricevente e Redigente', () => {
   });
 });
 
-describe('il requisito dei 90 giorni è sempre dichiarato', () => {
-  it('anche quando tutto è sotto soglia', () => {
-    const e = calcolaSoglie25Novies({ ...vuoto, conLavoratori: false, contributiScaduti: 1 });
-    expect(e.datiMancanti.some((d) => d.includes('90 giorni'))).toBe(true);
+describe('requisito dei 90 giorni: per fattispecie, non globale', () => {
+  // Verifica di Libra (parte B): il ritardo è un requisito di INPS, INAIL e
+  // Agente della Riscossione, ciascuno con le sue fonti; NON dell'IVA.
+  const inps = {
+    ...vuoto,
+    conLavoratori: true,
+    contributiScaduti: 50_000,
+    contributiDovutiAnnoPrecedente: 100_000,
+  };
+  const rigaInps = (e: ReturnType<typeof calcolaSoglie25Novies>) =>
+    e.righe.find((r) => r.ambito.includes('CON lavoratori'));
+
+  it('INPS oltre soglia CON ritardo accertato: presupposti integrati', () => {
+    expect(rigaInps(calcolaSoglie25Novies(inps, 'INPS'))?.esito).toBe('sopra');
+  });
+
+  it('INPS oltre soglia SENZA verifica del ritardo: non determinabile, non "sopra"', () => {
+    const r = rigaInps(calcolaSoglie25Novies({ ...inps, ritardoOltre90Giorni: null }, 'INPS'));
+    expect(r?.esito).toBe('non_determinabile');
+    expect(r?.motivo).toContain('Elenco Deleghe');
+  });
+
+  it('INPS oltre soglia ma ritardo ASSENTE: presupposti non integrati', () => {
+    const r = rigaInps(calcolaSoglie25Novies({ ...inps, ritardoOltre90Giorni: false }, 'INPS'));
+    expect(r?.esito).toBe('sotto');
+    expect(r?.motivo).toContain('NON integrato');
+  });
+
+  it('ritardo assente decide anche senza i contributi dovuti', () => {
+    // Requisiti congiunti: se manca il tempo, il 30% non serve a nulla.
+    const r = rigaInps(
+      calcolaSoglie25Novies(
+        { ...inps, contributiDovutiAnnoPrecedente: null, ritardoOltre90Giorni: false },
+        'INPS'
+      )
+    );
+    expect(r?.esito).toBe('sotto');
+  });
+
+  it('INAIL oltre soglia senza verifica del ritardo: non determinabile', () => {
+    const e = calcolaSoglie25Novies({ ...vuoto, premiInail: 9_000, ritardoInail: null }, 'INAIL');
+    expect(e.righe[0].esito).toBe('non_determinabile');
+  });
+
+  it('IVA: il ritardo NON si applica, l’esito non dipende da quel dato', () => {
+    const conRitardoIgnoto = calcolaSoglie25Novies(
+      { ...vuoto, ivaScaduta: 25_000, ritardoOltre90Giorni: null, ritardoInail: null },
+      'AGENZIA_ENTRATE'
+    );
+    expect(conRitardoIgnoto.righe[0].esito).toBe('sopra');
+    expect(conRitardoIgnoto.righe[0].motivo).toContain('non si applica il requisito dei 90 giorni');
+  });
+
+  it('Agente della Riscossione oltre soglia senza i requisiti della lettera d): non determinabile', () => {
+    const r = calcolaSoglie25Novies(
+      {
+        ...vuoto,
+        creditiAffidati: 600_000,
+        formaAER: 'ALTRE_SOCIETA',
+        requisitiAerVerificati: null,
+      },
+      'AGENZIA_RISCOSSIONE'
+    ).righe.find((x) => x.applicabile);
+    expect(r?.esito).toBe('non_determinabile');
+    expect(r?.motivo).toContain('data di affidamento');
+  });
+
+  it('l’applicabilità nel tempo (comma 4) è dichiarata come non verificata', () => {
+    const e = calcolaSoglie25Novies(vuoto);
+    expect(e.datiMancanti.some((d) => d.includes('comma 4'))).toBe(true);
+  });
+});
+
+describe('lessico: mai "segnalazione dovuta"', () => {
+  // Il motore dichiarava in testa che oltre soglia non è mai segnalazione
+  // dovuta, e poi lo scriveva nel motivo dell'IVA.
+  it('nessun motivo contiene la formula vietata', () => {
+    const e = calcolaSoglie25Novies({
+      ...vuoto,
+      conLavoratori: true,
+      contributiScaduti: 50_000,
+      contributiDovutiAnnoPrecedente: 100_000,
+      premiInail: 9_000,
+      ivaScaduta: 25_000,
+      creditiAffidati: 600_000,
+      formaAER: 'ALTRE_SOCIETA',
+    });
+    expect(e.righe.some((r) => /segnalazione dovuta/i.test(r.motivo))).toBe(false);
   });
 });
 

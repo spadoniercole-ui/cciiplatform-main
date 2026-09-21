@@ -128,6 +128,23 @@ export interface DatiSoglie {
    * versare un euro. La norma parla di versamento.
    */
   ritardoOltre90Giorni: boolean | null;
+  /**
+   * Ritardo di oltre 90 giorni sui premi INAIL. Opzionale: oggi nessun
+   * documento caricabile lo porta, quindi resta non verificato e l'esito INAIL
+   * sopra soglia si dichiara non determinabile invece di darlo per integrato.
+   */
+  ritardoInail?: boolean | null;
+  /**
+   * Requisiti della lettera d) oltre all'importo, verificati insieme:
+   * carico affidato dal 1° luglio 2022 (comma 4), autodichiarato o
+   * definitivamente accertato, scaduto da oltre 90 giorni e non in
+   * rateizzazione regolare (la rateizzazione interrompe il conteggio sul
+   * debito originario). La parte SOSPESA dal giudice va gia' esclusa
+   * dall'importo: un debito sotto contenzioso non e' definitivamente
+   * accertato. null = non verificati, e l'esito sopra soglia resta non
+   * determinabile.
+   */
+  requisitiAerVerificati?: boolean | null;
 }
 
 export type EsitoSoglia = 'sotto' | 'sopra' | 'non_determinabile';
@@ -186,12 +203,47 @@ export function calcolaSoglie25Novies(
   const righe: RigaSoglia[] = [];
   const datiMancanti: string[] = [];
 
-  // Il requisito temporale: accertabile solo con l'Elenco Deleghe (F24).
-  if (dati.ritardoOltre90Giorni === null) {
-    datiMancanti.push(
-      `Requisito del ritardo di oltre ${S.giorniRitardo} giorni: non accertato. Serve l’Elenco Deleghe (F24), che porta la data di versamento.`
-    );
-  }
+  // ---- Requisito temporale, PER FATTISPECIE ----------------------------
+  //
+  // Prima era un campo unico, ricavato dalle deleghe INPS e riportato come
+  // lacuna generale. Ma il ritardo di oltre 90 giorni e' un requisito di
+  // ciascuna lettera — INPS, INAIL, Agente della Riscossione — con le sue
+  // fonti, e NON si applica all'IVA dell'Agenzia delle Entrate, che ha una
+  // disciplina temporale propria (verifica di Libra, parte B).
+  //
+  // Regola: un importo oltre soglia senza il requisito temporale non e' un
+  // presupposto integrato. Se il ritardo manca, l'esito e' negativo; se non
+  // e' verificabile, l'esito non e' determinabile — e lo si dice.
+  const conRequisitoTemporale = (
+    esito: EsitoSoglia,
+    motivo: string,
+    ritardo: boolean | null | undefined,
+    importoNoto: boolean,
+    serveA: string
+  ): { esito: EsitoSoglia; motivo: string } => {
+    if (esito === 'sotto') return { esito, motivo };
+    if (ritardo === false && importoNoto) {
+      return {
+        esito: 'sotto',
+        motivo: `${motivo} Requisito temporale (oltre ${S.giorniRitardo} giorni): NON integrato — i presupposti oggettivi non risultano integrati, qualunque sia l’importo.`,
+      };
+    }
+    if (esito !== 'sopra') return { esito, motivo };
+    if (ritardo === true) {
+      return {
+        esito: 'sopra',
+        motivo: `${motivo} Requisito temporale (oltre ${S.giorniRitardo} giorni): integrato.`,
+      };
+    }
+    return {
+      esito: 'non_determinabile',
+      motivo: `${motivo} Requisito temporale (oltre ${S.giorniRitardo} giorni): non verificato — ${serveA}.`,
+    };
+  };
+
+  datiMancanti.push(
+    'Applicabilità nel tempo (art. 25-novies, comma 4) non verificata sui dati caricati: la norma si applica ai debiti INPS accertati dal 1° gennaio 2022, INAIL dall’entrata in vigore del Codice, alle LIPE dal secondo trimestre 2022 e ai carichi affidati all’Agente della Riscossione dal 1° luglio 2022.'
+  );
 
   // ---- INPS -----------------------------------------------------------
   const contributi = val(dati.contributiScaduti);
@@ -232,6 +284,16 @@ export function calcolaSoglie25Novies(
         inpsSopraSoloConSanzioni = tot > sogliaPerc && tot > S.inpsImportoConLavoratori;
       }
     }
+    ({ esito, motivo } = conRequisitoTemporale(
+      esito,
+      motivo,
+      dati.ritardoOltre90Giorni,
+      contributi !== null,
+      'serve l’Elenco Deleghe (F24), che porta la data di versamento'
+    ));
+    if (esito === 'sopra')
+      motivo +=
+        ' L’ente invia la segnalazione entro 60 giorni dal verificarsi dei presupposti (art. 25-novies, comma 2, lett. b).';
     righe.push({
       ente: 'INPS',
       ambito: 'Segnalazione INPS — imprese CON lavoratori',
@@ -260,6 +322,16 @@ export function calcolaSoglie25Novies(
         inpsSopraSoloConSanzioni = contributi + sanzioni > S.inpsImportoSenzaLavoratori;
       }
     }
+    ({ esito, motivo } = conRequisitoTemporale(
+      esito,
+      motivo,
+      dati.ritardoOltre90Giorni,
+      contributi !== null,
+      'serve l’Elenco Deleghe (F24), che porta la data di versamento'
+    ));
+    if (esito === 'sopra')
+      motivo +=
+        ' L’ente invia la segnalazione entro 60 giorni dal verificarsi dei presupposti (art. 25-novies, comma 2, lett. b).';
     righe.push({
       ente: 'INPS',
       ambito: 'Segnalazione INPS — imprese SENZA lavoratori',
@@ -293,6 +365,16 @@ export function calcolaSoglie25Novies(
       esito = oltre ? 'sopra' : 'sotto';
       motivo = `Premi ${euro(premi)} — soglia ${euro(S.inail)}: ${oltre ? 'superata' : 'non superata'}.`;
     }
+    ({ esito, motivo } = conRequisitoTemporale(
+      esito,
+      motivo,
+      dati.ritardoInail,
+      premi !== null,
+      'servono la scadenza dei premi e il loro stato di pagamento'
+    ));
+    if (esito === 'sopra')
+      motivo +=
+        ' L’ente invia la segnalazione entro 60 giorni dal verificarsi dei presupposti (art. 25-novies, comma 2, lett. b).';
     righe.push({
       ente: 'INAIL',
       ambito: 'Segnalazione INAIL',
@@ -317,7 +399,10 @@ export function calcolaSoglie25Novies(
       const viaAssoluta = iva > S.ivaImportoAssoluto;
       if (viaAssoluta) {
         esito = 'sopra';
-        motivo = `IVA scaduta ${euro(iva)} — oltre ${euro(S.ivaImportoAssoluto)}: segnalazione dovuta in ogni caso, senza vincolo percentuale.`;
+        // "Segnalazione dovuta" contraddiceva la regola scritta in testa a
+        // questo file: oltre soglia non e' mai segnalazione dovuta. Il
+        // riscontro dice solo che i presupposti oggettivi risultano integrati.
+        motivo = `IVA scaduta ${euro(iva)} — oltre ${euro(S.ivaImportoAssoluto)}: presupposti oggettivi rilevati per la via alternativa, senza vincolo percentuale (art. 25-novies, comma 1, lett. c).`;
       } else if (volume === null) {
         motivo = `IVA scaduta ${euro(iva)} — sotto ${euro(S.ivaImportoAssoluto)}. Manca il volume d’affari: il requisito del 10% non è calcolabile.`;
       } else {
@@ -329,6 +414,16 @@ export function calcolaSoglie25Novies(
           `IVA scaduta ${euro(iva)} — ${euro(S.ivaImporto)} (${oltreImp ? 'superato' : 'non superato'}); ` +
           `10% del volume d’affari: ${euro(sogliaVol)} (${oltrePerc ? 'raggiunto' : 'non raggiunto'}). ` +
           `Requisiti congiunti: ${esito === 'sopra' ? 'entrambi soddisfatti' : 'non entrambi soddisfatti'}.`;
+      }
+    }
+    if (esito !== 'non_determinabile' || iva !== null) {
+      // Il requisito dei 90 giorni NON si applica qui (verifica di Libra):
+      // l'IVA ha il proprio termine di invio.
+      motivo +=
+        ' Il riscontro vale solo per debito IVA risultante dalle liquidazioni periodiche (LIPE); non si applica il requisito dei 90 giorni.';
+      if (esito === 'sopra') {
+        motivo +=
+          ' L’Agenzia invia la segnalazione con la comunicazione di irregolarità e comunque entro 150 giorni dal termine di presentazione della LIPE (art. 25-novies, comma 2, lett. a).';
       }
     }
     righe.push({
@@ -374,8 +469,18 @@ export function calcolaSoglie25Novies(
       if (crediti !== null) {
         const oltre = crediti > f.soglia;
         esito = oltre ? 'sopra' : 'sotto';
-        motivo = `Crediti affidati ${euro(crediti)} — soglia ${euro(f.soglia)}: ${oltre ? 'superata' : 'non superata'}.`;
+        motivo = `Crediti affidati ${euro(crediti)}, al netto della parte sospesa dal giudice — soglia ${euro(f.soglia)}: ${oltre ? 'superata' : 'non superata'}.`;
       }
+      ({ esito, motivo } = conRequisitoTemporale(
+        esito,
+        motivo,
+        dati.requisitiAerVerificati,
+        crediti !== null,
+        'servono la data di affidamento (dal 1° luglio 2022), la natura autodichiarata o definitivamente accertata, la scadenza oltre 90 giorni e lo stato di rateizzazione, che nessun file caricato riporta'
+      ));
+      if (esito === 'sopra')
+        motivo +=
+          ' L’ente invia la segnalazione entro 60 giorni dal verificarsi dei presupposti (art. 25-novies, comma 2, lett. b).';
       righe.push({
         ente: 'AGENZIA_RISCOSSIONE',
         ambito: f.ambito,

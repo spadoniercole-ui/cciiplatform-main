@@ -50,7 +50,12 @@ import {
   leggiListaInadempienze,
   eF24Aggregato,
 } from '@/lib/denunce/lettura';
-import { analizzaDenunce, analizzaInadempienze, analizzaVersamenti } from '@/lib/denunce/analisi';
+import {
+  analizzaDenunce,
+  analizzaInadempienze,
+  analizzaVersamenti,
+  partiteInpsPerAnzianita,
+} from '@/lib/denunce/analisi';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { generaScreeningAziendaAction } from '@/app/actions/screeningAzienda';
 import { generaPreCompilazioneMinisterialeAction } from '@/app/actions/checklistMinisterialeAzienda';
@@ -331,6 +336,10 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       // requisito dell'art. 25-novies che finora non era accertabile.
       let dovutoAnnoPrec: number | null = null;
       let nonVersato: number | null = null;
+      let creditiAffidatiNetti: number | null = null;
+      // Il ritardo della lettera a) viene dalla Lista Inadempienze quando c'è:
+      // le deleghe non lo sovrascrivono.
+      let ritardoDaLista = false;
       let ritardo90: boolean | null = null;
       let periodiRitardo: number | null = null;
       let mancanti: string | null = null;
@@ -373,24 +382,40 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             `Lista Inadempienze non riconosciuta: mancano ${r.colonneMancanti.join(', ')}.`
           );
         } else {
-          // Con i ruoli caricati, le partite già iscritte a ruolo si escludono:
-          // sono rappresentate dai residui dei ruoli. Contarle qui e lì
-          // raddoppierebbe il debito.
-          const b = analizzaInadempienze(r.righe, { escludiIscritteARuolo: !!fileRuoli });
-          nonVersato = b.totaleNonVersato;
+          // Le partite iscritte a ruolo escono dalla soglia INPS SEMPRE, non
+          // solo quando c'è il file dei ruoli: consegnate all'Agente della
+          // Riscossione, per l'Istituto sono chiuse — resta l'attesa del
+          // riversamento (chiarimento di Ercole, come per l'INAIL). Prima si
+          // escludevano solo per evitare il doppio conteggio con i ruoli, e
+          // senza quel file restavano dentro la lettera a).
+          const b = analizzaInadempienze(r.righe, { escludiIscritteARuolo: true });
+          // Della partite rimaste all'Istituto, contano per la lettera a)
+          // SOLO quelle scadute da oltre 90 giorni: importo e ritardo devono
+          // riguardare lo stesso debito (regola di Ercole). Il ritardo si
+          // ricava dalla partita stessa, non più dalle deleghe su tutti i
+          // periodi — che comprendevano debito già passato a ruolo.
+          const anz = partiteInpsPerAnzianita(r.righe, riferimento);
+          const bScadute = analizzaInadempienze(anz.scadute);
+          const bRecenti = analizzaInadempienze(anz.recenti);
+          nonVersato = bScadute.totaleNonVersato;
+          ritardo90 = bScadute.totaleNonVersato > 0;
+          ritardoDaLista = true;
+          if (bRecenti.totaleNonVersato > 0) {
+            note.push(
+              `Partite rimaste all’INPS scadute da meno di 90 giorni: ${Math.round(bRecenti.totaleNonVersato).toLocaleString('it-IT')} € — non ancora rilevanti per la soglia, che richiede un ritardo di oltre 90 giorni.`
+            );
+          }
           // Scritta secca, questa cifra si leggeva come IL debito anche quando
           // non lo era: chi si fermava alla prima riga non arrivava alla nota
           // che la correggeva.
           note.push(
             scelteFonti['vera:elenchi'] === 'VERA'
               ? `Lista Inadempienze: ${Math.round(nonVersato).toLocaleString('it-IT')} € — non usati come debito: la fonte scelta è il V.E.R.A., che li comprende.`
-              : fileRuoli
-                ? `Lista Inadempienze, partite non ancora iscritte a ruolo: ${Math.round(nonVersato).toLocaleString('it-IT')} €.`
-                : `Non versato certificato: ${Math.round(nonVersato).toLocaleString('it-IT')} €.`
+              : `Lista Inadempienze, partite rimaste all’INPS e scadute da oltre 90 giorni — quelle che contano per la soglia INPS: ${Math.round(nonVersato).toLocaleString('it-IT')} €. Il ritardo è misurato su queste stesse partite.`
           );
           if (b.esclusePerRuolo.righe > 0) {
             note.push(
-              `${b.esclusePerRuolo.righe} inadempienze escluse perché già iscritte a ruolo (${Math.round(b.esclusePerRuolo.importo).toLocaleString('it-IT')} €): il loro importo è rappresentato dai residui dei Ruoli Esattoriali, al netto di sgravi e pagamenti.`
+              `${b.esclusePerRuolo.righe} inadempienze escluse dalla soglia INPS perché già iscritte a ruolo (${Math.round(b.esclusePerRuolo.importo).toLocaleString('it-IT')} €): consegnate all’Agente della Riscossione, per l’Istituto la partita è chiusa. Rilevano, se ne ricorrono i requisiti, per la soglia dell’Agente (art. 25-novies, comma 1, lett. d).`
             );
           }
           if (b.anniConSaldoNegativo.length > 0) {
@@ -412,11 +437,17 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             `Ruoli esattoriali non riconosciuti: mancano ${ru.colonneMancanti.join(', ')}.`
           );
         } else {
-          nonVersato = (nonVersato ?? 0) + ru.residuo;
+          // NON si sommano più al non versato INPS: vanno sulla soglia
+          // dell'Agente della Riscossione, al netto della parte sospesa dal
+          // giudice, che non è definitivamente accertata.
+          creditiAffidatiNetti = Math.max(0, ru.residuo - ru.sospeso);
+          const eu = (x: number) => Math.round(x).toLocaleString('it-IT');
           note.push(
-            scelteFonti['vera:elenchi'] === 'VERA'
-              ? `Ruoli esattoriali: ${ru.cartelle} cartelle, residuo ${Math.round(ru.residuo).toLocaleString('it-IT')} € — non sommati: la fonte scelta è il V.E.R.A., che li comprende.`
-              : `Ruoli esattoriali: ${ru.cartelle} cartelle, residuo ${Math.round(ru.residuo).toLocaleString('it-IT')} € — credito dell’ente che le ha iscritte, sommato al non versato.`
+            `Ruoli esattoriali: ${ru.cartelle} cartelle, residuo ${eu(ru.residuo)} €` +
+              (ru.sospeso > 0
+                ? `, di cui ${eu(ru.sospeso)} € sospesi dal giudice in attesa del merito — esclusi, perché non definitivamente accertati`
+                : '') +
+              `. Contano per la soglia dell’Agente della Riscossione (lettera d), non per quella INPS: ${eu(creditiAffidatiNetti)} €. Restano da verificare data di affidamento, scadenza e stato di rateizzazione, che il file non riporta.`
           );
         }
       }
@@ -433,9 +464,11 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         } else {
           const c = analizzaVersamenti(righeDenunce, r.righe, riferimento);
           periodiRitardo = c.oltre90Giorni.length + c.maiVersati.length;
-          ritardo90 = periodiRitardo > 0;
+          if (!ritardoDaLista) ritardo90 = periodiRitardo > 0;
           note.push(
-            `Ritardo oltre 90 giorni: ${periodiRitardo} periodi, per ${Math.round(c.dovutoInRitardo).toLocaleString('it-IT')} € di contributi dovuti.`
+            ritardoDaLista
+              ? `Versamenti in ritardo oltre 90 giorni secondo le deleghe: ${periodiRitardo} periodi — dato complessivo, che comprende periodi già passati a ruolo. Per la soglia INPS vale il ritardo delle sole partite rimaste all’Istituto, dalla Lista Inadempienze.`
+              : `Ritardo oltre 90 giorni: ${periodiRitardo} periodi, per ${Math.round(c.dovutoInRitardo).toLocaleString('it-IT')} € di contributi dovuti.`
           );
           for (const sc of c.scartate) {
             note.push(
@@ -483,6 +516,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
           contributiScaduti:
             scelteFonti['vera:elenchi'] === 'VERA' ? undefined : (nonVersato ?? undefined),
           ritardoOltre90Giorni: ritardo90 ?? undefined,
+          creditiAffidatiAer: creditiAffidatiNetti ?? undefined,
           periodiInRitardo: periodiRitardo ?? undefined,
           denunceNonPresentate: mancanti ?? undefined,
           soglieAggiornateAl: dataVerifica,

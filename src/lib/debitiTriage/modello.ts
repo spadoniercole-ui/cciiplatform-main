@@ -61,7 +61,7 @@
  * che la legge non considera.
  */
 export type CategoriaDebito =
-  'PREVIDENZIALE' | 'ASSICURATIVO' | 'FISCALE' | 'COMMERCIALE' | 'ALTRO';
+  'PREVIDENZIALE' | 'ASSICURATIVO' | 'IVA' | 'FISCALE' | 'COMMERCIALE' | 'ALTRO';
 
 export const CATEGORIE: {
   codice: CategoriaDebito;
@@ -91,13 +91,28 @@ export const CATEGORIE: {
     aiuto:
       'Soglia assoluta sui premi non versati. Va tenuto distinto dal previdenziale: il bilancio li accorpa, la soglia no.',
   },
+  // L'IVA è separata dagli altri tributi. La soglia dell'Agenzia delle
+  // Entrate (art. 25-novies, comma 1, lett. c) riguarda SOLO il debito IVA
+  // scaduto e non versato che risulta dalle liquidazioni periodiche (LIPE):
+  // con un'unica categoria "Fiscale", anche IRES o IRAP finivano nella soglia
+  // IVA (verifica di Libra, parti B e D).
   {
-    codice: 'FISCALE',
-    etichetta: 'Fiscale',
+    codice: 'IVA',
+    etichetta: 'IVA da liquidazioni periodiche',
     ente: 'Agenzia delle Entrate',
     qualificato: true,
     riferimento: 'VOLUME_AFFARI',
-    aiuto: 'La soglia IVA si misura anche in percentuale sul volume d’affari.',
+    aiuto:
+      'Solo il debito IVA scaduto e non versato che risulta dalle LIPE. La soglia si misura anche sul 10% del volume d’affari dell’anno precedente; oltre 20.000 € vale comunque.',
+  },
+  {
+    codice: 'FISCALE',
+    etichetta: 'Altri tributi',
+    ente: 'Agenzia delle Entrate',
+    qualificato: false,
+    riferimento: null,
+    aiuto:
+      'IRES, IRAP, ritenute e altri tributi: non entrano nella soglia dell’Agenzia delle Entrate, che riguarda solo l’IVA. Se affidati all’Agente della Riscossione, rilevano per la sua soglia.',
   },
   {
     codice: 'COMMERCIALE',
@@ -167,6 +182,7 @@ export function totalePerCategoria(
   const out = {
     PREVIDENZIALE: 0,
     ASSICURATIVO: 0,
+    IVA: 0,
     FISCALE: 0,
     COMMERCIALE: 0,
     ALTRO: 0,
@@ -261,8 +277,8 @@ export function valoriSoglieDaPosizioni(righe: RigaDebitoTriage[]): {
     contributiScaduti: somma('PREVIDENZIALE'),
     contributiDovutiAnnoPrecedente: riferimentoDi(righe, 'PREVIDENZIALE'),
     premiInail: somma('ASSICURATIVO'),
-    ivaScaduta: somma('FISCALE'),
-    volumeAffari: riferimentoDi(righe, 'FISCALE'),
+    ivaScaduta: somma('IVA'),
+    volumeAffari: riferimentoDi(righe, 'IVA'),
   };
 }
 
