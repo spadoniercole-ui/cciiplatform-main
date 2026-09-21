@@ -128,3 +128,55 @@ export async function eliminaRigaDebitoTriageAction(
     return { success: false, error: `Eliminazione non riuscita: ${(error as Error).message}` };
   }
 }
+
+/**
+ * Sostituisce TUTTE le posizioni dell'azienda con quelle della tabella.
+ *
+ * La tabella è l'unica superficie dove le posizioni si vedono e si
+ * correggono — quelle a mano e quelle estratte dai prospetti insieme. Ciò che
+ * si vede è ciò che si salva. Ogni riga conserva il proprio `prospetto_id`,
+ * quindi la provenienza resta tracciabile anche dopo la sostituzione.
+ */
+export async function salvaTutteDebitiTriageAction(
+  nomeSchema: string,
+  aziendaId: number,
+  righe: RigaDebitoTriage[]
+): Promise<{ success: boolean; salvate?: number; error?: string }> {
+  try {
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabellaDebitiEnte(nomeSchema);
+    await pool.query(`DELETE FROM "${nomeSchema}".debiti_triage WHERE azienda_id = $1`, [
+      aziendaId,
+    ]);
+    let salvate = 0;
+    for (const r of righe) {
+      const vuota =
+        r.descrizione.trim() === '' &&
+        r.importoAnnoCorrente === null &&
+        r.importoAnnoPrecedente === null &&
+        r.importoAnnoMeno2 === null;
+      if (vuota) continue;
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".debiti_triage
+           (azienda_id, descrizione, categoria, importo_anno_corrente,
+            importo_anno_precedente, importo_anno_meno2, riferimento_anno_precedente, prospetto_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [
+          aziendaId,
+          r.descrizione.trim() || '(senza descrizione)',
+          r.categoria,
+          r.importoAnnoCorrente,
+          r.importoAnnoPrecedente,
+          r.importoAnnoMeno2,
+          r.riferimentoAnnoPrecedente,
+          r.prospettoId,
+        ]
+      );
+      salvate++;
+    }
+    return { success: true, salvate };
+  } catch (error: unknown) {
+    console.error('[salvaTutteDebitiTriageAction] Errore:', error);
+    return { success: false, error: `Salvataggio non riuscito: ${(error as Error).message}` };
+  }
+}

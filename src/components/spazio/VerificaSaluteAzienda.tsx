@@ -38,6 +38,11 @@ import {
   type RigaVerifica,
 } from '@/app/actions/aziendaInVerifica';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
+import { riconosciProspetto } from '@/lib/denunce/lettura';
+import type { RigaDebitoTriage } from '@/lib/debitiTriage/modello';
+import type { MappaturaProspetto } from '@/lib/debitiTriage/mappatura';
+import { salvaTutteDebitiTriageAction } from '@/app/actions/debitiTriage';
+import { salvaStrutturaProspettoAction } from '@/app/actions/struttureProspetto';
 import {
   leggiElencoDenunce,
   leggiElencoDeleghe,
@@ -105,8 +110,22 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
   // dimensioni portanti — bilancio ed esposizione — mancano entrambe, e
   // l'esito sarebbe rosso sempre: un semaforo che dice sempre la stessa cosa
   // non è un semaforo.
-  const [fileXbrl, setFileXbrl] = useState<File | null>(null);
-  const [fileVera, setFileVera] = useState<File | null>(null);
+  // Più bilanci: ognuno porta due esercizi, quindi due bilanci danno tre anni
+  // di indici. Un campo singolo lo faceva sembrare impossibile.
+  const [fileXbrl, setFileXbrl] = useState<File[]>([]);
+  // Un solo punto di caricamento per la posizione debitoria: N file di
+  // qualunque natura, riconosciuti dalle intestazioni al momento della
+  // conferma. Sostituisce i campi fissi — V.E.R.A. e tre fogli INPS — che
+  // presentavano come presupposto quello che è documentazione a corredo.
+  const [fileProspetti, setFileProspetti] = useState<File[]>([]);
+  // Le posizioni della tabella e le strutture mappate vivono qui finché
+  // l'azienda non esiste: si salvano alla conferma, insieme a lei. Prima
+  // restavano solo sullo schermo, e il pulsante di salvataggio diceva di
+  // confermare prima i dati — cioè di perderle.
+  const [righeDebiti, setRigheDebiti] = useState<RigaDebitoTriage[]>([]);
+  const [struttureDaSalvare, setStruttureDaSalvare] = useState<
+    { ente: string; firma: string; mappatura: MappaturaProspetto; nome: string }[]
+  >([]);
   // La visura serve di nuovo al momento del "Procedi": lo screening la usa
   // come documento di partenza.
   const [fileVisura, setFileVisura] = useState<File | null>(null);
@@ -117,10 +136,6 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
   // I tre fogli INPS. `null` = non ancora scelto; il flag "non disponibile"
   // dice che il documento non c'è e va escluso dalle verifiche, invece di
   // lasciare l'indicatore in attesa di qualcosa che non arriverà.
-  const [fileDenunce, setFileDenunce] = useState<File | null>(null);
-  const [fileDeleghe, setFileDeleghe] = useState<File | null>(null);
-  const [fileInadempienze, setFileInadempienze] = useState<File | null>(null);
-  const [nd, setNd] = useState({ denunce: false, deleghe: false, inadempienze: false });
   const [esitoFogli, setEsitoFogli] = useState<string[]>([]);
   /**
    * Data a cui la verifica è riferita.
@@ -207,20 +222,73 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         return;
       }
       setAziendaId(c.aziendaId);
+
+      // ---- Posizioni debitorie e strutture mappate ----------------------
+      // Si salvano PRIMA di calcolare l'indicatore, che le legge.
+      if (righeDebiti.length > 0) {
+        const sd = await salvaTutteDebitiTriageAction(nomeSchema, c.aziendaId, righeDebiti);
+        if (!sd.success) {
+          setErrore(`Posizioni debitorie non salvate: ${sd.error ?? 'errore'}`);
+        }
+      }
+      for (const st of struttureDaSalvare) {
+        await salvaStrutturaProspettoAction(nomeSchema, st.ente, st.firma, st.mappatura, st.nome);
+      }
       // ---- I documenti, prima della valutazione --------------------------
       // Ogni caricamento è indipendente: se uno fallisce, l'indicatore lo
       // registra come dimensione mancante e lo dichiara. Meglio un giudizio
       // parziale e onesto che nessun giudizio.
 
-      if (fileXbrl) {
-        setAvanzamento('Analisi del bilancio XBRL...');
+      // ---- Riconoscimento dei prospetti -----------------------------------
+      // Si classifica ogni file dalle intestazioni, poi la logica di
+      // elaborazione — invariata, e coperta dai test — riceve i file per
+      // tipo come prima riceveva i campi fissi.
+      const note: string[] = [];
+      let fileVera: File | null = null;
+      let fileDenunce: File | null = null;
+      let fileDelegheDettaglio: File | null = null;
+      let fileF24Aggregato: File | null = null;
+      let fileInadempienze: File | null = null;
+      for (const f of fileProspetti) {
+        const tipo = await riconosciProspetto(f);
+        if (tipo === 'VERA' && !fileVera) fileVera = f;
+        else if (tipo === 'DENUNCE' && !fileDenunce) fileDenunce = f;
+        // Deleghe per periodo e F24 aggregato NON si contendono lo stesso
+        // posto: se arrivano entrambi, il primo caricato vinceva — e se era
+        // l'aggregato, il ritardo diventava non calcolabile mentre il file
+        // buono veniva scartato come duplicato.
+        else if (tipo === 'DELEGHE' && !fileDelegheDettaglio) fileDelegheDettaglio = f;
+        else if (tipo === 'F24_AGGREGATO' && !fileF24Aggregato) fileF24Aggregato = f;
+        else if (tipo === 'INADEMPIENZE' && !fileInadempienze) fileInadempienze = f;
+        else if (tipo === 'SCONOSCIUTO') {
+          // Dichiarato, non scartato in silenzio: il file c'era, e chi l'ha
+          // caricato deve sapere che non è stato usato.
+          note.push(
+            `«${f.name}»: struttura non riconosciuta. Non è stato usato — la mappatura manuale delle colonne per i prospetti liberi non è ancora disponibile.`
+          );
+        } else {
+          note.push(`«${f.name}»: secondo file dello stesso tipo, ignorato — si usa il primo.`);
+        }
+      }
+
+      // Il dettaglio per periodo prevale SEMPRE sull'aggregato: e' l'unico da
+      // cui si misura il ritardo sul singolo versamento.
+      const fileDeleghe: File | null = fileDelegheDettaglio ?? fileF24Aggregato;
+      if (fileDelegheDettaglio && fileF24Aggregato) {
+        note.push(
+          `«${fileF24Aggregato.name}» (F24 aggregato) non usato: c'è anche l'Elenco Deleghe per periodo, che porta il dettaglio necessario al calcolo del ritardo.`
+        );
+      }
+
+      for (const fx of fileXbrl) {
+        setAvanzamento(`Analisi del bilancio XBRL (${fx.name})...`);
         try {
           // Via la rotta dedicata, non chiamando la libreria da qui:
           // `analizzaFileXbrl` legge le mappature dei tag dal database, e
           // importarla in un componente client trascinerebbe `pg` nel bundle
           // del browser — la build fallisce con "Can't resolve 'fs'".
           const fd = new FormData();
-          fd.append('file', fileXbrl);
+          fd.append('file', fx);
           const resp = await fetch('/api/xbrl/parse', { method: 'POST', body: fd });
           const esito = await resp.json();
           if (!resp.ok || !esito.success) {
@@ -228,7 +296,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
           }
           await salvaAnalisiXbrlAziendaAction(nomeSchema, c.aziendaId, esito);
         } catch (e) {
-          setErrore(`Bilancio XBRL non analizzabile: ${String(e)}`);
+          note.push(`Bilancio «${fx.name}» non analizzabile: ${String(e)}`);
         }
       }
 
@@ -249,10 +317,9 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         }
       }
 
-      // ---- I tre fogli INPS ----------------------------------------------
+      // ---- I fogli INPS riconosciuti ------------------------------------
       // Da qui vengono i numeri che prima si digitavano a mano, e il terzo
       // requisito dell'art. 25-novies che finora non era accertabile.
-      const note: string[] = [];
       let dovutoAnnoPrec: number | null = null;
       let nonVersato: number | null = null;
       let ritardo90: boolean | null = null;
@@ -624,40 +691,38 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
                 Documenti per l&apos;analisi
               </p>
-              <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
-                Senza questi due l&apos;indicatore non ha né il bilancio né l&apos;esposizione, e
-                l&apos;esito resta &laquo;approfondimenti necessari&raquo; per forza. Sono
-                facoltativi — ma è da qui che il semaforo prende significato.
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                Il primo livello si regge su documenti pubblici, recuperabili da chiunque: la visura
+                e il bilancio. Bastano a leggere l&apos;azienda e a fotografarne i conti, e
+                collocano sulla soglia del CCII senza entrarci — per quello serve la posizione
+                debitoria, più sotto.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                  Bilancio XBRL
-                </label>
-                <input
-                  type="file"
-                  accept=".xbrl,.xml"
-                  onChange={(e) => setFileXbrl(e.target.files?.[0] ?? null)}
-                  className="w-full text-xs font-mono text-slate-900 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 file:font-bold file:uppercase file:text-[10px]"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Da qui patrimonio netto e indici CCII.
-                </p>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                  Posizione V.E.R.A.
-                </label>
-                <input
-                  type="file"
-                  accept=".xls,.xlsx"
-                  onChange={(e) => setFileVera(e.target.files?.[0] ?? null)}
-                  className="w-full text-xs font-mono text-slate-900 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 file:font-bold file:uppercase file:text-[10px]"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">Da qui l&apos;esposizione.</p>
-              </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                Bilanci XBRL
+              </label>
+              <input
+                type="file"
+                accept=".xbrl,.xml"
+                multiple
+                onChange={(e) => setFileXbrl(Array.from(e.target.files ?? []))}
+                className="w-full font-mono text-xs text-slate-900 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:text-slate-700"
+              />
+              <p className="mt-1 text-[10px] text-slate-400">
+                Anche più di uno: ogni bilancio porta due esercizi, quindi due bilanci danno tre
+                anni di indici. Servono al quadro d&apos;insieme, mai al test delle soglie.
+              </p>
+              {fileXbrl.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {fileXbrl.map((f) => (
+                    <li key={f.name} className="font-mono text-[10px] text-slate-600">
+                      — {f.name}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div>
@@ -683,159 +748,34 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                 nomeSchema={nomeSchema}
                 aziendaId={aziendaId}
                 dataVerifica={dataVerifica}
+                prospetti={fileProspetti}
+                onProspetti={setFileProspetti}
+                onRighe={setRigheDebiti}
+                onStruttura={(st) => setStruttureDaSalvare((prev) => [...prev, st])}
               />
             </div>
 
             <div className="border-t border-slate-100 pt-4">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
-                Fogli INPS
-                <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
-                  — scorciatoia, valida solo per questo ente
-                </span>
-              </p>
-              <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
-                Compilano le posizioni qui sopra senza digitarle, e in più portano il ritardo di
-                oltre 90 giorni — il terzo requisito dell&apos;art. 25-novies, che senza
-                l&apos;Elenco Deleghe non è accertabile. Sono dati dell&apos;istituto: nessuna
-                elaborazione nostra. Se un foglio non è disponibile, spuntalo: verrà escluso dalle
-                verifiche invece di lasciare l&apos;indicatore in attesa.
-              </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                {tipoSpazio === 'NON_ENTE'
-                  ? 'Tutti e tre si scaricano dal Cassetto Previdenziale bidirezionale dell’azienda, insieme al debito contabilizzato: vi si accede con le credenziali del cliente.'
-                  : 'Tutti e tre provengono dai sistemi dell’istituto.'}
+              {/* Nessun documento la riporta: va dichiarata. Decide quale soglia
+                  INPS si applica — il 30% congiunto a 15.000 € con lavoratori,
+                  i soli 5.000 € senza. */}
+              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                Lavoratori subordinati o parasubordinati
+              </label>
+              <select
+                value={conLavoratori}
+                onChange={(e) => setConLavoratori(e.target.value as '' | 'si' | 'no')}
+                className={`${CLASSE_CAMPO} max-w-md`}
+              >
+                <option value="">Non dichiarato</option>
+                <option value="si">Sì</option>
+                <option value="no">No</option>
+              </select>
+              <p className="mt-1 text-[10px] text-slate-400">
+                Nessun documento la riporta. Decide quale soglia si applica: con lavoratori il 30%
+                congiunto a 15.000 €, senza la sola soglia di 5.000 €.
               </p>
             </div>
-
-            {[
-              {
-                k: 'denunce' as const,
-                label: 'Elenco denunce (UNIEMENS)',
-                hint: 'Contributi dovuti per anno e denunce non presentate.',
-                file: fileDenunce,
-                set: setFileDenunce,
-              },
-              {
-                k: 'inadempienze' as const,
-                label: 'Lista Inadempienze',
-                hint: 'Il non versato certificato dall’istituto.',
-                file: fileInadempienze,
-                set: setFileInadempienze,
-              },
-              {
-                k: 'deleghe' as const,
-                label: 'Elenco Deleghe (F24)',
-                hint: 'Date di versamento: da qui il ritardo oltre 90 giorni. Solo DM10.',
-                file: fileDeleghe,
-                set: setFileDeleghe,
-              },
-            ].map((f) => (
-              <div key={f.k} className="border-t border-slate-100 pt-3">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                    {f.label}
-                  </label>
-                  <label className="flex items-center gap-1.5 text-[10px] text-slate-500 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={nd[f.k]}
-                      onChange={(e) => {
-                        setNd({ ...nd, [f.k]: e.target.checked });
-                        if (e.target.checked) f.set(null);
-                      }}
-                    />
-                    non disponibile
-                  </label>
-                </div>
-                {!nd[f.k] && (
-                  <input
-                    type="file"
-                    accept=".xls,.xlsx"
-                    onChange={(e) => f.set(e.target.files?.[0] ?? null)}
-                    className="w-full mt-1 text-xs font-mono text-slate-900 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 file:font-bold file:uppercase file:text-[10px]"
-                  />
-                )}
-                <p className="text-[10px] text-slate-400 mt-1">
-                  {nd[f.k] ? 'Escluso dalle verifiche.' : f.hint}
-                </p>
-              </div>
-            ))}
-
-            {/* Il dato dei contributi dovuti si CHIEDE solo se l'Elenco denunce
-                non c'è. Con quel foglio caricato il numero si legge da lì —
-                dato dell'ente, non trascrizione — e chiederlo comunque
-                inviterebbe a digitare un valore che verrebbe poi ignorato. */}
-            {!fileDenunce && (
-              <div className="border-t border-slate-100 pt-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
-                  Soglia di segnalazione
-                </p>
-                <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
-                  Servono solo se l&apos;Elenco denunce non è disponibile: con quel foglio i
-                  contributi dovuti si leggono da lì, e il valore letto ha la precedenza su quello
-                  digitato.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                      Lavoratori subordinati o parasubordinati
-                    </label>
-                    <select
-                      value={conLavoratori}
-                      onChange={(e) => setConLavoratori(e.target.value as '' | 'si' | 'no')}
-                      className={CLASSE_CAMPO}
-                    >
-                      <option value="">Non dichiarato</option>
-                      <option value="si">Sì</option>
-                      <option value="no">No</option>
-                    </select>
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Decide quale soglia si applica: 30% + 15.000 € oppure 5.000 €.
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                      Contributi dovuti nell&apos;anno precedente
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={contributiDovuti}
-                      onChange={(e) => setContributiDovuti(e.target.value)}
-                      className={`${CLASSE_CAMPO} font-mono`}
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Totale dovuto, non il debito: è la base del 30%.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {fileDenunce && (
-              <div className="border-t border-slate-100 pt-3">
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  I contributi dovuti dell&apos;anno precedente verranno letti dall&apos;Elenco
-                  denunce: non c&apos;è nulla da digitare. La presenza di lavoratori resta invece da
-                  dichiarare — nessun foglio la riporta.
-                </p>
-                <div className="mt-3 max-w-md">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                    Lavoratori subordinati o parasubordinati
-                  </label>
-                  <select
-                    value={conLavoratori}
-                    onChange={(e) => setConLavoratori(e.target.value as '' | 'si' | 'no')}
-                    className={CLASSE_CAMPO}
-                  >
-                    <option value="">Non dichiarato</option>
-                    <option value="si">Sì</option>
-                    <option value="no">No</option>
-                  </select>
-                </div>
-              </div>
-            )}
           </div>
 
           {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}

@@ -11,6 +11,7 @@
 
 import { leggiFoglioAoa } from '@/lib/debitiEnte/tracciatoExcel';
 import type { RigaDenuncia, RigaDelega, RigaInadempienza } from './analisi';
+import { leggiImportoItaliano } from '@/lib/debitiTriage/mappatura';
 
 function normalizza(v: unknown): string {
   return String(v ?? '')
@@ -46,8 +47,12 @@ function numero(v: unknown): number {
   if (typeof v === 'number') return v;
   const s = String(v ?? '').replace(/[^\d,.-]/g, '');
   if (!s) return 0;
-  // Formato italiano: il punto separa le migliaia, la virgola i decimali.
-  const n = Number(s.replace(/\./g, '').replace(',', '.'));
+  // Una sola regola per gli importi italiani, in tutta la piattaforma.
+  // Questa funzione ne aveva una propria che toglieva SEMPRE i punti — e
+  // leggeva "35.25" come 3525 — mentre la mappatura dei prospetti leggeva
+  // "418.709" come 418,709. Due funzioni che sbagliano in direzioni opposte
+  // sono peggio di una: si unificano.
+  const n = leggiImportoItaliano(s);
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -184,3 +189,67 @@ export async function leggiListaInadempienze(file: File): Promise<EsitoLettura<R
   }
   return { righe };
 }
+
+// ---------------------------------------------------------------------------
+// RICONOSCIMENTO AUTOMATICO DEI PROSPETTI
+//
+// Il triage ha un solo punto di caricamento per la posizione debitoria: si
+// portano N file di qualunque natura, e il sistema capisce da solo cosa
+// sono. Prima c'erano campi fissi — uno per il V.E.R.A., tre per i fogli
+// INPS — che mostravano come presupposto quello che è invece documentazione a
+// corredo, e convivevano sulla stessa pagina con l'inserimento manuale.
+//
+// Si riconosce dalle INTESTAZIONI, mai dal nome del file: lo stesso dato
+// arriva con nomi diversi secondo il punto di prelievo, e un nome non prova
+// nulla sul contenuto.
+//
+// L'ordine dei tentativi conta: il file F24 aggregato va riconosciuto PRIMA
+// dell'Elenco Deleghe, perché condivide alcune intestazioni ma non porta il
+// dettaglio per periodo — scambiarli farebbe credere calcolabile un ritardo
+// che non lo è.
+
+export type TipoProspetto =
+  'DENUNCE' | 'DELEGHE' | 'F24_AGGREGATO' | 'INADEMPIENZE' | 'VERA' | 'SCONOSCIUTO';
+
+export async function riconosciProspetto(file: File): Promise<TipoProspetto> {
+  let aoa: unknown[][];
+  try {
+    aoa = (await leggiFoglioAoa(file)).aoa;
+  } catch {
+    // Non è un foglio di calcolo leggibile: può essere un PDF, un documento,
+    // un'immagine. Non lo si scarta in silenzio — si dichiara sconosciuto.
+    return 'SCONOSCIUTO';
+  }
+
+  if (
+    trovaIntestazione(aoa, ['Anno', 'Importo Pagato']) &&
+    !trovaIntestazione(aoa, ['Periodo comp.'])
+  ) {
+    return 'F24_AGGREGATO';
+  }
+  for (const v of VARIANTI_DENUNCE) {
+    if (trovaIntestazione(aoa, v)) return 'DENUNCE';
+  }
+  if (trovaIntestazione(aoa, COL_DELEGHE)) return 'DELEGHE';
+  if (trovaIntestazione(aoa, COL_INADEMPIENZE)) return 'INADEMPIENZE';
+
+  // Il V.E.R.A. non ha una riga di intestazione unica: è organizzato in
+  // sezioni con titolo. Lo si riconosce dalla parola che le sezioni portano.
+  const testo = aoa
+    .slice(0, 40)
+    .flat()
+    .map((c) => String(c ?? '').toUpperCase())
+    .join(' ');
+  if (/DETTAGLIO|V\.?E\.?R\.?A|POSIZIONE CONTRIBUTIVA|PERIODO DAL/.test(testo)) return 'VERA';
+
+  return 'SCONOSCIUTO';
+}
+
+export const ETICHETTA_PROSPETTO: Record<TipoProspetto, string> = {
+  DENUNCE: 'Elenco denunce (UNIEMENS)',
+  DELEGHE: 'Elenco deleghe (F24 per periodo)',
+  F24_AGGREGATO: 'F24 aggregato per anno',
+  INADEMPIENZE: 'Lista inadempienze',
+  VERA: 'Posizione V.E.R.A.',
+  SCONOSCIUTO: 'Struttura non riconosciuta',
+};

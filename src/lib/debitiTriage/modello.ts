@@ -225,3 +225,37 @@ export function andamento(righe: RigaDebitoTriage[]): {
     variazionePercentuale: p === 0 ? null : Math.round(((c - p) / p) * 1000) / 10,
   };
 }
+
+/**
+ * Dalle posizioni della tabella ai valori che il test delle soglie legge.
+ *
+ * È il collegamento che mancava: la tabella è stata costruita per raccogliere
+ * i numeri reali su cui si calcolano le soglie, ma fino alla 0.109.73
+ * l'indicatore non la leggeva affatto — continuava a basarsi solo sul
+ * V.E.R.A. e sui campi dell'anagrafica. Chi inseriva le posizioni a mano non
+ * vedeva cambiare nulla.
+ *
+ * Per ogni categoria: il debito è quello dell'anno del triage, il termine di
+ * paragone è la colonna di riferimento dell'anno precedente. Una categoria
+ * senza righe torna null, non zero — altrimenti un'assenza diventerebbe un
+ * "debito zero" e la soglia risulterebbe non superata per mancanza di dati.
+ */
+export function valoriSoglieDaPosizioni(righe: RigaDebitoTriage[]): {
+  contributiScaduti: number | null;
+  contributiDovutiAnnoPrecedente: number | null;
+  premiInail: number | null;
+  ivaScaduta: number | null;
+  volumeAffari: number | null;
+} {
+  const somma = (c: CategoriaDebito): number | null => {
+    const r = righe.filter((x) => x.categoria === c && x.importoAnnoCorrente !== null);
+    return r.length === 0 ? null : r.reduce((s, x) => s + (x.importoAnnoCorrente ?? 0), 0);
+  };
+  return {
+    contributiScaduti: somma('PREVIDENZIALE'),
+    contributiDovutiAnnoPrecedente: riferimentoDi(righe, 'PREVIDENZIALE'),
+    premiInail: somma('ASSICURATIVO'),
+    ivaScaduta: somma('FISCALE'),
+    volumeAffari: riferimentoDi(righe, 'FISCALE'),
+  };
+}

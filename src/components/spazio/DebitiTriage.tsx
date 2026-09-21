@@ -20,7 +20,21 @@ import {
   type CategoriaDebito,
   type RigaDebitoTriage,
 } from '@/lib/debitiTriage/modello';
-import { ottieniDebitiTriageAction, salvaDebitiTriageAction } from '@/app/actions/debitiTriage';
+import {
+  ottieniDebitiTriageAction,
+  salvaTutteDebitiTriageAction,
+} from '@/app/actions/debitiTriage';
+import { riconosciProspetto, ETICHETTA_PROSPETTO, type TipoProspetto } from '@/lib/denunce/lettura';
+import { leggiFoglioAoa } from '@/lib/debitiEnte/tracciatoExcel';
+import {
+  estraiRighe,
+  firmaIntestazioni,
+  individuaIntestazione,
+  proponiMappatura,
+  type MappaturaProspetto,
+} from '@/lib/debitiTriage/mappatura';
+import { cercaStrutturaProspettoAction } from '@/app/actions/struttureProspetto';
+import { PannelloMappatura } from '@/components/spazio/PannelloMappatura';
 
 interface Props {
   nomeSchema: string;
@@ -28,6 +42,22 @@ interface Props {
   /** Data di verifica: da qui i tre anni, senza chiedere nulla. */
   dataVerifica: string;
   onSalvato?: (righe: RigaDebitoTriage[]) => void;
+  /** File caricati come prospetti: li elabora la pagina alla conferma. */
+  prospetti?: File[];
+  onProspetti?: (file: File[]) => void;
+  /**
+   * La tabella comunica le proprie righe alla pagina, che le salva insieme
+   * all'azienda alla conferma. Senza, le posizioni inserite prima che
+   * l'azienda esistesse restavano solo sullo schermo.
+   */
+  onRighe?: (righe: RigaDebitoTriage[]) => void;
+  /** Strutture da ricordare, salvate dalla pagina quando l'azienda esiste. */
+  onStruttura?: (s: {
+    ente: string;
+    firma: string;
+    mappatura: MappaturaProspetto;
+    nome: string;
+  }) => void;
 }
 
 const CLASSE =
@@ -45,7 +75,24 @@ const vuota = (): RigaDebitoTriage => ({
 
 const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
 
-export function DebitiTriage({ nomeSchema, aziendaId, dataVerifica, onSalvato }: Props) {
+export function DebitiTriage({
+  nomeSchema,
+  aziendaId,
+  dataVerifica,
+  onSalvato,
+  prospetti = [],
+  onProspetti,
+  onRighe,
+  onStruttura,
+}: Props) {
+  // Il prospetto in mappatura in questo momento, con il suo foglio già letto.
+  const [inMappatura, setInMappatura] = useState<{
+    nome: string;
+    aoa: unknown[][];
+    proposta: MappaturaProspetto;
+  } | null>(null);
+  const [notaStruttura, setNotaStruttura] = useState<Record<string, string>>({});
+  const [tipi, setTipi] = useState<Record<string, TipoProspetto>>({});
   const anni = anniDelTriage(new Date(`${dataVerifica}T12:00:00Z`));
   const [haProspetti, setHaProspetti] = useState<boolean | null>(null);
   const [righe, setRighe] = useState<RigaDebitoTriage[]>([vuota()]);
@@ -62,10 +109,32 @@ export function DebitiTriage({ nomeSchema, aziendaId, dataVerifica, onSalvato }:
     });
   }, [nomeSchema, aziendaId]);
 
+  useEffect(() => {
+    onRighe?.(righe);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [righe]);
+
   const aggiorna = (i: number, campo: keyof RigaDebitoTriage, valore: unknown) => {
     const copia = [...righe];
     copia[i] = { ...copia[i], [campo]: valore };
     setRighe(copia);
+  };
+
+  /** Aggiunge le righe estratte, togliendo l'eventuale riga vuota iniziale. */
+  const aggiungiEstratte = (nuove: RigaDebitoTriage[]) => {
+    const esistenti = righe.filter(
+      (r) =>
+        r.descrizione.trim() !== '' ||
+        r.importoAnnoCorrente !== null ||
+        r.importoAnnoPrecedente !== null ||
+        r.importoAnnoMeno2 !== null
+    );
+    setRighe([...esistenti, ...nuove]);
+  };
+
+  const apriMappatura = async (f: File) => {
+    const { aoa } = await leggiFoglioAoa(f);
+    setInMappatura({ nome: f.name, aoa, proposta: proponiMappatura(aoa) });
   };
 
   const salva = async () => {
@@ -76,7 +145,9 @@ export function DebitiTriage({ nomeSchema, aziendaId, dataVerifica, onSalvato }:
       return;
     }
     setSalvataggio(true);
-    const r = await salvaDebitiTriageAction(nomeSchema, aziendaId, righe, null);
+    // Si salva la tabella per INTERO: è l'unica superficie dove le posizioni
+    // si vedono e si correggono, quelle a mano e quelle dai prospetti.
+    const r = await salvaTutteDebitiTriageAction(nomeSchema, aziendaId, righe);
     setSalvataggio(false);
     setEsito(r.success ? `${r.salvate} posizioni salvate.` : (r.error ?? 'Errore.'));
     if (r.success) onSalvato?.(righe);
@@ -124,17 +195,117 @@ export function DebitiTriage({ nomeSchema, aziendaId, dataVerifica, onSalvato }:
       )}
 
       {haProspetti === true && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-[11px] leading-relaxed text-amber-900">
-            Il caricamento dei prospetti liberi — con mappatura delle colonne — non è ancora
-            disponibile. Nel frattempo puoi inserire le posizioni a mano: sono le stesse righe, e
-            quando i prospetti arriveranno compileranno esattamente questa tabella.
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-[11px] leading-relaxed text-slate-600">
+            Carica i prospetti che hai, di qualunque natura: la piattaforma riconosce da sola cosa
+            sono dalle intestazioni. Il V.E.R.A., le denunce, le deleghe e le inadempienze
+            dell&apos;INPS si riconoscono in entrambe le varianti — Cassetto e INPS-CPC.
+          </p>
+          <input
+            type="file"
+            multiple
+            accept=".xls,.xlsx,.csv"
+            onChange={async (e) => {
+              const elenco = Array.from(e.target.files ?? []);
+              onProspetti?.(elenco);
+              // Il riconoscimento si mostra SUBITO, prima della conferma: chi
+              // carica un file deve sapere se la piattaforma l'ha capito, non
+              // scoprirlo dopo nel riepilogo.
+              const esiti: Record<string, TipoProspetto> = {};
+              const note: Record<string, string> = {};
+              for (const f of elenco) {
+                esiti[f.name] = await riconosciProspetto(f);
+                if (esiti[f.name] !== 'SCONOSCIUTO') continue;
+                // Tracciato non standard: forse è già stato mappato una volta.
+                // Se sì, si applica la mappatura salvata e lo si dichiara;
+                // se ci sono più enti per la stessa firma, si lascia decidere.
+                const { aoa } = await leggiFoglioAoa(f);
+                const firma = firmaIntestazioni(aoa[individuaIntestazione(aoa)] ?? []);
+                const r = await cercaStrutturaProspettoAction(nomeSchema, firma);
+                const note1 = r.strutture ?? [];
+                if (note1.length === 1) {
+                  const e = estraiRighe(aoa, note1[0].mappatura, anni, null, f.name);
+                  aggiungiEstratte(e.righe);
+                  note[f.name] =
+                    `riconosciuto da una mappatura salvata (${note1[0].ente}): ${e.righe.length} posizioni aggiunte`;
+                } else if (note1.length > 1) {
+                  note[f.name] = `tracciato noto per più enti: mappalo per scegliere quale`;
+                }
+              }
+              setTipi(esiti);
+              setNotaStruttura(note);
+            }}
+            className="w-full font-mono text-xs text-slate-900 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:text-slate-700"
+          />
+          {prospetti.length > 0 && (
+            <ul className="space-y-1">
+              {prospetti.map((f) => {
+                const t = tipi[f.name];
+                return (
+                  <li key={f.name} className="flex items-center justify-between gap-3 text-[11px]">
+                    <span className="truncate font-mono text-slate-700">
+                      {f.name}
+                      {notaStruttura[f.name] && (
+                        <span className="ml-2 font-sans text-[10px] text-emerald-700">
+                          — {notaStruttura[f.name]}
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      className={`shrink-0 font-bold ${
+                        !t
+                          ? 'text-slate-400'
+                          : t === 'SCONOSCIUTO'
+                            ? 'text-amber-700'
+                            : t === 'F24_AGGREGATO'
+                              ? 'text-amber-600'
+                              : 'text-emerald-700'
+                      }`}
+                    >
+                      {t ? ETICHETTA_PROSPETTO[t] : 'riconoscimento...'}
+                      {t === 'SCONOSCIUTO' &&
+                        !notaStruttura[f.name]?.startsWith('riconosciuto') && (
+                          <button
+                            onClick={() => void apriMappatura(f)}
+                            className="ml-2 font-bold text-sky-700 hover:underline"
+                          >
+                            mappa le colonne
+                          </button>
+                        )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {inMappatura && (
+            <PannelloMappatura
+              nomeFile={inMappatura.nome}
+              aoa={inMappatura.aoa}
+              proposta={inMappatura.proposta}
+              anni={anni}
+              onApplica={({ righe: estratte, ente, mappatura, firma }) => {
+                aggiungiEstratte(estratte);
+                onStruttura?.({ ente, firma, mappatura, nome: inMappatura.nome });
+                setNotaStruttura({
+                  ...notaStruttura,
+                  [inMappatura.nome]: `mappato: ${estratte.length} posizioni aggiunte`,
+                });
+                setInMappatura(null);
+                setHaProspetti(false);
+              }}
+              onAnnulla={() => setInMappatura(null)}
+            />
+          )}
+          <p className="text-[10px] leading-relaxed text-slate-400">
+            Le posizioni estratte finiscono nella tabella delle posizioni, dove le vedi e le
+            correggi prima che entrino nel calcolo.
           </p>
           <button
             onClick={() => setHaProspetti(false)}
-            className="mt-2 text-[11px] font-bold text-sky-700 hover:underline"
+            className="text-[11px] font-bold text-sky-700 hover:underline"
           >
-            Inserisci a mano
+            Integra a mano
           </button>
         </div>
       )}
@@ -295,17 +466,24 @@ export function DebitiTriage({ nomeSchema, aziendaId, dataVerifica, onSalvato }:
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => void salva()}
-              disabled={salvataggio}
-              className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-slate-800 disabled:bg-slate-300"
-            >
-              <Save className="h-3.5 w-3.5" />
-              {salvataggio ? 'Salvataggio...' : 'Consolida e salva'}
-            </button>
-            {esito && <span className="text-[11px] font-bold text-slate-600">{esito}</span>}
-          </div>
+          {aziendaId ? (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => void salva()}
+                disabled={salvataggio}
+                className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-slate-800 disabled:bg-slate-300"
+              >
+                <Save className="h-3.5 w-3.5" />
+                {salvataggio ? 'Salvataggio...' : 'Consolida e salva'}
+              </button>
+              {esito && <span className="text-[11px] font-bold text-slate-600">{esito}</span>}
+            </div>
+          ) : (
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              Le posizioni si salvano con la conferma dei dati, insieme all&apos;azienda: è da lì
+              che l&apos;indicatore le legge.
+            </p>
+          )}
         </div>
       )}
     </div>

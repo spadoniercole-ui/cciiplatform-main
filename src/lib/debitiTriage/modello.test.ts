@@ -103,3 +103,46 @@ describe('andamento sui tre anni', () => {
     expect(a.variazionePercentuale).toBeNull();
   });
 });
+
+describe('dalla tabella al test delle soglie', () => {
+  it('ogni categoria alimenta il proprio valore', async () => {
+    const { valoriSoglieDaPosizioni } = await import('./modello');
+    const v = valoriSoglieDaPosizioni([
+      riga({
+        categoria: 'PREVIDENZIALE',
+        importoAnnoCorrente: 496_544,
+        riferimentoAnnoPrecedente: 418_709,
+      }),
+      riga({ categoria: 'ASSICURATIVO', importoAnnoCorrente: 9_000 }),
+      riga({
+        categoria: 'FISCALE',
+        importoAnnoCorrente: 30_000,
+        riferimentoAnnoPrecedente: 900_000,
+      }),
+      riga({ categoria: 'COMMERCIALE', importoAnnoCorrente: 300_000 }),
+    ]);
+    expect(v.contributiScaduti).toBe(496_544);
+    expect(v.contributiDovutiAnnoPrecedente).toBe(418_709);
+    expect(v.premiInail).toBe(9_000);
+    expect(v.ivaScaduta).toBe(30_000);
+    expect(v.volumeAffari).toBe(900_000);
+  });
+
+  it('i commerciali non entrano in nessun valore di soglia', async () => {
+    const { valoriSoglieDaPosizioni } = await import('./modello');
+    const v = valoriSoglieDaPosizioni([
+      riga({ categoria: 'COMMERCIALE', importoAnnoCorrente: 999_999 }),
+    ]);
+    expect(v.contributiScaduti).toBeNull();
+    expect(v.ivaScaduta).toBeNull();
+  });
+
+  it('una categoria assente torna NULL, non zero', async () => {
+    // Zero trasformerebbe un'assenza in "debito zero", e la soglia
+    // risulterebbe non superata per mancanza di dati.
+    const { valoriSoglieDaPosizioni } = await import('./modello');
+    const v = valoriSoglieDaPosizioni([]);
+    expect(v.contributiScaduti).toBeNull();
+    expect(v.premiInail).toBeNull();
+  });
+});

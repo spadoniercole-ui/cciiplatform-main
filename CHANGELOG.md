@@ -93,6 +93,130 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.74 — 2026-09-21
+
+**Mappatura dei prospetti liberi — e la tabella che finalmente alimenta il
+semaforo**
+
+Consegna richiesta pulita e completa. Contiene la mappatura, ma anche due
+difetti trovati ripercorrendo il flusso, piu' gravi della funzione nuova.
+
+**1. La tabella delle posizioni NON alimentava il semaforo.** Costruita nella
+0.109.69 per raccogliere i numeri reali delle soglie, non era mai stata
+collegata all'indicatore, che continuava a leggere solo il V.E.R.A. e i campi
+dell'anagrafica. Chi inseriva le posizioni a mano non vedeva cambiare nulla.
+Ora `valoriSoglieDaPosizioni` traduce la tabella nei valori del test — debito
+dell'anno del triage per categoria, termine di paragone dalla colonna di
+riferimento — e le posizioni hanno la PRECEDENZA sui campi dell'anagrafica,
+che restano come ripiego per le aziende verificate prima. Una categoria senza
+righe torna null, non zero: un'assenza non deve diventare un "debito zero".
+
+**2. Le posizioni del triage restavano solo sullo schermo.** Il pulsante di
+salvataggio della tabella diceva di confermare prima i dati anagrafici — e
+alla conferma le posizioni non venivano salvate. Ora la tabella comunica le
+proprie righe alla pagina, che le salva insieme all'azienda PRIMA di calcolare
+l'indicatore. La tabella si salva per intero: e' l'unica superficie dove le
+posizioni si vedono e si correggono, a mano e dai prospetti insieme.
+
+**3. Importi divisi per mille.** Il test del riepilogo ha trovato che
+"418.709" veniva letto come quattrocentodiciotto virgola settecentonove: il
+separatore delle migliaia all'italiana scambiato per la virgola decimale
+inglese, senza errori ne' avvisi. E il lettore dei fogli INPS aveva il difetto
+opposto — toglieva sempre i punti, leggendo "35.25" come 3525. Due funzioni che
+sbagliavano in direzioni opposte sono ora una sola regola,
+`leggiImportoItaliano`, con **7 test** sui casi reali.
+
+**La mappatura.** Un prospetto non riconosciuto non si scarta: si apre un
+pannello con l'anteprima delle prime righe, e chi lo carica indica ente,
+forma, colonne e categoria. Le due forme scelte da Ercole: RIEPILOGO (una
+colonna per anno) e DETTAGLIO (una riga per movimento con una data, sommata
+per anno — la forma degli estratti conto, dei partitari e degli stessi fogli
+INPS). La categoria si da' per tutto il file, oppure da una colonna i cui
+valori si traducono uno per uno.
+
+La piattaforma PROPONE gli abbinamenti dai nomi delle intestazioni ma non li
+applica da se', e nessun modello interpreta le colonne: la lettura del
+documento resta di chi lo conosce. Prima di aggiungere, si mostra l'esito —
+quante posizioni, quali righe scartate e perche', quali anni restano fuori
+dai tre del triage.
+
+**La firma del tracciato ignora gli anni.** Un riepilogo "2026|2025|2024"
+diventa "2027|2026|2025" l'anno dopo: con gli anni dentro la firma, lo stesso
+tracciato sembrerebbe diverso ogni anno e la mappatura salvata non servirebbe
+mai. Salvata per ente e firma, al caricamento successivo lo stesso tracciato
+dello stesso ente si riconosce e si applica da solo.
+
+**25 test sulla mappatura**, fra cui: firma stabile fra un anno e l'altro;
+anno letto da date in ogni forma, compreso il numero seriale di Excel che
+letto come numero darebbe un anno di cinque cifre; somma per anno nel
+dettaglio invece di una riga per movimento; anni fuori finestra dichiarati;
+categoria da colonna. **3 test** sul collegamento fra tabella e soglie.
+
+**Lancio di prova** su un partitario costruito apposta (fra i file reali
+nessuno e' di struttura sconosciuta), con una riga-titolo prima
+dell'intestazione e importi all'italiana: riconosciuto come sconosciuto,
+intestazione individuata saltando il titolo, categoria tradotta dalla colonna
+"Natura", esito mostrato ("si estraggono 3 posizioni — anni fuori: 2022"),
+righe aggiunte alla tabella con i totali corretti.
+
+Verificato: type-check, lint, **301 test**, build cloud e portable complete.
+
+**Non verificato end-to-end**: il riconoscimento automatico al SECONDO
+caricamento dello stesso tracciato. Richiede una conferma completa e un
+secondo triage, che il sandbox non consente senza caricamento su Blob. La
+logica e' coperta dai test della firma e dell'estrazione.
+
+## 0.109.73 — 2026-09-21
+
+**Il triage rimesso in ordine: due livelli, un solo punto di caricamento**
+
+Rilievo di Ercole: la schermata mostrava due strade in parallelo — la tabella
+a mano e, sotto, i campi fissi per V.E.R.A. e tre fogli INPS — contraddicendo
+l'impianto concordato. E non si capiva che l'XBRL potesse essere piu' d'uno.
+
+**Livello 1: solo visura e XBRL, e l'XBRL MULTIPLO.** Documenti pubblici,
+recuperabili da chiunque, identici per Ricevente e Redigente. Ogni bilancio
+porta due esercizi, quindi due bilanci danno tre anni di indici; il campo
+singolo lo faceva sembrare impossibile. Servono al quadro d'insieme, mai al
+test delle soglie. Il V.E.R.A. esce da qui: e' documentazione a corredo, non
+presupposto del triage.
+
+**Livello 2: una sola area di caricamento per la posizione debitoria.** Alla
+domanda "hai prospetti?" si risponde caricando N file di qualunque natura, e la
+piattaforma li riconosce da sola.
+
+**Riconoscimento automatico** (`riconosciProspetto`): dalle INTESTAZIONI, mai
+dal nome del file — lo stesso dato arriva con nomi diversi secondo il punto di
+prelievo, e un nome non prova nulla sul contenuto. Riconosce V.E.R.A., denunce
+nelle due varianti, deleghe per periodo, F24 aggregato e inadempienze.
+L'ordine dei tentativi conta: l'F24 aggregato va riconosciuto PRIMA
+dell'Elenco Deleghe, perche' condivide alcune intestazioni ma non porta il
+dettaglio per periodo.
+
+**6 test di riconoscimento sui file reali** di Ercole, entrambe le famiglie
+(Cassetto e INPS-CPC): 6 su 6.
+
+Il riconoscimento si mostra SUBITO, accanto a ogni file, prima della conferma:
+chi carica deve sapere se la piattaforma ha capito, non scoprirlo dopo nel
+riepilogo. I file non riconosciuti vengono dichiarati e non usati — la
+mappatura manuale delle colonne non e' ancora disponibile.
+
+**Difetto trovato guardando il lancio di prova.** Deleghe per periodo e F24
+aggregato finivano nello stesso posto: caricandoli entrambi, vinceva il primo
+arrivato — e se era l'aggregato, il ritardo diventava non calcolabile mentre il
+file buono veniva scartato come duplicato. Ora il dettaglio prevale sempre,
+e l'aggregato scartato viene dichiarato.
+
+**Il campo manuale dei contributi dovuti e' eliminato.** E' la colonna di
+riferimento della tabella delle posizioni. Resta la dichiarazione sui
+lavoratori, che nessun documento riporta.
+
+**Lancio di prova** eseguito: nessun campo V.E.R.A. fisso, nessun blocco
+"Fogli INPS", XBRL multiplo presente, i cinque file caricati insieme
+riconosciuti ciascuno con il proprio tipo.
+
+Verificato: type-check, lint, **273 test**, build cloud e portable complete.
+
 ## 0.109.72 — 2026-09-20
 
 **Cruscotto di sintesi in testata alla scheda azienda**

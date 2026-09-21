@@ -22,6 +22,8 @@ import {
 import { ottieniParametriSoglieAction } from '@/app/actions/parametriSoglie';
 import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
 import { sintetizzaSoglie } from '@/lib/soglie25novies/sintesi';
+import { ottieniDebitiTriageAction } from '@/app/actions/debitiTriage';
+import { valoriSoglieDaPosizioni } from '@/lib/debitiTriage/modello';
 
 export interface RisultatoAttenzione {
   success: boolean;
@@ -93,6 +95,14 @@ export async function ottieniAttenzioneScreeningAction(
     // dichiarazione esplicita dell'operatore, non una deduzione.
     const esposizione = num(a.contributi_scaduti) ?? (daVera > 0 ? daVera : null);
 
+    // ---- Posizioni debitorie della tabella -------------------------------
+    // Sono i numeri reali su cui si calcolano le soglie, raccolti a mano o
+    // dai prospetti. Hanno la PRECEDENZA sui campi dell'anagrafica: quelli
+    // restano come ripiego per le aziende verificate prima che la tabella
+    // esistesse.
+    const posizioniRis = await ottieniDebitiTriageAction(nomeSchema, aziendaId);
+    const daPosizioni = valoriSoglieDaPosizioni(posizioniRis.righe ?? []);
+
     // ---- Soglie di segnalazione ------------------------------------------
     const dati: DatiSoglie = {
       conLavoratori:
@@ -107,13 +117,15 @@ export async function ottieniAttenzioneScreeningAction(
       // la colonna `contributi_scaduti` dell'anagrafica. Chi caricava il
       // V.E.R.A. dalla Verifica salute azienda si vedeva dire "soglie non
       // determinabili" pur avendo fornito l'esposizione.
-      contributiScaduti: num(a.contributi_scaduti) ?? esposizione ?? null,
-      contributiDovutiAnnoPrecedente: num(a.contributi_dovuti_anno_precedente),
+      contributiScaduti:
+        daPosizioni.contributiScaduti ?? num(a.contributi_scaduti) ?? esposizione ?? null,
+      contributiDovutiAnnoPrecedente:
+        daPosizioni.contributiDovutiAnnoPrecedente ?? num(a.contributi_dovuti_anno_precedente),
       annoContributiDovuti: null,
       sanzioniPresunte: num(a.sanzioni_presunte_vera),
-      premiInail: num(a.premi_inail),
-      ivaScaduta: num(a.iva_scaduta),
-      volumeAffari: num(a.volume_affari),
+      premiInail: daPosizioni.premiInail ?? num(a.premi_inail),
+      ivaScaduta: daPosizioni.ivaScaduta ?? num(a.iva_scaduta),
+      volumeAffari: daPosizioni.volumeAffari ?? num(a.volume_affari),
       creditiAffidati: num(a.crediti_affidati_aer),
       formaAER: formaAERdaAnagrafica(a.forma_giuridica),
       ritardoOltre90Giorni:
