@@ -39,6 +39,7 @@ import {
 } from '@/app/actions/aziendaInVerifica';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 import { riconosciProspetto } from '@/lib/denunce/lettura';
+import { accumulaFile, togliFile } from '@/lib/file/accumula';
 import type { RigaDebitoTriage } from '@/lib/debitiTriage/modello';
 import type { MappaturaProspetto } from '@/lib/debitiTriage/mappatura';
 import { salvaTutteDebitiTriageAction } from '@/app/actions/debitiTriage';
@@ -707,7 +708,13 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                 type="file"
                 accept=".xbrl,.xml"
                 multiple
-                onChange={(e) => setFileXbrl(Array.from(e.target.files ?? []))}
+                onChange={(e) => {
+                  const scelti = Array.from(e.target.files ?? []);
+                  setFileXbrl((prev) => accumulaFile(prev, scelti));
+                  // Si svuota il campo: senza, riscegliere lo stesso file non
+                  // produce alcun evento e sembra che il clic non funzioni.
+                  e.target.value = '';
+                }}
                 className="w-full font-mono text-xs text-slate-900 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:text-slate-700"
               />
               <p className="mt-1 text-[10px] text-slate-400">
@@ -717,8 +724,18 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               {fileXbrl.length > 0 && (
                 <ul className="mt-1 space-y-0.5">
                   {fileXbrl.map((f) => (
-                    <li key={f.name} className="font-mono text-[10px] text-slate-600">
+                    <li
+                      key={`${f.name}|${f.size}`}
+                      className="flex items-center gap-2 font-mono text-[10px] text-slate-600"
+                    >
                       — {f.name}
+                      <button
+                        onClick={() => setFileXbrl((prev) => togliFile(prev, f))}
+                        className="font-sans font-bold text-slate-400 hover:text-red-600"
+                        aria-label={`Togli ${f.name}`}
+                      >
+                        ×
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -750,6 +767,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                 dataVerifica={dataVerifica}
                 prospetti={fileProspetti}
                 onProspetti={setFileProspetti}
+                onTogliProspetto={(f) => setFileProspetti((prev) => togliFile(prev, f))}
                 onRighe={setRigheDebiti}
                 onStruttura={(st) => setStruttureDaSalvare((prev) => [...prev, st])}
               />

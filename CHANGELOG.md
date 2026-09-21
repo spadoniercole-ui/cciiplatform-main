@@ -93,6 +93,35 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.75 — 2026-09-21
+
+**I file caricati in due tempi non si perdono piu'**
+
+Segnalato da Ercole: caricato il bilancio 2022 e poi il 2021, il primo
+spariva.
+
+Causa: un campo di caricamento del browser SOSTITUISCE il proprio elenco a
+ogni nuova scelta, e io lo prendevo cosi' com'era. Funzionava solo
+selezionando tutti i file insieme nella finestra — cosa che nessuno fa. Lo
+stesso difetto c'era nell'area dei prospetti, doppio: oltre all'elenco dei
+file venivano sostituite anche le etichette di riconoscimento, quindi un
+secondo caricamento cancellava l'esito del primo.
+
+Ora i file si ACCUMULANO (`accumulaFile`), ciascuno con una × per toglierlo.
+Lo stesso file scelto di nuovo non si duplica — stesso nome e stessa
+dimensione — mentre due file omonimi ma diversi restano entrambi. Il campo si
+svuota dopo ogni scelta: senza, riscegliere lo stesso file non produce alcun
+evento e sembra che il clic non funzioni.
+
+**4 test** sulla regola di accumulo.
+
+**Lancio di prova** eseguito come lo aveva fatto Ercole, con scelte separate:
+bilancio 22 poi 21 — entrambi presenti; 22 riscelto — una sola occorrenza; 21
+tolto con la × — sparito; due prospetti caricati in due tempi — il primo resta
+presente e riconosciuto.
+
+Verificato: type-check, lint, **305 test**, build cloud e portable complete.
+
 ## 0.109.74 — 2026-09-21
 
 **Mappatura dei prospetti liberi — e la tabella che finalmente alimenta il

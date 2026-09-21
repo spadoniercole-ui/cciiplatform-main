@@ -35,6 +35,7 @@ import {
 } from '@/lib/debitiTriage/mappatura';
 import { cercaStrutturaProspettoAction } from '@/app/actions/struttureProspetto';
 import { PannelloMappatura } from '@/components/spazio/PannelloMappatura';
+import { accumulaFile } from '@/lib/file/accumula';
 
 interface Props {
   nomeSchema: string;
@@ -45,6 +46,7 @@ interface Props {
   /** File caricati come prospetti: li elabora la pagina alla conferma. */
   prospetti?: File[];
   onProspetti?: (file: File[]) => void;
+  onTogliProspetto?: (file: File) => void;
   /**
    * La tabella comunica le proprie righe alla pagina, che le salva insieme
    * all'azienda alla conferma. Senza, le posizioni inserite prima che
@@ -82,6 +84,7 @@ export function DebitiTriage({
   onSalvato,
   prospetti = [],
   onProspetti,
+  onTogliProspetto,
   onRighe,
   onStruttura,
 }: Props) {
@@ -206,8 +209,17 @@ export function DebitiTriage({
             multiple
             accept=".xls,.xlsx,.csv"
             onChange={async (e) => {
-              const elenco = Array.from(e.target.files ?? []);
-              onProspetti?.(elenco);
+              const campo = e.target;
+              const scelti = Array.from(campo.files ?? []);
+              // Si svuota SUBITO il campo: dopo le attese asincrone potrebbe
+              // non essere più raggiungibile, e senza svuotarlo riscegliere
+              // lo stesso file non produce alcun evento.
+              campo.value = '';
+              // Si ACCUMULA: il browser sostituisce l'elenco a ogni scelta, e
+              // prenderlo così faceva perdere i file caricati prima.
+              const tutti = accumulaFile(prospetti, scelti);
+              const elenco = tutti.filter((f) => !prospetti.includes(f));
+              onProspetti?.(tutti);
               // Il riconoscimento si mostra SUBITO, prima della conferma: chi
               // carica un file deve sapere se la piattaforma l'ha capito, non
               // scoprirlo dopo nel riepilogo.
@@ -232,8 +244,10 @@ export function DebitiTriage({
                   note[f.name] = `tracciato noto per più enti: mappalo per scegliere quale`;
                 }
               }
-              setTipi(esiti);
-              setNotaStruttura(note);
+              // Anche gli esiti si UNISCONO a quelli precedenti: sostituirli
+              // cancellava il riconoscimento dei file caricati prima.
+              setTipi((prev) => ({ ...prev, ...esiti }));
+              setNotaStruttura((prev) => ({ ...prev, ...note }));
             }}
             className="w-full font-mono text-xs text-slate-900 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:text-slate-700"
           />
@@ -242,7 +256,10 @@ export function DebitiTriage({
               {prospetti.map((f) => {
                 const t = tipi[f.name];
                 return (
-                  <li key={f.name} className="flex items-center justify-between gap-3 text-[11px]">
+                  <li
+                    key={`${f.name}|${f.size}`}
+                    className="flex items-center justify-between gap-3 text-[11px]"
+                  >
                     <span className="truncate font-mono text-slate-700">
                       {f.name}
                       {notaStruttura[f.name] && (
@@ -262,6 +279,13 @@ export function DebitiTriage({
                               : 'text-emerald-700'
                       }`}
                     >
+                      <button
+                        onClick={() => onTogliProspetto?.(f)}
+                        className="mr-2 font-bold text-slate-400 hover:text-red-600"
+                        aria-label={`Togli ${f.name}`}
+                      >
+                        ×
+                      </button>
                       {t ? ETICHETTA_PROSPETTO[t] : 'riconoscimento...'}
                       {t === 'SCONOSCIUTO' &&
                         !notaStruttura[f.name]?.startsWith('riconosciuto') && (
