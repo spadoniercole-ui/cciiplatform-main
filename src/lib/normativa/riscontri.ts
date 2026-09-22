@@ -190,7 +190,7 @@ export function calcolaRiscontri(input: InputRiscontri): Riscontri {
     if (b.patrimonioNetto < 0) {
       indicatori.push({
         nome: 'Patrimonio netto negativo',
-        dettaglio: `Patrimonio netto ${euro(b.patrimonioNetto)}: il capitale risulta eroso per intero. Il dato rileva ai fini degli artt. 2482-bis e 2482-ter c.c. (s.r.l.) o 2446 e 2447 c.c. (s.p.a.): la piattaforma lo rileva, non accerta alcun obbligo. Da verificare con l’organo amministrativo, anche rispetto alla sospensione degli effetti delle perdite degli esercizi 2020-2022 (D.L. 23/2020, art. 6 — fonte non ancora nel registro).`,
+        dettaglio: `Patrimonio netto ${euro(b.patrimonioNetto)}: il capitale risulta eroso per intero. Il dato rileva ai fini degli artt. 2482-bis e 2482-ter c.c. (s.r.l.) o 2446 e 2447 c.c. (s.p.a.): la piattaforma lo rileva, non accerta alcun obbligo. Da verificare con l’organo amministrativo se la società si è avvalsa della sospensione per le perdite 2020-2022 (D.L. 23/2020, art. 6): per le perdite 2020 il quinquennio scade con l’approvazione del bilancio 2025, cioè nel 2026. Sull’ampiezza della sospensione esiste un contrasto interpretativo non consolidato (Triveneto contro CNN).`,
         articolo: '3',
       });
     }

@@ -67,6 +67,8 @@ import { salvaValoriSoglieParzialeAction } from '@/app/actions/soglie25novies';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
 import { DebitiTriage } from '@/components/spazio/DebitiTriage';
 import type { Attenzione } from '@/lib/screening/indicatore';
+import { improntaFile } from '@/lib/fascicolo/impronta';
+import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
 
 interface Props {
   nomeSchema: string;
@@ -324,7 +326,18 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
           // scheda Posizione V.E.R.A., se la posizione viene presa in carico.
           const { righe } = estraiRigheVera(analisi.sezioni, {}, {}, true);
           if (righe.length > 0) {
-            await sostituisciDebitiVeraAction(nomeSchema, c.aziendaId, righe);
+            const reg = await registraDocumentoOrigineAction(
+              nomeSchema,
+              c.aziendaId,
+              'VERA',
+              await improntaFile(fileVera)
+            );
+            await sostituisciDebitiVeraAction(
+              nomeSchema,
+              c.aziendaId,
+              righe,
+              reg.success && reg.documentoId ? reg.documentoId : null
+            );
           }
         } catch (e) {
           setErrore(`File V.E.R.A. non leggibile: ${String(e)}`);

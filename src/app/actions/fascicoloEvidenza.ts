@@ -45,8 +45,11 @@ export async function ottieniFascicoloAction(
     // La posizione dell'ente puo' essere dell'azienda o aggiornata sullo scenario:
     // si prendono le righe dello scenario se ci sono, altrimenti quelle dell'azienda.
     const ente = await pool.query(
-      `SELECT id, voce, importo, importo_versato, tipo, data, scenario_id
-         FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1 ORDER BY id`,
+      `SELECT d.id, d.voce, d.importo, d.importo_versato, d.tipo, d.data, d.scenario_id,
+              o.nome_file, o.impronta
+         FROM "${nomeSchema}".debiti_ente d
+         LEFT JOIN "${nomeSchema}".documenti_origine o ON o.id = d.documento_id
+        WHERE d.azienda_id = $1 ORDER BY d.id`,
       [aziendaId]
     );
     const righeScenario = ente.rows.filter(
@@ -55,8 +58,10 @@ export async function ottieniFascicoloAction(
     const righeEnte =
       righeScenario.length > 0 ? righeScenario : ente.rows.filter((r) => r.scenario_id === null);
     const vera = await pool.query(
-      `SELECT id, sezione, voce, importo, categoria, trattamento
-         FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1 ORDER BY id`,
+      `SELECT v.id, v.sezione, v.voce, v.importo, v.categoria, v.trattamento, o.nome_file, o.impronta
+         FROM "${nomeSchema}".debiti_vera v
+         LEFT JOIN "${nomeSchema}".documenti_origine o ON o.id = v.documento_id
+        WHERE v.azienda_id = $1 ORDER BY v.id`,
       [aziendaId]
     );
 
@@ -77,6 +82,7 @@ export async function ottieniFascicoloAction(
           importoVersato: r.importo_versato === null ? null : Number(r.importo_versato),
           tipo: r.tipo,
           data: dataIso(r.data),
+          documento: r.impronta ? { nomeFile: r.nome_file, impronta: r.impronta } : null,
         })),
         vera: vera.rows.map((r) => ({
           id: r.id,
@@ -85,6 +91,7 @@ export async function ottieniFascicoloAction(
           importo: Number(r.importo),
           categoria: r.categoria,
           trattamento: r.trattamento,
+          documento: r.impronta ? { nomeFile: r.nome_file, impronta: r.impronta } : null,
         })),
       }),
     };

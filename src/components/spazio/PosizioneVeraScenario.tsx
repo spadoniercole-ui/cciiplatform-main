@@ -42,6 +42,8 @@ import {
 import { ottieniDebitiEnte, type RigaDebitoEnte } from '@/app/actions/debitiEnte';
 import { etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
 import { stampaHtml } from '@/lib/stampaTesto';
+import { improntaFile } from '@/lib/fascicolo/impronta';
+import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
 
 interface Props {
   nomeSchema: string;
@@ -75,6 +77,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   const [caricamento, setCaricamento] = useState(true);
   const [inElaborazione, setInElaborazione] = useState(false);
   const [esito, setEsito] = useState<string | null>(null);
+  const [fileInImportazione, setFileInImportazione] = useState<File | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
 
   // Mappatura titoli nuovi in sospeso (dopo un caricamento con titoli mai visti).
@@ -124,14 +127,31 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
     trattMap: Record<string, TrattamentoVera>
   ) => {
     const { righe } = estraiRigheVera(sezioni, titoliMap, trattMap);
-    const res = await sostituisciDebitiVeraAction(nomeSchema, aziendaId, righe as RigaVera[]);
+    let documentoId: number | null = null;
+    if (fileInImportazione) {
+      const reg = await registraDocumentoOrigineAction(
+        nomeSchema,
+        aziendaId,
+        'VERA',
+        await improntaFile(fileInImportazione)
+      );
+      if (reg.success && reg.documentoId) documentoId = reg.documentoId;
+    }
+    const res = await sostituisciDebitiVeraAction(
+      nomeSchema,
+      aziendaId,
+      righe as RigaVera[],
+      documentoId
+    );
     if (!res.success) {
       setErrore(res.error || 'Impossibile salvare la posizione VERA.');
       return;
     }
     await carica();
     router.refresh();
-    setEsito(`Importate ${righe.length} righe VERA da ${sezioni.length} sezioni.`);
+    setEsito(
+      `Importate ${righe.length} righe VERA da ${sezioni.length} sezioni.${documentoId ? ' Documento di origine registrato nel fascicolo di evidenza.' : ''}`
+    );
   };
 
   // Router dell'import: se mancano titoli → chiede i titoli; poi se mancano
@@ -162,6 +182,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   };
 
   const handleFile = async (file: File) => {
+    setFileInImportazione(file);
     setErrore(null);
     setEsito(null);
     setInElaborazione(true);

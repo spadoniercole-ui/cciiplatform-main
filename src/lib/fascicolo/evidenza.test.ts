@@ -32,6 +32,7 @@ const FASCICOLO = componiFascicolo({
       importoVersato: 10_000,
       tipo: 'CLE',
       data: '2025-12-31',
+      documento: { nomeFile: 'inadempienze.xlsx', impronta: 'a'.repeat(64) },
     },
   ],
   vera: [
@@ -42,6 +43,7 @@ const FASCICOLO = componiFascicolo({
       importo: 14_914.41,
       categoria: 'Contributi',
       trattamento: 'contabilizzato',
+      documento: null,
     },
     {
       id: 4,
@@ -50,6 +52,7 @@ const FASCICOLO = componiFascicolo({
       importo: 0,
       categoria: 'Contributi',
       trattamento: 'potenziale',
+      documento: null,
     },
     {
       id: 5,
@@ -58,6 +61,7 @@ const FASCICOLO = componiFascicolo({
       importo: 999,
       categoria: 'Altro',
       trattamento: 'ignora',
+      documento: null,
     },
   ],
 });
@@ -85,9 +89,10 @@ describe('fascicolo di evidenza', () => {
     expect(FASCICOLO.find((e) => e.id === 'EV-CAL-proposta-totale-dovuto')?.importo).toBe(370_000);
   });
 
-  it('senza documento di origine registrato, il dato è «non verificato», e lo si conta', () => {
+  it('con il documento di origine registrato il dato è «documentato»; senza, «non verificato»', () => {
     const r = riepilogoFascicolo(FASCICOLO);
-    expect(r.DOCUMENTATO).toBe(0);
+    expect(r.DOCUMENTATO).toBe(1);
+    expect(FASCICOLO.find((e) => e.id === 'EV-ENT-7')?.documento?.nome).toBe('inadempienze.xlsx');
     expect(r.IMPORTO_NON_NOTO).toBe(1);
     expect(r.NON_VERIFICATO).toBeGreaterThan(0);
   });

@@ -48,9 +48,9 @@ describe('revisore e registro delle fonti (REV-001)', () => {
     expect(
       esito('L’obbligo Uniemens discende dal D.L. 269/2003, art. 44, comma 9.', 'REV-001').esito
     ).toBe('PASS');
-    expect(esito('Rilevano gli artt. 2482-bis e 2482-ter c.c.', 'REV-001').esito).toBe(
-      'SEGNALAZIONE'
-    );
+    expect(esito('Rilevano gli artt. 2482-bis e 2482-ter c.c.', 'REV-001').esito).toBe('PASS');
+    // il regime transitorio del cram down e' ancora da verificare
+    expect(esito('Si applica il D.L. 69/2023, art. 1-bis.', 'REV-001').esito).toBe('SEGNALAZIONE');
   });
 });
 

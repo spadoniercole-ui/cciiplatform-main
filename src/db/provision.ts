@@ -1192,6 +1192,28 @@ export async function assicuraTabellaProposta(nomeSchema: string): Promise<void>
  * di caricamento della Proposta (stessa UI, stesso export/import Excel),
  * ma è un'altra tabella — dati diversi, archiviazione diversa.
  */
+/**
+ * Documenti di origine (fascicolo di evidenza, 0.109.88): un record per ogni
+ * file da cui sono state importate righe, con l'impronta SHA-256 calcolata
+ * nel browser. Il file NON viene conservato: solo nome, dimensione e
+ * impronta. Stessa impronta = stesso documento, anche se ricaricato.
+ */
+export async function assicuraTabellaDocumentiOrigine(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.documenti_origine (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      tipo TEXT NOT NULL,
+      nome_file TEXT NOT NULL,
+      dimensione INTEGER NOT NULL,
+      impronta TEXT NOT NULL,
+      caricato_il TIMESTAMP NOT NULL DEFAULT now(),
+      UNIQUE (azienda_id, impronta)
+    )`
+  );
+}
+
 export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<void> {
   const s = sql.identifier(nomeSchema);
   await assicuraTabelleScenari(nomeSchema); // serve scenari per la FK
@@ -1240,6 +1262,7 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
     );
   }
 
+  await assicuraTabellaDocumentiOrigine(nomeSchema);
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.debiti_ente (
       id SERIAL PRIMARY KEY,
@@ -1253,6 +1276,12 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
   );
   await eseguiDdlTenant(
     sql`CREATE INDEX IF NOT EXISTS idx_debiti_ente_azienda ON ${s}.debiti_ente (azienda_id)`
+  );
+  // Fascicolo di evidenza (0.109.88): documento di origine della riga.
+  // NULL per le righe inserite a mano o importate prima di questa versione:
+  // il fascicolo le mostra come «provenienza non registrata».
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_ente ADD COLUMN IF NOT EXISTS documento_id INTEGER`
   );
   // Importo versato — opzionale, alcuni schemi proprietari distinguono
   // il debito originario dal saldo residuo (quanto è già stato pagato).
@@ -1615,6 +1644,7 @@ export async function assicuraTabellaTracciatiDebitiEnte(nomeSchema: string): Pr
  */
 export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
   const s = sql.identifier(nomeSchema);
+  await assicuraTabellaDocumentiOrigine(nomeSchema);
   await assicuraTabellaAziende(nomeSchema); // FK aziende
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.vera_titoli (
@@ -1648,6 +1678,9 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
   // correzioni del trattamento senza ricaricare il file).
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS combinazione TEXT NOT NULL DEFAULT ''`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS documento_id INTEGER`
   );
   // Mappatura (per spazio) della combinazione Natura+Stato → trattamento.
   await eseguiDdlTenant(

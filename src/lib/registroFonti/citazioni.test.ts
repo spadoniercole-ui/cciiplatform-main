@@ -5,7 +5,7 @@ import { FONTI } from './fonti';
 describe('citazioni normative nel testo', () => {
   it('una citazione doppia della stessa fonte produce un solo rilievo', () => {
     expect(
-      riscontraCitazioni('Rilevano gli artt. 2482-bis e 2482-ter c.c.').nonSostenibili
+      riscontraCitazioni('Rilevano gli artt. 2482-bis e 2482-ter c.c.').riscontrate
     ).toHaveLength(1);
   });
 

@@ -49,6 +49,8 @@ import {
 import { raggruppaPerTipoDebito, etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
 import { esportaDebitiEnteExcel } from '@/lib/debitiEnte/excelDebitiEnte';
 import { useDichiaraContestoAssistente } from '@/components/ContestoAssistenteContext';
+import { improntaFile } from '@/lib/fascicolo/impronta';
+import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
 
 interface Props {
   nomeSchema: string;
@@ -109,6 +111,9 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
 
   // Wizard nuovo tracciato.
   const [wizardFile, setWizardFile] = useState<File | null>(null);
+  // File da cui si sta importando: il fascicolo di evidenza registra nome e
+  // impronta SHA-256, cosi' ogni riga sa da quale documento viene.
+  const [fileInImportazione, setFileInImportazione] = useState<File | null>(null);
   const [analisi, setAnalisi] = useState<AnalisiFoglio | null>(null);
   const [ruoli, setRuoli] = useState<RuoloColonna[]>([]);
   const [modo, setModo] = useState<ClassificazioneModo>('colonna_guida');
@@ -287,6 +292,17 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
   // --------------------------------------------------------------- import
   const salvaRigheDaSezione = async (tracciato: Tracciato, sezione: SezioneEstratta) => {
     const { righe: importate, scartate } = estraiRighe(sezione, tracciato);
+    let documentoId: number | null = null;
+    const fileOrigine = fileInImportazione ?? wizardFile;
+    if (fileOrigine) {
+      const reg = await registraDocumentoOrigineAction(
+        nomeSchema,
+        aziendaId,
+        'POSIZIONE_ENTE',
+        await improntaFile(fileOrigine)
+      );
+      if (reg.success && reg.documentoId) documentoId = reg.documentoId;
+    }
     // Sostituzione PER-TRACCIATO: via solo le righe di questo tracciato.
     await eliminaDebitiPerTracciatoAzienda(nomeSchema, aziendaId, tracciato.id);
     let salvate = 0;
@@ -305,6 +321,7 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
           datiExtra: r.datiExtra,
           tracciatoId: tracciato.id,
           codiceGuida: r.codiceGuida,
+          documentoId,
         },
         scenarioId
       );
@@ -313,6 +330,7 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
     }
     await carica();
     const parti = [`${salvate} righe importate dal tracciato «${tracciato.nome}».`];
+    if (documentoId) parti.push('Documento di origine registrato nel fascicolo di evidenza.');
     if (scartate.length > 0)
       parti.push(`${scartate.length} righe scartate (importo o categoria mancante).`);
     if (erroriSalvataggio.length > 0) parti.push(`${erroriSalvataggio.length} non salvate.`);
@@ -320,6 +338,7 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
   };
 
   const handleSelezionaFile = async (file: File) => {
+    setFileInImportazione(file);
     setErrore(null);
     setEsito(null);
     setInElaborazione(true);

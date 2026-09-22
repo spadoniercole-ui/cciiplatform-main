@@ -93,6 +93,58 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.88 — 2026-09-22
+
+**Fascicolo di evidenza, seconda tappa: impronta dei file e documento di origine riga per riga**
+
+Le righe importate dai file INPS sapevano da quale tracciato venivano, non da
+quale FILE. Ora lo sanno.
+
+- **Impronta SHA-256 calcolata nel browser** (`src/lib/fascicolo/impronta.ts`,
+  `crypto.subtle`): il file non viene inviato ne' conservato; al server arrivano
+  nome, dimensione e impronta.
+- **Tabella `documenti_origine`** (un record per file e azienda; stessa
+  impronta = stesso documento, anche se ricaricato) e colonna `documento_id` su
+  `debiti_ente` e `debiti_vera`. Migrazione idempotente; le righe gia' presenti
+  restano senza documento e il fascicolo lo dice.
+- **Tre flussi di importazione registrano il documento**: Situazione debitoria
+  dell'ente (file dei tracciati), Posizione V.E.R.A. nello scenario, V.E.R.A.
+  nella Verifica salute azienda. La ripresa della posizione dell'azienda in uno
+  scenario porta con se' il documento.
+- **Il fascicolo mostra il documento** (nome e impronta breve; l'impronta
+  intera al passaggio del mouse) e la riga diventa «Documentato». Prima tappa
+  che porta evidenze allo stato DOCUMENTATO.
+
+Non ancora coperti: righe della proposta (Excel della proposta), visura, XBRL.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable.
+
+## 0.109.87 — 2026-09-22
+
+**Registro delle fonti: chiuse le due fonti civilistiche sulle perdite di capitale**
+
+Riscontro di Ercole su fonti notarili e dottrinali (Comitato Triveneto,
+massime T.A.1 e T.A.4; CNN Studio 88-2021/I; Federnotizie; FNC):
+- `CC-2482bis-ter` → **vigente**: artt. 2446/2447 e 2482-bis/ter c.c., con la
+  causa di scioglimento dell'art. 2484 n. 4.
+- `DL23-2020-6` → **vigente**: art. 6 del D.L. 23/2020 come sostituito dalla
+  L. 178/2020 (art. 1, c. 266) ed esteso alle perdite 2021 (D.L. 228/2021) e
+  2022 (D.L. 198/2022). Il quinquennio per le perdite 2020 scade con
+  l'approvazione del bilancio 2025, cioe' nel 2026: e' il momento in cui il
+  riscontro sul patrimonio netto negativo torna rilevante. Registrato il
+  CONTRASTO INTERPRETATIVO non consolidato sull'ampiezza della sospensione
+  (Triveneto: intera perdita d'esercizio; CNN: solo la parte che incide sul
+  capitale al netto delle riserve), da riportare come tale (Libra REV-007).
+- Corretto il riscontro sul patrimonio netto negativo dei Riscontri normativi:
+  rimanda alla sospensione e alla scadenza 2026, non accerta obblighi.
+Il materiale di riscontro attribuiva la proroga al «D.L. 69/2023»: e' un
+errore (quel decreto riguarda il regime transitorio del cram down); le proroghe
+sono nei decreti 228/2021 e 198/2022. `DL69-2023-1bis` resta «da verificare».
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable.
+
 ## 0.109.86 — 2026-09-22
 
 **L'avviso di esportazione bloccata diventa una finestra dell'applicativo, con il percorso**

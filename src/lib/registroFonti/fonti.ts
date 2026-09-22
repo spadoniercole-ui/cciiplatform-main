@@ -267,26 +267,28 @@ export const FONTI: Fonte[] = [
     id: 'CC-2482bis-ter',
     norma: 'Codice civile, artt. 2482-bis e 2482-ter (s.r.l.); artt. 2446 e 2447 (s.p.a.)',
     oggetto:
-      'Riduzione del capitale per perdite: obblighi dell’organo amministrativo quando le perdite superano un terzo del capitale o lo riducono sotto il minimo legale.',
+      'Riduzione del capitale per perdite: perdita superiore a un terzo, obbligo di convocare senza indugio l’assemblea e di ridurre il capitale se la perdita non rientra entro l’esercizio successivo; perdita che porta il capitale sotto il minimo legale, ricapitalizzazione, trasformazione o scioglimento (causa di scioglimento ex art. 2484, n. 4).',
     efficaciaDal: null,
     efficaciaAl: null,
-    stato: 'da_verificare',
-    atto: null,
+    stato: 'vigente',
+    atto: 'R.D. 16 marzo 1942, n. 262 (Codice civile); artt. 2482-bis/ter introdotti dal D.Lgs. 17 gennaio 2003, n. 6',
     verifica:
-      'Spunto dall’analisi di Libra (0.109.84). Testo e presupposti non ancora riscontrati: la piattaforma lo richiama come dato da verificare, mai come accertamento.',
-    verificata: false,
+      'Regola ordinaria confermata da Ercole (0.109.87) con riscontro su fonti notarili e dottrinali. Attenzione: per le perdite emerse negli esercizi 2020, 2021 e 2022 opera la sospensione del D.L. 23/2020, art. 6 (DL23-2020-6): il riscontro sul patrimonio netto negativo NON accerta un obbligo senza aver verificato se la società se ne è avvalsa.',
+    verificata: true,
   },
   {
     id: 'DL23-2020-6',
-    norma: 'D.L. 8 aprile 2020, n. 23, art. 6 (conv. L. 5 giugno 2020, n. 40)',
+    norma:
+      'D.L. 8 aprile 2020, n. 23, art. 6 (conv. L. 5 giugno 2020, n. 40), come sostituito dall’art. 1, comma 266, L. 30 dicembre 2020, n. 178 ed esteso dal D.L. 228/2021, art. 3, c. 1-ter e dal D.L. 198/2022 (Milleproroghe)',
     oggetto:
-      'Sospensione degli obblighi di riduzione del capitale per le perdite emerse negli esercizi 2020-2022, con possibilità di rinvio fino al quinto esercizio successivo.',
-    efficaciaDal: null,
+      'Per le perdite emerse negli esercizi in corso al 31/12/2020, 2021 e 2022 non si applicano gli artt. 2446 c. 2-3, 2447, 2482-bis c. 4-6, 2482-ter c.c. e non opera la causa di scioglimento (2484 n. 4, 2545-duodecies). Il termine per ridurre la perdita sotto il terzo è posticipato al quinto esercizio successivo: l’assemblea che approva quel bilancio deve ridurre il capitale in proporzione. Per le perdite 2020 il quinquennio scade con l’approvazione del bilancio 2025 (nel 2026); per le perdite 2022, con il bilancio 2027. Restano fermi gli obblighi di convocazione e informativa ai soci.',
+    efficaciaDal: '2021-01-01',
     efficaciaAl: null,
-    stato: 'da_verificare',
-    atto: null,
-    verifica: 'Citato a memoria da Claude (0.109.84): perimetro temporale e testo da riscontrare.',
-    verificata: false,
+    stato: 'vigente',
+    atto: 'L. 178/2020, art. 1, c. 266; D.L. 228/2021, art. 3, c. 1-ter; D.L. 198/2022',
+    verifica:
+      'Riscontro di Ercole (0.109.87) su fonti notarili (Comitato Triveneto, massime T.A.1 e T.A.4; CNN Studio 88-2021/I) e dottrinali. CONTRASTO INTERPRETATIVO non consolidato (Libra REV-007): per il Triveneto è sterilizzata l’intera perdita d’esercizio, per il CNN solo la parte che incide sul capitale al netto delle riserve. Testo su Normattiva non ancora riscontrato direttamente.',
+    verificata: true,
   },
 ];
 

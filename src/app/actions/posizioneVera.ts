@@ -392,7 +392,8 @@ export async function ottieniDebitiVera(
 export async function sostituisciDebitiVeraAction(
   nomeSchema: string,
   aziendaId: number,
-  righe: RigaVera[]
+  righe: RigaVera[],
+  documentoId: number | null = null
 ): Promise<RisultatoOperazioneVera> {
   try {
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
@@ -400,8 +401,8 @@ export async function sostituisciDebitiVeraAction(
     await pool.query(`DELETE FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1`, [aziendaId]);
     for (const r of righe) {
       await pool.query(
-        `INSERT INTO "${nomeSchema}".debiti_vera (azienda_id, sezione, voce, importo, categoria, stato, trattamento, combinazione)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        `INSERT INTO "${nomeSchema}".debiti_vera (azienda_id, sezione, voce, importo, categoria, stato, trattamento, combinazione, documento_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           aziendaId,
           r.sezione,
@@ -411,6 +412,7 @@ export async function sostituisciDebitiVeraAction(
           r.stato ?? '',
           r.trattamento ?? 'contabilizzato',
           chiaveCombinazione(r.voce, r.stato ?? ''),
+          documentoId,
         ]
       );
     }

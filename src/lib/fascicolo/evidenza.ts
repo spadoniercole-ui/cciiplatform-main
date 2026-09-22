@@ -62,8 +62,14 @@ export interface RigaPropostaFascicolo {
   percentualeOfferta: number;
   rangoLegale: string | null;
 }
+export interface DocumentoOrigine {
+  nomeFile: string;
+  impronta: string;
+}
+
 export interface RigaPosizioneEnte {
   id: number;
+  documento: DocumentoOrigine | null;
   voce: string;
   importo: number;
   importoVersato: number | null;
@@ -72,6 +78,7 @@ export interface RigaPosizioneEnte {
 }
 export interface RigaVera {
   id: number;
+  documento: DocumentoOrigine | null;
   sezione: string;
   voce: string;
   importo: number;
@@ -152,7 +159,10 @@ export function componiFascicolo(input: {
       importo: r.importo,
       natura: r.tipo,
       dataRiferimento: r.data,
-      stato: 'NON_VERIFICATO',
+      documento: r.documento
+        ? { nome: r.documento.nomeFile, impronta: r.documento.impronta }
+        : null,
+      stato: r.documento ? 'DOCUMENTATO' : 'NON_VERIFICATO',
     });
     if (r.importoVersato !== null && r.importoVersato !== 0) {
       evidenze.push({
@@ -197,7 +207,10 @@ export function componiFascicolo(input: {
       importo: potenziale ? null : r.importo,
       ente: 'INPS',
       natura: r.categoria,
-      stato: potenziale ? 'IMPORTO_NON_NOTO' : 'NON_VERIFICATO',
+      documento: r.documento
+        ? { nome: r.documento.nomeFile, impronta: r.documento.impronta }
+        : null,
+      stato: potenziale ? 'IMPORTO_NON_NOTO' : r.documento ? 'DOCUMENTATO' : 'NON_VERIFICATO',
     });
   }
   const veraConImporto = veraUtili.filter((r) => r.trattamento !== 'potenziale');

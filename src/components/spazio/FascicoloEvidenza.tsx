@@ -11,6 +11,7 @@ import React, { useEffect, useState } from 'react';
 import { FolderSearch, ChevronDown, ChevronRight } from 'lucide-react';
 import { ottieniFascicoloAction } from '@/app/actions/fascicoloEvidenza';
 import { riepilogoFascicolo, type Evidenza, type StatoEvidenza } from '@/lib/fascicolo/evidenza';
+import { improntaBreve } from '@/lib/fascicolo/impronta';
 
 const STILE_STATO: Record<StatoEvidenza, { etichetta: string; classe: string }> = {
   DOCUMENTATO: { etichetta: 'Documentato', classe: 'bg-emerald-100 text-emerald-800' },
@@ -131,6 +132,7 @@ export function FascicoloEvidenza({ nomeSchema, aziendaId, scenarioId, onCaricat
                 <th className="px-3 py-2 font-bold">Dato</th>
                 <th className="px-3 py-2 font-bold">Importo</th>
                 <th className="px-3 py-2 font-bold">Data</th>
+                <th className="px-3 py-2 font-bold">Documento</th>
                 <th className="px-3 py-2 font-bold">Stato</th>
               </tr>
             </thead>
@@ -152,6 +154,20 @@ export function FascicoloEvidenza({ nomeSchema, aziendaId, scenarioId, onCaricat
                   <td className="px-3 py-2 text-slate-900 whitespace-nowrap">{euro(e.importo)}</td>
                   <td className="px-3 py-2 text-slate-600 whitespace-nowrap">
                     {e.dataRiferimento ?? '—'}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">
+                    {e.documento ? (
+                      <span title={`SHA-256 ${e.documento.impronta ?? ''}`}>
+                        {e.documento.nome}
+                        {e.documento.impronta && (
+                          <code className="block font-mono text-[10px] text-slate-400">
+                            {improntaBreve(e.documento.impronta)}…
+                          </code>
+                        )}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <span

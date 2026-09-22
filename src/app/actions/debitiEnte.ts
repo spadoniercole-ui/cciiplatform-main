@@ -47,6 +47,8 @@ export interface DatiRigaDebitoEnte {
   tracciatoId?: number | null;
   /** Codice-guida grezzo (per la ri-applicazione delle correzioni). Assente per l'inserimento manuale/tipo fisso. */
   codiceGuida?: string | null;
+  /** Documento di origine (fascicolo di evidenza); assente per le righe a mano. */
+  documentoId?: number | null;
 }
 
 export interface RisultatoElencoDebitiEnte {
@@ -136,8 +138,8 @@ export async function aggiungiRigaDebitoEnteAction(
         ? JSON.stringify(dati.datiExtra)
         : null;
     await pool.query(
-      `INSERT INTO "${nomeSchema}".debiti_ente (azienda_id, scenario_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      `INSERT INTO "${nomeSchema}".debiti_ente (azienda_id, scenario_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida, documento_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         aziendaId,
         scenarioId ?? null,
@@ -150,6 +152,7 @@ export async function aggiungiRigaDebitoEnteAction(
         datiExtra,
         dati.tracciatoId ?? null,
         dati.codiceGuida ?? null,
+        dati.documentoId ?? null,
       ]
     );
     return { success: true };
@@ -256,8 +259,8 @@ export async function riprendiDebitiAziendaInScenarioAction(
 
     const r = await pool.query(
       `INSERT INTO "${nomeSchema}".debiti_ente
-         (azienda_id, scenario_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida)
-       SELECT azienda_id, $2, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida
+         (azienda_id, scenario_id, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida, documento_id)
+       SELECT azienda_id, $2, voce, importo, importo_versato, tipo, note, data, dati_extra, tracciato_id, codice_guida, documento_id
          FROM "${nomeSchema}".debiti_ente
         WHERE azienda_id = $1 AND scenario_id IS NULL`,
       [aziendaId, scenarioId]
