@@ -51,7 +51,7 @@ export const CATALOGO_REVISORE: ControlloRevisore[] = [
   c(
     'REV-001',
     'FONTI',
-    'SEMANTICO',
+    'REGOLA_TESTO',
     'BLOCCO',
     'Ogni affermazione normativa porta un identificativo di fonte del registro.',
     'Testo bloccato: riferimento normativo privo di identificativo di fonte.'

@@ -30,7 +30,7 @@ function calcolaIndice(params: {
   return { codice, nome, valore, soglia, esito: verificaOk(valore) ? 'OK' : 'VIOLATO' };
 }
 
-/** Calcola i 5 indici CCII principali sul periodo corrente. */
+/** Calcola i 5 indici diagnostici di bilancio (derivati dal sistema, ORA ABROGATO, dell'originario art. 13 CCII: ausilio operativo, non parametro normativo). */
 export function calcolaIndiciCcii(dati: DatiFinanziariPeriodo): IndiceCcii[] {
   const debitiTributariPrevidenziali = dati.debitiTributari + dati.debitiPrevidenziali;
 

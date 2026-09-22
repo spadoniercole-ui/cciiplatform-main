@@ -9,7 +9,7 @@
 // schermo, con i rilievi in evidenza, perche' chi lavora deve vedere che cosa
 // non va per poterlo rigenerare o riscrivere.
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ShieldCheck, ShieldAlert, ChevronDown, ChevronRight } from 'lucide-react';
 import { revisionaTesto, type EsitoControllo, type Revisione } from '@/lib/revisore/revisore';
 import { ETICHETTA_GRUPPO, type GruppoControllo } from '@/lib/revisore/catalogo';
@@ -50,14 +50,42 @@ export function stampaSeConsegnabile(
 ): boolean {
   const revisione = revisionaTesto(testo, tipo, { fascicolo });
   if (!revisione.consegnabile) {
-    window.alert(
-      `Esportazione bloccata dal revisore: ${revisione.conteggi.BLOCCO} ${revisione.conteggi.BLOCCO === 1 ? 'controllo è' : 'controlli sono'} in stato «Bloccato». Apri il pannello Revisione per vedere i rilievi, poi rigenera o correggi il testo.`
+    // Niente window.alert: mostra l'intestazione tecnica del browser («… dice»)
+    // e non puo' indicare la strada. L'avviso lo mostra il pannello Revisione
+    // del testo interessato, che ascolta questo evento.
+    window.dispatchEvent(
+      new CustomEvent<EventoEsportazioneBloccata>(EVENTO_ESPORTAZIONE_BLOCCATA, {
+        detail: { testo, tipo, blocchi: revisione.conteggi.BLOCCO },
+      })
     );
     return false;
   }
   stampaTesto(titolo, revisione.testoRivisto, dataGenerazione);
   return true;
 }
+
+export const EVENTO_ESPORTAZIONE_BLOCCATA = 'ccii:esportazione-bloccata';
+export interface EventoEsportazioneBloccata {
+  testo: string;
+  tipo: TipoOutput;
+  blocchi: number;
+}
+
+/**
+ * Dove si trova il pannello Revisione, nelle parole dell'interfaccia. Chi
+ * conosce l'applicativo lo sa; chi e' alle prime armi ha bisogno del percorso,
+ * e darlo non costa nulla.
+ */
+const PERCORSO_PANNELLO: Record<TipoOutput, string> = {
+  RELAZIONE_SCENARIO:
+    'Scenari › apri lo scenario › scheda «Relazione» › riquadro «Revisione», subito sopra il testo della relazione.',
+  RELAZIONE_SCREENING:
+    'Verifica salute azienda › apri l’azienda › scheda «Screening» › riquadro «Revisione», subito sopra la relazione di Screening.',
+  DOCUMENTO_CORREDO:
+    'Scenari › apri lo scenario › scheda «Proposta» › sezione «Documenti di corredo» › riquadro «Revisione», sopra la bozza del documento.',
+  ANALISI_PROPOSTA:
+    'Scenari › apri lo scenario › scheda «Proposta» › riquadro «Revisione», sopra l’analisi.',
+};
 
 interface Props {
   testo: string | null | undefined;
@@ -70,7 +98,25 @@ export function RevisioneTesto({ testo, tipo, fascicolo }: Props) {
   const revisione = useRevisione(testo, tipo, fascicolo);
   const [aperto, setAperto] = useState(false);
   const [mostraNonVerificati, setMostraNonVerificati] = useState(false);
+  const [avvisoBlocchi, setAvvisoBlocchi] = useState<number | null>(null);
+  const riferimento = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const ascolta = (e: Event) => {
+      const d = (e as CustomEvent<EventoEsportazioneBloccata>).detail;
+      if (d.tipo === tipo && d.testo === testo) setAvvisoBlocchi(d.blocchi);
+    };
+    window.addEventListener(EVENTO_ESPORTAZIONE_BLOCCATA, ascolta);
+    return () => window.removeEventListener(EVENTO_ESPORTAZIONE_BLOCCATA, ascolta);
+  }, [tipo, testo]);
+
   if (!revisione) return null;
+
+  const vaiAiRilievi = () => {
+    setAvvisoBlocchi(null);
+    setAperto(true);
+    riferimento.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const livello = LIVELLI_OUTPUT[revisione.livello];
   const { conteggi } = revisione;
@@ -84,9 +130,66 @@ export function RevisioneTesto({ testo, tipo, fascicolo }: Props) {
 
   return (
     <section
+      ref={riferimento}
       className={`border rounded-xl p-4 space-y-3 ${revisione.consegnabile ? 'bg-white border-slate-200' : 'bg-red-50 border-red-300'}`}
       aria-label="Revisione del testo"
     >
+      {avvisoBlocchi !== null && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="Esportazione non disponibile"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+        >
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-red-600" />
+              <h4 className="font-bold text-slate-900 text-sm">Esportazione non disponibile</h4>
+            </div>
+            <p className="text-xs text-slate-700 leading-relaxed">
+              Il PDF non può essere generato:{' '}
+              {avvisoBlocchi === 1
+                ? 'un controllo del revisore è'
+                : `${avvisoBlocchi} controlli del revisore sono`}{' '}
+              in stato «Bloccato». Il testo resta leggibile a schermo, ma non può uscire
+              dall’applicativo finché i rilievi non sono risolti.
+            </p>
+            <div className="text-xs text-slate-700 leading-relaxed space-y-1">
+              <p className="font-bold text-slate-900">Che cosa fare</p>
+              <ol className="list-decimal pl-5 space-y-1">
+                <li>
+                  Apri il riquadro «Revisione» e leggi i rilievi contrassegnati «Bloccato».
+                  Percorso: {PERCORSO_PANNELLO[tipo]}
+                </li>
+                <li>
+                  Rigenera il testo con il pulsante «Rigenera» (o «Genera») dello stesso riquadro in
+                  cui si trova il testo, oppure correggilo dove l’applicativo lo consente.
+                </li>
+                <li>
+                  Quando nel riquadro «Revisione» non restano controlli «Bloccato», il pulsante di
+                  esportazione produce il PDF.
+                </li>
+              </ol>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setAvvisoBlocchi(null)}
+                className="px-3 py-2 text-[10px] font-bold uppercase text-slate-600 hover:text-slate-900"
+              >
+                Chiudi
+              </button>
+              <button
+                type="button"
+                onClick={vaiAiRilievi}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold uppercase rounded-lg"
+              >
+                Vai ai rilievi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-start gap-2">
           {revisione.consegnabile ? (

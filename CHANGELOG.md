@@ -93,6 +93,62 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.86 — 2026-09-22
+
+**L'avviso di esportazione bloccata diventa una finestra dell'applicativo, con il percorso**
+
+Richiesta di Ercole: l'avviso usava `window.alert`, che mostra l'intestazione
+tecnica del browser («… vercel.app dice») e non puo' indicare la strada. Ora e'
+una finestra dell'applicativo (`RevisioneTesto.tsx`), aperta dal pannello
+Revisione del testo interessato:
+- dice che il PDF non puo' uscire e perche' (quanti controlli «Bloccato»);
+- elenca che cosa fare in tre passi, con il PERCORSO nelle parole
+  dell'interfaccia (es. «Scenari › apri lo scenario › scheda "Relazione" ›
+  riquadro "Revisione"») — chi conosce l'applicativo va a occhi chiusi, chi e'
+  alle prime armi ha i riferimenti;
+- il pulsante «Vai ai rilievi» apre il dettaglio dei controlli e porta il
+  riquadro a schermo.
+Il meccanismo e' un evento del browser: chi chiama l'esportazione non cambia.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable.
+
+## 0.109.85 — 2026-09-22
+
+**Citazioni normative riscontrate sul registro delle fonti (REV-001 deterministico); «indici CCII» → indici diagnostici**
+
+**1. La fonte dell'obbligo Uniemens** (indicata da Ercole): D.L. 30 settembre
+2003, n. 269, art. 44, comma 9, convertito con modificazioni dalla L. 24
+novembre 2003, n. 326. Entra nel registro (`DL269-2003-44-c9`). Nelle relazioni
+di Screening l'AI aveva citato a memoria «D.M. 26/10/2009» e «D.M. 26/10/2011»:
+riferimenti da non usare. Nel registro anche, come «da verificare», gli artt.
+2482-bis/ter e 2446/2447 c.c. e il D.L. 23/2020, art. 6, richiamati dal
+riscontro sul patrimonio netto della 0.109.84.
+
+**2. Citazioni normative nel testo** — `src/lib/registroFonti/citazioni.ts`:
+il revisore estrae ogni riferimento a una norma (art. … CCII; art. …, comma …,
+del D.Lgs. …/…; D.L. …/…, art. …; D.M. con data; artt. … c.c.; circolari) e lo
+riscontra sul registro. **REV-001 diventa deterministico**: norma assente dal
+registro = BLOCCO (nessuno l'ha verificata); presente ma abrogata o da
+verificare = SEGNALAZIONE, con la nota di verifica del registro. Controlli
+eseguiti: 12 su 28.
+
+**3. I prompt elencano le fonti citabili**: le istruzioni accodate ai prompt di
+Relazione, Screening e documenti di corredo contengono l'elenco delle fonti
+verificate del registro, con i loro estremi, e vietano di citare altro; per una
+norma mancante l'AI scrive «[fonte da inserire nel registro]».
+
+**4. «Indici CCII» / «violato» → «indici diagnostici di bilancio oltre la soglia
+di riferimento»** (rilievo di Libra): il sistema degli indici dell'originario
+art. 13 CCII e' abrogato e quei valori non sono parametri normativi. Cambiati
+motore dell'indicatore di Screening, prompt, etichette a schermo (Scenario,
+Superadmin XBRL, parificazione tag, Brogliaccio). REV-003 intercetta anche
+«indici CCII» e «test violati» presentati come diritto vigente. I nomi interni
+(`VIOLATO`, `indiciViolati`) restano.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable.
+
 ## 0.109.84 — 2026-09-21
 
 **Un solo motore per l'art. 25-novies; prima tappa del fascicolo di evidenza**

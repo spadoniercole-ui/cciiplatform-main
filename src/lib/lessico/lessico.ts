@@ -16,6 +16,8 @@
 // l'offerta con i parametri dell'ente, non misura la completezza dei
 // documenti — la formula giusta e' quella di «conforme»).
 
+import { FONTI } from '@/lib/registroFonti/fonti';
+
 export type ClasseLessico =
   | 'VIETATO_AUTOMATICO'
   | 'CONSENTITO_QUALIFICATO'
@@ -357,6 +359,12 @@ export const ACCERTAMENTI_VIETATI: { voce: string; modello: RegExp }[] = [
  * prevenire che bloccare. Vive qui perche' nomina i termini vietati, e questo
  * file e' l'unico esente dalla sorveglianza dei sorgenti.
  */
+function elencoFontiCitabili(): string {
+  return FONTI.filter((f) => f.verificata && f.stato !== 'abrogato')
+    .map((f) => `  - ${f.norma} — ${f.oggetto.split('.')[0]}.`)
+    .join('\n');
+}
+
 export function istruzioniLessicoPerPrompt(): string {
   const vietati = LESSICO.filter((v) => v.classe === 'VIETATO_AUTOMATICO').map(
     (v) => `«${v.termine}»`
@@ -374,7 +382,9 @@ LESSICO OBBLIGATORIO (il testo viene controllato da un revisore automatico e, se
 - Un indicatore, il DSCR, il Test pratico o la Check List non dimostrano né accertano nulla: sono strumenti operativi.
 - Se richiami l'omologazione forzosa (cram down), indica sempre l'articolo (63 o 88 CCII), la versione applicabile alla data della proposta e che dipende dall'adesione degli altri creditori.
 - Un dato assente si dichiara assente: non scrivere mai che vale zero.
-- Non attribuire alla piattaforma il ruolo di chi attesta, assevera, certifica o accerta.`;
+- Non attribuire alla piattaforma il ruolo di chi attesta, assevera, certifica o accerta.
+- Cita SOLO le norme del registro delle fonti qui sotto, con questi estremi. Non citare a memoria altri decreti, circolari o articoli: un riferimento fuori dal registro blocca il testo. Se ti serve una norma che non c'è, scrivi «[fonte da inserire nel registro]» invece dell'estremo.
+${elencoFontiCitabili()}`;
 }
 
 /**

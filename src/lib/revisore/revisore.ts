@@ -27,6 +27,7 @@ import {
   riconciliaTestoConFascicolo,
   type Evidenza,
 } from '@/lib/fascicolo/evidenza';
+import { riscontraCitazioni } from '@/lib/registroFonti/citazioni';
 import { CATALOGO_REVISORE, MOTIVO_NON_VERIFICATO, type ControlloRevisore } from './catalogo';
 import {
   LIVELLO_PER_TIPO,
@@ -121,6 +122,29 @@ function perFrase(
 }
 
 const VERIFICHE: Record<string, Verifica> = {
+  // Ogni norma citata deve stare nel registro delle fonti: una norma assente
+  // non e' stata verificata da nessuno (e' cosi' che l'AI ha citato due decreti
+  // diversi, a memoria, per l'obbligo Uniemens). Assente dal registro = BLOCCO,
+  // come vuole Libra; presente ma abrogata o da verificare = SEGNALAZIONE.
+  'REV-001': (testo) => {
+    const r = riscontraCitazioni(testo);
+    const rilievi: Rilievo[] = [
+      ...r.nonInRegistro.map((c) => ({
+        trovato: c.testo,
+        contesto: contestoDi(testo, c.posizione, c.testo.length),
+        nota: 'Norma non presente nel registro delle fonti: nessuno l’ha verificata. Aggiungerla al registro dopo il riscontro sul testo ufficiale, oppure togliere la citazione.',
+      })),
+      ...r.nonSostenibili.map(({ citazione, fonte }) => ({
+        trovato: citazione.testo,
+        contesto: contestoDi(testo, citazione.posizione, citazione.testo.length),
+        nota: `Nel registro come «${fonte.stato}» (${fonte.id}): ${fonte.verifica}`,
+      })),
+    ];
+    if (r.nonInRegistro.length) return { esito: 'BLOCCO', rilievi };
+    if (r.nonSostenibili.length) return { esito: 'SEGNALAZIONE', rilievi };
+    return PASS;
+  },
+
   // Ogni importo del testo deve avere la sua evidenza nel fascicolo. Finche' il
   // fascicolo non copre tutte le fonti (oggi: proposta, posizione dell'ente,
   // V.E.R.A.), un importo non riconciliato e' SEGNALATO, non bloccato: bloccare
@@ -146,10 +170,10 @@ const VERIFICHE: Record<string, Verifica> = {
       testo,
       (f) => {
         const m = f.match(
-          /indici\s+(?:di\s+allerta|(?:del\s+)?CNDCEC)|art(?:icolo|\.)?\s*13,?\s*(?:comma|c\.)\s*2|sistema\s+di\s+allerta|\bOCRI\b/iu
+          /indic[ei]\s+(?:di\s+allerta|(?:del\s+)?CNDCEC|CCII)|(?:test|indic[ei])\s+(?:CCII\s+)?violat[oi]|art(?:icolo|\.)?\s*13,?\s*(?:comma|c\.)\s*2|sistema\s+di\s+allerta|\bOCRI\b/iu
         );
         if (!m) return null;
-        return /abrogat|non\s+(?:più|piu’)\s+(?:in\s+vigore|vigent)|storic|(?:disciplina|norma|sistema|impianto)\s+superat|mai\s+(?:entrat|divenut|approvat)|non\s+costituisc/iu.test(
+        return /abrogat|non\s+(?:più|piu’)\s+(?:in\s+vigore|vigent)|storic|(?:disciplina|norma|sistema|impianto)\s+superat|mai\s+(?:entrat|divenut|approvat)|non\s+costituisc|diagnostic|strument[oi]\s+operativ|non\s+(?:sono\s+)?parametr/iu.test(
           f
         )
           ? null

@@ -261,8 +261,8 @@ export function BrogliaccioEnteScenario({
             />
           ) : (
             <p className="text-xs text-slate-400">
-              Non ancora generato — raccoglie l&apos;ultimo bilancio XBRL, gli indici CCII e la
-              Posizione Aggiornata.
+              Non ancora generato — raccoglie l&apos;ultimo bilancio XBRL, gli indici diagnostici di
+              bilancio e la Posizione Aggiornata.
             </p>
           )}
         </div>

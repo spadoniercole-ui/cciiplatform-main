@@ -40,6 +40,20 @@ describe('catalogo e livelli (Libra, parti D ed E)', () => {
   });
 });
 
+describe('revisore e registro delle fonti (REV-001)', () => {
+  it('una norma citata che non è nel registro blocca; una da verificare segnala', () => {
+    expect(esito('L’obbligo Uniemens discende dal D.M. 26 ottobre 2009.', 'REV-001').esito).toBe(
+      'BLOCCO'
+    );
+    expect(
+      esito('L’obbligo Uniemens discende dal D.L. 269/2003, art. 44, comma 9.', 'REV-001').esito
+    ).toBe('PASS');
+    expect(esito('Rilevano gli artt. 2482-bis e 2482-ter c.c.', 'REV-001').esito).toBe(
+      'SEGNALAZIONE'
+    );
+  });
+});
+
 describe('revisore e fascicolo di evidenza', () => {
   const fascicolo = componiFascicolo({
     proposta: [
@@ -167,6 +181,10 @@ describe('revisore a regole', () => {
     expect(esito('Gli indici di allerta impongono la segnalazione.', 'REV-003').esito).toBe(
       'BLOCCO'
     );
+    expect(esito('Risultano 3 indici CCII violati su 5 test.', 'REV-003').esito).toBe('BLOCCO');
+    expect(
+      esito('Tre indici diagnostici di bilancio oltre la soglia di riferimento.', 'REV-003').esito
+    ).toBe('PASS');
     expect(
       esito(
         'Gli indici CNDCEC, abrogati prima di entrare in vigore, restano un ausilio diagnostico.',

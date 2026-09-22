@@ -128,7 +128,7 @@ export default function FunzioneParificazioneTag({ analisi, onSalvataggioComplet
       <div className="bg-slate-900 text-white p-4 rounded-xl flex flex-wrap justify-between items-center gap-3 shadow-sm">
         <div>
           <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-400">
-            Parificazione Tag XBRL → Indici CCII
+            Parificazione Tag XBRL → Indici diagnostici di bilancio
           </h2>
           <p className="text-xs text-slate-300 mt-0.5">
             {analisi.anagrafica.ragioneSociale || 'Azienda non identificata'} — periodo corrente
@@ -197,7 +197,7 @@ export default function FunzioneParificazioneTag({ analisi, onSalvataggioComplet
         <div className="lg:col-span-6 bg-white p-4 rounded-xl border border-slate-200 space-y-3">
           <div className="border-b pb-2">
             <h3 className="text-xs font-bold uppercase text-slate-500">
-              Parametri richiesti dagli indici CCII
+              Parametri richiesti dagli indici diagnostici
             </h3>
           </div>
           <div className="space-y-2 overflow-y-auto max-h-[480px]">

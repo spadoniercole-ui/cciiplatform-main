@@ -248,7 +248,8 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   }
 
   if (input.indiciViolati === null) {
-    if (input.xbrlPresente) daAccertare.push('Indici CCII non calcolabili dal bilancio caricato.');
+    if (input.xbrlPresente)
+      daAccertare.push('Indici diagnostici di bilancio non calcolabili dal bilancio caricato.');
   } else {
     determinate++;
   }
@@ -334,11 +335,13 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
 
   // ---- Livello 2: equilibrio economico-finanziario ---------------------
   if (input.indiciViolati !== null && input.indiciViolati >= 3) {
-    accertato.unshift(`${input.indiciViolati} indici CCII oltre soglia.`);
+    accertato.unshift(
+      `${input.indiciViolati} indici diagnostici di bilancio oltre la soglia di riferimento (strumenti operativi, non parametri normativi).`
+    );
     return {
       esito: 'ROSSO',
       etichetta: etichettaCriticita(lacunePortanti),
-      fattoreDeterminante: 'Indici CCII oltre soglia',
+      fattoreDeterminante: 'Indici diagnostici di bilancio oltre la soglia di riferimento',
       accertato,
       daAccertare,
       copertura,
@@ -350,9 +353,9 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
 
   if (input.indiciViolati !== null && input.indiciViolati > 0) {
     esito = 'GIALLO';
-    fattoreDeterminante = 'Indici CCII oltre soglia';
+    fattoreDeterminante = 'Indici diagnostici di bilancio oltre la soglia di riferimento';
     accertato.unshift(
-      `${input.indiciViolati} ${input.indiciViolati === 1 ? 'indice CCII oltre soglia' : 'indici CCII oltre soglia'}.`
+      `${input.indiciViolati} ${input.indiciViolati === 1 ? 'indice diagnostico di bilancio oltre la soglia di riferimento' : 'indici diagnostici di bilancio oltre la soglia di riferimento'}.`
     );
   }
 

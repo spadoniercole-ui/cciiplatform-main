@@ -477,7 +477,10 @@ export async function generaScreeningAziendaAction(
       const indiciTesto = ultimo.indici
         .map((i) => `${i.nome}: ${i.valore} (${i.esito})`)
         .join('; ');
-      if (indiciTesto) blocchiContesto.push(`Indici CCII: ${indiciTesto}.`);
+      if (indiciTesto)
+        blocchiContesto.push(
+          `Indici diagnostici di bilancio (strumenti operativi: il sistema degli indici dell’originario art. 13 CCII è abrogato e questi valori NON sono parametri normativi né prova di crisi): ${indiciTesto}.`
+        );
     } else {
       blocchiContesto.push('Nessun bilancio XBRL ancora caricato per questa azienda.');
     }

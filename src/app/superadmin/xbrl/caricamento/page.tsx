@@ -612,7 +612,8 @@ export default function GestioneXBRLPage() {
                               )}
                               {ind.esito === 'VIOLATO' && (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 text-[10px] font-sans font-bold">
-                                  <AlertTriangle className="w-3 h-3 text-rose-600" /> VIOLATO
+                                  <AlertTriangle className="w-3 h-3 text-rose-600" /> OLTRE SOGLIA
+                                  DI RIFERIMENTO
                                 </span>
                               )}
                               {ind.esito === 'NON_CALCOLABILE' && (

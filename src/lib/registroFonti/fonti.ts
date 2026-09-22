@@ -248,6 +248,46 @@ export const FONTI: Fonte[] = [
       'Regola di Ercole (Polo Crisi d’Impresa INPS). Per l’INAIL Libra cita la circolare n. 28/2023, non ancora riscontrata.',
     verificata: true,
   },
+
+  // ---- Obblighi dichiarativi e riscontri civilistici ---------------------
+  {
+    id: 'DL269-2003-44-c9',
+    norma: 'D.L. 30 settembre 2003, n. 269, art. 44, comma 9 (conv. L. 24 novembre 2003, n. 326)',
+    oggetto:
+      'Obbligo per i datori di lavoro di trasmettere mensilmente all’INPS, per via telematica, i dati retributivi e contributivi dei lavoratori dipendenti (flusso Uniemens). La sua assenza è una violazione autonoma degli obblighi dichiarativi.',
+    efficaciaDal: null,
+    efficaciaAl: null,
+    stato: 'vigente',
+    atto: 'L. 24 novembre 2003, n. 326',
+    verifica:
+      'Fonte indicata da Ercole (0.109.85). Nelle relazioni generate l’AI aveva citato a memoria «D.M. 26/10/2009» e «D.M. 26/10/2011»: riferimenti da non usare. Data di efficacia da riscontrare su Normattiva.',
+    verificata: true,
+  },
+  {
+    id: 'CC-2482bis-ter',
+    norma: 'Codice civile, artt. 2482-bis e 2482-ter (s.r.l.); artt. 2446 e 2447 (s.p.a.)',
+    oggetto:
+      'Riduzione del capitale per perdite: obblighi dell’organo amministrativo quando le perdite superano un terzo del capitale o lo riducono sotto il minimo legale.',
+    efficaciaDal: null,
+    efficaciaAl: null,
+    stato: 'da_verificare',
+    atto: null,
+    verifica:
+      'Spunto dall’analisi di Libra (0.109.84). Testo e presupposti non ancora riscontrati: la piattaforma lo richiama come dato da verificare, mai come accertamento.',
+    verificata: false,
+  },
+  {
+    id: 'DL23-2020-6',
+    norma: 'D.L. 8 aprile 2020, n. 23, art. 6 (conv. L. 5 giugno 2020, n. 40)',
+    oggetto:
+      'Sospensione degli obblighi di riduzione del capitale per le perdite emerse negli esercizi 2020-2022, con possibilità di rinvio fino al quinto esercizio successivo.',
+    efficaciaDal: null,
+    efficaciaAl: null,
+    stato: 'da_verificare',
+    atto: null,
+    verifica: 'Citato a memoria da Claude (0.109.84): perimetro temporale e testo da riscontrare.',
+    verificata: false,
+  },
 ];
 
 export function fonte(id: string): Fonte | undefined {
