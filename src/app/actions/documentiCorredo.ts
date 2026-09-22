@@ -8,6 +8,7 @@
 // informazione mancante deve lasciare un segnaposto tra parentesi
 // quadre, non riempirlo a caso.
 
+import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
 import { pool } from '@/lib/db';
 import { assicuraTabellaDocumentiCorredo } from '@/db/provision';
@@ -237,7 +238,7 @@ export async function generaDocumentoCorredoAction(
       model: 'claude-sonnet-5',
       max_tokens: 5000,
       thinking: { type: 'disabled' },
-      system: PROMPT_PER_TIPO[tipo],
+      system: PROMPT_PER_TIPO[tipo] + istruzioniLessicoPerPrompt(),
       messages: [{ role: 'user', content: userPrompt }],
     });
 

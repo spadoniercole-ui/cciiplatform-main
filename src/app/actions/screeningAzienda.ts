@@ -5,6 +5,7 @@
 // perché. Genera una Check List su misura da XBRL + visura camerale +
 // le direttrici dell'ente, prima ancora che arrivi una proposta.
 
+import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
 import { del, get } from '@/lib/blobStore';
 import { pool } from '@/lib/db';
@@ -748,7 +749,10 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
               messages: [
                 {
                   role: 'user',
-                  content: [bloccoDocumento, { type: 'text', text: promptRelazione }],
+                  content: [
+                    bloccoDocumento,
+                    { type: 'text', text: promptRelazione + istruzioniLessicoPerPrompt() },
+                  ],
                 },
               ],
             },

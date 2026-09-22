@@ -10,6 +10,7 @@
 // stato caricato alcun bilancio XBRL, la relazione lo dichiara
 // esplicitamente invece di inventare un quadro quantitativo.
 
+import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
 import { pool } from '@/lib/db';
 import { assicuraTabellaProposta } from '@/db/provision';
@@ -1035,7 +1036,7 @@ Elabora la relazione di valutazione della proposta seguendo la struttura prescri
       model: 'claude-sonnet-5',
       max_tokens: 6000,
       thinking: { type: 'disabled' },
-      system: systemInstruction,
+      system: systemInstruction + istruzioniLessicoPerPrompt(),
       messages: [{ role: 'user', content: userPrompt }],
     });
 

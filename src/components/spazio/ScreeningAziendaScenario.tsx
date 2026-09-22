@@ -22,6 +22,7 @@ import { statoRichiestaDocumenti } from '@/lib/screening/documentiGiaPresenti';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import type { Attenzione } from '@/lib/screening/indicatore';
+import { RevisioneTesto, stampaSeConsegnabile } from '@/components/spazio/RevisioneTesto';
 
 interface Props {
   nomeSchema: string;
@@ -478,12 +479,20 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               </button>
             </div>
           </div>
+          <div className="mb-3">
+            <RevisioneTesto testo={stato.relazioneTesto} tipo="RELAZIONE_SCREENING" />
+          </div>
           <TestoConNormativa testo={stato.relazioneTesto} codice={codice} mostraRiferimenti />
         </div>
       )}
 
       {stato?.esiste && stato.relazioneTesto && (
-        <RiscontriNormativi nomeSchema={nomeSchema} aziendaId={aziendaId} codice={codice} />
+        <RiscontriNormativi
+          nomeSchema={nomeSchema}
+          aziendaId={aziendaId}
+          codice={codice}
+          tipoSpazio={tipoSpazio}
+        />
       )}
     </div>
   );
@@ -491,5 +500,5 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
 
 /** Grezzo apposta — vedi src/lib/stampaTesto.ts */
 function handleStampaRelazione(testo: string, generatoIl: string | null) {
-  stampaTesto('Relazione di Screening', testo, generatoIl);
+  stampaSeConsegnabile('RELAZIONE_SCREENING', 'Relazione di Screening', testo, generatoIl);
 }

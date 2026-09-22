@@ -29,6 +29,9 @@ import {
   type VersioneRelazione,
 } from '@/app/actions/scenarioSblocco';
 import { stampaTesto } from '@/lib/stampaTesto';
+import { RevisioneTesto, stampaSeConsegnabile } from '@/components/spazio/RevisioneTesto';
+import { FascicoloEvidenza } from '@/components/spazio/FascicoloEvidenza';
+import type { Evidenza } from '@/lib/fascicolo/evidenza';
 
 interface Props {
   nomeSchema: string;
@@ -55,6 +58,7 @@ export function RelazioneAiScenario({
   identitaUtente,
   bloccatoIl: bloccatoIlIniziale,
 }: Props) {
+  const [fascicolo, setFascicolo] = useState<Evidenza[] | null>(null);
   const [prerequisiti, setPrerequisiti] = useState<StatoPrerequisiti | null>(null);
   const [caricamento, setCaricamento] = useState(true);
 
@@ -305,12 +309,36 @@ export function RelazioneAiScenario({
           </div>
         )}
 
+        {/* Il fascicolo si vede anche PRIMA di generare: chi lavora sa su quali
+            evidenze il testo potra' poggiare, e quali provenienze mancano. */}
+        <div className="mb-3">
+          <FascicoloEvidenza
+            nomeSchema={nomeSchema}
+            aziendaId={aziendaId}
+            scenarioId={scenarioId}
+            onCaricato={setFascicolo}
+          />
+        </div>
+        {relazione && (
+          <div className="mb-3">
+            <RevisioneTesto testo={relazione} tipo="RELAZIONE_SCENARIO" fascicolo={fascicolo} />
+          </div>
+        )}
+
         {relazione ? (
           <div className="relative">
             <div className="absolute top-0 right-0 flex gap-2">
               <button
                 type="button"
-                onClick={() => stampaTesto('Relazione', relazione, null)}
+                onClick={() =>
+                  stampaSeConsegnabile(
+                    'RELAZIONE_SCENARIO',
+                    'Relazione',
+                    relazione,
+                    null,
+                    fascicolo
+                  )
+                }
                 className="text-slate-400 hover:text-blue-600"
                 title="Stampa / PDF"
               >
@@ -359,7 +387,8 @@ export function RelazioneAiScenario({
                     type="button"
                     onClick={(e) => {
                       e.preventDefault();
-                      stampaTesto(
+                      stampaSeConsegnabile(
+                        'RELAZIONE_SCENARIO',
                         `Relazione — versione ${v.numeroVersione}`,
                         v.testo,
                         v.generataIl

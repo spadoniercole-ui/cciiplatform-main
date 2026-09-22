@@ -93,6 +93,119 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.84 — 2026-09-21
+
+**Un solo motore per l'art. 25-novies; prima tappa del fascicolo di evidenza**
+
+Nasce dall'analisi di Libra su sei documenti prodotti dalle versioni 0.109.77,
+79 e 82. Libra notava che i tre PDF dei «Riscontri normativi» erano identici e
+li leggeva come ridondanza. Erano tre versioni diverse della piattaforma, con in
+mezzo la riscrittura del motore delle soglie: il PDF non cambiava perche' **non
+usava quel motore**.
+
+**1. Rimosso il secondo motore dell'art. 25-novies** —
+`lib/normativa/riscontri.ts` (0.109.29) confrontava con le soglie i debiti
+previdenziali e tributari del BILANCIO e l'esposizione V.E.R.A., e non aveva
+ricevuto nessuna delle regole della 0.109.78-79. Violava due principi di Ercole:
+l'XBRL serve solo al quadro generale (la voce D.13 somma INPS e INAIL), e un
+credito a ruolo esce dalla lettera a). Ora il pannello e il PDF dei Riscontri
+prendono l'art. 25-novies dall'unico motore (`lib/soglie25novies`), con le
+formule di Libra: «presupposti oggettivi rilevati / non rilevati», «esito non
+esprimibile» con il motivo. Eliminate anche le costanti di soglia duplicate.
+Tolta la dicitura che dava per «applicabile» il cram down; aggiunto che nella
+composizione negoziata INPS e INAIL sono fuori dalla transazione dell'art. 23,
+comma 2-bis. «Indicatori di crisi» diventa «Segnali e squilibri rilevati».
+
+**2. Ogni PDF dei Riscontri porta versione e data di elaborazione**: due
+documenti con versione diversa possono differire perche' e' cambiato il motore,
+non i dati.
+
+**3. Fascicolo di evidenza, prima tappa** — `src/lib/fascicolo/evidenza.ts`,
+pannello `FascicoloEvidenza.tsx`. Ogni importo diventa un'evidenza con
+identificativo stabile (`EV-PRO-…`, `EV-ENT-…`, `EV-VER-…`, `EV-CAL-…`), ente,
+natura, rango, data e stato. Si compone AL VOLO da proposta, posizione debitoria
+dell'ente e V.E.R.A.: nessuna tabella nuova, sempre coerente con i dati.
+- Una voce V.E.R.A. «potenziale» ha importo NON NOTO, mai zero: il totale e'
+  dichiarato come minimo (e' il caso dei 14.914 € contro la soglia di 15.000 €).
+- I valori calcolati (offerto, saldo, totali) dichiarano da che cosa derivano.
+- Di quasi tutte le righe la piattaforma non ha mai registrato il documento di
+  origine: il fascicolo lo dice («provenienza non registrata») invece di tacerlo.
+
+**4. Il revisore esegue REV-010** — ogni importo in euro del testo deve avere la
+sua evidenza (scarto massimo 1 €; le soglie di legge non sono dati). Scostamento
+da Libra, dichiarato: finche' il fascicolo non copre tutte le fonti, un importo
+non riconciliato e' SEGNALATO, non bloccato. Attivo sulla Relazione dello
+scenario; senza fascicolo il controllo resta «non verificato». Controlli
+eseguiti: 11 su 28.
+
+**5. Riscontro civilistico sul patrimonio netto negativo** (spunto di Libra):
+richiama gli artt. 2482-bis/ter e 2446/2447 c.c. come dato da verificare, con
+l'avvertenza sulla sospensione delle perdite 2020-2022. Rileva, non accerta.
+
+Prossime tappe del fascicolo: impronta SHA-256 dei file al caricamento e
+registrazione del documento di origine riga per riga (file INPS, visura, XBRL);
+fatti della visura estratti una volta e salvati (compreso l'avviso «procedura
+concorsuale pendente»); citazioni normative del testo riscontrate sul registro
+delle fonti; storico delle relazioni di Screening; REV-010 su Screening e
+documenti di corredo.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable.
+
+## 0.109.83 — 2026-09-21
+
+**Fase 4: il revisore a regole e i quattro livelli di output (Libra, parti D ed E)**
+
+**1. Il catalogo dei controlli** — `src/lib/revisore/catalogo.ts`: i 28
+controlli della parte E di Libra (erano stati ricordati come 25), nei quattro
+gruppi: fonti e vigenza, dati e calcoli, linguaggio e perimetro, strumenti e
+creditori pubblici. Ciascuno con verifica, azione e messaggio standard.
+
+**2. Il revisore** — `src/lib/revisore/revisore.ts`, logica pura e
+deterministica: stesso testo, stesso esito, nessuna AI. Esiti di Libra: superato,
+bloccato, segnalato, corretto. **La piattaforma ne aggiunge un quinto, «non
+verificato»**: dei 28 controlli, 10 sono oggi eseguibili come regole sul testo;
+gli altri 18 richiedono il senso della frase (revisore AI, fase 5), il fascicolo
+di evidenza (ogni dato con la propria provenienza: non ancora costruito) oppure
+sono garantiti a monte dal motore. Dichiararli «superati» sarebbe una falsa
+assicurazione: compaiono come non verificati, con il motivo, e restano a carico
+della revisione professionale.
+Controlli eseguiti: REV-003 (fonte abrogata presentata come vigente), REV-012
+(dato assente trattato come zero), REV-020 (termini vietati: sostituzione dove e'
+sicura, blocco nella conclusione o dove non lo e'; «crisi», «insolvenza»,
+«sostenibile» bloccati solo come ACCERTAMENTO, ammessi come citazione), REV-021
+(qualificazione mancante aggiunta in calce), REV-022 (il riscontro di soglia non
+diventa obbligo di segnalazione), REV-023 (un indicatore non dimostra), REV-024
+(intestazione di livello), REV-025 (la piattaforma non attesta), REV-035 e
+REV-036 (cram down richiamato con norma, versione e adesioni).
+
+**3. I quattro livelli di output** — `src/lib/revisore/livelli.ts` (Libra D.9):
+riscontro documentale, esito istruttorio, bozza professionale, conclusione
+attestativa o giuridica. Il quarto non e' mai emesso dal software. Relazione
+dello scenario e documenti di corredo sono di livello 3; relazione di Screening
+di livello 2. Ogni testo esportato porta in testa la dichiarazione del proprio
+limite. Ci sono anche le sei formule obbligatorie per le lacune (D.2), pronte
+per gli esiti.
+
+**4. Pannello «Revisione» e blocco dell'esportazione** — `RevisioneTesto.tsx`,
+sopra Relazione dello scenario, relazione di Screening e documenti di corredo.
+Regola di consegna di Libra (E.1): un testo con anche un solo controllo bloccato
+**non si esporta in PDF**. Resta leggibile a schermo, con i rilievi in evidenza,
+perche' chi lavora deve vedere che cosa non va per rigenerarlo o correggerlo. Il
+PDF esce nella versione rivista: intestazione di livello, sostituzioni,
+qualificazioni in calce. Il revisore gira nel browser: vale anche per i testi
+generati prima che esistesse.
+
+**5. Prevenire prima di bloccare** — le istruzioni di lessico
+(`istruzioniLessicoPerPrompt()`) sono accodate ai prompt di Relazione, relazione
+di Screening e documenti di corredo.
+
+Scostamento da Libra, dichiarato: per REV-024 Libra prevede il blocco; la
+piattaforma antepone da se' l'intestazione e registra la correzione.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable.
+
 ## 0.109.82 — 2026-09-21
 
 **Fase 3: il lessico controllato di Libra diventa un dato del sistema**

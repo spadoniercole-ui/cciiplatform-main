@@ -20,16 +20,7 @@ export const SOGLIA_IMPRESA_MINORE = {
   debiti: 500_000,
 } as const;
 
-export const SOGLIA_25NOVIES = {
-  inpsConDipendenti: 15_000, // e >30% dei contributi dell'anno precedente
-  inpsSenzaDipendenti: 5_000,
-  inail: 5_000,
-  adeIva: 5_000, // e >=10% del volume d'affari; in ogni caso oltre 20.000
-  adeIvaAssoluta: 20_000,
-  aerImpresaIndividuale: 100_000,
-  aerSocietaPersone: 200_000,
-  aerAltreSocieta: 500_000,
-} as const;
+// Le soglie dell'art. 25-novies NON stanno piu' qui: unica sede, src/lib/soglie25novies.
 
 export type EsitoSoglia = 'sotto' | 'sopra' | 'non_disponibile';
 
@@ -156,92 +147,34 @@ export function calcolaRiscontri(input: InputRiscontri): Riscontri {
     );
   }
 
-  // --- Soglie segnalazione creditori pubblici (art. 25-novies) -----------
-  // Base di calcolo: i buckets di bilancio (previdenziali, tributari). Sono
-  // aggregati e privi della dimensione temporale: si dichiara la cautela.
-  if (b) {
-    // INPS/INAIL (previdenziali aggregati)
-    const esitoPrev: EsitoSoglia =
-      b.debitiPrevidenziali > SOGLIA_25NOVIES.inpsSenzaDipendenti ? 'sopra' : 'sotto';
-    soglie.push({
-      parametro: 'Debiti previdenziali (segnalazione INPS/INAIL)',
-      valoreRilevato: b.debitiPrevidenziali,
-      soglia: `> ${euro(SOGLIA_25NOVIES.inpsSenzaDipendenti)} (senza dipendenti) · > ${euro(
-        SOGLIA_25NOVIES.inpsConDipendenti
-      )} e >30% anno prec. (con dipendenti)`,
-      sogliaValore: SOGLIA_25NOVIES.inpsSenzaDipendenti,
-      esito: esitoPrev,
-      fonte: `Bilancio XBRL (${b.anno ? `bilancio ${b.anno}` : 'ultimo'})`,
-      articolo: '25-novies',
-      cautela:
-        'Dato di bilancio aggregato (INPS+INAIL) e a fine esercizio: non prova il requisito «scaduto da oltre 90 giorni» né il raffronto con l’anno precedente. Verificare sulla posizione debitoria di dettaglio.',
+  // --- Art. 25-novies: NON si valuta qui (0.109.84) -----------------------
+  // Fino alla 0.109.83 questa funzione confrontava con le soglie dell'art.
+  // 25-novies i debiti previdenziali e tributari del BILANCIO e l'esposizione
+  // V.E.R.A. Era un secondo motore, rimasto fuori dalla riscrittura delle
+  // soglie (0.109.78-79), e violava due principi fissati da Ercole: l'XBRL
+  // serve solo al quadro generale, mai alle soglie (la voce D.13 somma INPS e
+  // INAIL); un credito passato a ruolo esce dalla lettera a). L'unico motore
+  // delle soglie e' src/lib/soglie25novies: il pannello dei Riscontri lo
+  // interroga direttamente. Qui resta solo la segnalazione che il tema esiste.
+  if (b && (b.debitiPrevidenziali > 0 || b.debitiTributari > 0)) {
+    articoli.push({
+      numero: '25-novies',
+      categoria: 'soglia',
+      motivo: `Il bilancio espone debiti verso creditori pubblici (previdenziali ${euro(
+        b.debitiPrevidenziali
+      )}, tributari ${euro(b.debitiTributari)}). Il dato di bilancio è aggregato e non si confronta con le soglie: il riscontro è nella sezione «Presupposti oggettivi dell’art. 25-novies», sui dati ufficiali degli enti.`,
     });
-    // Agenzia Entrate (tributari aggregati)
-    const esitoTrib: EsitoSoglia = b.debitiTributari > SOGLIA_25NOVIES.adeIva ? 'sopra' : 'sotto';
-    soglie.push({
-      parametro: 'Debiti tributari (segnalazione Agenzia Entrate)',
-      valoreRilevato: b.debitiTributari,
-      soglia: `> ${euro(SOGLIA_25NOVIES.adeIva)} e ≥10% volume d’affari · in ogni caso > ${euro(
-        SOGLIA_25NOVIES.adeIvaAssoluta
-      )}`,
-      sogliaValore: SOGLIA_25NOVIES.adeIva,
-      esito: esitoTrib,
-      fonte: `Bilancio XBRL (${b.anno ? `bilancio ${b.anno}` : 'ultimo'})`,
-      articolo: '25-novies',
-      cautela:
-        'La soglia di legge riguarda la sola IVA da liquidazioni periodiche; il dato di bilancio aggrega i debiti tributari e non isola l’IVA né la scadenza. Verificare sulla posizione di dettaglio.',
+    articoli.push({
+      numero: '63',
+      categoria: 'leva',
+      motivo:
+        'Presenza di debiti tributari o contributivi: negli accordi di ristrutturazione il loro trattamento è disciplinato dall’art. 63. Nella composizione negoziata la transazione dell’art. 23, comma 2-bis riguarda i soli crediti fiscali: INPS e INAIL ne sono esclusi.',
     });
-
-    if (b.debitiPrevidenziali > 0 || b.debitiTributari > 0) {
-      articoli.push({
-        numero: '25-novies',
-        categoria: 'soglia',
-        motivo: `Esposizione verso creditori pubblici rilevata (previdenziali ${euro(
-          b.debitiPrevidenziali
-        )}, tributari ${euro(b.debitiTributari)}): valutata sulle soglie di segnalazione.`,
-      });
-      articoli.push({
-        numero: '63',
-        categoria: 'leva',
-        motivo:
-          'Presenza di debiti tributari/contributivi: applicabile la transazione fiscale e contributiva (cram down) negli accordi di ristrutturazione.',
-      });
-      articoli.push({
-        numero: '88',
-        categoria: 'leva',
-        motivo:
-          'Presenza di debiti tributari/contributivi: applicabile il trattamento dei crediti tributari e contributivi nel concordato preventivo.',
-      });
-    }
-    datiMancanti.push(
-      'Segnalazioni art. 25-novies: requisito temporale (scaduto da oltre 90 giorni), numero dipendenti e raffronto con l’anno precedente non ricavabili dai soli dati di bilancio.'
-    );
-  }
-
-  // Esposizione verso l'ente / VERA come dato "certo per certo" informativo.
-  if (typeof input.esposizioneEnte === 'number' && input.esposizioneEnte > 0) {
-    soglie.push({
-      parametro: 'Esposizione verso l’ente (posizione di dettaglio)',
-      valoreRilevato: input.esposizioneEnte,
-      soglia: 'Riferimento: soglie art. 25-novies del creditore pubblico competente',
-      sogliaValore: SOGLIA_25NOVIES.inpsSenzaDipendenti,
-      esito: 'non_disponibile',
-      fonte: 'Posizione debitoria Ente',
-      articolo: '25-novies',
-      cautela:
-        'Esposizione di dettaglio importata: confrontare con la soglia specifica del creditore pubblico competente e con il requisito temporale.',
-    });
-  }
-  if (typeof input.esposizioneVera === 'number' && input.esposizioneVera > 0) {
-    soglie.push({
-      parametro: 'Esposizione V.E.R.A. (contabilizzato + da contabilizzare)',
-      valoreRilevato: input.esposizioneVera,
-      soglia: 'Riferimento: soglie art. 25-novies',
-      sogliaValore: SOGLIA_25NOVIES.inpsSenzaDipendenti,
-      esito: 'non_disponibile',
-      fonte: 'Posizione V.E.R.A.',
-      articolo: '25-novies',
-      cautela: 'Esposizione VERA di dettaglio: valutare per singola natura e scadenza.',
+    articoli.push({
+      numero: '88',
+      categoria: 'leva',
+      motivo:
+        'Presenza di debiti tributari o contributivi: nel concordato preventivo il loro trattamento è disciplinato dall’art. 88.',
     });
   }
 
@@ -257,7 +190,7 @@ export function calcolaRiscontri(input: InputRiscontri): Riscontri {
     if (b.patrimonioNetto < 0) {
       indicatori.push({
         nome: 'Patrimonio netto negativo',
-        dettaglio: `Patrimonio netto ${euro(b.patrimonioNetto)}: erosione integrale del capitale.`,
+        dettaglio: `Patrimonio netto ${euro(b.patrimonioNetto)}: il capitale risulta eroso per intero. Il dato rileva ai fini degli artt. 2482-bis e 2482-ter c.c. (s.r.l.) o 2446 e 2447 c.c. (s.p.a.): la piattaforma lo rileva, non accerta alcun obbligo. Da verificare con l’organo amministrativo, anche rispetto alla sospensione degli effetti delle perdite degli esercizi 2020-2022 (D.L. 23/2020, art. 6 — fonte non ancora nel registro).`,
         articolo: '3',
       });
     }

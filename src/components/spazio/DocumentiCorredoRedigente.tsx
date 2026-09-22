@@ -15,6 +15,7 @@ import {
 } from '@/app/actions/documentiCorredo';
 import { DOCUMENTI_CORREDO, type TipoDocumentoCorredo } from '@/lib/documentiCorredo/costanti';
 import { stampaTesto } from '@/lib/stampaTesto';
+import { RevisioneTesto, stampaSeConsegnabile } from '@/components/spazio/RevisioneTesto';
 
 interface Props {
   nomeSchema: string;
@@ -149,7 +150,14 @@ export function DocumentiCorredoRedigente({ nomeSchema, scenarioId }: Props) {
                 {bozza && (
                   <button
                     type="button"
-                    onClick={() => stampaTesto(meta.titolo, bozza, doc?.generatoIl ?? null)}
+                    onClick={() =>
+                      stampaSeConsegnabile(
+                        'DOCUMENTO_CORREDO',
+                        meta.titolo,
+                        bozza,
+                        doc?.generatoIl ?? null
+                      )
+                    }
                     className="flex items-center gap-1 px-2 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-[9px] uppercase rounded transition-colors"
                     title="Apre una finestra di stampa — da lì puoi salvare come PDF"
                   >
@@ -172,6 +180,11 @@ export function DocumentiCorredoRedigente({ nomeSchema, scenarioId }: Props) {
               </div>
             </div>
 
+            {bozza && (
+              <div className="mb-3">
+                <RevisioneTesto testo={bozza} tipo="DOCUMENTO_CORREDO" />
+              </div>
+            )}
             {bozza ? (
               <>
                 <textarea

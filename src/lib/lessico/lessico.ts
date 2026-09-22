@@ -293,3 +293,97 @@ export function cercaTerminiLessico(
   }
   return rilievi.sort((a, b) => a.posizione - b.posizione);
 }
+
+// ---------------------------------------------------------------------------
+// Supporto al revisore a regole (fase 4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sostituzioni che si possono fare in automatico senza rompere la frase: solo
+ * dove la nuova espressione ha la stessa funzione grammaticale della vecchia.
+ * Per gli altri termini vietati non esiste una sostituzione sicura: il testo
+ * si blocca e va rigenerato o riscritto.
+ */
+export const SOSTITUZIONI_DIRETTE: { modello: RegExp; con: string; voce: string }[] = [
+  {
+    voce: 'LEX-RICEVIBILE',
+    modello: parola('non\\s+ricevibil[ei]|irricevibil[ei]'),
+    con: 'non coerente con i parametri configurati',
+  },
+  {
+    voce: 'LEX-RICEVIBILE',
+    modello: parola('ricevibilità'),
+    con: 'coerenza con i parametri configurati',
+  },
+  {
+    voce: 'LEX-RICEVIBILE',
+    modello: parola('ricevibil[ei]'),
+    con: 'coerente con i parametri configurati',
+  },
+  {
+    voce: 'LEX-PAVIMENTO-MINIMO',
+    modello: parola('paviment[oi]\\s+minim[oi]'),
+    con: 'termine di confronto',
+  },
+];
+
+/**
+ * Termini vietati solo quando ACCERTANO uno stato: «l'azienda è in crisi» si',
+ * «Codice della crisi» no. Il modello riconosce la costruzione assertiva.
+ */
+export const ACCERTAMENTI_VIETATI: { voce: string; modello: RegExp }[] = [
+  {
+    voce: 'LEX-CRISI',
+    modello: parola(
+      '(?:è|e’|sono|versa|versano|si\\s+trova|si\\s+trovano|risulta|risultano|appare)\\s+(?:ormai\\s+|già\\s+|chiaramente\\s+)?in\\s+(?:uno\\s+)?(?:stato\\s+di\\s+)?crisi|stato\\s+di\\s+crisi\\s+(?:è\\s+)?(?:accertat[oa]|conclamat[oa]|evidente)|crisi\\s+conclamata'
+    ),
+  },
+  {
+    voce: 'LEX-INSOLVENZA',
+    modello: parola(
+      '(?:è|e’|sono|versa|versano|si\\s+trova|si\\s+trovano|risulta|risultano|appare)\\s+(?:ormai\\s+|già\\s+|chiaramente\\s+)?(?:in\\s+(?:uno\\s+)?(?:stato\\s+di\\s+)?insolvenza|insolvent[ei])|stato\\s+di\\s+insolvenza\\s+(?:è\\s+)?(?:accertat[oa]|conclamat[oa]|evidente)'
+    ),
+  },
+  {
+    voce: 'LEX-SOSTENIBILE',
+    modello: parola(
+      '(?:è|sono|risulta|risultano|appare|appaiono|si\\s+conferma)\\s+(?:pienamente\\s+|complessivamente\\s+|finanziariamente\\s+)?(?:in)?sostenibil[ei]'
+    ),
+  },
+];
+
+/**
+ * Istruzioni di lessico da accodare a ogni prompt che genera un testo: meglio
+ * prevenire che bloccare. Vive qui perche' nomina i termini vietati, e questo
+ * file e' l'unico esente dalla sorveglianza dei sorgenti.
+ */
+export function istruzioniLessicoPerPrompt(): string {
+  const vietati = LESSICO.filter((v) => v.classe === 'VIETATO_AUTOMATICO').map(
+    (v) => `«${v.termine}»`
+  );
+  const riservati = LESSICO.filter((v) => v.classe === 'RISERVATO_PROFESSIONISTA').map(
+    (v) => `«${v.termine}»`
+  );
+  return `
+
+LESSICO OBBLIGATORIO (il testo viene controllato da un revisore automatico e, se lo viola, viene bloccato):
+- Non usare mai, come esito o giudizio, i termini: ${vietati.join(', ')}. «Crisi» e «insolvenza» sono ammessi solo nei nomi di norme e istituti, mai per dire che l'azienda lo è.
+- Non esprimere giudizi riservati al professionista o al tribunale: ${riservati.join(', ')}. Al loro posto descrivi i dati, i calcoli e ciò che manca.
+- Per il confronto con i parametri dell'ente scrivi «coerente / non coerente con i parametri configurati».
+- Per l'art. 25-novies scrivi «risultano integrati / non risultano integrati i presupposti oggettivi rilevati», mai che una segnalazione è dovuta o obbligatoria.
+- Un indicatore, il DSCR, il Test pratico o la Check List non dimostrano né accertano nulla: sono strumenti operativi.
+- Se richiami l'omologazione forzosa (cram down), indica sempre l'articolo (63 o 88 CCII), la versione applicabile alla data della proposta e che dipende dall'adesione degli altri creditori.
+- Un dato assente si dichiara assente: non scrivere mai che vale zero.
+- Non attribuire alla piattaforma il ruolo di chi attesta, assevera, certifica o accerta.`;
+}
+
+/**
+ * La qualificazione obbligatoria nomina i termini vietati per NEGARLI («non
+ * esprime un giudizio di ricevibilità, ammissibilità o omologabilità»): quelle
+ * occorrenze non sono violazioni. Restituisce gli intervalli da ignorare.
+ */
+export function intervalliQualificazioneNegata(testo: string): [number, number][] {
+  const rx =
+    /non\s+esprime\s+un\s+giudizio\s+di\s+ricevibilità,\s+ammissibilità\s+o\s+omologabilità/giu;
+  return Array.from(testo.matchAll(rx)).map((m) => [m.index ?? 0, (m.index ?? 0) + m[0].length]);
+}
