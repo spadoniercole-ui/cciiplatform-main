@@ -18,6 +18,7 @@ import {
   type UtenteSpazio,
   type TipologiaUtente,
 } from '@/app/actions/utenti';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 interface Props {
   nomeSchema: string;
@@ -139,7 +140,7 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
 
   const handleRimuovi = async (utente: UtenteSpazio) => {
     if (utente.aziendeIds.length <= 1) {
-      alert(
+      avvisoApp(
         "Questo operatore è associato solo a questa azienda: rimuoverlo lo lascerebbe senza alcuna azienda su cui lavorare. Associalo prima a un'altra azienda, oppure disabilitalo dalla panoramica Utenti."
       );
       return;

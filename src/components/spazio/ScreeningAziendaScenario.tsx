@@ -17,12 +17,18 @@ import type { AnalisiXbrlResult } from '@/lib/xbrl/types';
 import { stampaTesto } from '@/lib/stampaTesto';
 import { TestoConNormativa } from '@/components/spazio/TestoConNormativa';
 import { RiscontriNormativi } from '@/components/spazio/RiscontriNormativi';
-import { ottieniVisuraTriageAction } from '@/app/actions/visuraTriage';
+import { ottieniVisuraTriageAction, registraVisuraTriageAction } from '@/app/actions/visuraTriage';
 import { statoRichiestaDocumenti } from '@/lib/screening/documentiGiaPresenti';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import type { Attenzione } from '@/lib/screening/indicatore';
 import { RevisioneTesto, stampaSeConsegnabile } from '@/components/spazio/RevisioneTesto';
+import { FattiVisura } from '@/components/spazio/FattiVisura';
+import { StoricoScreening } from '@/components/spazio/StoricoScreening';
+import { FascicoloEvidenza } from '@/components/spazio/FascicoloEvidenza';
+import type { Evidenza } from '@/lib/fascicolo/evidenza';
+import { improntaFile } from '@/lib/fascicolo/impronta';
+import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
 
 interface Props {
   nomeSchema: string;
@@ -40,6 +46,18 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   const [caricamentoXbrl, setCaricamentoXbrl] = useState(false);
   const [visuraFile, setVisuraFile] = useState<File | null>(null);
   const [generazioneInCorso, setGenerazioneInCorso] = useState(false);
+  const [fascicolo, setFascicolo] = useState<Evidenza[] | null>(null);
+  // Secondi trascorsi dall'avvio: la generazione dura fino a due minuti e
+  // mezzo, e un pulsante che gira da solo non dice se sta lavorando o e' fermo.
+  const [secondiGenerazione, setSecondiGenerazione] = useState(0);
+  useEffect(() => {
+    if (!generazioneInCorso) {
+      setSecondiGenerazione(0);
+      return;
+    }
+    const t = setInterval(() => setSecondiGenerazione((v) => v + 1), 1000);
+    return () => clearInterval(t);
+  }, [generazioneInCorso]);
   const [errore, setErrore] = useState<string | null>(null);
   const [esitoPreCompilazione, setEsitoPreCompilazione] = useState<string | null>(null);
   // Consente di lanciare l'analisi anche senza bilancio XBRL: il sistema
@@ -103,7 +121,18 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
         return;
       }
       const analisi: AnalisiXbrlResult = corpo;
-      const risultato = await salvaAnalisiXbrlAziendaAction(nomeSchema, aziendaId, analisi);
+      const regX = await registraDocumentoOrigineAction(
+        nomeSchema,
+        aziendaId,
+        'XBRL',
+        await improntaFile(file)
+      );
+      const risultato = await salvaAnalisiXbrlAziendaAction(
+        nomeSchema,
+        aziendaId,
+        analisi,
+        regX.success && regX.documentoId ? regX.documentoId : null
+      );
       if (!risultato.success) {
         setErrore(risultato.error || 'Impossibile salvare il bilancio.');
         return;
@@ -164,6 +193,17 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
         }
         urlDaUsare = corpoUpload.url;
         nomeDaUsare = visuraFile.name;
+        // Trattenuta come quella del triage: se la generazione fallisce
+        // (crediti, AI non raggiungibile, tempo scaduto) la visura resta e non
+        // va ricaricata. Alla generazione riuscita viene eliminata come sempre.
+        const reg = await registraVisuraTriageAction(
+          nomeSchema,
+          aziendaId,
+          urlDaUsare,
+          nomeDaUsare
+        );
+        if (reg.success)
+          setVisuraTriage({ nome: nomeDaUsare, caricataIl: new Date().toISOString() });
       } else {
         const r = await ottieniVisuraTriageAction(nomeSchema, aziendaId);
         if (!r.success || !r.visura) {
@@ -209,6 +249,8 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
       if (risultato.success) {
         await carica();
         setVisuraFile(null);
+        // La visura ha finito il suo lavoro ed e' stata eliminata dal server.
+        setVisuraTriage(null);
         // Screening appena generato → la Check List deve sbloccarsi (e
         // mostrare il badge delle domande) subito, non solo dopo un'altra
         // azione. Il semaforo è renderizzato dal layout (Server Component),
@@ -384,9 +426,11 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               Fascicolo storico (PDF) —{' '}
               {visuraFile
                 ? `selezionato: ${visuraFile.name}`
-                : stato?.nomeFileVisura
-                  ? `1 caricato — ${stato.nomeFileVisura}`
-                  : 'nessuno ancora'}
+                : visuraTriage
+                  ? `disponibile: ${visuraTriage.nome} (trattenuta, non serve ricaricarla)`
+                  : stato?.nomeFileVisura
+                    ? `usata nell’ultimo screening: ${stato.nomeFileVisura} — non conservata: per rigenerare va ricaricata`
+                    : 'nessuno ancora — obbligatorio per generare'}
             </span>
             <label className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg transition-colors cursor-pointer">
               <Upload className="w-3.5 h-3.5" />
@@ -418,10 +462,22 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           </p>
         </div>
 
+        {!visuraFile && !visuraTriage && !generazioneInCorso && (
+          <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-start gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>
+              Per generare serve il fascicolo storico (visura camerale in PDF): usa «Scegli file»
+              qui sopra. Il bilancio XBRL è consigliato ma non obbligatorio.
+            </span>
+          </p>
+        )}
         <button
           type="button"
           onClick={handleGenera}
-          disabled={generazioneInCorso}
+          disabled={generazioneInCorso || (!visuraFile && !visuraTriage)}
+          title={
+            !visuraFile && !visuraTriage ? 'Carica prima il fascicolo storico (PDF)' : undefined
+          }
           className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold uppercase tracking-wider rounded-lg text-xs transition-colors"
         >
           {generazioneInCorso ? (
@@ -430,13 +486,40 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
             <Sparkles className="w-3.5 h-3.5" />
           )}
           {generazioneInCorso
-            ? 'Caricamento e analisi...'
-            : tipoSpazio === 'NON_ENTE'
-              ? 'Pre-compila Check List Ministeriale'
-              : stato?.esiste
-                ? 'Rigenera screening'
-                : 'Genera screening'}
+            ? `Analisi in corso… ${secondiGenerazione}s`
+            : !visuraFile && !visuraTriage
+              ? 'Carica il fascicolo storico per generare'
+              : tipoSpazio === 'NON_ENTE'
+                ? 'Pre-compila Check List Ministeriale'
+                : stato?.esiste
+                  ? 'Rigenera screening'
+                  : 'Genera screening'}
         </button>
+        {generazioneInCorso && (
+          <div className="text-[11px] text-slate-700 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+            <p className="font-bold text-slate-900">
+              Generazione in corso — {secondiGenerazione} secondi. Può richiedere fino a due minuti
+              e mezzo: non chiudere la pagina.
+            </p>
+            <p>
+              {secondiGenerazione < 8
+                ? 'Caricamento del fascicolo storico…'
+                : 'L’assistente sta producendo in parallelo il questionario per direttrice, la relazione di analisi e i fatti della visura.'}
+            </p>
+            {secondiGenerazione > 150 && (
+              <p className="text-amber-800">
+                Tempo massimo superato: se non compare nulla entro pochi secondi, la generazione è
+                stata interrotta e verrà mostrato un messaggio.
+              </p>
+            )}
+          </div>
+        )}
+        {errore && (
+          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2 flex items-start gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>{errore}</span>
+          </p>
+        )}
         {tipoSpazio === 'NON_ENTE' ? (
           <p className="text-[10px] text-slate-400">
             Ripetere l&apos;operazione sovrascrive solo le domande già compilate dallo Screening —
@@ -457,6 +540,22 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
         )}
       </div>
 
+      {stato?.esiste && (
+        <StoricoScreening
+          nomeSchema={nomeSchema}
+          aziendaId={aziendaId}
+          versione={stato.generatoIl ? Date.parse(stato.generatoIl) : 0}
+        />
+      )}
+
+      {stato?.esiste && stato.visuraFatti && (
+        <FattiVisura
+          fatti={stato.visuraFatti}
+          impronta={stato.visuraImpronta}
+          nomeFile={stato.nomeFileVisura}
+        />
+      )}
+
       {stato?.esiste && stato.relazioneTesto && (
         <div className="bg-white border border-slate-200 rounded-xl p-5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
@@ -471,7 +570,9 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               )}
               <button
                 type="button"
-                onClick={() => handleStampaRelazione(stato.relazioneTesto!, stato.generatoIl)}
+                onClick={() =>
+                  handleStampaRelazione(stato.relazioneTesto!, stato.generatoIl, fascicolo)
+                }
                 className="flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[9px] uppercase rounded transition-colors"
                 title="Apre una finestra di stampa — da lì puoi salvare come PDF"
               >
@@ -479,8 +580,18 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               </button>
             </div>
           </div>
-          <div className="mb-3">
-            <RevisioneTesto testo={stato.relazioneTesto} tipo="RELAZIONE_SCREENING" />
+          <div className="mb-3 space-y-3">
+            <FascicoloEvidenza
+              nomeSchema={nomeSchema}
+              aziendaId={aziendaId}
+              scenarioId={null}
+              onCaricato={setFascicolo}
+            />
+            <RevisioneTesto
+              testo={stato.relazioneTesto}
+              tipo="RELAZIONE_SCREENING"
+              fascicolo={fascicolo}
+            />
           </div>
           <TestoConNormativa testo={stato.relazioneTesto} codice={codice} mostraRiferimenti />
         </div>
@@ -499,6 +610,16 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
 }
 
 /** Grezzo apposta — vedi src/lib/stampaTesto.ts */
-function handleStampaRelazione(testo: string, generatoIl: string | null) {
-  stampaSeConsegnabile('RELAZIONE_SCREENING', 'Relazione di Screening', testo, generatoIl);
+function handleStampaRelazione(
+  testo: string,
+  generatoIl: string | null,
+  fascicolo: Evidenza[] | null
+) {
+  stampaSeConsegnabile(
+    'RELAZIONE_SCREENING',
+    'Relazione di Screening',
+    testo,
+    generatoIl,
+    fascicolo
+  );
 }

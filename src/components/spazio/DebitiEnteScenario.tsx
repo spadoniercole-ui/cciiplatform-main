@@ -51,6 +51,7 @@ import { esportaDebitiEnteExcel } from '@/lib/debitiEnte/excelDebitiEnte';
 import { useDichiaraContestoAssistente } from '@/components/ContestoAssistenteContext';
 import { improntaFile } from '@/lib/fascicolo/impronta';
 import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 interface Props {
   nomeSchema: string;
@@ -272,9 +273,10 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
   const handleEliminaSelezionate = async () => {
     if (righeSelezionate.size === 0) return;
     if (
-      !window.confirm(
-        `Eliminare ${righeSelezionate.size} righe selezionate? Operazione non reversibile.`
-      )
+      !(await confermaApp(
+        `Eliminare ${righeSelezionate.size} righe selezionate? Operazione non reversibile.`,
+        { distruttiva: true, etichettaConferma: 'Procedi' }
+      ))
     )
       return;
     setInElaborazione(true);
@@ -563,9 +565,10 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
 
   const handleEliminaTracciato = async (t: Tracciato) => {
     if (
-      !window.confirm(
-        `Eliminare il tracciato «${t.nome}»? Verranno cancellate SOLO le righe importate con questo tracciato (in tutte le aziende dello spazio). Le righe manuali restano.`
-      )
+      !(await confermaApp(
+        `Eliminare il tracciato «${t.nome}»? Verranno cancellate SOLO le righe importate con questo tracciato (in tutte le aziende dello spazio). Le righe manuali restano.`,
+        { distruttiva: true, etichettaConferma: 'Procedi' }
+      ))
     )
       return;
     setInElaborazione(true);

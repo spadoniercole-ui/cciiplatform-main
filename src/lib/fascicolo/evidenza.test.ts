@@ -15,6 +15,7 @@ const FASCICOLO = componiFascicolo({
       importoDovuto: 120_000,
       percentualeOfferta: 40,
       rangoLegale: 'PRIVILEGIO_GENERALE',
+      documento: null,
     },
     {
       id: 2,
@@ -22,6 +23,7 @@ const FASCICOLO = componiFascicolo({
       importoDovuto: 250_000,
       percentualeOfferta: 20,
       rangoLegale: 'CHIROGRAFARIO',
+      documento: { nomeFile: 'proposta.xlsx', impronta: 'b'.repeat(64) },
     },
   ],
   posizioneEnte: [
@@ -91,10 +93,40 @@ describe('fascicolo di evidenza', () => {
 
   it('con il documento di origine registrato il dato è «documentato»; senza, «non verificato»', () => {
     const r = riepilogoFascicolo(FASCICOLO);
-    expect(r.DOCUMENTATO).toBe(1);
+    expect(r.DOCUMENTATO).toBe(2);
     expect(FASCICOLO.find((e) => e.id === 'EV-ENT-7')?.documento?.nome).toBe('inadempienze.xlsx');
     expect(r.IMPORTO_NON_NOTO).toBe(1);
     expect(r.NON_VERIFICATO).toBeGreaterThan(0);
+  });
+});
+
+describe('bilancio nel fascicolo', () => {
+  it('ogni voce di bilancio è un’evidenza per anno; con il file XBRL registrato è documentata', () => {
+    const f = componiFascicolo({
+      proposta: [],
+      posizioneEnte: [],
+      vera: [],
+      bilanci: [
+        {
+          id: 1,
+          anno: 2025,
+          comparativo: false,
+          documento: { nomeFile: 'bilancio2025.xbrl', impronta: 'c'.repeat(64) },
+          voci: { patrimonioNetto: -504_146, totaleAttivo: 1_200_000, debitiPrevidenziali: 30_000 },
+        },
+      ],
+    });
+    const pn = f.find((e) => e.id === 'EV-BIL-2025-patrimonioNetto')!;
+    expect(pn.importo).toBe(-504_146);
+    expect(pn.stato).toBe('DOCUMENTATO');
+    expect(pn.dataRiferimento).toBe('2025-12-31');
+    expect(f.find((e) => e.id === 'EV-BIL-2025-debitiPrevidenziali')!.descrizione).toContain(
+      'non si usa per le soglie'
+    );
+    // la riconciliazione confronta valori assoluti: «€ 504.146» nel testo trova il PN negativo
+    expect(
+      riconciliaTestoConFascicolo('patrimonio netto di € 504.146', f).riconciliati
+    ).toHaveLength(1);
   });
 });
 

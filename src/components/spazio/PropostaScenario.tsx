@@ -49,6 +49,9 @@ import type { TipoProposta } from '@/lib/origineProposta';
 import { esportaPropostaExcel, importaPropostaExcel } from '@/lib/proposta/excelProposta';
 import { generaDocumentoPropostaPdf } from '@/lib/proposta/pdfProposta';
 import { RANGHI_LEGALI, etichettaRango, type RangoLegale } from '@/lib/proposta/rangoLegale';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
+import { improntaFile } from '@/lib/fascicolo/impronta';
+import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
 
 interface Props {
   nomeSchema: string;
@@ -272,8 +275,9 @@ export function PropostaScenario({
 
   const handleEliminaSelezionate = async () => {
     if (righeSelezionate.size === 0) return;
-    const conferma = window.confirm(
-      `Eliminare ${righeSelezionate.size} rig${righeSelezionate.size === 1 ? 'a' : 'he'} selezionat${righeSelezionate.size === 1 ? 'a' : 'e'}? L'operazione non è reversibile.`
+    const conferma = await confermaApp(
+      `Eliminare ${righeSelezionate.size} rig${righeSelezionate.size === 1 ? 'a' : 'he'} selezionat${righeSelezionate.size === 1 ? 'a' : 'e'}? L'operazione non è reversibile.`,
+      { distruttiva: true, etichettaConferma: 'Procedi' }
     );
     if (!conferma) return;
     setEliminazioneMultiplaInCorso(true);
@@ -311,8 +315,9 @@ export function PropostaScenario({
     // confronto automatico rischierebbe di unire righe che invece
     // devono restare distinte).
     if (righe.length > 0) {
-      const conferma = window.confirm(
-        `Questo scenario ha già ${righe.length} rig${righe.length === 1 ? 'a' : 'he'} di proposta. Importando da questo file, le righe esistenti verranno eliminate e sostituite con quelle del file — non aggiunte. Continuare?`
+      const conferma = await confermaApp(
+        `Questo scenario ha già ${righe.length} rig${righe.length === 1 ? 'a' : 'he'} di proposta. Importando da questo file, le righe esistenti verranno eliminate e sostituite con quelle del file — non aggiunte. Continuare?`,
+        { distruttiva: true, etichettaConferma: 'Procedi' }
       );
       if (!conferma) return;
     }
@@ -321,6 +326,14 @@ export function PropostaScenario({
     setEsitoImportazione(null);
     try {
       const { righe: righeImportate, righeConErrore } = await importaPropostaExcel(file);
+      // Fascicolo di evidenza: l'Excel e' il documento di origine delle righe.
+      const reg = await registraDocumentoOrigineAction(
+        nomeSchema,
+        aziendaId,
+        'PROPOSTA',
+        await improntaFile(file)
+      );
+      const documentoId = reg.success && reg.documentoId ? reg.documentoId : null;
 
       if (righe.length > 0) {
         const risultatoPulizia = await eliminaTuttaPropostaAction(nomeSchema, scenarioId);
@@ -340,7 +353,10 @@ export function PropostaScenario({
       let salvate = 0;
       const erroriSalvataggio: string[] = [];
       for (const riga of righeImportate) {
-        const risultato = await aggiungiRigaPropostaAction(nomeSchema, scenarioId, riga);
+        const risultato = await aggiungiRigaPropostaAction(nomeSchema, scenarioId, {
+          ...riga,
+          documentoId,
+        });
         if (risultato.success) {
           salvate += 1;
         } else {

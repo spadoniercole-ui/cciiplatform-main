@@ -28,6 +28,7 @@ import {
   cessaLicenzaAction,
   type Licenza,
 } from '@/app/actions/licenze';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 interface ModuloLicenzaProps {
   /** null = crea una nuova licenza commerciale; altrimenti modifica quella esistente. */
@@ -124,7 +125,7 @@ export default function ModuloLicenza({
   const handleRigeneraChiave = async () => {
     if (!licenza) return;
 
-    const conferma = window.confirm(
+    const conferma = await confermaApp(
       'ATTENZIONE: rigenerando la chiave, gli spazi già collegati restano collegati (il legame è per id interno, non per la chiave mostrata), ma la chiave visibile cambierà. Vuoi procedere?'
     );
 
@@ -295,8 +296,9 @@ export default function ModuloLicenza({
 
   const handleCessa = async () => {
     if (!licenza) return;
-    const conferma = window.confirm(
-      'ATTENZIONE: la cessazione è pensata per essere definitiva (fine anticipata del rapporto commerciale). Gli spazi già collegati NON vengono toccati, ma non sarà più possibile crearne di nuovi con questa licenza. Vuoi procedere?'
+    const conferma = await confermaApp(
+      'ATTENZIONE: la cessazione è pensata per essere definitiva (fine anticipata del rapporto commerciale). Gli spazi già collegati NON vengono toccati, ma non sarà più possibile crearne di nuovi con questa licenza. Vuoi procedere?',
+      { distruttiva: true, etichettaConferma: 'Procedi' }
     );
     if (!conferma) return;
     const motivo = window.prompt('Motivo della cessazione (facoltativo):') || undefined;

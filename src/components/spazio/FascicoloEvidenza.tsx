@@ -75,8 +75,8 @@ export function FascicoloEvidenza({ nomeSchema, aziendaId, scenarioId, onCaricat
           </h3>
           <p className="text-[11px] text-slate-600 mt-0.5">
             Gli importi su cui il testo può poggiare, con la loro provenienza. Oggi copre proposta,
-            posizione debitoria dell’ente e V.E.R.A.; il revisore segnala ogni importo del testo che
-            non trova qui.
+            posizione debitoria dell’ente, V.E.R.A. e bilanci XBRL; il revisore segnala ogni importo
+            del testo che non trova qui.
           </p>
         </div>
       </div>

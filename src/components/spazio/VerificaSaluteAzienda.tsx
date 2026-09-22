@@ -310,7 +310,18 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
           if (!resp.ok || !esito.success) {
             throw new Error(esito.error || 'Analisi non riuscita.');
           }
-          await salvaAnalisiXbrlAziendaAction(nomeSchema, c.aziendaId, esito);
+          const regX = await registraDocumentoOrigineAction(
+            nomeSchema,
+            c.aziendaId,
+            'XBRL',
+            await improntaFile(fx)
+          );
+          await salvaAnalisiXbrlAziendaAction(
+            nomeSchema,
+            c.aziendaId,
+            esito,
+            regX.success && regX.documentoId ? regX.documentoId : null
+          );
         } catch (e) {
           note.push(`Bilancio «${fx.name}» non analizzabile: ${String(e)}`);
         }

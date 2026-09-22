@@ -18,6 +18,7 @@ import {
   riattivaAziendaAction,
   type Azienda,
 } from '@/app/actions/aziende';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 interface Props {
   nomeSchema: string;
@@ -100,7 +101,7 @@ export function AziendeManager({ nomeSchema, codice }: Props) {
     const azione = azienda.attiva ? disabilitaAziendaAction : riattivaAziendaAction;
     const risultato = await azione(nomeSchema, azienda.id);
     if (!risultato.success) {
-      alert(risultato.error || 'Operazione fallita.');
+      avvisoApp(risultato.error || 'Operazione fallita.');
     }
     await carica();
   };

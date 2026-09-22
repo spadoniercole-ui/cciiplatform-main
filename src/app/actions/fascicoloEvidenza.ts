@@ -10,6 +10,7 @@ import {
   assicuraTabellaProposta,
   assicuraTabellaDebitiEnte,
   assicuraTabelleVera,
+  assicuraTabellaXbrlAzienda,
 } from '@/db/provision';
 import { componiFascicolo, type Evidenza } from '@/lib/fascicolo/evidenza';
 
@@ -33,13 +34,17 @@ export async function ottieniFascicoloAction(
     await assicuraTabellaProposta(nomeSchema);
     await assicuraTabellaDebitiEnte(nomeSchema);
     await assicuraTabelleVera(nomeSchema);
+    await assicuraTabellaXbrlAzienda(nomeSchema);
 
     const proposta =
       scenarioId === null
         ? { rows: [] }
         : await pool.query(
-            `SELECT id, categoria_creditore, importo_dovuto, percentuale_offerta, rango_legale
-               FROM "${nomeSchema}".proposta_creditori WHERE scenario_id = $1 ORDER BY id`,
+            `SELECT p.id, p.categoria_creditore, p.importo_dovuto, p.percentuale_offerta, p.rango_legale,
+                    o.nome_file, o.impronta
+               FROM "${nomeSchema}".proposta_creditori p
+               LEFT JOIN "${nomeSchema}".documenti_origine o ON o.id = p.documento_id
+              WHERE p.scenario_id = $1 ORDER BY p.id`,
             [scenarioId]
           );
     // La posizione dell'ente puo' essere dell'azienda o aggiornata sullo scenario:
@@ -65,15 +70,56 @@ export async function ottieniFascicoloAction(
       [aziendaId]
     );
 
+    const bilanci = await pool.query(
+      `SELECT x.id, x.anno_bilancio, x.nome_file, x.dati_finanziari, o.nome_file AS doc_nome, o.impronta
+         FROM "${nomeSchema}".xbrl_storico_azienda x
+         LEFT JOIN "${nomeSchema}".documenti_origine o ON o.id = x.documento_id
+        WHERE x.azienda_id = $1 ORDER BY x.anno_bilancio DESC NULLS LAST`,
+      [aziendaId]
+    );
+    const CHIAVI_BILANCIO = [
+      'ricaviVendite',
+      'valoreProduzione',
+      'costiProduzione',
+      'ebitda',
+      'oneriFinanziari',
+      'utileEsercizio',
+      'totaleAttivo',
+      'attivoCircolante',
+      'disponibilitaLiquide',
+      'patrimonioNetto',
+      'totaleDebiti',
+      'debitiBanche',
+      'debitiFornitori',
+      'debitiTributari',
+      'debitiPrevidenziali',
+    ] as const;
+
     return {
       success: true,
       fascicolo: componiFascicolo({
+        bilanci: bilanci.rows.map((r) => {
+          const d = (r.dati_finanziari ?? {}) as Record<string, unknown>;
+          const voci: Record<string, number> = {};
+          for (const k of CHIAVI_BILANCIO) {
+            const v = d[k];
+            if (typeof v === 'number' && Number.isFinite(v)) voci[k] = v;
+          }
+          return {
+            id: Number(r.id),
+            anno: r.anno_bilancio === null ? null : Number(r.anno_bilancio),
+            comparativo: /comparativo/i.test(String(r.nome_file ?? '')),
+            documento: r.impronta ? { nomeFile: r.doc_nome, impronta: r.impronta } : null,
+            voci,
+          };
+        }),
         proposta: proposta.rows.map((r) => ({
           id: r.id,
           categoriaCreditore: r.categoria_creditore,
           importoDovuto: Number(r.importo_dovuto),
           percentualeOfferta: Number(r.percentuale_offerta),
           rangoLegale: r.rango_legale ?? null,
+          documento: r.impronta ? { nomeFile: r.nome_file, impronta: r.impronta } : null,
         })),
         posizioneEnte: righeEnte.map((r) => ({
           id: r.id,

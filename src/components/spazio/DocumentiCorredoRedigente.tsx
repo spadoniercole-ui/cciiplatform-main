@@ -16,13 +16,17 @@ import {
 import { DOCUMENTI_CORREDO, type TipoDocumentoCorredo } from '@/lib/documentiCorredo/costanti';
 import { stampaTesto } from '@/lib/stampaTesto';
 import { RevisioneTesto, stampaSeConsegnabile } from '@/components/spazio/RevisioneTesto';
+import { FascicoloEvidenza } from '@/components/spazio/FascicoloEvidenza';
+import type { Evidenza } from '@/lib/fascicolo/evidenza';
 
 interface Props {
   nomeSchema: string;
   scenarioId: number;
+  aziendaId: number;
 }
 
-export function DocumentiCorredoRedigente({ nomeSchema, scenarioId }: Props) {
+export function DocumentiCorredoRedigente({ nomeSchema, scenarioId, aziendaId }: Props) {
+  const [fascicolo, setFascicolo] = useState<Evidenza[] | null>(null);
   const [documenti, setDocumenti] = useState<DocumentoCorredo[]>([]);
   const [bozze, setBozze] = useState<Record<string, string>>({});
   const [caricamento, setCaricamento] = useState(true);
@@ -114,6 +118,14 @@ export function DocumentiCorredoRedigente({ nomeSchema, scenarioId }: Props) {
         </span>
       </div>
 
+      {/* Un solo fascicolo per tutte le bozze: gli importi sono gli stessi. */}
+      <FascicoloEvidenza
+        nomeSchema={nomeSchema}
+        aziendaId={aziendaId}
+        scenarioId={scenarioId}
+        onCaricato={setFascicolo}
+      />
+
       {errore && (
         <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
           {errore}
@@ -155,7 +167,8 @@ export function DocumentiCorredoRedigente({ nomeSchema, scenarioId }: Props) {
                         'DOCUMENTO_CORREDO',
                         meta.titolo,
                         bozza,
-                        doc?.generatoIl ?? null
+                        doc?.generatoIl ?? null,
+                        fascicolo
                       )
                     }
                     className="flex items-center gap-1 px-2 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-[9px] uppercase rounded transition-colors"
@@ -182,7 +195,7 @@ export function DocumentiCorredoRedigente({ nomeSchema, scenarioId }: Props) {
 
             {bozza && (
               <div className="mb-3">
-                <RevisioneTesto testo={bozza} tipo="DOCUMENTO_CORREDO" />
+                <RevisioneTesto testo={bozza} tipo="DOCUMENTO_CORREDO" fascicolo={fascicolo} />
               </div>
             )}
             {bozza ? (

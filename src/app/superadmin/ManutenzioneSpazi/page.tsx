@@ -19,6 +19,7 @@ import {
 import { aggiornaFunzioniPlusAction, type FunzioniPlus } from '@/app/actions/funzioniPlus';
 import { aggiornaAnagraficaSpazioAction, eliminaSpazioCompletoAction } from '@/app/actions/spazi';
 import { RiparazioneIndiceAdmin } from '@/components/superadmin/RiparazioneIndiceAdmin';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 export default function ManutenzioneSpaziPage() {
   const [spazi, setSpazi] = useState<SpazioConLicenza[]>([]);
@@ -126,7 +127,7 @@ export default function ManutenzioneSpaziPage() {
     try {
       const risultato = await riprovaProvisioningAction(spazio.id, spazio.codice);
       if (!risultato.success) {
-        alert(risultato.error || 'Provisioning fallito.');
+        avvisoApp(risultato.error || 'Provisioning fallito.');
       }
       await caricaSpazi();
     } finally {
@@ -139,7 +140,7 @@ export default function ManutenzioneSpaziPage() {
     try {
       const risultato = await entraComeSalvagenteAction(spazio.id);
       if (!risultato.success) {
-        alert(risultato.error || 'Impossibile entrare in questo spazio.');
+        avvisoApp(risultato.error || 'Impossibile entrare in questo spazio.');
         return;
       }
       // Nuova scheda: il superadmin non perde la propria pagina di

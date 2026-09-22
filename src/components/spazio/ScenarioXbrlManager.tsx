@@ -31,6 +31,9 @@ import { ottieniTabXbrlAzienda, ottieniIndiciAzienda } from '@/app/actions/azien
 import type { TabXbrlAzienda, IndiceAzienda } from '@/app/actions/aziendaConfig';
 import { calcolaTrend, type PuntoStorico, type AndamentoIndice } from '@/lib/xbrl/trend';
 import type { AnalisiXbrlResult, IndiceCcii } from '@/lib/xbrl/types';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
+import { improntaFile } from '@/lib/fascicolo/impronta';
+import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
 
 interface Props {
   nomeSchema: string;
@@ -192,6 +195,9 @@ export function ScenarioXbrlManager({ nomeSchema, aziendaId, scenarioId }: Props
 
   const [caricamentoFile, setCaricamentoFile] = useState(false);
   const [analisi, setAnalisi] = useState<AnalisiXbrlResult | null>(null);
+  // Il file analizzato, finche' non viene salvato: il fascicolo di evidenza ne
+  // registra nome e impronta al salvataggio.
+  const [fileAnalizzato, setFileAnalizzato] = useState<File | null>(null);
   const [erroreParsing, setErroreParsing] = useState<string | null>(null);
   const [salvataggio, setSalvataggio] = useState(false);
   const [salvato, setSalvato] = useState(false);
@@ -246,6 +252,7 @@ export function ScenarioXbrlManager({ nomeSchema, aziendaId, scenarioId }: Props
     setCaricamentoFile(true);
     setErroreParsing(null);
     setAnalisi(null);
+    setFileAnalizzato(file);
     setSalvato(false);
     setAtecoAggiornato(null);
     try {
@@ -301,7 +308,22 @@ export function ScenarioXbrlManager({ nomeSchema, aziendaId, scenarioId }: Props
       // Salva SEMPRE l'analisi completa (tutti i 9 indici), non filtrata:
       // la configurazione per azienda decide cosa mostrare, non cosa
       // conservare — se cambia in futuro, lo storico non va ricaricato.
-      const risultato = await salvaAnalisiXbrlAziendaAction(nomeSchema, aziendaId, analisi);
+      let documentoId: number | null = null;
+      if (fileAnalizzato) {
+        const regX = await registraDocumentoOrigineAction(
+          nomeSchema,
+          aziendaId,
+          'XBRL',
+          await improntaFile(fileAnalizzato)
+        );
+        if (regX.success && regX.documentoId) documentoId = regX.documentoId;
+      }
+      const risultato = await salvaAnalisiXbrlAziendaAction(
+        nomeSchema,
+        aziendaId,
+        analisi,
+        documentoId
+      );
       if (!risultato.success) {
         setErroreParsing(risultato.error || 'Impossibile salvare nello storico.');
         return;
@@ -618,8 +640,9 @@ function StoricoAzienda({
 
   const handleEliminaSelezionati = async () => {
     if (selezionati.size === 0) return;
-    const conferma = window.confirm(
-      `Eliminare ${selezionati.size} bilanci${selezionati.size === 1 ? 'o' : ''} selezionat${selezionati.size === 1 ? 'o' : 'i'} dallo storico? L'operazione non è reversibile.`
+    const conferma = await confermaApp(
+      `Eliminare ${selezionati.size} bilanci${selezionati.size === 1 ? 'o' : ''} selezionat${selezionati.size === 1 ? 'o' : 'i'} dallo storico? L'operazione non è reversibile.`,
+      { distruttiva: true, etichettaConferma: 'Procedi' }
     );
     if (!conferma) return;
     setEliminazioneInCorso(true);

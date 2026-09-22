@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import { KeyRound, Copy, RefreshCw, Download } from 'lucide-react';
 import { rigeneraPasswordAdminSpazioAction } from '@/app/actions/spazi';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 interface Props {
   nomeSchema: string;
@@ -43,7 +44,7 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
   };
 
   const handleRigenera = async () => {
-    const conferma = window.confirm(
+    const conferma = await confermaApp(
       "ATTENZIONE: la password attuale di questo admin smetterà di funzionare non appena generi quella nuova. Assicurati di poterla comunicare subito all'interessato. Procedere?"
     );
     if (!conferma) return;

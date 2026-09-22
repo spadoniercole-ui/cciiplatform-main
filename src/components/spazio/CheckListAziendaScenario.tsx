@@ -17,6 +17,7 @@ import {
   aggiornaTestoDomandaScreeningAction,
   type StatoScreeningAzienda,
 } from '@/app/actions/screeningAzienda';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 interface Props {
   nomeSchema: string;
@@ -48,7 +49,7 @@ export function CheckListAziendaScenario({ nomeSchema, aziendaId, codice }: Prop
   }, [nomeSchema, aziendaId]);
 
   const handleCorreggiPolarita = async () => {
-    const conferma = window.confirm(
+    const conferma = await confermaApp(
       'Rilegge tutte le domande e riformula quelle con polarità sbagliata (dove Sì non è la risposta favorevole). Le risposte già date a una domanda riformulata vengono invertite di conseguenza, per rappresentare lo stesso fatto. Procedere?'
     );
     if (!conferma) return;

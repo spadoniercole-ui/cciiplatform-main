@@ -120,6 +120,8 @@ export interface DatiRigaProposta {
   numeroRate: number | null;
   note: string | null;
   rangoLegale?: RangoLegale | null;
+  /** Documento di origine (fascicolo di evidenza): l'Excel importato. Assente per le righe a mano. */
+  documentoId?: number | null;
 }
 
 export async function aggiungiRigaPropostaAction(
@@ -147,8 +149,8 @@ export async function aggiungiRigaPropostaAction(
 
     await pool.query(
       `INSERT INTO "${nomeSchema}".proposta_creditori
-         (scenario_id, categoria_creditore, importo_dovuto, percentuale_offerta, modalita, numero_rate, note, rango_legale)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+         (scenario_id, categoria_creditore, importo_dovuto, percentuale_offerta, modalita, numero_rate, note, rango_legale, documento_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         scenarioId,
         dati.categoriaCreditore.trim(),
@@ -158,6 +160,7 @@ export async function aggiungiRigaPropostaAction(
         dati.numeroRate,
         dati.note,
         dati.rangoLegale || null,
+        dati.documentoId ?? null,
       ]
     );
 

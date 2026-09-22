@@ -14,7 +14,7 @@
 //
 // Logica pura: niente database, niente React.
 
-export type OrigineEvidenza = 'PROPOSTA' | 'POSIZIONE_ENTE' | 'VERA' | 'CALCOLO';
+export type OrigineEvidenza = 'PROPOSTA' | 'POSIZIONE_ENTE' | 'VERA' | 'BILANCIO' | 'CALCOLO';
 
 /**
  * Stato di verifica (Libra D-GEN-003): un dato privo di fonte, data o
@@ -48,6 +48,7 @@ const PREFISSO: Record<OrigineEvidenza, string> = {
   PROPOSTA: 'PRO',
   POSIZIONE_ENTE: 'ENT',
   VERA: 'VER',
+  BILANCIO: 'BIL',
   CALCOLO: 'CAL',
 };
 
@@ -55,16 +56,18 @@ export function idEvidenza(origine: OrigineEvidenza, chiave: string | number): s
   return `EV-${PREFISSO[origine]}-${chiave}`;
 }
 
+export interface DocumentoOrigine {
+  nomeFile: string;
+  impronta: string;
+}
+
 export interface RigaPropostaFascicolo {
   id: number;
+  documento: DocumentoOrigine | null;
   categoriaCreditore: string;
   importoDovuto: number;
   percentualeOfferta: number;
   rangoLegale: string | null;
-}
-export interface DocumentoOrigine {
-  nomeFile: string;
-  impronta: string;
 }
 
 export interface RigaPosizioneEnte {
@@ -76,6 +79,53 @@ export interface RigaPosizioneEnte {
   tipo: string;
   data: string | null;
 }
+/** Un bilancio dello storico XBRL: le voci che le relazioni citano. */
+export interface BilancioFascicolo {
+  id: number;
+  anno: number | null;
+  documento: DocumentoOrigine | null;
+  /** true = anno comparativo dedotto da un altro file, non caricato a se'. */
+  comparativo: boolean;
+  voci: Partial<
+    Record<
+      | 'ricaviVendite'
+      | 'valoreProduzione'
+      | 'costiProduzione'
+      | 'ebitda'
+      | 'oneriFinanziari'
+      | 'utileEsercizio'
+      | 'totaleAttivo'
+      | 'attivoCircolante'
+      | 'disponibilitaLiquide'
+      | 'patrimonioNetto'
+      | 'totaleDebiti'
+      | 'debitiBanche'
+      | 'debitiFornitori'
+      | 'debitiTributari'
+      | 'debitiPrevidenziali',
+      number
+    >
+  >;
+}
+
+export const ETICHETTA_VOCE_BILANCIO: Record<keyof BilancioFascicolo['voci'], string> = {
+  ricaviVendite: 'Ricavi delle vendite',
+  valoreProduzione: 'Valore della produzione',
+  costiProduzione: 'Costi della produzione',
+  ebitda: 'EBITDA',
+  oneriFinanziari: 'Oneri finanziari',
+  utileEsercizio: 'Utile (perdita) dell’esercizio',
+  totaleAttivo: 'Totale attivo',
+  attivoCircolante: 'Attivo circolante',
+  disponibilitaLiquide: 'Disponibilità liquide',
+  patrimonioNetto: 'Patrimonio netto',
+  totaleDebiti: 'Totale debiti',
+  debitiBanche: 'Debiti verso banche',
+  debitiFornitori: 'Debiti verso fornitori',
+  debitiTributari: 'Debiti tributari',
+  debitiPrevidenziali: 'Debiti previdenziali',
+};
+
 export interface RigaVera {
   id: number;
   documento: DocumentoOrigine | null;
@@ -93,6 +143,7 @@ export function componiFascicolo(input: {
   proposta: RigaPropostaFascicolo[];
   posizioneEnte: RigaPosizioneEnte[];
   vera: RigaVera[];
+  bilanci?: BilancioFascicolo[];
 }): Evidenza[] {
   const evidenze: Evidenza[] = [];
   const base = { ente: null, natura: null, rango: null, dataRiferimento: null, documento: null };
@@ -107,7 +158,10 @@ export function componiFascicolo(input: {
       importo: r.importoDovuto,
       ente: r.categoriaCreditore,
       rango: r.rangoLegale,
-      stato: 'NON_VERIFICATO',
+      documento: r.documento
+        ? { nome: r.documento.nomeFile, impronta: r.documento.impronta }
+        : null,
+      stato: r.documento ? 'DOCUMENTATO' : 'NON_VERIFICATO',
     });
     evidenze.push({
       ...base,
@@ -228,6 +282,28 @@ export function componiFascicolo(input: {
       stato: 'DERIVATO',
       derivatoDa: { ids: veraConImporto.map((r) => idEvidenza('VERA', r.id)), operazione: 'somma' },
     });
+  }
+  // Bilancio: una evidenza per voce e per anno. Il dato di bilancio serve al
+  // quadro generale e alle relazioni, MAI alle soglie dell'art. 25-novies
+  // (la voce D.13 somma INPS e INAIL): la descrizione lo ricorda.
+  for (const b of input.bilanci ?? []) {
+    for (const [chiave, valore] of Object.entries(b.voci)) {
+      if (valore === undefined || valore === null || !Number.isFinite(valore)) continue;
+      const etichetta =
+        ETICHETTA_VOCE_BILANCIO[chiave as keyof BilancioFascicolo['voci']] ?? chiave;
+      evidenze.push({
+        ...base,
+        id: idEvidenza('BILANCIO', `${b.anno ?? 'nd'}-${chiave}`),
+        origine: 'BILANCIO',
+        descrizione: `Bilancio ${b.anno ?? 'anno n.d.'}${b.comparativo ? ' (comparativo)' : ''} — ${etichetta}${chiave === 'debitiPrevidenziali' || chiave === 'debitiTributari' ? ' (aggregato di bilancio: non si usa per le soglie)' : ''}`,
+        importo: valore,
+        dataRiferimento: b.anno ? `${b.anno}-12-31` : null,
+        documento: b.documento
+          ? { nome: b.documento.nomeFile, impronta: b.documento.impronta }
+          : null,
+        stato: b.documento ? 'DOCUMENTATO' : 'NON_VERIFICATO',
+      });
+    }
   }
   return evidenze;
 }

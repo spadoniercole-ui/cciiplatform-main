@@ -44,6 +44,7 @@ import { etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
 import { stampaHtml } from '@/lib/stampaTesto';
 import { improntaFile } from '@/lib/fascicolo/impronta';
 import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 interface Props {
   nomeSchema: string;
@@ -273,9 +274,10 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
 
   const dimenticaTitolo = async (t: TitoloVera) => {
     if (
-      !window.confirm(
-        `Dimenticare la sezione «${t.titolo}»? La mappatura verrà rimossa (al prossimo caricamento la richiederò di nuovo) e le sue righe VERA di questa azienda saranno eliminate.`
-      )
+      !(await confermaApp(
+        `Dimenticare la sezione «${t.titolo}»? La mappatura verrà rimossa (al prossimo caricamento la richiederò di nuovo) e le sue righe VERA di questa azienda saranno eliminate.`,
+        { distruttiva: true, etichettaConferma: 'Procedi' }
+      ))
     )
       return;
     setInElaborazione(true);
@@ -317,9 +319,10 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
 
   const dimenticaTratt = async (t: TrattamentoVeraRiga) => {
     if (
-      !window.confirm(
-        `Dimenticare la combinazione «${t.natura} / ${t.stato || 'nessuno stato'}»? Verrà richiesta di nuovo al prossimo caricamento e le sue righe VERA di questa azienda saranno eliminate.`
-      )
+      !(await confermaApp(
+        `Dimenticare la combinazione «${t.natura} / ${t.stato || 'nessuno stato'}»? Verrà richiesta di nuovo al prossimo caricamento e le sue righe VERA di questa azienda saranno eliminate.`,
+        { distruttiva: true, etichettaConferma: 'Procedi' }
+      ))
     )
       return;
     setInElaborazione(true);

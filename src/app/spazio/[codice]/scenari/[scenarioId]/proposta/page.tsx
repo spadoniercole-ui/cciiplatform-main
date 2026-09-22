@@ -47,6 +47,7 @@ export default async function PropostaScenarioPage({
         <DocumentiCorredoRedigente
           nomeSchema={contesto.nomeSchema}
           scenarioId={Number(scenarioId)}
+          aziendaId={scenario.aziendaId}
         />
       )}
     </div>

@@ -9,7 +9,7 @@ import { pool } from '@/lib/db';
 import { assicuraTabellaDocumentiOrigine } from '@/db/provision';
 import { improntaValida, type DescrittoreDocumento } from '@/lib/fascicolo/impronta';
 
-export type TipoDocumentoOrigine = 'POSIZIONE_ENTE' | 'VERA';
+export type TipoDocumentoOrigine = 'POSIZIONE_ENTE' | 'VERA' | 'VISURA' | 'PROPOSTA' | 'XBRL';
 
 export async function registraDocumentoOrigineAction(
   nomeSchema: string,

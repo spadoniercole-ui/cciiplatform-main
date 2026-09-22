@@ -1,4 +1,5 @@
 import './globals.css';
+import { FinestreApp } from '@/components/FinestreApp';
 import { Space_Grotesk, IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
 
 // Tre ruoli distinti, non la stessa famiglia riadattata ovunque:
@@ -34,7 +35,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="it"
       className={`${spaceGrotesk.variable} ${ibmPlexSans.variable} ${ibmPlexMono.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        <FinestreApp />
+      </body>
     </html>
   );
 }

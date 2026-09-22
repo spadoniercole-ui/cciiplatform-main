@@ -5,6 +5,17 @@
 // perché. Genera una Check List su misura da XBRL + visura camerale +
 // le direttrici dell'ente, prima ancora che arrivi una proposta.
 
+import { APP_VERSION } from '@/lib/appVersion';
+import { createHash } from 'node:crypto';
+import {
+  PROMPT_ESTRAZIONE_VISURA,
+  avvisiDaFattiVisura,
+  estraiJson,
+  normalizzaFattiVisura,
+  fattiVisuraPerPrompt,
+  type FattiVisura,
+} from '@/lib/visura/fatti';
+import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
 import { del, get } from '@/lib/blobStore';
@@ -143,6 +154,9 @@ export interface RispostaScreening {
 
 export interface StatoScreeningAzienda {
   esiste: boolean;
+  /** Fatti estratti dalla visura (null se lo screening e' anteriore alla 0.109.89). */
+  visuraFatti: FattiVisura | null;
+  visuraImpronta: string | null;
   sezioni: SezioneChecklist[];
   risposte: RispostaScreening[];
   generatoIl: string | null;
@@ -157,6 +171,8 @@ export async function ottieniScreeningAzienda(
 ): Promise<{ success: boolean; stato: StatoScreeningAzienda; error?: string }> {
   const vuoto: StatoScreeningAzienda = {
     esiste: false,
+    visuraFatti: null,
+    visuraImpronta: null,
     sezioni: [],
     risposte: [],
     generatoIl: null,
@@ -170,7 +186,7 @@ export async function ottieniScreeningAzienda(
     await assicuraTabelleScreeningAzienda(nomeSchema);
 
     const screeningRis = await pool.query(
-      `SELECT sezioni, nome_file_visura, generato_il, relazione_testo FROM "${nomeSchema}".azienda_screening WHERE azienda_id = $1`,
+      `SELECT sezioni, nome_file_visura, generato_il, relazione_testo, visura_fatti, visura_impronta FROM "${nomeSchema}".azienda_screening WHERE azienda_id = $1`,
       [aziendaId]
     );
     if (screeningRis.rows.length === 0) return { success: true, stato: vuoto };
@@ -216,6 +232,10 @@ export async function ottieniScreeningAzienda(
       success: true,
       stato: {
         esiste: true,
+        visuraFatti: screeningRis.rows[0].visura_fatti
+          ? normalizzaFattiVisura(screeningRis.rows[0].visura_fatti)
+          : null,
+        visuraImpronta: screeningRis.rows[0].visura_impronta ?? null,
         sezioni,
         risposte,
         generatoIl: screeningRis.rows[0].generato_il,
@@ -407,6 +427,7 @@ export async function generaScreeningAziendaAction(
     }
     const buffer = Buffer.from(await new Response(risultatoGet.stream).arrayBuffer());
     const visuraBase64 = buffer.toString('base64');
+    const visuraImpronta = createHash('sha256').update(buffer).digest('hex');
 
     const intestazione = Buffer.from(visuraBase64.slice(0, 20), 'base64').toString('latin1');
     if (!intestazione.startsWith('%PDF-')) {
@@ -737,7 +758,43 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
     // fallimento di una NON butti via le altre — si salva quello che c'è.
     let esitiSezioni: PromiseSettledResult<SezioneChecklist | null>[];
     let esitoRelazione: PromiseSettledResult<Anthropic.Messages.Message>;
+    let esitoFatti: PromiseSettledResult<Anthropic.Messages.Message>;
+    let visuraFatti: FattiVisura | null = null;
     try {
+      // PRIMA i fatti della visura (chiamata breve, JSON chiuso): cosi' la
+      // relazione li riceve come DATI e ogni generazione parte dagli stessi
+      // fatti, invece di rileggere la visura e coglierne ogni volta di diversi.
+      esitoFatti = (
+        await Promise.allSettled([
+          anthropic.messages.create(
+            {
+              model: 'claude-sonnet-5',
+              max_tokens: 2500,
+              thinking: { type: 'disabled' },
+              messages: [
+                {
+                  role: 'user',
+                  content: [bloccoDocumento, { type: 'text', text: PROMPT_ESTRAZIONE_VISURA }],
+                },
+              ],
+            },
+            { signal: controller.signal }
+          ),
+        ])
+      )[0];
+      if (esitoFatti.status === 'fulfilled') {
+        const json = estraiJson(
+          esitoFatti.value.content
+            .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
+            .map((b) => b.text)
+            .join('\n')
+        );
+        if (json) visuraFatti = normalizzaFattiVisura(json);
+      }
+      const blocchoFattiPerPrompt = visuraFatti
+        ? `\n\nFATTI GIÀ ESTRATTI DALLA VISURA (usa QUESTI, come dati; la visura allegata serve solo per i dettagli non riportati qui):\n${fattiVisuraPerPrompt(visuraFatti)}\n`
+        : '';
+
       const [sezRis, relRis] = await Promise.all([
         Promise.allSettled(direttrici.map((d, i) => generaSezione(d, i + 1, controller.signal))),
         Promise.allSettled([
@@ -754,7 +811,10 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
                   role: 'user',
                   content: [
                     bloccoDocumento,
-                    { type: 'text', text: promptRelazione + istruzioniLessicoPerPrompt() },
+                    {
+                      type: 'text',
+                      text: promptRelazione + blocchoFattiPerPrompt + istruzioniLessicoPerPrompt(),
+                    },
                   ],
                 },
               ],
@@ -798,22 +858,59 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
         : 'Relazione di inquadramento non disponibile (la generazione non è riuscita a completarla in tempo). Puoi rigenerare lo screening per riprovare.';
     // Avviso deterministico in testa quando l'analisi è stata lanciata senza
     // bilancio: garantito anche se il modello non lo ripetesse.
+    // Fatti della visura: se l'estrazione e' fallita, visuraFatti e' null (mai
+    // un oggetto vuoto spacciato per «nessun fatto»).
+    // Avvisi deterministici in testa: garantiti anche se il modello tacesse.
+    const avvisiVisura = visuraFatti
+      ? avvisiDaFattiVisura(visuraFatti, new Date().toISOString().slice(0, 10))
+      : [];
+    const testaAvvisiVisura =
+      avvisiVisura.length > 0
+        ? `AVVISI DALLA VISURA (rilevati dalla piattaforma, non accertati)\n${avvisiVisura.map((a) => `- ${a.testo}`).join('\n')}\n\n`
+        : '';
+
     const relazioneTesto = senzaBilancio
       ? `⚠️ ANALISI PRELIMINARE — BILANCIO XBRL ASSENTE\nQuesta relazione è stata generata senza bilancio XBRL: è quindi parziale e basata sui soli dati disponibili (fascicolo storico, Situazione Debitoria, Posizione VERA). Caricare il bilancio e rigenerare per l'inquadramento economico-patrimoniale completo.\n\n${corpoRelazione}`
       : corpoRelazione;
+    const relazioneConAvvisi = testaAvvisiVisura + relazioneTesto;
 
     await pool.query(
-      `INSERT INTO "${nomeSchema}".azienda_screening (azienda_id, direttrici_usate, sezioni, relazione_testo, nome_file_visura, generato_il)
-       VALUES ($1, $2, $3, $4, $5, now())
-       ON CONFLICT (azienda_id) DO UPDATE SET direttrici_usate = $2, sezioni = $3, relazione_testo = $4, nome_file_visura = $5, generato_il = now()`,
+      `INSERT INTO "${nomeSchema}".azienda_screening (azienda_id, direttrici_usate, sezioni, relazione_testo, nome_file_visura, visura_fatti, visura_impronta, generato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+       ON CONFLICT (azienda_id) DO UPDATE SET direttrici_usate = $2, sezioni = $3, relazione_testo = $4, nome_file_visura = $5, visura_fatti = $6, visura_impronta = $7, generato_il = now()`,
       [
         aziendaId,
         JSON.stringify(direttrici),
         JSON.stringify(sezioni),
-        relazioneTesto,
+        relazioneConAvvisi,
         nomeFileVisura,
+        visuraFatti ? JSON.stringify(visuraFatti) : null,
+        visuraImpronta,
       ]
     );
+    // Storico: ogni generazione resta, con versione della piattaforma e
+    // impronta della visura. Tre PDF prodotti da tre versioni diverse non sono
+    // piu' «versioni parallele» indistinguibili (rilievo di Libra).
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".azienda_screening_storico
+         (azienda_id, relazione_testo, sezioni, nome_file_visura, visura_impronta, visura_fatti, app_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        aziendaId,
+        relazioneConAvvisi,
+        JSON.stringify(sezioni),
+        nomeFileVisura,
+        visuraImpronta,
+        visuraFatti ? JSON.stringify(visuraFatti) : null,
+        APP_VERSION,
+      ]
+    );
+    // Documento di origine nel fascicolo di evidenza.
+    await registraDocumentoOrigineAction(nomeSchema, aziendaId, 'VISURA', {
+      nomeFile: nomeFileVisura,
+      dimensione: buffer.length,
+      impronta: visuraImpronta,
+    });
     await pool.query(
       `DELETE FROM "${nomeSchema}".azienda_screening_risposte WHERE azienda_id = $1`,
       [aziendaId]
@@ -1135,5 +1232,51 @@ async function visuraEraTrattenuta(
     return !!r.visura && r.visura.url === url;
   } catch {
     return false;
+  }
+}
+
+export interface VoceStoricoScreening {
+  id: number;
+  generatoIl: string;
+  appVersion: string | null;
+  nomeFileVisura: string | null;
+  visuraImpronta: string | null;
+  relazioneTesto: string | null;
+}
+
+/** Le generazioni precedenti dello Screening, dalla piu' recente. */
+export async function ottieniStoricoScreeningAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<{ success: boolean; voci: VoceStoricoScreening[]; error?: string }> {
+  try {
+    if (!validaSchema(nomeSchema))
+      return { success: false, voci: [], error: 'Nome schema non valido.' };
+    await assicuraTabelleScreeningAzienda(nomeSchema);
+    const r = await pool.query(
+      `SELECT id, generato_il, app_version, nome_file_visura, visura_impronta, relazione_testo
+         FROM "${nomeSchema}".azienda_screening_storico WHERE azienda_id = $1
+        ORDER BY generato_il DESC, id DESC LIMIT 20`,
+      [aziendaId]
+    );
+    return {
+      success: true,
+      voci: r.rows.map((x) => ({
+        id: Number(x.id),
+        generatoIl:
+          x.generato_il instanceof Date ? x.generato_il.toISOString() : String(x.generato_il),
+        appVersion: x.app_version ?? null,
+        nomeFileVisura: x.nome_file_visura ?? null,
+        visuraImpronta: x.visura_impronta ?? null,
+        relazioneTesto: x.relazione_testo ?? null,
+      })),
+    };
+  } catch (error: unknown) {
+    console.error('[ottieniStoricoScreeningAction] Errore:', error);
+    return {
+      success: false,
+      voci: [],
+      error: `Impossibile leggere lo storico: ${(error as Error).message || error}`,
+    };
   }
 }

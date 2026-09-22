@@ -83,6 +83,21 @@ function frasi(testo: string): string[] {
   return unite.map(spazi).filter((f) => f.length > 0);
 }
 
+/** La frase che contiene la posizione data (fra due segni di fine frase o a capo). */
+function fraseIntorno(testo: string, posizione: number): string {
+  const inizio = Math.max(
+    testo.lastIndexOf('.', posizione - 1),
+    testo.lastIndexOf('\n', posizione - 1),
+    testo.lastIndexOf(';', posizione - 1),
+    -1
+  );
+  const fineCandidati = ['.', '\n', ';']
+    .map((c) => testo.indexOf(c, posizione))
+    .filter((i) => i >= 0);
+  const fine = fineCandidati.length ? Math.min(...fineCandidati) : testo.length;
+  return testo.slice(inizio + 1, fine);
+}
+
 function contestoDi(testo: string, posizione: number, lunghezza: number): string {
   return spazi(testo.slice(Math.max(0, posizione - 60), posizione + lunghezza + 60));
 }
@@ -134,14 +149,27 @@ const VERIFICHE: Record<string, Verifica> = {
         contesto: contestoDi(testo, c.posizione, c.testo.length),
         nota: 'Norma non presente nel registro delle fonti: nessuno l’ha verificata. Aggiungerla al registro dopo il riscontro sul testo ufficiale, oppure togliere la citazione.',
       })),
-      ...r.nonSostenibili.map(({ citazione, fonte }) => ({
-        trovato: citazione.testo,
-        contesto: contestoDi(testo, citazione.posizione, citazione.testo.length),
-        nota: `Nel registro come «${fonte.stato}» (${fonte.id}): ${fonte.verifica}`,
-      })),
+      ...r.nonSostenibili
+        // Una fonte abrogata citata COME abrogata («il sistema dell'originario
+        // art. 13 CCII e' stato abrogato») e' una citazione corretta, non un
+        // rilievo: la frase intorno lo dichiara.
+        .filter(
+          ({ citazione, fonte }) =>
+            !(
+              fonte.stato === 'abrogato' &&
+              /abrogat|non\s+(?:più|piu’)\s+(?:in\s+vigore|vigent)|originari[oa]|storic|superat/iu.test(
+                fraseIntorno(testo, citazione.posizione)
+              )
+            )
+        )
+        .map(({ citazione, fonte }) => ({
+          trovato: citazione.testo,
+          contesto: contestoDi(testo, citazione.posizione, citazione.testo.length),
+          nota: `Nel registro come «${fonte.stato}» (${fonte.id}): ${fonte.verifica}`,
+        })),
     ];
     if (r.nonInRegistro.length) return { esito: 'BLOCCO', rilievi };
-    if (r.nonSostenibili.length) return { esito: 'SEGNALAZIONE', rilievi };
+    if (rilievi.length) return { esito: 'SEGNALAZIONE', rilievi };
     return PASS;
   },
 
@@ -158,7 +186,7 @@ const VERIFICHE: Record<string, Verifica> = {
       rilievi: nonRiconciliati.map((i) => ({
         trovato: i.testo,
         contesto: contestoDi(testo, i.posizione, i.testo.length),
-        nota: 'Importo senza evidenza nel fascicolo (proposta, posizione dell’ente, V.E.R.A.): verificarne la provenienza.',
+        nota: 'Importo senza evidenza nel fascicolo (proposta, posizione dell’ente, V.E.R.A., bilanci): verificarne la provenienza.',
       })),
     };
   },
@@ -323,7 +351,7 @@ const VERIFICHE: Record<string, Verifica> = {
     return rilievi.length ? { esito: 'BLOCCO', rilievi } : PASS;
   },
 
-  'REV-035': (testo) => {
+  'REV-035': (testo, amb) => {
     const m = testo.match(/omologazione\s+forzosa|cram\s*-?\s*down/iu);
     if (!m) return PASS;
     const mancanti: string[] = [];
@@ -332,19 +360,23 @@ const VERIFICHE: Record<string, Verifica> = {
     if (!/aderent|adesion|maggioranz|determinant/iu.test(testo))
       mancanti.push('adesione e maggioranze');
     if (
-      !/28\s*(?:\/|\.|\s+settembre\s+)\s*(?:09\s*[/.]\s*)?2024|136\/2024|69\/2023|version[ei]|alla\s+data\s+(?:della|di\s+deposito)/iu.test(
+      !/28\s*(?:\/|\.|\s+settembre\s+)\s*(?:09\s*[/.]\s*)?2024|136\/2024|69\/2023|version[ei]|vigent[ei]|in\s+vigore|testo\s+attuale|correttivo|alla\s+data\s+(?:della|di\s+deposito)/iu.test(
         testo
       )
     )
       mancanti.push('la versione applicabile alla data della proposta');
     if (mancanti.length === 0) return PASS;
+    // Nella relazione di Screening non esiste ancora una proposta, quindi
+    // nemmeno una data: il richiamo e' generale e la lacuna si segnala, non
+    // blocca. Con una proposta in esame, invece, blocca.
+    const preProposta = amb.tipoOutput === 'RELAZIONE_SCREENING';
     return {
-      esito: 'BLOCCO',
+      esito: preProposta ? 'SEGNALAZIONE' : 'BLOCCO',
       rilievi: [
         {
           trovato: m[0],
           contesto: contestoDi(testo, m.index ?? 0, m[0].length),
-          nota: `Il testo richiama l’omologazione forzosa senza indicare: ${mancanti.join('; ')}.`,
+          nota: `Il testo richiama l’omologazione forzosa senza indicare: ${mancanti.join('; ')}.${preProposta ? ' Prima della proposta il richiamo può restare generale: indicare almeno che la disciplina applicabile dipende dalla data della proposta.' : ''}`,
         },
       ],
     };
@@ -410,7 +442,9 @@ export function revisionaTesto(
             ? 'Fascicolo di evidenza non disponibile per questo testo: gli importi non sono stati riconciliati.'
             : esito === 'SEGNALAZIONE' && controllo.id === 'REV-010'
               ? 'Importi non riconciliati con il fascicolo di evidenza.'
-              : controllo.messaggio,
+              : esito === 'SEGNALAZIONE'
+                ? `Verifica richiesta: ${controllo.messaggio.replace(/^Testo bloccato:\s*/iu, '')}`
+                : controllo.messaggio,
       rilievi,
     };
   });

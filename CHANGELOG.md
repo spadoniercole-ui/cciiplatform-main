@@ -93,6 +93,156 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.93 — 2026-09-22
+
+**Fascicolo di evidenza: i bilanci XBRL entrano con il loro file di origine**
+
+- **Il file XBRL e' un documento di origine**: registrato con impronta
+  SHA-256 nei tre punti in cui si carica (Verifica salute azienda, Screening,
+  scheda Bilanci dello scenario); `xbrl_storico_azienda.documento_id` lo lega
+  a ogni annualita', compreso l'anno comparativo dedotto dallo stesso file.
+- **Le voci di bilancio sono evidenze** (`EV-BIL-<anno>-<voce>`): ricavi,
+  valore e costi della produzione, EBITDA, oneri finanziari, utile, totale
+  attivo, attivo circolante, liquidita', patrimonio netto, debiti totali e per
+  natura. Con il file registrato risultano «Documentato»; i bilanci caricati
+  prima di questa versione restano «provenienza non registrata». I debiti
+  previdenziali e tributari di bilancio portano l'avvertenza: aggregato di
+  bilancio, non si usa per le soglie.
+- Il revisore (REV-010) riconcilia cosi' anche i numeri di bilancio citati
+  nelle relazioni: un patrimonio netto di «€ 504.146» trova la sua evidenza.
+
+File del triage: Elenco denunce e Lista inadempienze producono un esito di
+verifica, non righe salvate; non hanno quindi un documento da legare. I file
+V.E.R.A. e XBRL del triage sono coperti.
+
+Il fascicolo copre ora proposta, posizione dell'ente, V.E.R.A., visura e
+bilanci. Restano REV-005 e REV-013 (valori di legge e ricalcoli).
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable.
+
+## 0.109.92 — 2026-09-22
+
+**Impronta e versione su ogni PDF esportato; l'Excel della proposta come documento di origine**
+
+**1. Piede di ogni documento esportato** (`lib/stampaTesto.ts`, quindi tutti
+gli output: Relazione, Screening, documenti di corredo, Brogliaccio, analisi
+della proposta, Riscontri normativi, prospetto V.E.R.A.): versione della
+piattaforma, data di esportazione, data di generazione del contenuto e
+impronta SHA-256 del contenuto, calcolata nel browser. Due documenti con
+impronta diversa differiscono nel contenuto; con versione diversa puo' essere
+cambiato il motore a parita' di dati; l'impronta e' anche la prova che il
+documento non e' stato modificato dopo l'esportazione. La finestra di stampa
+si apre nel gesto dell'utente (altrimenti il browser la blocca) e il
+contenuto si scrive dopo il calcolo dell'impronta. Tolto il piede manuale che
+i Riscontri normativi avevano dalla 0.109.84.
+
+**2. Excel della proposta nel fascicolo di evidenza**: l'importazione
+registra il file (impronta SHA-256) e ogni riga importata porta
+`documento_id`; nel fascicolo le righe risultano «Documentato» con nome del
+file e impronta. Le righe inserite a mano restano «provenienza non
+registrata». Il fascicolo copre ora proposta, posizione dell'ente, V.E.R.A. e
+visura.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (importazione Excel: 5 righe «Documentato»); il piede e' coperto da un test unitario perche' la demo non ha output stampabili.
+
+## 0.109.91 — 2026-09-22
+
+**REV-010 su Screening e documenti di corredo; via tutti gli avvisi nativi del browser**
+
+**1. Il fascicolo di evidenza arriva anche a Screening e documenti di corredo.**
+Lo Screening usa il fascicolo dell'azienda (posizione dell'ente e V.E.R.A.,
+senza righe di proposta); i documenti di corredo quello dello scenario, un
+solo pannello sopra le tre bozze. Il revisore esegue REV-010 (importi del testo
+riconciliati con il fascicolo) su tutti gli output coperti; l'esportazione usa
+lo stesso fascicolo. Lo storico dello Screening resta senza fascicolo: le
+generazioni passate vanno lette con il fascicolo di allora, che non esiste.
+
+**2. Nessun alert() o confirm() del browser** (regola di Ercole, 0.109.86):
+`components/FinestreApp.tsx`, montato nel layout radice, offre `avvisoApp()` e
+`await confermaApp()` con la stessa forma delle funzioni native. Sostituite 22
+chiamate in 12 file; le 8 conferme di eliminazione o cessazione hanno il
+pulsante rosso «Procedi». Escape annulla.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (finestra di conferma).
+
+## 0.109.90 — 2026-09-22
+
+**Screening: storico delle generazioni, fatti della visura come dati, visura non piu' persa, segnali all'utente; due tarature del revisore**
+
+Dal giro di Screening fatto da Ercole con la 0.109.88 e dai suoi rilievi.
+
+**1. Storico delle generazioni** — tabella `azienda_screening_storico`: ogni
+generazione resta con data, versione della piattaforma, impronta della visura
+e fatti estratti. Pannello «Generazioni precedenti» nella scheda Screening,
+con revisore ed esportazione per ciascuna. Tre PDF prodotti da tre versioni
+non sono piu' «versioni parallele» indistinguibili.
+
+**2. I fatti della visura arrivano alla relazione come dati**: l'estrazione
+(chiamata breve) ora precede la relazione, che li riceve nel prompt; ogni
+generazione parte dagli stessi fatti. Costo: qualche secondo in piu'.
+
+**3. La visura caricata direttamente nello Screening non si perde piu'**
+(rilievo di Ercole): e' trattenuta come quella del triage, quindi una
+generazione fallita (crediti, AI non raggiungibile, tempo scaduto) non la
+distrugge. Alla generazione riuscita viene eliminata come sempre.
+
+**4. Si capisce se parte** (rilievo di Ercole): l'etichetta del fascicolo
+storico non fa piu' credere che la visura dell'ultimo Screening sia ancora
+disponibile («usata nell'ultimo screening — non conservata: per rigenerare va
+ricaricata»); senza visura il pulsante e' disabilitato e dice perche', con un
+avviso che indica «Scegli file»; durante la generazione un riquadro mostra i
+secondi trascorsi, la fase e il tempo massimo; l'errore compare accanto al
+pulsante, non solo in cima alla pagina.
+
+**5. Revisore**: una fonte abrogata citata COME abrogata («il sistema
+dell'originario art. 13 CCII e' stato abrogato») non e' piu' segnalata da
+REV-001; il messaggio di una segnalazione non dice piu' «Testo bloccato».
+REV-035 riconosce «vigente / in vigore / testo attuale» come indicazione della
+versione e, nella relazione di Screening — dove una proposta ancora non c'e' —
+la lacuna e' segnalata, non bloccata.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (segnali del pulsante; storico e
+fatti richiedono la chiave AI).
+
+## 0.109.89 — 2026-09-22
+
+**Fascicolo di evidenza, terza tappa: i fatti della visura estratti una volta e salvati; avviso sulla procedura concorsuale pendente**
+
+Rilievo di Libra: fra una generazione e l'altra della relazione di Screening
+l'affitto d'azienda, il trasferimento di sede e gli addetti comparivano e
+scomparivano, perche' l'AI rileggeva la visura ogni volta.
+
+- **Estrazione con contratto chiuso** (`src/lib/visura/fatti.ts`): nella
+  generazione dello Screening una terza chiamata, in parallelo, estrae dalla
+  visura un JSON a campi fissi (anagrafica, stato, capitale, addetti, organi,
+  procedure concorsuali con tipo/data/stato/tribunale, trasferimenti di sede,
+  atti rilevanti, data della visura). «null» dove il dato non c'e', mai
+  inventato. Il JSON e' normalizzato senza eccezioni (date italiane, importi
+  con separatori, campi mancanti).
+- **Salvati con l'impronta SHA-256 della visura** (`azienda_screening.
+  visura_fatti`, `visura_impronta`); la visura entra nel fascicolo come
+  documento di origine (`documenti_origine`, tipo VISURA).
+- **Avvisi deterministici**, in testa alla relazione e nel nuovo pannello
+  «Fatti della visura»: procedura concorsuale risultante dalla visura e non
+  chiusa (richiesta di Ercole), stato dell'attivita' anomalo, visura piu'
+  vecchia di 90 giorni. Formula: «rilevato, non accertato»; la coesistenza con
+  lo strumento in esame e' valutazione di livello 4.
+- Se l'estrazione fallisce si salva null, mai un oggetto vuoto spacciato per
+  «nessun fatto».
+
+Limite dichiarato: in questa versione la relazione di Screening legge ancora
+la visura per conto proprio (le due chiamate sono parallele); la tappa
+successiva le passera' i fatti salvati come dati, cosi' ogni generazione
+parte dagli stessi fatti.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable. Nessun lancio di prova: la portable di prova non ha la chiave AI e
+il pannello compare solo dopo uno Screening generato.
+
 ## 0.109.88 — 2026-09-22
 
 **Fascicolo di evidenza, seconda tappa: impronta dei file e documento di origine riga per riga**

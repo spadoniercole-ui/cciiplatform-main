@@ -1041,6 +1041,33 @@ export async function assicuraTabelleScreeningAzienda(nomeSchema: string): Promi
       generato_il TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
+  // Fatti della visura (0.109.89): estratti una volta, salvati, passati
+  // all'AI come dati; con l'impronta della visura da cui vengono.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.azienda_screening ADD COLUMN IF NOT EXISTS visura_fatti JSONB`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.azienda_screening ADD COLUMN IF NOT EXISTS visura_impronta TEXT`
+  );
+  // Storico delle generazioni (0.109.90): la riga corrente si sovrascrive,
+  // ma ogni generazione resta qui con versione della piattaforma e impronta
+  // della visura.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.azienda_screening_storico (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      generato_il TIMESTAMP NOT NULL DEFAULT now(),
+      relazione_testo TEXT,
+      sezioni JSONB,
+      nome_file_visura TEXT,
+      visura_impronta TEXT,
+      visura_fatti JSONB,
+      app_version TEXT
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_screening_storico_azienda ON ${s}.azienda_screening_storico (azienda_id)`
+  );
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.azienda_screening_risposte (
       id SERIAL PRIMARY KEY,
@@ -1116,6 +1143,10 @@ export async function assicuraTabellaXbrlAzienda(nomeSchema: string): Promise<vo
       CONSTRAINT uq_azienda_anno_tenant UNIQUE (azienda_id, anno_bilancio)
     )`
   );
+  // Fascicolo di evidenza (0.109.93): il file XBRL da cui viene il bilancio.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.xbrl_storico_azienda ADD COLUMN IF NOT EXISTS documento_id INTEGER`
+  );
 }
 
 /**
@@ -1124,6 +1155,7 @@ export async function assicuraTabellaXbrlAzienda(nomeSchema: string): Promise<vo
  */
 export async function assicuraTabellaProposta(nomeSchema: string): Promise<void> {
   const s = sql.identifier(nomeSchema);
+  await assicuraTabellaDocumentiOrigine(nomeSchema);
   await assicuraTabelleScenari(nomeSchema); // serve scenari per la FK
 
   await eseguiDdlTenant(
@@ -1177,6 +1209,10 @@ export async function assicuraTabellaProposta(nomeSchema: string): Promise<void>
   );
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.proposta_creditori ADD COLUMN IF NOT EXISTS importo_aderente NUMERIC`
+  );
+  // Fascicolo di evidenza (0.109.92): l'Excel da cui la riga e' stata importata.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.proposta_creditori ADD COLUMN IF NOT EXISTS documento_id INTEGER`
   );
 
   await eseguiDdlTenant(

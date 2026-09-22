@@ -150,8 +150,7 @@ export function RiscontriNormativi({
               .join('')}</ul>`
           : ''
       }
-      <p class="note">Calcolo deterministico sui dati disponibili. Il rilevamento di segnali non accerta lo stato di crisi. Non costituisce parere legale; per l'uso ufficiale fa fede il testo su Normattiva.</p>
-      <p class="note">CCIIPlatform ${APP_VERSION} — elaborato il ${new Date().toLocaleString('it-IT')}. A parità di dati e di versione il contenuto è identico: un documento con versione diversa può differire perché è cambiato il motore, non i dati.</p>`;
+      <p class="note">Calcolo deterministico sui dati disponibili. Il rilevamento di segnali non accerta lo stato di crisi. Non costituisce parere legale; per l'uso ufficiale fa fede il testo su Normattiva.</p>`;
     stampaHtml(
       `Riscontri normativi${ragioneSociale ? ` — ${ragioneSociale}` : ''}`,
       corpo,

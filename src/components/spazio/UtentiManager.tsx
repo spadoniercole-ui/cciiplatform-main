@@ -19,6 +19,7 @@ import {
 import { ottieniAziende, type Azienda } from '@/app/actions/aziende';
 import { ottieniPermessiUtente, impostaPermessoAction } from '@/app/actions/permessi';
 import { MODULI_PERMESSO, type LivelloPermesso } from '@/lib/moduliPermesso';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 const ETICHETTE_MODULO: Record<string, string> = {
   scenari: 'Scenari',
@@ -76,7 +77,7 @@ export function UtentiManager({ nomeSchema }: Props) {
     const azione = utente.attivo ? disabilitaUtenteSpazioAction : riattivaUtenteSpazioAction;
     const risultato = await azione(nomeSchema, utente.id);
     if (!risultato.success) {
-      alert(risultato.error || 'Operazione fallita.');
+      avvisoApp(risultato.error || 'Operazione fallita.');
     }
     await carica();
   };
@@ -103,13 +104,13 @@ export function UtentiManager({ nomeSchema }: Props) {
   };
 
   const handleRigeneraPassword = async (utente: UtenteSpazio) => {
-    const conferma = window.confirm(
+    const conferma = await confermaApp(
       `Rigenerare la password di ${utente.nome} ${utente.cognome}? La password attuale smetterà di funzionare.`
     );
     if (!conferma) return;
     const risultato = await rigeneraPasswordUtenteAction(nomeSchema, utente.id);
     if (!risultato.success || !risultato.passwordTemporanea) {
-      alert(risultato.error || 'Impossibile rigenerare la password.');
+      avvisoApp(risultato.error || 'Impossibile rigenerare la password.');
       return;
     }
     setPasswordAppenaGenerata({ utenteId: utente.id, password: risultato.passwordTemporanea });

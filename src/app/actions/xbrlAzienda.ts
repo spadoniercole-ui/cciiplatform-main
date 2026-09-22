@@ -100,7 +100,9 @@ export interface RisultatoOperazioneXbrlAzienda {
 export async function salvaAnalisiXbrlAziendaAction(
   nomeSchema: string,
   aziendaId: number,
-  analisi: AnalisiXbrlResult
+  analisi: AnalisiXbrlResult,
+  /** Documento di origine (fascicolo di evidenza): il file XBRL registrato con la sua impronta. */
+  documentoId: number | null = null
 ): Promise<RisultatoOperazioneXbrlAzienda> {
   try {
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
@@ -108,11 +110,12 @@ export async function salvaAnalisiXbrlAziendaAction(
     await assicuraTabellaXbrlAzienda(nomeSchema);
     await pool.query(
       `INSERT INTO "${nomeSchema}".xbrl_storico_azienda
-         (azienda_id, anno_bilancio, nome_file, dati_finanziari, indici, altri_indici, situazione_debitoria, severity)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (azienda_id, anno_bilancio, nome_file, dati_finanziari, indici, altri_indici, situazione_debitoria, severity, documento_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (azienda_id, anno_bilancio)
        DO UPDATE SET
          nome_file = EXCLUDED.nome_file,
+         documento_id = EXCLUDED.documento_id,
          dati_finanziari = EXCLUDED.dati_finanziari,
          indici = EXCLUDED.indici,
          altri_indici = EXCLUDED.altri_indici,
@@ -128,6 +131,7 @@ export async function salvaAnalisiXbrlAziendaAction(
         JSON.stringify(analisi.altriIndici),
         JSON.stringify(analisi.situazioneDebitoria),
         analisi.severity,
+        documentoId,
       ]
     );
 
@@ -151,8 +155,8 @@ export async function salvaAnalisiXbrlAziendaAction(
 
       await pool.query(
         `INSERT INTO "${nomeSchema}".xbrl_storico_azienda
-           (azienda_id, anno_bilancio, nome_file, dati_finanziari, indici, altri_indici, situazione_debitoria, severity)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           (azienda_id, anno_bilancio, nome_file, dati_finanziari, indici, altri_indici, situazione_debitoria, severity, documento_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          ON CONFLICT (azienda_id, anno_bilancio) DO NOTHING`,
         [
           aziendaId,
@@ -163,6 +167,7 @@ export async function salvaAnalisiXbrlAziendaAction(
           JSON.stringify(bundle.altriIndici),
           JSON.stringify(bundle.situazioneDebitoria),
           bundle.severity,
+          documentoId,
         ]
       );
       // DO NOTHING, non DO UPDATE: se per quell'anno esiste già una riga

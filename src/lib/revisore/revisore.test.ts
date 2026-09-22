@@ -49,6 +49,16 @@ describe('revisore e registro delle fonti (REV-001)', () => {
       esito('L’obbligo Uniemens discende dal D.L. 269/2003, art. 44, comma 9.', 'REV-001').esito
     ).toBe('PASS');
     expect(esito('Rilevano gli artt. 2482-bis e 2482-ter c.c.', 'REV-001').esito).toBe('PASS');
+    // fonte abrogata citata COME abrogata: citazione corretta
+    expect(
+      esito(
+        'Il sistema dell’originario art. 13 CCII è stato abrogato dal D.Lgs. 83/2022.',
+        'REV-001'
+      ).esito
+    ).toBe('PASS');
+    expect(esito('Ai sensi dell’art. 13 CCII gli indici sono superati.', 'REV-001').esito).toBe(
+      'SEGNALAZIONE'
+    );
     // il regime transitorio del cram down e' ancora da verificare
     expect(esito('Si applica il D.L. 69/2023, art. 1-bis.', 'REV-001').esito).toBe('SEGNALAZIONE');
   });
@@ -63,6 +73,7 @@ describe('revisore e fascicolo di evidenza', () => {
         importoDovuto: 120_000,
         percentualeOfferta: 40,
         rangoLegale: null,
+        documento: null,
       },
     ],
     posizioneEnte: [],
@@ -213,6 +224,19 @@ describe('revisore a regole', () => {
 
   it('REV-035 e REV-036: il cram down va richiamato con norma, versione e adesioni', () => {
     expect(esito('Il debitore potrà chiedere il cram down.', 'REV-035').esito).toBe('BLOCCO');
+    // nello Screening non c'e' ancora una proposta: segnalazione, non blocco
+    expect(
+      revisionaTesto(
+        'Il debitore potrà chiedere il cram down.',
+        'RELAZIONE_SCREENING'
+      ).risultati.find((x) => x.controllo.id === 'REV-035')!.esito
+    ).toBe('SEGNALAZIONE');
+    expect(
+      esito(
+        'Omologazione forzosa ex art. 63 CCII nel testo vigente, subordinata all’adesione degli altri creditori.',
+        'REV-035'
+      ).esito
+    ).toBe('PASS');
     expect(
       esito(
         'L’omologazione forzosa ex art. 63 CCII, nella versione in vigore dal 28/09/2024, dipende dall’adesione degli altri creditori.',

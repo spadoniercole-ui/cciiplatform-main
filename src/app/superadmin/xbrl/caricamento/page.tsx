@@ -33,6 +33,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 interface PuntoStoricoDb {
   id: number;
@@ -171,11 +172,11 @@ export default function GestioneXBRLPage() {
           setStorico([]);
         }
       } else {
-        alert(`Errore elaborazione XBRL: ${result.error || 'Risposta non valida dal server'}`);
+        avvisoApp(`Errore elaborazione XBRL: ${result.error || 'Risposta non valida dal server'}`);
       }
     } catch (err) {
       console.error('Errore durante il parsing XBRL:', err);
-      alert('Si è verificato un errore durante la lettura del file XBRL.');
+      avvisoApp('Si è verificato un errore durante la lettura del file XBRL.');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -893,7 +894,7 @@ export default function GestioneXBRLPage() {
               <FunzioneParificazioneTag
                 analisi={analisiGrezza}
                 onSalvataggioCompletato={(numeroSalvati) => {
-                  alert(
+                  avvisoApp(
                     `${numeroSalvati} correzion${numeroSalvati === 1 ? 'e salvata' : 'i salvate'} su xbrl_tag_mappings. I prossimi file caricati useranno questo mapping.`
                   );
                 }}
