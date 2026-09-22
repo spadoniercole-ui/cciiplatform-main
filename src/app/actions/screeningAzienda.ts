@@ -5,6 +5,7 @@
 // perché. Genera una Check List su misura da XBRL + visura camerale +
 // le direttrici dell'ente, prima ancora che arrivi una proposta.
 
+import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneServer';
 import { APP_VERSION } from '@/lib/appVersion';
 import { createHash } from 'node:crypto';
 import {
@@ -496,7 +497,10 @@ export async function generaScreeningAziendaAction(
         );
       }
       const indiciTesto = ultimo.indici
-        .map((i) => `${i.nome}: ${i.valore} (${i.esito})`)
+        .map(
+          (i) =>
+            `${i.nome}: ${i.valore} (${i.esito === 'VIOLATO' ? 'oltre la soglia di riferimento' : i.esito === 'OK' ? 'entro la soglia di riferimento' : 'non calcolabile'})`
+        )
         .join('; ');
       if (indiciTesto)
         blocchiContesto.push(
@@ -872,7 +876,21 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
     const relazioneTesto = senzaBilancio
       ? `⚠️ ANALISI PRELIMINARE — BILANCIO XBRL ASSENTE\nQuesta relazione è stata generata senza bilancio XBRL: è quindi parziale e basata sui soli dati disponibili (fascicolo storico, Situazione Debitoria, Posizione VERA). Caricare il bilancio e rigenerare per l'inquadramento economico-patrimoniale completo.\n\n${corpoRelazione}`
       : corpoRelazione;
-    const relazioneConAvvisi = testaAvvisiVisura + relazioneTesto;
+    // Passata correttiva del revisore: i rilievi bloccanti tornano al modello
+    // per una riscrittura mirata; cio' che resta viene riportato nel PDF.
+    let relazioneCorretta = relazioneTesto;
+    if (anthropic && relazioneTesto.trim()) {
+      const esitoCorr = await correggiConRevisore(
+        anthropic,
+        relazioneTesto,
+        'RELAZIONE_SCREENING',
+        {
+          signal: controller.signal,
+        }
+      );
+      relazioneCorretta = notaCorrezione(esitoCorr) + esitoCorr.testo;
+    }
+    const relazioneConAvvisi = testaAvvisiVisura + relazioneCorretta;
 
     await pool.query(
       `INSERT INTO "${nomeSchema}".azienda_screening (azienda_id, direttrici_usate, sezioni, relazione_testo, nome_file_visura, visura_fatti, visura_impronta, generato_il)

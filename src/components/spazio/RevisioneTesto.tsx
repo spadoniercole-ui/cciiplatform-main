@@ -16,6 +16,7 @@ import { ETICHETTA_GRUPPO, type GruppoControllo } from '@/lib/revisore/catalogo'
 import { ETICHETTA_TIPO_OUTPUT, LIVELLI_OUTPUT, type TipoOutput } from '@/lib/revisore/livelli';
 import { stampaTesto } from '@/lib/stampaTesto';
 import type { Evidenza } from '@/lib/fascicolo/evidenza';
+import { appendiceRilievi } from '@/lib/revisore/correzione';
 
 const STILE_ESITO: Record<EsitoControllo, { etichetta: string; classe: string }> = {
   PASS: { etichetta: 'Superato', classe: 'bg-emerald-100 text-emerald-800' },
@@ -37,9 +38,11 @@ export function useRevisione(
 }
 
 /**
- * Esporta in PDF solo un testo consegnabile, e nella versione RIVISTA
- * (intestazione di livello, sostituzioni, qualificazioni in calce).
- * Restituisce false se il testo e' bloccato.
+ * Esporta in PDF la versione RIVISTA del testo (intestazione di livello,
+ * sostituzioni, qualificazioni) e, in calce, i rilievi rimasti. Non blocca
+ * mai: un rilievo su un testo che l'utente non puo' modificare sarebbe lavoro
+ * sprecato (regola di Ercole); le informazioni del revisore stanno DENTRO il
+ * documento. Il nome resta per non toccare i chiamanti.
  */
 export function stampaSeConsegnabile(
   tipo: TipoOutput,
@@ -49,18 +52,7 @@ export function stampaSeConsegnabile(
   fascicolo?: Evidenza[] | null
 ): boolean {
   const revisione = revisionaTesto(testo, tipo, { fascicolo });
-  if (!revisione.consegnabile) {
-    // Niente window.alert: mostra l'intestazione tecnica del browser («… dice»)
-    // e non puo' indicare la strada. L'avviso lo mostra il pannello Revisione
-    // del testo interessato, che ascolta questo evento.
-    window.dispatchEvent(
-      new CustomEvent<EventoEsportazioneBloccata>(EVENTO_ESPORTAZIONE_BLOCCATA, {
-        detail: { testo, tipo, blocchi: revisione.conteggi.BLOCCO },
-      })
-    );
-    return false;
-  }
-  stampaTesto(titolo, revisione.testoRivisto, dataGenerazione);
+  stampaTesto(titolo, revisione.testoRivisto + appendiceRilievi(revisione), dataGenerazione);
   return true;
 }
 
@@ -131,7 +123,7 @@ export function RevisioneTesto({ testo, tipo, fascicolo }: Props) {
   return (
     <section
       ref={riferimento}
-      className={`border rounded-xl p-4 space-y-3 ${revisione.consegnabile ? 'bg-white border-slate-200' : 'bg-red-50 border-red-300'}`}
+      className={`border rounded-xl p-4 space-y-3 ${revisione.consegnabile ? 'bg-white border-slate-200' : 'bg-amber-50 border-amber-300'}`}
       aria-label="Revisione del testo"
     >
       {avvisoBlocchi !== null && (
@@ -203,8 +195,8 @@ export function RevisioneTesto({ testo, tipo, fascicolo }: Props) {
             </h3>
             <p className="text-[11px] text-slate-600 mt-0.5">
               {revisione.consegnabile
-                ? 'Nessun controllo bloccante: il testo si può esportare, nella versione rivista.'
-                : 'Testo non consegnabile: l’esportazione è bloccata finché restano controlli in stato «Bloccato». Rigenera o correggi il testo.'}
+                ? 'Nessun rilievo da risolvere: il PDF esce nella versione rivista.'
+                : 'Restano rilievi da risolvere: il PDF esce comunque, nella versione rivista e con i rilievi riportati in calce, come parte del documento. Rigenerare il testo fa ripartire la correzione automatica.'}
             </p>
           </div>
         </div>

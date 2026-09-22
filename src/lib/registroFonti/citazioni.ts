@@ -63,11 +63,28 @@ export function estraiCitazioni(testo: string): CitazioneNormativa[] {
     });
   }
   for (const m of testo.matchAll(rxAttoData)) {
-    trovate.push({
-      testo: m[0],
-      posizione: m.index ?? 0,
-      chiave: `${tipoAtto(norm(m[1]))} ${m[2]} ${norm(m[3])} ${m[4]}`,
-    });
+    // «D.L. 30 settembre 2003, n. 269»: se c'e' il numero, la chiave e' quella
+    // dell'atto (dl 269/2003); se prima c'e' «art. 44, comma 9, del», l'articolo
+    // si aggiunge alla chiave.
+    const pos = m.index ?? 0;
+    if (m[5]) {
+      const prima = testo.slice(Math.max(0, pos - 60), pos);
+      const art = prima.match(
+        /artt?\.?\s*(\d+(?:-[a-z]+)?)(?:,?\s*(?:comma|c\.)\s*\d+[a-z-]*)?,?\s*(?:del|della|dello)\s*$/iu
+      );
+      const atto = `${tipoAtto(norm(m[1]))} ${m[5]}/${m[4]}`;
+      trovate.push({
+        testo: m[0],
+        posizione: pos,
+        chiave: art ? `${atto} art ${art[1].toLowerCase()}` : atto,
+      });
+    } else {
+      trovate.push({
+        testo: m[0],
+        posizione: pos,
+        chiave: `${tipoAtto(norm(m[1]))} ${m[2]} ${norm(m[3])} ${m[4]}`,
+      });
+    }
   }
   for (const m of testo.matchAll(rxDd)) {
     trovate.push({
@@ -140,7 +157,8 @@ export function chiaviFonte(f: Fonte): string[] {
     } else if (/codice civile/.test(n)) chiavi.push(`cc art ${a}`);
     else if (atto) chiavi.push(`${atto} art ${a}`);
   }
-  if (atto && articoli.length === 0) chiavi.push(atto);
+  // L'atto e' citabile anche senza articolo («il D.L. 269/2003»).
+  if (atto) chiavi.push(atto);
   // Decreto dirigenziale datato: «decreto dirigenziale 23 aprile 2026»
   const dd = n.match(/decreto dirigenziale[^0-9]*(\d{1,2})\s+([a-zà]+)\s+(\d{4})/);
   if (dd) chiavi.push(`dd ${dd[1]} ${dd[2]} ${dd[3]}`);

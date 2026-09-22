@@ -8,6 +8,7 @@
 // informazione mancante deve lasciare un segnaposto tra parentesi
 // quadre, non riempirlo a caso.
 
+import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneServer';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
 import { pool } from '@/lib/db';
@@ -247,17 +248,22 @@ export async function generaDocumentoCorredoAction(
       return { success: false, error: 'Nessun testo restituito dal modello AI.' };
     }
 
+    // Passata correttiva del revisore: i rilievi bloccanti tornano al modello
+    // per una riscrittura mirata; cio' che resta viene riportato nel PDF.
+    const esitoCorr = await correggiConRevisore(anthropic, bloccoTesto.text, 'DOCUMENTO_CORREDO');
+    const testoFinale = notaCorrezione(esitoCorr) + esitoCorr.testo;
+
     await pool.query(
       `INSERT INTO "${nomeSchema}".documenti_corredo (scenario_id, tipo, testo, generato_il, aggiornato_il)
        VALUES ($1, $2, $3, now(), now())
        ON CONFLICT (scenario_id, tipo)
        DO UPDATE SET testo = $3, generato_il = now(), aggiornato_il = now()`,
-      [scenarioId, tipo, bloccoTesto.text]
+      [scenarioId, tipo, testoFinale]
     );
 
     return {
       success: true,
-      testo: bloccoTesto.text,
+      testo: testoFinale,
       troncata: response.stop_reason === 'max_tokens',
     };
   } catch (error: any) {

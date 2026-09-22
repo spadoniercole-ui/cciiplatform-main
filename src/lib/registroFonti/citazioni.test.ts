@@ -26,6 +26,14 @@ describe('citazioni normative nel testo', () => {
     );
   });
 
+  it('la forma datata con «n.» risale all’atto e all’articolo che la precede', () => {
+    const r = riscontraCitazioni(
+      'obbligo mensile telematico dall’art. 44, comma 9, del D.L. 30 settembre 2003, n. 269 (convertito con L. 24 novembre 2003, n. 326)'
+    );
+    expect(r.riscontrate.map((x) => x.fonte.id)).toContain('DL269-2003-44-c9');
+    expect(r.nonInRegistro.map((x) => x.chiave)).not.toContain('dl 30 settembre 2003');
+  });
+
   it('ogni fonte del registro è raggiungibile da almeno una chiave', () => {
     for (const f of FONTI) {
       if (f.id === 'INPS-ruoli-lettera-d') continue; // prassi senza estremi

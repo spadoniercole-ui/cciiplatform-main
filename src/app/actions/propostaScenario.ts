@@ -10,6 +10,7 @@
 // stato caricato alcun bilancio XBRL, la relazione lo dichiara
 // esplicitamente invece di inventare un quadro quantitativo.
 
+import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneServer';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
 import { pool } from '@/lib/db';
@@ -1050,9 +1051,12 @@ Elabora la relazione di valutazione della proposta seguendo la struttura prescri
       return { success: false, error: 'Nessun testo restituito dal modello AI.' };
     }
 
-    // Ogni generazione è una versione a sé, mai sovrascritta — utile
-    // per entrambi i percorsi, non solo per chi si blocca dopo.
-    await salvaVersioneRelazioneAction(nomeSchema, scenarioId, bloccoTesto.text);
+    // Passata correttiva del revisore (i rilievi bloccanti tornano al modello
+    // per una riscrittura mirata), poi ogni generazione è una versione a sé,
+    // mai sovrascritta — utile per entrambi i percorsi.
+    const esitoCorr = await correggiConRevisore(anthropic, bloccoTesto.text, 'RELAZIONE_SCENARIO');
+    const testoFinale = notaCorrezione(esitoCorr) + esitoCorr.testo;
+    await salvaVersioneRelazioneAction(nomeSchema, scenarioId, testoFinale);
 
     // Solo Ricevente: la generazione riuscita della relazione è il
     // momento in cui lo scenario si congela in sola lettura permanente

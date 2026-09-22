@@ -93,6 +93,41 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.94 — 2026-09-22
+
+**Il revisore non blocca piu': corregge, e cio' che resta va dentro il documento**
+
+Regola di Ercole: un rilievo su un testo che l'utente non puo' modificare e'
+lavoro sprecato («in che modo puo' intervenire sui blocchi? nessuno»). Le
+informazioni elaborate dal revisore vanno rimesse DENTRO il documento.
+
+**1. Passata correttiva** (`lib/revisore/correzione.ts`,
+`correzioneServer.ts`), in tutte e tre le generazioni — Screening, Relazione
+dello scenario, documenti di corredo: il testo generato passa dal revisore; se
+ci sono rilievi bloccanti, testo e rilievi tornano al modello con
+l'istruzione di riscrivere SOLO le frasi segnalate, senza cambiare numeri,
+fatti, struttura; il testo corretto ripassa dal revisore e si adotta solo se
+ha meno blocchi e lunghezza compatibile (mai una riscrittura peggiore
+dell'originale, mai un commento al posto del testo). Una riga in testa
+dichiara la correzione. Primo passo concreto della fase 5 (agente revisore),
+con il revisore a regole come giudice.
+
+**2. Esportazione mai bloccata**: il PDF esce sempre, nella versione rivista
+e, in calce, con i rilievi rimasti («Rilievi del revisore automatico non
+risolti: parte integrante del documento»). Il pannello Revisione passa da
+rosso ad ambra e lo dice; la finestra «Esportazione non disponibile» non
+serve piu'.
+
+**3. Tre falsi rilievi del giro di Ercole**: REV-001 riconosce «art. 44,
+comma 9, del D.L. 30 settembre 2003, n. 269» (forma datata con numero, e
+l'articolo che la precede) e un atto citato senza articolo; REV-003 non trova
+piu' «indice VIOLATO» nella relazione perche' il contesto passato al modello
+ora dice «oltre la soglia di riferimento», non «VIOLATO».
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (esportazione con rilievi in calce).
+La passata correttiva richiede la chiave AI: da provare in cloud.
+
 ## 0.109.93 — 2026-09-22
 
 **Fascicolo di evidenza: i bilanci XBRL entrano con il loro file di origine**
