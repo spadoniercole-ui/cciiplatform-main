@@ -32,6 +32,13 @@ import {
   type TitoloEnte,
 } from '@/lib/titoliEnte/titoli';
 import { confermaApp } from '@/components/FinestreApp';
+import { MaterieEnteManager } from '@/components/spazio/MaterieEnteManager';
+import {
+  ottieniMaterieEnteAction,
+  assegnaMateriaCodiceAction,
+  suggerisciMaterieCodiciAction,
+} from '@/app/actions/titoliEnte';
+import type { MateriaEnte } from '@/lib/titoliEnte/materie';
 
 interface Props {
   nomeSchema: string;
@@ -95,6 +102,11 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
   const [inCorso, setInCorso] = useState(false);
   const [esitoProposto, setEsitoProposto] = useState<TitoloEnte | null>(null);
   const [esitoImport, setEsitoImport] = useState<string | null>(null);
+  const [materie, setMaterie] = useState<MateriaEnte[]>([]);
+  const caricaMaterie = async () => {
+    const r = await ottieniMaterieEnteAction(nomeSchema);
+    if (r.success) setMaterie(r.materie);
+  };
 
   const carica = async () => {
     const r = await ottieniTitoliEnteAction(nomeSchema);
@@ -105,6 +117,7 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
   };
   useEffect(() => {
     carica();
+    caricaMaterie();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema]);
 
@@ -144,11 +157,10 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
             Titoli di credito dell’ente
           </h2>
           <p className="text-[11px] text-slate-600 mt-1">
-            La tabella giuridica su cui l’ente fonda il recupero: per ogni codice di partita dei
-            tracciati, l’atto o il flusso, il presupposto giuridico e il riferimento interno (la
-            circolare che lo traduce in prassi). Al salvataggio la piattaforma riscontra la norma su
-            Gazzetta Ufficiale e Normattiva, e il riferimento interno sul sito dell’ente:
-            nessun’altra fonte. Un riscontro in contrasto impedisce il salvataggio.
+            La tabella giuridica su cui l’ente fonda il recupero. Il flusso: il sito istituzionale;
+            le materie da riscontrare; la ricerca dell’AI in blocco, che propone per ogni materia
+            presupposto giuridico e circolari; la conferma di una persona; i codici dell’anagrafica
+            che cadono nella materia. Il titolo di una partita è quello della sua materia.
           </p>
           <p className="text-[11px] text-slate-500 italic mt-1">{AVVERTENZA_TITOLI_ENTE}</p>
         </div>
@@ -207,6 +219,36 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
         </button>
       </div>
 
+      <div className="border border-slate-200 rounded-xl p-4">
+        <MaterieEnteManager
+          nomeSchema={nomeSchema}
+          codice={codice}
+          dominioEnte={dominio || null}
+          onCambiate={caricaMaterie}
+        />
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+          Codici dell’anagrafica
+        </h3>
+        <button
+          type="button"
+          onClick={async () => {
+            const r = await suggerisciMaterieCodiciAction(codice);
+            if (!r.success) setErrore(r.error ?? 'Errore.');
+            else
+              setEsitoImport(
+                `${r.assegnati} codici assegnati a una materia dalla descrizione: controlla e sposta quelli che non tornano.`
+              );
+            await carica();
+          }}
+          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+        >
+          Proponi la materia dei codici senza materia
+        </button>
+      </div>
+
       {esitoImport && (
         <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
           {esitoImport}
@@ -240,32 +282,6 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                 onChange={(e) => setInModifica({ ...inModifica, atto: e.target.value })}
                 className={CLASSE_CAMPO}
                 placeholder="es. Denuncia Uniemens presentata e non versata"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                Presupposto giuridico (norma, articolo, comma)
-              </label>
-              <input
-                value={inModifica.presuppostoGiuridico}
-                onChange={(e) =>
-                  setInModifica({ ...inModifica, presuppostoGiuridico: e.target.value })
-                }
-                className={CLASSE_CAMPO}
-                placeholder="es. D.L. 269/2003, art. 44, comma 9"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                Riferimento interno (circolare, messaggio)
-              </label>
-              <input
-                value={inModifica.riferimentoInterno ?? ''}
-                onChange={(e) =>
-                  setInModifica({ ...inModifica, riferimentoInterno: e.target.value || null })
-                }
-                className={CLASSE_CAMPO}
-                placeholder="es. circolare INPS n. … del …"
               />
             </div>
             <div className="sm:col-span-2">
@@ -322,8 +338,7 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
             <tr>
               <th className="px-3 py-2 font-bold">Codice</th>
               <th className="px-3 py-2 font-bold">Atto o flusso</th>
-              <th className="px-3 py-2 font-bold">Presupposto giuridico</th>
-              <th className="px-3 py-2 font-bold">Riferimento interno</th>
+              <th className="px-3 py-2 font-bold">Materia (titolo della partita)</th>
               <th className="px-3 py-2 font-bold"></th>
             </tr>
           </thead>
@@ -343,13 +358,33 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                   {t.atto}
                   {t.note && <span className="block text-[10px] text-slate-500">{t.note}</span>}
                 </td>
-                <td className="px-3 py-2 text-slate-800">
-                  {t.presuppostoGiuridico || <span className="text-amber-700">da indicare</span>}
-                  <Esito r={t.riscontroNorma} etichetta="Riscontro" />
-                </td>
-                <td className="px-3 py-2 text-slate-800">
-                  {t.riferimentoInterno ?? <span className="text-slate-400">—</span>}
-                  {t.riferimentoInterno && <Esito r={t.riscontroInterno} etichetta="Riscontro" />}
+                <td className="px-3 py-2">
+                  <select
+                    value={t.materiaId ?? ''}
+                    onChange={async (e) => {
+                      const v = e.target.value ? Number(e.target.value) : null;
+                      const r = await assegnaMateriaCodiceAction(codice, t.id!, v);
+                      if (!r.success) setErrore(r.error ?? 'Errore.');
+                      await carica();
+                    }}
+                    className={`${CLASSE_CAMPO} ${t.materiaId ? '' : 'border-amber-400'}`}
+                  >
+                    <option value="">— da assegnare —</option>
+                    {materie.map((m) => (
+                      <option key={m.id} value={m.id!}>
+                        {m.nome}
+                        {m.stato === 'CONFERMATA' ? ' ✓' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {(() => {
+                    const m = materie.find((x) => x.id === t.materiaId);
+                    return m?.presuppostoGiuridico ? (
+                      <span className="block text-[10px] text-slate-500 mt-0.5">
+                        {m.presuppostoGiuridico}
+                      </span>
+                    ) : null;
+                  })()}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <button

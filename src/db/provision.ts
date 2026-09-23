@@ -792,6 +792,28 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
       dominio_ente TEXT
     )`
   );
+  // Materie (0.109.98): la chiave giuridica non e' il codice ma la MATERIA
+  // (denunce Uniemens, note di rettifica, dilazioni, verbali, diffide...).
+  // Ogni codice dell'anagrafica cade in una materia; presupposto giuridico e
+  // riferimenti interni stanno sulla materia, proposti dall'AI sul sito
+  // dell'ente e confermati da una persona.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.materie_ente (
+      id SERIAL PRIMARY KEY,
+      nome TEXT NOT NULL UNIQUE,
+      codici_indicativi TEXT,
+      presupposto_giuridico TEXT,
+      riferimenti_interni TEXT,
+      proposta JSONB,
+      stato TEXT NOT NULL DEFAULT 'DA_RICERCARE',
+      confermata_da TEXT,
+      confermata_il TIMESTAMP,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS materia_id INTEGER`
+  );
 }
 
 /**

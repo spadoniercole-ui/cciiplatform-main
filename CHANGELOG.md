@@ -93,6 +93,41 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.98 — 2026-09-23
+
+**La mappa giuridica ricostruita: materie, non codici; ricerca dell'AI in blocco; conferma umana**
+
+Ercole: la chiave non e' il codice ma la MATERIA. Flusso: (1) il sito
+istituzionale; (2) l'elenco delle materie da riscontrare, che l'ente carica a
+campi (materia, codici indicativi facoltativi e non vincolanti); (3) quando
+l'ente dichiara di averle caricate tutte, la ricerca dell'AI parte in blocco
+(un clic, avanzamento a schermo, una chiamata per materia per non incorrere
+nei limiti di tempo del server); (4) i codici dell'anagrafica cadono nella
+generalita' della materia.
+
+- **`materie_ente`** (`lib/titoliEnte/materie.ts`, `MaterieEnteManager.tsx`):
+  nome, codici indicativi, proposta dell'AI (presupposti con estratto e link,
+  circolari e messaggi con link, sintesi, se c'e' almeno una fonte ufficiale),
+  stato «da ricercare / proposta / confermata», chi e quando ha confermato.
+- **Ricerca sul sito dell'ente** piu' Normattiva e Gazzetta (`web_search` con
+  domini ammessi): dalle circolari si risale alla norma. La proposta e' tale
+  finche' una persona la rivede, la corregge se serve e conferma. Se la
+  ricerca viene rifiutata dal servizio, l'errore mostra il motivo vero.
+- **I codici cadono nella materia**: colonna «Materia» al posto di presupposto
+  e riferimento nella tabella dei codici; «Proponi la materia dei codici senza
+  materia» li assegna dalla descrizione ufficiale (27 → denunce, 25 → note di
+  rettifica, 28/44 → dilazioni, 30/31/24 → verbali…), l'ente sposta quelli che
+  non tornano; un codice senza materia e' «da assegnare».
+- **Fascicolo**: il titolo presunto di una partita e' la sua materia (con
+  presupposto e riferimenti confermati); se la materia non e' confermata o il
+  codice e' senza materia, lo dice.
+- Le colonne presupposto/riferimento dei singoli codici e i loro riscontri
+  restano nel database (compilazioni gia' fatte), ma non compaiono piu'.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (materie, assegnazione dei codici;
+la ricerca AI richiede la chiave: da provare in cloud).
+
 ## 0.109.97 — 2026-09-23
 
 **Anagrafica dei codici dell'ente, codice sempre scelto, conferma con plausibilita' prima di salvare; via effetti sul calcolo, categorie e etichette del tipo di debito**

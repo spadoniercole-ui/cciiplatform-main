@@ -66,6 +66,23 @@ export async function ottieniFascicoloAction(
     const righeEnte =
       righeScenario.length > 0 ? righeScenario : ente.rows.filter((r) => r.scenario_id === null);
     const titoliRis = await pool.query(`SELECT * FROM "${nomeSchema}".titoli_ente`);
+    const materieRis = await pool.query(
+      `SELECT id, nome, presupposto_giuridico, riferimenti_interni, stato FROM "${nomeSchema}".materie_ente`
+    );
+    const materiePerId = new Map<
+      number,
+      { nome: string; presupposto: string | null; riferimenti: string | null; confermata: boolean }
+    >(
+      materieRis.rows.map((m) => [
+        Number(m.id),
+        {
+          nome: String(m.nome),
+          presupposto: m.presupposto_giuridico ?? null,
+          riferimenti: m.riferimenti_interni ?? null,
+          confermata: m.stato === 'CONFERMATA',
+        },
+      ])
+    );
     const titoli: TitoloEnte[] = titoliRis.rows.map((t) => ({
       id: Number(t.id),
       codice: String(t.codice),
@@ -76,17 +93,22 @@ export async function ottieniFascicoloAction(
       note: t.note ?? null,
       riscontroNorma: t.riscontro_norma ?? RISCONTRO_VUOTO,
       riscontroInterno: t.riscontro_interno ?? RISCONTRO_VUOTO,
+      materiaId: t.materia_id === null || t.materia_id === undefined ? null : Number(t.materia_id),
     }));
+    // Il titolo di una partita e' quello della sua MATERIA (0.109.98): il
+    // codice serve a trovarla. Un codice senza materia = «da assegnare».
     const titoloDi = (codice: string | null): TitoloPresunto | null => {
       const t = titoloPerCodice(titoli, codice);
-      return t
-        ? {
-            codice: t.codice,
-            atto: t.atto,
-            presuppostoGiuridico: t.presuppostoGiuridico || null,
-            riferimentoInterno: t.riferimentoInterno,
-          }
-        : null;
+      if (!t) return null;
+      const m = t.materiaId ? materiePerId.get(t.materiaId) : undefined;
+      return {
+        codice: t.codice,
+        atto: m
+          ? `${m.nome}${m.confermata ? '' : ' (materia non ancora confermata)'} — ${t.atto}`
+          : `${t.atto} — materia da assegnare`,
+        presuppostoGiuridico: m?.presupposto ?? null,
+        riferimentoInterno: m?.riferimenti ?? null,
+      };
     };
     const vera = await pool.query(
       `SELECT v.id, v.sezione, v.voce, v.importo, v.categoria, v.trattamento, o.nome_file, o.impronta

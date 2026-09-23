@@ -43,6 +43,8 @@ export interface TitoloEnte {
   note: string | null;
   riscontroNorma: RiscontroFonte;
   riscontroInterno: RiscontroFonte;
+  /** Materia in cui il codice cade (0.109.98); null = da assegnare. */
+  materiaId?: number | null;
 }
 
 export const RISCONTRO_VUOTO: RiscontroFonte = {
