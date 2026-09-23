@@ -13,8 +13,14 @@ import {
   ottieniMaterieEnteAction,
   ricercaMateriaAction,
   salvaMateriaEnteAction,
+  avviaRicercaDifferitaAction,
+  verificaRicercaDifferitaAction,
 } from '@/app/actions/titoliEnte';
-import { ETICHETTA_STATO_MATERIA, type MateriaEnte } from '@/lib/titoliEnte/materie';
+import {
+  ETICHETTA_STATO_MATERIA,
+  stimaCostoRicerca,
+  type MateriaEnte,
+} from '@/lib/titoliEnte/materie';
 import { confermaApp } from '@/components/FinestreApp';
 
 const CLASSE_CAMPO =
@@ -24,11 +30,19 @@ interface Props {
   nomeSchema: string;
   codice: string;
   dominioEnte: string | null;
+  /** Lotto in differita in corso, se c'e'. */
+  lottoInCorso?: { id: string; inviatoIl: string | null } | null;
   /** Le materie cambiano: chi le usa (i codici) si aggiorna. */
   onCambiate?: () => void;
 }
 
-export function MaterieEnteManager({ nomeSchema, codice, dominioEnte, onCambiate }: Props) {
+export function MaterieEnteManager({
+  nomeSchema,
+  codice,
+  dominioEnte,
+  lottoInCorso,
+  onCambiate,
+}: Props) {
   const [materie, setMaterie] = useState<MateriaEnte[]>([]);
   const [nuova, setNuova] = useState({ nome: '', codiciIndicativi: '' });
   const [inModifica, setInModifica] = useState<MateriaEnte | null>(null);
@@ -99,7 +113,7 @@ export function MaterieEnteManager({ nomeSchema, codice, dominioEnte, onCambiate
       return;
     }
     const ok = await confermaApp(
-      `Confermi di aver caricato tutte le materie? La ricerca partirà in blocco su ${daFare.length} ${daFare.length === 1 ? 'materia' : 'materie'}, sul sito ${dominioEnte} e sulle fonti ufficiali. Può richiedere alcuni minuti; le proposte restano «da confermare» finché non le approvi.`,
+      `Confermi di aver caricato tutte le materie? La ricerca partirà subito su ${daFare.length} ${daFare.length === 1 ? 'materia' : 'materie'}, sul sito ${dominioEnte} e sulle fonti ufficiali: spesa stimata ${stimaCostoRicerca(daFare.length, 'immediata')} (al massimo quattro ricerche per materia). Può richiedere alcuni minuti; le proposte restano «da confermare» finché non le approvi. Se non hai fretta, «Ricerca in differita» costa la metà e risponde entro qualche ora.`,
       { titolo: 'Avvio della ricerca', etichettaConferma: 'Avvia la ricerca' }
     );
     if (!ok) return;
@@ -190,6 +204,47 @@ export function MaterieEnteManager({ nomeSchema, codice, dominioEnte, onCambiate
             <span className="text-[11px] text-slate-700">
               Ricerca in corso: {ricerca.fatte + 1} di {ricerca.totale} — «{ricerca.corrente}»
             </span>
+          )}
+          {!lottoInCorso ? (
+            <button
+              type="button"
+              disabled={ricerca !== null}
+              onClick={async () => {
+                const daFare = materie.filter((m) => m.stato !== 'CONFERMATA' && !m.proposta);
+                if (daFare.length === 0) return setErrore('Nessuna materia da ricercare.');
+                const ok = await confermaApp(
+                  `Ricerca in differita su ${daFare.length} ${daFare.length === 1 ? 'materia' : 'materie'}: spesa stimata ${stimaCostoRicerca(daFare.length, 'differita')}, la metà di quella immediata. L’esito arriva entro qualche ora: tornerai qui e premerai «Verifica l’esito». Avviare?`,
+                  { titolo: 'Ricerca in differita', etichettaConferma: 'Avvia in differita' }
+                );
+                if (!ok) return;
+                const r = await avviaRicercaDifferitaAction(codice);
+                if (!r.success) setErrore(r.error ?? 'Errore.');
+                await carica();
+              }}
+              className="px-3 py-2 bg-white border border-slate-300 text-slate-700 font-bold text-[10px] uppercase rounded-lg disabled:text-slate-400"
+            >
+              Ricerca in differita (metà prezzo, entro qualche ora)
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={async () => {
+                const r = await verificaRicercaDifferitaAction(codice);
+                if (!r.success) setErrore(r.error ?? 'Errore.');
+                else if (r.stato === 'IN_CORSO')
+                  setErrore('La ricerca in differita è ancora in corso: riprova più tardi.');
+                else setErrore(null);
+                await carica();
+              }}
+              className="px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[10px] uppercase rounded-lg"
+              title={
+                lottoInCorso.inviatoIl
+                  ? `Inviata il ${new Date(lottoInCorso.inviatoIl).toLocaleString('it-IT')}`
+                  : undefined
+              }
+            >
+              Verifica l’esito della ricerca in differita
+            </button>
           )}
         </div>
       )}
@@ -431,6 +486,13 @@ export function MaterieEnteManager({ nomeSchema, codice, dominioEnte, onCambiate
                     type="button"
                     disabled={ricerca !== null}
                     onClick={async () => {
+                      if (
+                        !(await confermaApp(
+                          `Cercare di nuovo «${m.nome}»? Spesa stimata ${stimaCostoRicerca(1, 'immediata')}.`,
+                          { etichettaConferma: 'Cerca' }
+                        ))
+                      )
+                        return;
                       setRicerca({ fatte: 0, totale: 1, corrente: m.nome });
                       const r = await ricercaMateriaAction(codice, m.id!);
                       setRicerca(null);

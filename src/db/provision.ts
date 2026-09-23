@@ -818,6 +818,13 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.materie_ente ADD COLUMN IF NOT EXISTS esito_ricerca TEXT`
   );
+  // Ricerca in differita (0.109.101): il lotto inviato al servizio a meta' prezzo.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.titoli_ente_config ADD COLUMN IF NOT EXISTS lotto_ricerca_id TEXT`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.titoli_ente_config ADD COLUMN IF NOT EXISTS lotto_ricerca_il TIMESTAMP`
+  );
 }
 
 /**

@@ -93,6 +93,27 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.101 — 2026-09-23
+
+**Ricerca delle materie: costo dimezzato, dichiarato prima del clic, e canale in differita a meta' prezzo**
+
+Ercole: cinque euro per la ricerca dei riferimenti sono troppi. La spesa
+viene soprattutto dalle pagine lette, che entrano nel contesto del modello.
+- **Da otto a quattro ricerche per materia**, con l'istruzione di aprire
+  solo le pagine che servono.
+- **La spesa stimata compare prima del clic**: nella finestra di avvio, in
+  «Cerca di nuovo» e nella ricerca in differita (stima indicativa per
+  materia, `COSTO_STIMATO_MATERIA_EUR`).
+- **Ricerca in differita** (Message Batches, meta' prezzo): un lotto con
+  tutte le materie da ricercare; l'esito arriva entro qualche ora e si applica
+  con «Verifica l'esito della ricerca in differita». Il lotto in corso e'
+  registrato (`titoli_ente_config.lotto_ricerca_id`); una sola alla volta.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable. Il canale in differita con ricerca web nel lotto e' da provare in
+cloud: se il servizio non accettasse la ricerca web nei lotti, l'errore lo
+dira' in chiaro.
+
 ## 0.109.100 — 2026-09-23
 
 **Correzione della 0.109.99 (parte a schermo mancante) e due presidi sul modulo delle materie**

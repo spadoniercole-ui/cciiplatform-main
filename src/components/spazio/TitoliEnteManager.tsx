@@ -97,6 +97,9 @@ const NUOVO: TitoloEnte = {
 export function TitoliEnteManager({ nomeSchema, codice }: Props) {
   const [titoli, setTitoli] = useState<TitoloEnte[]>([]);
   const [dominio, setDominio] = useState('');
+  const [lottoInCorso, setLottoInCorso] = useState<{ id: string; inviatoIl: string | null } | null>(
+    null
+  );
   const [inModifica, setInModifica] = useState<TitoloEnte | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
   const [inCorso, setInCorso] = useState(false);
@@ -113,6 +116,7 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
     if (r.success) {
       setTitoli(r.titoli);
       setDominio(r.dominioEnte ?? '');
+      setLottoInCorso(r.lottoInCorso ?? null);
     } else setErrore(r.error ?? 'Lettura non riuscita.');
   };
   useEffect(() => {
@@ -224,7 +228,11 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
           nomeSchema={nomeSchema}
           codice={codice}
           dominioEnte={dominio || null}
-          onCambiate={caricaMaterie}
+          lottoInCorso={lottoInCorso}
+          onCambiate={async () => {
+            await caricaMaterie();
+            await carica();
+          }}
         />
       </div>
 

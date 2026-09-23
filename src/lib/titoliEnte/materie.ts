@@ -101,7 +101,7 @@ export function promptRicercaMateria(
   dominioEnte: string
 ): string {
   return `Sei un istruttore che documenta i titoli di credito di un ente pubblico. Materia: «${nome}»${codiciIndicativi ? ` (codici di partita indicativi, non vincolanti: ${codiciIndicativi})` : ''}.
-Cerca sul sito ${dominioEnte} le circolari e i messaggi che disciplinano questa materia — prova più formulazioni (singolare e plurale, sigle, il nome dell'atto, «circolare», «messaggio») — e da essi risali alle norme di legge che fondano il credito dell'ente (articolo e comma). Se possibile riscontra le norme su normattiva.it o gazzettaufficiale.it. Se una ricerca non dà risultati, riprova con altri termini prima di rispondere a vuoto.
+Cerca sul sito ${dominioEnte} le circolari e i messaggi che disciplinano questa materia — prova più formulazioni (singolare e plurale, sigle, il nome dell'atto, «circolare», «messaggio») — e da essi risali alle norme di legge che fondano il credito dell'ente (articolo e comma). Se possibile riscontra le norme su normattiva.it o gazzettaufficiale.it. Se una ricerca non dà risultati, riprova con altri termini prima di rispondere a vuoto. Hai al massimo quattro ricerche: apri solo le pagine che servono (una circolare recente sulla materia basta di solito), non leggere pagine di riepilogo o notizie.
 Rispondi SOLO con un JSON, senza testo attorno:
 {"presupposti": [{"norma": "estremi con articolo e comma", "url": "pagina ufficiale o null", "estratto": "passo breve o null"}],
  "riferimenti": [{"tipo": "circolare|messaggio", "estremi": "n. e data", "titolo": "oggetto o null", "url": "pagina sul sito dell'ente o null"}],
@@ -135,4 +135,19 @@ export function materiaSuggeritaPerDescrizione(
     }
   }
   return null;
+}
+
+/**
+ * Stima del costo, in euro, per materia: ordine di grandezza dichiarato
+ * PRIMA del clic, non un preventivo. Quattro ricerche, le pagine lette come
+ * testo in ingresso, la risposta. Il canale in differita costa la meta'.
+ */
+export const COSTO_STIMATO_MATERIA_EUR = { immediata: 0.35, differita: 0.18 };
+
+export function stimaCostoRicerca(
+  numeroMaterie: number,
+  canale: 'immediata' | 'differita'
+): string {
+  const totale = numeroMaterie * COSTO_STIMATO_MATERIA_EUR[canale];
+  return `circa ${totale < 1 ? totale.toFixed(2) : totale.toFixed(1)} €`;
 }

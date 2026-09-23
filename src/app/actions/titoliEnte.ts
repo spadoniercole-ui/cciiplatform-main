@@ -56,21 +56,33 @@ function daRiga(r: Record<string, unknown>): TitoloEnte {
   };
 }
 
-export async function ottieniTitoliEnteAction(
-  nomeSchema: string
-): Promise<{ success: boolean; titoli: TitoloEnte[]; dominioEnte: string | null; error?: string }> {
+export async function ottieniTitoliEnteAction(nomeSchema: string): Promise<{
+  success: boolean;
+  titoli: TitoloEnte[];
+  dominioEnte: string | null;
+  lottoInCorso?: { id: string; inviatoIl: string | null } | null;
+  error?: string;
+}> {
   try {
     if (!validaSchema(nomeSchema))
       return { success: false, titoli: [], dominioEnte: null, error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
     const r = await pool.query(`SELECT * FROM "${nomeSchema}".titoli_ente ORDER BY codice`);
     const c = await pool.query(
-      `SELECT dominio_ente FROM "${nomeSchema}".titoli_ente_config WHERE id = 1`
+      `SELECT dominio_ente, lotto_ricerca_id, lotto_ricerca_il FROM "${nomeSchema}".titoli_ente_config WHERE id = 1`
     );
     return {
       success: true,
       titoli: r.rows.map(daRiga),
       dominioEnte: c.rows[0]?.dominio_ente ?? null,
+      lottoInCorso: c.rows[0]?.lotto_ricerca_id
+        ? {
+            id: String(c.rows[0].lotto_ricerca_id),
+            inviatoIl: c.rows[0].lotto_ricerca_il
+              ? new Date(c.rows[0].lotto_ricerca_il).toISOString()
+              : null,
+          }
+        : null,
     };
   } catch (error: unknown) {
     console.error('[ottieniTitoliEnteAction]', error);
@@ -473,7 +485,7 @@ export async function ricercaMateriaAction(
         max_tokens: 2500,
         thinking: { type: 'disabled' },
         tools: [
-          { type: 'web_search_20250305', name: 'web_search', allowed_domains: domini, max_uses: 8 },
+          { type: 'web_search_20250305', name: 'web_search', allowed_domains: domini, max_uses: 4 },
         ],
         messages: [
           {
@@ -613,5 +625,160 @@ export async function suggerisciMaterieCodiciAction(
       assegnati: 0,
       error: `Assegnazione non riuscita: ${(error as Error).message || error}`,
     };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ricerca in differita (0.109.101): un lotto a meta' prezzo, esito entro ore
+// ---------------------------------------------------------------------------
+
+/** Invia in un lotto tutte le materie non confermate e senza proposta. */
+export async function avviaRicercaDifferitaAction(
+  codiceSpazio: string
+): Promise<{ success: boolean; materie?: number; lottoId?: string; error?: string }> {
+  try {
+    const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
+    if (!contesto || contesto.modalita === 'OPERATORE')
+      return { success: false, error: 'Operazione riservata all’Admin di Spazio.' };
+    if (!anthropic)
+      return {
+        success: false,
+        error:
+          'Ricerca automatica non disponibile in questo ambiente (nessuna chiave AI o nessuna rete).',
+      };
+    const nomeSchema = contesto.nomeSchema;
+    const cfg = await pool.query(
+      `SELECT dominio_ente, lotto_ricerca_id FROM "${nomeSchema}".titoli_ente_config WHERE id = 1`
+    );
+    const dominio: string | null = cfg.rows[0]?.dominio_ente ?? null;
+    if (!dominio)
+      return { success: false, error: 'Indicare prima il sito istituzionale dell’ente.' };
+    if (cfg.rows[0]?.lotto_ricerca_id)
+      return {
+        success: false,
+        error:
+          'C’è già una ricerca in differita in corso: verificane l’esito prima di avviarne un’altra.',
+      };
+    const m = await pool.query(
+      `SELECT * FROM "${nomeSchema}".materie_ente WHERE stato <> 'CONFERMATA' AND proposta IS NULL ORDER BY nome`
+    );
+    if (m.rows.length === 0) return { success: false, error: 'Nessuna materia da ricercare.' };
+    const domini = [dominio, ...DOMINI_NORMA];
+    const lotto = await anthropic.messages.batches.create({
+      requests: m.rows.map((r) => ({
+        custom_id: `materia-${r.id}`,
+        params: {
+          model: 'claude-sonnet-5',
+          max_tokens: 2500,
+          tools: [
+            {
+              type: 'web_search_20250305',
+              name: 'web_search',
+              allowed_domains: domini,
+              max_uses: 4,
+            },
+          ],
+          messages: [
+            {
+              role: 'user',
+              content: promptRicercaMateria(String(r.nome), r.codici_indicativi ?? null, dominio),
+            },
+          ],
+        },
+      })),
+    });
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".titoli_ente_config (id, dominio_ente, lotto_ricerca_id, lotto_ricerca_il) VALUES (1, $1, $2, now())
+       ON CONFLICT (id) DO UPDATE SET lotto_ricerca_id = $2, lotto_ricerca_il = now()`,
+      [dominio, lotto.id]
+    );
+    const quando = new Date().toLocaleString('it-IT');
+    await pool.query(
+      `UPDATE "${nomeSchema}".materie_ente SET esito_ricerca = $1, aggiornato_il = now() WHERE stato <> 'CONFERMATA' AND proposta IS NULL`,
+      [
+        `Ricerca in differita inviata il ${quando}: l’esito arriva entro qualche ora, con «Verifica l’esito della ricerca in differita».`,
+      ]
+    );
+    return { success: true, materie: m.rows.length, lottoId: lotto.id };
+  } catch (error: unknown) {
+    const msg = (error as Error).message || String(error);
+    return { success: false, error: `Invio in differita non riuscito: ${msg.slice(0, 200)}` };
+  }
+}
+
+/** Legge l'esito del lotto: se e' concluso, applica le proposte materia per materia. */
+export async function verificaRicercaDifferitaAction(codiceSpazio: string): Promise<{
+  success: boolean;
+  stato?: 'IN_CORSO' | 'CONCLUSA';
+  proposte?: number;
+  aVuoto?: number;
+  error?: string;
+}> {
+  try {
+    const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
+    if (!contesto || contesto.modalita === 'OPERATORE')
+      return { success: false, error: 'Operazione riservata all’Admin di Spazio.' };
+    if (!anthropic)
+      return { success: false, error: 'Servizio AI non disponibile in questo ambiente.' };
+    const nomeSchema = contesto.nomeSchema;
+    const cfg = await pool.query(
+      `SELECT dominio_ente, lotto_ricerca_id FROM "${nomeSchema}".titoli_ente_config WHERE id = 1`
+    );
+    const lottoId: string | null = cfg.rows[0]?.lotto_ricerca_id ?? null;
+    const dominio: string = cfg.rows[0]?.dominio_ente ?? '';
+    if (!lottoId) return { success: false, error: 'Nessuna ricerca in differita in corso.' };
+    const lotto = await anthropic.messages.batches.retrieve(lottoId);
+    if (lotto.processing_status !== 'ended') return { success: true, stato: 'IN_CORSO' };
+    const domini = [dominio, ...DOMINI_NORMA];
+    const adesso = new Date();
+    const quando = adesso.toLocaleString('it-IT');
+    let proposte = 0;
+    let aVuoto = 0;
+    for await (const esito of await anthropic.messages.batches.results(lottoId)) {
+      const id = Number(esito.custom_id.replace('materia-', ''));
+      if (!Number.isFinite(id)) continue;
+      if (esito.result.type !== 'succeeded') {
+        aVuoto += 1;
+        await pool.query(
+          `UPDATE "${nomeSchema}".materie_ente SET esito_ricerca = $2, aggiornato_il = now() WHERE id = $1`,
+          [
+            id,
+            `Ricerca in differita del ${quando}: esito «${esito.result.type}». Riprovare o compilare a mano.`,
+          ]
+        );
+        continue;
+      }
+      const testo = esito.result.message.content
+        .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('\n');
+      const json = estraiJson(testo);
+      const proposta = normalizzaProposta(json, adesso.toISOString(), domini);
+      if (!proposta) {
+        aVuoto += 1;
+        await pool.query(
+          `UPDATE "${nomeSchema}".materie_ente SET proposta = NULL, esito_ricerca = $2, aggiornato_il = now() WHERE id = $1`,
+          [
+            id,
+            json
+              ? `Ricerca in differita del ${quando}: nessuna circolare o norma trovata. Provare con codici indicativi o un nome più vicino a quello delle circolari, oppure compilare a mano.`
+              : `Ricerca in differita del ${quando}: risposta non nel formato atteso. Riprovare.`,
+          ]
+        );
+        continue;
+      }
+      proposte += 1;
+      await pool.query(
+        `UPDATE "${nomeSchema}".materie_ente SET proposta = $2, esito_ricerca = $3, stato = CASE WHEN stato = 'CONFERMATA' THEN stato ELSE 'PROPOSTA' END, aggiornato_il = now() WHERE id = $1`,
+        [id, JSON.stringify(proposta), `Ricerca in differita del ${quando}: proposta prodotta.`]
+      );
+    }
+    await pool.query(
+      `UPDATE "${nomeSchema}".titoli_ente_config SET lotto_ricerca_id = NULL, lotto_ricerca_il = NULL WHERE id = 1`
+    );
+    return { success: true, stato: 'CONCLUSA', proposte, aVuoto };
+  } catch (error: unknown) {
+    const msg = (error as Error).message || String(error);
+    return { success: false, error: `Verifica non riuscita: ${msg.slice(0, 200)}` };
   }
 }
