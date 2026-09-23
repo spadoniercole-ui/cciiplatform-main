@@ -355,6 +355,7 @@ function materiaDaRiga(r: Record<string, unknown>): MateriaEnte {
     stato: (r.stato as MateriaEnte['stato']) ?? 'DA_RICERCARE',
     confermataDa: (r.confermata_da as string | null) ?? null,
     confermataIl: r.confermata_il ? new Date(r.confermata_il as string).toISOString() : null,
+    esitoRicerca: (r.esito_ricerca as string | null) ?? null,
   };
 }
 
@@ -488,22 +489,40 @@ export async function ricercaMateriaAction(
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error('[ricercaMateriaAction]', msg);
+      await pool.query(
+        `UPDATE "${nomeSchema}".materie_ente SET esito_ricerca = $2, aggiornato_il = now() WHERE id = $1`,
+        [
+          materiaId,
+          `Ricerca del ${new Date().toLocaleString('it-IT')}: rifiutata dal servizio AI — ${msg.slice(0, 200)}`,
+        ]
+      );
       return {
         success: false,
         error: `La ricerca è stata rifiutata dal servizio AI: ${msg.slice(0, 200)}`,
       };
     }
-    const proposta = normalizzaProposta(estraiJson(testo), new Date().toISOString(), domini);
+    const adesso = new Date();
+    const quando = adesso.toLocaleString('it-IT');
+    const json = estraiJson(testo);
+    const proposta = normalizzaProposta(json, adesso.toISOString(), domini);
     if (!proposta) {
-      await pool.query(
-        `UPDATE "${nomeSchema}".materie_ente SET proposta = NULL, aggiornato_il = now() WHERE id = $1`,
-        [materiaId]
+      // Anche «nulla trovato» e' un esito: si registra il motivo, non il silenzio.
+      const motivo = json
+        ? `Ricerca del ${quando} su ${dominio}: nessuna circolare o norma trovata per questa materia. Provare con codici indicativi o con un nome più vicino a quello usato dall’ente nelle circolari, oppure compilare a mano.`
+        : `Ricerca del ${quando}: il modello ha risposto ma non nel formato atteso (inizio: «${testo.replace(/\s+/g, ' ').slice(0, 120)}»). Riprovare.`;
+      const r0 = await pool.query(
+        `UPDATE "${nomeSchema}".materie_ente SET proposta = NULL, esito_ricerca = $2, aggiornato_il = now() WHERE id = $1 RETURNING *`,
+        [materiaId, motivo]
       );
-      return { success: true, materia: { ...materia, proposta: null } };
+      return { success: true, materia: materiaDaRiga(r0.rows[0]) };
     }
     const r = await pool.query(
-      `UPDATE "${nomeSchema}".materie_ente SET proposta = $2, stato = CASE WHEN stato = 'CONFERMATA' THEN stato ELSE 'PROPOSTA' END, aggiornato_il = now() WHERE id = $1 RETURNING *`,
-      [materiaId, JSON.stringify(proposta)]
+      `UPDATE "${nomeSchema}".materie_ente SET proposta = $2, esito_ricerca = $3, stato = CASE WHEN stato = 'CONFERMATA' THEN stato ELSE 'PROPOSTA' END, aggiornato_il = now() WHERE id = $1 RETURNING *`,
+      [
+        materiaId,
+        JSON.stringify(proposta),
+        `Ricerca del ${quando} su ${dominio}: proposta prodotta.`,
+      ]
     );
     return { success: true, materia: materiaDaRiga(r.rows[0]) };
   } catch (error: unknown) {

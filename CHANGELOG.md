@@ -93,6 +93,27 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.99 — 2026-09-23
+
+**Ricerca delle materie: anche «nulla trovato» e' un esito, e si vede**
+
+Dal primo giro in cloud di Ercole: su tre materie, due restavano «in attesa
+della ricerca» benche' la ricerca fosse partita su tutte. Il modello non aveva
+restituito nulla di utilizzabile e il codice taceva. Ora:
+- l'esito dell'ultima ricerca resta sulla materia (`esito_ricerca`) e si
+  legge: «nessuna circolare o norma trovata», oppure «risposta non nel
+  formato atteso» con l'inizio della risposta, oppure «rifiutata dal servizio
+  AI» con il motivo;
+- ogni materia senza proposta ha «Cerca di nuovo» e «Compila a mano»
+  (presupposto e riferimenti a mano, poi conferma);
+- il prompt chiede al modello di provare piu' formulazioni prima di
+  rispondere a vuoto;
+- «Avvia la ricerca» riparte su tutte le materie non confermate e senza
+  proposta, quindi anche su quelle andate a vuoto.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable.
+
 ## 0.109.98 — 2026-09-23
 
 **La mappa giuridica ricostruita: materie, non codici; ricerca dell'AI in blocco; conferma umana**

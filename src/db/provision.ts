@@ -814,6 +814,10 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS materia_id INTEGER`
   );
+  // Esito dell'ultima ricerca (0.109.99): anche «nulla trovato» e' un esito, e va detto.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.materie_ente ADD COLUMN IF NOT EXISTS esito_ricerca TEXT`
+  );
 }
 
 /**

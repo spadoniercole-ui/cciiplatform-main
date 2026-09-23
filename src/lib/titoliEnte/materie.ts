@@ -42,6 +42,8 @@ export interface MateriaEnte {
   stato: StatoMateria;
   confermataDa: string | null;
   confermataIl: string | null;
+  /** Ultima ricerca: quando e con quale esito, anche se a vuoto. */
+  esitoRicerca: string | null;
 }
 
 export const ETICHETTA_STATO_MATERIA: Record<StatoMateria, string> = {
@@ -99,7 +101,7 @@ export function promptRicercaMateria(
   dominioEnte: string
 ): string {
   return `Sei un istruttore che documenta i titoli di credito di un ente pubblico. Materia: «${nome}»${codiciIndicativi ? ` (codici di partita indicativi, non vincolanti: ${codiciIndicativi})` : ''}.
-Cerca sul sito ${dominioEnte} le circolari e i messaggi che disciplinano questa materia, e da essi risali alle norme di legge che fondano il credito dell'ente (articolo e comma). Se possibile riscontra le norme su normattiva.it o gazzettaufficiale.it.
+Cerca sul sito ${dominioEnte} le circolari e i messaggi che disciplinano questa materia — prova più formulazioni (singolare e plurale, sigle, il nome dell'atto, «circolare», «messaggio») — e da essi risali alle norme di legge che fondano il credito dell'ente (articolo e comma). Se possibile riscontra le norme su normattiva.it o gazzettaufficiale.it. Se una ricerca non dà risultati, riprova con altri termini prima di rispondere a vuoto.
 Rispondi SOLO con un JSON, senza testo attorno:
 {"presupposti": [{"norma": "estremi con articolo e comma", "url": "pagina ufficiale o null", "estratto": "passo breve o null"}],
  "riferimenti": [{"tipo": "circolare|messaggio", "estremi": "n. e data", "titolo": "oggetto o null", "url": "pagina sul sito dell'ente o null"}],
