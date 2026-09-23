@@ -3,21 +3,38 @@ import {
   interpretaRiscontro,
   titoloPerCodice,
   validaTitolo,
-  TITOLI_INPS_PREDEFINITI,
   RISCONTRO_VUOTO,
+  type TitoloEnte,
 } from './titoli';
 
-const titoli = TITOLI_INPS_PREDEFINITI.map((t, i) => ({
-  ...t,
-  id: i + 1,
-  riscontroNorma: RISCONTRO_VUOTO,
-  riscontroInterno: RISCONTRO_VUOTO,
-}));
+const titoli: TitoloEnte[] = [
+  {
+    id: 1,
+    codice: '27',
+    atto: 'DENUNCIA MENSILE INSOLUTA',
+    presuppostoGiuridico: '',
+    riferimentoInterno: null,
+    effettoCalcolo: 'NESSUNO',
+    note: null,
+    riscontroNorma: RISCONTRO_VUOTO,
+    riscontroInterno: RISCONTRO_VUOTO,
+  },
+  {
+    id: 2,
+    codice: '44',
+    atto: 'PRATICA APERTA PER GESTIONE DILAZIONE',
+    presuppostoGiuridico: '',
+    riferimentoInterno: null,
+    effettoCalcolo: 'NESSUNO',
+    note: null,
+    riscontroNorma: RISCONTRO_VUOTO,
+    riscontroInterno: RISCONTRO_VUOTO,
+  },
+];
 
 describe('titoli di credito dell’ente', () => {
-  it('i sei codici di Ercole sono precaricati; il 44 interrompe il ritardo', () => {
-    expect(titoli.map((t) => t.codice)).toEqual(['27', '25', '34', '44', '81', '74']);
-    expect(titoloPerCodice(titoli, '44')?.effettoCalcolo).toBe('INTERROMPE_RITARDO');
+  it('il codice dice il titolo e basta: nessun effetto sul calcolo', () => {
+    expect(titoloPerCodice(titoli, '44')?.atto).toContain('DILAZIONE');
   });
   it('trova il codice anche con zeri iniziali e spazi', () => {
     expect(titoloPerCodice(titoli, ' 027 ')?.codice).toBe('27');

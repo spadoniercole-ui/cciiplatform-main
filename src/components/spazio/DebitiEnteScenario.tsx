@@ -9,7 +9,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Pencil, X, Download, Upload, FileStack } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Download, Upload, FileStack, AlertTriangle } from 'lucide-react';
 import {
   ottieniDebitiEnte,
   aggiungiRigaDebitoEnteAction,
@@ -52,6 +52,9 @@ import { useDichiaraContestoAssistente } from '@/components/ContestoAssistenteCo
 import { improntaFile } from '@/lib/fascicolo/impronta';
 import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
 import { avvisoApp, confermaApp } from '@/components/FinestreApp';
+import { ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
+import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
+import { controllaPartita, type AvvisoPlausibilita } from '@/lib/plausibilita/partita';
 
 interface Props {
   nomeSchema: string;
@@ -96,7 +99,7 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
   const [inElaborazione, setInElaborazione] = useState(false);
 
   // Form inserimento/modifica manuale.
-  const [form, setForm] = useState<DatiRigaDebitoEnte>({
+  const [form, setFormGrezzo] = useState<DatiRigaDebitoEnte>({
     voce: '',
     importo: 0,
     importoVersato: null,
@@ -104,8 +107,23 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
     note: null,
     data: null,
   });
+  const setForm = (f: DatiRigaDebitoEnte | ((prev: DatiRigaDebitoEnte) => DatiRigaDebitoEnte)) => {
+    setFormGrezzo(f);
+    setDaConfermare(null);
+  };
   const [rigaInModifica, setRigaInModifica] = useState<number | null>(null);
   const [salvataggio, setSalvataggio] = useState(false);
+  // Anagrafica dei codici dell'ente (Parametri di Spazio › Titoli di credito):
+  // il codice si sceglie, non si scrive.
+  const [titoli, setTitoli] = useState<TitoloEnte[]>([]);
+  useEffect(() => {
+    ottieniTitoliEnteAction(nomeSchema).then((r) => {
+      if (r.success) setTitoli(r.titoli);
+    });
+  }, [nomeSchema]);
+  // Passaggio di conferma prima di scrivere: il riepilogo con gli avvisi di
+  // plausibilita'. Alla conferma si salva; al ripensamento si torna al modulo.
+  const [daConfermare, setDaConfermare] = useState<AvvisoPlausibilita[] | null>(null);
 
   // Selezione multipla per eliminazione.
   const [righeSelezionate, setRigheSelezionate] = useState<Set<number>>(new Set());
@@ -196,15 +214,49 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
       setErrore('Inserisci la voce di debito.');
       return;
     }
-    if (!form.tipo) {
-      setErrore('Scegli la categoria.');
+    // La categoria non si sceglie piu' a mano (0.109.97): il significato lo
+    // porta il codice. Si valorizza in silenzio con la prima attiva.
+    const tipoEffettivo = form.tipo || categorieAttive[0]?.codice || 'CLE';
+    if (form.tipo !== tipoEffettivo) setFormGrezzo({ ...form, tipo: tipoEffettivo });
+    // Primo passaggio: riepilogo con i controlli di plausibilita'.
+    if (daConfermare === null) {
+      const avvisi = controllaPartita(
+        {
+          voce: form.voce,
+          importo: form.importo,
+          importoVersato: form.importoVersato,
+          data: form.data,
+          codice: form.codiceGuida ?? null,
+        },
+        righe
+          .filter((r) => r.id !== rigaInModifica)
+          .map((r) => ({
+            importo: r.importo,
+            codice: r.codiceGuida ?? null,
+            voce: r.voce,
+            data: r.data,
+          })),
+        titoli.length ? titoli.map((t) => t.codice) : null,
+        new Date().toISOString().slice(0, 10)
+      );
+      setDaConfermare(avvisi);
+      setErrore(null);
       return;
     }
+    setDaConfermare(null);
     setSalvataggio(true);
     setErrore(null);
     const risultato = rigaInModifica
-      ? await modificaRigaDebitoEnteAction(nomeSchema, rigaInModifica, form)
-      : await aggiungiRigaDebitoEnteAction(nomeSchema, aziendaId, form, scenarioId);
+      ? await modificaRigaDebitoEnteAction(nomeSchema, rigaInModifica, {
+          ...form,
+          tipo: tipoEffettivo,
+        })
+      : await aggiungiRigaDebitoEnteAction(
+          nomeSchema,
+          aziendaId,
+          { ...form, tipo: tipoEffettivo },
+          scenarioId
+        );
     if (!risultato.success) {
       setErrore(
         risultato.error || `Impossibile ${rigaInModifica ? 'modificare' : 'aggiungere'} la riga.`
@@ -233,8 +285,10 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
       tipo: riga.tipo,
       note: riga.note,
       data: riga.data,
+      codiceGuida: riga.codiceGuida ?? null,
     });
     setRigaInModifica(riga.id);
+    setDaConfermare(null);
     setErrore(null);
   };
 
@@ -333,6 +387,26 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
     await carica();
     const parti = [`${salvate} righe importate dal tracciato «${tracciato.nome}».`];
     if (documentoId) parti.push('Documento di origine registrato nel fascicolo di evidenza.');
+    // Codici fuori dall'anagrafica dell'ente: il 54 al posto del 44 si vede qui.
+    if (titoli.length > 0) {
+      const noti = new Set(titoli.map((t) => t.codice.replace(/^0+(?=\d)/, '').toUpperCase()));
+      const ignoti = Array.from(
+        new Set(
+          importate
+            .map((r) =>
+              (r.codiceGuida ?? '')
+                .trim()
+                .replace(/^0+(?=\d)/, '')
+                .toUpperCase()
+            )
+            .filter((c) => c && !noti.has(c))
+        )
+      );
+      if (ignoti.length)
+        parti.push(
+          `Attenzione: ${ignoti.length === 1 ? 'il codice' : 'i codici'} ${ignoti.join(', ')} non ${ignoti.length === 1 ? 'è' : 'sono'} nell’anagrafica dell’ente (Parametri di Spazio › Titoli di credito dell’ente): verificare il file.`
+        );
+    }
     if (scartate.length > 0)
       parti.push(`${scartate.length} righe scartate (importo o categoria mancante).`);
     if (erroriSalvataggio.length > 0) parti.push(`${erroriSalvataggio.length} non salvate.`);
@@ -678,20 +752,27 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
           </div>
           <div>
             <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-              Categoria
+              Codice di partita
             </label>
             <select
-              value={form.tipo}
-              onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+              value={form.codiceGuida ?? ''}
+              onChange={(e) => setForm({ ...form, codiceGuida: e.target.value || null })}
               className="w-full p-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-900"
+              title="I codici vengono dall’anagrafica dell’ente: Parametri di Spazio › Titoli di credito dell’ente"
             >
-              {categorieAttive.length === 0 && <option value="">—</option>}
-              {categorieAttive.map((c) => (
-                <option key={c.codice} value={c.codice}>
-                  {c.etichetta}
+              <option value="">— nessun codice —</option>
+              {titoli.map((t) => (
+                <option key={t.codice} value={t.codice}>
+                  {t.codice} — {t.atto}
                 </option>
               ))}
             </select>
+            {titoli.length === 0 && (
+              <p className="text-[10px] text-amber-700 mt-1">
+                Anagrafica dei codici non caricata: Parametri di Spazio › Titoli di credito
+                dell’ente.
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Note</label>
@@ -703,13 +784,58 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
             />
           </div>
         </div>
+        {daConfermare !== null && (
+          <div className="border border-blue-200 bg-blue-50 rounded-lg p-3 space-y-2">
+            <p className="text-xs font-bold text-slate-900">Conferma prima di salvare</p>
+            <p className="text-[11px] text-slate-700">
+              {form.voce} — € {form.importo.toLocaleString('it-IT')}
+              {form.importoVersato !== null
+                ? ` (versato € ${form.importoVersato.toLocaleString('it-IT')})`
+                : ''}
+              {form.data ? ` — ${form.data.split('-').reverse().join('/')}` : ''}
+              {form.codiceGuida ? ` — codice ${form.codiceGuida}` : ' — senza codice'}
+            </p>
+            {daConfermare.length === 0 ? (
+              <p className="text-[11px] text-emerald-800">Nessun avviso di plausibilità.</p>
+            ) : (
+              <ul className="space-y-1">
+                {daConfermare.map((a, i) => (
+                  <li key={i} className="text-[11px] text-amber-900 flex gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span>{a.testo}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={salvataggio}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
+              >
+                {salvataggio ? 'Salvataggio...' : 'Conferma e salva'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDaConfermare(null)}
+                className="px-3 py-2 text-[10px] font-bold uppercase text-slate-600"
+              >
+                Torna al modulo
+              </button>
+            </div>
+          </div>
+        )}
         <button
           type="submit"
-          disabled={salvataggio}
+          disabled={salvataggio || daConfermare !== null}
           className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
-          {salvataggio ? 'Salvataggio...' : rigaInModifica ? 'Salva modifiche' : 'Aggiungi riga'}
+          {salvataggio
+            ? 'Salvataggio...'
+            : rigaInModifica
+              ? 'Verifica e salva modifiche'
+              : 'Verifica e aggiungi riga'}
         </button>
       </form>
 

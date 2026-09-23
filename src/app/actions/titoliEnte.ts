@@ -19,7 +19,6 @@ import { estraiJson } from '@/lib/visura/fatti';
 import {
   DOMINI_NORMA,
   RISCONTRO_VUOTO,
-  TITOLI_INPS_PREDEFINITI,
   interpretaRiscontro,
   promptRiscontroInterno,
   promptRiscontroNorma,
@@ -76,40 +75,56 @@ export async function ottieniTitoliEnteAction(
   }
 }
 
-/** Precarica i codici INPS indicati da Ercole, solo dove la tabella e' vuota. */
-export async function precaricaTitoliInpsAction(
-  nomeSchema: string
-): Promise<{ success: boolean; inseriti: number; error?: string }> {
+/**
+ * Importa l'anagrafica dei codici dell'ente (codice, descrizione): crea le
+ * righe che mancano con la descrizione ufficiale come atto, aggiorna la
+ * descrizione di quelle che esistono senza toccare presupposto, riferimento e
+ * riscontri gia' fatti. Nessun precaricamento: l'anagrafica e' dell'ente.
+ */
+export async function importaAnagraficaCodiciAction(
+  codiceSpazio: string,
+  codici: { codice: string; descrizione: string }[]
+): Promise<{ success: boolean; inseriti: number; aggiornati: number; error?: string }> {
   try {
-    if (!validaSchema(nomeSchema))
-      return { success: false, inseriti: 0, error: 'Nome schema non valido.' };
+    const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
+    if (!contesto || contesto.modalita === 'OPERATORE')
+      return {
+        success: false,
+        inseriti: 0,
+        aggiornati: 0,
+        error: 'Operazione riservata all’Admin di Spazio.',
+      };
+    if (codici.length === 0)
+      return {
+        success: false,
+        inseriti: 0,
+        aggiornati: 0,
+        error: 'Nel file non ci sono righe con Codice e Descrizione.',
+      };
+    const nomeSchema = contesto.nomeSchema;
     await assicuraTabelleParametriSpazio(nomeSchema);
     let inseriti = 0;
-    for (const t of TITOLI_INPS_PREDEFINITI) {
+    let aggiornati = 0;
+    for (const c of codici) {
+      const codice = c.codice.trim().slice(0, 12);
+      if (!/^[A-Za-z0-9.\-/]{1,12}$/.test(codice)) continue;
       const r = await pool.query(
-        `INSERT INTO "${nomeSchema}".titoli_ente (codice, atto, presupposto_giuridico, riferimento_interno, effetto_calcolo, note)
-         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (codice) DO NOTHING`,
-        [
-          t.codice,
-          t.atto || '(da precisare)',
-          t.presuppostoGiuridico,
-          t.riferimentoInterno,
-          t.effettoCalcolo,
-          t.note,
-        ]
+        `INSERT INTO "${nomeSchema}".titoli_ente (codice, atto) VALUES ($1, $2)
+         ON CONFLICT (codice) DO UPDATE SET atto = CASE WHEN "${nomeSchema}".titoli_ente.atto = '' OR "${nomeSchema}".titoli_ente.atto = '(da precisare)' THEN EXCLUDED.atto ELSE "${nomeSchema}".titoli_ente.atto END, aggiornato_il = now()
+         RETURNING (xmax = 0) AS nuovo`,
+        [codice, c.descrizione.trim().slice(0, 200)]
       );
-      inseriti += r.rowCount ?? 0;
+      if (r.rows[0]?.nuovo) inseriti += 1;
+      else aggiornati += 1;
     }
-    await pool.query(
-      `INSERT INTO "${nomeSchema}".titoli_ente_config (id, dominio_ente) VALUES (1, 'inps.it') ON CONFLICT (id) DO NOTHING`
-    );
-    return { success: true, inseriti };
+    return { success: true, inseriti, aggiornati };
   } catch (error: unknown) {
-    console.error('[precaricaTitoliInpsAction]', error);
+    console.error('[importaAnagraficaCodiciAction]', error);
     return {
       success: false,
       inseriti: 0,
-      error: `Precaricamento non riuscito: ${(error as Error).message || error}`,
+      aggiornati: 0,
+      error: `Importazione non riuscita: ${(error as Error).message || error}`,
     };
   }
 }

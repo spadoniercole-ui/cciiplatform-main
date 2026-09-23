@@ -6,17 +6,26 @@
 // riferimento sulle sole fonti ufficiali; l'esito resta sulla riga.
 
 import React, { useEffect, useState } from 'react';
-import { Scale, Plus, Save, Trash2, ExternalLink, AlertTriangle, Check } from 'lucide-react';
+import {
+  Scale,
+  Plus,
+  Save,
+  Trash2,
+  ExternalLink,
+  AlertTriangle,
+  Check,
+  Upload,
+} from 'lucide-react';
+import { leggiCodiciDaExcel } from '@/lib/titoliEnte/anagraficaExcel';
 import {
   eliminaTitoloEnteAction,
   ottieniTitoliEnteAction,
-  precaricaTitoliInpsAction,
+  importaAnagraficaCodiciAction,
   salvaDominioEnteAction,
   salvaTitoloEnteAction,
 } from '@/app/actions/titoliEnte';
 import {
   AVVERTENZA_TITOLI_ENTE,
-  ETICHETTA_EFFETTO,
   ETICHETTA_ESITO,
   RISCONTRO_VUOTO,
   type RiscontroFonte,
@@ -85,6 +94,7 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
   const [errore, setErrore] = useState<string | null>(null);
   const [inCorso, setInCorso] = useState(false);
   const [esitoProposto, setEsitoProposto] = useState<TitoloEnte | null>(null);
+  const [esitoImport, setEsitoImport] = useState<string | null>(null);
 
   const carica = async () => {
     const r = await ottieniTitoliEnteAction(nomeSchema);
@@ -167,19 +177,27 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
         >
           Salva sito
         </button>
-        {titoli.length === 0 && (
-          <button
-            type="button"
-            onClick={async () => {
-              const r = await precaricaTitoliInpsAction(nomeSchema);
-              if (!r.success) setErrore(r.error ?? 'Errore.');
+        <label className="flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg cursor-pointer">
+          <Upload className="w-3.5 h-3.5" /> Importa anagrafica dei codici (Excel)
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              setErrore(null);
+              const r = await importaAnagraficaCodiciAction(codice, await leggiCodiciDaExcel(f));
+              if (!r.success) setErrore(r.error ?? 'Importazione non riuscita.');
+              else
+                setEsitoImport(
+                  `${r.inseriti} codici nuovi, ${r.aggiornati} aggiornati: completa presupposto giuridico e riferimento interno riga per riga.`
+                );
               await carica();
             }}
-            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase rounded-lg"
-          >
-            Precarica i codici INPS
-          </button>
-        )}
+          />
+        </label>
         <button
           type="button"
           onClick={() => setInModifica({ ...NUOVO })}
@@ -189,6 +207,11 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
         </button>
       </div>
 
+      {esitoImport && (
+        <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+          {esitoImport}
+        </p>
+      )}
       {errore && (
         <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2 flex items-start gap-2">
           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> <span>{errore}</span>
@@ -247,27 +270,6 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
             </div>
             <div className="sm:col-span-2">
               <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                Effetto sul calcolo
-              </label>
-              <select
-                value={inModifica.effettoCalcolo}
-                onChange={(e) =>
-                  setInModifica({
-                    ...inModifica,
-                    effettoCalcolo: e.target.value as TitoloEnte['effettoCalcolo'],
-                  })
-                }
-                className={CLASSE_CAMPO}
-              >
-                {(Object.keys(ETICHETTA_EFFETTO) as TitoloEnte['effettoCalcolo'][]).map((k) => (
-                  <option key={k} value={k}>
-                    {ETICHETTA_EFFETTO[k]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
                 Note dell’ente
               </label>
               <input
@@ -322,7 +324,6 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
               <th className="px-3 py-2 font-bold">Atto o flusso</th>
               <th className="px-3 py-2 font-bold">Presupposto giuridico</th>
               <th className="px-3 py-2 font-bold">Riferimento interno</th>
-              <th className="px-3 py-2 font-bold">Effetto sul calcolo</th>
               <th className="px-3 py-2 font-bold"></th>
             </tr>
           </thead>
@@ -330,8 +331,8 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
             {titoli.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-3 py-4 text-slate-500">
-                  Nessun codice configurato: per uno spazio INPS usa «Precarica i codici INPS»,
-                  altrimenti «Nuovo codice».
+                  Nessun codice configurato: importa l’anagrafica dei codici dell’ente (Excel con
+                  colonne Codice e Descrizione), poi completa ogni riga.
                 </td>
               </tr>
             )}
@@ -349,9 +350,6 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                 <td className="px-3 py-2 text-slate-800">
                   {t.riferimentoInterno ?? <span className="text-slate-400">—</span>}
                   {t.riferimentoInterno && <Esito r={t.riscontroInterno} etichetta="Riscontro" />}
-                </td>
-                <td className="px-3 py-2 text-slate-600">
-                  {t.effettoCalcolo === 'NESSUNO' ? '—' : ETICHETTA_EFFETTO[t.effettoCalcolo]}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   <button

@@ -95,20 +95,6 @@ export function ParametriSpazioManager({ codice, tipoSpazio }: Props) {
             titolo: 'Anagrafica Ente',
             descrizione: "Etichette dei campi identificativi usati dall'ente di questo spazio.",
           },
-          {
-            href: `/spazio/${codice}/parametri/tipo-debito`,
-            icon: Scale,
-            titolo: 'Tipo Debito (Situazione Debitoria)',
-            descrizione:
-              'Etichette dei 4 codici CLE/CEN/CEC/CEA usati dall\u2019ente di questo spazio.',
-          },
-          {
-            href: `/spazio/${codice}/parametri/categorie-debito`,
-            icon: Scale,
-            titolo: 'Categorie tipo debito (Tracciati)',
-            descrizione:
-              'Le categorie con cui i tracciati classificano i debiti (default Debito/AVA/Neutro): aggiungi, rinomina, disattiva.',
-          },
         ]
       : []),
     {

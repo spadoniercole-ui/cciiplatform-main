@@ -93,6 +93,46 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.97 — 2026-09-23
+
+**Anagrafica dei codici dell'ente, codice sempre scelto, conferma con plausibilita' prima di salvare; via effetti sul calcolo, categorie e etichette del tipo di debito**
+
+Tre precisazioni di Ercole, in sequenza: (1) l'ente carica la propria
+anagrafica dei codici e la gestisce nella tabella dei titoli: nessun
+precaricamento; (2) l'elenco delle partite che l'ente carica e' gia' al netto
+delle partite chiuse (infasamento all'Agente, pagamento tardivo, cassa
+dell'azienda, compensazione): il perfezionamento di una dilazione non e' un
+dato, e' una lavorazione della sede; ogni partita presente conta, e il codice
+dice solo il titolo; (3) la piattaforma non verifica se il funzionario ha
+fatto la lavorazione: lo dichiara nel perimetro e basta.
+
+- **Importa anagrafica dei codici (Excel «Codice, Descrizione»)** nei Titoli
+  di credito dell'ente: crea le righe con la descrizione ufficiale come atto,
+  non tocca presupposto, riferimento e riscontri gia' fatti. Tolto «Precarica».
+- **Il codice si sceglie, non si scrive**: nell'imputazione manuale di una
+  partita al posto della categoria c'e' l'elenco dei codici dell'anagrafica;
+  all'importazione dei tracciati un codice fuori anagrafica viene segnalato
+  («il 54 al posto del 44»). La modifica di una partita conserva il codice.
+- **Conferma prima di salvare** (`lib/plausibilita/partita.ts`): «Verifica e
+  aggiungi riga» mostra un riepilogo con gli avvisi — importo dieci volte piu'
+  grande o piu' piccolo della mediana delle partite con lo stesso codice
+  (123.000 per 12.300, 500 per 5.000), versato maggiore del dovuto, data
+  futura o molto lontana, codice fuori anagrafica o assente, doppione — e solo
+  «Conferma e salva» scrive; «Torna al modulo» conserva i valori. Ogni
+  modifica al modulo azzera il riepilogo.
+- **Via l'«effetto sul calcolo»** dalla tabella dei titoli (colonna nel
+  database mantenuta, ignorata). Nessuna regola sulla dilazione.
+- **Ritirate dal menu** «Categorie tipo debito» e «Tipo debito — etichette»:
+  il significato lo porta il codice. Le tabelle sotto restano per gli spazi
+  esistenti; la categoria della partita si valorizza in silenzio con la prima
+  attiva.
+- **Dichiarazione di perimetro**: aggiunta la frase sull'elenco al netto delle
+  partite chiuse.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (importazione dell'anagrafica dal
+file di Ercole; conferma con avvisi su una partita 123.000).
+
 ## 0.109.96 — 2026-09-23
 
 **Titoli di credito dell'ente: la tabella giuridica nei Parametri di Spazio, con riscontro sulle sole fonti ufficiali; il fascicolo passa dal file di origine al titolo**

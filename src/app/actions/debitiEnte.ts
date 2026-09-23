@@ -173,8 +173,17 @@ export async function modificaRigaDebitoEnteAction(
       return { success: false, error: 'La voce di debito è obbligatoria.' };
     }
     await pool.query(
-      `UPDATE "${nomeSchema}".debiti_ente SET voce = $2, importo = $3, importo_versato = $4, tipo = $5, note = $6, data = $7 WHERE id = $1`,
-      [id, dati.voce.trim(), dati.importo, dati.importoVersato, dati.tipo, dati.note, dati.data]
+      `UPDATE "${nomeSchema}".debiti_ente SET voce = $2, importo = $3, importo_versato = $4, tipo = $5, note = $6, data = $7, codice_guida = COALESCE($8, codice_guida) WHERE id = $1`,
+      [
+        id,
+        dati.voce.trim(),
+        dati.importo,
+        dati.importoVersato,
+        dati.tipo,
+        dati.note,
+        dati.data,
+        dati.codiceGuida ?? null,
+      ]
     );
     return { success: true };
   } catch (error: any) {

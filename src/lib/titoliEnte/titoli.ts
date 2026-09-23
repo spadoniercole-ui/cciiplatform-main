@@ -34,7 +34,11 @@ export interface TitoloEnte {
   atto: string;
   presuppostoGiuridico: string;
   riferimentoInterno: string | null;
-  /** Il codice cambia il calcolo delle soglie (es. dilazione: interrompe il ritardo). */
+  /**
+   * @deprecated dalla 0.109.97. L'elenco caricato dall'ente e' gia' al netto
+   * delle partite chiuse: ogni partita presente conta, e il codice dice solo
+   * il titolo. La colonna resta nel database, sempre 'NESSUNO'.
+   */
   effettoCalcolo: 'NESSUNO' | 'INTERROMPE_RITARDO' | 'ESCLUDE_DA_LETTERA_A';
   note: string | null;
   riscontroNorma: RiscontroFonte;
@@ -57,80 +61,13 @@ export const ETICHETTA_ESITO: Record<EsitoRiscontro, string> = {
   NON_ESEGUITO: 'Non ancora riscontrato',
 };
 
-export const ETICHETTA_EFFETTO: Record<TitoloEnte['effettoCalcolo'], string> = {
-  NESSUNO: 'Nessuno',
-  INTERROMPE_RITARDO: 'Interrompe il conteggio del ritardo (art. 25-novies)',
-  ESCLUDE_DA_LETTERA_A: 'Partita passata a ruolo: esce dalla lettera a)',
-};
-
 /** Fonti ammesse per il riscontro della norma: solo quelle ufficiali dello Stato. */
 export const DOMINI_NORMA = ['gazzettaufficiale.it', 'normattiva.it'];
-
-/** Precaricamento per gli spazi INPS: i codici indicati da Ercole. Modificabile dall'ente. */
-export const TITOLI_INPS_PREDEFINITI: Omit<
-  TitoloEnte,
-  'id' | 'riscontroNorma' | 'riscontroInterno'
->[] = [
-  {
-    codice: '27',
-    atto: 'Denuncia Uniemens presentata e non versata',
-    presuppostoGiuridico:
-      'D.L. 30 settembre 2003, n. 269, art. 44, comma 9 (conv. L. 24 novembre 2003, n. 326)',
-    riferimentoInterno: null,
-    effettoCalcolo: 'NESSUNO',
-    note: 'Flusso mensile obbligatorio per legge; il mancato versamento a fronte della denuncia è di per sé titolo.',
-  },
-  {
-    codice: '25',
-    atto: 'Nota di rettifica',
-    presuppostoGiuridico: '',
-    riferimentoInterno: null,
-    effettoCalcolo: 'NESSUNO',
-    note: 'Atto amministrativo a firma del direttore della sede, notificato e impugnabile (autotutela, ricorso amministrativo, giudiziario).',
-  },
-  {
-    codice: '34',
-    atto: 'Verbale ispettivo',
-    presuppostoGiuridico: '',
-    riferimentoInterno: null,
-    effettoCalcolo: 'NESSUNO',
-    note: 'Atto amministrativo notificato e impugnabile.',
-  },
-  {
-    codice: '44',
-    atto: 'Dilazione concessa',
-    presuppostoGiuridico: '',
-    riferimentoInterno: null,
-    effettoCalcolo: 'INTERROMPE_RITARDO',
-    note: 'Non è un titolo autonomo: è una condizione della partita. La rateizzazione interrompe il conteggio del ritardo.',
-  },
-  {
-    codice: '81',
-    atto: '',
-    presuppostoGiuridico: '',
-    riferimentoInterno: null,
-    effettoCalcolo: 'NESSUNO',
-    note: 'Codice indicato da Ercole: atto da precisare.',
-  },
-  {
-    codice: '74',
-    atto: '',
-    presuppostoGiuridico: '',
-    riferimentoInterno: null,
-    effettoCalcolo: 'NESSUNO',
-    note: 'Codice indicato da Ercole: atto da precisare.',
-  },
-];
 
 export function validaTitolo(t: Partial<TitoloEnte>): string | null {
   if (!t.codice || !/^[A-Za-z0-9.\-/]{1,12}$/.test(t.codice.trim()))
     return 'Codice di partita mancante o non valido.';
   if (!t.atto || !t.atto.trim()) return `Codice ${t.codice}: indicare l’atto o il flusso.`;
-  if (
-    t.effettoCalcolo &&
-    !['NESSUNO', 'INTERROMPE_RITARDO', 'ESCLUDE_DA_LETTERA_A'].includes(t.effettoCalcolo)
-  )
-    return 'Effetto sul calcolo non riconosciuto.';
   return null;
 }
 
@@ -157,7 +94,7 @@ export function titoloPerCodice(
 
 /** Testo per la dichiarazione di perimetro del Ricevente (frase concordata con Ercole). */
 export const AVVERTENZA_TITOLI_ENTE =
-  'I crediti dell’ente sono acquisiti come certi, liquidi ed esigibili sul presupposto che esistano gli atti che li fondano (denuncia non versata, nota di rettifica, verbale, diffida, cartella), notificati e non impugnati o impugnati senza esito. L’elaborato indica per ciascuna partita il titolo presunto in base al codice; la verifica dell’esistenza e della regolarità degli atti, della notifica e dei termini resta all’ente, che deve essere in condizione di dimostrarli in sede amministrativa e giudiziaria.';
+  'L’elenco delle partite è caricato dall’ente al netto delle partite chiuse per infasamento all’Agente della riscossione, pagamento, utilizzo della cassa o compensazione: ogni partita presente è considerata aperta. I crediti dell’ente sono acquisiti come certi, liquidi ed esigibili sul presupposto che esistano gli atti che li fondano (denuncia non versata, nota di rettifica, verbale, diffida, cartella), notificati e non impugnati o impugnati senza esito. L’elaborato indica per ciascuna partita il titolo presunto in base al codice; la verifica dell’esistenza e della regolarità degli atti, della notifica e dei termini resta all’ente, che deve essere in condizione di dimostrarli in sede amministrativa e giudiziaria.';
 
 /**
  * Interpreta la risposta JSON del riscontro (modello con ricerca sulle fonti
