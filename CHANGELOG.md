@@ -93,6 +93,47 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.102 — 2026-09-23
+
+**Indice di Attenzione Istruttoria (IAI): la copertina dello Screening**
+
+Ercole: «una domanda e una risposta in cinque minuti» — la relazione di sette
+pagine va bene, ma prima serve una pagina che dica chi e' l'assassino.
+
+- **Motore puro** (`src/lib/iai/indice.ts`): indice composito 0-100 secondo
+  la metodologia OCSE-JRC per gli indicatori compositi (Nardo et al. 2005/08):
+  normalizzazione per distanza dall'obiettivo (0 all'obiettivo, 100 alla
+  saturazione, lineare in mezzo), ponderazione dichiarata, aggregazione con
+  VINCOLI di non compensabilita' (Munda 2005). Struttura di bilancio con lo
+  Z''-score di Altman (1995, societa' non quotate e non manifatturiere).
+- **Cinque dimensioni**: A esposizione verso l'ente (30), B struttura
+  patrimoniale e finanziaria (25), C dinamica (15), D affidabilita' dei dati
+  (15), E quadro procedurale (15). Vincoli: procedura concorsuale pendente
+  (minimo 70), denunce Uniemens assenti con addetti (75), presupposti dell'art.
+  25-novies rilevati (56).
+- **Quattro fasce** con la lettura decisionale: attenzione contenuta (0-30),
+  da monitorare (31-55), da sottoporre al dirigente (56-75), da sottoporre con
+  urgenza (76-100). Lessico di Libra: niente crisi/insolvenza come esito.
+- **Copertina** (`CopertinaIai.tsx`, in testa allo Screening): quadrante,
+  cinque barre con peso, vincoli scattati, TRE RIGHE DI SINTESI generate dai
+  numeri (non dall'AI): indice e fascia, determinanti, limiti della misura.
+  Determinanti e lacune per dimensione a richiesta. Dichiarazione
+  metodologica in calce.
+- **Dati** (`app/actions/iai.ts`): soglie dell'ente, fascicolo, due bilanci,
+  fatti della visura. Nessuna AI. Deterministico: stessi dati, stesso numero.
+- Il caso DEO GRIFO (dalla relazione del 21/09) e' un test: fascia urgente
+  per A, B ed E, con due vincoli.
+
+Limiti dichiarati: l'esito del triage sulle denunce non e' conservato, quindi
+il vincolo «Uniemens assenti» oggi non scatta in produzione (da conservare
+nella prossima versione); pesi, obiettivi e saturazioni sono i default proposti
+da Claude, da portare nei Parametri di Spazio e da tarare con Ercole (confronto
+a coppie); l'analisi di sensibilita' sull'Azienda Demo e' da fare.
+
+Verificato: type-check (entrambi i controlli), lint, test (motore con il caso
+DEO GRIFO), build cloud e portable. La copertina compare solo con uno Screening
+esistente: non vista a schermo nel sandbox, da guardare in cloud.
+
 ## 0.109.101 — 2026-09-23
 
 **Ricerca delle materie: costo dimezzato, dichiarato prima del clic, e canale in differita a meta' prezzo**

@@ -25,6 +25,7 @@ import type { Attenzione } from '@/lib/screening/indicatore';
 import { RevisioneTesto, stampaSeConsegnabile } from '@/components/spazio/RevisioneTesto';
 import { FattiVisura } from '@/components/spazio/FattiVisura';
 import { StoricoScreening } from '@/components/spazio/StoricoScreening';
+import { CopertinaIai } from '@/components/spazio/CopertinaIai';
 import { FascicoloEvidenza } from '@/components/spazio/FascicoloEvidenza';
 import type { Evidenza } from '@/lib/fascicolo/evidenza';
 import { improntaFile } from '@/lib/fascicolo/impronta';
@@ -539,6 +540,15 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           </p>
         )}
       </div>
+
+      {stato?.esiste && (
+        <CopertinaIai
+          nomeSchema={nomeSchema}
+          aziendaId={aziendaId}
+          tipoSpazio={tipoSpazio}
+          versione={stato.generatoIl ? Date.parse(stato.generatoIl) : 0}
+        />
+      )}
 
       {stato?.esiste && (
         <StoricoScreening
