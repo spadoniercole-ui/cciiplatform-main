@@ -8,6 +8,7 @@
 // informazione mancante deve lasciare un segnaposto tra parentesi
 // quadre, non riempirlo a caso.
 
+import { perimetroPerPrompt } from '@/lib/revisore/perimetro';
 import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneServer';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
@@ -239,7 +240,7 @@ export async function generaDocumentoCorredoAction(
       model: 'claude-sonnet-5',
       max_tokens: 5000,
       thinking: { type: 'disabled' },
-      system: PROMPT_PER_TIPO[tipo] + istruzioniLessicoPerPrompt(),
+      system: PROMPT_PER_TIPO[tipo] + perimetroPerPrompt('CORREDO') + istruzioniLessicoPerPrompt(),
       messages: [{ role: 'user', content: userPrompt }],
     });
 

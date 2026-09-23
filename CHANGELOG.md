@@ -93,6 +93,87 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.96 — 2026-09-23
+
+**Titoli di credito dell'ente: la tabella giuridica nei Parametri di Spazio, con riscontro sulle sole fonti ufficiali; il fascicolo passa dal file di origine al titolo**
+
+Riflessione di Ercole: il credito di un ente pubblico non nasce da un numero
+ma da un atto (denuncia obbligatoria non versata, nota di rettifica, verbale
+ispettivo, diffida, cartella), notificato e impugnabile; se non impugnato, il
+credito e' certo, liquido ed esigibile. Il codice della partita porta gia' il
+titolo. L'onere di dimostrarlo resta all'ente, come in sede amministrativa e
+giudiziaria: la piattaforma acquisisce, non verifica, e lo dichiara.
+
+**1. Tabella «Titoli di credito dell'ente»** (`lib/titoliEnte/`,
+`app/actions/titoliEnte.ts`, `TitoliEnteManager.tsx`, Parametri di Spazio,
+solo spazi ENTE): una riga per codice di partita — atto o flusso,
+presupposto giuridico, riferimento interno (la circolare con cui l'ente
+traduce la norma in prassi), effetto sul calcolo (es. dilazione: interrompe
+il ritardo), note. Sito ufficiale dell'ente configurabile. Precaricamento dei
+sei codici INPS indicati da Ercole (27, 25, 34, 44, 81, 74; gli ultimi due da
+precisare), modificabili.
+
+**2. Riscontro doppio al salvataggio**, con ricerca limitata alle fonti
+ufficiali: la norma su gazzettaufficiale.it e normattiva.it, il riferimento
+interno sul sito dell'ente. Tre esiti: CONFERMATO (si salva, con estratto,
+link e nome di chi ha confermato), IN CONTRASTO (non si salva; a schermo il
+passo trovato), NON VERIFICABILE (si salva solo con conferma esplicita,
+etichetta «da riscontrare»). Un «confermato» senza fonte ufficiale non vale.
+Si riscontra solo cio' che e' cambiato. Senza chiave AI o senza rete
+(portable) l'esito e' «da riscontrare».
+
+**3. Fascicolo di evidenza per titolo**: gli stati diventano «titolo
+dell'ente» (con l'atto presunto dal codice; un codice non configurato lo
+dice, con il percorso), «dichiarato dall'azienda», «importo non noto»,
+«calcolato». Il documento di origine resta come traccia. Sparisce
+«provenienza non registrata».
+
+**4. Dichiarazione di perimetro**: in testa a Screening e Relazione la frase
+concordata — i crediti dell'ente sono acquisiti come certi, liquidi ed
+esigibili sul presupposto degli atti che li fondano; l'elaborato indica il
+titolo presunto per codice; la verifica degli atti, della notifica e dei
+termini resta all'ente.
+
+Prossima tappa: le fonti confermate entrano nel registro delle fonti;
+l'elenco dei titoli presunti nel report.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (tabella, precaricamento, salvataggio
+«da riscontrare», fascicolo per titolo).
+
+## 0.109.95 — 2026-09-22
+
+**Dichiarazione di perimetro al posto dell'inventario delle provenienze**
+
+Scelta di Ercole: elencare uno per uno gli importi «senza evidenza» non
+serve a chi legge. I dati di provenienza aziendale non hanno valenza legale
+ai fini della valutazione: si dichiara una volta, in testa, con la
+terminologia di Libra, e le indicazioni si sviluppano su quei dati cosi'
+come proposti.
+
+- **`lib/revisore/perimetro.ts`**: un solo testo, con una variabile — il
+  livello degli occhi che leggono. Il pubblico e' sempre l'ente, ma cambia il
+  livello: TRIAGE (chi immette i file: esito di verifica), SCREENING (primo
+  livello decisionale: se sottoporre il caso al dirigente per un confronto
+  con l'azienda o per la richiesta di liquidazione giudiziale), RELAZIONE
+  (livello dirigenziale: dati storici + valutazione attuale + dati di settore
+  + scenari, a supporto della valutazione della proposta e dell'intenzione
+  di voto), CORREDO (bozze per il professionista). La dichiarazione dice da
+  dove vengono i dati e che valore hanno, a che cosa serve l'elaborato, che
+  cosa NON e'.
+- **Inserita prima della generazione** nei prompt di Screening, Relazione e
+  documenti di corredo («scrivi per questo livello di lettura e non oltre»)
+  e **in testa a ogni elaborato** (sostituisce l'intestazione di livello;
+  REV-024 la garantisce). Mostrata anche nell'esito del triage.
+- **REV-010 non elenca piu'**: un solo rilievo di conteggio («n importi su m
+  non presenti nel fascicolo: dati riportati come proposti, coperti dalla
+  dichiarazione di perimetro»), che non va in calce al PDF ne' alla passata
+  correttiva. L'elenco puntuale resta per gli errori: citazioni fuori
+  registro (REV-001) e, prossimamente, contraddizioni numeriche (REV-013).
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (dichiarazione in testa al PDF).
+
 ## 0.109.94 — 2026-09-22
 
 **Il revisore non blocca piu': corregge, e cio' che resta va dentro il documento**

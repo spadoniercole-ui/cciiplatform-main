@@ -23,6 +23,7 @@
 // Il costo che si voleva abbattere non era il salvataggio: erano i quindici
 // campi da digitare. Quelli ora arrivano dalla visura.
 
+import { dichiarazionePerimetro } from '@/lib/revisore/perimetro';
 import React, { useEffect, useState } from 'react';
 import { Stethoscope, Upload, Check, AlertTriangle, ArrowRight } from 'lucide-react';
 import {
@@ -1045,6 +1046,10 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
 
       {fase === 'esito' && (
         <div className="space-y-4">
+          {/* Dichiarazione di perimetro: stesso testo che apre Screening e Relazione, al livello del data entry. */}
+          <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 whitespace-pre-line mb-3">
+            {dichiarazionePerimetro('TRIAGE')}
+          </p>
           {esitoFogli.length > 0 && (
             <div className="bg-white border border-slate-200 rounded-xl p-5">
               <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider mb-2">

@@ -767,6 +767,31 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
       ordine INTEGER NOT NULL DEFAULT 0
     )`
   );
+
+  // Titoli di credito dell'ente (0.109.96): la tabella giuridica su cui l'ente
+  // fonda il recupero, un record per codice di partita. Il presupposto
+  // giuridico e il riferimento interno (circolare) sono riscontrati sulle
+  // fonti ufficiali al salvataggio; l'esito resta sulla riga.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.titoli_ente (
+      id SERIAL PRIMARY KEY,
+      codice TEXT NOT NULL UNIQUE,
+      atto TEXT NOT NULL,
+      presupposto_giuridico TEXT NOT NULL DEFAULT '',
+      riferimento_interno TEXT,
+      effetto_calcolo TEXT NOT NULL DEFAULT 'NESSUNO',
+      note TEXT,
+      riscontro_norma JSONB,
+      riscontro_interno JSONB,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.titoli_ente_config (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      dominio_ente TEXT
+    )`
+  );
 }
 
 /**

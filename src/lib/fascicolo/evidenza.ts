@@ -17,14 +17,28 @@
 export type OrigineEvidenza = 'PROPOSTA' | 'POSIZIONE_ENTE' | 'VERA' | 'BILANCIO' | 'CALCOLO';
 
 /**
- * Stato di verifica (Libra D-GEN-003): un dato privo di fonte, data o
- * perimetro e' «non verificato» e non puo' sostenere un esito giuridico.
- *  - DOCUMENTATO      : si conosce il documento di origine (e la sua impronta).
- *  - NON_VERIFICATO   : il dato c'e', la provenienza documentale no.
+ * Stato dell'evidenza — riscritto nella 0.109.96 su indicazione di Ercole: il
+ * criterio non e' il file di origine, e' il TITOLO.
+ *  - TITOLO_ENTE      : credito dell'ente, acquisito come certo, liquido ed
+ *                       esigibile sul presupposto degli atti che lo fondano;
+ *                       il titolo presunto e' dedotto dal codice di partita
+ *                       (tabella «Titoli di credito dell'ente»). L'onere di
+ *                       dimostrarlo resta all'ente.
+ *  - DICHIARATO       : dato di provenienza aziendale (proposta, bilancio,
+ *                       situazione dichiarata), riportato come proposto.
  *  - IMPORTO_NON_NOTO : la voce esiste ma l'importo e' ignoto. NON vale zero.
  *  - DERIVATO         : calcolato dalla piattaforma da altre evidenze.
+ * Il documento di origine (nome, impronta) resta come traccia, non come stato.
  */
-export type StatoEvidenza = 'DOCUMENTATO' | 'NON_VERIFICATO' | 'IMPORTO_NON_NOTO' | 'DERIVATO';
+export type StatoEvidenza = 'TITOLO_ENTE' | 'DICHIARATO' | 'IMPORTO_NON_NOTO' | 'DERIVATO';
+
+/** Titolo presunto di una partita dell'ente, dalla tabella dei titoli. */
+export interface TitoloPresunto {
+  codice: string;
+  atto: string;
+  presuppostoGiuridico: string | null;
+  riferimentoInterno: string | null;
+}
 
 export interface Evidenza {
   /** Stabile finche' la riga di origine esiste: EV-<origine>-<id riga>. */
@@ -40,6 +54,10 @@ export interface Evidenza {
   dataRiferimento: string | null;
   documento: { nome: string; impronta: string | null } | null;
   stato: StatoEvidenza;
+  /** Solo TITOLO_ENTE: l'atto presunto dal codice; null = codice non configurato. */
+  titolo?: TitoloPresunto | null;
+  /** Solo TITOLO_ENTE: il codice della partita, se il tracciato lo porta. */
+  codicePartita?: string | null;
   /** Per DERIVATO: da quali evidenze e con quale operazione. */
   derivatoDa?: { ids: string[]; operazione: string };
 }
@@ -73,6 +91,8 @@ export interface RigaPropostaFascicolo {
 export interface RigaPosizioneEnte {
   id: number;
   documento: DocumentoOrigine | null;
+  codiceGuida?: string | null;
+  titolo?: TitoloPresunto | null;
   voce: string;
   importo: number;
   importoVersato: number | null;
@@ -161,7 +181,7 @@ export function componiFascicolo(input: {
       documento: r.documento
         ? { nome: r.documento.nomeFile, impronta: r.documento.impronta }
         : null,
-      stato: r.documento ? 'DOCUMENTATO' : 'NON_VERIFICATO',
+      stato: 'DICHIARATO',
     });
     evidenze.push({
       ...base,
@@ -216,7 +236,9 @@ export function componiFascicolo(input: {
       documento: r.documento
         ? { nome: r.documento.nomeFile, impronta: r.documento.impronta }
         : null,
-      stato: r.documento ? 'DOCUMENTATO' : 'NON_VERIFICATO',
+      stato: 'TITOLO_ENTE',
+      titolo: r.titolo ?? null,
+      codicePartita: r.codiceGuida ?? null,
     });
     if (r.importoVersato !== null && r.importoVersato !== 0) {
       evidenze.push({
@@ -264,7 +286,7 @@ export function componiFascicolo(input: {
       documento: r.documento
         ? { nome: r.documento.nomeFile, impronta: r.documento.impronta }
         : null,
-      stato: potenziale ? 'IMPORTO_NON_NOTO' : r.documento ? 'DOCUMENTATO' : 'NON_VERIFICATO',
+      stato: potenziale ? 'IMPORTO_NON_NOTO' : 'TITOLO_ENTE',
     });
   }
   const veraConImporto = veraUtili.filter((r) => r.trattamento !== 'potenziale');
@@ -301,7 +323,7 @@ export function componiFascicolo(input: {
         documento: b.documento
           ? { nome: b.documento.nomeFile, impronta: b.documento.impronta }
           : null,
-        stato: b.documento ? 'DOCUMENTATO' : 'NON_VERIFICATO',
+        stato: 'DICHIARATO',
       });
     }
   }
@@ -366,8 +388,8 @@ export const IMPORTI_DI_LEGGE = [5_000, 15_000, 20_000, 100_000, 200_000, 500_00
 
 export function riepilogoFascicolo(fascicolo: Evidenza[]): Record<StatoEvidenza, number> {
   const r: Record<StatoEvidenza, number> = {
-    DOCUMENTATO: 0,
-    NON_VERIFICATO: 0,
+    TITOLO_ENTE: 0,
+    DICHIARATO: 0,
     IMPORTO_NON_NOTO: 0,
     DERIVATO: 0,
   };

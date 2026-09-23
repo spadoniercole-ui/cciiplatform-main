@@ -5,6 +5,7 @@
 // perché. Genera una Check List su misura da XBRL + visura camerale +
 // le direttrici dell'ente, prima ancora che arrivi una proposta.
 
+import { perimetroPerPrompt } from '@/lib/revisore/perimetro';
 import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneServer';
 import { APP_VERSION } from '@/lib/appVersion';
 import { createHash } from 'node:crypto';
@@ -817,7 +818,11 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
                     bloccoDocumento,
                     {
                       type: 'text',
-                      text: promptRelazione + blocchoFattiPerPrompt + istruzioniLessicoPerPrompt(),
+                      text:
+                        promptRelazione +
+                        blocchoFattiPerPrompt +
+                        perimetroPerPrompt('SCREENING') +
+                        istruzioniLessicoPerPrompt(),
                     },
                   ],
                 },

@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { CATALOGO_REVISORE } from './catalogo';
 import { componiFascicolo } from '@/lib/fascicolo/evidenza';
 import { CONTROLLI_ESEGUITI, revisionaTesto } from './revisore';
-import { FORMULE_LACUNA, LIVELLI_OUTPUT, formulaLacuna, intestazioneLivello } from './livelli';
+import { FORMULE_LACUNA, LIVELLI_OUTPUT, formulaLacuna } from './livelli';
+import { dichiarazionePerimetro } from './perimetro';
 import {
   QUALIFICAZIONE_RISCONTRO_PARAMETRI,
   istruzioniLessicoPerPrompt,
@@ -84,7 +85,8 @@ describe('revisore e fascicolo di evidenza', () => {
     const r = revisionaTesto(t, 'RELAZIONE_SCENARIO', { fascicolo });
     const c = r.risultati.find((x) => x.controllo.id === 'REV-010')!;
     expect(c.esito).toBe('SEGNALAZIONE');
-    expect(c.rilievi.map((x) => x.trovato)).toEqual(['€ 777.000']);
+    expect(c.rilievi).toHaveLength(1);
+    expect(c.rilievi[0].contesto).toContain('€ 777.000');
     expect(r.consegnabile).toBe(true);
   });
   it('REV-010: senza fascicolo non risulta superato', () => {
@@ -181,7 +183,7 @@ describe('revisore a regole', () => {
     expect(r.risultati.find((x) => x.controllo.id === 'REV-024')!.esito).toBe(
       'CORREZIONE_AUTOMATICA'
     );
-    expect(r.testoRivisto.startsWith(intestazioneLivello('DOCUMENTO_CORREDO'))).toBe(true);
+    expect(r.testoRivisto.startsWith(dichiarazionePerimetro('CORREDO'))).toBe(true);
   });
 
   it('REV-003: gli indici di allerta abrogati non passano per diritto vigente', () => {

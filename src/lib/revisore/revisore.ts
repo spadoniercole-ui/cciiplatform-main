@@ -29,12 +29,8 @@ import {
 } from '@/lib/fascicolo/evidenza';
 import { riscontraCitazioni } from '@/lib/registroFonti/citazioni';
 import { CATALOGO_REVISORE, MOTIVO_NON_VERIFICATO, type ControlloRevisore } from './catalogo';
-import {
-  LIVELLO_PER_TIPO,
-  intestazioneLivello,
-  type LivelloOutput,
-  type TipoOutput,
-} from './livelli';
+import { LIVELLO_PER_TIPO, type LivelloOutput, type TipoOutput } from './livelli';
+import { FASE_PER_TIPO, MODELLO_DICHIARAZIONE, dichiarazionePerimetro } from './perimetro';
 
 export type EsitoControllo =
   'PASS' | 'BLOCCO' | 'SEGNALAZIONE' | 'CORREZIONE_AUTOMATICA' | 'NON_VERIFICATO';
@@ -179,15 +175,28 @@ const VERIFICHE: Record<string, Verifica> = {
   // su una copertura parziale punirebbe i testi per un limite della piattaforma.
   'REV-010': (testo, amb) => {
     if (amb.fascicolo === null) return { esito: 'NON_VERIFICATO', rilievi: [] };
-    const { nonRiconciliati } = riconciliaTestoConFascicolo(testo, amb.fascicolo, IMPORTI_DI_LEGGE);
+    const { nonRiconciliati, riconciliati } = riconciliaTestoConFascicolo(
+      testo,
+      amb.fascicolo,
+      IMPORTI_DI_LEGGE
+    );
     if (nonRiconciliati.length === 0) return PASS;
+    // Un solo rilievo di conteggio: la provenienza dei dati aziendali e'
+    // coperta dalla dichiarazione di perimetro in testa all'elaborato
+    // (scelta di Ercole); l'elenco puntuale resta per le CONTRADDIZIONI
+    // numeriche (REV-013), non per i dati presi come proposti.
     return {
       esito: 'SEGNALAZIONE',
-      rilievi: nonRiconciliati.map((i) => ({
-        trovato: i.testo,
-        contesto: contestoDi(testo, i.posizione, i.testo.length),
-        nota: 'Importo senza evidenza nel fascicolo (proposta, posizione dell’ente, V.E.R.A., bilanci): verificarne la provenienza.',
-      })),
+      rilievi: [
+        {
+          trovato: `${nonRiconciliati.length} ${nonRiconciliati.length === 1 ? 'importo' : 'importi'} su ${nonRiconciliati.length + riconciliati.length}`,
+          contesto: nonRiconciliati
+            .slice(0, 6)
+            .map((i) => i.testo)
+            .join(', '),
+          nota: 'Importi non presenti nel fascicolo di evidenza: dati riportati come proposti, coperti dalla dichiarazione di perimetro. Non è una contraddizione: nessuna correzione richiesta.',
+        },
+      ],
     };
   },
 
@@ -325,15 +334,14 @@ const VERIFICHE: Record<string, Verifica> = {
   },
 
   'REV-024': (testo, amb) => {
-    if (/bozza\s+istruttoria|elaborazione\s+tecnica|soggett[oa]\s+a\s+validazione/iu.test(testo))
-      return PASS;
+    if (MODELLO_DICHIARAZIONE.test(testo)) return PASS;
     return {
       esito: 'CORREZIONE_AUTOMATICA',
       rilievi: [
         {
-          trovato: '(intestazione assente)',
+          trovato: '(dichiarazione di perimetro assente)',
           contesto: spazi(testo.slice(0, 120)),
-          nota: `Anteposta l’intestazione di livello: ${intestazioneLivello(amb.tipoOutput)}`,
+          nota: `Anteposta la dichiarazione di perimetro e destinazione (${FASE_PER_TIPO[amb.tipoOutput].toLowerCase()}).`,
         },
       ],
     };
@@ -458,10 +466,8 @@ export function revisionaTesto(
   };
   for (const r of risultati) conteggi[r.esito] += 1;
 
-  if (
-    !/bozza\s+istruttoria|elaborazione\s+tecnica|soggett[oa]\s+a\s+validazione/iu.test(testoRivisto)
-  ) {
-    testoRivisto = `${intestazioneLivello(tipoOutput)}\n\n${testoRivisto}`;
+  if (!MODELLO_DICHIARAZIONE.test(testoRivisto)) {
+    testoRivisto = `${dichiarazionePerimetro(FASE_PER_TIPO[tipoOutput])}\n\n${testoRivisto}`;
   }
   if (note.length) {
     testoRivisto = `${testoRivisto}\n\nQUALIFICAZIONI OBBLIGATORIE\n${note.map((n) => `- ${n}`).join('\n')}`;

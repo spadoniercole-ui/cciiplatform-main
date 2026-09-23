@@ -44,6 +44,13 @@ export function ParametriSpazioManager({ codice, tipoSpazio }: Props) {
     ...(tipoSpazio === 'ENTE'
       ? [
           {
+            href: `/spazio/${codice}/parametri/titoli-ente`,
+            icon: Scale,
+            titolo: 'Titoli di credito dell’ente',
+            descrizione:
+              'Per ogni codice di partita: atto, presupposto giuridico e circolare, riscontrati sulle fonti ufficiali.',
+          },
+          {
             href: `/spazio/${codice}/parametri/direttrici-ente`,
             icon: Sparkles,
             titolo: 'Direttrici Ente (Screening)',

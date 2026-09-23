@@ -11,8 +11,10 @@ import {
   assicuraTabellaDebitiEnte,
   assicuraTabelleVera,
   assicuraTabellaXbrlAzienda,
+  assicuraTabelleParametriSpazio,
 } from '@/db/provision';
-import { componiFascicolo, type Evidenza } from '@/lib/fascicolo/evidenza';
+import { componiFascicolo, type Evidenza, type TitoloPresunto } from '@/lib/fascicolo/evidenza';
+import { RISCONTRO_VUOTO, titoloPerCodice, type TitoloEnte } from '@/lib/titoliEnte/titoli';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -35,6 +37,7 @@ export async function ottieniFascicoloAction(
     await assicuraTabellaDebitiEnte(nomeSchema);
     await assicuraTabelleVera(nomeSchema);
     await assicuraTabellaXbrlAzienda(nomeSchema);
+    await assicuraTabelleParametriSpazio(nomeSchema);
 
     const proposta =
       scenarioId === null
@@ -50,7 +53,7 @@ export async function ottieniFascicoloAction(
     // La posizione dell'ente puo' essere dell'azienda o aggiornata sullo scenario:
     // si prendono le righe dello scenario se ci sono, altrimenti quelle dell'azienda.
     const ente = await pool.query(
-      `SELECT d.id, d.voce, d.importo, d.importo_versato, d.tipo, d.data, d.scenario_id,
+      `SELECT d.id, d.voce, d.importo, d.importo_versato, d.tipo, d.data, d.scenario_id, d.codice_guida,
               o.nome_file, o.impronta
          FROM "${nomeSchema}".debiti_ente d
          LEFT JOIN "${nomeSchema}".documenti_origine o ON o.id = d.documento_id
@@ -62,6 +65,29 @@ export async function ottieniFascicoloAction(
     );
     const righeEnte =
       righeScenario.length > 0 ? righeScenario : ente.rows.filter((r) => r.scenario_id === null);
+    const titoliRis = await pool.query(`SELECT * FROM "${nomeSchema}".titoli_ente`);
+    const titoli: TitoloEnte[] = titoliRis.rows.map((t) => ({
+      id: Number(t.id),
+      codice: String(t.codice),
+      atto: String(t.atto ?? ''),
+      presuppostoGiuridico: String(t.presupposto_giuridico ?? ''),
+      riferimentoInterno: t.riferimento_interno ?? null,
+      effettoCalcolo: t.effetto_calcolo ?? 'NESSUNO',
+      note: t.note ?? null,
+      riscontroNorma: t.riscontro_norma ?? RISCONTRO_VUOTO,
+      riscontroInterno: t.riscontro_interno ?? RISCONTRO_VUOTO,
+    }));
+    const titoloDi = (codice: string | null): TitoloPresunto | null => {
+      const t = titoloPerCodice(titoli, codice);
+      return t
+        ? {
+            codice: t.codice,
+            atto: t.atto,
+            presuppostoGiuridico: t.presuppostoGiuridico || null,
+            riferimentoInterno: t.riferimentoInterno,
+          }
+        : null;
+    };
     const vera = await pool.query(
       `SELECT v.id, v.sezione, v.voce, v.importo, v.categoria, v.trattamento, o.nome_file, o.impronta
          FROM "${nomeSchema}".debiti_vera v
@@ -129,6 +155,8 @@ export async function ottieniFascicoloAction(
           tipo: r.tipo,
           data: dataIso(r.data),
           documento: r.impronta ? { nomeFile: r.nome_file, impronta: r.impronta } : null,
+          codiceGuida: r.codice_guida ?? null,
+          titolo: titoloDi(r.codice_guida ?? null),
         })),
         vera: vera.rows.map((r) => ({
           id: r.id,

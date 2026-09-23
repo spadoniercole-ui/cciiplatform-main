@@ -10,6 +10,7 @@
 // stato caricato alcun bilancio XBRL, la relazione lo dichiara
 // esplicitamente invece di inventare un quadro quantitativo.
 
+import { perimetroPerPrompt } from '@/lib/revisore/perimetro';
 import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneServer';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
@@ -1040,7 +1041,7 @@ Elabora la relazione di valutazione della proposta seguendo la struttura prescri
       model: 'claude-sonnet-5',
       max_tokens: 6000,
       thinking: { type: 'disabled' },
-      system: systemInstruction + istruzioniLessicoPerPrompt(),
+      system: systemInstruction + perimetroPerPrompt('RELAZIONE') + istruzioniLessicoPerPrompt(),
       messages: [{ role: 'user', content: userPrompt }],
     });
 

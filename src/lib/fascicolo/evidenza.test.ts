@@ -91,12 +91,13 @@ describe('fascicolo di evidenza', () => {
     expect(FASCICOLO.find((e) => e.id === 'EV-CAL-proposta-totale-dovuto')?.importo).toBe(370_000);
   });
 
-  it('con il documento di origine registrato il dato è «documentato»; senza, «non verificato»', () => {
+  it('il criterio è il titolo: partite dell’ente «titolo dell’ente», dati aziendali «dichiarato»', () => {
     const r = riepilogoFascicolo(FASCICOLO);
-    expect(r.DOCUMENTATO).toBe(2);
+    expect(r.TITOLO_ENTE).toBe(2);
+    expect(r.DICHIARATO).toBe(2);
     expect(FASCICOLO.find((e) => e.id === 'EV-ENT-7')?.documento?.nome).toBe('inadempienze.xlsx');
     expect(r.IMPORTO_NON_NOTO).toBe(1);
-    expect(r.NON_VERIFICATO).toBeGreaterThan(0);
+    expect(r.DERIVATO).toBeGreaterThan(0);
   });
 });
 
@@ -118,7 +119,7 @@ describe('bilancio nel fascicolo', () => {
     });
     const pn = f.find((e) => e.id === 'EV-BIL-2025-patrimonioNetto')!;
     expect(pn.importo).toBe(-504_146);
-    expect(pn.stato).toBe('DOCUMENTATO');
+    expect(pn.stato).toBe('DICHIARATO');
     expect(pn.dataRiferimento).toBe('2025-12-31');
     expect(f.find((e) => e.id === 'EV-BIL-2025-debitiPrevidenziali')!.descrizione).toContain(
       'non si usa per le soglie'

@@ -75,6 +75,7 @@ export const ETICHETTA_TIPO_OUTPUT: Record<TipoOutput, string> = {
  * piattaforma la antepone da se' a ogni testo che stampa: il controllo resta,
  * perche' un testo puo' arrivare al revisore anche da altre strade.
  */
+/** @deprecated dalla 0.109.95: la testa dell'elaborato e' la dichiarazione di perimetro (perimetro.ts). */
 export function intestazioneLivello(tipo: TipoOutput): string {
   const livello = LIVELLO_PER_TIPO[tipo];
   if (livello === 3) {

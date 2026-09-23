@@ -23,7 +23,9 @@ import type { Evidenza } from '@/lib/fascicolo/evidenza';
 
 export function promptCorrezione(testo: string, revisione: Revisione): string {
   const rilievi = revisione.risultati
-    .filter((r) => r.esito === 'BLOCCO' || r.esito === 'SEGNALAZIONE')
+    .filter(
+      (r) => (r.esito === 'BLOCCO' || r.esito === 'SEGNALAZIONE') && r.controllo.id !== 'REV-010'
+    )
     .flatMap((r) =>
       r.rilievi.map(
         (x) =>
@@ -92,8 +94,9 @@ export function scegliVersione(
 
 /** Appendice da mettere in calce al documento: i rilievi rimasti, in chiaro. */
 export function appendiceRilievi(revisione: Revisione): string {
+  // REV-010 e' coperto dalla dichiarazione di perimetro: non va in calce.
   const restanti = revisione.risultati.filter(
-    (r) => r.esito === 'BLOCCO' || r.esito === 'SEGNALAZIONE'
+    (r) => (r.esito === 'BLOCCO' || r.esito === 'SEGNALAZIONE') && r.controllo.id !== 'REV-010'
   );
   if (restanti.length === 0) return '';
   const righe = restanti.flatMap((r) =>
