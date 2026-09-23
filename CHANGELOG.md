@@ -93,6 +93,24 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.100 — 2026-09-23
+
+**Correzione della 0.109.99 (parte a schermo mancante) e due presidi sul modulo delle materie**
+
+- La 0.109.99 aveva portato in produzione la registrazione dell'esito della
+  ricerca ma NON la parte a schermo: lo script di modifica si era fermato
+  prima del componente, e la verifica non l'aveva colto. Ora sotto ogni
+  materia senza proposta compaiono l'esito dell'ultima ricerca, «Cerca di
+  nuovo» e «Compila a mano».
+- **Virgole nel nome**: «Durc, Avviso di addebito, Diffide amministrative»
+  non diventa una materia sola; la piattaforma chiede se creare tre materie
+  distinte (i codici indicativi vanno alla prima).
+- **Nome già esistente**: avviso esplicito, nessun aggiornamento silenzioso.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (pulsanti sotto la materia; virgole
+nel nome).
+
 ## 0.109.99 — 2026-09-23
 
 **Ricerca delle materie: anche «nulla trovato» e' un esito, e si vede**

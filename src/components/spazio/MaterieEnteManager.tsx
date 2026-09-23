@@ -56,21 +56,40 @@ export function MaterieEnteManager({ nomeSchema, codice, dominioEnte, onCambiate
   }, [nomeSchema]);
 
   const salvaNuova = async () => {
-    const r = await salvaMateriaEnteAction(codice, {
-      id: null,
-      nome: nuova.nome,
-      codiciIndicativi: nuova.codiciIndicativi || null,
-    });
-    if (!r.success) return setErrore(r.error ?? 'Errore.');
+    const nomi = nuova.nome
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean);
+    if (nomi.length === 0) return;
+    // Una materia con tre nomi non e' una materia: con le virgole si chiede.
+    if (nomi.length > 1) {
+      const ok = await confermaApp(
+        `Il nome contiene ${nomi.length} voci separate da virgola: ${nomi.map((n) => `«${n}»`).join(', ')}. Creare ${nomi.length} materie distinte? I codici indicativi, se presenti, andranno solo alla prima.`,
+        { titolo: 'Più materie in un nome', etichettaConferma: `Crea ${nomi.length} materie` }
+      );
+      if (!ok) return;
+    }
+    for (const [i, nome] of nomi.entries()) {
+      if (materie.some((m) => m.nome.trim().toLowerCase() === nome.toLowerCase())) {
+        setErrore(
+          `Esiste già una materia «${nome}»: modificala con la matita invece di ricrearla.`
+        );
+        continue;
+      }
+      const r = await salvaMateriaEnteAction(codice, {
+        id: null,
+        nome,
+        codiciIndicativi: i === 0 ? nuova.codiciIndicativi || null : null,
+      });
+      if (!r.success) return setErrore(r.error ?? 'Errore.');
+    }
     setNuova({ nome: '', codiciIndicativi: '' });
     setErrore(null);
     await carica();
   };
 
   const avviaRicerca = async () => {
-    const daFare = materie.filter(
-      (m) => m.stato === 'DA_RICERCARE' || (m.stato === 'PROPOSTA' && !m.proposta)
-    );
+    const daFare = materie.filter((m) => m.stato !== 'CONFERMATA' && !m.proposta);
     if (daFare.length === 0) {
       setErrore('Nessuna materia da ricercare: tutte hanno già una proposta o sono confermate.');
       return;
@@ -400,14 +419,89 @@ export function MaterieEnteManager({ nomeSchema, codice, dominioEnte, onCambiate
                 )}
               </div>
             )}
-            {m.stato === 'DA_RICERCARE' && !m.proposta && (
-              <p className="text-[10px] text-slate-500">In attesa della ricerca.</p>
-            )}
-            {m.stato === 'PROPOSTA' && !m.proposta && (
-              <p className="text-[10px] text-amber-700">
-                La ricerca non ha trovato nulla sul sito dell’ente: compila a mano con «Rivedi e
-                conferma» dopo una nuova ricerca, o aggiungi codici indicativi.
-              </p>
+            {m.stato !== 'CONFERMATA' && !m.proposta && (
+              <div className="space-y-1">
+                {m.esitoRicerca ? (
+                  <p className="text-[11px] text-amber-800">{m.esitoRicerca}</p>
+                ) : (
+                  <p className="text-[10px] text-slate-500">In attesa della ricerca.</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={ricerca !== null}
+                    onClick={async () => {
+                      setRicerca({ fatte: 0, totale: 1, corrente: m.nome });
+                      const r = await ricercaMateriaAction(codice, m.id!);
+                      setRicerca(null);
+                      if (!r.success) setErrore(r.error ?? 'Errore.');
+                      await carica();
+                    }}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-100 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+                  >
+                    Cerca di nuovo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setConferma({
+                        id: m.id!,
+                        presupposto: m.presuppostoGiuridico ?? '',
+                        riferimenti: m.riferimentiInterni ?? '',
+                      })
+                    }
+                    className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+                  >
+                    Compila a mano
+                  </button>
+                </div>
+                {conferma?.id === m.id && (
+                  <div className="space-y-2 pt-1">
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase">
+                      Presupposto giuridico
+                    </label>
+                    <input
+                      value={conferma.presupposto}
+                      onChange={(e) => setConferma({ ...conferma, presupposto: e.target.value })}
+                      className={CLASSE_CAMPO}
+                    />
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase">
+                      Riferimenti interni
+                    </label>
+                    <input
+                      value={conferma.riferimenti}
+                      onChange={(e) => setConferma({ ...conferma, riferimenti: e.target.value })}
+                      className={CLASSE_CAMPO}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const r = await confermaMateriaEnteAction(
+                            codice,
+                            m.id!,
+                            conferma.presupposto,
+                            conferma.riferimenti
+                          );
+                          if (!r.success) setErrore(r.error ?? 'Errore.');
+                          setConferma(null);
+                          await carica();
+                        }}
+                        className="flex items-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase rounded-lg"
+                      >
+                        <Check className="w-3.5 h-3.5" /> Confermo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConferma(null)}
+                        className="px-3 py-2 text-[10px] font-bold uppercase text-slate-500"
+                      >
+                        Annulla
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </li>
         ))}
