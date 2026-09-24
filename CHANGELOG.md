@@ -93,6 +93,41 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.109 — 2026-09-24
+
+**Quattro interventi dalla valutazione giuridica dell'analisi comparativa di Libra**
+
+Claude, come giurista, ha valutato l'analisi comparativa di Libra fra le
+versioni 0.109.106 e 0.109.108: corretta nell'impianto; due errori (art. 118
+l.fall. al posto degli artt. 185-186; il rilievo REV-003 «eliminato con
+riscrittura» nella 106, dove in realta' il controllo non esisteva); due punti
+da riscontrare (art. 23 c. 2-bis; responsabilita' dell'amministratore, che e'
+livello 4). Ercole ha confermato i quattro interventi:
+1. **Riconciliazione dell'importo dell'art. 25-novies** (motore delle soglie,
+   riga INPS con lavoratori): il motivo dice quale importo e' stato confrontato
+   (contributi scaduti dai valori per le soglie, al netto di sanzioni e
+   interessi che non concorrono alla soglia) e come si rapporta
+   all'esposizione V.E.R.A. quantificata, con le sanzioni presunte; se i due
+   importi non coincidono, lo dice e chiede la riconciliazione.
+2. **Formula condizionata sugli strumenti** nel punto 6 della relazione di
+   Screening, riportata fedelmente dal prompt: composizione negoziata (art.
+   23 c. 2-bis: solo tributi e carichi dell'Agente, non contributi — dal
+   registro), accordo di ristrutturazione (art. 63, convenienza/trattamento
+   non deteriore), concordato (art. 88); concordato anteriore al 15/07/2022 →
+   legge fallimentare (artt. 185-186) per l'art. 390 CCII.
+3. **Avviso della visura**: artt. 185 e 186 l.fall. accanto all'art. 390 CCII.
+4. **Patrimonio netto negativo**: rilevano gli artt. 2485 e 2486 c.c. e, in
+   composizione negoziata, l'art. 20 CCII; «norme che rilevano, non conclusioni
+   su alcun soggetto».
+
+Registro delle fonti: tre voci nuove con stato «da verificare», in attesa del
+riscontro di Ercole (`CCII-20`, `CC-2485-2486`, `LF-185-186`); il revisore le
+segnala nei testi finche' restano tali. L'estrazione delle citazioni
+riconosce ora «art. 186 l.fall.» / «legge fallimentare».
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable.
+
 ## 0.109.108 — 2026-09-24
 
 **Cinque correttivi dall'analisi di Libra sulla Relazione di Screening con copertina (DEO GRIFO)**

@@ -108,6 +108,8 @@ export interface DatiSoglie {
   sanzioniPresunte: number | null;
   /** Voci V.E.R.A. a importo non noto: con almeno una, «sotto soglia» vale solo sui dati quantificati. */
   vociImportoIgnoto?: number;
+  /** Esposizione V.E.R.A. quantificata (contabilizzato + da contabilizzare), per la riconciliazione. */
+  esposizioneVera?: number | null;
   /** Premi assicurativi non versati (INAIL). */
   premiInail: number | null;
   /** Debito IVA scaduto da liquidazioni periodiche. */
@@ -302,6 +304,18 @@ export function calcolaSoglie25Novies(
       contributi !== null,
       'serve l’Elenco Deleghe (F24), che porta la data di versamento'
     ));
+    // Riconciliazione (analisi giuridica del 24/09/2026): dire QUALE importo
+    // e' stato confrontato, da dove viene e che cosa esclude, e come si
+    // rapporta all'esposizione V.E.R.A., che comprende sanzioni presunte
+    // estranee alla soglia (art. 25-novies, c. 1, lett. a: debito per contributi).
+    if (contributi !== null) {
+      const vera = dati.esposizioneVera ?? null;
+      motivo +=
+        ` Importo confrontato: contributi previdenziali scaduti dai valori per le soglie, ${euro(contributi)}, al netto di sanzioni e interessi, che non concorrono alla soglia.` +
+        (vera !== null
+          ? ` L’esposizione V.E.R.A. quantificata è ${euro(vera)}${sanzioni > 0 ? `, di cui sanzioni presunte ${euro(sanzioni)}` : ''}: ${Math.abs(vera - contributi) > 0.5 ? 'i due importi non coincidono e la differenza va riconciliata prima di ogni conclusione sui presupposti' : 'coincide con l’importo confrontato'}.`
+          : '');
+    }
     if (esito === 'sopra')
       motivo +=
         ' L’ente invia la segnalazione entro 60 giorni dal verificarsi dei presupposti (art. 25-novies, comma 2, lett. b).';

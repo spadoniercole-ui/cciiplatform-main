@@ -39,6 +39,8 @@ export function estraiCitazioni(testo: string): CitazioneNormativa[] {
   const rxNormaArt = new RegExp(`${atto},?\\s*${art}`, 'giu');
   const rxAttoData =
     /(d\.?\s*m\.?|decreto ministeriale|d\.?\s*l\.?|d\.?\s*lgs\.?)\s*(\d{1,2})\s+([a-zà]+)\s+(\d{4})(?:,?\s*n\.?\s*(\d+))?/giu;
+  const rxLf =
+    /artt?\.?\s*(\d{1,3}(?:-(?:bis|ter|quater))?)(?:\s*(?:e|,)\s*(\d{1,3}(?:-(?:bis|ter|quater))?))?\s*(?:l\.\s*fall\.|l\.f\.|legge\s+fallimentare|r\.d\.\s*267\/1942)/giu;
   const rxCc =
     /artt?\.?\s*(\d{4}(?:-(?:bis|ter|quater))?)(?:\s*(?:e|,)\s*(\d{4}(?:-(?:bis|ter|quater))?))?\s*(?:c\.c\.|cod\.?\s*civ\.?|codice civile)/giu;
   const rxDd =
@@ -92,6 +94,15 @@ export function estraiCitazioni(testo: string): CitazioneNormativa[] {
       posizione: m.index ?? 0,
       chiave: `dd ${m[1]} ${norm(m[2])} ${m[3]}`,
     });
+  }
+  for (const m of testo.matchAll(rxLf)) {
+    trovate.push({ testo: m[0], posizione: m.index ?? 0, chiave: `lf art ${m[1].toLowerCase()}` });
+    if (m[2])
+      trovate.push({
+        testo: m[0],
+        posizione: m.index ?? 0,
+        chiave: `lf art ${m[2].toLowerCase()}`,
+      });
   }
   for (const m of testo.matchAll(rxCc)) {
     trovate.push({ testo: m[0], posizione: m.index ?? 0, chiave: `cc art ${m[1].toLowerCase()}` });
@@ -155,6 +166,8 @@ export function chiaviFonte(f: Fonte): string[] {
       chiavi.push(`ccii art ${a}`);
       chiavi.push(`dlgs 14/2019 art ${a}`);
     } else if (/codice civile/.test(n)) chiavi.push(`cc art ${a}`);
+    else if (/legge fallimentare|267\/1942|r\.d\. 16 marzo 1942/.test(n))
+      chiavi.push(`lf art ${a}`);
     else if (atto) chiavi.push(`${atto} art ${a}`);
   }
   // L'atto e' citabile anche senza articolo («il D.L. 269/2003»).

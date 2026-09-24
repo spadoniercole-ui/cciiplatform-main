@@ -290,6 +290,46 @@ export const FONTI: Fonte[] = [
       'Riscontro di Ercole (0.109.87) su fonti notarili (Comitato Triveneto, massime T.A.1 e T.A.4; CNN Studio 88-2021/I) e dottrinali. CONTRASTO INTERPRETATIVO non consolidato (Libra REV-007): per il Triveneto è sterilizzata l’intera perdita d’esercizio, per il CNN solo la parte che incide sul capitale al netto delle riserve. Testo su Normattiva non ancora riscontrato direttamente.',
     verificata: true,
   },
+  // ---- Fonti indicate dall'analisi giuridica del 24/09/2026, in attesa di riscontro di Ercole ----
+  {
+    id: 'CCII-20',
+    norma: 'D.Lgs. 14/2019 (CCII), art. 20',
+    oggetto:
+      'Sospensione degli obblighi degli artt. 2446, 2447, 2482-bis, 2482-ter c.c. e delle cause di scioglimento (artt. 2484, 2545-duodecies c.c.) durante la composizione negoziata, dalla pubblicazione dell’istanza.',
+    efficaciaDal: null,
+    efficaciaAl: null,
+    stato: 'da_verificare',
+    atto: null,
+    verifica:
+      'Indicata dall’analisi giuridica di Libra (24/09/2026) come norma che rileva per il patrimonio netto negativo in vista di una composizione negoziata. Testo e decorrenza da riscontrare su Normattiva.',
+    verificata: false,
+  },
+  {
+    id: 'CC-2485-2486',
+    norma: 'Codice civile, artt. 2485 e 2486',
+    oggetto:
+      'Accertamento delle cause di scioglimento e poteri degli amministratori: gestione ai soli fini della conservazione dell’integrità e del valore del patrimonio sociale; responsabilità per i danni.',
+    efficaciaDal: null,
+    efficaciaAl: null,
+    stato: 'da_verificare',
+    atto: null,
+    verifica:
+      'Indicata dall’analisi giuridica di Libra (24/09/2026). Nei testi della piattaforma si cita solo come norma che rileva: nessuna conclusione su persone. Testo da riscontrare.',
+    verificata: false,
+  },
+  {
+    id: 'LF-185-186',
+    norma: 'R.D. 16 marzo 1942, n. 267 (legge fallimentare), artt. 185 e 186',
+    oggetto:
+      'Esecuzione del concordato preventivo e risoluzione per inadempimento: disciplina applicabile ai procedimenti anteriori al 15/07/2022 per la norma transitoria dell’art. 390 CCII.',
+    efficaciaDal: null,
+    efficaciaAl: null,
+    stato: 'da_verificare',
+    atto: null,
+    verifica:
+      'Sostituisce la citazione errata «art. 118» (l.fall. e CCII) comparsa in due analisi. Numerazione da riscontrare sul testo della legge fallimentare.',
+    verificata: false,
+  },
 ];
 
 export function fonte(id: string): Fonte | undefined {
