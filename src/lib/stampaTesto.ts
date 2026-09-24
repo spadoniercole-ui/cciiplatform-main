@@ -33,7 +33,24 @@ export function impostaParametriStampa(p: ParametriStampa | null): void {
 const escH = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 function stilePagina(): string {
   const m = parametriStampa.margini;
-  return `\n  @page { margin: ${m.alto}mm ${m.destro}mm ${m.basso}mm ${m.sinistro}mm; }\n  .testata { display:flex; align-items:center; gap:14px; border-bottom:1px solid #e2e8f0; padding-bottom:8px; margin-bottom:14px; }\n  .testata img { max-height:56px; max-width:180px; }\n  .testata .ente { font-size:11px; color:#475569; white-space:pre-line; }\n  .pie-ente { font-size:10px; color:#64748b; white-space:pre-line; margin-top:18px; border-top:1px solid #e2e8f0; padding-top:6px; }`;
+  const conTestata = !!(parametriStampa.logoDataUrl || parametriStampa.intestazione);
+  const conPie = !!parametriStampa.piePagina;
+  // In stampa la testata e il pie' dell'ente sono fissi: si ripetono su ogni
+  // pagina, il pie' sta in fondo. Il corpo riserva lo spazio con il padding.
+  // A schermo (anteprima nella finestra) restano nel flusso.
+  return `
+  @page { margin: ${m.alto}mm ${m.destro}mm ${m.basso}mm ${m.sinistro}mm; }
+  .testata { display:flex; align-items:center; gap:18px; border-bottom:1px solid #cbd5e1; padding-bottom:10px; margin-bottom:18px; }
+  .testata img { max-height:72px; max-width:220px; }
+  .testata .ente { font-size:13px; color:#334155; white-space:pre-line; line-height:1.35; letter-spacing:.02em; }
+  .pie-ente { font-size:10px; color:#64748b; white-space:pre-line; border-top:1px solid #cbd5e1; padding-top:6px; margin-top:24px; text-align:center; }
+  @media print {
+    body { max-width:none; margin:0; ${conTestata ? 'padding-top:96px;' : ''} ${conPie ? 'padding-bottom:48px;' : ''} }
+    .testata { position:fixed; top:0; left:0; right:0; margin:0; background:#fff; }
+    .pie-ente { position:fixed; bottom:0; left:0; right:0; margin:0; background:#fff; }
+    h1 { page-break-after:avoid; }
+    table, tr { page-break-inside:avoid; }
+  }`;
 }
 function testataEnte(): string {
   const p = parametriStampa;
@@ -100,12 +117,12 @@ export function stampaHtml(
 <meta charset="utf-8">
 <title>${titolo}</title>
 <style>
-  body { font-family: Georgia, serif; max-width: 820px; margin: 40px auto; color: #1e293b; line-height: 1.5; }
-  h1 { font-size: 18px; border-bottom: 2px solid #1e293b; padding-bottom: 8px; }
-  .sub { color: #64748b; font-size: 12px; margin-bottom: 20px; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 12px 0; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
-  th { text-transform: uppercase; font-size: 10px; color: #64748b; }
+  body { font-family: Georgia, serif; max-width: 820px; margin: 40px auto; color: #1e293b; line-height: 1.55; font-size: 13px; }
+  h1 { font-size: 20px; border-bottom: 2px solid #1e293b; padding-bottom: 8px; margin: 0 0 6px; }
+  .sub { color: #64748b; font-size: 12px; margin-bottom: 22px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 14px 0; }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  th { text-transform: uppercase; font-size: 10px; color: #64748b; letter-spacing: .04em; }
   tr.tot { font-weight: bold; background: #f8fafc; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .note { color: #94a3b8; font-size: 10px; margin-top: 16px; }${STILE_PIEDE}${stilePagina()}
@@ -137,8 +154,8 @@ export function stampaTesto(titolo: string, testo: string, dataGenerazione: stri
 <meta charset="utf-8">
 <title>${titolo}</title>
 <style>
-  body { font-family: Georgia, serif; max-width: 720px; margin: 40px auto; color: #1e293b; line-height: 1.6; }
-  h1 { font-size: 18px; border-bottom: 2px solid #1e293b; padding-bottom: 8px; }
+  body { font-family: Georgia, serif; max-width: 720px; margin: 40px auto; color: #1e293b; line-height: 1.6; font-size: 13px; }
+  h1 { font-size: 20px; border-bottom: 2px solid #1e293b; padding-bottom: 8px; margin: 0 0 6px; }
   .data { color: #64748b; font-size: 12px; margin-bottom: 24px; }
   .testo { white-space: pre-wrap; font-size: 13px; }${STILE_PIEDE}${stilePagina()}
 </style>

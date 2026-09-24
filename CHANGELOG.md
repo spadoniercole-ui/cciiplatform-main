@@ -93,6 +93,25 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.112 — 2026-09-24
+
+**Impaginazione della stampa riequilibrata**
+
+Ercole: «dobbiamo trovare un equilibrio nell'impaginazione». Dall'anteprima:
+intestazione compressa, logo minuscolo, pie' dell'ente attaccato al contenuto,
+mezza pagina vuota.
+- In stampa la **testata dell'ente si ripete su ogni pagina** e il **pie'
+  dell'ente sta in fondo alla pagina** (posizione fissa; il corpo riserva lo
+  spazio). A schermo, nell'anteprima della finestra, restano nel flusso.
+- Logo fino a 72 px di altezza e 220 px di larghezza; intestazione a 13 px
+  con interlinea; pie' centrato.
+- Tipografia di base: corpo 13 px, interlinea 1,55, titolo 20 px, celle con
+  piu' aria; titoli e righe di tabella non si spezzano fra due pagine.
+- I margini di @page restano quelli dell'ente.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable. L'effetto va giudicato in cloud con «Anteprima di stampa».
+
 ## 0.109.111 — 2026-09-24
 
 **Parametri di stampa: margini, intestazione, pie' di pagina e logo dell'ente**
