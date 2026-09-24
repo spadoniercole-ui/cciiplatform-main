@@ -93,6 +93,23 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.110 — 2026-09-24
+
+**Mai piu' bianco su bianco: regola globale**
+
+Rilievo ricorrente di Ercole (da ultimo nella pagina dei parametri
+dell'IAI). Il corpo dell'applicativo e' scuro con testo bianco: ogni
+riquadro chiaro che non dichiara il proprio colore del testo lo eredita
+bianco. Regola in `globals.css` con `:where()` (specificita' zero, le
+classi `text-*` di Tailwind vincono comunque): dentro `.bg-white`,
+`.bg-slate-50/100`, `.bg-blue-50`, `.bg-amber-50`, `.bg-emerald-50`,
+`.bg-red-50` il testo e' slate-900, compresi input, select e textarea.
+Vale per tutto l'applicativo, anche per i riquadri futuri.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (colore calcolato del testo nella
+pagina dei parametri: scuro).
+
 ## 0.109.109 — 2026-09-24
 
 **Quattro interventi dalla valutazione giuridica dell'analisi comparativa di Libra**

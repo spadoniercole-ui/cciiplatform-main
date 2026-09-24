@@ -23,6 +23,17 @@ h6 {
   font-family: var(--font-display), system-ui, sans-serif;
 }
 
+/* Il corpo e' scuro con testo bianco: ogni riquadro chiaro deve avere testo
+   scuro anche se chi lo scrive dimentica di dichiararlo («bianco su bianco»,
+   rilievo ricorrente di Ercole). :where() ha specificita' zero, cosi' le
+   classi text-* di Tailwind, se presenti, vincono comunque. */
+:where(.bg-white, .bg-slate-50, .bg-slate-100, .bg-blue-50, .bg-amber-50, .bg-emerald-50, .bg-red-50) {
+  color: rgb(15 23 42); /* slate-900 */
+}
+:where(.bg-white, .bg-slate-50) :where(input, select, textarea) {
+  color: rgb(15 23 42);
+}
+
 /* Focus sempre visibile — mai rimosso, solo ridisegnato nel colore di
    marca invece del contorno blu di sistema. */
 :focus-visible {
