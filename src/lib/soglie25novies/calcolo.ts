@@ -106,6 +106,8 @@ export interface DatiSoglie {
   annoContributiDovuti: number | null;
   /** Sanzioni presunte dal file V.E.R.A. Mostrate, mai nel test. */
   sanzioniPresunte: number | null;
+  /** Voci V.E.R.A. a importo non noto: con almeno una, «sotto soglia» vale solo sui dati quantificati. */
+  vociImportoIgnoto?: number;
   /** Premi assicurativi non versati (INAIL). */
   premiInail: number | null;
   /** Debito IVA scaduto da liquidazioni periodiche. */
@@ -281,6 +283,13 @@ export function calcolaSoglie25Novies(
         `Contributi ${euro(contributi)} — 30% dei dovuti: ${euro(sogliaPerc)} (${oltrePerc ? 'superato' : 'non superato'}); ` +
         `${euro(S.inpsImportoConLavoratori)} (${oltreImp ? 'superato' : 'non superato'}). ` +
         `Requisiti congiunti: ${esito === 'sopra' ? 'entrambi superati' : 'non entrambi superati'}.`;
+      // Rilievo di Libra: se ci sono partite a importo ignoto, «sotto soglia»
+      // vale solo sui dati quantificati e la verifica sul perimetro complessivo
+      // resta sospesa. Non e' un esito, e' una distinzione da dire.
+      if (esito === 'sotto' && (dati.vociImportoIgnoto ?? 0) > 0) {
+        esito = 'non_determinabile';
+        motivo += ` Sui dati quantificati la soglia non è raggiunta; con ${dati.vociImportoIgnoto} ${dati.vociImportoIgnoto === 1 ? 'partita' : 'partite'} a importo non noto la verifica sul perimetro contributivo complessivo resta sospesa.`;
+      }
       if (applicabile && esito === 'sotto' && sanzioni > 0) {
         const tot = contributi + sanzioni;
         inpsSopraSoloConSanzioni = tot > sogliaPerc && tot > S.inpsImportoConLavoratori;

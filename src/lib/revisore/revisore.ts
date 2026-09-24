@@ -203,6 +203,22 @@ const VERIFICHE: Record<string, Verifica> = {
   // Fonte abrogata presentata come vigente: gli indici di allerta dell'originario
   // art. 13, comma 2, abrogato dal D.Lgs. 83/2022 prima di diventare operativo.
   'REV-003': (testo) => {
+    // «artt. 63 e 88» richiamati insieme: contesti diversi (rilievo di Libra).
+    const insieme = perFrase(
+      testo,
+      (f) => {
+        const m = f.match(
+          /art(?:t\.?|icol[oi]|\.)?\s*63\s*(?:e|ed|,)\s*88\b|art(?:t\.?|icol[oi]|\.)?\s*88\s*(?:e|ed|,)\s*63\b/iu
+        );
+        if (!m) return null;
+        return /condizionat|a\s+seconda|se\s+la\s+società|rispettivamente|accord[oi]\s+di\s+ristrutturazione.*concordat|concordat.*accord[oi]\s+di\s+ristrutturazione/iu.test(
+          f
+        )
+          ? null
+          : m;
+      },
+      'Gli artt. 63 e 88 CCII operano in contesti diversi (transazione negli accordi di ristrutturazione; concordato preventivo): sostituire il rinvio cumulativo con una formula condizionata allo strumento.'
+    );
     const rilievi = perFrase(
       testo,
       (f) => {
@@ -218,7 +234,9 @@ const VERIFICHE: Record<string, Verifica> = {
       },
       'La frase richiama una disciplina abrogata senza dirlo: riscriverla indicando che non è diritto vigente.'
     );
-    return rilievi.length ? { esito: 'BLOCCO', rilievi } : PASS;
+    if (rilievi.length) return { esito: 'BLOCCO', rilievi };
+    if (insieme.length) return { esito: 'SEGNALAZIONE', rilievi: insieme };
+    return PASS;
   },
 
   'REV-012': (testo) => {

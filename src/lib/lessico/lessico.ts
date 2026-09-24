@@ -382,6 +382,10 @@ LESSICO OBBLIGATORIO (il testo viene controllato da un revisore automatico e, se
 - Un indicatore, il DSCR, il Test pratico o la Check List non dimostrano né accertano nulla: sono strumenti operativi.
 - Se richiami l'omologazione forzosa (cram down), indica sempre l'articolo (63 o 88 CCII), la versione applicabile alla data della proposta e che dipende dall'adesione degli altri creditori.
 - Un dato assente si dichiara assente: non scrivere mai che vale zero.
+- Non richiamare insieme «artt. 63 e 88 CCII»: operano in contesti diversi (art. 63 transazione su crediti tributari e contributivi negli accordi di ristrutturazione; art. 88 concordato preventivo). Usa una formula condizionata allo strumento che la società sceglierà; per l'art. 63 distingui accordo liquidatorio (convenienza) e in continuità (trattamento non deteriore).
+- Una procedura concorsuale aperta prima del 15/07/2022 resta sotto la legge fallimentare (art. 390 CCII): non applicarle norme del Codice.
+- Sospensione per le perdite 2020-2022: non è un'esenzione automatica; richiede l'individuazione dell'esercizio della perdita, delle delibere adottate e del rinvio formalizzato, e non sottrae gli amministratori ai doveri di conservazione del patrimonio.
+- Lo scenario liquidatorio di base è un ancoraggio grezzo: dillo, e indica che una comparazione utilizzabile richiede stime di realizzo, tempi, costi prededucibili, cause di prelazione, passività potenziali e riconciliazione del debito previdenziale.
 - Non attribuire alla piattaforma il ruolo di chi attesta, assevera, certifica o accerta.
 - Cita SOLO le norme del registro delle fonti qui sotto, con questi estremi. Non citare a memoria altri decreti, circolari o articoli: un riferimento fuori dal registro blocca il testo. Se ti serve una norma che non c'è, scrivi «[fonte da inserire nel registro]» invece dell'estremo.
 ${elencoFontiCitabili()}`;

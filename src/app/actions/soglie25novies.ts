@@ -258,6 +258,7 @@ export async function valutaSoglieAction(
       creditiAffidati: v.creditiAffidatiAer,
       formaAER: lettura.formaAER ?? null,
       ritardoOltre90Giorni: null,
+      vociImportoIgnoto: await contaVociVeraIgnote(nomeSchema, aziendaId),
     };
 
     // Soglie configurate per lo spazio, non costanti.
@@ -278,5 +279,18 @@ export async function valutaSoglieAction(
   } catch (error: unknown) {
     console.error('[valutaSoglieAction] Errore:', error);
     return { success: false, error: `Valutazione non riuscita: ${(error as Error).message}` };
+  }
+}
+
+/** Voci V.E.R.A. «potenziali» a importo non noto per l'azienda (0 se la tabella manca). */
+async function contaVociVeraIgnote(nomeSchema: string, aziendaId: number): Promise<number> {
+  try {
+    const r = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1 AND trattamento = 'potenziale'`,
+      [aziendaId]
+    );
+    return Number(r.rows[0]?.n ?? 0);
+  } catch {
+    return 0;
   }
 }

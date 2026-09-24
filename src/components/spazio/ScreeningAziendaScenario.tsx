@@ -22,17 +22,18 @@ import { statoRichiestaDocumenti } from '@/lib/screening/documentiGiaPresenti';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import type { Attenzione } from '@/lib/screening/indicatore';
-import {
-  RevisioneTesto,
-  stampaSeConsegnabile,
-  stampaConCopertina,
-} from '@/components/spazio/RevisioneTesto';
+import { RevisioneTesto } from '@/components/spazio/RevisioneTesto';
 import { FattiVisura } from '@/components/spazio/FattiVisura';
 import { StoricoScreening } from '@/components/spazio/StoricoScreening';
 import { CopertinaIai } from '@/components/spazio/CopertinaIai';
 import type { EsitoIai } from '@/lib/iai/indice';
 import { htmlCopertinaIai } from '@/lib/iai/copertinaHtml';
 import { htmlRiferimentiEMetodo } from '@/lib/iai/riferimentiHtml';
+import { corpoRiscontriHtml } from '@/components/spazio/RiscontriNormativi';
+import { calcolaRiscontriNormativiAzienda } from '@/app/actions/screeningAzienda';
+import { valutaSoglieAction } from '@/app/actions/soglie25novies';
+import { stampaHtml } from '@/lib/stampaTesto';
+import { appendiceRilievi } from '@/lib/revisore/correzione';
 import { datiRiferimentiAction } from '@/app/actions/iai';
 import { revisionaTesto } from '@/lib/revisore/revisore';
 import { FascicoloEvidenza } from '@/components/spazio/FascicoloEvidenza';
@@ -58,6 +59,68 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   const [generazioneInCorso, setGenerazioneInCorso] = useState(false);
   const [fascicolo, setFascicolo] = useState<Evidenza[] | null>(null);
   const [esitoIai, setEsitoIai] = useState<EsitoIai | null>(null);
+  // Stampa unica dello Screening: copertina + relazione + riscontri normativi
+  // + allegato «Riferimenti e metodo» (flag dell'ente, spegnibile al lancio).
+  const [menuStampa, setMenuStampa] = useState(false);
+  const [conAllegato, setConAllegato] = useState(true);
+  const [stampaInCorso, setStampaInCorso] = useState(false);
+  const stampaScreening = async () => {
+    if (!stato?.relazioneTesto || !esitoIai) return;
+    setStampaInCorso(true);
+    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const testo = stato.relazioneTesto;
+    const revisione = revisionaTesto(testo, 'RELAZIONE_SCREENING', { fascicolo });
+    const [ris, s25] = await Promise.all([
+      calcolaRiscontriNormativiAzienda(nomeSchema, aziendaId),
+      valutaSoglieAction(nomeSchema, aziendaId, tipoSpazio),
+    ]);
+    const riscontri =
+      ris.success && ris.riscontri
+        ? corpoRiscontriHtml(
+            ris.riscontri,
+            s25.success && s25.esito ? s25.esito : null,
+            s25.success ? null : (s25.error ?? null)
+          )
+        : '<p class="note">Riscontri normativi non calcolabili sui dati disponibili.</p>';
+    let allegato = '';
+    if (conAllegato) {
+      const rif = await datiRiferimentiAction(nomeSchema, aziendaId, tipoSpazio);
+      if (rif.success)
+        allegato = htmlRiferimentiEMetodo({
+          fase: 'SCREENING',
+          documenti: rif.documenti ?? [],
+          fontiUsate: rif.fontiUsate ?? [],
+          testo,
+          materie: rif.materie ?? [],
+          parametriIai: rif.parametriIai ?? null,
+          parametriPersonalizzati: rif.parametriPersonalizzati ?? false,
+          revisione,
+        });
+    }
+    const salto = '<div style="page-break-before:always"></div>';
+    const corpo = conAllegato
+      ? revisione.testoRivisto
+      : revisione.testoRivisto + appendiceRilievi(revisione);
+    stampaHtml(
+      `Screening — ${intestazioneCopertina.azienda}`,
+      htmlCopertinaIai(esitoIai, {
+        ...intestazioneCopertina,
+        data: new Date().toLocaleString('it-IT'),
+      }) +
+        salto +
+        `<h2 style="font-size:14px">Relazione di Screening</h2><div style="white-space:pre-wrap;font-size:12px;line-height:1.5">${esc(corpo)}</div>` +
+        salto +
+        `<h2 style="font-size:14px">Riscontri normativi</h2>${riscontri}` +
+        (allegato ? salto + allegato : ''),
+      undefined,
+      stato.generatoIl
+    );
+    setStampaInCorso(false);
+    setMenuStampa(false);
+  };
+  useEffect(() => {
+    if (esitoIai) setConAllegato(esitoIai.parametri.notaNelReport);
+  }, [esitoIai]);
   const intestazioneCopertina = {
     azienda: stato?.visuraFatti?.denominazione ?? `Azienda ${aziendaId}`,
     codiceFiscale: stato?.visuraFatti?.codiceFiscale ?? null,
@@ -564,6 +627,56 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           versione={stato.generatoIl ? Date.parse(stato.generatoIl) : 0}
           intestazione={intestazioneCopertina}
           onCalcolato={setEsitoIai}
+          azioneStampa={
+            <div className="ml-auto relative">
+              <button
+                type="button"
+                onClick={() => setMenuStampa((v) => !v)}
+                disabled={!stato.relazioneTesto}
+                className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
+                title="Un solo documento: copertina, relazione, riscontri normativi e, se attivo, l’allegato"
+              >
+                <Printer className="w-3.5 h-3.5" /> Stampa lo Screening (PDF)
+              </button>
+              {menuStampa && (
+                <div className="absolute right-0 mt-1 w-80 bg-white border border-slate-200 rounded-xl shadow-lg p-3 space-y-2 z-20">
+                  <p className="text-[11px] text-slate-700">
+                    Il documento contiene: copertina con l’indice, relazione di Screening, riscontri
+                    normativi.
+                  </p>
+                  <label className="flex items-start gap-2 text-[11px] text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={conAllegato}
+                      onChange={(e) => setConAllegato(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Allegato «Riferimenti e metodo» (perimetro, documenti con impronta, fonti,
+                      titoli dell’ente, parametri dell’indice, rilievi residui)
+                    </span>
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={stampaScreening}
+                      disabled={stampaInCorso}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
+                    >
+                      {stampaInCorso ? 'Preparazione…' : 'Stampa'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMenuStampa(false)}
+                      className="px-3 py-2 text-[10px] font-bold uppercase text-slate-500"
+                    >
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          }
         />
       )}
 
@@ -595,47 +708,6 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
                   Generata il {new Date(stato.generatoIl).toLocaleString('it-IT')}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={async () => {
-                  let allegato = '';
-                  if (esitoIai?.parametri.notaNelReport) {
-                    const rif = await datiRiferimentiAction(nomeSchema, aziendaId, tipoSpazio);
-                    if (rif.success) {
-                      allegato = htmlRiferimentiEMetodo({
-                        fase: 'SCREENING',
-                        documenti: rif.documenti ?? [],
-                        fontiUsate: rif.fontiUsate ?? [],
-                        testo: stato.relazioneTesto!,
-                        materie: rif.materie ?? [],
-                        parametriIai: rif.parametriIai ?? null,
-                        parametriPersonalizzati: rif.parametriPersonalizzati ?? false,
-                        revisione: revisionaTesto(stato.relazioneTesto!, 'RELAZIONE_SCREENING', {
-                          fascicolo,
-                        }),
-                      });
-                    }
-                  }
-                  return esitoIai
-                    ? stampaConCopertina(
-                        'RELAZIONE_SCREENING',
-                        'Relazione di Screening',
-                        htmlCopertinaIai(esitoIai, {
-                          ...intestazioneCopertina,
-                          data: new Date().toLocaleString('it-IT'),
-                        }),
-                        stato.relazioneTesto!,
-                        stato.generatoIl,
-                        fascicolo,
-                        allegato
-                      )
-                    : handleStampaRelazione(stato.relazioneTesto!, stato.generatoIl, fascicolo);
-                }}
-                className="flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[9px] uppercase rounded transition-colors"
-                title="Apre una finestra di stampa — da lì puoi salvare come PDF"
-              >
-                <Printer className="w-3 h-3" /> Stampa / PDF
-              </button>
             </div>
           </div>
           <div className="mb-3 space-y-3">
@@ -668,16 +740,3 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
 }
 
 /** Grezzo apposta — vedi src/lib/stampaTesto.ts */
-function handleStampaRelazione(
-  testo: string,
-  generatoIl: string | null,
-  fascicolo: Evidenza[] | null
-) {
-  stampaSeConsegnabile(
-    'RELAZIONE_SCREENING',
-    'Relazione di Screening',
-    testo,
-    generatoIl,
-    fascicolo
-  );
-}

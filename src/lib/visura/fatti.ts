@@ -161,9 +161,18 @@ export function avvisiDaFattiVisura(f: FattiVisura, oggi: string): AvvisoVisura[
   for (const p of pendenti) {
     const quando = p.data ? ` del ${p.data.split('-').reverse().join('/')}` : '';
     const dove = p.tribunale ? ` (${p.tribunale})` : '';
+    // Rilievo di Libra: un procedimento aperto prima del 15/07/2022 resta
+    // sotto la legge fallimentare (art. 390 CCII); i rapporti fra debito
+    // attuale, passivo concordatario e debiti successivi all'omologazione
+    // vanno ricostruiti prima di richiamare strumenti del Codice.
+    const anteriore = p.data !== null && p.data < '2022-07-15';
     avvisi.push({
       codice: 'PROCEDURA_PENDENTE',
-      testo: `Procedura concorsuale risultante dalla visura: ${p.tipo}${quando}${dove}, stato «${p.stato ?? 'non indicato'}». Il dato è rilevato, non accertato: la coesistenza con lo strumento in esame (adempimento, risoluzione, disciplina applicabile per data del procedimento) va valutata professionalmente prima di ogni altra istruttoria.`,
+      testo: `Procedura concorsuale risultante dalla visura: ${p.tipo}${quando}${dove}, stato «${p.stato ?? 'non indicato'}». Il dato è rilevato, non accertato: la coesistenza con lo strumento in esame (adempimento, risoluzione, disciplina applicabile per data del procedimento) va valutata professionalmente prima di ogni altra istruttoria.${
+        anteriore
+          ? ' Procedimento anteriore al 15/07/2022: disciplina della legge fallimentare per la norma transitoria dell’art. 390 CCII; occorre ricostruire il rapporto fra il debito attuale, il passivo concordatario e l’eventuale debito sorto dopo l’omologazione, distinguendo crediti concorsuali, prededucibili e successivi.'
+          : ''
+      }`,
     });
   }
   if (f.statoAttivita && /liquidaz|cessat|sciolt|cancellat|inattiv|sospes/i.test(f.statoAttivita)) {

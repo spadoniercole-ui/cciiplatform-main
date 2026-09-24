@@ -50,6 +50,19 @@ describe('revisore e registro delle fonti (REV-001)', () => {
       esito('L’obbligo Uniemens discende dal D.L. 269/2003, art. 44, comma 9.', 'REV-001').esito
     ).toBe('PASS');
     expect(esito('Rilevano gli artt. 2482-bis e 2482-ter c.c.', 'REV-001').esito).toBe('PASS');
+    // «artt. 63 e 88» insieme: segnalazione; condizionati allo strumento: pass
+    expect(
+      esito(
+        'Il test di convenienza previsto dagli articoli 63 e 88 del Codice della Crisi.',
+        'REV-003'
+      ).esito
+    ).toBe('SEGNALAZIONE');
+    expect(
+      esito(
+        'Il test dipende dallo strumento: art. 63 se accordo di ristrutturazione, art. 88 se concordato preventivo, rispettivamente.',
+        'REV-003'
+      ).esito
+    ).toBe('PASS');
     // fonte abrogata citata COME abrogata: citazione corretta
     expect(
       esito(

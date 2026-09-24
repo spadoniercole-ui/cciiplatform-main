@@ -93,6 +93,64 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.108 — 2026-09-24
+
+**Cinque correttivi dall'analisi di Libra sulla Relazione di Screening con copertina (DEO GRIFO)**
+
+Giudizio di Libra: impianto corretto (pre-istruttoria interna, nessun
+accertamento, IAI dichiarato come non probatorio). Cinque precisazioni,
+tutte accolte:
+1. **IAI**: la dichiarazione dice ora che l'indice rileva soltanto come
+   criterio di priorita' del fascicolo, senza valore probatorio autonomo
+   (art. 3 CCII impone la rilevazione tempestiva, non attribuisce prova a un
+   punteggio), e che i vincoli di non compensabilita' sono regole
+   metodologiche interne, non presunzioni normative.
+2. **Art. 25-novies, imprese con lavoratori**: con partite V.E.R.A. a importo
+   non noto, «sotto soglia» vale solo sui dati quantificati e l'esito diventa
+   «non determinabile» con la frase: soglia non raggiunta sui dati
+   quantificati, verifica sospesa sul perimetro contributivo complessivo
+   (`vociImportoIgnoto` nel motore delle soglie).
+3. **Concordato anteriore al CCII**: l'avviso della visura, per un
+   procedimento aperto prima del 15/07/2022, aggiunge la disciplina della
+   legge fallimentare (art. 390 CCII) e la necessita' di ricostruire il
+   rapporto fra debito attuale, passivo concordatario e debiti successivi
+   all'omologazione. Il prompt vieta il rinvio cumulativo «artt. 63 e 88»
+   (contesti diversi; formula condizionata allo strumento; per l'art. 63
+   liquidatorio/continuita'); REV-003 lo segnala nei testi.
+4. **Patrimonio netto negativo**: l'avviso precisa che la sospensione
+   2020-2022 non e' automatica (esercizio della perdita, delibere, rinvio
+   formalizzato; doveri di conservazione del patrimonio invariati) e che la
+   perdita si determina sulla reale consistenza patrimoniale.
+5. **Scenario liquidatorio**: il prompt chiede di dichiararlo ancoraggio
+   grezzo e di elencare cio' che una comparazione utilizzabile richiede.
+
+Non accolto in forma di citazione: Cass. 6893/2023 e Cass. 2044/2026, citate
+da Libra, non entrano nel registro finche' non riscontrate sul testo.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable.
+
+## 0.109.107 — 2026-09-24
+
+**Una sola stampa dello Screening**
+
+Ercole: tre punti di stampa creano confusione; il documento e' uno, con la
+copertina come suo elemento.
+- **«Stampa lo Screening (PDF)»**, unico pulsante, nel riquadro
+  dell'indice: apre una piccola finestra che elenca il contenuto (copertina
+  con l'indice, relazione di Screening, riscontri normativi) e il flag
+  dell'allegato «Riferimenti e metodo», gia' impostato dai Parametri
+  dell'ente e spegnibile al lancio.
+- Tolti «Stampa copertina» e il «Stampa / PDF» dei Riscontri normativi e
+  della relazione. Il corpo dei Riscontri e' ora una funzione
+  (`corpoRiscontriHtml`) usata dalla stampa unica.
+- Senza allegato i rilievi residui restano in calce alla relazione; con
+  l'allegato stanno nella sua sezione 6.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable. Il documento stampato richiede uno Screening generato: da vedere in
+cloud.
+
 ## 0.109.106 — 2026-09-24
 
 **«Riferimenti e metodo»: l'allegato unico in coda al PDF dello Screening**

@@ -2,14 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Scale, ExternalLink, AlertTriangle, Info, Printer, RefreshCw } from 'lucide-react';
+import { Scale, ExternalLink, AlertTriangle, Info, RefreshCw } from 'lucide-react';
 import { calcolaRiscontriNormativiAzienda } from '@/app/actions/screeningAzienda';
 import type { Riscontri, EsitoSoglia } from '@/lib/normativa/riscontri';
 import { linkNormativaArticolo } from '@/lib/normativa/riferimenti';
-import { stampaHtml } from '@/lib/stampaTesto';
 import { valutaSoglieAction } from '@/app/actions/soglie25novies';
 import type { EsitoSoglie, RigaSoglia } from '@/lib/soglie25novies/calcolo';
-import { APP_VERSION } from '@/lib/appVersion';
 
 /** Formule di Libra (D.3.2): mai «segnalazione dovuta», mai un giudizio. */
 const ESITO_25: Record<RigaSoglia['esito'], string> = {
@@ -61,6 +59,60 @@ const CAT_CLS: Record<string, string> = {
   leva: 'bg-violet-50 text-violet-700 border-violet-200',
 };
 
+/** Il corpo dei Riscontri normativi in HTML: usato dalla stampa unica dello Screening. */
+export function corpoRiscontriHtml(
+  dati: Riscontri,
+  soglie25: EsitoSoglie | null,
+  errore25: string | null
+): string {
+  const rigaSoglia = (s: Riscontri['soglie'][number]) =>
+    `<tr><td>${s.parametro}</td><td class="num">${euro(s.valoreRilevato)}</td><td>${s.soglia}</td><td>${
+      s.esito === 'sopra' ? 'OLTRE SOGLIA' : s.esito === 'sotto' ? 'sotto soglia' : 'da verificare'
+    }</td><td>${s.fonte}${s.cautela ? `<br><em style="color:#94a3b8">${s.cautela}</em>` : ''}</td></tr>`;
+  const corpo = `
+    <h2 style="font-size:14px">Articoli movimentati</h2>
+    <ul>${dati.articoli
+      .map(
+        (a) => `<li><strong>Art. ${a.numero}</strong> (${CAT_LABEL[a.categoria]}): ${a.motivo}</li>`
+      )
+      .join('')}</ul>
+    <h2 style="font-size:14px">Presupposti oggettivi dell’art. 25-novies</h2>
+    ${
+      soglie25
+        ? `<table><thead><tr><th>Fattispecie</th><th>Importo confrontato</th><th>Esito</th><th>Motivo</th><th>Fonte</th></tr></thead><tbody>${soglie25.righe
+            .filter((r) => r.applicabile)
+            .map(
+              (r) =>
+                `<tr><td>${r.ambito}<br><em style="color:#94a3b8">${r.descrizione}</em></td><td class="num">${euro(r.esposizione)}</td><td>${ESITO_25[r.esito]}</td><td>${r.motivo}</td><td>${r.fonte ?? '—'}</td></tr>`
+            )
+            .join('')}</tbody></table>${
+            soglie25.datiMancanti.length
+              ? `<ul>${soglie25.datiMancanti.map((d) => `<li>${d}</li>`).join('')}</ul>`
+              : ''
+          }<p class="note">${QUALIFICA_25}</p>`
+        : `<p>Esito non esprimibile: ${errore25 ?? 'valori per le soglie non inseriti'}. Non è stata formulata alcuna conclusione sul merito.</p>`
+    }
+    <h2 style="font-size:14px">Altri parametri di legge (dal bilancio)</h2>
+    <table><thead><tr><th>Parametro</th><th>Valore rilevato</th><th>Soglia</th><th>Esito</th><th>Fonte / cautela</th></tr></thead>
+    <tbody>${dati.soglie.map(rigaSoglia).join('')}</tbody></table>
+    ${
+      dati.indicatori.length
+        ? `<h2 style="font-size:14px">Segnali e squilibri rilevati (da sottoporre a valutazione professionale)</h2><ul>${dati.indicatori
+            .map((i) => `<li><strong>${i.nome}</strong> — ${i.dettaglio} (art. ${i.articolo})</li>`)
+            .join('')}</ul>`
+        : ''
+    }
+    ${
+      dati.datiMancanti.length
+        ? `<h2 style="font-size:14px">Cosa non è stato verificato automaticamente</h2><ul>${dati.datiMancanti
+            .map((d) => `<li>${d}</li>`)
+            .join('')}</ul>`
+        : ''
+    }
+    <p class="note">Calcolo deterministico sui dati disponibili. Il rilevamento di segnali non accerta lo stato di crisi. Non costituisce parere legale; per l'uso ufficiale fa fede il testo su Normattiva.</p>`;
+  return corpo;
+}
+
 export function RiscontriNormativi({
   nomeSchema,
   aziendaId,
@@ -97,67 +149,6 @@ export function RiscontriNormativi({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, aziendaId]);
 
-  const stampa = () => {
-    if (!dati) return;
-    const rigaSoglia = (s: Riscontri['soglie'][number]) =>
-      `<tr><td>${s.parametro}</td><td class="num">${euro(s.valoreRilevato)}</td><td>${s.soglia}</td><td>${
-        s.esito === 'sopra'
-          ? 'OLTRE SOGLIA'
-          : s.esito === 'sotto'
-            ? 'sotto soglia'
-            : 'da verificare'
-      }</td><td>${s.fonte}${s.cautela ? `<br><em style="color:#94a3b8">${s.cautela}</em>` : ''}</td></tr>`;
-    const corpo = `
-      <h2 style="font-size:14px">Articoli movimentati</h2>
-      <ul>${dati.articoli
-        .map(
-          (a) =>
-            `<li><strong>Art. ${a.numero}</strong> (${CAT_LABEL[a.categoria]}): ${a.motivo}</li>`
-        )
-        .join('')}</ul>
-      <h2 style="font-size:14px">Presupposti oggettivi dell’art. 25-novies</h2>
-      ${
-        soglie25
-          ? `<table><thead><tr><th>Fattispecie</th><th>Importo confrontato</th><th>Esito</th><th>Motivo</th><th>Fonte</th></tr></thead><tbody>${soglie25.righe
-              .filter((r) => r.applicabile)
-              .map(
-                (r) =>
-                  `<tr><td>${r.ambito}<br><em style="color:#94a3b8">${r.descrizione}</em></td><td class="num">${euro(r.esposizione)}</td><td>${ESITO_25[r.esito]}</td><td>${r.motivo}</td><td>${r.fonte ?? '—'}</td></tr>`
-              )
-              .join('')}</tbody></table>${
-              soglie25.datiMancanti.length
-                ? `<ul>${soglie25.datiMancanti.map((d) => `<li>${d}</li>`).join('')}</ul>`
-                : ''
-            }<p class="note">${QUALIFICA_25}</p>`
-          : `<p>Esito non esprimibile: ${errore25 ?? 'valori per le soglie non inseriti'}. Non è stata formulata alcuna conclusione sul merito.</p>`
-      }
-      <h2 style="font-size:14px">Altri parametri di legge (dal bilancio)</h2>
-      <table><thead><tr><th>Parametro</th><th>Valore rilevato</th><th>Soglia</th><th>Esito</th><th>Fonte / cautela</th></tr></thead>
-      <tbody>${dati.soglie.map(rigaSoglia).join('')}</tbody></table>
-      ${
-        dati.indicatori.length
-          ? `<h2 style="font-size:14px">Segnali e squilibri rilevati (da sottoporre a valutazione professionale)</h2><ul>${dati.indicatori
-              .map(
-                (i) => `<li><strong>${i.nome}</strong> — ${i.dettaglio} (art. ${i.articolo})</li>`
-              )
-              .join('')}</ul>`
-          : ''
-      }
-      ${
-        dati.datiMancanti.length
-          ? `<h2 style="font-size:14px">Cosa non è stato verificato automaticamente</h2><ul>${dati.datiMancanti
-              .map((d) => `<li>${d}</li>`)
-              .join('')}</ul>`
-          : ''
-      }
-      <p class="note">Calcolo deterministico sui dati disponibili. Il rilevamento di segnali non accerta lo stato di crisi. Non costituisce parere legale; per l'uso ufficiale fa fede il testo su Normattiva.</p>`;
-    stampaHtml(
-      `Riscontri normativi${ragioneSociale ? ` — ${ragioneSociale}` : ''}`,
-      corpo,
-      'Articoli e soglie movimentati dall’analisi (calcolo automatico)'
-    );
-  };
-
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-5">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
@@ -170,16 +161,6 @@ export function RiscontriNormativi({
             Calcolo automatico
           </span>
         </div>
-        {dati && !caricamento && (
-          <button
-            type="button"
-            onClick={stampa}
-            className="flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[9px] uppercase rounded transition-colors"
-            title="Apre la stampa dei riscontri — da lì puoi salvare come PDF"
-          >
-            <Printer className="w-3 h-3" /> Stampa / PDF
-          </button>
-        )}
       </div>
 
       <p className="text-[11px] text-slate-500 mb-4">

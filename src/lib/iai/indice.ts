@@ -401,7 +401,7 @@ export function calcolaIai(d: DatiIai, p: ParametriIai = PARAMETRI_IAI_PREDEFINI
 }
 
 export const DICHIARAZIONE_IAI =
-  'Indicatore composito di orientamento istruttorio, costruito secondo la metodologia OCSE-JRC per gli indicatori compositi (normalizzazione per distanza dall’obiettivo, ponderazione dichiarata, aggregazione con vincoli di non compensabilità); struttura di bilancio misurata con lo Z’’-score di Altman (1995). Non costituisce accertamento di crisi o insolvenza né giudizio sulla proposta: orienta il livello decisionale successivo. Parametri e pesi sono dichiarati e modificabili dall’ente.';
+  'Indicatore composito di orientamento istruttorio, costruito secondo la metodologia OCSE-JRC per gli indicatori compositi (normalizzazione per distanza dall’obiettivo, ponderazione dichiarata, aggregazione con vincoli di non compensabilità); struttura di bilancio misurata con lo Z’’-score di Altman (1995). Non costituisce accertamento di crisi o insolvenza né giudizio sulla proposta: rileva soltanto come criterio di priorità del fascicolo per il livello decisionale successivo, senza valore probatorio autonomo (l’art. 3 CCII impone la rilevazione tempestiva degli squilibri, non attribuisce a un punteggio automatico la prova dello stato di crisi). I vincoli di non compensabilità sono regole metodologiche interne, non presunzioni normative. Parametri e pesi sono dichiarati e modificabili dall’ente.';
 
 /** Basi metodologiche dell'indice, da stampare in copertina. */
 export const BASI_METODOLOGICHE_IAI: { rif: string; uso: string }[] = [
