@@ -36,11 +36,14 @@ export interface ParametriIai {
     sogliaEnteSuperata: number;
   };
   fasce: { fine: number; nome: string; lettura: string }[];
+  /** La nota metodologica va in coda al PDF dello Screening (default: si'). */
+  notaNelReport: boolean;
 }
 
 export const PARAMETRI_IAI_PREDEFINITI: ParametriIai = {
   pesi: { A: 30, B: 25, C: 15, D: 15, E: 15 },
   vincoli: { proceduraPendente: 70, denunceAssentiConAddetti: 75, sogliaEnteSuperata: 56 },
+  notaNelReport: true,
   fasce: [
     {
       fine: 30,
@@ -399,3 +402,102 @@ export function calcolaIai(d: DatiIai, p: ParametriIai = PARAMETRI_IAI_PREDEFINI
 
 export const DICHIARAZIONE_IAI =
   'Indicatore composito di orientamento istruttorio, costruito secondo la metodologia OCSE-JRC per gli indicatori compositi (normalizzazione per distanza dall’obiettivo, ponderazione dichiarata, aggregazione con vincoli di non compensabilità); struttura di bilancio misurata con lo Z’’-score di Altman (1995). Non costituisce accertamento di crisi o insolvenza né giudizio sulla proposta: orienta il livello decisionale successivo. Parametri e pesi sono dichiarati e modificabili dall’ente.';
+
+/** Basi metodologiche dell'indice, da stampare in copertina. */
+export const BASI_METODOLOGICHE_IAI: { rif: string; uso: string }[] = [
+  {
+    rif: 'OECD/JRC (Nardo M., Saisana M., Saltelli A., Tarantola S., Hoffman A., Giovannini E.), Handbook on Constructing Composite Indicators: Methodology and User Guide, OECD Publishing, 2008.',
+    uso: 'impianto dell’indice: scelta degli indicatori, normalizzazione per distanza dall’obiettivo, ponderazione dichiarata, aggregazione, analisi di sensibilità.',
+  },
+  {
+    rif: 'Altman E.I., Hartzell J., Peck M., Emerging Markets Corporate Bonds: A Scoring System, Salomon Brothers, 1995 (Z’’-score per società non quotate e non manifatturiere; da Altman E.I., Financial Ratios, Discriminant Analysis and the Prediction of Corporate Bankruptcy, Journal of Finance, 1968).',
+    uso: 'dimensione B: struttura patrimoniale e finanziaria (zona di sicurezza sopra 2,6; zona di pericolo sotto 1,1).',
+  },
+  {
+    rif: 'Munda G., “Measuring Sustainability”: A Multi-Criterion Framework, Environment, Development and Sustainability, 7, 2005; Munda G., Social Multi-Criteria Evaluation for a Sustainable Economy, Springer, 2008.',
+    uso: 'aggregazione non compensativa: i vincoli fissano un minimo che il resto non può compensare.',
+  },
+  {
+    rif: 'Saaty T.L., The Analytic Hierarchy Process, McGraw-Hill, 1980.',
+    uso: 'ponderazione: i pesi delle dimensioni si definiscono con il confronto a coppie da parte dell’ente (in corso di taratura).',
+  },
+  {
+    rif: 'CNDCEC, Crisi d’impresa. Gli indici dell’allerta, ottobre 2019.',
+    uso: 'indici diagnostici di bilancio, come strumenti operativi e non parametri normativi (il sistema dell’originario art. 13 CCII è abrogato).',
+  },
+];
+
+/** Riferimenti normativi che entrano nelle dimensioni, per la copertina. */
+export const RIFERIMENTI_NORMATIVI_IAI: { dimensione: Dimensione; rif: string }[] = [
+  {
+    dimensione: 'A',
+    rif: 'D.Lgs. 14/2019 (CCII), art. 25-novies — segnalazioni dei creditori pubblici qualificati (presupposti oggettivi rilevati / non rilevati).',
+  },
+  {
+    dimensione: 'A',
+    rif: 'D.L. 30 settembre 2003, n. 269, art. 44, comma 9 (conv. L. 326/2003) — obbligo di trasmissione mensile delle denunce Uniemens.',
+  },
+  {
+    dimensione: 'B',
+    rif: 'D.Lgs. 14/2019 (CCII), art. 3 — adeguatezza degli assetti e rilevazione tempestiva degli squilibri (gli indici sono diagnostici, non soglie di legge).',
+  },
+  {
+    dimensione: 'B',
+    rif: 'D.Lgs. 14/2019 (CCII), art. 2, lett. d) — parametri dimensionali dell’impresa minore.',
+  },
+  {
+    dimensione: 'E',
+    rif: 'Codice civile, artt. 2482-bis e 2482-ter (s.r.l.), 2446 e 2447 (s.p.a.) — riduzione del capitale per perdite; D.L. 23/2020, art. 6 — sospensione per le perdite 2020-2022.',
+  },
+  {
+    dimensione: 'E',
+    rif: 'D.Lgs. 14/2019 (CCII), art. 390 — disciplina transitoria dei procedimenti anteriori (procedure pendenti risultanti dalla visura).',
+  },
+  {
+    dimensione: 'D',
+    rif: 'Perimetro dei dati dichiarato in testa all’elaborato: dati di provenienza aziendale riportati come proposti; crediti dell’ente acquisiti sul presupposto degli atti che li fondano.',
+  },
+];
+
+/** Parametri dell'ente sopra i predefiniti: pesi e minimi dei vincoli, validati. Fasce fisse. */
+export function parametriDaEnte(grezzo: unknown): ParametriIai {
+  const g = grezzo && typeof grezzo === 'object' ? (grezzo as Record<string, unknown>) : {};
+  const pesiG = (g.pesi && typeof g.pesi === 'object' ? g.pesi : {}) as Record<string, unknown>;
+  const vinG = (g.vincoli && typeof g.vincoli === 'object' ? g.vincoli : {}) as Record<
+    string,
+    unknown
+  >;
+  const n = (v: unknown, def: number, min: number, max: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.round(v))) : def;
+  const base = PARAMETRI_IAI_PREDEFINITI;
+  const pesi = {
+    A: n(pesiG.A, base.pesi.A, 0, 100),
+    B: n(pesiG.B, base.pesi.B, 0, 100),
+    C: n(pesiG.C, base.pesi.C, 0, 100),
+    D: n(pesiG.D, base.pesi.D, 0, 100),
+    E: n(pesiG.E, base.pesi.E, 0, 100),
+  };
+  // Tutti a zero = nessun indice: si torna ai predefiniti.
+  const somma = pesi.A + pesi.B + pesi.C + pesi.D + pesi.E;
+  return {
+    pesi: somma > 0 ? pesi : base.pesi,
+    vincoli: {
+      proceduraPendente: n(vinG.proceduraPendente, base.vincoli.proceduraPendente, 0, 100),
+      denunceAssentiConAddetti: n(
+        vinG.denunceAssentiConAddetti,
+        base.vincoli.denunceAssentiConAddetti,
+        0,
+        100
+      ),
+      sogliaEnteSuperata: n(vinG.sogliaEnteSuperata, base.vincoli.sogliaEnteSuperata, 0, 100),
+    },
+    fasce: base.fasce,
+    notaNelReport: typeof g.notaNelReport === 'boolean' ? g.notaNelReport : base.notaNelReport,
+  };
+}
+
+export const NOME_VINCOLO: Record<keyof ParametriIai['vincoli'], string> = {
+  proceduraPendente: 'Procedura concorsuale pendente in visura',
+  denunceAssentiConAddetti: 'Denunce Uniemens assenti con addetti dichiarati',
+  sogliaEnteSuperata: 'Presupposti dell’art. 25-novies rilevati',
+};

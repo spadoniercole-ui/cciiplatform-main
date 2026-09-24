@@ -22,10 +22,19 @@ import { statoRichiestaDocumenti } from '@/lib/screening/documentiGiaPresenti';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import type { Attenzione } from '@/lib/screening/indicatore';
-import { RevisioneTesto, stampaSeConsegnabile } from '@/components/spazio/RevisioneTesto';
+import {
+  RevisioneTesto,
+  stampaSeConsegnabile,
+  stampaConCopertina,
+} from '@/components/spazio/RevisioneTesto';
 import { FattiVisura } from '@/components/spazio/FattiVisura';
 import { StoricoScreening } from '@/components/spazio/StoricoScreening';
 import { CopertinaIai } from '@/components/spazio/CopertinaIai';
+import type { EsitoIai } from '@/lib/iai/indice';
+import { htmlCopertinaIai } from '@/lib/iai/copertinaHtml';
+import { htmlRiferimentiEMetodo } from '@/lib/iai/riferimentiHtml';
+import { datiRiferimentiAction } from '@/app/actions/iai';
+import { revisionaTesto } from '@/lib/revisore/revisore';
 import { FascicoloEvidenza } from '@/components/spazio/FascicoloEvidenza';
 import type { Evidenza } from '@/lib/fascicolo/evidenza';
 import { improntaFile } from '@/lib/fascicolo/impronta';
@@ -48,6 +57,12 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   const [visuraFile, setVisuraFile] = useState<File | null>(null);
   const [generazioneInCorso, setGenerazioneInCorso] = useState(false);
   const [fascicolo, setFascicolo] = useState<Evidenza[] | null>(null);
+  const [esitoIai, setEsitoIai] = useState<EsitoIai | null>(null);
+  const intestazioneCopertina = {
+    azienda: stato?.visuraFatti?.denominazione ?? `Azienda ${aziendaId}`,
+    codiceFiscale: stato?.visuraFatti?.codiceFiscale ?? null,
+    ente: tipoSpazio === 'ENTE' ? 'Ricevente' : 'Redigente',
+  };
   // Secondi trascorsi dall'avvio: la generazione dura fino a due minuti e
   // mezzo, e un pulsante che gira da solo non dice se sta lavorando o e' fermo.
   const [secondiGenerazione, setSecondiGenerazione] = useState(0);
@@ -547,6 +562,8 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           aziendaId={aziendaId}
           tipoSpazio={tipoSpazio}
           versione={stato.generatoIl ? Date.parse(stato.generatoIl) : 0}
+          intestazione={intestazioneCopertina}
+          onCalcolato={setEsitoIai}
         />
       )}
 
@@ -580,9 +597,40 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               )}
               <button
                 type="button"
-                onClick={() =>
-                  handleStampaRelazione(stato.relazioneTesto!, stato.generatoIl, fascicolo)
-                }
+                onClick={async () => {
+                  let allegato = '';
+                  if (esitoIai?.parametri.notaNelReport) {
+                    const rif = await datiRiferimentiAction(nomeSchema, aziendaId, tipoSpazio);
+                    if (rif.success) {
+                      allegato = htmlRiferimentiEMetodo({
+                        fase: 'SCREENING',
+                        documenti: rif.documenti ?? [],
+                        fontiUsate: rif.fontiUsate ?? [],
+                        testo: stato.relazioneTesto!,
+                        materie: rif.materie ?? [],
+                        parametriIai: rif.parametriIai ?? null,
+                        parametriPersonalizzati: rif.parametriPersonalizzati ?? false,
+                        revisione: revisionaTesto(stato.relazioneTesto!, 'RELAZIONE_SCREENING', {
+                          fascicolo,
+                        }),
+                      });
+                    }
+                  }
+                  return esitoIai
+                    ? stampaConCopertina(
+                        'RELAZIONE_SCREENING',
+                        'Relazione di Screening',
+                        htmlCopertinaIai(esitoIai, {
+                          ...intestazioneCopertina,
+                          data: new Date().toLocaleString('it-IT'),
+                        }),
+                        stato.relazioneTesto!,
+                        stato.generatoIl,
+                        fascicolo,
+                        allegato
+                      )
+                    : handleStampaRelazione(stato.relazioneTesto!, stato.generatoIl, fascicolo);
+                }}
                 className="flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[9px] uppercase rounded transition-colors"
                 title="Apre una finestra di stampa — da lì puoi salvare come PDF"
               >

@@ -93,6 +93,100 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.106 — 2026-09-24
+
+**«Riferimenti e metodo»: l'allegato unico in coda al PDF dello Screening**
+
+Ercole: «perche' nella nota non riportiamo tutti i riferimenti del report?».
+Fatto: la nota metodologica diventa l'allegato unico dei riferimenti
+(`lib/iai/riferimentiHtml.ts`, dati da `datiRiferimentiAction`):
+1. perimetro e destinazione per esteso;
+2. documenti di origine con impronta abbreviata (dodici cifre, l'intera
+   nell'applicativo) e data di caricamento;
+3. fonti normative: le voci del registro usate dal motore (soglie) e citate
+   nel testo, con stato e nota di verifica; i riferimenti per dimensione
+   dell'indice; a parte, le citazioni del testo non presenti nel registro;
+4. titoli di credito dell'ente: materie con presupposto, riferimenti, codici e
+   conferma;
+5. parametri e metodo dell'indice (pesi con quota, vincoli, fasce, basi);
+6. revisione automatica: controlli eseguiti e rilievi residui, che con
+   l'allegato non stanno piu' in calce al testo della relazione.
+La copertina perde il blocco dei riferimenti e rimanda all'allegato. Il flag
+nei Parametri dell'indice si chiama ora «Allega Riferimenti e metodo»,
+attivo per default.
+
+Da estendere a Relazione dello scenario e documenti di corredo con la stessa
+funzione.
+
+Verificato: type-check (entrambi i controlli), lint, test (allegato sul caso
+con citazione fuori registro), build cloud e portable. La coda del PDF
+richiede uno Screening generato: da vedere in cloud.
+
+## 0.109.105 — 2026-09-24
+
+**La nota metodologica dell'IAI e' l'ultima sezione del PDF dello Screening, per default**
+
+Variante di Ercole: la nota si stampa nel report con un flag attivo per
+default; togliendo la spunta il PDF esce senza. Cosi' i pesi non stanno in
+copertina, dove distraggono, ma in fondo, dove chi vuole capire il numero li
+trova, e non vanno chiesti.
+- `lib/iai/notaHtml.ts`: una sola funzione per la nota (pesi con quota,
+  vincoli, fasce, basi), usata dalla stampa a parte nei Parametri e
+  dall'allegato in coda al PDF dello Screening (dopo la relazione, su pagina
+  nuova).
+- Flag «Allega la nota metodologica in coda al PDF dello Screening» nei
+  Parametri dell'indice (`parametri_iai.notaNelReport`, default attivo).
+- `stampaConCopertina` accetta un allegato in coda.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (flag nei Parametri; la coda del PDF
+dello Screening richiede uno Screening generato: da vedere in cloud).
+
+## 0.109.104 — 2026-09-24
+
+**Pesi e vincoli dell'IAI nei Parametri di Spazio; i pesi non compaiono in copertina**
+
+Ercole: i pesi delle dimensioni devono essere modificabili dall'ente e non
+devono comparire nella stampa. Risposta: si', con una sfumatura — il metodo
+OCSE-JRC chiede pesi dichiarati, quindi restano dichiarati nella pagina dei
+parametri e stampabili a parte come nota metodologica.
+
+- **Parametri di Spazio › Indice di Attenzione Istruttoria**
+  (`ParametriIaiManager.tsx`, tabella `parametri_iai`): pesi delle cinque
+  dimensioni (relativi: conta il rapporto), minimi dei tre vincoli, «Predefiniti»
+  per tornare ai valori proposti, «Stampa nota metodologica» (pesi con quota,
+  vincoli, fasce, basi metodologiche).
+- I valori dell'ente sono validati (`parametriDaEnte`): fuori scala si
+  riportano nei limiti, mancanti = predefiniti, tutti a zero = predefiniti.
+- **Copertina e riquadro senza pesi**: restano dimensione e punteggio.
+- Il calcolo dell'indice legge i parametri dell'ente, se ci sono.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (pagina dei parametri, salvataggio,
+ritorno ai predefiniti).
+
+## 0.109.103 — 2026-09-23
+
+**La copertina si stampa, e porta i riferimenti**
+
+Ercole: «e non la stampi? non metti i riferimenti?». Fatto.
+- **«Stampa copertina»** sul riquadro dell'IAI: quadrante, barre, vincoli,
+  sintesi, determinanti e lacune per dimensione, **riferimenti normativi per
+  dimensione** (art. 25-novies; D.L. 269/2003 art. 44 c. 9; CCII artt. 2 e 3;
+  c.c. 2482-bis/ter e 2446/2447 con D.L. 23/2020 art. 6; CCII art. 390) e
+  **basi metodologiche** (OECD/JRC Handbook 2008; Altman 1968/1995; Munda
+  2005/2008; Saaty 1980; CNDCEC 2019), con la dichiarazione in calce, il
+  piede con versione e impronta.
+- **Il PDF della relazione di Screening ha la copertina come prima pagina**:
+  copertina, salto pagina, relazione rivista con i rilievi in calce.
+- A schermo: «Mostra riferimenti normativi e basi metodologiche» sotto il
+  riquadro. L'intestazione della copertina prende denominazione e codice
+  fiscale dai fatti della visura.
+- Cio' che si stampa e' cio' che si vede: stesso motore, stessa HTML.
+
+Verificato: type-check (entrambi i controlli), lint, test (copertina HTML
+sul caso DEO GRIFO), build cloud e portable.
+
 ## 0.109.102 — 2026-09-23
 
 **Indice di Attenzione Istruttoria (IAI): la copertina dello Screening**

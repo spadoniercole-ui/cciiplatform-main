@@ -825,6 +825,15 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.titoli_ente_config ADD COLUMN IF NOT EXISTS lotto_ricerca_il TIMESTAMP`
   );
+  // Parametri dell'Indice di Attenzione Istruttoria (0.109.104): pesi delle
+  // dimensioni e minimi dei vincoli, dell'ente. NULL = valori predefiniti.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_iai (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      parametri JSONB,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
 }
 
 /**

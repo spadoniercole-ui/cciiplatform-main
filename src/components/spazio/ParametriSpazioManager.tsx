@@ -19,6 +19,7 @@ import {
   Scale,
   Sparkles,
   History,
+  Gauge,
 } from 'lucide-react';
 
 interface Props {
@@ -43,6 +44,13 @@ export function ParametriSpazioManager({ codice, tipoSpazio }: Props) {
     },
     ...(tipoSpazio === 'ENTE'
       ? [
+          {
+            href: `/spazio/${codice}/parametri/indice-iai`,
+            icon: Gauge,
+            titolo: 'Indice di Attenzione Istruttoria',
+            descrizione:
+              'Pesi delle dimensioni e minimi dei vincoli, con la nota metodologica stampabile.',
+          },
           {
             href: `/spazio/${codice}/parametri/titoli-ente`,
             icon: Scale,

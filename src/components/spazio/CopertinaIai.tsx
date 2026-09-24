@@ -7,7 +7,16 @@
 import React, { useEffect, useState } from 'react';
 import { Gauge, AlertTriangle } from 'lucide-react';
 import { calcolaIaiAction } from '@/app/actions/iai';
-import { DICHIARAZIONE_IAI, NOME_DIMENSIONE, type EsitoIai } from '@/lib/iai/indice';
+import {
+  BASI_METODOLOGICHE_IAI,
+  DICHIARAZIONE_IAI,
+  NOME_DIMENSIONE,
+  RIFERIMENTI_NORMATIVI_IAI,
+  type EsitoIai,
+} from '@/lib/iai/indice';
+import { htmlCopertinaIai } from '@/lib/iai/copertinaHtml';
+import { stampaHtml } from '@/lib/stampaTesto';
+import { Printer } from 'lucide-react';
 
 interface Props {
   nomeSchema: string;
@@ -15,6 +24,8 @@ interface Props {
   tipoSpazio: 'ENTE' | 'NON_ENTE';
   /** Cambia quando cambiano i dati (nuovo Screening): l'indice si ricalcola. */
   versione: number;
+  /** Intestazione della copertina stampata. */
+  intestazione: { azienda: string; codiceFiscale: string | null; ente: string };
   onCalcolato?: (esito: EsitoIai) => void;
 }
 
@@ -59,7 +70,15 @@ function Quadrante({ valore, colore }: { valore: number; colore: string }) {
   );
 }
 
-export function CopertinaIai({ nomeSchema, aziendaId, tipoSpazio, versione, onCalcolato }: Props) {
+export function CopertinaIai({
+  nomeSchema,
+  aziendaId,
+  tipoSpazio,
+  versione,
+  intestazione,
+  onCalcolato,
+}: Props) {
+  const [riferimenti, setRiferimenti] = useState(false);
   const [esito, setEsito] = useState<EsitoIai | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
   const [dettaglio, setDettaglio] = useState(false);
@@ -94,6 +113,23 @@ export function CopertinaIai({ nomeSchema, aziendaId, tipoSpazio, versione, onCa
             e perché.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() =>
+            stampaHtml(
+              'Indice di Attenzione Istruttoria — copertina',
+              htmlCopertinaIai(esito, {
+                ...intestazione,
+                data: new Date().toLocaleString('it-IT'),
+              }),
+              undefined,
+              null
+            )
+          }
+          className="ml-auto flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+        >
+          <Printer className="w-3.5 h-3.5" /> Stampa copertina
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
@@ -113,7 +149,6 @@ export function CopertinaIai({ nomeSchema, aziendaId, tipoSpazio, versione, onCa
             <div key={c.dimensione} className="flex items-center gap-3">
               <span className="w-56 shrink-0 text-[11px] text-slate-700">
                 <strong>{c.dimensione}</strong> · {NOME_DIMENSIONE[c.dimensione]}
-                <span className="text-slate-400"> · peso {esito.parametri.pesi[c.dimensione]}</span>
               </span>
               <div
                 className="flex-1 h-3 bg-slate-100 rounded overflow-hidden"
@@ -193,6 +228,37 @@ export function CopertinaIai({ nomeSchema, aziendaId, tipoSpazio, versione, onCa
         </div>
       )}
 
+      <button
+        type="button"
+        onClick={() => setRiferimenti((v) => !v)}
+        className="text-[10px] font-bold uppercase text-slate-500 hover:text-blue-700"
+      >
+        {riferimenti ? 'Nascondi' : 'Mostra'} riferimenti normativi e basi metodologiche
+      </button>
+      {riferimenti && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[10px] text-slate-700">
+          <div>
+            <p className="font-bold text-slate-900 mb-1">Riferimenti normativi per dimensione</p>
+            <ul className="space-y-1">
+              {RIFERIMENTI_NORMATIVI_IAI.map((r) => (
+                <li key={r.rif}>
+                  <b>{r.dimensione}</b> · {r.rif}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="font-bold text-slate-900 mb-1">Basi metodologiche</p>
+            <ul className="space-y-1">
+              {BASI_METODOLOGICHE_IAI.map((b) => (
+                <li key={b.rif}>
+                  {b.rif} <span className="text-slate-500">— {b.uso}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
       <p className="text-[10px] text-slate-400 italic">{DICHIARAZIONE_IAI}</p>
     </section>
   );

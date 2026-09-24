@@ -133,3 +133,19 @@ describe('IAI', () => {
     expect(e.indice).toBeGreaterThanOrEqual(70);
   });
 });
+
+describe('parametri dell’ente', () => {
+  it('valida, riempie i mancanti con i predefiniti e non accetta pesi tutti a zero', async () => {
+    const { parametriDaEnte, PARAMETRI_IAI_PREDEFINITI } = await import('./indice');
+    const p = parametriDaEnte({
+      pesi: { A: 50, B: 'x', C: 200 },
+      vincoli: { proceduraPendente: 90 },
+    });
+    expect(p.pesi).toEqual({ A: 50, B: 25, C: 100, D: 15, E: 15 });
+    expect(p.vincoli.proceduraPendente).toBe(90);
+    expect(p.vincoli.sogliaEnteSuperata).toBe(PARAMETRI_IAI_PREDEFINITI.vincoli.sogliaEnteSuperata);
+    expect(parametriDaEnte({ pesi: { A: 0, B: 0, C: 0, D: 0, E: 0 } }).pesi).toEqual(
+      PARAMETRI_IAI_PREDEFINITI.pesi
+    );
+  });
+});

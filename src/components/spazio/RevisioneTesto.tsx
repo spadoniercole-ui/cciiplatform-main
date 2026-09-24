@@ -14,7 +14,7 @@ import { ShieldCheck, ShieldAlert, ChevronDown, ChevronRight } from 'lucide-reac
 import { revisionaTesto, type EsitoControllo, type Revisione } from '@/lib/revisore/revisore';
 import { ETICHETTA_GRUPPO, type GruppoControllo } from '@/lib/revisore/catalogo';
 import { ETICHETTA_TIPO_OUTPUT, LIVELLI_OUTPUT, type TipoOutput } from '@/lib/revisore/livelli';
-import { stampaTesto } from '@/lib/stampaTesto';
+import { stampaTesto, stampaHtml } from '@/lib/stampaTesto';
 import type { Evidenza } from '@/lib/fascicolo/evidenza';
 import { appendiceRilievi } from '@/lib/revisore/correzione';
 
@@ -54,6 +54,36 @@ export function stampaSeConsegnabile(
   const revisione = revisionaTesto(testo, tipo, { fascicolo });
   stampaTesto(titolo, revisione.testoRivisto + appendiceRilievi(revisione), dataGenerazione);
   return true;
+}
+
+/**
+ * Come stampaSeConsegnabile, ma con una COPERTINA in HTML davanti (l'Indice di
+ * Attenzione Istruttoria) e il testo rivisto a seguire, su pagina nuova.
+ */
+export function stampaConCopertina(
+  tipo: TipoOutput,
+  titolo: string,
+  copertinaHtml: string,
+  testo: string,
+  dataGenerazione: string | null,
+  fascicolo?: Evidenza[] | null,
+  /** Allegato in coda (es. nota metodologica); vuoto = nessuno. */
+  allegatoHtml = ''
+): void {
+  const revisione = revisionaTesto(testo, tipo, { fascicolo });
+  // Con l'allegato «Riferimenti e metodo» i rilievi residui stanno li', non in calce al testo.
+  const corpo = (
+    allegatoHtml ? revisione.testoRivisto : revisione.testoRivisto + appendiceRilievi(revisione)
+  )
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  stampaHtml(
+    titolo,
+    `${copertinaHtml}<div style="page-break-before:always"></div><h2 style="font-size:14px">Relazione</h2><div style="white-space:pre-wrap;font-size:12px;line-height:1.5">${corpo}</div>${allegatoHtml ? `<div style="page-break-before:always"></div>${allegatoHtml}` : ''}`,
+    undefined,
+    dataGenerazione
+  );
 }
 
 export const EVENTO_ESPORTAZIONE_BLOCCATA = 'ccii:esportazione-bloccata';
