@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { ParametriStampaLoader } from '@/components/spazio/ParametriStampaLoader';
 import { ottieniContestoAccessoSpazio, esciDaSalvagenteAction } from '@/app/actions/spazi';
 import { SidebarSpazio } from '@/components/spazio/SidebarSpazio';
 import { TopStatusBar } from '@/components/brand/TopStatusBar';
@@ -75,7 +76,10 @@ export default async function LayoutSpazio({
             />
           )}
 
-          <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          <main className="flex-1 overflow-y-auto p-6">
+            <ParametriStampaLoader nomeSchema={contesto.nomeSchema} />
+            {children}
+          </main>
         </div>
         <ChatbotAiuto />
       </div>

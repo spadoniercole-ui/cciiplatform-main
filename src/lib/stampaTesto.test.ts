@@ -15,3 +15,11 @@ describe('piede dei documenti esportati', () => {
     expect(p).toMatch(/[0-9a-f]{64}/);
   });
 });
+
+describe('parametri di stampa', () => {
+  it('impostaParametriStampa accetta null (torna ai predefiniti)', async () => {
+    const { impostaParametriStampa, PARAMETRI_STAMPA_PREDEFINITI } = await import('./stampaTesto');
+    expect(() => impostaParametriStampa(null)).not.toThrow();
+    expect(PARAMETRI_STAMPA_PREDEFINITI.margini.alto).toBe(15);
+  });
+});

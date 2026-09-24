@@ -825,6 +825,19 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.titoli_ente_config ADD COLUMN IF NOT EXISTS lotto_ricerca_il TIMESTAMP`
   );
+  // Parametri di stampa (0.109.111): margini, intestazione, pie' di pagina,
+  // logo dell'ente (immagine come data URL, al massimo ~300 KB).
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_stampa (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      margini JSONB,
+      intestazione TEXT,
+      pie_pagina TEXT,
+      logo_data_url TEXT,
+      logo_nome TEXT,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
   // Parametri dell'Indice di Attenzione Istruttoria (0.109.104): pesi delle
   // dimensioni e minimi dei vincoli, dell'ente. NULL = valori predefiniti.
   await eseguiDdlTenant(

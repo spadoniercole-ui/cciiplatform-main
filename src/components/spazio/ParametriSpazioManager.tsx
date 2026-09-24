@@ -20,6 +20,7 @@ import {
   Sparkles,
   History,
   Gauge,
+  Printer,
 } from 'lucide-react';
 
 interface Props {
@@ -44,6 +45,13 @@ export function ParametriSpazioManager({ codice, tipoSpazio }: Props) {
     },
     ...(tipoSpazio === 'ENTE'
       ? [
+          {
+            href: `/spazio/${codice}/parametri/stampa`,
+            icon: Printer,
+            titolo: 'Stampa',
+            descrizione:
+              'Margini, intestazione, piè di pagina e logo dell’ente su ogni documento stampato.',
+          },
           {
             href: `/spazio/${codice}/parametri/indice-iai`,
             icon: Gauge,

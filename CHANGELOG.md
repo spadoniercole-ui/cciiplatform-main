@@ -93,6 +93,26 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.111 — 2026-09-24
+
+**Parametri di stampa: margini, intestazione, pie' di pagina e logo dell'ente**
+
+Ercole: per non mettere mano al codice ogni volta. Parametri di Spazio ›
+Stampa (`ParametriStampaManager.tsx`, tabella `parametri_stampa`):
+- margini in millimetri (5-40) applicati con `@page`;
+- intestazione su piu' righe e pie' di pagina dell'ente;
+- logo (PNG, JPEG, SVG, WEBP, fino a 300 KB), conservato come data URL, in
+  testa accanto all'intestazione;
+- «Anteprima di stampa» per vedere l'effetto senza un documento.
+I parametri si caricano una volta per spazio (`ParametriStampaLoader` nel
+layout) e valgono per ogni stampa: Screening, relazioni, riscontri,
+prospetti, note. Il piede tecnico con versione e impronta resta, dopo il pie'
+di pagina dell'ente.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (salvataggio dei parametri con
+logo; anteprima con intestazione, logo e pie' di pagina).
+
 ## 0.109.110 — 2026-09-24
 
 **Mai piu' bianco su bianco: regola globale**
