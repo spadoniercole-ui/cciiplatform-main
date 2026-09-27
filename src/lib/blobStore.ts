@@ -23,7 +23,12 @@ function cartellaBlob(): string {
 }
 
 function idDaUrl(url: string): string {
-  return url.startsWith(PREFISSO) ? url.slice(PREFISSO.length) : path.basename(url);
+  const id = url.startsWith(PREFISSO) ? url.slice(PREFISSO.length) : path.basename(url);
+  // Solo file dentro la cartella dei blob: niente separatori né "..".
+  if (!id || /[\\/]/.test(id) || id.includes('..')) {
+    throw new Error('Identificativo di file non valido.');
+  }
+  return id;
 }
 
 async function aBuffer(body: any): Promise<Buffer> {
