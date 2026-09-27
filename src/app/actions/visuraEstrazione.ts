@@ -23,6 +23,7 @@
 // caricato su questa piattaforma.
 
 import Anthropic from '@anthropic-ai/sdk';
+import { richiediSessione } from '@/lib/autorizzazione';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 120 * 1000, maxRetries: 1 }) : null;
@@ -96,6 +97,7 @@ export async function estraiAnagraficaDaVisuraAction(
   pdfBase64: string
 ): Promise<RisultatoEstrazione> {
   try {
+    await richiediSessione();
     if (!anthropic) {
       return {
         success: false,

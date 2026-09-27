@@ -14,6 +14,7 @@
 import { pool } from '@/lib/db';
 import { assicuraTabelleConfigAzienda } from '@/db/provision';
 import { ottieniTabXbrlAbilitate, ottieniIndiciSpazio } from '@/app/actions/parametriSpazio';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -36,6 +37,7 @@ export async function ottieniTabXbrlAzienda(
   aziendaId: number
 ): Promise<RisultatoTabXbrlAzienda> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, tab: [], error: 'Nome schema non valido.' };
     }
@@ -88,6 +90,7 @@ export async function impostaTabXbrlAziendaAction(
   abilitato: boolean
 ): Promise<RisultatoOperazioneConfigAzienda> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleConfigAzienda(nomeSchema);
 
@@ -129,6 +132,7 @@ export async function ottieniIndiciAzienda(
   aziendaId: number
 ): Promise<RisultatoIndiciAzienda> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, indici: [], error: 'Nome schema non valido.' };
     }
@@ -177,6 +181,7 @@ export async function impostaIndiceAziendaAction(
   abilitato: boolean
 ): Promise<RisultatoOperazioneConfigAzienda> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleConfigAzienda(nomeSchema);
 

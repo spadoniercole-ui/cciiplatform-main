@@ -38,7 +38,6 @@ interface RigaChallenge {
   fattori_totali: number | null;
 }
 
-
 async function leggiChallenge(): Promise<RigaChallenge | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_PENDING)?.value;

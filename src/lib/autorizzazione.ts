@@ -201,9 +201,7 @@ export async function contestoIspezioneCorrente(): Promise<ContestoAccessoSpazio
  * Contesto di accesso allo spazio `codice` per il chiamante, oppure null se
  * non ha accesso. È la stessa verifica usata dal layout del pannello spazio.
  */
-export async function risolviContestoSpazio(
-  codice: string
-): Promise<ContestoAccessoSpazio | null> {
+export async function risolviContestoSpazio(codice: string): Promise<ContestoAccessoSpazio | null> {
   return risolviContestoSpazioMemo(codice);
 }
 

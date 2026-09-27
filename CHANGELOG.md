@@ -93,6 +93,36 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.110.0 — 2026-09-27
+
+**Sicurezza: ogni azione verifica chi la chiama**
+
+Correzione delle falle critiche emerse dall'audit di sicurezza. Le server
+action sono endpoint pubblici: fino a oggi quasi nessuna verificava la
+sessione, per cui bastava conoscerne l'identificativo (presente nel codice
+scaricato dal browser) per leggere o modificare i dati di qualunque spazio,
+entrare come amministratore o azzerare il database.
+- Nuovo modulo unico `src/lib/autorizzazione.ts`: l'identità arriva solo
+  dalla sessione; lo spazio passato dal browser è accettato solo se coincide
+  con quello dell'utente (il Superadmin opera su tutti).
+- Guardia su tutte le 251 azioni non pubbliche; le funzioni di gestione
+  (parametri, utenti, permessi, configurazioni) sono riservate all'Admin di
+  Spazio; licenze, spazi, backup, ripristino, dump e azzeramento al
+  Superadmin. Le route API richiedono la sessione.
+- Modalità salvagente: il cookie di ispezione contiene solo l'id dello spazio
+  e vale solo con una sessione Superadmin attiva.
+- La console `/superadmin` si apre solo al Superadmin.
+- MFA: l'avvio della verifica non è più invocabile dall'esterno; al quinto
+  codice o PIN errato bisogna rifare il login.
+- Un utente disabilitato perde subito l'accesso anche con sessione aperta.
+- Aggiornati `next` (15.5.26) e `drizzle-orm` (0.45) per vulnerabilità note.
+- Nuovo controllo `npm run check:autorizzazione` (in type-check e CI): fallisce
+  se un'azione nuova non verifica il chiamante.
+
+Verificato: type-check, lint, test (inclusi 14 nuovi sulla guardia), build
+cloud e portable; login e navigazione di tutte le pagine dei due spazi
+dell'edizione portable.
+
 ## 0.109.112 — 2026-09-24
 
 **Impaginazione della stampa riequilibrata**

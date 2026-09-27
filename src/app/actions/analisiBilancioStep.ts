@@ -12,6 +12,7 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabellaAnalisiBilancioStep } from '@/db/provision';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export type SezioneAnalisiBilancio = 'xbrl' | 'indici';
 
@@ -47,6 +48,7 @@ export async function ottieniStatoAnalisiBilancioStep(
   aziendaId: number
 ): Promise<RisultatoStatoAnalisiBilancio> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, stato: STATO_VUOTO, error: 'Nome schema non valido.' };
     }
@@ -89,6 +91,7 @@ export async function segnaVistaAnalisiBilancioAction(
   sezione: SezioneAnalisiBilancio
 ): Promise<RisultatoVistaAnalisiBilancio> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, cambiato: false, error: 'Nome schema non valido.' };
     }

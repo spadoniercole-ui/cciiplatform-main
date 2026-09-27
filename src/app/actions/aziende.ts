@@ -13,6 +13,7 @@
 // di riferimento (convocazione INPS/INAIL e piano di risanamento).
 
 import { assicuraTabellaAziende } from '@/db/provision';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export interface Azienda {
   id: number;
@@ -126,6 +127,7 @@ function valoriDaDati(dati: DatiAzienda) {
 
 export async function ottieniAziende(nomeSchema: string): Promise<RisultatoElencoAziende> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     await assicuraTabellaAziende(nomeSchema);
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
@@ -152,6 +154,7 @@ export async function ottieniAziendaPerId(
   id: number
 ): Promise<RisultatoAzienda> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     await assicuraTabellaAziende(nomeSchema);
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
@@ -178,6 +181,7 @@ export async function creaAziendaAction(
   dati: DatiAzienda
 ): Promise<RisultatoAzienda> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!(dati.ragioneSociale || '').trim()) {
       return { success: false, error: "La ragione sociale dell'azienda è obbligatoria." };
     }
@@ -202,6 +206,7 @@ export async function modificaAziendaAction(
   dati: DatiAzienda
 ): Promise<RisultatoOperazioneAzienda> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!(dati.ragioneSociale || '').trim()) {
       return { success: false, error: "La ragione sociale dell'azienda è obbligatoria." };
     }
@@ -244,6 +249,8 @@ async function impostaStatoAzienda(
   attiva: boolean
 ): Promise<RisultatoOperazioneAzienda> {
   try {
+    // Unico percorso di disabilitaAziendaAction e riattivaAziendaAction.
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -275,6 +282,7 @@ export async function aggiornaCodiceAtecoAction(
   nuovoCodiceAteco: string
 ): Promise<RisultatoOperazioneAzienda> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');

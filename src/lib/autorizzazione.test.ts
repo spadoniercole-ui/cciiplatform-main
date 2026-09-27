@@ -114,9 +114,7 @@ beforeEach(() => {
 describe('senza sessione', () => {
   it('rifiuta ogni accesso', async () => {
     await expect(richiediSuperadmin()).rejects.toBeInstanceOf(ErroreAutorizzazione);
-    await expect(richiediAccessoSchema('tenant_alfa')).rejects.toBeInstanceOf(
-      ErroreAutorizzazione
-    );
+    await expect(richiediAccessoSchema('tenant_alfa')).rejects.toBeInstanceOf(ErroreAutorizzazione);
     expect(await risolviContestoSpazio('alfa')).toBeNull();
   });
 
