@@ -19,6 +19,7 @@ import { ottieniModelliChecklist } from '@/app/actions/checklistModelli';
 import { ottieniRisposteChecklist, ottieniEsclusioniChecklist } from '@/app/actions/checklist';
 import { MODELLO_MINISTERIALE } from '@/lib/checklist/costanti';
 import { CHECKLIST_MINISTERIALE, type SezioneChecklist } from '@/lib/checklist/ministeriale';
+import { richiediSessione } from '@/lib/autorizzazione';
 
 export interface RisultatoAssistenteContestuale {
   success: boolean;
@@ -98,6 +99,7 @@ export async function chiediAssistenteContestuale(
   cronologia: MessaggioChatGuidato[],
   messaggio: string
 ): Promise<RisultatoAssistenteContestuale> {
+  await richiediSessione();
   if (!contesto) {
     const risultato = await chiediAssistente(
       cronologia.map((m) => ({ ruolo: m.ruolo, testo: m.testo })),

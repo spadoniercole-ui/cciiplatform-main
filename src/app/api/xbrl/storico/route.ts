@@ -12,9 +12,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
 import type { AnalisiXbrlResult } from '@/lib/xbrl/types';
+import { rifiutaSeNonAutorizzato } from '@/lib/autorizzazione';
 
 export async function POST(req: NextRequest) {
   try {
+    const rifiuto = await rifiutaSeNonAutorizzato('SUPERADMIN');
+    if (rifiuto) return rifiuto;
     const body: { analisi: AnalisiXbrlResult } = await req.json();
     const analisi = body?.analisi;
 
@@ -65,6 +68,8 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const rifiuto = await rifiutaSeNonAutorizzato('SUPERADMIN');
+    if (rifiuto) return rifiuto;
     const codiceFiscale = req.nextUrl.searchParams.get('codiceFiscale');
 
     if (!codiceFiscale) {

@@ -17,6 +17,7 @@
 // XBRL. Il Dizionario Indici del superadmin resta un modulo a sé, per un
 // uso futuro eventualmente diverso — non più agganciato qui.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabelleParametriSpazio } from '@/db/provision';
 import { INDICI_XBRL_CANONICI } from '@/lib/indiciXbrlCanonici';
@@ -45,6 +46,7 @@ export interface RisultatoIndiciSpazio {
 
 export async function ottieniIndiciSpazio(nomeSchema: string): Promise<RisultatoIndiciSpazio> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     await assicuraTabelleParametriSpazio(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, indici: [], error: 'Nome schema non valido.' };
@@ -87,6 +89,7 @@ export async function impostaIndiceAbilitatoAction(
   abilitato: boolean
 ): Promise<RisultatoOperazioneParametri> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }
@@ -158,6 +161,7 @@ export async function ottieniLimitiRicevibilita(
   tipoSpazio?: 'ENTE' | 'NON_ENTE'
 ): Promise<RisultatoLimitiRicevibilita> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, limiti: [], error: 'Nome schema non valido.' };
     }
@@ -263,6 +267,7 @@ export async function ottieniLimitiRicevibilitaRango(
   nomeSchema: string
 ): Promise<RisultatoLimitiRicevibilitaRango> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, limiti: [], error: 'Nome schema non valido.' };
     }
@@ -311,6 +316,7 @@ export async function aggiornaLimiteRicevibilitaRangoAction(
   }
 ): Promise<RisultatoOperazioneParametri> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }
@@ -367,6 +373,7 @@ export async function aggiornaLimiteRicevibilitaAction(
   }
 ): Promise<RisultatoOperazioneParametri> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }
@@ -399,6 +406,7 @@ export async function creaCategoriaLimiteAction(
   categoria: string
 ): Promise<RisultatoOperazioneParametri> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }
@@ -446,6 +454,7 @@ export interface RisultatoTabXbrl {
 
 export async function ottieniTabXbrlAbilitate(nomeSchema: string): Promise<RisultatoTabXbrl> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, tab: [], error: 'Nome schema non valido.' };
     }
@@ -493,6 +502,7 @@ export async function impostaTabXbrlAbilitataAction(
   abilitato: boolean
 ): Promise<RisultatoOperazioneParametri> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }
@@ -520,6 +530,7 @@ export async function ottieniPercentualeMediaProposta(
   nomeSchema: string
 ): Promise<{ success: boolean; percentuale: number; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, percentuale: 30, error: 'Nome schema non valido.' };
     }
@@ -549,6 +560,7 @@ export async function aggiornaPercentualeMediaPropostaAction(
   percentuale: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }
@@ -586,6 +598,7 @@ export async function ottieniAnniStoricoMax(
   nomeSchema: string
 ): Promise<{ success: boolean; anni: number; personalizzato: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return {
         success: false,
@@ -622,6 +635,7 @@ export async function aggiornaAnniStoricoMaxAction(
   anni: number | null
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }

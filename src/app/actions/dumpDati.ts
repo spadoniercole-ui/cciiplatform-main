@@ -13,6 +13,7 @@
 // per popolarlo di dati.
 
 import { pool } from '@/lib/db';
+import { richiediSuperadmin } from '@/lib/autorizzazione';
 
 function escapeIdentificatore(nome: string): string {
   return `"${nome.replace(/"/g, '""')}"`;
@@ -39,6 +40,7 @@ export interface RisultatoDumpDati {
 
 export async function generaDumpDatiAction(): Promise<RisultatoDumpDati> {
   try {
+    await richiediSuperadmin();
     const schemiRis = await pool.query(
       `SELECT nspname FROM pg_catalog.pg_namespace
        WHERE nspname = 'public' OR nspname LIKE 'tenant\\_%' ORDER BY nspname`

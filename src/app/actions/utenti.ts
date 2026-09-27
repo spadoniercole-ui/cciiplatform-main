@@ -7,6 +7,7 @@
 // (admin_workspace): questi utenti non hanno ancora un proprio login reale
 // — è il prossimo passo naturale una volta che questa gestione esiste.
 
+import { messaggioErrore, richiediAccessoSchema } from '@/lib/autorizzazione';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { assicuraTabelleUtenti } from '@/db/provision';
@@ -57,6 +58,7 @@ function generaPasswordTemporanea(): string {
 
 export async function ottieniUtentiSpazio(nomeSchema: string): Promise<RisultatoElencoUtenti> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     await assicuraTabelleUtenti(nomeSchema);
     // Garantisce/valorizza lo username per gli operatori creati prima della
     // 0.109 (idempotente e memoizzato per processo).
@@ -97,6 +99,7 @@ export async function creaUtenteSpazioAction(
   dati: DatiUtente
 ): Promise<RisultatoOperazioneUtente> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const nome = dati.nome.trim();
     const cognome = dati.cognome.trim();
     const email = (dati.email || '').trim().toLowerCase();
@@ -195,6 +198,7 @@ export async function modificaUtenteSpazioAction(
   dati: DatiUtente
 ): Promise<RisultatoOperazioneUtente> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const nome = dati.nome.trim();
     const cognome = dati.cognome.trim();
     const email = dati.email.trim().toLowerCase();
@@ -256,6 +260,11 @@ export async function disabilitaUtenteSpazioAction(
   nomeSchema: string,
   id: number
 ): Promise<RisultatoOperazioneUtente> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+  } catch (error) {
+    return { success: false, error: messaggioErrore(error, 'Operazione non autorizzata.') };
+  }
   return impostaStatoUtente(nomeSchema, id, false);
 }
 
@@ -263,6 +272,11 @@ export async function riattivaUtenteSpazioAction(
   nomeSchema: string,
   id: number
 ): Promise<RisultatoOperazioneUtente> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+  } catch (error) {
+    return { success: false, error: messaggioErrore(error, 'Operazione non autorizzata.') };
+  }
   return impostaStatoUtente(nomeSchema, id, true);
 }
 
@@ -272,6 +286,7 @@ export async function rigeneraPasswordUtenteAction(
   id: number
 ): Promise<RisultatoOperazioneUtente> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');

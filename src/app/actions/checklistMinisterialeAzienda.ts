@@ -7,6 +7,7 @@
 // pre-compilarne alcune quando i dati lo consentono con certezza, il
 // resto va completato a mano — mai per invenzione.
 
+import { messaggioErrore, richiediAccessoSchema } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
 import { del, get } from '@/lib/blobStore';
 import { pool } from '@/lib/db';
@@ -47,6 +48,7 @@ export async function ottieniChecklistMinisterialeAzienda(
 ): Promise<{ success: boolean; stato: StatoChecklistMinisterialeAzienda; error?: string }> {
   const statoVuoto: StatoChecklistMinisterialeAzienda = { risposte: [], quadro: null };
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, stato: statoVuoto, error: 'Nome schema non valido.' };
     }
@@ -88,6 +90,7 @@ export async function salvaRispostaChecklistMinisterialeAziendaAction(
   note: string | null
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleScenari(nomeSchema);
     await pool.query(
@@ -117,6 +120,7 @@ export async function ereditaChecklistMinisterialeInScenarioAction(
   scenarioId: number
 ): Promise<{ success: boolean; copiate: number; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, copiate: 0, error: 'Nome schema non valido.' };
     }
@@ -160,6 +164,17 @@ export async function generaPreCompilazioneMinisterialeAction(
   visuraUrl: string,
   nomeFileVisura: string
 ): Promise<RisultatoPreCompilazioneMinisteriale> {
+  // Verifica fuori dal try: il `finally` sotto elimina il blob `visuraUrl`,
+  // e un chiamante non autorizzato non deve poter cancellare file altrui.
+  try {
+    await richiediAccessoSchema(nomeSchema);
+  } catch (error) {
+    return {
+      success: false,
+      domandeCompilate: 0,
+      error: messaggioErrore(error, 'Operazione non autorizzata.'),
+    };
+  }
   try {
     if (!anthropic) {
       return {

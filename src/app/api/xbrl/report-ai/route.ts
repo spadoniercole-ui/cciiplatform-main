@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
+import { rifiutaSeNonAutorizzato } from '@/lib/autorizzazione';
 
 // ============================================================================
 // Tipizzazione dell'Input Payload
@@ -53,6 +54,8 @@ const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
 
 export async function POST(req: NextRequest) {
   try {
+    const rifiuto = await rifiutaSeNonAutorizzato('SUPERADMIN');
+    if (rifiuto) return rifiuto;
     if (!anthropic) {
       return NextResponse.json(
         { error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' },

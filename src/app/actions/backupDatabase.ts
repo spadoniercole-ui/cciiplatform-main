@@ -38,6 +38,7 @@ import { cifra } from '@/lib/portableCrypto';
 import { APP_VERSION } from '@/lib/appVersion';
 import { intestazione, nomeFileBackup, type EsitoIntegrita } from '@/lib/backup/formato';
 import { generaScriptBackup } from '@/lib/backup/genera';
+import { richiediSuperadmin } from '@/lib/autorizzazione';
 
 export interface RisultatoBackup {
   success: boolean;
@@ -58,6 +59,7 @@ export interface RisultatoBackup {
 
 export async function generaBackupCompletoAction(passphrase?: string): Promise<RisultatoBackup> {
   try {
+    await richiediSuperadmin();
     const quando = new Date();
 
     // La generazione sta in src/lib/backup/genera.ts, separata dal pool:

@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { richiediSuperadmin } from '@/lib/autorizzazione';
 
 export interface WorkspaceLicenzaInput {
   workspaceId: number;
@@ -21,6 +22,7 @@ export interface ActionResult {
 export async function attivaLicenzaWorkspaceAction(
   data: WorkspaceLicenzaInput
 ): Promise<ActionResult> {
+  await richiediSuperadmin();
   if (!data.codiceLicenza || data.codiceLicenza.trim().length < 4) {
     return {
       success: false,
@@ -45,6 +47,7 @@ export async function attivaLicenzaWorkspaceAction(
 export async function salvaParametriSistemaAction(
   parametri: ParametroSistemaInput[]
 ): Promise<ActionResult> {
+  await richiediSuperadmin();
   if (!parametri || parametri.length === 0) {
     return {
       success: false,
@@ -65,6 +68,7 @@ export async function salvaParametriSistemaAction(
 
 export async function importaMatriceCNDCECAction(): Promise<ActionResult> {
   try {
+    await richiediSuperadmin();
     revalidatePath('/superadmin');
     return { success: true };
   } catch (error) {

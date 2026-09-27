@@ -8,6 +8,7 @@
 // scenario ha già risposte su un modello, quelle risposte restano
 // leggibili anche a modello disattivato.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabellaChecklistModelli } from '@/db/provision';
 import type { SezioneChecklist } from '@/lib/checklist/ministeriale';
@@ -48,6 +49,7 @@ export async function ottieniModelliChecklist(
   includiDisattivati = false
 ): Promise<RisultatoElencoModelli> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, modelli: [], error: 'Nome schema non valido.' };
     }
@@ -83,6 +85,7 @@ export async function creaModelloChecklistAction(
   sezioni: SezioneChecklist[]
 ): Promise<RisultatoOperazioneModello> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!nome.trim()) return { success: false, error: 'Il nome del modello è obbligatorio.' };
     if (!validaSezioniChecklist(sezioni)) {
@@ -111,6 +114,7 @@ export async function aggiornaModelloChecklistAction(
   dati: { nome: string; descrizione: string | null; sezioni: SezioneChecklist[] }
 ): Promise<RisultatoOperazioneModello> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!dati.nome.trim()) return { success: false, error: 'Il nome del modello è obbligatorio.' };
     if (!validaSezioniChecklist(dati.sezioni)) {
@@ -140,6 +144,7 @@ export async function impostaStatoModelloAction(
   attivo: boolean
 ): Promise<RisultatoOperazioneModello> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(`UPDATE "${nomeSchema}".checklist_modelli SET attivo = $2 WHERE id = $1`, [
       id,

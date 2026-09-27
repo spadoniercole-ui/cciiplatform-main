@@ -6,6 +6,7 @@
 // uno per azienda.
 
 import { pool } from '@/lib/db';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { assicuraTabellaArchitraveDebitiEnte } from '@/db/provision';
 import type { TipoDebitoEnte } from '@/lib/debitiEnte/tipoDebito';
 
@@ -36,6 +37,7 @@ export async function ottieniArchitraveDebitiEnte(
   nomeSchema: string
 ): Promise<RisultatoArchitraveDebitiEnte> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, architrave: null, error: 'Nome schema non valido.' };
     }
@@ -80,6 +82,7 @@ export async function salvaArchitraveDebitiEnteAction(
   architrave: ArchitraveDebitiEnte
 ): Promise<RisultatoOperazioneArchitrave> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     if (!architrave.mappatura.includes('importo')) {
@@ -141,6 +144,7 @@ export async function azzeraArchitraveDebitiEnteAction(
   nomeSchema: string
 ): Promise<RisultatoOperazioneArchitrave> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaArchitraveDebitiEnte(nomeSchema);
