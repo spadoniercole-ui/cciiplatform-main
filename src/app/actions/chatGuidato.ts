@@ -12,6 +12,7 @@
 // (vedi PosizioneEnteScenario, ChecklistScenario) — il chatbot è un
 // percorso alternativo, non l'unico.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
 import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import { ottieniAnagraficaEnte, salvaAnagraficaEnteAction } from '@/app/actions/anagraficaEnte';
@@ -67,6 +68,7 @@ export async function chiediGuidaAnagrafica(
   cronologia: MessaggioChatGuidato[],
   messaggio: string
 ): Promise<RisultatoChatGuidato> {
+  await richiediAccessoSchema(nomeSchema);
   if (!anthropic) {
     return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
   }
@@ -230,6 +232,7 @@ export async function chiediGuidaDebitiEnte(
   cronologia: MessaggioChatGuidato[],
   messaggio: string
 ): Promise<RisultatoChatGuidato> {
+  await richiediAccessoSchema(nomeSchema);
   if (!anthropic) {
     return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
   }
@@ -375,6 +378,7 @@ export async function chiediGuidaChecklist(
   cronologia: MessaggioChatGuidato[],
   messaggio: string
 ): Promise<RisultatoChatGuidato> {
+  await richiediAccessoSchema(nomeSchema);
   if (!anthropic) {
     return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
   }
@@ -554,6 +558,7 @@ export async function chiediGuidaProposta(
   cronologia: MessaggioChatGuidato[],
   messaggio: string
 ): Promise<RisultatoChatGuidato> {
+  await richiediAccessoSchema(nomeSchema);
   if (!anthropic) {
     return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
   }

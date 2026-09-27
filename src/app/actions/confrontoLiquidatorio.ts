@@ -6,6 +6,7 @@
 // livello del Brogliaccio Ricevente, poi "parcheggiato": la Relazione
 // lo legge già pronto, non lo cerca mai lei stessa.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
 import { pool } from '@/lib/db';
 import { assicuraTabellaConfrontoLiquidatorio } from '@/db/provision';
@@ -41,6 +42,7 @@ export async function ottieniConfrontoLiquidatorio(
   scenarioId: number
 ): Promise<RisultatoConfrontoLiquidatorio> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, testo: null, generatoIl: null, errore: 'Nome schema non valido.' };
     }
@@ -82,6 +84,8 @@ export async function generaConfrontoLiquidatorioSeNecessarioAction(
   scenarioId: number,
   aziendaId: number
 ): Promise<void> {
+  // Fuori dal try: il catch scrive l'errore nello schema ricevuto.
+  await richiediAccessoSchema(nomeSchema);
   try {
     if (!anthropic) return; // silenzioso — non è un'azione esplicita dell'utente
     if (!validaSchema(nomeSchema)) return;
@@ -219,6 +223,8 @@ export async function generaConfrontoLiquidatorioRedigenteSeNecessarioAction(
   scenarioId: number,
   aziendaId: number
 ): Promise<void> {
+  // Fuori dal try: il catch scrive l'errore nello schema ricevuto.
+  await richiediAccessoSchema(nomeSchema);
   try {
     if (!anthropic) return; // silenzioso — non è un'azione esplicita dell'utente
     if (!validaSchema(nomeSchema)) return;

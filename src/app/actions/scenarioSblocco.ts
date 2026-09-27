@@ -7,6 +7,7 @@
 // prima, specialmente se già mostrato o consegnato a un ente
 // creditore.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 
 function validaSchema(nomeSchema: string): boolean {
@@ -42,6 +43,7 @@ export async function sbloccaScenarioAction(
   sbloccatoDa: string | null
 ): Promise<RisultatoOperazioneSblocco> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!motivo.trim()) {
       return { success: false, error: 'Indica un motivo per lo sblocco.' };
@@ -66,6 +68,7 @@ export async function ottieniStoricoSblocchi(
   scenarioId: number
 ): Promise<{ success: boolean; sblocchi: SbloccoScenario[]; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, sblocchi: [], error: 'Nome schema non valido.' };
     }
@@ -101,6 +104,7 @@ export async function salvaVersioneRelazioneAction(
   testo: string
 ): Promise<{ success: boolean; numeroVersione?: number; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const contatoreRis = await pool.query(
       `SELECT COALESCE(MAX(numero_versione), 0) + 1 AS prossimo
@@ -128,6 +132,7 @@ export async function ottieniStoricoRelazioni(
   scenarioId: number
 ): Promise<{ success: boolean; versioni: VersioneRelazione[]; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, versioni: [], error: 'Nome schema non valido.' };
     }

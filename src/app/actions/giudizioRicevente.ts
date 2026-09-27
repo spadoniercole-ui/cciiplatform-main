@@ -9,6 +9,7 @@
 // importano già a vicenda, mettere questa funzione in uno dei due
 // creerebbe un ciclo.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { verificaRicevibilitaProposta } from '@/app/actions/propostaScenario';
 import { ottieniAnalisiRiceventeAction } from '@/app/actions/simulazioneRicevente';
 
@@ -38,6 +39,7 @@ export async function calcolaGiudizioFinaleRicevente(
   scenarioId: number
 ): Promise<RisultatoGiudizioFinaleRicevente> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     const [esitoRis, analisiRis] = await Promise.all([
       verificaRicevibilitaProposta(nomeSchema, scenarioId, 'ENTE'),
       ottieniAnalisiRiceventeAction(nomeSchema, scenarioId),
