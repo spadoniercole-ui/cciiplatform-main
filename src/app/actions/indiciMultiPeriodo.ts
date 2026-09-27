@@ -20,7 +20,7 @@ import { ottieniIndiciAzienda } from '@/app/actions/aziendaConfig';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { ottieniAnniStoricoMax } from '@/app/actions/parametriSpazio';
 import type { IndiceCcii, AlertSeverity } from '@/lib/xbrl/types';
-import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { richiediAccessoScenario } from '@/lib/autorizzazione';
 
 export interface PuntoIndiciMultiPeriodo {
   chiave: 'storico' | 'aggiornata';
@@ -52,7 +52,7 @@ export async function ottieniIndiciMultiPeriodo(
 ): Promise<RisultatoIndiciMultiPeriodo> {
   const vuoto = { success: false as const, indiciAbilitati: [], punti: [], trend: null };
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     const scenarioRis = await ottieniScenarioPerId(nomeSchema, scenarioId);
     if (!scenarioRis.success || !scenarioRis.scenario) {
       return { ...vuoto, error: scenarioRis.error || 'Scenario non trovato.' };

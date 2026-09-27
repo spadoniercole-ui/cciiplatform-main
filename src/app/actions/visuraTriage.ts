@@ -19,7 +19,11 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabellaAziende } from '@/db/provision';
-import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import {
+  richiediAccessoAzienda,
+  richiediAccessoSchema,
+  verificaFileDelloSpazio,
+} from '@/lib/autorizzazione';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -37,7 +41,9 @@ export async function registraVisuraTriageAction(
   nome: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    // Il file verrà poi letto ed eliminato dallo screening: deve essere dello spazio.
+    verificaFileDelloSpazio(contesto, url);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaAziende(nomeSchema);
     await pool.query(
@@ -59,7 +65,7 @@ export async function ottieniVisuraTriageAction(
   aziendaId: number
 ): Promise<{ success: boolean; visura?: VisuraTrattenuta | null; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const r = await pool
       .query(
@@ -99,7 +105,10 @@ export async function dimenticaVisuraTriageAction(
   aziendaId: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoAzienda(nomeSchema, aziendaId, {
+      modulo: ['report', 'scenari'],
+      livello: 'SCRITTURA',
+    });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(
       `UPDATE "${nomeSchema}".aziende

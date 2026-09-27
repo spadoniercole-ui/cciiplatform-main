@@ -38,7 +38,7 @@ export async function calcolaIaiAction(
   tipoSpazio: 'ENTE' | 'NON_ENTE'
 ): Promise<{ success: boolean; esito?: EsitoIai; dati?: DatiIai; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaXbrlAzienda(nomeSchema);
@@ -155,7 +155,7 @@ export async function ottieniParametriIaiAction(
   nomeSchema: string
 ): Promise<{ success: boolean; parametri: ParametriIai; personalizzati: boolean; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return {
         success: false,
@@ -242,7 +242,7 @@ export async function datiRiferimentiAction(
   error?: string;
 }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);

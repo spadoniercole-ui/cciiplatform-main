@@ -84,7 +84,7 @@ export async function salvaTracciatoDebitiEnteAction(
   dati: DatiNuovoTracciato
 ): Promise<RisultatoSalvaTracciato> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { modulo: ['scenari'], livello: 'SCRITTURA' });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!dati.nome.trim())
       return { success: false, error: 'Il nome del tracciato è obbligatorio.' };
@@ -150,7 +150,7 @@ export async function aggiornaTracciatoDebitiEnteAction(
   dati: DatiNuovoTracciato
 ): Promise<RisultatoCorrezioneTracciato> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { modulo: ['scenari'], livello: 'SCRITTURA' });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!dati.nome.trim())
       return { success: false, error: 'Il nome del tracciato è obbligatorio.' };
@@ -225,7 +225,7 @@ export async function aggiornaMappaturaCodiciTracciatoAction(
   codiciNoti: string[]
 ): Promise<RisultatoOperazioneTracciato> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { modulo: ['scenari'], livello: 'SCRITTURA' });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaTracciatiDebitiEnte(nomeSchema);
     await pool.query(
@@ -253,7 +253,7 @@ export async function eliminaTracciatoDebitiEnteAction(
   tracciatoId: number
 ): Promise<RisultatoOperazioneTracciato> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { modulo: ['scenari'], livello: 'SCRITTURA' });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
     await assicuraTabellaTracciatiDebitiEnte(nomeSchema);
