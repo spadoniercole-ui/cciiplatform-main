@@ -377,7 +377,7 @@ export async function ottieniMaterieEnteAction(
   nomeSchema: string
 ): Promise<{ success: boolean; materie: MateriaEnte[]; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema))
       return { success: false, materie: [], error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);

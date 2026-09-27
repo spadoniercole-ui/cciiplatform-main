@@ -24,7 +24,7 @@ export async function ottieniParametriSoglieAction(
   nomeSchema: string
 ): Promise<{ success: boolean; parametri?: ParametriSoglie; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
     const r = await pool.query(

@@ -67,7 +67,7 @@ export async function ottieniColonneChecklist(
     pesoDefault: 'RILEVANTE' as PesoDomanda,
   };
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { ...vuoto, error: 'Nome schema non valido.' };
     }

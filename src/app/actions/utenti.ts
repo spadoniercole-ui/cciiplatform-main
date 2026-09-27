@@ -58,7 +58,7 @@ function generaPasswordTemporanea(): string {
 
 export async function ottieniUtentiSpazio(nomeSchema: string): Promise<RisultatoElencoUtenti> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     await assicuraTabelleUtenti(nomeSchema);
     // Garantisce/valorizza lo username per gli operatori creati prima della
     // 0.109 (idempotente e memoizzato per processo).
