@@ -14,6 +14,7 @@
 // campo livello1_testo (il Redigente non ha i tre livelli): così
 // `ottieniBrogliaccio` e la lettura restano una sola implementazione.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabellaBrogliaccio } from '@/db/provision';
 import {
@@ -62,6 +63,7 @@ export async function generaBrogliaccioRedigenteAction(
   scenarioId: number
 ): Promise<RisultatoBrogliaccio> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, stato: STATO_VUOTO_BROGLIACCIO, error: 'Nome schema non valido.' };
     }

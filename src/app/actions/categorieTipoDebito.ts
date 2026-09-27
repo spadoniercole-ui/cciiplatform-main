@@ -6,6 +6,7 @@
 // risolvibili via fallback statico, così i dati già inseriti non si toccano.
 
 import { pool } from '@/lib/db';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { assicuraTabellaCategorieTipoDebito } from '@/db/provision';
 
 function validaSchema(nomeSchema: string): boolean {
@@ -41,6 +42,7 @@ function codiceDaEtichetta(etichetta: string): string {
 
 export async function ottieniCategorieTipoDebito(nomeSchema: string): Promise<RisultatoCategorie> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, categorie: [], error: 'Nome schema non valido.' };
     }
@@ -82,6 +84,7 @@ export async function creaCategoriaTipoDebitoAction(
   descrizione?: string
 ): Promise<RisultatoOperazioneCategoria> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const et = etichetta.trim();
     if (!et) return { success: false, error: "L'etichetta è obbligatoria." };
@@ -118,6 +121,7 @@ export async function aggiornaCategoriaTipoDebitoAction(
   descrizione?: string
 ): Promise<RisultatoOperazioneCategoria> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const et = etichetta.trim();
     if (!et) return { success: false, error: "L'etichetta è obbligatoria." };
@@ -142,6 +146,7 @@ export async function impostaAttivoCategoriaTipoDebitoAction(
   attivo: boolean
 ): Promise<RisultatoOperazioneCategoria> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaCategorieTipoDebito(nomeSchema);
     await pool.query(
@@ -165,6 +170,7 @@ export async function impostaContribuisceCategoriaTipoDebitoAction(
   contribuisce: boolean
 ): Promise<RisultatoOperazioneCategoria> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaCategorieTipoDebito(nomeSchema);
     await pool.query(

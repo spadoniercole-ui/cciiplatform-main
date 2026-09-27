@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
+import { rifiutaSeNonAutorizzato } from '@/lib/autorizzazione';
 
 /**
  * Rileva se la richiesta è indirizzata a "indici" o "parametri" dal query
@@ -21,6 +22,8 @@ function getTargetResource(request: Request): 'indici' | 'parametri' {
 // GET: Recupera tutti i record della risorsa specificata
 export async function GET(request: Request) {
   try {
+    const rifiuto = await rifiutaSeNonAutorizzato('SUPERADMIN');
+    if (rifiuto) return rifiuto;
     const resource = getTargetResource(request);
 
     if (resource === 'parametri') {
@@ -52,6 +55,8 @@ export async function GET(request: Request) {
 // PATCH: Aggiorna un campo di un record esistente
 export async function PATCH(request: Request) {
   try {
+    const rifiuto = await rifiutaSeNonAutorizzato('SUPERADMIN');
+    if (rifiuto) return rifiuto;
     const resource = getTargetResource(request);
     const { id, campo, valore } = await request.json();
 
@@ -116,6 +121,8 @@ export async function PATCH(request: Request) {
 // POST: Inserisce un nuovo record (Indice o Parametro)
 export async function POST(request: Request) {
   try {
+    const rifiuto = await rifiutaSeNonAutorizzato('SUPERADMIN');
+    if (rifiuto) return rifiuto;
     const resource = getTargetResource(request);
     const body = await request.json();
 

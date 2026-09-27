@@ -8,6 +8,7 @@
 import { pool } from '@/lib/db';
 import { assicuraTabellaDocumentiOrigine } from '@/db/provision';
 import { improntaValida, type DescrittoreDocumento } from '@/lib/fascicolo/impronta';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export type TipoDocumentoOrigine = 'POSIZIONE_ENTE' | 'VERA' | 'VISURA' | 'PROPOSTA' | 'XBRL';
 
@@ -18,6 +19,7 @@ export async function registraDocumentoOrigineAction(
   descrittore: DescrittoreDocumento
 ): Promise<{ success: boolean; documentoId?: number; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     if (!improntaValida(descrittore.impronta))

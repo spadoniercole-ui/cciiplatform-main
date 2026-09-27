@@ -8,6 +8,7 @@
 // Stesso principio già usato per l'Anagrafica Ente.
 
 import { pool } from '@/lib/db';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { assicuraTabellaTipoDebitoConfig } from '@/db/provision';
 import { TIPI_DEBITO_ENTE, type TipoDebitoEnte } from '@/lib/debitiEnte/tipoDebito';
 
@@ -27,6 +28,7 @@ export async function ottieniEtichetteTipoDebito(
   nomeSchema: string
 ): Promise<RisultatoEtichetteTipoDebito> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, etichette: [], error: 'Nome schema non valido.' };
     }
@@ -83,6 +85,7 @@ export async function aggiornaEtichettaTipoDebitoAction(
   etichetta: string
 ): Promise<RisultatoOperazioneTipoDebito> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }

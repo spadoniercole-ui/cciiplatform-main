@@ -19,6 +19,7 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabellaAziende } from '@/db/provision';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -36,6 +37,7 @@ export async function registraVisuraTriageAction(
   nome: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaAziende(nomeSchema);
     await pool.query(
@@ -57,6 +59,7 @@ export async function ottieniVisuraTriageAction(
   aziendaId: number
 ): Promise<{ success: boolean; visura?: VisuraTrattenuta | null; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const r = await pool
       .query(
@@ -96,6 +99,7 @@ export async function dimenticaVisuraTriageAction(
   aziendaId: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(
       `UPDATE "${nomeSchema}".aziende

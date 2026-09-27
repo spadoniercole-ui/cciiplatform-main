@@ -18,6 +18,7 @@
 // deve mai andare a cercare altrove.
 
 import Anthropic from '@anthropic-ai/sdk';
+import { richiediSessione } from '@/lib/autorizzazione';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
@@ -68,6 +69,7 @@ export async function chiediAssistente(
   cronologia: MessaggioChat[],
   domanda: string
 ): Promise<RisultatoChiediAssistente> {
+  await richiediSessione();
   if (!anthropic) {
     return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
   }

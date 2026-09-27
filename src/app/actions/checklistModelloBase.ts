@@ -13,6 +13,7 @@
 // invece che da una copia nel database.
 
 import { CHECKLIST_MINISTERIALE, type SezioneChecklist } from '@/lib/checklist/ministeriale';
+import { richiediSessione } from '@/lib/autorizzazione';
 
 export interface RisultatoModelloBase {
   success: boolean;
@@ -20,5 +21,6 @@ export interface RisultatoModelloBase {
 }
 
 export async function ottieniModelloBase(): Promise<RisultatoModelloBase> {
+  await richiediSessione();
   return { success: true, sezioni: CHECKLIST_MINISTERIALE };
 }

@@ -6,6 +6,7 @@
 // tracciatoImport). Qui vivono solo persistenza e ciclo di vita.
 
 import { pool } from '@/lib/db';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { assicuraTabellaTracciatiDebitiEnte, assicuraTabellaDebitiEnte } from '@/db/provision';
 import type { Tracciato, RuoloColonna, ClassificazioneModo } from '@/lib/debitiEnte/tracciatoCore';
 
@@ -38,6 +39,7 @@ export async function ottieniTracciatiDebitiEnte(
   nomeSchema: string
 ): Promise<RisultatoElencoTracciati> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, tracciati: [], error: 'Nome schema non valido.' };
     }
@@ -82,6 +84,7 @@ export async function salvaTracciatoDebitiEnteAction(
   dati: DatiNuovoTracciato
 ): Promise<RisultatoSalvaTracciato> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!dati.nome.trim())
       return { success: false, error: 'Il nome del tracciato è obbligatorio.' };
@@ -147,6 +150,7 @@ export async function aggiornaTracciatoDebitiEnteAction(
   dati: DatiNuovoTracciato
 ): Promise<RisultatoCorrezioneTracciato> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!dati.nome.trim())
       return { success: false, error: 'Il nome del tracciato è obbligatorio.' };
@@ -221,6 +225,7 @@ export async function aggiornaMappaturaCodiciTracciatoAction(
   codiciNoti: string[]
 ): Promise<RisultatoOperazioneTracciato> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaTracciatiDebitiEnte(nomeSchema);
     await pool.query(
@@ -248,6 +253,7 @@ export async function eliminaTracciatoDebitiEnteAction(
   tracciatoId: number
 ): Promise<RisultatoOperazioneTracciato> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
     await assicuraTabellaTracciatiDebitiEnte(nomeSchema);

@@ -11,6 +11,7 @@
 //                       riscontrare» finche' un riscontro non la chiude.
 // Senza chiave AI (portable senza rete) il riscontro e' NON_VERIFICABILE.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
 import { pool } from '@/lib/db';
 import { assicuraTabelleParametriSpazio } from '@/db/provision';
@@ -64,6 +65,7 @@ export async function ottieniTitoliEnteAction(nomeSchema: string): Promise<{
   error?: string;
 }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema))
       return { success: false, titoli: [], dominioEnte: null, error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
@@ -375,6 +377,7 @@ export async function ottieniMaterieEnteAction(
   nomeSchema: string
 ): Promise<{ success: boolean; materie: MateriaEnte[]; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema))
       return { success: false, materie: [], error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);

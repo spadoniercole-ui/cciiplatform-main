@@ -11,6 +11,7 @@
 // e consente di ripristinarlo: uno scostamento deve restare visibile, non
 // diventare la nuova normalità che nessuno ricorda di aver introdotto.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabelleParametriSpazio } from '@/db/provision';
 import { SOGLIE_DI_LEGGE, type ParametriSoglie } from '@/lib/soglie25novies/parametri';
@@ -23,6 +24,7 @@ export async function ottieniParametriSoglieAction(
   nomeSchema: string
 ): Promise<{ success: boolean; parametri?: ParametriSoglie; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
     const r = await pool.query(
@@ -58,6 +60,7 @@ export async function salvaParametriSoglieAction(
   p: ParametriSoglie
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     // Nessun valore può essere negativo o assente: una soglia a zero
     // renderebbe "oltre soglia" qualunque esposizione, anche di un euro.

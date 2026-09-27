@@ -10,6 +10,7 @@
 import { pool } from '@/lib/db';
 import { assicuraTabellaAziende } from '@/db/provision';
 import type { AnagraficaEstratta } from '@/app/actions/visuraEstrazione';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export interface RisultatoVerifica {
   success: boolean;
@@ -31,6 +32,7 @@ export async function creaAziendaInVerificaAction(
   dati: AnagraficaEstratta
 ): Promise<RisultatoVerifica> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!dati.ragioneSociale || dati.ragioneSociale.trim() === '') {
       return { success: false, error: 'La ragione sociale è obbligatoria.' };
@@ -148,6 +150,7 @@ export async function archiviaVerificaAction(
   motivo: string
 ): Promise<RisultatoVerifica> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!motivo || motivo.trim().length < 3) {
       // Il motivo è obbligatorio: un'archiviazione senza spiegazione è
@@ -173,6 +176,7 @@ export async function riapriVerificaAction(
   aziendaId: number
 ): Promise<RisultatoVerifica> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(
       `UPDATE "${nomeSchema}".aziende SET verifica_archiviata = FALSE WHERE id = $1`,
@@ -192,6 +196,7 @@ export async function registraEsitoVerificaAction(
   esito: string
 ): Promise<RisultatoVerifica> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(
       `UPDATE "${nomeSchema}".aziende SET verifica_esito = $2, verifica_eseguita_il = now() WHERE id = $1`,
@@ -216,6 +221,7 @@ export async function promuoviAziendaAction(
   aziendaId: number
 ): Promise<RisultatoVerifica> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(`UPDATE "${nomeSchema}".aziende SET in_verifica = FALSE WHERE id = $1`, [
       aziendaId,
@@ -253,6 +259,7 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
   error?: string;
 }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const r = await pool
       .query(
@@ -288,6 +295,7 @@ export async function ottieniAziendeInVerificaAction(
   nomeSchema: string
 ): Promise<{ success: boolean; righe?: RigaVerifica[]; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const r = await pool
       .query(

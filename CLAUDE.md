@@ -49,8 +49,19 @@ anche la CI in `.github/workflows/ci.yml`).
     modifica di schema deve essere idempotente e compatibile con i tenant esistenti.
 - **Autenticazione**: niente `middleware.ts`. Sessione = token opaco nella tabella `sessioni`,
   cookie httpOnly `session_token` (8 ore), password bcryptjs, MFA (`src/lib/mfa`), limite
-  tentativi (`src/lib/tentativiAccesso.ts`). Ogni server action deve verificare sessione e
-  permessi da sé (`src/lib/sessione.ts`).
+  tentativi (`src/lib/tentativiAccesso.ts`).
+- **Autorizzazione — regola obbligatoria**: ogni `export async function` di un file
+  `'use server'` è un endpoint pubblico. La prima istruzione deve verificare il chiamante con
+  `src/lib/autorizzazione.ts`:
+  - `richiediAccessoSchema(nomeSchema, { soloAdmin?, modulo?, livello? })` per le azioni di
+    spazio (rifiuta schemi diversi da quello della sessione; il Superadmin passa sempre);
+  - `richiediAccessoSpazio(codice)` / `richiediAccessoSpazioId(id)` se il parametro è quello;
+  - `richiediSuperadmin()` per licenze, spazi, backup/ripristino, parametri di sistema;
+  - route API: `rifiutaSeNonAutorizzato('SESSIONE' | 'SUPERADMIN')`.
+  Mai fidarsi di `nomeSchema`, id utente o ruolo passati dal browser. Le funzioni interne
+  (helper, avvio MFA) vanno in `src/lib`, non esportate da file `'use server'`.
+  `scripts/check-autorizzazione.mjs` (dentro `npm run type-check`) fa fallire la CI se
+  un'azione non ha la guardia.
 - **AI**: solo `@anthropic-ai/sdk` (`ANTHROPIC_API_KEY`), usato nelle server action
   (proposta, screening, visura, confronto liquidatorio, chatbot…) e in
   `src/app/api/xbrl/report-ai`. `openai` e `@google/genai` sono dipendenze non usate.

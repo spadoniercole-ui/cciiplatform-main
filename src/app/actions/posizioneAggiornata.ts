@@ -10,6 +10,7 @@
 // forma dati (DatiFinanziariPeriodo) usata da anno corrente/precedente,
 // nessun motore di calcolo da riscrivere per gestire più punti.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabellaPosizioneAggiornata } from '@/db/provision';
 import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
@@ -62,6 +63,7 @@ export async function ottienePosizioneAggiornata(
   scenarioId: number
 ): Promise<RisultatoPosizioneAggiornata> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return {
         success: false,
@@ -108,6 +110,7 @@ export async function ottieniTuttePosizioniAggiornate(
   scenarioId: number
 ): Promise<RisultatoElencoPosizioniAggiornate> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, posizioni: [], error: 'Nome schema non valido.' };
     }
@@ -146,6 +149,7 @@ export async function salvaPosizioneAggiornataAction(
   id?: number | null
 ): Promise<RisultatoOperazionePosizione> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const messaggioBloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
     if (messaggioBloccato) return { success: false, error: messaggioBloccato };
@@ -197,6 +201,7 @@ export async function eliminaPosizioneAggiornataAction(
   id: number
 ): Promise<RisultatoOperazionePosizione> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const rigaRis = await pool.query(
       `SELECT scenario_id FROM "${nomeSchema}".posizione_aggiornata WHERE id = $1`,

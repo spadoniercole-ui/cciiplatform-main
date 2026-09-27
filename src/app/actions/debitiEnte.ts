@@ -8,6 +8,7 @@
 // ma dati e tabella diversi.
 
 import { pool } from '@/lib/db';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { assicuraTabellaDebitiEnte } from '@/db/provision';
 
 function validaSchema(nomeSchema: string): boolean {
@@ -69,6 +70,7 @@ export async function ottieniDebitiEnte(
   scenarioId?: number
 ): Promise<RisultatoElencoDebitiEnte> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, righe: [], error: 'Nome schema non valido.' };
     }
@@ -125,6 +127,7 @@ export async function aggiungiRigaDebitoEnteAction(
   scenarioId?: number
 ): Promise<RisultatoOperazioneDebitoEnte> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!dati.voce.trim()) {
       return { success: false, error: 'La voce di debito è obbligatoria.' };
@@ -168,6 +171,7 @@ export async function modificaRigaDebitoEnteAction(
   dati: DatiRigaDebitoEnte
 ): Promise<RisultatoOperazioneDebitoEnte> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!dati.voce.trim()) {
       return { success: false, error: 'La voce di debito è obbligatoria.' };
@@ -197,6 +201,7 @@ export async function eliminaRigaDebitoEnteAction(
   id: number
 ): Promise<RisultatoOperazioneDebitoEnte> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(`DELETE FROM "${nomeSchema}".debiti_ente WHERE id = $1`, [id]);
     return { success: true };
@@ -218,6 +223,7 @@ export async function eliminaDebitiPerTracciatoAzienda(
   tracciatoId: number
 ): Promise<RisultatoOperazioneDebitoEnte> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(
       `DELETE FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1 AND tracciato_id = $2`,
@@ -251,6 +257,7 @@ export async function riprendiDebitiAziendaInScenarioAction(
   scenarioId: number
 ): Promise<{ success: boolean; copiate?: number; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
 
@@ -287,6 +294,7 @@ export async function contaDebitiAziendaNonAttribuitiAction(
   aziendaId: number
 ): Promise<{ success: boolean; righe?: number; totale?: number; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
     const r = await pool.query(
@@ -310,6 +318,7 @@ export async function eliminaTuttiDebitiEnteAction(
   scenarioId?: number
 ): Promise<RisultatoOperazioneDebitoEnte> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     // Si svuota SOLO l'ambito richiesto: svuotare lo scenario non deve
     // toccare la posizione dell'azienda, né quella di un altro scenario.

@@ -11,6 +11,7 @@
 import { pool } from '@/lib/db';
 import { assicuraTabellaDatiSettore } from '@/db/provision';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { analizzaCodiceAteco, type InfoSettoreAteco } from '@/lib/settore/atecoMapping';
 import { interrogaIstat, type PuntoSerieIstat } from '@/lib/settore/istatClient';
 import { ottieniFunzioniPlusSpazio } from '@/app/actions/funzioniPlus';
@@ -30,6 +31,7 @@ export async function aggiornaDatiSettoreSeNecessarioAction(
   aziendaId: number
 ): Promise<void> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     const plusRis = await ottieniFunzioniPlusSpazio(nomeSchema);
     if (!plusRis.funzioni.datiSettore) return;
 
@@ -88,6 +90,7 @@ export async function ottieniDatiSettore(
     aggiornatoIl: null,
   };
   try {
+    await richiediAccessoSchema(nomeSchema);
     const aziendaRis = await ottieniAziendaPerId(nomeSchema, aziendaId);
     if (!aziendaRis.success || !aziendaRis.azienda) {
       return { ...vuoto, error: 'Azienda non trovata.' };
@@ -160,6 +163,7 @@ export async function aggiornaDatiSettoreAction(
   aziendaId: number
 ): Promise<RisultatoAggiornaDatiSettore> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     const plusRis = await ottieniFunzioniPlusSpazio(nomeSchema);
     if (!plusRis.funzioni.datiSettore) {
       return {

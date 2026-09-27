@@ -23,6 +23,7 @@ import {
   type FormaAER,
 } from '@/lib/soglie25novies/calcolo';
 import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export interface ValoriSoglie {
   conLavoratoriSubordinati: boolean | null;
@@ -59,6 +60,7 @@ export async function ottieniValoriSoglieAction(
   aziendaId: number
 ): Promise<RisultatoValoriSoglie> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const r = await pool.query(
       `SELECT con_lavoratori_subordinati, contributi_scaduti, contributi_dovuti_anno_precedente,
@@ -118,6 +120,7 @@ export async function salvaValoriSoglieParzialeAction(
   valori: Partial<ValoriSoglie>
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
 
     const colonne: Record<keyof ValoriSoglie, string> = {
@@ -162,6 +165,7 @@ export async function salvaValoriSoglieAction(
   valori: ValoriSoglie
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(
       `UPDATE "${nomeSchema}".aziende SET
@@ -221,6 +225,7 @@ export async function valutaSoglieAction(
   tipoSpazio: 'ENTE' | 'NON_ENTE'
 ): Promise<RisultatoEsitoSoglie> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
 

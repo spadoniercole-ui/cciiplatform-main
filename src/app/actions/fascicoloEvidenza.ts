@@ -15,6 +15,7 @@ import {
 } from '@/db/provision';
 import { componiFascicolo, type Evidenza, type TitoloPresunto } from '@/lib/fascicolo/evidenza';
 import { RISCONTRO_VUOTO, titoloPerCodice, type TitoloEnte } from '@/lib/titoliEnte/titoli';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -32,6 +33,7 @@ export async function ottieniFascicoloAction(
   scenarioId: number | null
 ): Promise<{ success: boolean; fascicolo?: Evidenza[]; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaProposta(nomeSchema);
     await assicuraTabellaDebitiEnte(nomeSchema);

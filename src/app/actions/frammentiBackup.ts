@@ -24,6 +24,7 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabella, eliminaScaduti } from '@/lib/backup/frammentiServer';
+import { richiediSuperadmin } from '@/lib/autorizzazione';
 
 export interface RisultatoFrammento {
   success: boolean;
@@ -40,6 +41,7 @@ export async function inviaFrammentoBackupAction(
   contenuto: string
 ): Promise<RisultatoFrammento> {
   try {
+    await richiediSuperadmin();
     if (!/^[a-zA-Z0-9-]{8,64}$/.test(id)) {
       return { success: false, error: 'Identificativo del caricamento non valido.' };
     }

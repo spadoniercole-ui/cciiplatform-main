@@ -10,6 +10,7 @@
 import { pool } from '@/lib/db';
 import { assicuraTabelleAnagraficaEnte } from '@/db/provision';
 import { CHIAVI_CAMPO_ANAGRAFICA_ENTE } from '@/lib/costantiRicevibilita';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 const NUMERO_CAMPI = 10;
 
@@ -54,6 +55,7 @@ export async function ottieniAnagraficaEnte(
   aziendaId: number
 ): Promise<RisultatoAnagraficaEnte> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, dati: VUOTA, error: 'Nome schema non valido.' };
     }
@@ -96,6 +98,7 @@ export async function salvaAnagraficaEnteAction(
   dati: AnagraficaEnte
 ): Promise<RisultatoOperazioneAnagraficaEnte> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
 

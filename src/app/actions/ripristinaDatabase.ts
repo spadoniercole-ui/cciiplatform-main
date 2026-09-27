@@ -48,6 +48,7 @@ import {
 } from '@/lib/backup/leggi';
 import { generaBackupCompletoAction } from '@/app/actions/backupDatabase';
 import { assemblaFrammenti, eliminaFrammenti } from '@/lib/backup/frammentiServer';
+import { richiediSuperadmin } from '@/lib/autorizzazione';
 
 export interface RisultatoRipristino {
   success: boolean;
@@ -169,6 +170,7 @@ export async function provaRipristinoAction(
   contenutoFile: string,
   passphrase?: string
 ): Promise<RisultatoRipristino> {
+  await richiediSuperadmin();
   let contenuto: string;
   try {
     contenuto = await recuperaContenuto(contenutoFile);
@@ -264,6 +266,7 @@ export async function ripristinaDatabaseAction(
   contenutoFile: string,
   passphrase?: string
 ): Promise<RisultatoRipristino> {
+  await richiediSuperadmin();
   const prova = await provaRipristinoAction(contenutoFile, passphrase);
   if (!prova.success) return prova;
 

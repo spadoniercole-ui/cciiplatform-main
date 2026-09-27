@@ -21,7 +21,7 @@ import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { pool } from '@/lib/db';
-import { avviaChallengeMfa } from '@/app/actions/mfa';
+import { avviaChallengeMfa } from '@/lib/mfa/challenge';
 
 export interface WorkspaceDinamico {
   id: string;

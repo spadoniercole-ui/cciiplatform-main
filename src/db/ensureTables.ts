@@ -165,6 +165,11 @@ export async function assicuraTabelleMfa(): Promise<void> {
   await eseguiIstruzione(
     `ALTER TABLE public.mfa_challenge ADD COLUMN IF NOT EXISTS fattori_totali INTEGER`
   );
+  // Codici TOTP / PIN errati sulla challenge: oltre il limite la challenge
+  // viene eliminata (vedi actions/mfa.ts), niente tentativi illimitati.
+  await eseguiIstruzione(
+    `ALTER TABLE public.mfa_challenge ADD COLUMN IF NOT EXISTS tentativi_falliti INTEGER NOT NULL DEFAULT 0`
+  );
 }
 
 export async function assicuraTabelleSpazi(): Promise<void> {

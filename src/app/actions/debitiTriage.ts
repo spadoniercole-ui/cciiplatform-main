@@ -8,6 +8,7 @@
 // aggiungere un ente senza toccare il motore.
 
 import { pool } from '@/lib/db';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { assicuraTabellaDebitiEnte } from '@/db/provision';
 import type { CategoriaDebito, RigaDebitoTriage } from '@/lib/debitiTriage/modello';
 
@@ -26,6 +27,7 @@ export async function ottieniDebitiTriageAction(
   aziendaId: number
 ): Promise<RisultatoRighe> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
     const r = await pool
@@ -71,6 +73,7 @@ export async function salvaDebitiTriageAction(
   prospettoId: number | null
 ): Promise<{ success: boolean; salvate?: number; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
 
@@ -121,6 +124,7 @@ export async function eliminaRigaDebitoTriageAction(
   rigaId: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(`DELETE FROM "${nomeSchema}".debiti_triage WHERE id = $1`, [rigaId]);
     return { success: true };
@@ -143,6 +147,7 @@ export async function salvaTutteDebitiTriageAction(
   righe: RigaDebitoTriage[]
 ): Promise<{ success: boolean; salvate?: number; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
     await pool.query(`DELETE FROM "${nomeSchema}".debiti_triage WHERE azienda_id = $1`, [

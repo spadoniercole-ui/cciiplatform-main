@@ -27,8 +27,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
     redirect('/');
   }
 
-  const ruolo: 'SUPERADMIN' | 'USER' =
-    risultato.rows[0].ruolo === 'SUPERADMIN' ? 'SUPERADMIN' : 'USER';
+  // Una sessione valida non basta: la console è solo del Superadmin. Prima
+  // qualunque utente di uno spazio autenticato poteva aprirla.
+  if (risultato.rows[0].ruolo !== 'SUPERADMIN') {
+    redirect('/');
+  }
+  const ruolo = 'SUPERADMIN' as const;
 
   // Il superadmin di sistema opera sempre con licenza attiva (è chi la
   // gestisce). Per gli utenti tenant, la licenza è oggi un'unica riga

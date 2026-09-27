@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '@/lib/db';
+import { rifiutaSeNonAutorizzato } from '@/lib/autorizzazione';
 
 interface OverrideTag {
   aliasTag: string;
@@ -22,6 +23,8 @@ interface OverrideTag {
 
 export async function POST(req: NextRequest) {
   try {
+    const rifiuto = await rifiutaSeNonAutorizzato('SUPERADMIN');
+    if (rifiuto) return rifiuto;
     const body = await req.json();
     const overrides: OverrideTag[] = body?.overrides;
 

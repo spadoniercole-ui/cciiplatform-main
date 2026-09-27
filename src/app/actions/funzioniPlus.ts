@@ -9,6 +9,7 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabelleSpazi } from '@/db/ensureTables';
+import { richiediAccessoSchema, richiediSuperadmin } from '@/lib/autorizzazione';
 
 export interface FunzioniPlus {
   datiSettore: boolean;
@@ -28,6 +29,7 @@ export async function ottieniFunzioniPlusSpazio(
   nomeSchema: string
 ): Promise<RisultatoFunzioniPlus> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     await assicuraTabelleSpazi();
     const risultato = await pool.query(
       `SELECT l.plus_dati_settore, l.plus_simulazione, l.plus_relazione_ai
@@ -68,6 +70,7 @@ export async function aggiornaFunzioniPlusAction(
   funzioni: FunzioniPlus
 ): Promise<RisultatoOperazioneFunzioniPlus> {
   try {
+    await richiediSuperadmin();
     await assicuraTabelleSpazi();
     const aggiornata = await pool.query(
       `UPDATE public.licenze_spazio
