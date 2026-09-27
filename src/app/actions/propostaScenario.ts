@@ -10,7 +10,11 @@
 // stato caricato alcun bilancio XBRL, la relazione lo dichiara
 // esplicitamente invece di inventare un quadro quantitativo.
 
-import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import {
+  richiediAccessoSchema,
+  richiediAccessoScenario,
+  verificaRigaConsentita,
+} from '@/lib/autorizzazione';
 import { perimetroPerPrompt } from '@/lib/revisore/perimetro';
 import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneServer';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
@@ -75,7 +79,7 @@ export async function ottieniPropostaScenario(
   scenarioId: number
 ): Promise<RisultatoElencoProposta> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema))
       return { success: false, righe: [], error: 'Nome schema non valido.' };
     await assicuraTabellaProposta(nomeSchema);
@@ -134,7 +138,10 @@ export async function aggiungiRigaPropostaAction(
   dati: DatiRigaProposta
 ): Promise<RisultatoOperazioneProposta> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const messaggioBloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
     if (messaggioBloccato) return { success: false, error: messaggioBloccato };
@@ -199,7 +206,11 @@ export async function eliminaRigaPropostaAction(
   id: number
 ): Promise<RisultatoOperazioneProposta> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    const contesto = await richiediAccessoSchema(nomeSchema, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
+    await verificaRigaConsentita(contesto, 'proposta_creditori', id);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const rigaRis = await pool.query(
       `SELECT scenario_id FROM "${nomeSchema}".proposta_creditori WHERE id = $1`,
@@ -232,7 +243,10 @@ export async function eliminaTuttaPropostaAction(
   scenarioId: number
 ): Promise<RisultatoOperazioneProposta> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const messaggioBloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
     if (messaggioBloccato) return { success: false, error: messaggioBloccato };
@@ -263,7 +277,11 @@ export async function impostaRigaRilevanteAction(
   rilevante: boolean
 ): Promise<RisultatoOperazioneProposta> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    const contesto = await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
+    await verificaRigaConsentita(contesto, 'proposta_creditori', rigaId);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
 
     if (rilevante) {
@@ -297,7 +315,11 @@ export async function modificaRigaPropostaAction(
   dati: DatiRigaProposta
 ): Promise<RisultatoOperazioneProposta> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    const contesto = await richiediAccessoSchema(nomeSchema, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
+    await verificaRigaConsentita(contesto, 'proposta_creditori', id);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const rigaRis = await pool.query(
       `SELECT scenario_id FROM "${nomeSchema}".proposta_creditori WHERE id = $1`,
@@ -370,7 +392,7 @@ export async function verificaRicevibilitaProposta(
   tipoSpazio?: 'ENTE' | 'NON_ENTE'
 ): Promise<RisultatoVerificaRicevibilita> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     const [propostaRisultato, limitiRisultato, limitiRangoRisultato] = await Promise.all([
       ottieniPropostaScenario(nomeSchema, scenarioId),
       ottieniLimitiRicevibilita(nomeSchema, tipoSpazio),
@@ -729,7 +751,10 @@ export async function generaRelazionePropostaAction(
   scenarioId: number
 ): Promise<RisultatoRelazioneProposta> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['relazione'],
+      livello: 'SCRITTURA',
+    });
     if (!anthropic) {
       return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
     }

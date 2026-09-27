@@ -93,6 +93,36 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.111.0 — 2026-09-27
+
+**Sicurezza: permessi degli Operatori applicati anche sul server**
+
+Finora i permessi per modulo (Nessun accesso / Sola lettura / Lettura e
+scrittura) e le aziende assegnate valevano solo per ciò che la sidebar e le
+pagine mostravano: chiamando direttamente le azioni, un Operatore poteva
+scrivere dove aveva la sola lettura e vedere aziende non sue.
+- Un Operatore legge e modifica solo le aziende assegnate (e i loro scenari,
+  debiti, righe di proposta, posizioni aggiornate, bilanci XBRL); gli elenchi
+  mostrano solo quelle.
+- Le scritture richiedono "Lettura e scrittura" sul modulo della pagina: ad
+  esempio con la Proposta in sola lettura non si aggiungono né modificano
+  righe (messaggio chiaro). Aprire una pagina non richiede mai la scrittura.
+- Le funzioni delle pagine di gestione (parametri, utenti, aziende, verifica
+  salute) sono riservate all'Admin di Spazio anche in lettura; modificare o
+  eliminare un tracciato di importazione (tocca i debiti di tutte le
+  aziende) è riservato all'Admin.
+- File caricati: il nome porta lo spazio che li carica e le azioni
+  rifiutano file di altri spazi; nella portable nessun accesso a file fuori
+  dalla cartella dei documenti.
+- Sblocco scenario: nello storico l'autore è preso dalla sessione, non dal
+  browser.
+
+Verificato: type-check, lint, test (20 sulla guardia), build cloud e
+portable; nella portable Admin dei due spazi (54 pagine) e un Operatore
+creato da interfaccia con i permessi di default (cambio password al primo
+accesso, 13 e 15 pagine) senza alcun blocco improprio; le pagine di
+gestione lo rimandano alla dashboard.
+
 ## 0.110.0 — 2026-09-27
 
 **Sicurezza: ogni azione verifica chi la chiama**

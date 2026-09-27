@@ -6,7 +6,7 @@
 // livello del Brogliaccio Ricevente, poi "parcheggiato": la Relazione
 // lo legge già pronto, non lo cerca mai lei stessa.
 
-import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { ErroreAutorizzazione, richiediAccessoScenario } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
 import { pool } from '@/lib/db';
 import { assicuraTabellaConfrontoLiquidatorio } from '@/db/provision';
@@ -30,6 +30,22 @@ function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
 }
 
+/** L'azienda ricevuta deve essere quella dello scenario: altrimenti i dati di
+ * un'altra azienda finirebbero nel confronto di questo scenario. Da chiamare
+ * dopo la guardia (che ha già validato `nomeSchema`). */
+async function verificaAziendaDelloScenario(
+  nomeSchema: string,
+  scenarioId: number,
+  aziendaId: number
+): Promise<void> {
+  const ris = await pool.query(`SELECT azienda_id FROM "${nomeSchema}".scenari WHERE id = $1`, [
+    scenarioId,
+  ]);
+  if (ris.rows.length > 0 && Number(ris.rows[0].azienda_id) !== Number(aziendaId)) {
+    throw new ErroreAutorizzazione('Lo scenario non appartiene a questa azienda.');
+  }
+}
+
 export interface RisultatoConfrontoLiquidatorio {
   success: boolean;
   testo: string | null;
@@ -42,7 +58,7 @@ export async function ottieniConfrontoLiquidatorio(
   scenarioId: number
 ): Promise<RisultatoConfrontoLiquidatorio> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) {
       return { success: false, testo: null, generatoIl: null, errore: 'Nome schema non valido.' };
     }
@@ -85,7 +101,9 @@ export async function generaConfrontoLiquidatorioSeNecessarioAction(
   aziendaId: number
 ): Promise<void> {
   // Fuori dal try: il catch scrive l'errore nello schema ricevuto.
-  await richiediAccessoSchema(nomeSchema);
+  // Scrittura automatica (cache) innescata dal Brogliaccio: nessun modulo richiesto.
+  await richiediAccessoScenario(nomeSchema, scenarioId);
+  await verificaAziendaDelloScenario(nomeSchema, scenarioId, aziendaId);
   try {
     if (!anthropic) return; // silenzioso — non è un'azione esplicita dell'utente
     if (!validaSchema(nomeSchema)) return;
@@ -224,7 +242,9 @@ export async function generaConfrontoLiquidatorioRedigenteSeNecessarioAction(
   aziendaId: number
 ): Promise<void> {
   // Fuori dal try: il catch scrive l'errore nello schema ricevuto.
-  await richiediAccessoSchema(nomeSchema);
+  // Scrittura automatica (cache) innescata dal Brogliaccio: nessun modulo richiesto.
+  await richiediAccessoScenario(nomeSchema, scenarioId);
+  await verificaAziendaDelloScenario(nomeSchema, scenarioId, aziendaId);
   try {
     if (!anthropic) return; // silenzioso — non è un'azione esplicita dell'utente
     if (!validaSchema(nomeSchema)) return;

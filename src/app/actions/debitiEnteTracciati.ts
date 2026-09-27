@@ -150,7 +150,8 @@ export async function aggiornaTracciatoDebitiEnteAction(
   dati: DatiNuovoTracciato
 ): Promise<RisultatoCorrezioneTracciato> {
   try {
-    await richiediAccessoSchema(nomeSchema, { modulo: ['scenari'], livello: 'SCRITTURA' });
+    // Modifica/elimina righe di debito di TUTTE le aziende dello spazio: solo Admin.
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!dati.nome.trim())
       return { success: false, error: 'Il nome del tracciato è obbligatorio.' };
@@ -253,7 +254,8 @@ export async function eliminaTracciatoDebitiEnteAction(
   tracciatoId: number
 ): Promise<RisultatoOperazioneTracciato> {
   try {
-    await richiediAccessoSchema(nomeSchema, { modulo: ['scenari'], livello: 'SCRITTURA' });
+    // Modifica/elimina righe di debito di TUTTE le aziende dello spazio: solo Admin.
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
     await assicuraTabellaTracciatiDebitiEnte(nomeSchema);
