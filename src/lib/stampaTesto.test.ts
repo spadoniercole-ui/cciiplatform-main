@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { improntaContenuto, piedeDocumento } from './stampaTesto';
 import { APP_VERSION } from './appVersion';
 
@@ -21,5 +21,35 @@ describe('parametri di stampa', () => {
     const { impostaParametriStampa, PARAMETRI_STAMPA_PREDEFINITI } = await import('./stampaTesto');
     expect(() => impostaParametriStampa(null)).not.toThrow();
     expect(PARAMETRI_STAMPA_PREDEFINITI.margini.alto).toBe(15);
+  });
+});
+
+describe('finestre di stampa: niente HTML iniettato dai dati', () => {
+  function finestraFinta() {
+    const scritto: string[] = [];
+    const finestra = {
+      document: { write: (h: string) => scritto.push(h), close: () => {} },
+      focus: () => {},
+      print: () => {},
+    };
+    (globalThis as unknown as { window: unknown }).window = { open: () => finestra };
+    return scritto;
+  }
+
+  it('titolo, sottotitolo e testo sono escapati', async () => {
+    const { stampaHtml, stampaTesto } = await import('./stampaTesto');
+    const maligno = 'Rossi <img src=x onerror=alert(1)> & C. "srl"';
+
+    const html = finestraFinta();
+    stampaHtml(`Screening — ${maligno}`, '<p>corpo</p>', maligno, null);
+    await vi.waitFor(() => expect(html).toHaveLength(1));
+    expect(html[0]).not.toContain('<img src=x');
+    expect(html[0]).toContain('&lt;img src=x onerror=alert(1)&gt; &amp; C. &quot;srl&quot;');
+    expect(html[0]).toContain('<p>corpo</p>');
+
+    const testo = finestraFinta();
+    stampaTesto(maligno, maligno, null);
+    await vi.waitFor(() => expect(testo).toHaveLength(1));
+    expect(testo[0]).not.toContain('<img src=x');
   });
 });

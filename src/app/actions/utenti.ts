@@ -12,6 +12,8 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { assicuraTabelleUtenti } from '@/db/provision';
 import { generaUsernameUnivoco, usernameEsisteGlobale } from '@/lib/generaUsername';
+import { chiudiSessioniUtente } from '@/lib/sessione';
+import { pool } from '@/lib/db';
 
 export type TipologiaUtente = 'OPERATIVO' | 'CONSULTATORE';
 
@@ -261,11 +263,20 @@ export async function disabilitaUtenteSpazioAction(
   id: number
 ): Promise<RisultatoOperazioneUtente> {
   try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    const esito = await impostaStatoUtente(nomeSchema, id, false);
+    if (esito.success) {
+      // Un utente disabilitato non deve restare collegato con una sessione già aperta.
+      const utente = await pool.query(
+        `SELECT username, email FROM "${contesto.nomeSchema}".utenti_spazio WHERE id = $1`,
+        [id]
+      );
+      if (utente.rows[0]) await chiudiSessioniUtente(contesto.spazioId, utente.rows[0]);
+    }
+    return esito;
   } catch (error) {
-    return { success: false, error: messaggioErrore(error, 'Operazione non autorizzata.') };
+    return { success: false, error: messaggioErrore(error, 'Operazione non riuscita.') };
   }
-  return impostaStatoUtente(nomeSchema, id, false);
 }
 
 export async function riattivaUtenteSpazioAction(
@@ -286,7 +297,7 @@ export async function rigeneraPasswordUtenteAction(
   id: number
 ): Promise<RisultatoOperazioneUtente> {
   try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -299,11 +310,16 @@ export async function rigeneraPasswordUtenteAction(
       .update(tabelle.utenti_spazio)
       .set({ passwordHash, passwordTemporanea })
       .where(eq(tabelle.utenti_spazio.id, id))
-      .returning({ id: tabelle.utenti_spazio.id });
+      .returning({
+        id: tabelle.utenti_spazio.id,
+        username: tabelle.utenti_spazio.username,
+        email: tabelle.utenti_spazio.email,
+      });
 
     if (risultato.length === 0) {
       return { success: false, error: 'Utente non trovato.' };
     }
+    await chiudiSessioniUtente(contesto.spazioId, risultato[0]);
 
     return { success: true, passwordTemporanea };
   } catch (error: any) {
