@@ -20,7 +20,7 @@ import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneSe
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
 import { pool } from '@/lib/db';
-import { assicuraTabellaProposta } from '@/db/provision';
+import { assicuraTabellaProposta, assicuraTabellaSimulazioneRicevente } from '@/db/provision';
 import {
   ottieniLimitiRicevibilita,
   ottieniLimitiRicevibilitaRango,
@@ -400,6 +400,8 @@ export async function verificaRicevibilitaProposta(
       // Lettura diretta invece di importare da simulazioneRicevente.ts:
       // quel file importa già da qui (ottieniPropostaScenario), un
       // import nell'altro senso creerebbe un ciclo.
+      // La tabella può non esistere ancora se lo spazio non ha mai usato la simulazione.
+      await assicuraTabellaSimulazioneRicevente(nomeSchema);
       const estrazioneRis = await pool.query(
         `SELECT importo_dovuto_estratto, percentuale_offerta_estratta, modalita_estratta,
                 numero_rate_estratto, estrazione_riuscita, motivo_estrazione_mancata

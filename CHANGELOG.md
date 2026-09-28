@@ -93,6 +93,35 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.113.0 — 2026-09-28
+
+**Correzioni emerse dai test e pulizia**
+
+- **Parametri → Ricevibilità: il salvataggio di un limite non funzionava
+  mai** (errore del database per un parametro sbagliato nella query). Ora
+  salva, con test su database reale.
+- **Import Excel dei debiti**: gli importi illeggibili ('n.d.', vuoti,
+  testo) scartano la riga invece di importarla a 0; letti i negativi tra
+  parentesi e i formati '1,234.56'; righe di totale riconosciute in
+  qualunque colonna; colonna "versato" vuota lasciata vuota; suggerimenti
+  di colonna corretti ('Importo versato', 'Data versamento', 'Annotazioni').
+- **Saldo di una riga di debito mai negativo** (versato oltre il dovuto non
+  riduce più i totali): tabella, export Excel, screening, fascicolo.
+- **Check List**: i pesi delle direttrici si ripartiscono sempre su 100
+  (prima potevano sommare 25 o 75 quando l'AI generava meno sezioni); id di
+  domanda duplicati o vuoti rifiutati con messaggio preciso.
+- Ricevibilità: il messaggio indica la soglia trovata tramite alias (verdetto
+  invariato). Ranghi legali sconosciuti in fondo all'elenco.
+- Errori sporadici "già esistente" / "chiave duplicata" all'apertura
+  contemporanea di più pagine (creazione tabelle) eliminati; tabella della
+  simulazione creata prima della lettura.
+- Sicurezza: titolo e sottotitolo delle finestre di stampa escapati (la
+  ragione sociale poteva iniettare HTML); dopo un cambio o una rigenerazione
+  della password, o la disattivazione di un utente, le sessioni aperte si
+  chiudono; segreto TOTP con caratteri non validi rifiutato.
+- Pulizia: rimossi file e 10 server action mai usati, lo script db:seed
+  rotto; knip configurato per Next.js.
+
 ## 0.112.0 — 2026-09-28
 
 **Dipendenze: vulnerabilità corrette e pacchetti inutilizzati rimossi**
