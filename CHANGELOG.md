@@ -93,6 +93,22 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.112.0 — 2026-09-28
+
+**Dipendenze: vulnerabilità corrette e pacchetti inutilizzati rimossi**
+
+- `jspdf` 2.5 → 4.2 e `jspdf-autotable` 3.8 → 5.0: eliminata la
+  vulnerabilità critica (tramite dompurify) nella generazione dei PDF. Nessuna
+  modifica al codice; nuovo test che genera davvero il PDF della Proposta, e
+  verificato il download "Genera documento (PDF) da inviare" nel browser.
+- `postcss` → 8.5.28 (vulnerabilità alta).
+- Rimossi 11 pacchetti mai usati: `openai`, `@google/genai`, `jose`,
+  `@vercel/postgres` (deprecato), `@dhiwise/component-tagger`,
+  `@heroicons/react`, `react-hook-form`, `@tailwindcss/forms`,
+  `@tailwindcss/typography`, `tailwindcss-animate`, `@netlify/plugin-nextjs`.
+- Resta da aggiornare `xlsx` (vulnerabilità alta, nessuna correzione su npm):
+  la versione corretta è pubblicata solo su cdn.sheetjs.com.
+
 ## 0.111.0 — 2026-09-27
 
 **Sicurezza: permessi degli Operatori applicati anche sul server**
