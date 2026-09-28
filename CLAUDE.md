@@ -74,7 +74,7 @@ anche la CI in `.github/workflows/ci.yml`).
   un'azione non ha la guardia.
 - **AI**: solo `@anthropic-ai/sdk` (`ANTHROPIC_API_KEY`), usato nelle server action
   (proposta, screening, visura, confronto liquidatorio, chatbot…) e in
-  `src/app/api/xbrl/report-ai`. `openai` e `@google/genai` sono dipendenze non usate.
+  `src/app/api/xbrl/report-ai`.
 - **File**: Vercel Blob tramite `src/lib/blobStore.ts` (filesystem locale in portable).
 
 ### Variabili d'ambiente
@@ -125,6 +125,7 @@ portable**. Dettagli: `portable/REPORT-PORTABLE.md`.
   globali). Non eseguirlo mai.
 - La chiave di permesso `'report'` indica il modulo **Proposta**: non rinominarla, si
   romperebbero i permessi salvati.
-- `jose` è una dipendenza non importata. `image-hosts.config.mjs` e
-  `@dhiwise/component-tagger` sono residui dello scaffold iniziale.
+- `image-hosts.config.mjs` è un residuo dello scaffold iniziale (non importato).
+- `xlsx` 0.18.5 (npm) ha vulnerabilità note senza correzione: va sostituito con la build
+  SheetJS 0.20.x da cdn.sheetjs.com (stessa API), non con un'altra versione da npm.
 - `README.md` è boilerplate generico: questo file è la documentazione di riferimento.

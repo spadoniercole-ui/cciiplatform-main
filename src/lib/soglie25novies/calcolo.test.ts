@@ -414,3 +414,197 @@ describe('soglia assoluta quando il 30% non è calcolabile', () => {
     expect(riga?.motivo).toContain('non superata');
   });
 });
+
+describe('INPS con lavoratori — partite a importo non noto', () => {
+  const base = {
+    ...vuoto,
+    conLavoratori: true,
+    contributiScaduti: 10_000,
+    contributiDovutiAnnoPrecedente: 100_000, // 30% = 30.000
+  };
+  const rigaCon = (e: ReturnType<typeof calcolaSoglie25Novies>) =>
+    e.righe.find((r) => r.ambito.includes('CON lavoratori'));
+
+  it('senza voci ignote: sotto soglia', () => {
+    expect(rigaCon(calcolaSoglie25Novies(base, 'INPS'))?.esito).toBe('sotto');
+  });
+
+  it('una partita ignota: "sotto" diventa non determinabile, al singolare', () => {
+    const r = rigaCon(calcolaSoglie25Novies({ ...base, vociImportoIgnoto: 1 }, 'INPS'));
+    expect(r?.esito).toBe('non_determinabile');
+    expect(r?.motivo).toContain('Sui dati quantificati la soglia non è raggiunta');
+    expect(r?.motivo).toContain('con 1 partita a importo non noto');
+  });
+
+  it('più partite ignote: al plurale', () => {
+    const r = rigaCon(calcolaSoglie25Novies({ ...base, vociImportoIgnoto: 3 }, 'INPS'));
+    expect(r?.esito).toBe('non_determinabile');
+    expect(r?.motivo).toContain('con 3 partite a importo non noto');
+  });
+
+  it('la riga resta fra le non determinabili dell’esito complessivo', () => {
+    const e = calcolaSoglie25Novies({ ...base, vociImportoIgnoto: 2 }, 'INPS');
+    expect(e.nonDeterminabili.map((r) => r.ambito)).toContain(rigaCon(e)?.ambito);
+    expect(e.superate).toHaveLength(0);
+  });
+
+  it('se la soglia è superata, le voci ignote non cambiano l’esito', () => {
+    const r = rigaCon(
+      calcolaSoglie25Novies({ ...base, contributiScaduti: 40_000, vociImportoIgnoto: 2 }, 'INPS')
+    );
+    expect(r?.esito).toBe('sopra');
+    expect(r?.motivo).not.toContain('importo non noto');
+  });
+
+  it('zero voci ignote equivale a nessuna', () => {
+    const r = rigaCon(calcolaSoglie25Novies({ ...base, vociImportoIgnoto: 0 }, 'INPS'));
+    expect(r?.esito).toBe('sotto');
+  });
+
+  it('con voci ignote il flag delle sanzioni non si accende', () => {
+    const e = calcolaSoglie25Novies(
+      { ...base, contributiScaduti: 20_000, sanzioniPresunte: 20_000, vociImportoIgnoto: 1 },
+      'INPS'
+    );
+    expect(e.inpsSopraSoloConSanzioni).toBe(false);
+  });
+
+  it('ritardo assente: l’esito torna "sotto" anche con voci ignote', () => {
+    const r = rigaCon(
+      calcolaSoglie25Novies({ ...base, vociImportoIgnoto: 1, ritardoOltre90Giorni: false }, 'INPS')
+    );
+    expect(r?.esito).toBe('sotto');
+    expect(r?.motivo).toContain('NON integrato');
+  });
+});
+
+describe('INPS con lavoratori — sanzioni presunte', () => {
+  const base = {
+    ...vuoto,
+    conLavoratori: true,
+    contributiScaduti: 12_000,
+    contributiDovutiAnnoPrecedente: 20_000, // 30% = 6.000; manca la soglia dei 15.000
+  };
+
+  it('contributi sotto, contributi + sanzioni oltre entrambe le soglie → flag acceso', () => {
+    const e = calcolaSoglie25Novies({ ...base, sanzioniPresunte: 5_000 });
+    expect(e.superate).toHaveLength(0);
+    expect(e.inpsSopraSoloConSanzioni).toBe(true);
+  });
+
+  it('con le sanzioni si supera l’importo ma non il 30% → flag spento', () => {
+    const e = calcolaSoglie25Novies({
+      ...base,
+      contributiScaduti: 12_000,
+      contributiDovutiAnnoPrecedente: 60_000, // 30% = 18.000
+      sanzioniPresunte: 5_000, // totale 17.000
+    });
+    expect(e.inpsSopraSoloConSanzioni).toBe(false);
+  });
+
+  it('con le sanzioni si resta sotto i 15.000 € → flag spento', () => {
+    const e = calcolaSoglie25Novies({ ...base, sanzioniPresunte: 2_000 });
+    expect(e.inpsSopraSoloConSanzioni).toBe(false);
+  });
+
+  it('riga non applicabile (senza lavoratori) → il flag non viene dalla riga CON', () => {
+    // 12.000 € superano già i 5.000 € della riga SENZA: nessun flag.
+    const e = calcolaSoglie25Novies({ ...base, conLavoratori: false, sanzioniPresunte: 5_000 });
+    expect(e.inpsSopraSoloConSanzioni).toBe(false);
+  });
+
+  it('lavoratori non dichiarati → nessun flag', () => {
+    const e = calcolaSoglie25Novies({ ...base, conLavoratori: null, sanzioniPresunte: 5_000 });
+    expect(e.inpsSopraSoloConSanzioni).toBe(false);
+  });
+
+  it('il flag è visibile a INPS e a NON_PUBBLICO, non agli altri enti', () => {
+    const dati = { ...base, sanzioniPresunte: 5_000 };
+    expect(calcolaSoglie25Novies(dati, 'INPS').inpsSopraSoloConSanzioni).toBe(true);
+    expect(calcolaSoglie25Novies(dati, 'NON_PUBBLICO').inpsSopraSoloConSanzioni).toBe(true);
+    expect(calcolaSoglie25Novies(dati, 'INAIL').inpsSopraSoloConSanzioni).toBe(false);
+    expect(calcolaSoglie25Novies(dati, 'AGENZIA_ENTRATE').inpsSopraSoloConSanzioni).toBe(false);
+  });
+
+  it('le sanzioni presunte sono dichiarate come presunzione fra i dati mancanti', () => {
+    const e = calcolaSoglie25Novies({ ...base, sanzioniPresunte: 5_000 });
+    expect(e.datiMancanti.some((d) => d.includes('PRESUNZIONE'))).toBe(true);
+    const senza = calcolaSoglie25Novies(base);
+    expect(senza.datiMancanti.some((d) => d.includes('PRESUNZIONE'))).toBe(false);
+  });
+});
+
+describe('INPS con lavoratori — riconciliazione con l’esposizione V.E.R.A.', () => {
+  const base = {
+    ...vuoto,
+    conLavoratori: true,
+    contributiScaduti: 10_000,
+    contributiDovutiAnnoPrecedente: 100_000,
+  };
+  const motivoCon = (dati: DatiSoglie) =>
+    calcolaSoglie25Novies(dati, 'INPS').righe.find((r) => r.ambito.includes('CON lavoratori'))
+      ?.motivo ?? '';
+
+  it('dichiara sempre quale importo è stato confrontato', () => {
+    expect(motivoCon(base)).toContain(
+      'Importo confrontato: contributi previdenziali scaduti dai valori per le soglie'
+    );
+    expect(motivoCon(base)).toContain('al netto di sanzioni e interessi');
+  });
+
+  it('senza esposizione V.E.R.A. non parla di riconciliazione', () => {
+    expect(motivoCon(base)).not.toContain('V.E.R.A.');
+    expect(motivoCon({ ...base, esposizioneVera: null })).not.toContain('V.E.R.A.');
+  });
+
+  it('senza contributi non dichiara nessun importo confrontato', () => {
+    expect(motivoCon({ ...base, contributiScaduti: null, esposizioneVera: 10_000 })).not.toContain(
+      'Importo confrontato'
+    );
+  });
+
+  it('esposizione coincidente → lo dice', () => {
+    const m = motivoCon({ ...base, esposizioneVera: 10_000 });
+    expect(m).toContain('L’esposizione V.E.R.A. quantificata è');
+    expect(m).toContain('coincide con l’importo confrontato');
+    expect(m).not.toContain('va riconciliata');
+  });
+
+  it('differenza entro 0,50 € → considerata coincidente', () => {
+    expect(motivoCon({ ...base, esposizioneVera: 10_000.5 })).toContain('coincide');
+    expect(motivoCon({ ...base, esposizioneVera: 9_999.5 })).toContain('coincide');
+  });
+
+  it('differenza oltre 0,50 € → va riconciliata', () => {
+    const m = motivoCon({ ...base, esposizioneVera: 10_000.51 });
+    expect(m).toContain('i due importi non coincidono');
+    expect(m).toContain('va riconciliata');
+  });
+
+  it('con sanzioni presunte ne indica la quota nell’esposizione', () => {
+    const m = motivoCon({ ...base, esposizioneVera: 14_000, sanzioniPresunte: 4_000 });
+    expect(m).toMatch(/di cui sanzioni presunte 4\.?000 €/);
+    expect(m).toContain('va riconciliata');
+  });
+
+  it('senza sanzioni non cita la quota', () => {
+    expect(motivoCon({ ...base, esposizioneVera: 10_000 })).not.toContain('di cui sanzioni');
+  });
+
+  it('oltre soglia: il termine di 60 giorni segue la riconciliazione', () => {
+    const m = motivoCon({ ...base, contributiScaduti: 40_000, esposizioneVera: 40_000 });
+    expect(m).toContain('entro 60 giorni');
+    expect(m.indexOf('Importo confrontato')).toBeLessThan(m.indexOf('entro 60 giorni'));
+  });
+
+  it('non oltre soglia: nessun termine di invio', () => {
+    expect(motivoCon({ ...base, esposizioneVera: 10_000 })).not.toContain('entro 60 giorni');
+  });
+
+  // Da valutare: la riconciliazione con V.E.R.A. (calcolo.ts ~307-318) è
+  // aggiunta solo alla riga INPS «CON lavoratori». Per un'impresa SENZA
+  // lavoratori con esposizioneVera 14.000 € e contributi 10.000 € la riga
+  // applicabile non dice né quale importo è stato confrontato né che la
+  // differenza va riconciliata.
+  it.todo('riga INPS SENZA lavoratori: dovrebbe riportare anche la riconciliazione V.E.R.A.');
+});
