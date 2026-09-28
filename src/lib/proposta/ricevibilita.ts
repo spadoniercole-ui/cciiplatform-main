@@ -184,14 +184,20 @@ export function valutaRigaProposta<T extends RigaProposta>(
     motivi.push("modalità 'rateale' non ammessa per questa categoria");
   }
 
-  // Nota: il livello 'alias' ricade qui nell'etichetta della soglia
-  // Generale (comportamento originale, conservato).
+  // Livello 'alias': la soglia è quella di una categoria il cui alias
+  // coincide con il nome della riga (cambia solo il testo, non l'esito).
+  const categoriaAlias =
+    'categoriaCreditore' in limite && typeof limite.categoriaCreditore === 'string'
+      ? limite.categoriaCreditore
+      : null;
   const etichettaLivello =
     livelloMatch === 'categoria'
       ? 'per questa categoria'
-      : livelloMatch === 'rango'
-        ? `per il rango legale "${riga.rangoLegale ? etichettaRango(riga.rangoLegale) : ''}" (nessuna soglia specifica trovata per il nome esatto di questa categoria)`
-        : 'dalla soglia Generale (nessuna soglia specifica trovata per categoria né per rango legale)';
+      : livelloMatch === 'alias'
+        ? `per la categoria${categoriaAlias ? ` "${categoriaAlias}"` : ''}, trovata tramite alias di "${riga.categoriaCreditore}"`
+        : livelloMatch === 'rango'
+          ? `per il rango legale "${riga.rangoLegale ? etichettaRango(riga.rangoLegale) : ''}" (nessuna soglia specifica trovata per il nome esatto di questa categoria)`
+          : 'dalla soglia Generale (nessuna soglia specifica trovata per categoria né per rango legale)';
 
   let motivazionePositiva: string;
   if (haValoreLiquidazione(limite)) {

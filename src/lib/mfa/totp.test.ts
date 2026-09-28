@@ -166,11 +166,19 @@ describe('verificaTotp', () => {
     expect(verificaTotp(altro, '050471', 1, t)).toBe(false);
   });
 
-  // Da valutare: base32Decode scarta in silenzio i caratteri fuori alfabeto
-  // (totp.ts, `if (idx === -1) continue`). Un segreto corrotto come
-  // «GEZD!GNBV…» viene quindi accettato come se fosse «GEZDGNBV…» invece di
-  // essere rifiutato. Non si fissa il comportamento finché non è deciso.
-  it.todo('segreto con caratteri non Base32 frammisti → dovrebbe essere rifiutato');
+  it('segreto con caratteri non Base32 frammisti → rifiutato', () => {
+    // Prima «GEZD!GNBV…» era decodificato come «GEZDGNBV…» e accettato.
+    const corrotto = SEGRETO_RFC.slice(0, 4) + '!' + SEGRETO_RFC.slice(4);
+    expect(base32Decode(corrotto).length).toBe(0);
+    expect(verificaTotp(corrotto, '050471', 1, t)).toBe(false);
+    expect(verificaTotp(SEGRETO_RFC.replace('Z', '1'), '050471', 1, t)).toBe(false);
+  });
+
+  it('spazi, minuscole e padding restano accettati anche nel segreto', () => {
+    const conSpazi = SEGRETO_RFC.toLowerCase().replace(/(.{4})/g, '$1 ') + '== ';
+    expect(base32Decode(conSpazi).toString('ascii')).toBe(SEGRETO_ASCII);
+    expect(verificaTotp(conSpazi, '050471', 1, t)).toBe(true);
+  });
 });
 
 describe('generaSegretoBase32', () => {

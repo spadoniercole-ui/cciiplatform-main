@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validaSezioniChecklist } from './validazione';
+import { erroreSezioniChecklist, validaSezioniChecklist } from './validazione';
 
 const domandaValida = {
   id: '1.1',
@@ -66,9 +66,26 @@ describe('validaSezioniChecklist', () => {
     expect(validaSezioniChecklist([sezioneValida, { numero: '2' }])).toBe(false);
   });
 
-  it.todo(
-    'id di domanda duplicati (due domande "1.1") sono accettati: le risposte, indicizzate per ' +
-      'id, si sovrapporrebbero'
-  );
-  it.todo('id o testo di domanda vuoti ("") sono accettati');
+  it('rifiuta id di domanda duplicati, anche in sezioni diverse', () => {
+    const doppia = [sezioneValida, { ...sezioneValida, numero: '2' }];
+    expect(validaSezioniChecklist(doppia)).toBe(false);
+    expect(erroreSezioniChecklist(doppia)).toMatch(/"1\.1" è usato più volte/);
+    const stessaSezione = [{ ...sezioneValida, domande: [domandaValida, domandaValida] }];
+    expect(validaSezioniChecklist(stessaSezione)).toBe(false);
+  });
+
+  it.each([
+    ['id vuoto', { ...domandaValida, id: '' }, /senza id/],
+    ['id solo spazi', { ...domandaValida, id: '  ' }, /senza id/],
+    ['testo vuoto', { ...domandaValida, domanda: '' }, /"1\.1" non ha testo/],
+    ['testo solo spazi', { ...domandaValida, domanda: ' ' }, /non ha testo/],
+  ])('rifiuta %s con un messaggio chiaro', (_, domanda, messaggio) => {
+    const sezioni = [{ ...sezioneValida, domande: [domanda] }];
+    expect(validaSezioniChecklist(sezioni)).toBe(false);
+    expect(erroreSezioniChecklist(sezioni)).toMatch(messaggio);
+  });
+
+  it('nessun errore per una struttura valida', () => {
+    expect(erroreSezioniChecklist([sezioneValida])).toBeNull();
+  });
 });

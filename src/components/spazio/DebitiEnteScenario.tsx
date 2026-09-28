@@ -46,7 +46,11 @@ import {
   type Tracciato,
   type SezioneEstratta,
 } from '@/lib/debitiEnte/tracciatoCore';
-import { raggruppaPerTipoDebito, etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
+import {
+  raggruppaPerTipoDebito,
+  etichettaTipoDebito,
+  saldoRigaDebitoEnte,
+} from '@/lib/debitiEnte/tipoDebito';
 import { esportaDebitiEnteExcel } from '@/lib/debitiEnte/excelDebitiEnte';
 import { useDichiaraContestoAssistente } from '@/components/ContestoAssistenteContext';
 import { improntaFile } from '@/lib/fascicolo/impronta';
@@ -1338,7 +1342,7 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
                   <td className="p-3 text-slate-700">€ {r.importo.toLocaleString('it-IT')}</td>
                   {haSaldo && (
                     <td className="p-3 font-bold text-slate-900">
-                      € {(r.importo - (r.importoVersato ?? 0)).toLocaleString('it-IT')}
+                      € {saldoRigaDebitoEnte(r).toLocaleString('it-IT')}
                     </td>
                   )}
                   <td className="p-3">

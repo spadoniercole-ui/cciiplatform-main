@@ -33,7 +33,7 @@ import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
 import { ottieniCategorieTipoDebito } from '@/app/actions/categorieTipoDebito';
-import { raggruppaPerTipoDebito } from '@/lib/debitiEnte/tipoDebito';
+import { raggruppaPerTipoDebito, saldoRigaDebitoEnte } from '@/lib/debitiEnte/tipoDebito';
 import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
 import { ottieniEtichetteTipoDebito } from '@/app/actions/tipoDebitoConfig';
 import { calcolaQuadroDirettrici, type QuadroDirettrici } from '@/lib/checklist/scoringDirettrici';
@@ -390,7 +390,7 @@ export async function calcolaRiscontriNormativiAzienda(
       );
       esposizioneEnte = debitiRis.righe
         .filter((r) => !noContrib.has(r.tipo))
-        .reduce((acc, r) => acc + (r.importo - (r.importoVersato ?? 0)), 0);
+        .reduce((acc, r) => acc + saldoRigaDebitoEnte(r), 0);
     }
 
     // Esposizione VERA: contabilizzato + da_contabilizzare (esclude potenziale).

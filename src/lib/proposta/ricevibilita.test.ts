@@ -292,18 +292,29 @@ describe('scelta del limite: categoria → alias → rango → Generale → ness
     expect(esito.motivazione).toContain('per il rango legale "Chirografario"');
   });
 
-  it('livello alias: la motivazione usa (oggi) l’etichetta della soglia Generale', () => {
+  it('livello alias: la motivazione indica la categoria trovata tramite alias', () => {
+    const inps = limiteCat('INPS', { percentualeMinima: 40, alias: ['Enti previdenziali'] });
     const esito = valutaRigaProposta(
-      riga({ percentualeOfferta: 50 }),
+      riga({ categoriaCreditore: 'Enti previdenziali', percentualeOfferta: 50 }),
+      inps,
+      'alias'
+    );
+    expect(esito.ricevibile).toBe(true);
+    expect(esito.motivazione).toContain(
+      'per la categoria "INPS", trovata tramite alias di "Enti previdenziali"'
+    );
+    expect(esito.motivazione).not.toContain('soglia Generale');
+    expect(esito.motivazione).not.toContain('nessuna soglia specifica');
+  });
+
+  it('livello alias con una soglia senza nome di categoria: esito invariato', () => {
+    const esito = valutaRigaProposta(
+      riga({ percentualeOfferta: 30 }),
       soglia({ percentualeMinima: 40 }),
       'alias'
     );
-    expect(esito.motivazione).toContain('dalla soglia Generale');
+    expect(esito.ricevibile).toBe(false);
   });
-
-  it.todo(
-    'livello alias: la motivazione dovrebbe indicare la categoria trovata tramite alias, non la soglia Generale'
-  );
 });
 
 describe('verificaRicevibilitaRighe (NON_ENTE, per categoria)', () => {
