@@ -86,28 +86,3 @@ export async function salvaStrutturaProspettoAction(
     return { success: false, error: `Salvataggio non riuscito: ${(error as Error).message}` };
   }
 }
-
-/** Registra il prospetto caricato e restituisce l'id da dare alle righe. */
-export async function registraProspettoAction(
-  nomeSchema: string,
-  aziendaId: number,
-  nomeFile: string,
-  ente: string,
-  mappatura: MappaturaProspetto,
-  righeImportate: number
-): Promise<{ success: boolean; prospettoId?: number; error?: string }> {
-  try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
-    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    await assicuraTabellaDebitiEnte(nomeSchema);
-    const r = await pool.query(
-      `INSERT INTO "${nomeSchema}".prospetti_triage
-         (azienda_id, nome_file, ente, mappatura, righe_importate)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [aziendaId, nomeFile, ente, JSON.stringify(mappatura), righeImportate]
-    );
-    return { success: true, prospettoId: Number(r.rows[0].id) };
-  } catch (error: unknown) {
-    return { success: false, error: `Registrazione non riuscita: ${(error as Error).message}` };
-  }
-}

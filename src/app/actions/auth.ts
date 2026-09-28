@@ -23,12 +23,6 @@ import bcrypt from 'bcryptjs';
 import { pool } from '@/lib/db';
 import { avviaChallengeMfa } from '@/lib/mfa/challenge';
 
-export interface WorkspaceDinamico {
-  id: string;
-  name: string;
-  type: 'system' | 'tenant';
-}
-
 /** Confronto a tempo costante, per non rivelare via timing quanti caratteri della password sono corretti. */
 function confrontoSicuro(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -380,8 +374,4 @@ export async function eseguiLogout() {
     }
     return { success: true };
   }
-}
-
-export async function ottieniListaWorkspace(): Promise<WorkspaceDinamico[]> {
-  return [{ id: 'CENTRAL_CONSOLE', name: '👑 CONSOLE CENTRALE superadmin', type: 'system' }];
 }

@@ -346,29 +346,3 @@ export async function contaDebitiAziendaNonAttribuitiAction(
     return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
   }
 }
-
-export async function eliminaTuttiDebitiEnteAction(
-  nomeSchema: string,
-  aziendaId: number,
-  scenarioId?: number
-): Promise<RisultatoOperazioneDebitoEnte> {
-  try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
-    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    // Si svuota SOLO l'ambito richiesto: svuotare lo scenario non deve
-    // toccare la posizione dell'azienda, né quella di un altro scenario.
-    await pool.query(
-      `DELETE FROM "${nomeSchema}".debiti_ente
-        WHERE azienda_id = $1
-          AND ${scenarioId === undefined ? 'scenario_id IS NULL' : 'scenario_id = $2'}`,
-      scenarioId === undefined ? [aziendaId] : [aziendaId, scenarioId]
-    );
-    return { success: true };
-  } catch (error: any) {
-    console.error('[eliminaTuttiDebitiEnteAction] Errore:', error);
-    return {
-      success: false,
-      error: `Impossibile eliminare le righe esistenti: ${error.message || error}`,
-    };
-  }
-}

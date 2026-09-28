@@ -16,7 +16,6 @@
     "check:use-server": "bash scripts/check-use-server-exports.sh",
     "type-check": "npm run check:use-server && npm run check:autorizzazione && tsc --noEmit",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx src/db/seed.ts",
     "build": "next build",
     "build:portable": "node portable/build-portable.mjs",
     "test": "vitest run",
@@ -65,8 +64,7 @@
     "typescript": "^5",
     "vitest": "^2.1.9"
   },
-  "description": "A modern Next.js 15 application built with TypeScript and Tailwind CSS.",
-  "main": "index.js",
+  "description": "CCIIplatform — piattaforma per il Codice della Crisi d'Impresa e dell'Insolvenza",
   "keywords": [],
   "author": "",
   "license": "ISC"

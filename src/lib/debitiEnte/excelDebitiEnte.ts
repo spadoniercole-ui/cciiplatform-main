@@ -1,16 +1,8 @@
 // src/lib/debitiEnte/excelDebitiEnte.ts
 //
-// Posizione Debitoria dell'Ente — a differenza di ogni altro Excel del
-// progetto, qui NON esportiamo un modello da compilare e reimportare: il
-// sistema assorbe la struttura del PRIMO file che l'ente carica (quello
-// che già usa nella propria contabilità) e la fissa come architrave per
-// i caricamenti successivi (src/app/actions/debitiEnteArchitrave.ts).
-// esportaDebitiEnteExcel resta solo per la CONSULTAZIONE di quanto già
-// inserito (backup, revisione) — non è più pensato per essere
-// ricaricato. importaDebitiEnteExcel (il vecchio formato fisso a 4
-// colonne) resta per compatibilità con dati inseriti prima di questa
-// consegna; il percorso nuovo, per tutto il resto, è
-// leggiIntestazioniExcel + importaConArchitrave qui sotto.
+// Posizione Debitoria dell'Ente — esportaDebitiEnteExcel serve alla
+// CONSULTAZIONE di quanto già inserito (backup, revisione).
+// importaDebitiEnteExcel legge il vecchio formato fisso a 4 colonne.
 
 import * as XLSX from 'xlsx';
 import {
@@ -20,6 +12,7 @@ import {
   type EtichetteTipoDebitoPersonalizzate,
 } from './tipoDebito';
 import type { RigaDebitoEnte } from '@/app/actions/debitiEnte';
+import { saldoRigaDebitoEnte } from './tipoDebito';
 
 const INTESTAZIONI = ['Voce', 'Importo (€)', 'Tipo (CLE / CEN / CEC / CEA)', 'Note'];
 
@@ -63,7 +56,7 @@ export function esportaDebitiEnteExcel(
 
   for (const r of righe) {
     const versato = r.importoVersato ?? '';
-    const saldo = r.importoVersato === null ? r.importo : r.importo - r.importoVersato;
+    const saldo = saldoRigaDebitoEnte(r);
     dati.push([
       r.voce,
       r.importo,
@@ -198,218 +191,4 @@ export async function importaDebitiEnteExcel(
   }
 
   return { righe, righeConErrore };
-}
-
-// ============================================================================
-// Flusso adattivo — il file che l'ente porta con il proprio formato,
-// non un nostro modello. Due fasi: (1) leggere solo le intestazioni, per
-// far scegliere all'operatore cosa significa ciascuna colonna (una volta
-// sola, al primo caricamento); (2) importare usando quella mappatura,
-// salvata come architrave, per ogni caricamento successivo.
-// ============================================================================
-
-export interface IntestazioniLette {
-  intestazioni: string[];
-  /** Valori distinti trovati nella prima colonna che sembra testuale e ripetuta (candidata a "tipo") — aiuta l'operatore a mappare i valori del proprio file su CLE/CEN/CEC/CEA senza doverli indovinare. */
-  valoriDistintiPerColonna: string[][];
-  numeroRigheDati: number;
-  /** Tutti i fogli del file, non solo quello letto — molti export (es. INPS) hanno un foglio di riepilogo e altri di dettaglio: l'operatore sceglie quale leggere, non si assume mai il primo. */
-  fogliDisponibili: string[];
-  foglioLetto: string;
-}
-
-/** Legge solo le intestazioni (riga 0) e i valori distinti per colonna, senza interpretare nulla — la mappatura la sceglie l'operatore. Se nomeFoglio non è indicato, legge il primo — ma lo dichiara sempre in foglioLetto, così l'operatore vede subito se non è quello giusto. */
-export async function leggiIntestazioniExcel(
-  file: File,
-  nomeFoglio?: string
-): Promise<IntestazioniLette> {
-  const buffer = await file.arrayBuffer();
-  const wb = XLSX.read(buffer, { type: 'array' });
-  const foglioScelto =
-    nomeFoglio && wb.SheetNames.includes(nomeFoglio) ? nomeFoglio : wb.SheetNames[0];
-  const foglio = wb.Sheets[foglioScelto];
-  const intervallo = XLSX.utils.decode_range(foglio['!ref'] || 'A1');
-  const cella = (riga: number, colonna: number) =>
-    foglio[XLSX.utils.encode_cell({ r: riga, c: colonna })];
-
-  const numeroColonne = intervallo.e.c - intervallo.s.c + 1;
-  const intestazioni: string[] = [];
-  for (let c = 0; c < numeroColonne; c++) {
-    const valore = cella(0, c)?.v;
-    intestazioni.push(
-      typeof valore === 'string' ? valore.trim() : String(valore ?? `Colonna ${c + 1}`)
-    );
-  }
-
-  // Una riga "ha dati" se QUALUNQUE colonna è valorizzata — non solo la
-  // prima. Guardare sempre la colonna 0 fissa, a prescindere da quale
-  // ruolo ci sia mappato, scartava in silenzio metà delle righe di
-  // schemi proprietari dove la prima colonna non è sempre popolata.
-  const rigaHaDati = (r: number): boolean => {
-    for (let c = 0; c < numeroColonne; c++) {
-      const v = cella(r, c)?.v;
-      if (v !== undefined && v !== '') return true;
-    }
-    return false;
-  };
-
-  const valoriDistintiPerColonna: string[][] = intestazioni.map(() => []);
-  let numeroRigheDati = 0;
-  for (let r = 1; r <= intervallo.e.r; r++) {
-    if (!rigaHaDati(r)) continue;
-    numeroRigheDati += 1;
-    for (let c = 0; c < numeroColonne; c++) {
-      const valore = cella(r, c)?.v;
-      const testo = typeof valore === 'string' ? valore.trim() : String(valore ?? '');
-      if (
-        testo &&
-        !valoriDistintiPerColonna[c].includes(testo) &&
-        valoriDistintiPerColonna[c].length < 20
-      ) {
-        valoriDistintiPerColonna[c].push(testo);
-      }
-    }
-  }
-
-  return {
-    intestazioni,
-    valoriDistintiPerColonna,
-    numeroRigheDati,
-    fogliDisponibili: wb.SheetNames,
-    foglioLetto: foglioScelto,
-  };
-}
-
-export interface RisultatoImportConArchitrave {
-  righe: RigaDebitoEsportabile[];
-  righeConErrore: { indice: number; motivo: string }[];
-  /** true se il numero di colonne del file non coincide con l'architrave salvato — l'operatore ha caricato un file diverso da quello atteso. */
-  strutturaNonCorrispondente: boolean;
-}
-
-/** Un numero seriale Excel (giorni dal 1899-12-30) o una stringa in formato italiano/ISO — entrambi ammessi, lo schema proprietario può usare l'uno o l'altro a seconda di come la colonna è formattata nel file sorgente. */
-function parsaData(valore: unknown): string | null {
-  if (valore === undefined || valore === null || valore === '') return null;
-  if (typeof valore === 'number') {
-    const data = XLSX.SSF.parse_date_code(valore);
-    if (!data) return null;
-    return `${data.y}-${String(data.m).padStart(2, '0')}-${String(data.d).padStart(2, '0')}`;
-  }
-  const testo = String(valore).trim();
-  const isoMatch = testo.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-  const itMatch = testo.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (itMatch) return `${itMatch[3]}-${itMatch[2].padStart(2, '0')}-${itMatch[1].padStart(2, '0')}`;
-  return null;
-}
-
-function parsaImporto(valore: unknown): number | null {
-  if (valore === undefined || valore === null || valore === '') return null;
-  const numero =
-    typeof valore === 'number'
-      ? valore
-      : Number(String(valore).replace(/\./g, '').replace(',', '.'));
-  return Number.isNaN(numero) ? null : numero;
-}
-
-/** Importa usando la mappatura già scelta (architrave) — nessuna interpretazione nuova, solo applicazione di quanto deciso al primo caricamento. */
-export async function importaConArchitrave(
-  file: File,
-  mappatura: string[], // RuoloColonnaDebito[], tipizzato lato chiamante
-  mappaturaTipo: Record<string, TipoDebitoEnte>,
-  numeroColonneAttese: number,
-  nomeFoglio?: string | null,
-  tipoFisso?: TipoDebitoEnte | null
-): Promise<RisultatoImportConArchitrave> {
-  const buffer = await file.arrayBuffer();
-  const wb = XLSX.read(buffer, { type: 'array' });
-  const foglioScelto =
-    nomeFoglio && wb.SheetNames.includes(nomeFoglio) ? nomeFoglio : wb.SheetNames[0];
-  const foglio = wb.Sheets[foglioScelto];
-  const intervallo = XLSX.utils.decode_range(foglio['!ref'] || 'A1');
-  const cella = (riga: number, colonna: number) =>
-    foglio[XLSX.utils.encode_cell({ r: riga, c: colonna })];
-
-  const numeroColonne = intervallo.e.c - intervallo.s.c + 1;
-  if (numeroColonne !== numeroColonneAttese) {
-    return { righe: [], righeConErrore: [], strutturaNonCorrispondente: true };
-  }
-
-  const idxVoce = mappatura.indexOf('voce');
-  const idxImporto = mappatura.indexOf('importo');
-  const idxImportoVersato = mappatura.indexOf('importo_versato');
-  const idxTipo = mappatura.indexOf('tipo');
-  const idxNota = mappatura.indexOf('nota');
-  const idxData = mappatura.indexOf('data');
-
-  // Colonne "extra": ogni colonna mappata al ruolo 'extra' viene salvata
-  // com'è, chiave = intestazione originale. Così TUTTE le colonne mappate
-  // vengono caricate, non solo i sei campi semantici. L'intestazione si
-  // legge dalla prima riga dell'intervallo.
-  const rHeader = intervallo.s.r;
-  const colonneExtra: { idx: number; header: string }[] = [];
-  for (let c = 0; c < numeroColonne; c++) {
-    if (mappatura[c] === 'extra') {
-      const header = String(cella(rHeader, c)?.v ?? '').trim() || `Colonna ${c + 1}`;
-      colonneExtra.push({ idx: c, header });
-    }
-  }
-
-  // Stessa correzione di leggiIntestazioniExcel — vedi lì il commento.
-  const rigaHaDati = (r: number): boolean => {
-    for (let c = 0; c < numeroColonne; c++) {
-      const v = cella(r, c)?.v;
-      if (v !== undefined && v !== '') return true;
-    }
-    return false;
-  };
-
-  const righe: RigaDebitoEsportabile[] = [];
-  const righeConErrore: { indice: number; motivo: string }[] = [];
-
-  for (let r = 1; r <= intervallo.e.r; r++) {
-    if (!rigaHaDati(r)) continue;
-
-    const voce =
-      idxVoce >= 0 ? String(cella(r, idxVoce)?.v ?? '').trim() : `Riga ${righe.length + 1}`;
-    const importo = parsaImporto(cella(r, idxImporto)?.v);
-    const importoVersato =
-      idxImportoVersato >= 0 ? parsaImporto(cella(r, idxImportoVersato)?.v) : null;
-    const testoTipo = String(cella(r, idxTipo)?.v ?? '').trim();
-    // File come un export INPS: nessuna colonna dedicata al tipo, tutte
-    // le righe sono implicitamente della stessa natura — un tipo fisso
-    // per l'intero import, non una mappatura per valore.
-    const tipo = tipoFisso ?? mappaturaTipo[testoTipo];
-    const noteGrezze = idxNota >= 0 ? cella(r, idxNota)?.v : undefined;
-    const note = typeof noteGrezze === 'string' && noteGrezze.trim() ? noteGrezze.trim() : null;
-    const data = idxData >= 0 ? parsaData(cella(r, idxData)?.v) : null;
-
-    if (importo === null || importo < 0) {
-      righeConErrore.push({ indice: r, motivo: `"${voce}": importo non valido` });
-      continue;
-    }
-    if (!tipo) {
-      righeConErrore.push({
-        indice: r,
-        motivo: `"${voce}": valore "${testoTipo}" nella colonna Tipo non è mai stato mappato — aggiorna il modello o correggi il file.`,
-      });
-      continue;
-    }
-
-    let datiExtra: Record<string, string> | null = null;
-    if (colonneExtra.length > 0) {
-      const acc: Record<string, string> = {};
-      for (const { idx, header } of colonneExtra) {
-        const v = cella(r, idx)?.v;
-        if (v !== undefined && v !== null && String(v).trim() !== '') {
-          acc[header] = String(v).trim();
-        }
-      }
-      if (Object.keys(acc).length > 0) datiExtra = acc;
-    }
-
-    righe.push({ voce, importo, importoVersato, tipo, note, data, datiExtra });
-  }
-
-  return { righe, righeConErrore, strutturaNonCorrispondente: false };
 }

@@ -38,7 +38,7 @@ function riduciAscii(s: string): string {
  * mancano entrambi, si ripiega su "utente" — non lascia mai una base vuota,
  * che romperebbe l'unicità e la leggibilità.
  */
-export function baseUsername(nome: string, cognome: string): string {
+function baseUsername(nome: string, cognome: string): string {
   const n = riduciAscii(nome);
   const c = riduciAscii(cognome);
   if (n && c) return `${n}.${c}`;

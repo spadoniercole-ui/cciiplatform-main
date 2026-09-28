@@ -22,7 +22,6 @@ import { generaUsernameUnivoco, usernameEsisteGlobale } from '@/lib/generaUserna
 import { chiudiSessioniUtente } from '@/lib/sessione';
 import {
   COOKIE_SPAZIO_ISPEZIONE,
-  contestoIspezioneCorrente,
   messaggioErrore,
   richiediAccessoSchema,
   richiediSessione,
@@ -349,15 +348,6 @@ export async function riprovaProvisioningAction(
 // spazio sta ispezionando in questo momento.
 // ============================================================================
 
-export interface ContestoIspezione {
-  spazioId: number;
-  codice: string;
-  descrizione: string;
-  nomeSchema: string;
-  tipoSpazio: 'ENTE' | 'NON_ENTE';
-  giudicante: boolean;
-}
-
 // Il cookie di ispezione contiene SOLO l'id dello spazio scelto: i dati
 // dello spazio sono riletti dal database a ogni richiesta e il cookie vale
 // solo insieme a una sessione SUPERADMIN (vedi src/lib/autorizzazione.ts).
@@ -407,19 +397,6 @@ export async function esciDaSalvagenteAction(): Promise<ActionResult> {
   const cookieStore = await cookies();
   cookieStore.delete(COOKIE_SPAZIO_ISPEZIONE);
   return { success: true };
-}
-
-export async function ottieniContestoIspezione(): Promise<ContestoIspezione | null> {
-  const contesto = await contestoIspezioneCorrente();
-  if (!contesto) return null;
-  return {
-    spazioId: contesto.spazioId,
-    codice: contesto.codice,
-    descrizione: contesto.descrizione,
-    nomeSchema: contesto.nomeSchema,
-    tipoSpazio: contesto.tipoSpazio,
-    giudicante: contesto.giudicante,
-  };
 }
 
 export interface RisultatoElencoSpazi {

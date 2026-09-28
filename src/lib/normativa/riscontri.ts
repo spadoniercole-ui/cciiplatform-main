@@ -14,7 +14,7 @@
 // `datiMancanti`.
 
 // ---- Soglie di legge (fonte: CCII artt. 2 e 25-novies) --------------------
-export const SOGLIA_IMPRESA_MINORE = {
+const SOGLIA_IMPRESA_MINORE = {
   attivo: 300_000,
   ricavi: 200_000,
   debiti: 500_000,

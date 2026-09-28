@@ -31,7 +31,7 @@ export interface PassoScenario {
   icon: typeof FileText;
 }
 
-export const PASSI_SCENARIO_RICEVUTA: PassoScenario[] = [
+const PASSI_SCENARIO_RICEVUTA: PassoScenario[] = [
   {
     numero: 0,
     id: 'proposta',
@@ -104,7 +104,7 @@ export const PASSI_SCENARIO_RICEVUTA: PassoScenario[] = [
   },
 ];
 
-export const PASSI_SCENARIO_DA_DEFINIRE: PassoScenario[] = [
+const PASSI_SCENARIO_DA_DEFINIRE: PassoScenario[] = [
   {
     numero: 0,
     id: 'xbrl',
