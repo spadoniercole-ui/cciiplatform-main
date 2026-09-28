@@ -67,33 +67,65 @@ describe('calcolaPesiDirettrici', () => {
     });
   });
 
-  it('le sezioni in più rispetto alle direttrici hanno peso 0 e usano il titolo', () => {
+  it('le sezioni in più rispetto alle direttrici hanno peso 0, usano il titolo e sono segnalate', () => {
     const { pesiPerDomanda, pesiPerDirettrice } = calcolaPesiDirettrici(
       [sezione('1', 1), sezione('2', 1)],
       [{ nome: 'Unica', prodotti: ['x'] }]
     );
-    expect(pesiPerDirettrice[1]).toEqual({ nome: 'Sezione 2', prodotti: 0, peso: 0 });
+    expect(pesiPerDirettrice[1]).toEqual({
+      nome: 'Sezione 2',
+      prodotti: 0,
+      peso: 0,
+      senzaDirettrice: true,
+    });
     expect(pesiPerDomanda['2.1']).toBe(0);
     expect(pesiPerDomanda['1.1']).toBe(100);
   });
 
-  it('una sezione senza domande compare nei pesi per direttrice ma non assegna pesi', () => {
+  it('una sezione senza domande compare nei pesi per direttrice con peso 0 e segnalata', () => {
     const { pesiPerDomanda, pesiPerDirettrice } = calcolaPesiDirettrici(
       [sezione('1', 0), sezione('2', 2)],
       direttrici
     );
-    expect(pesiPerDirettrice.map((d) => d.peso)).toEqual([75, 25]);
+    expect(pesiPerDirettrice).toEqual([
+      { nome: 'Fiscale', prodotti: 3, peso: 0, senzaDomande: true },
+      { nome: 'Contributiva', prodotti: 1, peso: 100 },
+    ]);
     expect(Object.keys(pesiPerDomanda)).toEqual(['2.1', '2.2']);
   });
 
-  it.todo(
-    'sezione senza domande: il peso della sua direttrice va perso e non viene ridistribuito ' +
-      '(sezioni [0 domande, 2 domande], prodotti [3, 1] → somma pesi 25 invece di 100)'
-  );
-  it.todo(
-    'meno sezioni generate che direttrici: i prodotti delle direttrici senza sezione restano ' +
-      'nel denominatore (1 sezione, direttrici [3, 1] prodotti → somma pesi 75 invece di 100)'
-  );
+  it('sezione senza domande: il peso della sua direttrice si ridistribuisce (somma 100)', () => {
+    // Prima: sezioni [0, 2 domande], prodotti [3, 1] → 12,5 a domanda, somma 25.
+    const { pesiPerDomanda } = calcolaPesiDirettrici(
+      [sezione('1', 0), sezione('2', 2)],
+      direttrici
+    );
+    expect(pesiPerDomanda['2.1']).toBeCloseTo(50, 10);
+    expect(somma(pesiPerDomanda)).toBeCloseTo(100, 10);
+  });
+
+  it('meno sezioni che direttrici: le direttrici senza sezione escono dal denominatore', () => {
+    // Prima: 1 sezione, direttrici [3, 1] prodotti → 37,5 a domanda, somma 75.
+    const { pesiPerDomanda, pesiPerDirettrice } = calcolaPesiDirettrici(
+      [sezione('1', 2)],
+      direttrici
+    );
+    expect(pesiPerDirettrice).toEqual([{ nome: 'Fiscale', prodotti: 3, peso: 100 }]);
+    expect(pesiPerDomanda['1.1']).toBeCloseTo(50, 10);
+    expect(somma(pesiPerDomanda)).toBeCloseTo(100, 10);
+  });
+
+  it('anteprima (nessuna sezione con domande): pesi per direttrice su tutte le sezioni', () => {
+    const { pesiPerDomanda, pesiPerDirettrice } = calcolaPesiDirettrici(
+      [sezione('1', 0), sezione('2', 0)],
+      direttrici
+    );
+    expect(pesiPerDirettrice).toEqual([
+      { nome: 'Fiscale', prodotti: 3, peso: 75 },
+      { nome: 'Contributiva', prodotti: 1, peso: 25 },
+    ]);
+    expect(pesiPerDomanda).toEqual({});
+  });
 });
 
 describe('calcolaQuadroDirettrici', () => {
@@ -178,8 +210,25 @@ describe('calcolaQuadroDirettrici', () => {
     expect(q.pesiPerDirettrice).toEqual([]);
   });
 
-  it.todo(
-    'tutte le risposte su domande a peso 0 (sezione senza direttrice): punteggio 0 → ' +
-      '"Nessuna criticità netta rilevata" (verde) anche con tutti No; valutare "grigio"'
-  );
+  it('risposte solo su domande a peso 0 (sezione senza direttrice) → non valutabile', () => {
+    // Prima: punteggio 0 → "Nessuna criticità netta rilevata" (verde) anche con tutti No.
+    const q = calcolaQuadroDirettrici(
+      [sezione('1', 1), sezione('2', 2)],
+      [{ nome: 'Unica', prodotti: ['x'] }],
+      risposte({ '2.1': false, '2.2': false })
+    );
+    expect(q.punteggio).toBeNull();
+    expect(q.domandeRisposte).toBe(2);
+    expect(q.coloreEtichetta).toBe('grigio');
+  });
+
+  it('sezione senza domande: tutte No sulle altre → +100 (prima +25)', () => {
+    const q = calcolaQuadroDirettrici(
+      [sezione('1', 0), sezione('2', 2)],
+      direttrici,
+      risposte({ '2.1': false, '2.2': false })
+    );
+    expect(q.punteggio).toBeCloseTo(100, 10);
+    expect(q.coloreEtichetta).toBe('rosso');
+  });
 });

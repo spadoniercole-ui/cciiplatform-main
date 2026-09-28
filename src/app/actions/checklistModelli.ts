@@ -12,7 +12,7 @@ import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabellaChecklistModelli } from '@/db/provision';
 import type { SezioneChecklist } from '@/lib/checklist/ministeriale';
-import { validaSezioniChecklist } from '@/lib/checklist/validazione';
+import { erroreSezioniChecklist } from '@/lib/checklist/validazione';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -88,13 +88,8 @@ export async function creaModelloChecklistAction(
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!nome.trim()) return { success: false, error: 'Il nome del modello è obbligatorio.' };
-    if (!validaSezioniChecklist(sezioni)) {
-      return {
-        success: false,
-        error:
-          'Struttura non valida: ogni sezione serve numero, titolo e domande (ciascuna con id, domanda, peso STRUTTURALE/RILEVANTE/DOCUMENTALE).',
-      };
-    }
+    const erroreStruttura = erroreSezioniChecklist(sezioni);
+    if (erroreStruttura) return { success: false, error: erroreStruttura };
     await assicuraTabellaChecklistModelli(nomeSchema);
     await pool.query(
       `INSERT INTO "${nomeSchema}".checklist_modelli (nome, descrizione, sezioni)
@@ -117,13 +112,8 @@ export async function aggiornaModelloChecklistAction(
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!dati.nome.trim()) return { success: false, error: 'Il nome del modello è obbligatorio.' };
-    if (!validaSezioniChecklist(dati.sezioni)) {
-      return {
-        success: false,
-        error:
-          'Struttura non valida: ogni sezione serve numero, titolo e domande (ciascuna con id, domanda, peso STRUTTURALE/RILEVANTE/DOCUMENTALE).',
-      };
-    }
+    const erroreStruttura = erroreSezioniChecklist(dati.sezioni);
+    if (erroreStruttura) return { success: false, error: erroreStruttura };
     await pool.query(
       `UPDATE "${nomeSchema}".checklist_modelli SET nome = $2, descrizione = $3, sezioni = $4 WHERE id = $1`,
       [id, dati.nome.trim(), dati.descrizione?.trim() || null, JSON.stringify(dati.sezioni)]

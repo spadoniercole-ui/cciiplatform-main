@@ -10,11 +10,7 @@
 // studio, da un professionista, dall'azienda stessa) — è l'input che
 // scatena l'intero ciclo di verifica.
 
-import {
-  richiediAccessoAzienda,
-  richiediAccessoSchema,
-  richiediAccessoScenario,
-} from '@/lib/autorizzazione';
+import { richiediAccessoAzienda, richiediAccessoScenario } from '@/lib/autorizzazione';
 import { assicuraTabelleScenari } from '@/db/provision';
 import { type TipoProposta, ORIGINI_PER_TIPO } from '@/lib/origineProposta';
 
@@ -241,26 +237,6 @@ export async function creaScenarioAction(
   } catch (error: any) {
     console.error('[creaScenarioAction] Errore:', error);
     return { success: false, error: `Impossibile creare lo scenario: ${error.message || error}` };
-  }
-}
-
-export async function aggiornaStatoScenarioAction(
-  nomeSchema: string,
-  scenarioId: number,
-  stato: StatoScenario
-): Promise<RisultatoOperazioneScenario> {
-  try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
-    const { db } = await import('@/db/client');
-    const { getTabelleTenant } = await import('@/db/schema');
-    const { eq } = await import('drizzle-orm');
-    const tabelle = getTabelleTenant(nomeSchema);
-
-    await db.update(tabelle.scenari).set({ stato }).where(eq(tabelle.scenari.id, scenarioId));
-    return { success: true, scenarioId };
-  } catch (error: any) {
-    console.error('[aggiornaStatoScenarioAction] Errore:', error);
-    return { success: false, error: `Impossibile aggiornare lo stato: ${error.message || error}` };
   }
 }
 

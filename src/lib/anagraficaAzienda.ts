@@ -12,7 +12,7 @@ export interface CampoAnagrafica {
 
 /** Campi obbligatori. Praticamente tutti quelli che qualificano l'azienda:
  * l'unico davvero facoltativo è il numero di sedi secondarie (0 è valido). */
-export const CAMPI_OBBLIGATORI_AZIENDA: CampoAnagrafica[] = [
+const CAMPI_OBBLIGATORI_AZIENDA: CampoAnagrafica[] = [
   { chiave: 'ragioneSociale', label: 'Ragione Sociale' },
   { chiave: 'formaGiuridica', label: 'Forma Giuridica' },
   { chiave: 'codiceAteco', label: 'Codice ATECO' },

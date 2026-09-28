@@ -19,11 +19,12 @@ import { contaSpaziPerLicenza, getLicenzaPerId } from '@/app/actions/licenze';
 import { RUOLI_ADMIN_SPAZIO, type RuoloAdminSpazio } from '@/lib/ruoliAdminSpazio';
 import { generaSlug } from '@/lib/slug';
 import { generaUsernameUnivoco, usernameEsisteGlobale } from '@/lib/generaUsername';
+import { chiudiSessioniUtente } from '@/lib/sessione';
 import {
   COOKIE_SPAZIO_ISPEZIONE,
-  contestoIspezioneCorrente,
   messaggioErrore,
   richiediAccessoSchema,
+  richiediSessione,
   richiediSuperadmin,
   risolviContestoSpazio,
   type ContestoAccessoSpazio,
@@ -347,15 +348,6 @@ export async function riprovaProvisioningAction(
 // spazio sta ispezionando in questo momento.
 // ============================================================================
 
-export interface ContestoIspezione {
-  spazioId: number;
-  codice: string;
-  descrizione: string;
-  nomeSchema: string;
-  tipoSpazio: 'ENTE' | 'NON_ENTE';
-  giudicante: boolean;
-}
-
 // Il cookie di ispezione contiene SOLO l'id dello spazio scelto: i dati
 // dello spazio sono riletti dal database a ogni richiesta e il cookie vale
 // solo insieme a una sessione SUPERADMIN (vedi src/lib/autorizzazione.ts).
@@ -405,19 +397,6 @@ export async function esciDaSalvagenteAction(): Promise<ActionResult> {
   const cookieStore = await cookies();
   cookieStore.delete(COOKIE_SPAZIO_ISPEZIONE);
   return { success: true };
-}
-
-export async function ottieniContestoIspezione(): Promise<ContestoIspezione | null> {
-  const contesto = await contestoIspezioneCorrente();
-  if (!contesto) return null;
-  return {
-    spazioId: contesto.spazioId,
-    codice: contesto.codice,
-    descrizione: contesto.descrizione,
-    nomeSchema: contesto.nomeSchema,
-    tipoSpazio: contesto.tipoSpazio,
-    giudicante: contesto.giudicante,
-  };
 }
 
 export interface RisultatoElencoSpazi {
@@ -625,7 +604,7 @@ export async function rigeneraPasswordAdminSpazioAction(
   adminId: number
 ): Promise<RisultatoNuovaPassword> {
   try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -638,11 +617,16 @@ export async function rigeneraPasswordAdminSpazioAction(
       .update(tabelle.admin_workspace)
       .set({ passwordHash, passwordTemporanea })
       .where(eq(tabelle.admin_workspace.id, adminId))
-      .returning({ id: tabelle.admin_workspace.id });
+      .returning({
+        id: tabelle.admin_workspace.id,
+        username: tabelle.admin_workspace.username,
+        email: tabelle.admin_workspace.email,
+      });
 
     if (risultato.length === 0) {
       return { success: false, error: 'Admin non trovato in questo spazio.' };
     }
+    await chiudiSessioniUtente(contesto.spazioId, risultato[0]);
 
     return { success: true, passwordTemporanea };
   } catch (error: any) {
@@ -746,11 +730,18 @@ export async function impostaNuovaPasswordAdminAction(
       .update(tabelle.admin_workspace)
       .set({ passwordHash, passwordTemporanea: null })
       .where(eq(tabelle.admin_workspace.id, adminId))
-      .returning({ id: tabelle.admin_workspace.id });
+      .returning({
+        id: tabelle.admin_workspace.id,
+        username: tabelle.admin_workspace.username,
+        email: tabelle.admin_workspace.email,
+      });
 
     if (risultato.length === 0) {
       return { success: false, error: 'Admin non trovato in questo spazio.' };
     }
+    // Le altre sessioni dell'Admin si chiudono; resta aperta quella corrente.
+    const sessione = await richiediSessione();
+    await chiudiSessioniUtente(contesto.spazioId, risultato[0], sessione.token);
 
     return { success: true };
   } catch (error: any) {
@@ -792,11 +783,18 @@ export async function impostaNuovaPasswordUtenteAction(
       .update(tabelle.utenti_spazio)
       .set({ passwordHash, passwordTemporanea: null })
       .where(eq(tabelle.utenti_spazio.id, utenteId))
-      .returning({ id: tabelle.utenti_spazio.id });
+      .returning({
+        id: tabelle.utenti_spazio.id,
+        username: tabelle.utenti_spazio.username,
+        email: tabelle.utenti_spazio.email,
+      });
 
     if (risultato.length === 0) {
       return { success: false, error: 'Utente non trovato in questo spazio.' };
     }
+    // Le altre sessioni dell'utente si chiudono; resta aperta quella corrente.
+    const sessione = await richiediSessione();
+    await chiudiSessioniUtente(contesto.spazioId, risultato[0], sessione.token);
 
     return { success: true };
   } catch (error: any) {

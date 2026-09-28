@@ -125,7 +125,6 @@ portable**. Dettagli: `portable/REPORT-PORTABLE.md`.
   globali). Non eseguirlo mai.
 - La chiave di permesso `'report'` indica il modulo **Proposta**: non rinominarla, si
   romperebbero i permessi salvati.
-- `image-hosts.config.mjs` è un residuo dello scaffold iniziale (non importato).
 - `xlsx` 0.18.5 (npm) ha vulnerabilità note senza correzione: va sostituito con la build
   SheetJS 0.20.x da cdn.sheetjs.com (stessa API), non con un'altra versione da npm.
 - `README.md` è boilerplate generico: questo file è la documentazione di riferimento.

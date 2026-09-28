@@ -13,6 +13,7 @@ import {
   normalizzaEtichetta,
   testoCella,
   indiceRuolo,
+  interpretaNumero,
   type Aoa,
   type SezioneEstratta,
   type Tracciato,
@@ -80,14 +81,13 @@ export function rilevaCodiciNuovi(sezione: SezioneEstratta, tracciato: Tracciato
   return distinti.filter((v) => !(v in tracciato.mappaturaCodici));
 }
 
+/**
+ * Versione TOLLERANTE di interpretaNumero: cella vuota o non numerica → 0.
+ * Resta per chi somma importi facoltativi (es. colonna credito del file VERA);
+ * l'import a tracciati usa interpretaNumero, che distingue "assente" da 0.
+ */
 export function parseNumero(c: unknown): number {
-  if (typeof c === 'number') return Number.isFinite(c) ? c : 0;
-  const t = testoCella(c as never)
-    .replace(/[€\s]/g, '')
-    .replace(/\.(?=\d{3}(\D|$))/g, '') // separatore migliaia
-    .replace(',', '.');
-  const n = Number(t);
-  return Number.isNaN(n) ? 0 : n;
+  return interpretaNumero(c) ?? 0;
 }
 
 export interface RigaImportata {
@@ -129,8 +129,8 @@ export function estraiRighe(sezione: SezioneEstratta, tracciato: Tracciato): Esi
   });
 
   sezione.righe.forEach((riga, n) => {
-    const importo = idxImporto >= 0 ? parseNumero(riga[idxImporto]) : NaN;
-    if (idxImporto < 0 || Number.isNaN(importo)) {
+    const importo = idxImporto >= 0 ? interpretaNumero(riga[idxImporto]) : null;
+    if (importo === null) {
       scartate.push({ indice: n, motivo: 'importo assente o non numerico' });
       return;
     }
@@ -151,7 +151,8 @@ export function estraiRighe(sezione: SezioneEstratta, tracciato: Tracciato): Esi
       idxVoce >= 0 && testoCella(riga[idxVoce]).trim() !== ''
         ? testoCella(riga[idxVoce])
         : `Riga ${n + 1}`;
-    const versato = idxVersato >= 0 ? parseNumero(riga[idxVersato]) : null;
+    // Cella versato vuota o non numerica → null ("non indicato"), non 0.
+    const versato = idxVersato >= 0 ? interpretaNumero(riga[idxVersato]) : null;
     const data =
       idxData >= 0 && testoCella(riga[idxData]).trim() !== '' ? testoCella(riga[idxData]) : null;
     const note =
@@ -176,16 +177,23 @@ export function estraiRighe(sezione: SezioneEstratta, tracciato: Tracciato): Esi
   return { righe, scartate };
 }
 
-/** Suggerimento di ruoli iniziali per il wizard, in base alle etichette. */
+/**
+ * Suggerimento di ruoli iniziali per il wizard, in base alle etichette.
+ * L'ordine conta: prima la data (così "Data versamento" non diventa versato),
+ * poi il versato (così "Importo versato" non diventa importo), poi l'importo.
+ * I confronti sono a inizio parola: "Annotazioni" non contiene la parola "anno",
+ * "Diversi" non contiene "vers".
+ */
 export function suggerisciRuoli(intestazioni: string[]): import('./tracciatoCore').RuoloColonna[] {
   return intestazioni.map((h) => {
     const n = normalizzaEtichetta(h);
-    if (/(imp.*debito|importo|contributi|totale debito|iscritto|residuo)/.test(n)) return 'importo';
-    if (/(vers|versato)/.test(n)) return 'importo_versato';
-    if (/(data|periodo|anno)/.test(n)) return 'data';
-    if (/(natura|descriz|voce|posizione|causale)/.test(n)) return 'voce';
-    if (/(csl|tipo|stato lavorazione)/.test(n)) return 'guida';
-    if (/(nota|note)/.test(n)) return 'nota';
+    if (/\b(data|periodo|anno)\b/.test(n)) return 'data';
+    if (/\b(versat[oi]|versament[oi])\b/.test(n)) return 'importo_versato';
+    if (/\b(imp\b.*\bdebito|importo|contributi|totale debito|iscritto|residuo)/.test(n))
+      return 'importo';
+    if (/\b(natura|descriz|voce|posizione|causale)/.test(n)) return 'voce';
+    if (/\b(csl|tipo|stato lavorazione)/.test(n)) return 'guida';
+    if (/\b(nota|note|annotazion[ei])\b/.test(n)) return 'nota';
     return 'ignora';
   });
 }

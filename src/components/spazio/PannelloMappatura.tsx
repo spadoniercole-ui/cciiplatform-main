@@ -22,7 +22,7 @@ import {
 } from '@/lib/debitiTriage/mappatura';
 import { CATEGORIE, type CategoriaDebito, type RigaDebitoTriage } from '@/lib/debitiTriage/modello';
 
-export const ENTI_PROSPETTO: { valore: string; etichetta: string }[] = [
+const ENTI_PROSPETTO: { valore: string; etichetta: string }[] = [
   { valore: 'INPS', etichetta: 'INPS' },
   { valore: 'INAIL', etichetta: 'INAIL' },
   { valore: 'AGENZIA_ENTRATE', etichetta: 'Agenzia delle Entrate' },

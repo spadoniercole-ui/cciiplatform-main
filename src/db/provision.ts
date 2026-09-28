@@ -1,6 +1,8 @@
 import { db } from './client';
 import { sql } from 'drizzle-orm';
 import { deveRinominareInLegacy } from '@/lib/migrazioni/debitiEnteLegacy';
+import { sqlVincoloCheckIdempotente } from '@/lib/migrazioni/vincoloCheck';
+import { eCorsaDdlBenigna } from '@/lib/migrazioni/corsaDdl';
 import { getTabelleTenant } from './schema';
 
 // Ogni istruzione DDL è una query separata, non un unico blocco
@@ -8,8 +10,24 @@ import { getTabelleTenant } from './schema';
 // implicita, e se una singola istruzione fallisce annulla anche quelle
 // precedenti già riuscite nello stesso blocco (lo stesso problema già
 // risolto in src/db/ensureTables.ts per le tabelle di sistema globali).
+//
+// Una corsa concorrente BENIGNA (due richieste che creano lo stesso oggetto
+// nello stesso istante: "already exists", o il duplicato sui cataloghi di
+// sistema di un CREATE … IF NOT EXISTS) viene ignorata, come già fa
+// src/db/ensureTables.ts; qualunque altro errore viene rilanciato.
 async function eseguiDdlTenant(istruzione: ReturnType<typeof sql>) {
-  await db.execute(istruzione);
+  try {
+    await db.execute(istruzione);
+  } catch (error) {
+    if (eCorsaDdlBenigna(error)) {
+      console.warn(
+        '[provision] Corsa concorrente sul DDL del tenant (innocua, ignorata):',
+        (error as Error)?.message
+      );
+      return;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -573,12 +591,18 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.limiti_ricevibilita ADD COLUMN IF NOT EXISTS ente_25novies TEXT`
   );
+  // Un solo blocco DO, sicuro con richieste concorrenti: il vecchio DROP+ADD
+  // in due istruzioni falliva con "constraint already exists" quando una
+  // pagina lanciava più richieste in parallelo (vedi vincoloCheck.ts).
   await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.limiti_ricevibilita DROP CONSTRAINT IF EXISTS ente_25novies_valido`
-  );
-  await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.limiti_ricevibilita ADD CONSTRAINT ente_25novies_valido
-        CHECK (ente_25novies IS NULL OR ente_25novies IN ('INPS','INAIL','AGENZIA_ENTRATE','AGENZIA_RISCOSSIONE','NON_PUBBLICO'))`
+    sql.raw(
+      sqlVincoloCheckIdempotente(
+        nomeSchema,
+        'limiti_ricevibilita',
+        'ente_25novies_valido',
+        `ente_25novies IS NULL OR ente_25novies IN ('INPS','INAIL','AGENZIA_ENTRATE','AGENZIA_RISCOSSIONE','NON_PUBBLICO')`
+      )
+    )
   );
 
   // Riconoscimento automatico per gli spazi gia' esistenti: si valorizza solo
@@ -1577,11 +1601,16 @@ export async function assicuraTabelleAnagraficaEnte(nomeSchema: string): Promise
   // Difensivo: il vincolo originale limitava a 5 campi (1-5) — se la
   // tabella esisteva già da prima di questa consegna, il CREATE TABLE IF
   // NOT EXISTS sopra non lo aggiorna da solo. Sostituito con uno a 10.
+  // Stesso blocco DO sicuro con richieste concorrenti (vedi vincoloCheck.ts).
   await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.anagrafica_ente_config DROP CONSTRAINT IF EXISTS campo_valido`
-  );
-  await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.anagrafica_ente_config ADD CONSTRAINT campo_valido CHECK (campo BETWEEN 1 AND 10)`
+    sql.raw(
+      sqlVincoloCheckIdempotente(
+        nomeSchema,
+        'anagrafica_ente_config',
+        'campo_valido',
+        'campo BETWEEN 1 AND 10'
+      )
+    )
   );
   // Flessibilità massima, stesso principio già applicato alla Check List
   // custom: ogni campo è disattivabile, non solo rietichettabile — un
@@ -1716,11 +1745,15 @@ export async function assicuraTabellaCategorieTipoDebito(nomeSchema: string): Pr
   );
   const n = (conteggio[0] as { n: number } | undefined)?.n ?? 0;
   if (n === 0) {
+    // ON CONFLICT: due richieste parallele possono vedere entrambe la tabella
+    // vuota e seminare insieme; senza, la seconda falliva con
+    // "duplicate key … categorie_tipo_debito_pkey".
     await eseguiDdlTenant(
       sql`INSERT INTO ${s}.categorie_tipo_debito (codice, etichetta, descrizione, ordine, attivo, contribuisce) VALUES
         ('DEBITO', 'Debito', 'Debito certo da contabilizzare', 1, TRUE, TRUE),
         ('AVA', 'AVA', 'Affidato all''Agente della Riscossione', 2, TRUE, TRUE),
-        ('NEUTRO', 'Neutro', 'Voce neutra ai fini del confronto', 3, TRUE, FALSE)`
+        ('NEUTRO', 'Neutro', 'Voce neutra ai fini del confronto', 3, TRUE, FALSE)
+        ON CONFLICT (codice) DO NOTHING`
     );
   }
 }

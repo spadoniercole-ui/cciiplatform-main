@@ -23,6 +23,7 @@ import { assicuraTabelleParametriSpazio } from '@/db/provision';
 import { INDICI_XBRL_CANONICI } from '@/lib/indiciXbrlCanonici';
 import { CATEGORIA_SENTINELLA_ENTE } from '@/lib/costantiRicevibilita';
 import { RANGHI_LEGALI, type RangoLegale } from '@/lib/proposta/rangoLegale';
+import { queryAggiornaLimite } from '@/lib/proposta/sqlLimiti';
 import {
   MAX_ANNI_STORICO_DEFAULT,
   MIN_ANNI_STORICO,
@@ -377,23 +378,9 @@ export async function aggiornaLimiteRicevibilitaAction(
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }
-    await pool.query(
-      `UPDATE "${nomeSchema}".limiti_ricevibilita
-       SET percentuale_minima = $1, unica_soluzione_ammessa = $2, rateizzazione_ammessa = $3, note = $4,
-           valore_liquidazione_stimato = $5, alias = $6,
-           ente_25novies = COALESCE($7, ente_25novies)
-       WHERE id = $7`,
-      [
-        dati.percentualeMinima,
-        dati.unicaSoluzioneAmmessa,
-        dati.rateizzazioneAmmessa,
-        dati.note,
-        dati.valoreLiquidazioneStimato ?? null,
-        dati.alias ?? [],
-        dati.ente25Novies ?? null,
-        id,
-      ]
-    );
+    // Segnaposto e parametri costruiti (e testati) in src/lib/proposta/sqlLimiti.ts.
+    const { testo, parametri } = queryAggiornaLimite(nomeSchema, id, dati);
+    await pool.query(testo, parametri);
     return { success: true };
   } catch (error: any) {
     console.error('[aggiornaLimiteRicevibilitaAction] Errore:', error);

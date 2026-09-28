@@ -132,9 +132,24 @@ describe('raggruppaPerRango', () => {
     expect(gruppi.reduce((a, g) => a + g.totaleOfferto, 0)).toBeCloseTo(offerto, 6);
   });
 
-  it.todo(
-    'rango sconosciuto (es. valore legacy "IPOTECARIO" letto dal DB) ha indexOf -1 e finisce ' +
-      'in TESTA, prima dei prededucibili, invece che in fondo con i non classificati'
-  );
+  it('un rango sconosciuto (valore legacy letto dal DB) va in fondo, dopo i non classificati', () => {
+    const conLegacy: RigaConRango[] = [
+      ...righe,
+      {
+        categoriaCreditore: 'Banca',
+        importoDovuto: 7000,
+        percentualeOfferta: 50,
+        rangoLegale: 'IPOTECARIO' as never,
+      },
+    ];
+    expect(raggruppaPerRango(conLegacy).map((r) => r.rango)).toEqual([
+      'PREDEDUCIBILE',
+      'PRIVILEGIATO_IPOTECA',
+      'CHIROGRAFARIO',
+      'POSTERGATO',
+      null,
+      'IPOTECARIO',
+    ]);
+  });
   it.todo('percentualeOfferta fuori da 0–100 (es. 150) non è limitata: offerto > dovuto');
 });

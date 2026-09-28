@@ -14,14 +14,12 @@ const CARTELLA = 'src/app/actions';
 const PUBBLICHE = new Set([
   'auth.ts:eseguiAutenticazione',
   'auth.ts:eseguiLogout',
-  'auth.ts:ottieniListaWorkspace',
   'mfa.ts:mfaStato',
   'mfa.ts:mfaVerificaTotp',
   'mfa.ts:mfaInviaPin',
   'mfa.ts:mfaAnnulla',
   'spazi.ts:esciDaSalvagenteAction',
-  // Delegano alla guardia centrale (risolviContestoSpazio / contestoIspezioneCorrente).
-  'spazi.ts:ottieniContestoIspezione',
+  // Delega alla guardia centrale (risolviContestoSpazio).
   'spazi.ts:ottieniContestoAccessoSpazio',
 ]);
 const GUARDIA =

@@ -271,38 +271,3 @@ async function impostaStatoAzienda(
     };
   }
 }
-
-/**
- * Aggiornamento mirato del solo codice ATECO — usata quando un file XBRL
- * caricato porta un codice diverso da quello in anagrafica. Il dato del
- * file (fonte CCIAA) prevale su quello inserito manualmente: un operatore
- * può aver omesso o sbagliato il campo per distrazione, il file no —
- * evita di bloccare le fasi di analisi che dipendono dall'ATECO (Dati di
- * Settore) per un'anagrafica incompleta quando il dato corretto era già
- * disponibile nel bilancio caricato.
- */
-export async function aggiornaCodiceAtecoAction(
-  nomeSchema: string,
-  aziendaId: number,
-  nuovoCodiceAteco: string
-): Promise<RisultatoOperazioneAzienda> {
-  try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
-    const { db } = await import('@/db/client');
-    const { getTabelleTenant } = await import('@/db/schema');
-    const { eq } = await import('drizzle-orm');
-    const tabelle = getTabelleTenant(nomeSchema);
-
-    await db
-      .update(tabelle.aziende)
-      .set({ codiceAteco: nuovoCodiceAteco })
-      .where(eq(tabelle.aziende.id, aziendaId));
-    return { success: true };
-  } catch (error: any) {
-    console.error('[aggiornaCodiceAtecoAction] Errore:', error);
-    return {
-      success: false,
-      error: `Impossibile aggiornare il codice ATECO: ${error.message || error}`,
-    };
-  }
-}

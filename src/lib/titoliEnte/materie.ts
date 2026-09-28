@@ -142,7 +142,7 @@ export function materiaSuggeritaPerDescrizione(
  * PRIMA del clic, non un preventivo. Quattro ricerche, le pagine lette come
  * testo in ingresso, la risposta. Il canale in differita costa la meta'.
  */
-export const COSTO_STIMATO_MATERIA_EUR = { immediata: 0.35, differita: 0.18 };
+const COSTO_STIMATO_MATERIA_EUR = { immediata: 0.35, differita: 0.18 };
 
 export function stimaCostoRicerca(
   numeroMaterie: number,

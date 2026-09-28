@@ -6,8 +6,8 @@
 // direttrici configurate: quante direttrici, quanti prodotti per
 // ciascuna, quante domande genera lo Screening per ciascuna sezione.
 //
-// Formula: ogni prodotto (sommato su tutte le direttrici) vale
-// 100/totaleProdotti punti. Il peso di una direttrice è (i suoi
+// Formula: ogni prodotto (sommato sulle direttrici che contribuiscono,
+// vedi calcolaPesiDirettrici) vale 100/totaleProdotti punti. Il peso di una direttrice è (i suoi
 // prodotti) × quel valore. Il peso di una singola domanda è il peso
 // della sua direttrice diviso per il numero di domande che la sezione
 // contiene. Il punteggio finale è la somma dei pesi delle domande con
@@ -24,11 +24,24 @@ import type { SezioneChecklist } from './ministeriale';
 import type { RispostaPerCalcolo } from './scoring';
 import type { DirettriceStrutturata } from '@/app/actions/screeningAzienda';
 
+export interface PesoDirettrice {
+  nome: string;
+  prodotti: number;
+  peso: number;
+  /** Sezione generata oltre il numero di direttrici configurate: non ha
+   * una direttrice da cui prendere il peso, quindi è esclusa dal calcolo
+   * (peso 0 per tutte le sue domande). */
+  senzaDirettrice?: true;
+  /** Sezione abbinata a una direttrice ma senza domande: non contribuisce
+   * al punteggio e il peso della direttrice viene ridistribuito sulle altre. */
+  senzaDomande?: true;
+}
+
 export interface QuadroDirettrici {
   pesiPerDomanda: Record<string, number>;
   /** Peso di ciascuna direttrice, per mostrare il calcolo in trasparenza. */
-  pesiPerDirettrice: { nome: string; prodotti: number; peso: number }[];
-  punteggio: number | null; // null = nessuna domanda ancora risposta
+  pesiPerDirettrice: PesoDirettrice[];
+  punteggio: number | null; // null = nessuna domanda con peso ancora risposta
   domandeRisposte: number;
   domandeTotali: number;
   etichetta: string;
@@ -37,32 +50,58 @@ export interface QuadroDirettrici {
 
 /** Calcola il peso di ciascuna domanda dalla struttura delle direttrici
  * — indipendente dalle risposte, serve anche solo per mostrare "come
- * pesa ciascuna direttrice" prima ancora di rispondere a nulla. */
+ * pesa ciascuna direttrice" prima ancora di rispondere a nulla.
+ *
+ * Regola di normalizzazione: i 100 punti si ripartiscono SOLO tra le
+ * direttrici che contribuiscono davvero, cioè quelle abbinate (per
+ * posizione) a una sezione con almeno una domanda. Quindi:
+ * - una direttrice senza sezione generata (meno sezioni che direttrici)
+ *   esce dal denominatore;
+ * - una sezione senza domande ha peso 0 (flag `senzaDomande`) e il peso
+ *   della sua direttrice si ridistribuisce sulle altre;
+ * - una sezione in più rispetto alle direttrici ha peso 0 (flag
+ *   `senzaDirettrice`): non ha prodotti da cui ricavare un peso.
+ * Così la somma dei pesi delle domande è sempre 100 (se almeno una
+ * domanda ha peso). Eccezione: se NESSUNA sezione ha domande (anteprima
+ * della sola struttura, es. pagina Pesi direttrici) i pesi per direttrice
+ * si calcolano su tutte le sezioni abbinate, come prima. */
 export function calcolaPesiDirettrici(
   sezioni: SezioneChecklist[],
   direttrici: DirettriceStrutturata[]
 ): {
   pesiPerDomanda: Record<string, number>;
-  pesiPerDirettrice: QuadroDirettrici['pesiPerDirettrice'];
+  pesiPerDirettrice: PesoDirettrice[];
 } {
   const totaleProdotti = direttrici.reduce((acc, d) => acc + d.prodotti.length, 0);
   const pesiPerDomanda: Record<string, number> = {};
-  const pesiPerDirettrice: QuadroDirettrici['pesiPerDirettrice'] = [];
+  const pesiPerDirettrice: PesoDirettrice[] = [];
 
   if (totaleProdotti === 0) {
     return { pesiPerDomanda, pesiPerDirettrice };
   }
-  const valorePerProdotto = 100 / totaleProdotti;
+
+  const soloAnteprima = sezioni.every((s) => s.domande.length === 0);
+  const contribuisce = (sezione: SezioneChecklist, indice: number) =>
+    indice < direttrici.length && (soloAnteprima || sezione.domande.length > 0);
+  const prodottiContribuenti = sezioni.reduce(
+    (acc, sezione, indice) =>
+      contribuisce(sezione, indice) ? acc + direttrici[indice].prodotti.length : acc,
+    0
+  );
+  const valorePerProdotto = prodottiContribuenti > 0 ? 100 / prodottiContribuenti : 0;
 
   sezioni.forEach((sezione, indice) => {
     const direttrice = direttrici[indice];
     const numeroProdotti = direttrice?.prodotti.length ?? 0;
-    const pesoDirettrice = numeroProdotti * valorePerProdotto;
-    pesiPerDirettrice.push({
+    const pesoDirettrice = contribuisce(sezione, indice) ? numeroProdotti * valorePerProdotto : 0;
+    const voce: PesoDirettrice = {
       nome: direttrice?.nome ?? sezione.titolo,
       prodotti: numeroProdotti,
       peso: pesoDirettrice,
-    });
+    };
+    if (!direttrice) voce.senzaDirettrice = true;
+    else if (sezione.domande.length === 0 && !soloAnteprima) voce.senzaDomande = true;
+    pesiPerDirettrice.push(voce);
     const numeroDomande = sezione.domande.length;
     if (numeroDomande === 0) return;
     const pesoPerDomanda = pesoDirettrice / numeroDomande;
@@ -95,6 +134,10 @@ export function calcolaQuadroDirettrici(
   let punteggio = 0;
   let domandeRisposte = 0;
   let domandeTotali = 0;
+  // Risposte date a domande con peso > 0: se sono tutte su domande a peso 0
+  // (es. sezioni senza direttrice) il punteggio non è valutabile (grigio),
+  // non "0 = nessuna criticità".
+  let rispostePesate = 0;
 
   for (const sezione of sezioni) {
     for (const domanda of sezione.domande) {
@@ -103,11 +146,12 @@ export function calcolaQuadroDirettrici(
       if (risposta === null || risposta === undefined) continue;
       domandeRisposte++;
       const peso = pesiPerDomanda[domanda.id] ?? 0;
+      if (peso > 0) rispostePesate++;
       punteggio += risposta === false ? peso : -peso;
     }
   }
 
-  const punteggioFinale = domandeRisposte > 0 ? punteggio : null;
+  const punteggioFinale = rispostePesate > 0 ? punteggio : null;
   const { etichetta, coloreEtichetta } = etichettaDaPunteggio(punteggioFinale);
 
   return {
