@@ -20,7 +20,7 @@ export async function ottieniPermessiUtente(
   utenteId: number
 ): Promise<RisultatoPermessi> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');

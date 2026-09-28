@@ -8,7 +8,7 @@
 // aritmetica. Vedi il commento in db/provision.ts (assicuraTabella
 // SimulazioneRicevente) sul perché i PDF non si conservano.
 
-import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { richiediAccessoScenario, verificaFileDelloSpazio } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
 import { del, get } from '@/lib/blobStore';
 import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
@@ -101,12 +101,17 @@ export async function analizzaDocumentiRiceventeAction(
   istruzioniOperatore?: string
 ): Promise<RisultatoAnalisiRicevente> {
   // Prima di tutto e fuori dal try: il finally elimina i blob indicati dal chiamante.
-  await richiediAccessoSchema(nomeSchema);
+  const contesto = await richiediAccessoScenario(nomeSchema, scenarioId, {
+    modulo: ['report'],
+    livello: 'SCRITTURA',
+  });
   const documenti: DocumentoPdf[] = [
     documentiNominati.asseverazione,
     documentiNominati.propostaCramDown,
     documentiNominati.pianoSviluppo,
   ].filter((d): d is DocumentoPdf => d !== null);
+  // Ogni file deve appartenere a questo spazio, prima di leggerlo o eliminarlo.
+  for (const d of documenti) verificaFileDelloSpazio(contesto, d.url);
   const urlDaEliminare = documenti.map((d) => d.url);
   try {
     if (!anthropic) {
@@ -469,7 +474,7 @@ export async function ottieniAnalisiRiceventeAction(
   scenarioId: number
 ): Promise<RisultatoAnalisiRicevente> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaSimulazioneRicevente(nomeSchema);
     const risultato = await pool.query(

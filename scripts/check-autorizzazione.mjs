@@ -25,7 +25,7 @@ const PUBBLICHE = new Set([
   'spazi.ts:ottieniContestoAccessoSpazio',
 ]);
 const GUARDIA =
-  /\b(richiedi(Sessione|Superadmin|AccessoSchema|AccessoSpazio|AccessoSpazioId)|ottieniContestoAccessoSpazio)\(/;
+  /\b(richiedi(Sessione|Superadmin|AccessoSchema|AccessoSpazio|AccessoSpazioId|AccessoAzienda|AccessoScenario)|ottieniContestoAccessoSpazio)\(/;
 // Funzioni pubbliche che delegano a un helper privato già protetto.
 const DELEGA = /^\s*return (\w+)\(/;
 

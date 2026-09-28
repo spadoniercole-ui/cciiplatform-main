@@ -37,7 +37,7 @@ export async function ottieniArchitraveDebitiEnte(
   nomeSchema: string
 ): Promise<RisultatoArchitraveDebitiEnte> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, architrave: null, error: 'Nome schema non valido.' };
     }
@@ -82,7 +82,7 @@ export async function salvaArchitraveDebitiEnteAction(
   architrave: ArchitraveDebitiEnte
 ): Promise<RisultatoOperazioneArchitrave> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     if (!architrave.mappatura.includes('importo')) {
@@ -144,7 +144,7 @@ export async function azzeraArchitraveDebitiEnteAction(
   nomeSchema: string
 ): Promise<RisultatoOperazioneArchitrave> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaArchitraveDebitiEnte(nomeSchema);

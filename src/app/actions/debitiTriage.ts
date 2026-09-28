@@ -27,7 +27,7 @@ export async function ottieniDebitiTriageAction(
   aziendaId: number
 ): Promise<RisultatoRighe> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
     const r = await pool
@@ -73,7 +73,7 @@ export async function salvaDebitiTriageAction(
   prospettoId: number | null
 ): Promise<{ success: boolean; salvate?: number; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
 
@@ -124,7 +124,7 @@ export async function eliminaRigaDebitoTriageAction(
   rigaId: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(`DELETE FROM "${nomeSchema}".debiti_triage WHERE id = $1`, [rigaId]);
     return { success: true };
@@ -147,7 +147,7 @@ export async function salvaTutteDebitiTriageAction(
   righe: RigaDebitoTriage[]
 ): Promise<{ success: boolean; salvate?: number; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
     await pool.query(`DELETE FROM "${nomeSchema}".debiti_triage WHERE azienda_id = $1`, [

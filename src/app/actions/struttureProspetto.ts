@@ -26,7 +26,7 @@ export async function cercaStrutturaProspettoAction(
   firma: string
 ): Promise<{ success: boolean; strutture?: StrutturaSalvata[]; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
     const r = await pool
@@ -65,7 +65,7 @@ export async function salvaStrutturaProspettoAction(
   nomeRiconosciuto: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!ente || !firma) return { success: false, error: 'Ente e firma sono obbligatori.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
@@ -97,7 +97,7 @@ export async function registraProspettoAction(
   righeImportate: number
 ): Promise<{ success: boolean; prospettoId?: number; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
     const r = await pool.query(

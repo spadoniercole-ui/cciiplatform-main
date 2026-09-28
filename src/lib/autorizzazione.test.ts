@@ -86,6 +86,18 @@ vi.mock('@/lib/db', () => ({
       }
       if (sql.includes('.permessi_utente')) return { rows: permessi[p0 as number] ?? [] };
       if (sql.includes('.utenti_aziende')) return { rows: [{ azienda_id: 7 }] };
+      // Righe riconducibili a un'azienda: scenari 100 → azienda 7, 200 → azienda 8;
+      // debiti_ente 5 → azienda 8; proposta_creditori 9 → scenario 100 (azienda 7).
+      if (sql.includes('JOIN') && sql.includes('.proposta_creditori')) {
+        return { rows: p0 === 9 ? [{ azienda_id: 7 }] : [] };
+      }
+      if (sql.includes('.scenari WHERE id')) {
+        const mappa: Record<number, number> = { 100: 7, 200: 8 };
+        return { rows: mappa[p0 as number] ? [{ azienda_id: mappa[p0 as number] }] : [] };
+      }
+      if (sql.includes('.debiti_ente WHERE id')) {
+        return { rows: p0 === 5 ? [{ azienda_id: 8 }] : [] };
+      }
       throw new Error(`Query non prevista nel test: ${sql}`);
     },
   },
@@ -99,6 +111,10 @@ const {
   risolviContestoSpazio,
   rifiutaSeNonAutorizzato,
   verificaAziendaConsentita,
+  richiediAccessoAzienda,
+  richiediAccessoScenario,
+  verificaRigaConsentita,
+  verificaFileDelloSpazio,
 } = await import('./autorizzazione');
 
 function login(token: string, ruolo: string, workspaceId: number | null, username: string) {
@@ -181,9 +197,9 @@ describe('operatori', () => {
     ).resolves.toBeTruthy();
     await expect(
       richiediAccessoSchema('tenant_alfa', { modulo: 'checklist', livello: 'SCRITTURA' })
-    ).rejects.toThrow('Permesso insufficiente');
+    ).rejects.toThrow('serve il permesso di scrittura');
     await expect(richiediAccessoSchema('tenant_alfa', { modulo: 'xbrl' })).rejects.toThrow(
-      'Permesso insufficiente'
+      'Nessun permesso sul modulo'
     );
   });
 
@@ -197,6 +213,76 @@ describe('operatori', () => {
   it('un utente disabilitato perde l’accesso', async () => {
     login('t-dino', 'USER', 1, 'dino.disabilitato');
     await expect(richiediAccessoSchema('tenant_alfa')).rejects.toThrow();
+  });
+});
+
+describe('operatori: aziende, scenari e righe assegnate', () => {
+  it('accede solo alle aziende assegnate', async () => {
+    login('t-otto', 'USER', 1, 'otto.operatore');
+    await expect(richiediAccessoAzienda('tenant_alfa', 7)).resolves.toBeTruthy();
+    await expect(richiediAccessoAzienda('tenant_alfa', 8)).rejects.toThrow('Azienda non assegnata');
+  });
+
+  it("accede solo agli scenari dell'azienda assegnata", async () => {
+    login('t-otto', 'USER', 1, 'otto.operatore');
+    await expect(richiediAccessoScenario('tenant_alfa', 100)).resolves.toBeTruthy();
+    await expect(richiediAccessoScenario('tenant_alfa', 200)).rejects.toThrow(
+      'Azienda non assegnata'
+    );
+  });
+
+  it('modifica solo righe di aziende assegnate (anche tramite lo scenario)', async () => {
+    login('t-otto', 'USER', 1, 'otto.operatore');
+    const c = await richiediAccessoSchema('tenant_alfa');
+    await expect(verificaRigaConsentita(c, 'debiti_ente', 5)).rejects.toThrow(
+      'Azienda non assegnata'
+    );
+    await expect(verificaRigaConsentita(c, 'proposta_creditori', 9)).resolves.toBeUndefined();
+  });
+
+  it("l'Admin non è ristretto dalle aziende assegnate", async () => {
+    login('t-anna', 'USER', 1, 'anna.admin');
+    await expect(richiediAccessoScenario('tenant_alfa', 200)).resolves.toBeTruthy();
+    await expect(richiediAccessoAzienda('tenant_alfa', 8)).resolves.toBeTruthy();
+  });
+
+  it('basta il permesso su uno dei moduli elencati', async () => {
+    login('t-otto', 'USER', 1, 'otto.operatore');
+    await expect(
+      richiediAccessoScenario('tenant_alfa', 100, {
+        modulo: ['report', 'scenari'],
+        livello: 'SCRITTURA',
+      })
+    ).resolves.toBeTruthy();
+    await expect(
+      richiediAccessoScenario('tenant_alfa', 100, {
+        modulo: ['report', 'checklist'],
+        livello: 'SCRITTURA',
+      })
+    ).rejects.toThrow('sola lettura');
+  });
+});
+
+describe('file caricati', () => {
+  it('accetta i file del proprio spazio e rifiuta quelli di un altro', async () => {
+    login('t-anna', 'USER', 1, 'anna.admin');
+    const c = await richiediAccessoSchema('tenant_alfa');
+    const ok = [
+      'https://abc.private.blob.vercel-storage.com/spazio-1-visura-XyZ123.pdf',
+      'localblob:3f2a-9c__spazio-1-visura.pdf',
+      // caricato prima della regola: senza prefisso, accettato
+      'https://abc.private.blob.vercel-storage.com/visura-XyZ123.pdf',
+    ];
+    for (const u of ok) expect(() => verificaFileDelloSpazio(c, u)).not.toThrow();
+    const ko = [
+      'https://abc.private.blob.vercel-storage.com/spazio-2-visura-XyZ123.pdf',
+      'localblob:3f2a-9c__spazio-2-visura.pdf',
+      'localblob:../../dati/database.enc',
+      'https://evil.example.com/spazio-1-visura.pdf',
+      'http://abc.private.blob.vercel-storage.com/spazio-1-visura.pdf',
+      '',
+    ];
+    for (const u of ko) expect(() => verificaFileDelloSpazio(c, u)).toThrow(ErroreAutorizzazione);
   });
 });
 

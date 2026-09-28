@@ -58,6 +58,16 @@ anche la CI in `.github/workflows/ci.yml`).
   - `richiediAccessoSpazio(codice)` / `richiediAccessoSpazioId(id)` se il parametro è quello;
   - `richiediSuperadmin()` per licenze, spazi, backup/ripristino, parametri di sistema;
   - route API: `rifiutaSeNonAutorizzato('SESSIONE' | 'SUPERADMIN')`.
+  Operatori (`modalita === 'OPERATORE'`), oltre allo spazio:
+  - azioni con `aziendaId` / `scenarioId` → `richiediAccessoAzienda` / `richiediAccessoScenario`
+    (solo aziende assegnate); con il solo id di una riga → `verificaRigaConsentita`;
+  - scritture → `{ modulo: [...], livello: 'SCRITTURA' }` col modulo della pagina che le usa
+    (`scenari` per i passi generici; `report` = Proposta); le scritture automatiche alla sola
+    visita di una pagina (cache, "…SeNecessario") contano come letture;
+  - funzioni usate solo da pagine Admin (`parametri`, `utenti`, `aziende/**`,
+    `verifica-salute`) → `soloAdmin: true`, anche le letture;
+  - elenchi di più aziende → filtrati a `contesto.aziendeConsentite`;
+  - URL di file passati dal browser → `verificaFileDelloSpazio` prima di `get`/`del`.
   Mai fidarsi di `nomeSchema`, id utente o ruolo passati dal browser. Le funzioni interne
   (helper, avvio MFA) vanno in `src/lib`, non esportate da file `'use server'`.
   `scripts/check-autorizzazione.mjs` (dentro `npm run type-check`) fa fallire la CI se

@@ -17,6 +17,7 @@
 import { put } from '@/lib/blobStore';
 import { NextResponse } from 'next/server';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
+import { prefissoFileSpazio } from '@/lib/autorizzazione';
 
 const DIMENSIONE_MASSIMA = 4 * 1024 * 1024; // 4MB, prudente sotto il tetto reale di Vercel (4,5MB)
 
@@ -54,7 +55,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    const blob = await put(file.name, file, {
+    // Il prefisso lega il file allo spazio: le azioni che lo leggono o lo
+    // eliminano verificano che appartenga allo spazio del chiamante.
+    const blob = await put(`${prefissoFileSpazio(contesto.spazioId)}${file.name}`, file, {
       access: 'private',
       addRandomSuffix: true,
     });

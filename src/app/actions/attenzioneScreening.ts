@@ -41,7 +41,7 @@ export async function ottieniAttenzioneScreeningAction(
   aziendaId: number
 ): Promise<RisultatoAttenzione> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     // Anche la tabella aziende: le colonne delle soglie e del ritardo
     // vengono aggiunte lì, e questa action le legge. Se l'azienda è stata

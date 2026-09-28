@@ -73,8 +73,11 @@ export interface ContestoAccessoSpazio {
 export interface RequisitiAccesso {
   /** Solo Admin di Spazio (o Superadmin): gestione utenti, permessi, configurazione. */
   soloAdmin?: boolean;
-  /** Per gli Operatori: modulo e livello minimo richiesto. */
-  modulo?: Modulo;
+  /**
+   * Per gli Operatori: modulo e livello minimo richiesto. Con un elenco di
+   * moduli basta il permesso su uno qualunque (azioni condivise fra passi).
+   */
+  modulo?: Modulo | readonly Modulo[];
   livello?: 'LETTURA' | 'SCRITTURA';
 }
 
@@ -310,16 +313,33 @@ function verificaRequisiti(contesto: ContestoAccessoSpazio, req: RequisitiAccess
     throw new ErroreAutorizzazione('Operazione riservata all’Admin di Spazio.');
   }
   if (req.modulo) {
-    const livello = contesto.permessi?.[req.modulo] ?? 'NESSUNO';
+    const moduli: readonly Modulo[] = typeof req.modulo === 'string' ? [req.modulo] : req.modulo;
     const richiesto = req.livello ?? 'LETTURA';
-    const ok = richiesto === 'LETTURA' ? livello !== 'NESSUNO' : livello === 'SCRITTURA';
+    const ok = moduli.some((m) => {
+      const livello = contesto.permessi?.[m] ?? 'NESSUNO';
+      return richiesto === 'LETTURA' ? livello !== 'NESSUNO' : livello === 'SCRITTURA';
+    });
     if (!ok) {
+      const nomi = moduli.map((m) => `"${NOMI_MODULO[m] ?? m}"`).join(' o ');
       throw new ErroreAutorizzazione(
-        `Permesso insufficiente sul modulo "${req.modulo}" (richiesto: ${richiesto}).`
+        richiesto === 'SCRITTURA'
+          ? `Permesso in sola lettura: serve il permesso di scrittura sul modulo ${nomi}.`
+          : `Nessun permesso sul modulo ${nomi}.`
       );
     }
   }
 }
+
+// Etichette mostrate all'utente (la chiave 'report' è il modulo Proposta).
+const NOMI_MODULO: Partial<Record<Modulo, string>> = {
+  scenari: 'Scenari',
+  checklist: 'Check List',
+  indici: 'Indici',
+  xbrl: 'XBRL',
+  report: 'Proposta',
+  relazione: 'Relazione',
+  simulazione: 'Simulazione',
+};
 
 /**
  * Verifica che il chiamante possa operare sullo spazio `codice` e restituisce
@@ -391,6 +411,109 @@ export function verificaAziendaConsentita(
   if (!contesto.aziendeConsentite?.includes(Number(aziendaId))) {
     throw new ErroreAutorizzazione('Azienda non assegnata a questo utente.');
   }
+}
+
+/**
+ * Accesso a un'azienda dello spazio: per gli Operatori deve essere fra
+ * quelle assegnate dall'Admin di Spazio.
+ */
+export async function richiediAccessoAzienda(
+  nomeSchema: string,
+  aziendaId: number,
+  req: RequisitiAccesso = {}
+): Promise<ContestoAccessoSpazio> {
+  const contesto = await richiediAccessoSchema(nomeSchema, req);
+  verificaAziendaConsentita(contesto, aziendaId);
+  return contesto;
+}
+
+/**
+ * Accesso a uno scenario: per gli Operatori l'azienda dello scenario deve
+ * essere fra quelle assegnate. Uno scenario inesistente passa (l'azione
+ * risponderà "non trovato" come prima).
+ */
+export async function richiediAccessoScenario(
+  nomeSchema: string,
+  scenarioId: number,
+  req: RequisitiAccesso = {}
+): Promise<ContestoAccessoSpazio> {
+  const contesto = await richiediAccessoSchema(nomeSchema, req);
+  if (contesto.modalita === 'OPERATORE') {
+    await verificaRigaConsentita(contesto, 'scenari', scenarioId);
+  }
+  return contesto;
+}
+
+// Tabelle tenant con una riga riconducibile a un'azienda: colonna diretta
+// `azienda_id`, oppure `scenario_id` (e da lì l'azienda dello scenario).
+const TABELLE_CON_AZIENDA = {
+  scenari: 'azienda_id',
+  debiti_ente: 'azienda_id',
+  debiti_triage: 'azienda_id',
+  debiti_vera: 'azienda_id',
+  xbrl_storico_azienda: 'azienda_id',
+  proposta_creditori: 'scenario_id',
+  posizione_aggiornata: 'scenario_id',
+} as const;
+export type TabellaConAzienda = keyof typeof TABELLE_CON_AZIENDA;
+
+/**
+ * Per gli Operatori: la riga `id` della tabella deve appartenere a
+ * un'azienda assegnata. Serve alle azioni che ricevono solo l'id di una
+ * riga (modifica/elimina). Una riga inesistente passa.
+ */
+export async function verificaRigaConsentita(
+  contesto: ContestoAccessoSpazio,
+  tabella: TabellaConAzienda,
+  id: number
+): Promise<void> {
+  if (contesto.modalita !== 'OPERATORE') return;
+  const colonna = TABELLE_CON_AZIENDA[tabella];
+  const s = contesto.nomeSchema;
+  const sql =
+    colonna === 'azienda_id'
+      ? `SELECT azienda_id FROM "${s}".${tabella} WHERE id = $1`
+      : `SELECT sc.azienda_id FROM "${s}".${tabella} t
+           JOIN "${s}".scenari sc ON sc.id = t.scenario_id WHERE t.id = $1`;
+  const ris = await pool.query(sql, [Number(id)]);
+  if (ris.rows.length === 0) return;
+  verificaAziendaConsentita(contesto, ris.rows[0].azienda_id);
+}
+
+/** Prefisso del nome dei file caricati: lega il file allo spazio che lo carica. */
+export function prefissoFileSpazio(spazioId: number): string {
+  return `spazio-${spazioId}-`;
+}
+
+/**
+ * Un file caricato (URL Vercel Blob o `localblob:` della portable) può essere
+ * letto o eliminato da un'azione solo se appartiene allo spazio del
+ * chiamante. I file caricati prima di questa regola non hanno il prefisso:
+ * restano accettati (il nome contiene un suffisso casuale non indovinabile),
+ * ma un file con il prefisso di un ALTRO spazio viene sempre rifiutato.
+ */
+export function verificaFileDelloSpazio(contesto: ContestoAccessoSpazio, url: string): void {
+  const rifiuta = () => {
+    throw new ErroreAutorizzazione('File non appartenente a questo spazio.');
+  };
+  if (typeof url !== 'string' || !url) rifiuta();
+  let nome: string;
+  if (url.startsWith('localblob:')) {
+    const id = url.slice('localblob:'.length);
+    if (/[\\/]|\.\./.test(id)) rifiuta();
+    nome = id.includes('__') ? id.slice(id.indexOf('__') + 2) : id;
+  } else {
+    let u: URL;
+    try {
+      u = new URL(url);
+    } catch {
+      return rifiuta();
+    }
+    if (u.protocol !== 'https:' || !u.hostname.endsWith('.blob.vercel-storage.com')) rifiuta();
+    nome = decodeURIComponent(u.pathname.replace(/^\/+/, ''));
+  }
+  const m = /^spazio-(\d+)-/.exec(nome);
+  if (m && Number(m[1]) !== contesto.spazioId) rifiuta();
 }
 
 /** Messaggio sicuro da restituire al browser per un errore catturato. */

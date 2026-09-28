@@ -33,7 +33,7 @@ export async function ottieniLicenzaOperativaSpazio(
   nomeSchema: string
 ): Promise<RisultatoLicenzaOperativaSpazio> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, licenza: null, error: 'Nome schema non valido.' };
     }

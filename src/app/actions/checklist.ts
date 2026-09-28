@@ -6,7 +6,7 @@
 // può avere più check list compilate in parallelo (es. la Ministeriale
 // più una o più custom di un ente).
 
-import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { richiediAccessoScenario } from '@/lib/autorizzazione';
 import { assicuraTabelleScenari } from '@/db/provision';
 import { MODELLO_MINISTERIALE } from '@/lib/checklist/costanti';
 
@@ -28,7 +28,7 @@ export async function ottieniRisposteChecklist(
   modelloChiave: string = MODELLO_MINISTERIALE
 ): Promise<RisultatoElencoRisposte> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     await assicuraTabelleScenari(nomeSchema);
     const { pool } = await import('@/lib/db');
 
@@ -71,7 +71,10 @@ export async function salvaRispostaChecklistAction(
   note: string | null
 ): Promise<RisultatoSalvataggioRisposta> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['checklist'],
+      livello: 'SCRITTURA',
+    });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }
@@ -120,7 +123,7 @@ export async function ottieniEsclusioniChecklist(
   modelloChiave: string
 ): Promise<RisultatoEsclusioniChecklist> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     await assicuraTabelleScenari(nomeSchema);
     const { pool } = await import('@/lib/db');
     const risultato = await pool.query(
@@ -152,7 +155,10 @@ export async function impostaEsclusioneDomandaAction(
   esclusa: boolean
 ): Promise<RisultatoOperazioneEsclusione> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['checklist'],
+      livello: 'SCRITTURA',
+    });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     const { pool } = await import('@/lib/db');

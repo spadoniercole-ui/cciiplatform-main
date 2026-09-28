@@ -13,7 +13,7 @@
 // di riferimento (convocazione INPS/INAIL e piano di risanamento).
 
 import { assicuraTabellaAziende } from '@/db/provision';
-import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export interface Azienda {
   id: number;
@@ -127,17 +127,22 @@ function valoriDaDati(dati: DatiAzienda) {
 
 export async function ottieniAziende(nomeSchema: string): Promise<RisultatoElencoAziende> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    const contesto = await richiediAccessoSchema(nomeSchema);
     await assicuraTabellaAziende(nomeSchema);
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const tabelle = getTabelleTenant(nomeSchema);
 
     const righe = await db.select().from(tabelle.aziende);
+    // Operatori: solo le aziende assegnate dall'Admin di Spazio.
+    const consentite =
+      contesto.modalita === 'OPERATORE'
+        ? righe.filter((r) => contesto.aziendeConsentite?.includes(Number(r.id)))
+        : righe;
 
     return {
       success: true,
-      aziende: righe.map(mappaRigaAzienda),
+      aziende: consentite.map(mappaRigaAzienda),
     };
   } catch (error: any) {
     console.error('[ottieniAziende] Errore:', error);
@@ -154,7 +159,7 @@ export async function ottieniAziendaPerId(
   id: number
 ): Promise<RisultatoAzienda> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoAzienda(nomeSchema, id);
     await assicuraTabellaAziende(nomeSchema);
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
@@ -282,7 +287,7 @@ export async function aggiornaCodiceAtecoAction(
   nuovoCodiceAteco: string
 ): Promise<RisultatoOperazioneAzienda> {
   try {
-    await richiediAccessoSchema(nomeSchema);
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
