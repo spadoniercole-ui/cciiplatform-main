@@ -23,10 +23,15 @@ describe('saldoRigaDebitoEnte', () => {
     expect(saldoRigaDebitoEnte({ importo: 1000, importoVersato: 1000 })).toBe(0);
   });
 
-  it.todo(
-    'versato maggiore dell’importo: oggi il saldo diventa negativo (1000 - 1200 = -200); ' +
-      'decidere se va limitato a 0 o segnalato come anomalia'
-  );
+  it('versato maggiore dell’importo: il saldo è limitato a 0, non negativo', () => {
+    expect(saldoRigaDebitoEnte({ importo: 1000, importoVersato: 1200 })).toBe(0);
+  });
+
+  it('riga a credito (importo negativo) resta invariata', () => {
+    expect(saldoRigaDebitoEnte({ importo: -50, importoVersato: null })).toBe(-50);
+    expect(saldoRigaDebitoEnte({ importo: -50, importoVersato: 0 })).toBe(-50);
+    expect(saldoRigaDebitoEnte({ importo: -50, importoVersato: 20 })).toBe(-50);
+  });
 });
 
 describe('etichettaTipoDebito', () => {
@@ -96,8 +101,12 @@ describe('raggruppaPerTipoDebito', () => {
     expect(raggruppaPerTipoDebito([])).toEqual([]);
   });
 
-  it.todo(
-    'versato maggiore dell’importo: totaleSaldo di categoria può scendere sotto zero ' +
-      '({ importo: 100, importoVersato: 150 } → totaleSaldo -50) e compensare altre righe'
-  );
+  it('versato maggiore dell’importo: la riga non riduce il saldo delle altre', () => {
+    const esito = raggruppaPerTipoDebito([
+      { voce: 'pagata in eccesso', importo: 100, importoVersato: 150, tipo: 'DEBITO' },
+      { voce: 'aperta', importo: 300, importoVersato: null, tipo: 'DEBITO' },
+    ]);
+    expect(esito[0].totale).toBe(400);
+    expect(esito[0].totaleSaldo).toBe(300);
+  });
 });

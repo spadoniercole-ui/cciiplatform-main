@@ -55,6 +55,77 @@ export function colonneRealiDaRiga(riga: CellaGrezza[]): number[] {
   return out;
 }
 
+/**
+ * Interpretazione RIGOROSA di un importo da cella: restituisce null se la cella
+ * è vuota o non contiene un numero riconoscibile (es. "n.d.", "-", testo), così
+ * chi importa può scartare la riga invece di trattarla come 0.
+ *
+ * Formati accettati (simbolo € e spazi, anche non separabili, ignorati):
+ *  - italiano: "1.234,56", "1234,56", "1 234,00", "-1.234,56";
+ *  - anglosassone: "1,234.56", "1,234,567.89" — quando compaiono entrambi i
+ *    separatori, l'ULTIMO è quello decimale e l'altro è delle migliaia;
+ *  - negativo contabile tra parentesi: "(1.234,56)" → -1234.56.
+ *
+ * Ambiguità nota (comportamento invariato): con il solo punto, un punto seguito
+ * da esattamente tre cifre è trattato come separatore delle migliaia all'uso
+ * italiano, quindi "1.234" → 1234 e anche "1234.567" → 1234567 (non 1234.567).
+ * Gli export dell'ente non portano importi a tre decimali, per cui si privilegia
+ * la lettura italiana. Con la sola virgola, una virgola singola è sempre
+ * decimale ("1,234" → 1.234); più virgole sono migliaia ("1,234,567").
+ */
+export function interpretaNumero(c: unknown): number | null {
+  if (typeof c === 'number') return Number.isFinite(c) ? c : null;
+  if (typeof c !== 'string') return null;
+  let t = c.replace(/[€\s]/g, '');
+  let segno = 1;
+  const parentesi = /^\((.*)\)$/.exec(t);
+  if (parentesi) {
+    segno = -1;
+    t = parentesi[1];
+  }
+  if (t.startsWith('-') || t.startsWith('+')) {
+    if (t.startsWith('-')) segno = -segno;
+    t = t.slice(1);
+  }
+  if (t === '') return null;
+  const ultimoPunto = t.lastIndexOf('.');
+  const ultimaVirgola = t.lastIndexOf(',');
+  if (ultimoPunto >= 0 && ultimaVirgola >= 0) {
+    // Entrambi i separatori: l'ultimo è il decimale.
+    t = ultimaVirgola > ultimoPunto ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
+  } else if (ultimaVirgola >= 0) {
+    // Sola virgola: singola → decimale (italiano); più d'una → migliaia.
+    t = t.indexOf(',') === ultimaVirgola ? t.replace(',', '.') : t.replace(/,/g, '');
+  } else if (ultimoPunto >= 0) {
+    // Solo punto: punto seguito da esattamente tre cifre → migliaia (vedi sopra).
+    t = t.replace(/\.(?=\d{3}(\D|$))/g, '');
+  }
+  if (!/^(\d+(\.\d*)?|\.\d+)$/.test(t)) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? segno * n : null;
+}
+
+/**
+ * True se la riga è una riga di TOTALE che non va importata come debito:
+ * la parola "totale" (parola intera, senza distinzione di maiuscole: non
+ * "subtotale") compare in una cella di testo e TUTTE le altre celle non vuote
+ * sono numeri. Regola prudente: se la riga porta anche un altro testo (una
+ * voce, un codice, una data), quel testo può identificare una partita reale
+ * (es. "Saldo totale contributi" con codice "D1") e la riga NON è scartata.
+ * Il caso storico "totale" in prima colonna reale resta gestito come salto di
+ * sezione da rigaSaltoSezione.
+ */
+export function rigaDiTotale(riga: CellaGrezza[]): boolean {
+  let conTotale = false;
+  for (const i of colonneRealiDaRiga(riga)) {
+    const c = riga[i];
+    if (interpretaNumero(c) !== null) continue;
+    if (/(^| )totale( |$)/.test(normalizzaEtichetta(c))) conTotale = true;
+    else return false;
+  }
+  return conTotale;
+}
+
 function pareNumero(c: CellaGrezza): boolean {
   if (typeof c === 'number') return true;
   if (typeof c === 'string') {
@@ -164,6 +235,10 @@ export function estraiSezione(aoa: Aoa, headerRowForzata = -1): SezioneEstratta 
       fermatoARiga = r;
       break;
     }
+    // Riga di totale con l'etichetta fuori dalla prima colonna: si salta (non
+    // si ferma la sezione, così un subtotale intermedio non fa perdere le
+    // righe successive).
+    if (rigaDiTotale(riga)) continue;
     righe.push(colonneReali.map((i) => riga[i] ?? null));
   }
   return { headerRow, intestazioni, colonneReali, righe, fermatoARiga };

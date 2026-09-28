@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { estraiRighe, parseNumero, rilevaCodiciNuovi, suggerisciRuoli } from './tracciatoImport';
-import { estraiSezione, type Aoa, type SezioneEstratta, type Tracciato } from './tracciatoCore';
+import {
+  estraiSezione,
+  interpretaNumero,
+  rigaDiTotale,
+  type Aoa,
+  type SezioneEstratta,
+  type Tracciato,
+} from './tracciatoCore';
 
 function tracciato(parziale: Partial<Tracciato>): Tracciato {
   return {
@@ -56,14 +63,67 @@ describe('parseNumero', () => {
     expect(parseNumero('n.d.')).toBe(0);
   });
 
-  it.todo('importo negativo contabile tra parentesi: "(1.234,56)" oggi dà 0 invece di -1234.56');
-  it.todo(
-    'formato anglosassone con virgola delle migliaia: "1,234.56" oggi dà 0 invece di 1234.56'
+  it('importo negativo contabile tra parentesi: "(1.234,56)" → -1234.56', () => {
+    expect(parseNumero('(1.234,56)')).toBeCloseTo(-1234.56, 10);
+    expect(parseNumero('(€ 42)')).toBe(-42);
+  });
+
+  it('formato anglosassone: con entrambi i separatori l’ultimo è il decimale', () => {
+    expect(parseNumero('1,234.56')).toBeCloseTo(1234.56, 10);
+    expect(parseNumero('1,234,567.89')).toBeCloseTo(1234567.89, 10);
+    expect(parseNumero('1.234.567,89')).toBeCloseTo(1234567.89, 10);
+  });
+
+  it(
+    'punto seguito da esattamente tre cifre è sempre migliaia: "1234.567" dà 1234567 ' +
+      '(ambiguo, lettura italiana mantenuta)',
+    () => {
+      expect(parseNumero('1234.567')).toBe(1234567);
+    }
   );
-  it.todo(
-    'punto seguito da esattamente tre cifre è sempre migliaia: "1234.567" (testo con tre ' +
-      'decimali) dà 1234567; ambiguo, da confermare'
+});
+
+describe('interpretaNumero', () => {
+  it.each([
+    ['1.234,56', 1234.56],
+    ['1,234.56', 1234.56],
+    ['(1.234,56)', -1234.56],
+    ['-1.234,56', -1234.56],
+    ['+10', 10],
+    ['1 234,00', 1234],
+    ['0', 0],
+  ])('interpreta "%s" come %d', (testo, atteso) => {
+    expect(interpretaNumero(testo)).toBeCloseTo(atteso, 10);
+  });
+
+  it.each(['', '   ', 'n.d.', 'abc', '-', '()', '12abc', '1e5', '€'])(
+    '"%s" non è un numero → null',
+    (testo) => {
+      expect(interpretaNumero(testo)).toBeNull();
+    }
   );
+
+  it('null, undefined e numeri non finiti → null; numeri finiti invariati', () => {
+    expect(interpretaNumero(null)).toBeNull();
+    expect(interpretaNumero(undefined)).toBeNull();
+    expect(interpretaNumero(NaN)).toBeNull();
+    expect(interpretaNumero(Infinity)).toBeNull();
+    expect(interpretaNumero(-7.5)).toBe(-7.5);
+  });
+});
+
+describe('rigaDiTotale', () => {
+  it('"totale" in qualunque colonna con soli numeri accanto → riga di totale', () => {
+    expect(rigaDiTotale(['', '', 'Totale', '1.259,50'])).toBe(true);
+    expect(rigaDiTotale([null, 'TOTALE COMPLESSIVO:', 1259.5, '0,00'])).toBe(true);
+  });
+
+  it('non scarta righe con un altro testo (voce/codice) o con "totale" non a parola intera', () => {
+    expect(rigaDiTotale(['Saldo totale contributi', 'D1', '500'])).toBe(false);
+    expect(rigaDiTotale(['', 'D1', 'Totale', '500'])).toBe(false);
+    expect(rigaDiTotale(['', '', 'Subtotale', '500'])).toBe(false);
+    expect(rigaDiTotale(['', '', '', '500'])).toBe(false);
+  });
 });
 
 describe('estraiRighe', () => {
@@ -178,15 +238,52 @@ describe('estraiRighe', () => {
     expect(righe.map((r) => r.voce)).toEqual(['A']);
   });
 
-  it.todo(
-    'importo non numerico o vuoto: parseNumero non restituisce mai NaN, quindi la riga ' +
-      '{ Importo: "n.d." } viene importata con importo 0 invece di finire tra le scartate'
-  );
-  it.todo(
-    'riga di totale con l’etichetta fuori dalla prima colonna reale ' +
-      '(es. ["", "", "Totale", "1.259,50"]) non è riconosciuta e viene importata come debito'
-  );
-  it.todo('colonna versato presente ma cella vuota: importoVersato vale 0 invece di null');
+  it('importo non numerico o vuoto: la riga è scartata, non importata con 0', () => {
+    const aoa2: Aoa = [
+      ['Voce', 'Importo', 'Data'],
+      ['A', 'n.d.', '2024-01-01'],
+      ['B', '', '2024-02-01'],
+      ['C', '10', '2024-03-01'],
+      ['D', 'da definire', '2024-04-01'],
+    ];
+    const { righe, scartate } = estraiRighe(
+      estraiSezione(aoa2),
+      tracciato({ ruoli: ['voce', 'importo', 'data'] })
+    );
+    expect(righe.map((r) => r.voce)).toEqual(['C']);
+    expect(scartate).toEqual([
+      { indice: 0, motivo: 'importo assente o non numerico' },
+      { indice: 1, motivo: 'importo assente o non numerico' },
+      { indice: 3, motivo: 'importo assente o non numerico' },
+    ]);
+  });
+
+  it('riga di totale con l’etichetta fuori dalla prima colonna reale non è importata', () => {
+    const aoa2: Aoa = [
+      ['Voce', 'Codice', 'Descrizione', 'Importo'],
+      ['Contributi 2022', 'D1', 'Saldo totale contributi', '1.000,00'],
+      ['', '', 'Totale 2022', '1.000,00'],
+      ['Contributi 2023', 'D1', 'Mensilità', '259,50'],
+      ['', '', 'Totale', '1.259,50'],
+    ];
+    const sez = estraiSezione(aoa2);
+    const { righe } = estraiRighe(sez, tracciato({ ruoli: ['voce', 'guida', 'nota', 'importo'] }));
+    // Il subtotale intermedio è saltato, non ferma la sezione.
+    expect(righe.map((r) => [r.voce, r.importo])).toEqual([
+      ['Contributi 2022', 1000],
+      ['Contributi 2023', 259.5],
+    ]);
+  });
+
+  it('colonna versato presente ma cella vuota o non numerica: importoVersato è null', () => {
+    const t = tracciato({ ruoli });
+    const { righe } = estraiRighe(sezione, t);
+    // "Sanzioni 01/2023" ha la cella Versato vuota
+    expect(righe[1].importoVersato).toBeNull();
+    // "0" esplicito resta 0
+    expect(righe[2].importoVersato).toBe(0);
+    expect(righe[0].importoVersato).toBe(200);
+  });
 });
 
 describe('rilevaCodiciNuovi', () => {
@@ -251,7 +348,14 @@ describe('suggerisciRuoli', () => {
     ]);
   });
 
-  it.todo('"Importo versato" oggi è suggerito come importo invece di importo_versato');
-  it.todo('"Data versamento" oggi è suggerito come importo_versato invece di data');
-  it.todo('"Annotazioni" oggi è suggerito come data (contiene "anno") invece di nota');
+  it.each([
+    ['Importo versato', 'importo_versato'],
+    ['Versato', 'importo_versato'],
+    ['Data versamento', 'data'],
+    ['Annotazioni', 'nota'],
+    ['Note', 'nota'],
+    ['Diversi', 'ignora'],
+  ])('ordine delle euristiche: "%s" → %s', (intestazione, atteso) => {
+    expect(suggerisciRuoli([intestazione])).toEqual([atteso]);
+  });
 });
