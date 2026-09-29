@@ -38,9 +38,20 @@ execSync('next build', {
 });
 
 log('2/5 — pulizia e copia del bundle standalone');
+// server.js deve stare alla radice di .next/standalone: altrimenti il
+// launcher non lo trova ("server.js non trovato in questa cartella").
+const STANDALONE = path.join(ROOT, '.next', 'standalone');
+if (!fs.existsSync(path.join(STANDALONE, 'server.js'))) {
+  console.error(
+    '\n✖ .next/standalone/server.js non trovato: il pacchetto non partirebbe.\n' +
+      '  Controlla outputFileTracingRoot in next.config.mjs e che non ci siano altri\n' +
+      '  package-lock.json nelle cartelle superiori a quella del progetto.'
+  );
+  process.exit(1);
+}
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });
-copyDir(path.join(ROOT, '.next', 'standalone'), OUT);
+copyDir(STANDALONE, OUT);
 
 log('3/5 — copia asset statici e public (necessari accanto a server.js)');
 copyDir(path.join(ROOT, '.next', 'static'), path.join(OUT, '.next', 'static'));
