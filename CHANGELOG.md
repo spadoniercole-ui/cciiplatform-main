@@ -93,6 +93,31 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.116.0 — 2026-09-29
+
+**Sicurezza: password temporanee, tentativi di accesso, costi AI**
+
+- **Password temporanee mai più in chiaro nel database.** Fino a oggi la
+  password temporanea di Admin e utenti restava leggibile nel database (e
+  nei backup) finché l'utente non la cambiava. Ora si salva solo
+  l'indicazione "da cambiare al primo accesso"; la password viene mostrata
+  una sola volta a chi la genera, come prima. Le password già salvate
+  vengono cancellate automaticamente al primo accesso dopo
+  l'aggiornamento, senza cambiare nulla per gli utenti.
+- **Limite dei tentativi di accesso per tutti.** Prima valeva solo per il
+  Superadmin: ora anche Admin di spazio e utenti vengono bloccati per 15
+  minuti dopo 5 password errate. Il conteggio è salvato anche nel database,
+  quindi vale su più server e non si azzera con un riavvio.
+- **Tetto d'uso dell'estrazione AI dalle visure**: 30 all'ora per utente e
+  300 al giorno per spazio (modificabili con `AI_VISURE_PER_UTENTE_ORA` e
+  `AI_VISURE_PER_SPAZIO_GIORNO`). Oltre il tetto compare un messaggio e i
+  campi si compilano a mano.
+
+Verificato: type-check, lint, test, build cloud; edizione server avviata da
+zero: password temporanea non presente nel database, blocco dopo 5
+tentativi errati mantenuto dopo il riavvio della piattaforma, accessi
+corretti non toccati.
+
 ## 0.115.0 — 2026-09-29
 
 **Edizione server on-premise**
