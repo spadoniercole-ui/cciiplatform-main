@@ -93,6 +93,23 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.116.2 — 2026-09-29
+
+**Portable: "server.js non trovato" all'avvio** (Portable 1.1.1)
+
+- Il pacchetto portable poteva uscire dalla build senza `server.js` nella
+  cartella principale, e il launcher si fermava subito dopo la passphrase
+  con "ERRORE: server.js non trovato in questa cartella". Succedeva quando
+  sul PC che costruisce il pacchetto c'era un altro `package-lock.json` in
+  una cartella superiore (per esempio nella cartella utente): Next.js la
+  prendeva come radice del progetto e metteva `server.js` in una
+  sottocartella. Ora la radice è fissata nella configurazione (anche per la
+  build Docker dell'edizione server).
+- `npm run build:portable` si ferma con un messaggio chiaro se `server.js`
+  non è dove deve essere, invece di produrre un pacchetto che non parte.
+- Nessun intervento sui dati: basta ricostruire il pacchetto e sostituire i
+  file del programma, lasciando la cartella `dati`.
+
 ## 0.116.1 — 2026-09-29
 
 **Sicurezza: libreria Excel aggiornata**
@@ -104,7 +121,10 @@ completa.
   cdn.sheetjs.com, con la stessa interfaccia: nessun cambiamento per gli
   utenti in import ed export di Check List, modello di Check List,
   Proposta, Posizione Aggiornata, Debiti verso l'ente (anche tracciati
-  INPS con date), anagrafica titoli e report XBRL.
+  INPS con date), anagrafica titoli e report XBRL. Il pacchetto è
+  conservato nel repository (`vendor/`), così l'installazione, la CI e
+  l'immagine Docker dell'edizione server non dipendono dalla
+  raggiungibilità di cdn.sheetjs.com.
 - Nuovo test di andata e ritorno (export → file .xlsx → import) sui
   moduli principali e sulla lettura delle date, così un futuro cambio di
   versione che rompa i file Excel fa fallire la CI.

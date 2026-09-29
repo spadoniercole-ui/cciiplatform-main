@@ -1,8 +1,17 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 /** @type {import('next').NextConfig} */
 const PORTABLE = process.env.PORTABLE === '1';
 // Edizione server (Docker): build standalone, ma con l'ottimizzazione immagini
 // di Next attiva come nel cloud. Vedi Dockerfile.
 const STANDALONE = process.env.NEXT_OUTPUT_STANDALONE === '1';
+// Radice del progetto, fissata per le build standalone. Se Next trova un altro
+// package-lock.json in una cartella superiore (es. nella cartella utente di
+// Windows) sceglie quella come radice e mette server.js in
+// .next/standalone/<nome-cartella>/ invece che in .next/standalone/: il
+// pacchetto portable restava senza server.js e il launcher non partiva.
+const RADICE_PROGETTO = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig = {
   // Edizione PORTABLE: build "standalone" (server.js autoconsistente da
@@ -28,13 +37,14 @@ const nextConfig = {
   ...(PORTABLE
     ? {
         output: 'standalone',
+        outputFileTracingRoot: RADICE_PROGETTO,
         // In locale non serve l'ottimizzazione immagini: disattivandola si
         // evita la dipendenza da `sharp` (binari nativi per-OS) — così il
         // pacchetto costruito su un OS gira anche su un altro.
         images: { unoptimized: true },
       }
     : STANDALONE
-      ? { output: 'standalone' }
+      ? { output: 'standalone', outputFileTracingRoot: RADICE_PROGETTO }
       : {}),
   experimental: {
     // Default Next.js per le Server Actions: 1MB — troppo poco per PDF
