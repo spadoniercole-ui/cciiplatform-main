@@ -37,3 +37,15 @@ jobs:
 
       - name: Build cloud
         run: npm run build
+
+  immagine-server:
+    name: Immagine Docker edizione server
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Solo costruzione (nessuna pubblicazione): verifica che server/Dockerfile
+      # resti allineato al codice.
+      - name: Build immagine
+        run: docker build -f server/Dockerfile -t ccii-platform:ci .

@@ -7,6 +7,7 @@
 // Le ~230 chiamate pool.query nel resto del codice non cambiano.
 import { Pool } from 'pg';
 import { portablePool } from './portableDb';
+import { sslDatabase } from './edizioneServer';
 
 const PORTABLE = process.env.PORTABLE === '1';
 
@@ -14,5 +15,6 @@ export const pool = (PORTABLE
   ? portablePool
   : new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
+      // Cloud: TLS; edizione server: DATABASE_SSL=0 (Postgres nella rete interna).
+      ssl: sslDatabase(),
     })) as unknown as Pool;
