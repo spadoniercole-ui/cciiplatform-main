@@ -46,6 +46,8 @@ services:
       SUPERADMIN_USER: ${SUPERADMIN_USER:?Impostare SUPERADMIN_USER nel file .env}
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:?Impostare SUPERADMIN_PASSWORD nel file .env}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_VISURE_PER_UTENTE_ORA: ${AI_VISURE_PER_UTENTE_ORA:-}
+      AI_VISURE_PER_SPAZIO_GIORNO: ${AI_VISURE_PER_SPAZIO_GIORNO:-}
       TZ: ${TZ:-Europe/Rome}
     volumes:
       - dati:/dati

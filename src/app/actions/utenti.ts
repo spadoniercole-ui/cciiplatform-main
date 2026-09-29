@@ -7,6 +7,7 @@
 // (admin_workspace): questi utenti non hanno ancora un proprio login reale
 // — è il prossimo passo naturale una volta che questa gestione esiste.
 
+import { PASSWORD_DA_CAMBIARE } from '@/lib/passwordTemporanea';
 import { messaggioErrore, richiediAccessoSchema } from '@/lib/autorizzazione';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -146,7 +147,7 @@ export async function creaUtenteSpazioAction(
         email,
         tipologia: dati.tipologia,
         passwordHash,
-        passwordTemporanea,
+        passwordTemporanea: PASSWORD_DA_CAMBIARE,
       })
       .returning({ id: tabelle.utenti_spazio.id });
 
@@ -308,7 +309,7 @@ export async function rigeneraPasswordUtenteAction(
 
     const risultato = await db
       .update(tabelle.utenti_spazio)
-      .set({ passwordHash, passwordTemporanea })
+      .set({ passwordHash, passwordTemporanea: PASSWORD_DA_CAMBIARE })
       .where(eq(tabelle.utenti_spazio.id, id))
       .returning({
         id: tabelle.utenti_spazio.id,

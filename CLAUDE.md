@@ -49,7 +49,8 @@ anche la CI in `.github/workflows/ci.yml`).
     modifica di schema deve essere idempotente e compatibile con i tenant esistenti.
 - **Autenticazione**: niente `middleware.ts`. Sessione = token opaco nella tabella `sessioni`,
   cookie httpOnly `session_token` (8 ore), password bcryptjs, MFA (`src/lib/mfa`), limite
-  tentativi (`src/lib/tentativiAccesso.ts`).
+  tentativi per Superadmin e utenti, in memoria + database (`src/lib/tentativiAccessoCondivisi.ts`).
+  `password_temporanea` contiene solo il marcatore `PASSWORD_DA_CAMBIARE`, mai la password.
 - **Autorizzazione — regola obbligatoria**: ogni `export async function` di un file
   `'use server'` è un endpoint pubblico. La prima istruzione deve verificare il chiamante con
   `src/lib/autorizzazione.ts`:
@@ -83,6 +84,7 @@ anche la CI in `.github/workflows/ci.yml`).
 `BLOB_READ_WRITE_TOKEN`, `NEXT_PUBLIC_COPYRIGHT`. Portable: `PORTABLE`, `NEXT_PUBLIC_PORTABLE`,
 `PORTABLE_*` (vedi `src/lib/portableDb.ts`, `src/lib/portableBootstrap.ts`). Edizione server:
 `EDIZIONE_SERVER`, `DATABASE_SSL`, `ARCHIVIO_FILE_DIR`, `BACKUP_DIR` (vedi `src/lib/edizioneServer.ts`).
+Limiti AI (facoltativi): `AI_VISURE_PER_UTENTE_ORA`, `AI_VISURE_PER_SPAZIO_GIORNO` (`src/lib/limiteAi.ts`).
 
 ## Edizione portable
 
@@ -144,6 +146,8 @@ deve funzionare **in cloud, in portable e sul server**. La CI costruisce anche l
   globali). Non eseguirlo mai.
 - La chiave di permesso `'report'` indica il modulo **Proposta**: non rinominarla, si
   romperebbero i permessi salvati.
+- Nuove chiamate AI a consumo raggiungibili con la sola sessione: passarle da
+  `consumaQuotaAi` (`src/lib/limiteAi.ts`).
 - `xlsx` 0.18.5 (npm) ha vulnerabilità note senza correzione: va sostituito con la build
   SheetJS 0.20.x da cdn.sheetjs.com (stessa API), non con un'altra versione da npm.
 - `README.md` è boilerplate generico: questo file è la documentazione di riferimento.

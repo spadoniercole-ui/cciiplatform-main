@@ -25,6 +25,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { richiediSessione } from '@/lib/autorizzazione';
+import { consumaQuotaAi } from '@/lib/limiteAi';
+import { pool } from '@/lib/db';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 120 * 1000, maxRetries: 1 }) : null;
@@ -98,7 +100,7 @@ export async function estraiAnagraficaDaVisuraAction(
   pdfBase64: string
 ): Promise<RisultatoEstrazione> {
   try {
-    await richiediSessione();
+    const sessione = await richiediSessione();
     if (!anthropic) {
       return {
         success: false,
@@ -108,6 +110,13 @@ export async function estraiAnagraficaDaVisuraAction(
     if (!pdfBase64 || pdfBase64.length < 100) {
       return { success: false, error: 'File non leggibile.' };
     }
+
+    // Tetto d'uso: ogni estrazione è una chiamata AI a pagamento.
+    const quota = await consumaQuotaAi(pool, 'VISURA', {
+      utente: sessione.username ?? sessione.email ?? sessione.ruolo,
+      spazioId: sessione.workspaceId,
+    });
+    if (!quota.consentito) return { success: false, error: quota.error };
 
     const prompt = `Sei davanti a una visura camerale italiana (Registro Imprese).
 
