@@ -18,8 +18,9 @@
 // Su un'infrastruttura serverless con più istanze il conteggio è per istanza,
 // e un riavvio lo azzera. Non è quindi una difesa contro un attacco
 // distribuito e paziente; è un freno efficace contro il caso concreto e assai
-// più probabile — qualcuno che prova a indovinare da un punto solo. Per una
-// difesa completa servirebbe uno store condiviso, che è un'altra decisione.
+// più probabile — qualcuno che prova a indovinare da un punto solo. Dalla
+// 0.116 lo store condiviso c'è: src/lib/tentativiAccessoCondivisi.ts affianca
+// a questo contatore quello nel database, e il login usa quello.
 //
 // Lo stato sta su globalThis e non in una variabile di modulo per la stessa
 // ragione documentata in portableDb.ts: Next.js compila l'applicazione in più
