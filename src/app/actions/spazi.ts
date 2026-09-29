@@ -9,6 +9,7 @@
 // SQL diretto tramite il Pool di src/lib/db.ts per le tabelle di sistema
 // (spazi, licenze_spazio), coerente con licenze/sessioni/indici/parametri_sistema.
 
+import { PASSWORD_DA_CAMBIARE } from '@/lib/passwordTemporanea';
 import { revalidatePath } from 'next/cache';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -264,7 +265,7 @@ export async function creaSpazioAction(
           email: (admin.email || '').trim().toLowerCase(),
           cellulare: admin.cellulare.trim(),
           passwordHash,
-          passwordTemporanea,
+          passwordTemporanea: PASSWORD_DA_CAMBIARE,
           codiceConvalida,
         });
 
@@ -616,7 +617,7 @@ export async function rigeneraPasswordAdminSpazioAction(
 
     const risultato = await db
       .update(tabelle.admin_workspace)
-      .set({ passwordHash, passwordTemporanea })
+      .set({ passwordHash, passwordTemporanea: PASSWORD_DA_CAMBIARE })
       .where(eq(tabelle.admin_workspace.id, adminId))
       .returning({
         id: tabelle.admin_workspace.id,
