@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const PORTABLE = process.env.PORTABLE === '1';
+// Edizione server (Docker): build standalone, ma con l'ottimizzazione immagini
+// di Next attiva come nel cloud. Vedi Dockerfile.
+const STANDALONE = process.env.NEXT_OUTPUT_STANDALONE === '1';
 
 const nextConfig = {
   // Edizione PORTABLE: build "standalone" (server.js autoconsistente da
@@ -30,7 +33,9 @@ const nextConfig = {
         // pacchetto costruito su un OS gira anche su un altro.
         images: { unoptimized: true },
       }
-    : {}),
+    : STANDALONE
+      ? { output: 'standalone' }
+      : {}),
   experimental: {
     // Default Next.js per le Server Actions: 1MB — troppo poco per PDF
     // reali (relazioni, business plan, perizie allegate a una proposta).

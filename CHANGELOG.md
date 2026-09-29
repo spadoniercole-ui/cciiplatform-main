@@ -93,6 +93,33 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.115.0 — 2026-09-29
+
+**Edizione server on-premise**
+
+- La piattaforma completa (multi-spazio, superadmin, licenze) si può
+  installare sul **server dell'ente** con Docker Compose (`server/`):
+  PostgreSQL 16, la piattaforma, **HTTPS** con Caddy (certificato della CA
+  locale o fornito dall'IT) e **backup giornaliero** del database con
+  conservazione configurabile. Script di ripristino che salva prima lo stato
+  attuale. Guida: `docs/INSTALLAZIONE-SERVER.md`.
+- File caricati salvati su disco (`ARCHIVIO_FILE_DIR`) invece che su Vercel
+  Blob; in questo caso il limite dei PDF caricati sale da 4MB a 20MB.
+- Connessione al database senza TLS configurabile (`DATABASE_SSL=0`) per
+  Postgres nella rete interna; nel cloud nulla cambia.
+- Il backup generato dal pannello Superadmin viene salvato anche sul server
+  (`BACKUP_DIR`), oltre che scaricato.
+- All'avvio dell'edizione server le tabelle di sistema vengono create su un
+  database nuovo, attendendo che Postgres sia pronto.
+- CI: la costruzione dell'immagine Docker viene verificata a ogni modifica.
+
+Verificato: type-check, lint, test, build cloud; stack Docker avviato da zero:
+primo accesso Superadmin con PIN, creazione licenza e spazio, primo accesso
+dell'Admin di spazio (MFA e cambio password), 14 pagine senza errori, cookie
+`Secure`, PDF caricato nella cartella del server, backup dal pannello e
+pianificato, ripristino da backup, certificato HTTPS verificato con la CA
+locale.
+
 ## 0.114.0 — 2026-09-29
 
 **Edizione portable in rete locale** (Portable 1.1.0)

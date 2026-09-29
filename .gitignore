@@ -21,3 +21,9 @@ npm-debug.log*
 
 # Impostazioni locali di Claude Code (quelle condivise stanno in .claude/settings.json)
 .claude/settings.local.json
+
+# Edizione server (server/): segreti, backup e certificati locali
+server/.env
+server/backup/
+server/certificati/*
+!server/certificati/.gitkeep

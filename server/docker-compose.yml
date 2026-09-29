@@ -1,0 +1,93 @@
+# server/docker-compose.yml
+#
+# Edizione SERVER on-premise di CCIIPlatform. Guida completa:
+# docs/INSTALLAZIONE-SERVER.md. In breve:
+#   cp .env.example .env    # e compilarlo
+#   docker compose up -d --build
+#
+# Servizi:
+#   db      PostgreSQL 16 (dati nel volume "database", non esposto in rete)
+#   app     la piattaforma (Next.js), raggiungibile solo tramite caddy
+#   caddy   HTTPS sulle porte 80/443 del server
+#   backup  pg_dump giornaliero nella cartella CCII_CARTELLA_BACKUP
+
+name: ccii
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ccii
+      POSTGRES_USER: ccii
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Impostare POSTGRES_PASSWORD nel file .env}
+      TZ: ${TZ:-Europe/Rome}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ccii -d ccii']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+      args:
+        NEXT_PUBLIC_COPYRIGHT: ${NEXT_PUBLIC_COPYRIGHT:-}
+    image: ccii-platform:${CCII_VERSIONE_IMMAGINE:-locale}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://ccii:${POSTGRES_PASSWORD}@db:5432/ccii
+      SUPERADMIN_USER: ${SUPERADMIN_USER:?Impostare SUPERADMIN_USER nel file .env}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:?Impostare SUPERADMIN_PASSWORD nel file .env}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      TZ: ${TZ:-Europe/Rome}
+    volumes:
+      - dati:/dati
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '${CCII_PORTA_HTTP:-80}:80'
+      - '${CCII_PORTA_HTTPS:-443}:443'
+    environment:
+      CCII_INDIRIZZI: ${CCII_INDIRIZZI:-localhost}
+      CCII_TLS: ${CCII_TLS:-internal}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certificati:/certificati:ro
+      - caddy_dati:/data
+      - caddy_config:/config
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ['/bin/sh', '/backup.sh']
+    environment:
+      PGHOST: db
+      PGDATABASE: ccii
+      PGUSER: ccii
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_ORA: ${BACKUP_ORA:-02:00}
+      BACKUP_GIORNI_CONSERVAZIONE: ${BACKUP_GIORNI_CONSERVAZIONE:-30}
+      TZ: ${TZ:-Europe/Rome}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - ${CCII_CARTELLA_BACKUP:-./backup}:/backup
+
+volumes:
+  database:
+  dati:
+  caddy_dati:
+  caddy_config:

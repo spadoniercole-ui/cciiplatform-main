@@ -81,7 +81,8 @@ anche la CI in `.github/workflows/ci.yml`).
 
 `DATABASE_URL`, `ANTHROPIC_API_KEY`, `SUPERADMIN_USER`, `SUPERADMIN_PASSWORD`,
 `BLOB_READ_WRITE_TOKEN`, `NEXT_PUBLIC_COPYRIGHT`. Portable: `PORTABLE`, `NEXT_PUBLIC_PORTABLE`,
-`PORTABLE_*` (vedi `src/lib/portableDb.ts`, `src/lib/portableBootstrap.ts`).
+`PORTABLE_*` (vedi `src/lib/portableDb.ts`, `src/lib/portableBootstrap.ts`). Edizione server:
+`EDIZIONE_SERVER`, `DATABASE_SSL`, `ARCHIVIO_FILE_DIR`, `BACKUP_DIR` (vedi `src/lib/edizioneServer.ts`).
 
 ## Edizione portable
 
@@ -97,6 +98,17 @@ HTTPS sulla rete, con certificato autofirmato in `dati/tls` o fornito dall'IT, e
 l'`Host` originale (necessario al controllo di origine delle server action). Con
 `PORTABLE_HTTPS=1` i cookie di sessione diventano `Secure` (`src/lib/cookieSicuro.ts`).
 Errori di rete verso Anthropic/ISTAT → messaggi di `src/lib/serviziEsterni.ts`.
+
+## Edizione server on-premise
+
+Stessa piattaforma del cloud (multi-spazio, superadmin, licenze) sul server dell'ente con
+Docker Compose: `server/` (`docker-compose.yml` con `db` Postgres 16, `app`, `caddy` per HTTPS,
+`backup` con `pg_dump` giornaliero; `Dockerfile` con build standalone via
+`NEXT_OUTPUT_STANDALONE=1`; `ripristina.sh`). Guida: `docs/INSTALLAZIONE-SERVER.md`.
+Le differenze dal cloud passano tutte da `src/lib/edizioneServer.ts` (TLS del DB, archivio file
+su disco in `src/lib/blobStore.ts`, cartella dei backup del pannello, limite upload);
+all'avvio `src/lib/avvioServer.ts` crea le tabelle globali. Una modifica al codice condiviso
+deve funzionare **in cloud, in portable e sul server**. La CI costruisce anche l'immagine.
 
 ## Convenzioni
 
