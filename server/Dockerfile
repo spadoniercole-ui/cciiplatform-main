@@ -9,6 +9,8 @@
 FROM node:22-alpine AS dipendenze
 WORKDIR /app
 COPY package.json package-lock.json ./
+# SheetJS (xlsx) 0.20.x non è su npm: il pacchetto è nel repository.
+COPY vendor ./vendor
 RUN npm ci --no-audit --no-fund
 
 # --- build --------------------------------------------------------------------

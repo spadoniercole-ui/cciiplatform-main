@@ -104,7 +104,10 @@ completa.
   cdn.sheetjs.com, con la stessa interfaccia: nessun cambiamento per gli
   utenti in import ed export di Check List, modello di Check List,
   Proposta, Posizione Aggiornata, Debiti verso l'ente (anche tracciati
-  INPS con date), anagrafica titoli e report XBRL.
+  INPS con date), anagrafica titoli e report XBRL. Il pacchetto è
+  conservato nel repository (`vendor/`), così l'installazione, la CI e
+  l'immagine Docker dell'edizione server non dipendono dalla
+  raggiungibilità di cdn.sheetjs.com.
 - Nuovo test di andata e ritorno (export → file .xlsx → import) sui
   moduli principali e sulla lettura delle date, così un futuro cambio di
   versione che rompa i file Excel fa fallire la CI.
