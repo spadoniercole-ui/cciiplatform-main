@@ -79,6 +79,14 @@ if (fs.existsSync(imgDir)) fs.rmSync(imgDir, { recursive: true, force: true });
 
 log('5/5 — launcher, configurazione e istruzioni');
 copyDir(path.join(ROOT, 'portable', 'template'), OUT);
+// Launcher e istruzioni con fine riga Windows (CRLF): cmd.exe legge male i
+// .bat con i soli LF, e il Blocco note vecchio mostrerebbe un'unica riga.
+for (const nome of fs.readdirSync(OUT)) {
+  if (!/\.(bat|txt)$/i.test(nome)) continue;
+  const file = path.join(OUT, nome);
+  const testo = fs.readFileSync(file, 'utf8').replace(/\r?\n/g, '\r\n');
+  fs.writeFileSync(file, testo);
+}
 
 // Modalità rete locale: proxy HTTPS + node-forge (certificato autofirmato).
 fs.copyFileSync(path.join(ROOT, 'portable', 'lan-https.mjs'), path.join(OUT, 'lan-https.mjs'));

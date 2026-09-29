@@ -93,6 +93,23 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.116.3 — 2026-09-29
+
+**Portable: il launcher spiega perché manca server.js** (Portable 1.1.2)
+
+- Se nella cartella non c'è `server.js`, `Avvia-CCII.bat` lo dice **subito**,
+  prima di chiedere la passphrase, mostra la cartella da cui è stato
+  avviato e indica la causa più probabile con il rimedio:
+  - avviato **dall'interno di un file ZIP** senza estrarlo (Windows copia
+    solo il launcher in una cartella temporanea): estrarre tutto l'archivio;
+  - pacchetto costruito con una versione **precedente a Portable 1.1.1**
+    (`server.js` finito in una sottocartella): ricostruirlo;
+  - avviato dai **sorgenti** (`portable\template`): usare `portable-dist`;
+  - pacchetto **incompleto** (copia interrotta o antivirus): ricopiarlo.
+- I file `.bat` e `.txt` del pacchetto hanno ora le terminazioni di riga di
+  Windows: `cmd.exe` legge in modo inaffidabile i `.bat` con le sole
+  terminazioni Unix.
+
 ## 0.116.2 — 2026-09-29
 
 **Portable: "server.js non trovato" all'avvio** (Portable 1.1.1)
