@@ -3,6 +3,7 @@
 import { pool } from '@/lib/db';
 import { assicuraTabellaLicenze } from '@/db/ensureTables';
 import { generaSlug } from '@/lib/slug';
+import { richiediSuperadmin } from '@/lib/autorizzazione';
 
 export type StatoLicenza = 'ATTIVA' | 'SOSPESA' | 'CESSATA';
 
@@ -64,6 +65,7 @@ export interface RisultatoElencoLicenze {
  */
 export async function elencaLicenzeCommerciali(): Promise<RisultatoElencoLicenze> {
   try {
+    await richiediSuperadmin();
     await assicuraTabellaLicenze();
     const res = await pool.query('SELECT * FROM licenze ORDER BY data_attivazione DESC');
     return { success: true, licenze: res.rows as Licenza[] };
@@ -80,6 +82,7 @@ export async function elencaLicenzeCommerciali(): Promise<RisultatoElencoLicenze
 /** Recupera una singola licenza commerciale per id (per l'editing di quella specifica). */
 export async function getLicenzaPerId(idLicenza: string): Promise<Licenza | null> {
   try {
+    await richiediSuperadmin();
     await assicuraTabellaLicenze();
     const res = await pool.query('SELECT * FROM licenze WHERE id_licenza = $1', [idLicenza]);
     if (res.rows.length === 0) return null;
@@ -111,6 +114,7 @@ export async function creaLicenzaCommercialeAction(
   ragioneSociale: string
 ): Promise<RisultatoLicenza> {
   try {
+    await richiediSuperadmin();
     await assicuraTabellaLicenze();
     const nuovaChiave = generaChiaveLicenza(ragioneSociale);
     const query = `
@@ -145,6 +149,7 @@ export async function creaLicenzaCommercialeAction(
 /** Quanti spazi sono già collegati a questa licenza commerciale, per verificarne la capienza (max_spazi). */
 export async function contaSpaziPerLicenza(idLicenza: string): Promise<number> {
   try {
+    await richiediSuperadmin();
     const res = await pool.query(
       'SELECT COUNT(*) AS totale FROM licenze_spazio WHERE licenza_commerciale_id = $1',
       [idLicenza]
@@ -174,6 +179,7 @@ export async function rigeneraChiaveLicenza(
   chiaveAttuale: string
 ): Promise<RisultatoRigenerazioneChiave> {
   try {
+    await richiediSuperadmin();
     const attuale = await getLicenzaPerId(chiaveAttuale);
     if (!attuale) {
       return { success: false, error: 'Licenza non trovata.' };
@@ -209,6 +215,7 @@ export async function salvaParametriLicenza(
   parametri: { maxSpazi: number; maxAziende: number; maxUtenti: number; dataScadenza: string }
 ): Promise<RisultatoSalvataggio> {
   try {
+    await richiediSuperadmin();
     const query = `
       UPDATE licenze
       SET max_spazi = $1, max_aziende = $2, max_utenti = $3, data_scadenza = $4
@@ -249,6 +256,7 @@ export async function salvaFunzioniPlusLicenzaAction(
   funzioni: FunzioniPlusLicenza
 ): Promise<RisultatoSalvataggio> {
   try {
+    await richiediSuperadmin();
     const res = await pool.query(
       `UPDATE licenze SET plus_dati_settore = $1, plus_simulazione = $2, plus_relazione_ai = $3 WHERE id_licenza = $4`,
       [funzioni.datiSettore, funzioni.simulazione, funzioni.relazioneAi, idLicenza]
@@ -276,6 +284,7 @@ export async function salvaAnagraficaLicenza(
   }
 ): Promise<RisultatoSalvataggio> {
   try {
+    await richiediSuperadmin();
     const query = `
       UPDATE licenze
       SET ragione_sociale = $1, codice_fiscale = $2, partita_iva = $3, indirizzo = $4, cap = $5, citta = $6, pec = $7
@@ -314,6 +323,7 @@ export async function sospendiLicenzaAction(
   motivo?: string
 ): Promise<RisultatoSalvataggio> {
   try {
+    await richiediSuperadmin();
     const res = await pool.query(
       `UPDATE licenze SET stato = 'SOSPESA', data_sospensione = now(), motivo_stato = $2 WHERE id_licenza = $1`,
       [idLicenza, motivo || null]
@@ -330,6 +340,7 @@ export async function sospendiLicenzaAction(
 
 export async function riattivaLicenzaAction(idLicenza: string): Promise<RisultatoSalvataggio> {
   try {
+    await richiediSuperadmin();
     const res = await pool.query(
       `UPDATE licenze SET stato = 'ATTIVA', data_sospensione = NULL, motivo_stato = NULL WHERE id_licenza = $1`,
       [idLicenza]
@@ -349,6 +360,7 @@ export async function cessaLicenzaAction(
   motivo?: string
 ): Promise<RisultatoSalvataggio> {
   try {
+    await richiediSuperadmin();
     const res = await pool.query(
       `UPDATE licenze SET stato = 'CESSATA', data_cessazione = now(), motivo_stato = $2 WHERE id_licenza = $1`,
       [idLicenza, motivo || null]

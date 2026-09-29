@@ -10,6 +10,7 @@
 // per gli spazi che non hanno ancora scattato la foto — quelli che
 // l'hanno già fatto restano com'erano, come richiesto esplicitamente.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabelleParametriSpazio } from '@/db/provision';
 import { ottieniModelloBase } from '@/app/actions/checklistModelloBase';
@@ -77,6 +78,7 @@ export async function ottieniConfigurazioneChecklist(
   nomeSchema: string
 ): Promise<RisultatoConfigurazione> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }
@@ -144,6 +146,7 @@ export async function aggiornaPesoDomandaAction(
   peso: PesoDomanda
 ): Promise<RisultatoSalvataggioConfig> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
 
@@ -172,6 +175,7 @@ export async function ripristinaPesoDefaultAction(
   domandaId: string
 ): Promise<RisultatoSalvataggioConfig> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(`DELETE FROM "${nomeSchema}".checklist_pesi_domande WHERE domanda_id = $1`, [
       domandaId,
@@ -192,6 +196,7 @@ export async function aggiornaParametroNumericoAction(
   valore: number
 ): Promise<RisultatoSalvataggioConfig> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
 

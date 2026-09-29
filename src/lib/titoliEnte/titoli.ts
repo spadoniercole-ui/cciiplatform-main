@@ -131,7 +131,7 @@ export function interpretaRiscontro(grezzo: unknown, eseguitoIl: string): Riscon
 }
 
 /** Riempito dalle azioni con il sito ufficiale dell'ente; qui il minimo sindacale. */
-export const DOMINI_AMMESSI_TUTTI: string[] = [
+const DOMINI_AMMESSI_TUTTI: string[] = [
   ...DOMINI_NORMA,
   'inps.it',
   'inail.it',

@@ -8,6 +8,7 @@
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import { pool } from '@/lib/db';
+import { cookieSicuro } from '@/lib/cookieSicuro';
 
 const DURATA_SESSIONE_ORE = 8;
 
@@ -32,9 +33,32 @@ export async function creaSessione(
   cookieStore.set('session_token', token, {
     httpOnly: true,
     // Secure solo in produzione E non nell'edizione portable (HTTP locale).
-    secure: process.env.NODE_ENV === 'production' && process.env.PORTABLE !== '1',
+    secure: cookieSicuro(),
     sameSite: 'lax',
     path: '/',
     expires: scadenza,
   });
+}
+
+/**
+ * Chiude le sessioni aperte di un utente di spazio: dopo un cambio o una
+ * rigenerazione della password, o dopo la disattivazione, chi aveva già una
+ * sessione non deve poter continuare fino alla sua scadenza (8 ore).
+ * `eccettoToken` lascia aperta la sessione di chi sta cambiando la propria
+ * password. L'identità è lo username (dalla 0.109) o, per sessioni più
+ * vecchie, l'email.
+ */
+export async function chiudiSessioniUtente(
+  spazioId: number,
+  identita: { username: string | null; email: string | null },
+  eccettoToken?: string
+): Promise<void> {
+  if (!identita.username && !identita.email) return;
+  await pool.query(
+    `DELETE FROM sessioni
+      WHERE workspace_id = $1
+        AND ((username IS NOT NULL AND username = $2) OR (email IS NOT NULL AND email = $3))
+        AND token <> $4`,
+    [spazioId, identita.username, identita.email?.toLowerCase() ?? null, eccettoToken ?? '']
+  );
 }

@@ -93,6 +93,203 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.116.1 — 2026-09-29
+
+**Sicurezza: libreria Excel aggiornata**
+
+- **Sostituita la libreria che legge e scrive i file Excel** (SheetJS
+  `xlsx`): la versione 0.18.5 pubblicata su npm aveva vulnerabilità note
+  (inquinamento del prototipo e blocco su file costruiti ad arte) che non
+  verranno mai corrette lì. Ora si usa la build ufficiale 0.20.3 da
+  cdn.sheetjs.com, con la stessa interfaccia: nessun cambiamento per gli
+  utenti in import ed export di Check List, modello di Check List,
+  Proposta, Posizione Aggiornata, Debiti verso l'ente (anche tracciati
+  INPS con date), anagrafica titoli e report XBRL.
+- Nuovo test di andata e ritorno (export → file .xlsx → import) sui
+  moduli principali e sulla lettura delle date, così un futuro cambio di
+  versione che rompa i file Excel fa fallire la CI.
+
+## 0.116.0 — 2026-09-29
+
+**Sicurezza: password temporanee, tentativi di accesso, costi AI**
+
+- **Password temporanee mai più in chiaro nel database.** Fino a oggi la
+  password temporanea di Admin e utenti restava leggibile nel database (e
+  nei backup) finché l'utente non la cambiava. Ora si salva solo
+  l'indicazione "da cambiare al primo accesso"; la password viene mostrata
+  una sola volta a chi la genera, come prima. Le password già salvate
+  vengono cancellate automaticamente al primo accesso dopo
+  l'aggiornamento, senza cambiare nulla per gli utenti.
+- **Limite dei tentativi di accesso per tutti.** Prima valeva solo per il
+  Superadmin: ora anche Admin di spazio e utenti vengono bloccati per 15
+  minuti dopo 5 password errate. Il conteggio è salvato anche nel database,
+  quindi vale su più server e non si azzera con un riavvio.
+- **Tetto d'uso dell'estrazione AI dalle visure**: 30 all'ora per utente e
+  300 al giorno per spazio (modificabili con `AI_VISURE_PER_UTENTE_ORA` e
+  `AI_VISURE_PER_SPAZIO_GIORNO`). Oltre il tetto compare un messaggio e i
+  campi si compilano a mano.
+
+Verificato: type-check, lint, test, build cloud; edizione server avviata da
+zero: password temporanea non presente nel database, blocco dopo 5
+tentativi errati mantenuto dopo il riavvio della piattaforma, accessi
+corretti non toccati.
+
+## 0.115.0 — 2026-09-29
+
+**Edizione server on-premise**
+
+- La piattaforma completa (multi-spazio, superadmin, licenze) si può
+  installare sul **server dell'ente** con Docker Compose (`server/`):
+  PostgreSQL 16, la piattaforma, **HTTPS** con Caddy (certificato della CA
+  locale o fornito dall'IT) e **backup giornaliero** del database con
+  conservazione configurabile. Script di ripristino che salva prima lo stato
+  attuale. Guida: `docs/INSTALLAZIONE-SERVER.md`.
+- File caricati salvati su disco (`ARCHIVIO_FILE_DIR`) invece che su Vercel
+  Blob; in questo caso il limite dei PDF caricati sale da 4MB a 20MB.
+- Connessione al database senza TLS configurabile (`DATABASE_SSL=0`) per
+  Postgres nella rete interna; nel cloud nulla cambia.
+- Il backup generato dal pannello Superadmin viene salvato anche sul server
+  (`BACKUP_DIR`), oltre che scaricato.
+- All'avvio dell'edizione server le tabelle di sistema vengono create su un
+  database nuovo, attendendo che Postgres sia pronto.
+- CI: la costruzione dell'immagine Docker viene verificata a ogni modifica.
+
+Verificato: type-check, lint, test, build cloud; stack Docker avviato da zero:
+primo accesso Superadmin con PIN, creazione licenza e spazio, primo accesso
+dell'Admin di spazio (MFA e cambio password), 14 pagine senza errori, cookie
+`Secure`, PDF caricato nella cartella del server, backup dal pannello e
+pianificato, ripristino da backup, certificato HTTPS verificato con la CA
+locale.
+
+## 0.114.0 — 2026-09-29
+
+**Edizione portable in rete locale** (Portable 1.1.0)
+
+- Nuova modalità **rete locale** dell'edizione portable: un PC fa da server e
+  gli altri PC dell'ufficio usano la piattaforma dal browser, in **HTTPS**.
+  Si attiva con `PORTABLE_LAN=1` in `config.bat`; all'avvio sono mostrati gli
+  indirizzi da aprire. Il server interno resta su 127.0.0.1; un proxy HTTPS
+  (`lan-https.mjs`) espone solo la porta cifrata (predefinita 4443), con
+  certificato autofirmato creato al primo avvio o fornito dall'IT
+  (`dati\tls\cert.pem` + `key.pem`). Il launcher prova ad aprire la porta
+  nel firewall di Windows (reti private e di dominio).
+- Cookie di sessione `Secure` anche nella portable quando è in HTTPS.
+- Funzioni AI e dati ISTAT: senza internet, con chiave API assente o non
+  valida, o con servizio sovraccarico compare un messaggio chiaro invece di
+  un errore tecnico; il resto della piattaforma funziona normalmente.
+- README della portable: istruzioni per l'uso in rete locale.
+
+Verificato: type-check, lint, test (815), build cloud e portable; portable in
+modalità rete locale provata dall'indirizzo di rete della macchina: due
+utenti contemporanei (54 pagine), Operatore con cookie Secure e chiusura
+della sessione al cambio password; porta interna non raggiungibile dalla
+rete, HTTP semplice rifiutato.
+
+## 0.113.0 — 2026-09-28
+
+**Correzioni emerse dai test e pulizia**
+
+- **Parametri → Ricevibilità: il salvataggio di un limite non funzionava
+  mai** (errore del database per un parametro sbagliato nella query). Ora
+  salva, con test su database reale.
+- **Import Excel dei debiti**: gli importi illeggibili ('n.d.', vuoti,
+  testo) scartano la riga invece di importarla a 0; letti i negativi tra
+  parentesi e i formati '1,234.56'; righe di totale riconosciute in
+  qualunque colonna; colonna "versato" vuota lasciata vuota; suggerimenti
+  di colonna corretti ('Importo versato', 'Data versamento', 'Annotazioni').
+- **Saldo di una riga di debito mai negativo** (versato oltre il dovuto non
+  riduce più i totali): tabella, export Excel, screening, fascicolo.
+- **Check List**: i pesi delle direttrici si ripartiscono sempre su 100
+  (prima potevano sommare 25 o 75 quando l'AI generava meno sezioni); id di
+  domanda duplicati o vuoti rifiutati con messaggio preciso.
+- Ricevibilità: il messaggio indica la soglia trovata tramite alias (verdetto
+  invariato). Ranghi legali sconosciuti in fondo all'elenco.
+- Errori sporadici "già esistente" / "chiave duplicata" all'apertura
+  contemporanea di più pagine (creazione tabelle) eliminati; tabella della
+  simulazione creata prima della lettura.
+- Sicurezza: titolo e sottotitolo delle finestre di stampa escapati (la
+  ragione sociale poteva iniettare HTML); dopo un cambio o una rigenerazione
+  della password, o la disattivazione di un utente, le sessioni aperte si
+  chiudono; segreto TOTP con caratteri non validi rifiutato.
+- Pulizia: rimossi file e 10 server action mai usati, lo script db:seed
+  rotto; knip configurato per Next.js.
+
+## 0.112.0 — 2026-09-28
+
+**Dipendenze: vulnerabilità corrette e pacchetti inutilizzati rimossi**
+
+- `jspdf` 2.5 → 4.2 e `jspdf-autotable` 3.8 → 5.0: eliminata la
+  vulnerabilità critica (tramite dompurify) nella generazione dei PDF. Nessuna
+  modifica al codice; nuovo test che genera davvero il PDF della Proposta, e
+  verificato il download "Genera documento (PDF) da inviare" nel browser.
+- `postcss` → 8.5.28 (vulnerabilità alta).
+- Rimossi 11 pacchetti mai usati: `openai`, `@google/genai`, `jose`,
+  `@vercel/postgres` (deprecato), `@dhiwise/component-tagger`,
+  `@heroicons/react`, `react-hook-form`, `@tailwindcss/forms`,
+  `@tailwindcss/typography`, `tailwindcss-animate`, `@netlify/plugin-nextjs`.
+- Resta da aggiornare `xlsx` (vulnerabilità alta, nessuna correzione su npm):
+  la versione corretta è pubblicata solo su cdn.sheetjs.com.
+
+## 0.111.0 — 2026-09-27
+
+**Sicurezza: permessi degli Operatori applicati anche sul server**
+
+Finora i permessi per modulo (Nessun accesso / Sola lettura / Lettura e
+scrittura) e le aziende assegnate valevano solo per ciò che la sidebar e le
+pagine mostravano: chiamando direttamente le azioni, un Operatore poteva
+scrivere dove aveva la sola lettura e vedere aziende non sue.
+- Un Operatore legge e modifica solo le aziende assegnate (e i loro scenari,
+  debiti, righe di proposta, posizioni aggiornate, bilanci XBRL); gli elenchi
+  mostrano solo quelle.
+- Le scritture richiedono "Lettura e scrittura" sul modulo della pagina: ad
+  esempio con la Proposta in sola lettura non si aggiungono né modificano
+  righe (messaggio chiaro). Aprire una pagina non richiede mai la scrittura.
+- Le funzioni delle pagine di gestione (parametri, utenti, aziende, verifica
+  salute) sono riservate all'Admin di Spazio anche in lettura; modificare o
+  eliminare un tracciato di importazione (tocca i debiti di tutte le
+  aziende) è riservato all'Admin.
+- File caricati: il nome porta lo spazio che li carica e le azioni
+  rifiutano file di altri spazi; nella portable nessun accesso a file fuori
+  dalla cartella dei documenti.
+- Sblocco scenario: nello storico l'autore è preso dalla sessione, non dal
+  browser.
+
+Verificato: type-check, lint, test (20 sulla guardia), build cloud e
+portable; nella portable Admin dei due spazi (54 pagine) e un Operatore
+creato da interfaccia con i permessi di default (cambio password al primo
+accesso, 13 e 15 pagine) senza alcun blocco improprio; le pagine di
+gestione lo rimandano alla dashboard.
+
+## 0.110.0 — 2026-09-27
+
+**Sicurezza: ogni azione verifica chi la chiama**
+
+Correzione delle falle critiche emerse dall'audit di sicurezza. Le server
+action sono endpoint pubblici: fino a oggi quasi nessuna verificava la
+sessione, per cui bastava conoscerne l'identificativo (presente nel codice
+scaricato dal browser) per leggere o modificare i dati di qualunque spazio,
+entrare come amministratore o azzerare il database.
+- Nuovo modulo unico `src/lib/autorizzazione.ts`: l'identità arriva solo
+  dalla sessione; lo spazio passato dal browser è accettato solo se coincide
+  con quello dell'utente (il Superadmin opera su tutti).
+- Guardia su tutte le 251 azioni non pubbliche; le funzioni di gestione
+  (parametri, utenti, permessi, configurazioni) sono riservate all'Admin di
+  Spazio; licenze, spazi, backup, ripristino, dump e azzeramento al
+  Superadmin. Le route API richiedono la sessione.
+- Modalità salvagente: il cookie di ispezione contiene solo l'id dello spazio
+  e vale solo con una sessione Superadmin attiva.
+- La console `/superadmin` si apre solo al Superadmin.
+- MFA: l'avvio della verifica non è più invocabile dall'esterno; al quinto
+  codice o PIN errato bisogna rifare il login.
+- Un utente disabilitato perde subito l'accesso anche con sessione aperta.
+- Aggiornati `next` (15.5.26) e `drizzle-orm` (0.45) per vulnerabilità note.
+- Nuovo controllo `npm run check:autorizzazione` (in type-check e CI): fallisce
+  se un'azione nuova non verifica il chiamante.
+
+Verificato: type-check, lint, test (inclusi 14 nuovi sulla guardia), build
+cloud e portable; login e navigazione di tutte le pagine dei due spazi
+dell'edizione portable.
+
 ## 0.109.112 — 2026-09-24
 
 **Impaginazione della stampa riequilibrata**

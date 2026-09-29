@@ -18,6 +18,8 @@
 // deve mai andare a cercare altrove.
 
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
+import { richiediSessione } from '@/lib/autorizzazione';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const anthropic = apiKey ? new Anthropic({ apiKey }) : null;
@@ -68,8 +70,9 @@ export async function chiediAssistente(
   cronologia: MessaggioChat[],
   domanda: string
 ): Promise<RisultatoChiediAssistente> {
+  await richiediSessione();
   if (!anthropic) {
-    return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
+    return { success: false, error: messaggioChiaveAiMancante() };
   }
   if (!domanda.trim()) {
     return { success: false, error: 'Scrivi una domanda prima di inviare.' };
@@ -107,7 +110,9 @@ export async function chiediAssistente(
     console.error('[chiediAssistente] Errore:', error);
     return {
       success: false,
-      error: `Impossibile contattare l'assistente: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Impossibile contattare l'assistente: ${error.message || error}`,
     };
   }
 }

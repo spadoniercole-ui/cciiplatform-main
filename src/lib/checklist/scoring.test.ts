@@ -52,3 +52,76 @@ describe('calcolaQuadroQualitativo', () => {
     expect(risultato.percentualeCriticitaComplessiva).toBe(0);
   });
 });
+
+describe('calcolaQuadroQualitativo — soglie dell’etichetta', () => {
+  // Pesi personalizzati per ottenere percentuali esatte: una domanda No di peso
+  // `pctNo` e una Sì di peso 100 - pctNo → criticità pctNo%.
+  const sezioniSoglie: SezioneChecklist[] = [
+    {
+      numero: '1',
+      titolo: 'Soglie',
+      domande: [
+        { id: 'no', aCuraDi: 'esperto', domanda: 'No', peso: 'STRUTTURALE' },
+        { id: 'si', aCuraDi: 'esperto', domanda: 'Sì', peso: 'RILEVANTE' },
+      ],
+    },
+  ];
+  const risposteSoglie = {
+    no: { domandaId: 'no', risposta: false },
+    si: { domandaId: 'si', risposta: true },
+  };
+  const conPercentuale = (pctNo: number) =>
+    calcolaQuadroQualitativo(sezioniSoglie, risposteSoglie, {
+      STRUTTURALE: pctNo,
+      RILEVANTE: 100 - pctNo,
+      DOCUMENTALE: 1,
+    });
+
+  it.each([
+    [1, 'verde', 'Criticità contenute, alcune aree di attenzione'],
+    [20, 'verde', 'Criticità contenute, alcune aree di attenzione'],
+    [21, 'giallo', 'Piano da rafforzare su più punti'],
+    [50, 'giallo', 'Piano da rafforzare su più punti'],
+    [51, 'rosso', 'Criticità strutturali rilevanti'],
+    [100, 'rosso', 'Criticità strutturali rilevanti'],
+  ])('criticità %d%% → %s', (pct, colore, etichetta) => {
+    const q = conPercentuale(pct);
+    expect(q.percentualeCriticitaComplessiva).toBe(pct);
+    expect(q.coloreEtichetta).toBe(colore);
+    expect(q.etichetta).toBe(etichetta);
+  });
+
+  it('criticità 0% → "Nessuna criticità rilevata"', () => {
+    const q = conPercentuale(0);
+    expect(q.percentualeCriticitaComplessiva).toBe(0);
+    expect(q.etichetta).toBe('Nessuna criticità rilevata');
+    expect(q.coloreEtichetta).toBe('verde');
+  });
+
+  it('la percentuale è arrotondata prima del confronto con la soglia (20,4% → 20 → verde)', () => {
+    // 0,204 × 100 = 20,4 → arrotondato a 20
+    const q = calcolaQuadroQualitativo(sezioniSoglie, risposteSoglie, {
+      STRUTTURALE: 204,
+      RILEVANTE: 796,
+      DOCUMENTALE: 1,
+    });
+    expect(q.percentualeCriticitaComplessiva).toBe(20);
+    expect(q.coloreEtichetta).toBe('verde');
+  });
+
+  it('le soglie sono personalizzabili', () => {
+    const q = calcolaQuadroQualitativo(
+      sezioniSoglie,
+      risposteSoglie,
+      { STRUTTURALE: 30, RILEVANTE: 70, DOCUMENTALE: 1 },
+      { solido: 10, daRafforzare: 30 }
+    );
+    expect(q.coloreEtichetta).toBe('giallo');
+  });
+
+  it('sezione senza domande → percentuale di sezione null', () => {
+    const q = calcolaQuadroQualitativo([{ numero: '9', titolo: 'Vuota', domande: [] }], {});
+    expect(q.sezioni[0].percentualeCriticita).toBeNull();
+    expect(q.percentualeCriticitaComplessiva).toBeNull();
+  });
+});

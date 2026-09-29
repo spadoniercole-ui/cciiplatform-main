@@ -1,0 +1,29 @@
+# Dipendenze
+node_modules/
+
+# Build Next.js
+.next/
+out/
+*.tsbuildinfo
+
+# Build portable (chiavetta USB)
+portable-dist/
+
+# Variabili d'ambiente e segreti
+.env
+.env*.local
+
+# Varie
+.DS_Store
+npm-debug.log*
+.vercel
+.netlify
+
+# Impostazioni locali di Claude Code (quelle condivise stanno in .claude/settings.json)
+.claude/settings.local.json
+
+# Edizione server (server/): segreti, backup e certificati locali
+server/.env
+server/backup/
+server/certificati/*
+!server/certificati/.gitkeep

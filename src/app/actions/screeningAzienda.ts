@@ -20,14 +20,21 @@ import {
 import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { del, get } from '@/lib/blobStore';
 import { pool } from '@/lib/db';
+import {
+  richiediAccessoAzienda,
+  richiediAccessoSchema,
+  messaggioErrore,
+  verificaFileDelloSpazio,
+} from '@/lib/autorizzazione';
 import { assicuraTabelleScreeningAzienda } from '@/db/provision';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
 import { ottieniCategorieTipoDebito } from '@/app/actions/categorieTipoDebito';
-import { raggruppaPerTipoDebito } from '@/lib/debitiEnte/tipoDebito';
+import { raggruppaPerTipoDebito, saldoRigaDebitoEnte } from '@/lib/debitiEnte/tipoDebito';
 import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
 import { ottieniEtichetteTipoDebito } from '@/app/actions/tipoDebitoConfig';
 import { calcolaQuadroDirettrici, type QuadroDirettrici } from '@/lib/checklist/scoringDirettrici';
@@ -108,6 +115,7 @@ export async function ottieniDirettriciEnte(nomeSchema: string): Promise<{
   error?: string;
 }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema))
       return { success: false, direttrici: [], error: 'Nome schema non valido.' };
     const r = await pool.query(
@@ -130,6 +138,7 @@ export async function aggiornaDirettriciEnteAction(
   direttrici: DirettriceStrutturata[]
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const pulite = direttrici
       .map((d) => ({
@@ -183,6 +192,7 @@ export async function ottieniScreeningAzienda(
     relazioneTesto: null,
   };
   try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
     if (!validaSchema(nomeSchema))
       return { success: false, stato: vuoto, error: 'Nome schema non valido.' };
     await assicuraTabelleScreeningAzienda(nomeSchema);
@@ -284,6 +294,7 @@ export async function ottieniUltimiScreeningSpazio(
   nomeSchema: string
 ): Promise<{ success: boolean; screening: UltimoScreeningSpazio[]; error?: string }> {
   try {
+    const contesto = await richiediAccessoSchema(nomeSchema);
     if (!validaSchema(nomeSchema)) {
       return { success: false, screening: [], error: 'Nome schema non valido.' };
     }
@@ -295,9 +306,14 @@ export async function ottieniUltimiScreeningSpazio(
          JOIN "${nomeSchema}".aziende a ON a.id = s.azienda_id
         ORDER BY s.generato_il DESC NULLS LAST`
     );
+    // Gli Operatori vedono solo le aziende assegnate.
+    const righe =
+      contesto.modalita === 'OPERATORE'
+        ? r.rows.filter((x) => contesto.aziendeConsentite?.includes(Number(x.azienda_id)))
+        : r.rows;
     return {
       success: true,
-      screening: r.rows.map((x) => ({
+      screening: righe.map((x) => ({
         aziendaId: x.azienda_id,
         ragioneSociale: x.ragione_sociale,
         partitaIva: x.partita_iva ?? null,
@@ -328,6 +344,7 @@ export async function calcolaRiscontriNormativiAzienda(
   aziendaId: number
 ): Promise<{ success: boolean; riscontri: Riscontri | null; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) {
       return { success: false, riscontri: null, error: 'Nome schema non valido.' };
     }
@@ -374,7 +391,7 @@ export async function calcolaRiscontriNormativiAzienda(
       );
       esposizioneEnte = debitiRis.righe
         .filter((r) => !noContrib.has(r.tipo))
-        .reduce((acc, r) => acc + (r.importo - (r.importoVersato ?? 0)), 0);
+        .reduce((acc, r) => acc + saldoRigaDebitoEnte(r), 0);
     }
 
     // Esposizione VERA: contabilizzato + da_contabilizzare (esclude potenziale).
@@ -404,12 +421,20 @@ export async function generaScreeningAziendaAction(
   nomeFileVisura: string,
   istruzioniOperatore?: string
 ): Promise<RisultatoGenerazioneScreening> {
+  // Verifica fuori dal try: il `finally` sotto elimina il blob `visuraUrl`
+  // e non deve mai girare per un chiamante non autorizzato.
+  try {
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    verificaFileDelloSpazio(contesto, visuraUrl);
+  } catch (error) {
+    return { success: false, error: messaggioErrore(error, 'Operazione non autorizzata.') };
+  }
   let generazioneRiuscita = false;
   try {
     if (!anthropic) {
       return {
         success: false,
-        error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.',
+        error: messaggioChiaveAiMancante(),
       };
     }
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
@@ -951,7 +976,9 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
     console.error('[generaScreeningAziendaAction] Errore:', error);
     return {
       success: false,
-      error: `Impossibile generare lo screening: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Impossibile generare lo screening: ${error.message || error}`,
     };
   } finally {
     // I documenti non si conservano: il file su Blob non deve restare lì.
@@ -992,6 +1019,7 @@ export async function salvaRispostaScreeningAction(
   note: string | null
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleScreeningAzienda(nomeSchema);
     await pool.query(
@@ -1021,6 +1049,7 @@ export async function aggiornaTestoDomandaScreeningAction(
   nuovoTesto: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const testo = (nuovoTesto || '').trim();
     if (!testo) return { success: false, error: 'Il testo della domanda non può essere vuoto.' };
@@ -1068,6 +1097,7 @@ export async function ottieniConteggioScreeningPendente(
   aziendaId: number
 ): Promise<{ esiste: boolean; totali: number; risposte: number }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { esiste: false, totali: 0, risposte: 0 };
     await assicuraTabelleScreeningAzienda(nomeSchema);
 
@@ -1115,12 +1145,13 @@ export async function correggiPolaritaScreeningAction(
   aziendaId: number
 ): Promise<RisultatoCorrezionePolarita> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!anthropic) {
       return {
         success: false,
         domandeCorrette: 0,
         risposteInvertite: 0,
-        error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.',
+        error: messaggioChiaveAiMancante(),
       };
     }
     if (!validaSchema(nomeSchema)) {
@@ -1231,7 +1262,9 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
       success: false,
       domandeCorrette: 0,
       risposteInvertite: 0,
-      error: `Impossibile correggere la polarità: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Impossibile correggere la polarità: ${error.message || error}`,
     };
   }
 }
@@ -1273,6 +1306,7 @@ export async function ottieniStoricoScreeningAction(
   aziendaId: number
 ): Promise<{ success: boolean; voci: VoceStoricoScreening[]; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema))
       return { success: false, voci: [], error: 'Nome schema non valido.' };
     await assicuraTabelleScreeningAzienda(nomeSchema);

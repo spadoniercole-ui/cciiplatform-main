@@ -38,6 +38,8 @@ import { cifra } from '@/lib/portableCrypto';
 import { APP_VERSION } from '@/lib/appVersion';
 import { intestazione, nomeFileBackup, type EsitoIntegrita } from '@/lib/backup/formato';
 import { generaScriptBackup } from '@/lib/backup/genera';
+import { richiediSuperadmin } from '@/lib/autorizzazione';
+import { cartellaBackupServer } from '@/lib/edizioneServer';
 
 export interface RisultatoBackup {
   success: boolean;
@@ -58,6 +60,7 @@ export interface RisultatoBackup {
 
 export async function generaBackupCompletoAction(passphrase?: string): Promise<RisultatoBackup> {
   try {
+    await richiediSuperadmin();
     const quando = new Date();
 
     // La generazione sta in src/lib/backup/genera.ts, separata dal pool:
@@ -89,16 +92,15 @@ export async function generaBackupCompletoAction(passphrase?: string): Promise<R
       ? cifra(Buffer.from(testo, 'utf8'), passphrase!).toString('base64')
       : testo;
 
-    // Scrittura su disco solo dove un disco esiste davvero. Su Vercel il
-    // filesystem e' effimero: scrivere li' non produrrebbe un backup, solo un
-    // file che sparisce. Nel cloud l'unico "locale" possibile e' il PC di chi
-    // opera, raggiunto dallo scaricamento lato interfaccia.
+    // Scrittura su disco solo dove un disco esiste davvero (portable, o
+    // edizione server con BACKUP_DIR). Su Vercel il filesystem e' effimero:
+    // scrivere li' non produrrebbe un backup, solo un file che sparisce. Nel
+    // cloud l'unico "locale" possibile e' il PC di chi opera, raggiunto dallo
+    // scaricamento lato interfaccia.
     let percorsoLocale: string | undefined;
-    if (process.env.PORTABLE === '1') {
+    const base = cartellaBackupServer();
+    if (base) {
       try {
-        const base =
-          process.env.PORTABLE_BACKUP_DIR ||
-          path.join(process.env.PORTABLE_DATA_DIR || process.cwd(), 'backup');
         fs.mkdirSync(base, { recursive: true });
         const percorso = path.join(base, nomeFile);
         // Scrittura atomica: un'interruzione a meta' lascerebbe altrimenti un

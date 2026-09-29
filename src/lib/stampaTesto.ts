@@ -30,7 +30,13 @@ let parametriStampa: ParametriStampa = PARAMETRI_STAMPA_PREDEFINITI;
 export function impostaParametriStampa(p: ParametriStampa | null): void {
   parametriStampa = p ?? PARAMETRI_STAMPA_PREDEFINITI;
 }
-const escH = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const escH = (s: string) =>
+  s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 function stilePagina(): string {
   const m = parametriStampa.margini;
   const conTestata = !!(parametriStampa.logoDataUrl || parametriStampa.intestazione);
@@ -99,6 +105,8 @@ const STILE_PIEDE = `
  * Come stampaTesto ma con un corpo HTML libero (es. una tabella): utile quando
  * il contenuto non è prosa ma un prospetto. Il chiamante fornisce l'HTML del
  * <body> (già sanificato/costruito da lui, non da input utente grezzo).
+ * Titolo e sottotitolo sono invece testo semplice e vengono sempre escapati:
+ * spesso contengono dati inseriti dall'utente (es. la ragione sociale).
  */
 export function stampaHtml(
   titolo: string,
@@ -115,7 +123,7 @@ export function stampaHtml(
 <html lang="it">
 <head>
 <meta charset="utf-8">
-<title>${titolo}</title>
+<title>${escH(titolo)}</title>
 <style>
   body { font-family: Georgia, serif; max-width: 820px; margin: 40px auto; color: #1e293b; line-height: 1.55; font-size: 13px; }
   h1 { font-size: 20px; border-bottom: 2px solid #1e293b; padding-bottom: 8px; margin: 0 0 6px; }
@@ -130,8 +138,8 @@ export function stampaHtml(
 </head>
 <body>
   ${testataEnte()}
-  <h1>${titolo}</h1>
-  ${sottotitolo ? `<div class="sub">${sottotitolo}</div>` : ''}
+  <h1>${escH(titolo)}</h1>
+  ${sottotitolo ? `<div class="sub">${escH(sottotitolo)}</div>` : ''}
   ${corpoHtml}
   ${pieEnte()}
   ${piedeDocumento(impronta, dataGenerazione)}
@@ -152,7 +160,7 @@ export function stampaTesto(titolo: string, testo: string, dataGenerazione: stri
 <html lang="it">
 <head>
 <meta charset="utf-8">
-<title>${titolo}</title>
+<title>${escH(titolo)}</title>
 <style>
   body { font-family: Georgia, serif; max-width: 720px; margin: 40px auto; color: #1e293b; line-height: 1.6; font-size: 13px; }
   h1 { font-size: 20px; border-bottom: 2px solid #1e293b; padding-bottom: 8px; margin: 0 0 6px; }
@@ -162,9 +170,9 @@ export function stampaTesto(titolo: string, testo: string, dataGenerazione: stri
 </head>
 <body>
   ${testataEnte()}
-  <h1>${titolo}</h1>
+  <h1>${escH(titolo)}</h1>
   ${dataFormattata ? `<div class="data">Generato il ${dataFormattata}</div>` : ''}
-  <div class="testo">${testo.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+  <div class="testo">${escH(testo)}</div>
   ${pieEnte()}
   ${piedeDocumento(impronta, dataGenerazione)}
 </body>

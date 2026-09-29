@@ -32,15 +32,19 @@ export function base32Encode(buf: Buffer): string {
   return out;
 }
 
-/** Decodifica una stringa Base32 (ignora spazi e padding) in buffer. */
+/** Decodifica una stringa Base32 (tollera minuscole, spazi e padding
+ * finale '='). Un qualsiasi altro carattere fuori alfabeto rende il
+ * segreto non valido: si restituisce un buffer vuoto (e `verificaTotp`
+ * rifiuta), invece di scartare il carattere e decodificare un segreto
+ * diverso da quello memorizzato. */
 export function base32Decode(input: string): Buffer {
-  const pulito = input.toUpperCase().replace(/=+$/g, '').replace(/\s+/g, '');
+  const pulito = input.toUpperCase().replace(/\s+/g, '').replace(/=+$/g, '');
   let bits = 0;
   let valore = 0;
   const byteArray: number[] = [];
   for (const ch of pulito) {
     const idx = ALFABETO_BASE32.indexOf(ch);
-    if (idx === -1) continue; // carattere non valido: ignorato
+    if (idx === -1) return Buffer.alloc(0); // carattere non valido: segreto rifiutato
     valore = (valore << 5) | idx;
     bits += 5;
     if (bits >= 8) {

@@ -10,6 +10,11 @@
 // forma dati (DatiFinanziariPeriodo) usata da anno corrente/precedente,
 // nessun motore di calcolo da riscrivere per gestire più punti.
 
+import {
+  richiediAccessoSchema,
+  richiediAccessoScenario,
+  verificaRigaConsentita,
+} from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabellaPosizioneAggiornata } from '@/db/provision';
 import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
@@ -62,6 +67,7 @@ export async function ottienePosizioneAggiornata(
   scenarioId: number
 ): Promise<RisultatoPosizioneAggiornata> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) {
       return {
         success: false,
@@ -108,6 +114,7 @@ export async function ottieniTuttePosizioniAggiornate(
   scenarioId: number
 ): Promise<RisultatoElencoPosizioniAggiornate> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) {
       return { success: false, posizioni: [], error: 'Nome schema non valido.' };
     }
@@ -146,6 +153,10 @@ export async function salvaPosizioneAggiornataAction(
   id?: number | null
 ): Promise<RisultatoOperazionePosizione> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const messaggioBloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
     if (messaggioBloccato) return { success: false, error: messaggioBloccato };
@@ -197,6 +208,11 @@ export async function eliminaPosizioneAggiornataAction(
   id: number
 ): Promise<RisultatoOperazionePosizione> {
   try {
+    const contesto = await richiediAccessoSchema(nomeSchema, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
+    await verificaRigaConsentita(contesto, 'posizione_aggiornata', id);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const rigaRis = await pool.query(
       `SELECT scenario_id FROM "${nomeSchema}".posizione_aggiornata WHERE id = $1`,

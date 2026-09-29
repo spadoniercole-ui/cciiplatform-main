@@ -12,6 +12,7 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabelleAnagraficaEnte } from '@/db/provision';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 const NUMERO_CAMPI = 10;
 const ETICHETTE_DEFAULT = Array.from({ length: NUMERO_CAMPI }, (_, i) => `Campo ${i + 1}`);
@@ -34,6 +35,7 @@ export async function ottieniEtichetteAnagraficaEnte(
   nomeSchema: string
 ): Promise<RisultatoEtichetteAnagraficaEnte> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, etichette: [], error: 'Nome schema non valido.' };
     }
@@ -95,6 +97,7 @@ export async function aggiornaEtichettaAnagraficaEnteAction(
   dati: { etichetta?: string; attivo?: boolean }
 ): Promise<RisultatoOperazioneEtichetta> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     if (campo < 1 || campo > NUMERO_CAMPI) return { success: false, error: 'Campo non valido.' };

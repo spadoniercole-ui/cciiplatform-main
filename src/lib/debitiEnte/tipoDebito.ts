@@ -110,14 +110,26 @@ export function raggruppaPerTipoDebito(
     const v = assicura(r.tipo);
     v.numeroRighe += 1;
     v.totale += r.importo;
-    v.totaleSaldo += r.importo - (r.importoVersato ?? 0);
+    // Saldo limitato a 0 riga per riga: una riga pagata in eccesso non riduce
+    // il debito residuo delle altre righe della stessa categoria.
+    v.totaleSaldo += saldoRigaDebitoEnte(r);
   }
   return Array.from(mappa.values());
 }
 
 /** Il numero da confrontare con una proposta non è mai il debito lordo se
  * il file distingue quanto pagato — quando importoVersato è presente,
- * il saldo è la differenza; altrimenti coincide con l'importo. */
-export function saldoRigaDebitoEnte(r: { importo: number; importoVersato: number | null }): number {
-  return r.importoVersato === null ? r.importo : r.importo - r.importoVersato;
+ * il saldo è la differenza; altrimenti coincide con l'importo.
+ *
+ * Il saldo NON scende mai sotto zero per effetto del versato: una riga pagata
+ * in eccesso (versato > importo) non ha debito residuo, ma l'eccedenza non è un
+ * credito da compensare con altre righe (va semmai segnalata come anomalia, vedi
+ * lib/plausibilita). Una riga già negativa di suo (importo < 0, es. rettifica a
+ * credito) resta invariata: il versato non la rende più negativa. */
+export function saldoRigaDebitoEnte(r: {
+  importo: number;
+  importoVersato?: number | null;
+}): number {
+  if (r.importoVersato === null || r.importoVersato === undefined) return r.importo;
+  return Math.max(r.importo - r.importoVersato, Math.min(r.importo, 0));
 }

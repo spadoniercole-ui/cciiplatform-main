@@ -16,6 +16,7 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabelleScenari } from '@/db/provision';
+import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
 import {
   calcolaTestPratico,
   DATI_DEBITO_VUOTI,
@@ -56,6 +57,7 @@ export async function ottieniTestPraticoAzienda(
     compilato: false,
   };
   try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
     if (!validaSchema(nomeSchema)) {
       return { success: false, stato: statoVuoto, error: 'Nome schema non valido.' };
     }
@@ -122,6 +124,7 @@ export async function salvaTestPraticoAziendaAction(
   flussi: DatiFlussiARegime
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleScenari(nomeSchema);
     await pool.query(

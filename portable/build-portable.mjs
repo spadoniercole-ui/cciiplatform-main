@@ -68,6 +68,13 @@ if (fs.existsSync(imgDir)) fs.rmSync(imgDir, { recursive: true, force: true });
 
 log('5/5 — launcher, configurazione e istruzioni');
 copyDir(path.join(ROOT, 'portable', 'template'), OUT);
+
+// Modalità rete locale: proxy HTTPS + node-forge (certificato autofirmato).
+fs.copyFileSync(path.join(ROOT, 'portable', 'lan-https.mjs'), path.join(OUT, 'lan-https.mjs'));
+copyDir(
+  path.join(ROOT, 'node_modules', 'node-forge'),
+  path.join(OUT, 'node_modules', 'node-forge')
+);
 fs.mkdirSync(path.join(OUT, 'dati'), { recursive: true });
 
 console.log('\n✅ Fatto. Cartella pronta: ' + OUT);

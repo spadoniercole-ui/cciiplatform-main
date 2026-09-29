@@ -11,6 +11,7 @@
 
 import { pool } from '@/lib/db';
 import { seedXbrlTagMappings } from '@/db/seedXbrlTagMappings';
+import { richiediSuperadmin } from '@/lib/autorizzazione';
 
 const TABELLE_GLOBALI = [
   'spazi',
@@ -36,6 +37,7 @@ export interface RisultatoAzzeramento {
 
 export async function azzeraDatabaseCompletoAction(): Promise<RisultatoAzzeramento> {
   try {
+    await richiediSuperadmin();
     const schemiRis = await pool.query(
       `SELECT nspname FROM pg_catalog.pg_namespace WHERE nspname LIKE 'tenant\\_%'`
     );

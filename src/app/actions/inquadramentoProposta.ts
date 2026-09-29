@@ -9,6 +9,7 @@
 // Qui solo lettura e scrittura. Mai eccezioni oltre il confine della Server
 // Action: sempre { success, error? }.
 
+import { richiediAccessoScenario } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabellaProposta, assicuraTabelleParametriSpazio } from '@/db/provision';
 import { verificaScenarioNonBloccato } from '@/app/actions/scenari';
@@ -68,6 +69,7 @@ export async function ottieniInquadramentoPropostaAction(
   tipoSpazio: 'ENTE' | 'NON_ENTE'
 ): Promise<RisultatoInquadramento> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaProposta(nomeSchema);
     await assicuraTabelleParametriSpazio(nomeSchema);
@@ -169,6 +171,10 @@ export async function salvaInquadramentoPropostaAction(
   dati: DatiSalvataggioInquadramento
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const messaggioBloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
     if (messaggioBloccato) return { success: false, error: messaggioBloccato };

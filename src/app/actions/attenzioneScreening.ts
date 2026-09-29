@@ -24,6 +24,7 @@ import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
 import { sintetizzaSoglie } from '@/lib/soglie25novies/sintesi';
 import { ottieniDebitiTriageAction } from '@/app/actions/debitiTriage';
 import { valoriSoglieDaPosizioni } from '@/lib/debitiTriage/modello';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export interface RisultatoAttenzione {
   success: boolean;
@@ -40,6 +41,7 @@ export async function ottieniAttenzioneScreeningAction(
   aziendaId: number
 ): Promise<RisultatoAttenzione> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     // Anche la tabella aziende: le colonne delle soglie e del ritardo
     // vengono aggiunte lì, e questa action le legge. Se l'azienda è stata

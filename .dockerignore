@@ -1,0 +1,11 @@
+# Contesto di build dell'immagine Docker dell'edizione server (server/Dockerfile)
+node_modules
+.next
+portable-dist
+server/backup
+server/.env
+.env
+.env*.local
+.git
+*.tsbuildinfo
+.claude

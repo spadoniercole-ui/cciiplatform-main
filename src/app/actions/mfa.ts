@@ -11,18 +11,18 @@
 // di spazio, operatore). Così un solo flusso copre tutti.
 
 import { cookies } from 'next/headers';
-import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import QRCode from 'qrcode';
 import { pool } from '@/lib/db';
-import { assicuraTabelleMfa } from '@/db/ensureTables';
-import { generaSegretoBase32, otpauthUri, verificaTotp } from '@/lib/mfa/totp';
+import { otpauthUri, verificaTotp } from '@/lib/mfa/totp';
+import { COOKIE_PENDING } from '@/lib/mfa/challenge';
 import { creaSessione } from '@/lib/sessione';
-import type { FattoreMfa, DatiAvvioChallenge, StatoMfa, RispostaPassoMfa } from '@/lib/mfa/tipi';
+import type { FattoreMfa, StatoMfa, RispostaPassoMfa } from '@/lib/mfa/tipi';
 
-const COOKIE_PENDING = 'mfa_pending';
-const DURATA_CHALLENGE_MIN = 10;
 const EMITTENTE = 'CCIIPlatform';
+// Oltre questo numero di codici o PIN errati la verifica viene annullata e
+// bisogna ripartire dal login (con la password).
+const MAX_TENTATIVI_FALLITI = 5;
 
 interface RigaChallenge {
   token: string;
@@ -36,109 +36,6 @@ interface RigaChallenge {
   go_to_choice: boolean;
   fattori_rimasti: string[];
   fattori_totali: number | null;
-}
-
-function cookieOpts(scadenza: Date) {
-  return {
-    httpOnly: true as const,
-    secure: process.env.NODE_ENV === 'production' && process.env.PORTABLE !== '1',
-    sameSite: 'lax' as const,
-    path: '/',
-    expires: scadenza,
-  };
-}
-
-/** Avvia la challenge MFA dopo che la password è stata verificata. Interna:
- * chiamata da actions/auth.ts. Ritorna il primo fattore da superare. */
-export async function avviaChallengeMfa(d: DatiAvvioChallenge): Promise<{ next: FattoreMfa }> {
-  await assicuraTabelleMfa();
-
-  const cred = await pool.query(
-    'SELECT totp_secret, totp_attivo, pin_hash FROM public.mfa_credenziali WHERE identita_key = $1',
-    [d.identitaKey]
-  );
-
-  let totpAttivo = false;
-  let pinPresente = false;
-
-  if (cred.rows.length === 0) {
-    const secret = generaSegretoBase32();
-    await pool.query(
-      `INSERT INTO public.mfa_credenziali (identita_key, ruolo, workspace_id, username, totp_secret, totp_attivo)
-       VALUES ($1, $2, $3, $4, $5, FALSE)
-       ON CONFLICT (identita_key) DO NOTHING`,
-      [d.identitaKey, d.ruolo, d.workspaceId, d.username, secret]
-    );
-  } else {
-    totpAttivo = cred.rows[0].totp_attivo === true;
-    pinPresente = !!cred.rows[0].pin_hash;
-    if (!cred.rows[0].totp_secret) {
-      await pool.query(
-        'UPDATE public.mfa_credenziali SET totp_secret = $2, updated_at = now() WHERE identita_key = $1',
-        [d.identitaKey, generaSegretoBase32()]
-      );
-    }
-  }
-
-  // ---------------------------------------------------------------------
-  // COMPOSIZIONE DEI FATTORI — diversa per il SUPERADMIN
-  //
-  // Il Superadmin non ha una riga nel database e la sua password vive nelle
-  // variabili d'ambiente: e' quindi gia' immune a tutta la classe di
-  // minacce che passa dal database (injection, dump rubato, backup
-  // smarrito). Nemmeno il backup completo lo contiene.
-  //
-  // Resta pero' esposto dalla porta d'ingresso, che e' pubblica: la sua
-  // password e' una stringa statica, in chiaro nella configurazione, senza
-  // scadenza ne' rotazione. Se finisce fuori — accesso al progetto di
-  // hosting, log di build, uno screenshot durante una dimostrazione — chi la
-  // ottiene entra, e non resta traccia di nulla.
-  //
-  // Il secondo fattore serve a questo, e il suo valore non sta nel
-  // meccanismo ma nel fatto che il secondo segreto viva in un POSTO DIVERSO
-  // dal primo: la password nell'ambiente, l'hash del PIN nel database. Due
-  // vie di compromissione distinte, nessuna delle due sufficiente da sola.
-  //
-  // Il TOTP aggiunge poco a questa separazione (l'hash del PIN sta gia' nel
-  // database, come il segreto TOTP) e costa molto in attrito: app
-  // authenticator, QR, segreto da recuperare al cambio di telefono. Per il
-  // solo Superadmin viene percio' escluso; per Admin di Spazio e Operatori
-  // resta invariato, perche' quelli nel database ci sono eccome.
-  const fattori: FattoreMfa[] = [];
-  const soloPin = d.ruolo === 'SUPERADMIN';
-  if (!soloPin) {
-    fattori.push(totpAttivo ? 'TOTP' : 'TOTP_ENROLL');
-  }
-  fattori.push(pinPresente ? 'PIN' : 'PIN_SETUP');
-
-  const token = crypto.randomBytes(32).toString('hex');
-  const scadenza = new Date(Date.now() + DURATA_CHALLENGE_MIN * 60 * 1000);
-
-  await pool.query('DELETE FROM public.mfa_challenge WHERE expires_at < now()');
-  await pool.query(
-    `INSERT INTO public.mfa_challenge
-       (token, identita_key, ruolo, workspace_id, email, username, codice_spazio, tenant_id, go_to_choice, fattori_rimasti, expires_at, fattori_totali)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-    [
-      token,
-      d.identitaKey,
-      d.ruolo,
-      d.workspaceId,
-      d.email,
-      d.username,
-      d.codiceSpazio,
-      d.tenantId,
-      d.goToChoice,
-      fattori,
-      scadenza,
-      fattori.length,
-    ]
-  );
-
-  const cookieStore = await cookies();
-  cookieStore.set(COOKIE_PENDING, token, cookieOpts(scadenza));
-
-  return { next: fattori[0] };
 }
 
 async function leggiChallenge(): Promise<RigaChallenge | null> {
@@ -185,6 +82,29 @@ export async function mfaStato(): Promise<StatoMfa> {
   return { attivo: true, fase, username: ch.username, enroll, passo, totale };
 }
 
+/**
+ * Registra un codice o PIN errato. Al raggiungimento del limite elimina la
+ * challenge: per riprovare bisogna rifare il login con la password.
+ */
+async function registraTentativoFallito(
+  ch: RigaChallenge,
+  messaggio: string
+): Promise<RispostaPassoMfa> {
+  const r = await pool.query(
+    `UPDATE public.mfa_challenge SET tentativi_falliti = tentativi_falliti + 1
+      WHERE token = $1 RETURNING tentativi_falliti`,
+    [ch.token]
+  );
+  const tentativi: number = r.rows[0]?.tentativi_falliti ?? MAX_TENTATIVI_FALLITI;
+  if (tentativi >= MAX_TENTATIVI_FALLITI) {
+    await pool.query('DELETE FROM public.mfa_challenge WHERE token = $1', [ch.token]);
+    const cookieStore = await cookies();
+    cookieStore.delete(COOKIE_PENDING);
+    return { success: false, error: 'Troppi tentativi errati. Rifai il login.' };
+  }
+  return { success: false, error: messaggio };
+}
+
 /** Toglie il primo fattore; se non ne restano, crea la sessione reale. */
 async function avanzaFattore(ch: RigaChallenge): Promise<RispostaPassoMfa> {
   const restanti = ch.fattori_rimasti.slice(1);
@@ -229,7 +149,7 @@ export async function mfaVerificaTotp(codiceInput: unknown): Promise<RispostaPas
     if (!secret) return { success: false, error: 'Configurazione TOTP mancante. Rifai il login.' };
 
     if (!verificaTotp(secret, String(codiceInput || ''))) {
-      return { success: false, error: 'Codice non valido o scaduto. Riprova.' };
+      return await registraTentativoFallito(ch, 'Codice non valido o scaduto. Riprova.');
     }
     if (fase === 'TOTP_ENROLL') {
       await pool.query(
@@ -271,7 +191,7 @@ export async function mfaInviaPin(pinInput: unknown): Promise<RispostaPassoMfa> 
       );
       const hash: string | undefined = cred.rows[0]?.pin_hash;
       if (!hash || !(await bcrypt.compare(pin, hash))) {
-        return { success: false, error: 'PIN non corretto.' };
+        return await registraTentativoFallito(ch, 'PIN non corretto.');
       }
     }
     return await avanzaFattore(ch);

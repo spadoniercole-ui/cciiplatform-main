@@ -13,6 +13,7 @@
 // di riferimento (convocazione INPS/INAIL e piano di risanamento).
 
 import { assicuraTabellaAziende } from '@/db/provision';
+import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export interface Azienda {
   id: number;
@@ -126,16 +127,22 @@ function valoriDaDati(dati: DatiAzienda) {
 
 export async function ottieniAziende(nomeSchema: string): Promise<RisultatoElencoAziende> {
   try {
+    const contesto = await richiediAccessoSchema(nomeSchema);
     await assicuraTabellaAziende(nomeSchema);
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const tabelle = getTabelleTenant(nomeSchema);
 
     const righe = await db.select().from(tabelle.aziende);
+    // Operatori: solo le aziende assegnate dall'Admin di Spazio.
+    const consentite =
+      contesto.modalita === 'OPERATORE'
+        ? righe.filter((r) => contesto.aziendeConsentite?.includes(Number(r.id)))
+        : righe;
 
     return {
       success: true,
-      aziende: righe.map(mappaRigaAzienda),
+      aziende: consentite.map(mappaRigaAzienda),
     };
   } catch (error: any) {
     console.error('[ottieniAziende] Errore:', error);
@@ -152,6 +159,7 @@ export async function ottieniAziendaPerId(
   id: number
 ): Promise<RisultatoAzienda> {
   try {
+    await richiediAccessoAzienda(nomeSchema, id);
     await assicuraTabellaAziende(nomeSchema);
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
@@ -178,6 +186,7 @@ export async function creaAziendaAction(
   dati: DatiAzienda
 ): Promise<RisultatoAzienda> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!(dati.ragioneSociale || '').trim()) {
       return { success: false, error: "La ragione sociale dell'azienda è obbligatoria." };
     }
@@ -202,6 +211,7 @@ export async function modificaAziendaAction(
   dati: DatiAzienda
 ): Promise<RisultatoOperazioneAzienda> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!(dati.ragioneSociale || '').trim()) {
       return { success: false, error: "La ragione sociale dell'azienda è obbligatoria." };
     }
@@ -244,6 +254,8 @@ async function impostaStatoAzienda(
   attiva: boolean
 ): Promise<RisultatoOperazioneAzienda> {
   try {
+    // Unico percorso di disabilitaAziendaAction e riattivaAziendaAction.
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -256,40 +268,6 @@ async function impostaStatoAzienda(
     return {
       success: false,
       error: `Impossibile aggiornare lo stato dell'azienda: ${error.message || error}`,
-    };
-  }
-}
-
-/**
- * Aggiornamento mirato del solo codice ATECO — usata quando un file XBRL
- * caricato porta un codice diverso da quello in anagrafica. Il dato del
- * file (fonte CCIAA) prevale su quello inserito manualmente: un operatore
- * può aver omesso o sbagliato il campo per distrazione, il file no —
- * evita di bloccare le fasi di analisi che dipendono dall'ATECO (Dati di
- * Settore) per un'anagrafica incompleta quando il dato corretto era già
- * disponibile nel bilancio caricato.
- */
-export async function aggiornaCodiceAtecoAction(
-  nomeSchema: string,
-  aziendaId: number,
-  nuovoCodiceAteco: string
-): Promise<RisultatoOperazioneAzienda> {
-  try {
-    const { db } = await import('@/db/client');
-    const { getTabelleTenant } = await import('@/db/schema');
-    const { eq } = await import('drizzle-orm');
-    const tabelle = getTabelleTenant(nomeSchema);
-
-    await db
-      .update(tabelle.aziende)
-      .set({ codiceAteco: nuovoCodiceAteco })
-      .where(eq(tabelle.aziende.id, aziendaId));
-    return { success: true };
-  } catch (error: any) {
-    console.error('[aggiornaCodiceAtecoAction] Errore:', error);
-    return {
-      success: false,
-      error: `Impossibile aggiornare il codice ATECO: ${error.message || error}`,
     };
   }
 }

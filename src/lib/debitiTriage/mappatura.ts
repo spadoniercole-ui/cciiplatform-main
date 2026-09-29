@@ -105,7 +105,7 @@ export function individuaIntestazione(aoa: unknown[][]): number {
 }
 
 /** L'anno scritto in un'intestazione di colonna, se c'è. */
-export function annoDaIntestazione(v: unknown): number | null {
+function annoDaIntestazione(v: unknown): number | null {
   const m = String(v ?? '').match(/\b((?:19|20)\d{2})\b/);
   return m ? Number(m[1]) : null;
 }

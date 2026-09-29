@@ -14,6 +14,8 @@
 //
 // Logica pura: niente database, niente React.
 
+import { saldoRigaDebitoEnte } from '@/lib/debitiEnte/tipoDebito';
+
 export type OrigineEvidenza = 'PROPOSTA' | 'POSIZIONE_ENTE' | 'VERA' | 'BILANCIO' | 'CALCOLO';
 
 /**
@@ -70,7 +72,7 @@ const PREFISSO: Record<OrigineEvidenza, string> = {
   CALCOLO: 'CAL',
 };
 
-export function idEvidenza(origine: OrigineEvidenza, chiave: string | number): string {
+function idEvidenza(origine: OrigineEvidenza, chiave: string | number): string {
   return `EV-${PREFISSO[origine]}-${chiave}`;
 }
 
@@ -128,7 +130,7 @@ export interface BilancioFascicolo {
   >;
 }
 
-export const ETICHETTA_VOCE_BILANCIO: Record<keyof BilancioFascicolo['voci'], string> = {
+const ETICHETTA_VOCE_BILANCIO: Record<keyof BilancioFascicolo['voci'], string> = {
   ricaviVendite: 'Ricavi delle vendite',
   valoreProduzione: 'Valore della produzione',
   costiProduzione: 'Costi della produzione',
@@ -246,7 +248,7 @@ export function componiFascicolo(input: {
         id: idEvidenza('POSIZIONE_ENTE', `${r.id}-saldo`),
         origine: 'CALCOLO',
         descrizione: `Posizione debitoria dell’ente — ${r.voce}: saldo residuo`,
-        importo: arrotonda(r.importo - r.importoVersato),
+        importo: arrotonda(saldoRigaDebitoEnte(r)),
         natura: r.tipo,
         dataRiferimento: r.data,
         stato: 'DERIVATO',
@@ -260,9 +262,7 @@ export function componiFascicolo(input: {
       id: idEvidenza('CALCOLO', 'ente-totale-saldo'),
       origine: 'CALCOLO',
       descrizione: 'Posizione debitoria dell’ente — totale dei saldi',
-      importo: arrotonda(
-        input.posizioneEnte.reduce((s, r) => s + r.importo - (r.importoVersato ?? 0), 0)
-      ),
+      importo: arrotonda(input.posizioneEnte.reduce((s, r) => s + saldoRigaDebitoEnte(r), 0)),
       stato: 'DERIVATO',
       derivatoDa: {
         ids: input.posizioneEnte.map((r) => idEvidenza('POSIZIONE_ENTE', r.id)),

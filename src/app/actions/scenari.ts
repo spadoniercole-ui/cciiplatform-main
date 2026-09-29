@@ -10,6 +10,7 @@
 // studio, da un professionista, dall'azienda stessa) — è l'input che
 // scatena l'intero ciclo di verifica.
 
+import { richiediAccessoAzienda, richiediAccessoScenario } from '@/lib/autorizzazione';
 import { assicuraTabelleScenari } from '@/db/provision';
 import { type TipoProposta, ORIGINI_PER_TIPO } from '@/lib/origineProposta';
 
@@ -43,6 +44,7 @@ export async function ottieniScenari(
   aziendaId: number
 ): Promise<RisultatoElencoScenari> {
   try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
     await assicuraTabelleScenari(nomeSchema);
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
@@ -95,6 +97,7 @@ export async function ottieniScenarioPerId(
   scenarioId: number
 ): Promise<RisultatoScenarioSingolo> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     await assicuraTabelleScenari(nomeSchema);
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
@@ -164,6 +167,10 @@ export async function creaScenarioAction(
   simulazioneAttiva: boolean = false
 ): Promise<RisultatoOperazioneScenario> {
   try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
     if (!nome.trim()) {
       return { success: false, error: 'Il nome dello scenario è obbligatorio.' };
     }
@@ -233,25 +240,6 @@ export async function creaScenarioAction(
   }
 }
 
-export async function aggiornaStatoScenarioAction(
-  nomeSchema: string,
-  scenarioId: number,
-  stato: StatoScenario
-): Promise<RisultatoOperazioneScenario> {
-  try {
-    const { db } = await import('@/db/client');
-    const { getTabelleTenant } = await import('@/db/schema');
-    const { eq } = await import('drizzle-orm');
-    const tabelle = getTabelleTenant(nomeSchema);
-
-    await db.update(tabelle.scenari).set({ stato }).where(eq(tabelle.scenari.id, scenarioId));
-    return { success: true, scenarioId };
-  } catch (error: any) {
-    console.error('[aggiornaStatoScenarioAction] Errore:', error);
-    return { success: false, error: `Impossibile aggiornare lo stato: ${error.message || error}` };
-  }
-}
-
 /**
  * Blocca o sblocca la scelta della riga "rilevante per l'ente" — senza
  * questo, il confronto con la Posizione Debitoria dell'Ente perderebbe
@@ -263,6 +251,10 @@ export async function impostaBloccoRigaRilevanteAction(
   bloccata: boolean
 ): Promise<RisultatoOperazioneScenario> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -291,6 +283,10 @@ export async function archiviaScenarioAction(
   archiviato: boolean
 ): Promise<RisultatoOperazioneScenario> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -321,6 +317,10 @@ export async function eliminaScenarioAction(
   scenarioId: number
 ): Promise<RisultatoOperazioneScenario> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -346,6 +346,11 @@ export async function bloccaScenarioAction(
   scenarioId: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Stessi requisiti del chiamante (generaRelazionePropostaAction).
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['relazione'],
+      livello: 'SCRITTURA',
+    });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -369,6 +374,7 @@ export async function verificaScenarioNonBloccato(
   nomeSchema: string,
   scenarioId: number
 ): Promise<string | null> {
+  await richiediAccessoScenario(nomeSchema, scenarioId);
   const risultato = await ottieniScenarioPerId(nomeSchema, scenarioId);
   if (!risultato.success || !risultato.scenario) return null; // scenario non trovato, altri controlli se ne occupano altrove
   if (risultato.scenario.bloccatoIl) {

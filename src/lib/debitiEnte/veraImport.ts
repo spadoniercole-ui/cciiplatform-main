@@ -17,7 +17,7 @@ import {
 import { leggiFoglioAoa, elencoFogli } from './tracciatoExcel';
 import { parseNumero } from './tracciatoImport';
 
-export const FOGLIO_VERA_DEFAULT = 'Dettaglio Verifica';
+const FOGLIO_VERA_DEFAULT = 'Dettaglio Verifica';
 
 function indiceImporto(intestazioni: string[]): number {
   const norm = intestazioni.map(normalizzaEtichetta);
@@ -150,7 +150,7 @@ export function chiaveCombinazione(natura: string, stato: string): string {
 }
 
 /** Trattamento suggerito per una combinazione mai vista, da confermare dall'operatore. */
-export function suggerisciTrattamento(stato: string, importo: number): TrattamentoVera {
+function suggerisciTrattamento(stato: string, importo: number): TrattamentoVera {
   if (Math.abs(importo) < 0.005) return 'potenziale'; // natura presente ma importo ignoto
   return stato.trim() === '' ? 'contabilizzato' : 'da_contabilizzare';
 }

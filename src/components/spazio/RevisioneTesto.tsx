@@ -26,7 +26,7 @@ const STILE_ESITO: Record<EsitoControllo, { etichetta: string; classe: string }>
   NON_VERIFICATO: { etichetta: 'Non verificato', classe: 'bg-slate-200 text-slate-600' },
 };
 
-export function useRevisione(
+function useRevisione(
   testo: string | null | undefined,
   tipo: TipoOutput,
   fascicolo?: Evidenza[] | null
@@ -86,7 +86,7 @@ export function stampaConCopertina(
   );
 }
 
-export const EVENTO_ESPORTAZIONE_BLOCCATA = 'ccii:esportazione-bloccata';
+const EVENTO_ESPORTAZIONE_BLOCCATA = 'ccii:esportazione-bloccata';
 export interface EventoEsportazioneBloccata {
   testo: string;
   tipo: TipoOutput;

@@ -10,24 +10,19 @@
 // revocabile da un logout reale.
 
 import { getTabelleTenant } from '@/db/schema';
+import { MINUTI_BLOCCO } from '@/lib/tentativiAccesso';
 import {
-  controllaTentativi,
-  registraFallimento,
-  azzeraTentativi,
-  MINUTI_BLOCCO,
-} from '@/lib/tentativiAccesso';
+  azzeraTentativiCondivisi,
+  controllaTentativiCondivisi,
+  messaggioBlocco,
+  registraFallimentoCondiviso,
+} from '@/lib/tentativiAccessoCondivisi';
 import { eq } from 'drizzle-orm';
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { pool } from '@/lib/db';
-import { avviaChallengeMfa } from '@/app/actions/mfa';
-
-export interface WorkspaceDinamico {
-  id: string;
-  name: string;
-  type: 'system' | 'tenant';
-}
+import { avviaChallengeMfa } from '@/lib/mfa/challenge';
 
 /** Confronto a tempo costante, per non rivelare via timing quanti caratteri della password sono corretti. */
 function confrontoSicuro(a: string, b: string): boolean {
@@ -182,17 +177,13 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
       // Limitazione dei tentativi: fino a oggi non ce n'era alcuna, e la
       // password del Superadmin e' una stringa statica su una porta pubblica.
       const chiaveTentativi = `SUPER:${SUPERADMIN_USER}`;
-      const controllo = controllaTentativi(chiaveTentativi);
+      const controllo = await controllaTentativiCondivisi(pool, chiaveTentativi);
       if (controllo.bloccato) {
-        const minuti = Math.ceil(controllo.secondiRimanenti / 60);
-        return {
-          success: false,
-          error: `Troppi tentativi falliti. Riprovare fra ${minuti} ${minuti === 1 ? 'minuto' : 'minuti'}.`,
-        };
+        return { success: false, error: messaggioBlocco(controllo.secondiRimanenti) };
       }
 
       if (!confrontoSicuro(password, SUPERADMIN_PASSWORD)) {
-        const esito = registraFallimento(chiaveTentativi);
+        const esito = await registraFallimentoCondiviso(pool, chiaveTentativi);
         // Il messaggio non cambia in base al fatto che l'utente esista: dire
         // "utente corretto, password errata" confermerebbe a chi prova che
         // il nome e' quello giusto.
@@ -203,7 +194,7 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
             : 'Parola chiave Superadmin errata.',
         };
       }
-      azzeraTentativi(chiaveTentativi);
+      await azzeraTentativiCondivisi(pool, chiaveTentativi);
 
       // Password OK: si passa all'MFA (TOTP + PIN). La sessione verrà creata
       // solo al completamento dei tre fattori.
@@ -241,6 +232,24 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
       // possibile tra account con la stessa email.
       const username = utente.toLowerCase();
 
+      // Limitazione dei tentativi anche per gli utenti di spazio (fino alla
+      // 0.115 valeva solo per il Superadmin). La chiave è lo username digitato,
+      // esista o no: il blocco non rivela quali account esistono.
+      const chiaveTentativi = `USER:${username}`;
+      const controllo = await controllaTentativiCondivisi(pool, chiaveTentativi);
+      if (controllo.bloccato) {
+        return { success: false, error: messaggioBlocco(controllo.secondiRimanenti) };
+      }
+      const credenzialiNonValide = async () => {
+        const esito = await registraFallimentoCondiviso(pool, chiaveTentativi);
+        return {
+          success: false,
+          error: esito.bloccato
+            ? `Troppi tentativi falliti. Accesso bloccato per ${MINUTI_BLOCCO} minuti.`
+            : 'Credenziali non valide.',
+        };
+      };
+
       const indiceAdminRisultato = await pool.query(
         'SELECT nome_schema, spazio_id, codice_spazio FROM admin_spazio_index WHERE username = $1',
         [username]
@@ -268,9 +277,10 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
         if (utenteDb.length > 0) {
           const passwordCorretta = await bcrypt.compare(password, utenteDb[0].passwordHash);
           if (!passwordCorretta) {
-            return { success: false, error: 'Credenziali non valide.' };
+            return await credenzialiNonValide();
           }
 
+          await azzeraTentativiCondivisi(pool, chiaveTentativi);
           const { next } = await avviaChallengeMfa({
             identitaKey: `USER:${username}`,
             ruolo: 'USER',
@@ -304,7 +314,7 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
           : await cercaERiparaIndiceUtente(username);
 
       if (!schemaUtente) {
-        return { success: false, error: 'Credenziali non valide.' };
+        return await credenzialiNonValide();
       }
 
       const { db } = await import('@/db/client');
@@ -317,7 +327,7 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
         .limit(1);
 
       if (utenteDb.length === 0) {
-        return { success: false, error: 'Credenziali non valide.' };
+        return await credenzialiNonValide();
       }
       if (!utenteDb[0].attivo) {
         return { success: false, error: 'Utente disabilitato: contatta il tuo Admin di Spazio.' };
@@ -325,9 +335,10 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
 
       const passwordCorretta = await bcrypt.compare(password, utenteDb[0].passwordHash);
       if (!passwordCorretta) {
-        return { success: false, error: 'Credenziali non valide.' };
+        return await credenzialiNonValide();
       }
 
+      await azzeraTentativiCondivisi(pool, chiaveTentativi);
       const { next } = await avviaChallengeMfa({
         identitaKey: `USER:${username}`,
         ruolo: 'USER',
@@ -380,8 +391,4 @@ export async function eseguiLogout() {
     }
     return { success: true };
   }
-}
-
-export async function ottieniListaWorkspace(): Promise<WorkspaceDinamico[]> {
-  return [{ id: 'CENTRAL_CONSOLE', name: '👑 CONSOLE CENTRALE superadmin', type: 'system' }];
 }

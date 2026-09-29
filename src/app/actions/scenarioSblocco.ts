@@ -7,6 +7,7 @@
 // prima, specialmente se già mostrato o consegnato a un ente
 // creditore.
 
+import { richiediAccessoScenario } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 
 function validaSchema(nomeSchema: string): boolean {
@@ -30,11 +31,11 @@ export interface RisultatoOperazioneSblocco {
   error?: string;
 }
 
-/** Solo Admin di Spazio, mai un Operatore — verificato dal chiamante
- * (la Server Action non ha di per sé accesso al contesto di sessione,
- * il controllo di ruolo va fatto nel componente/pagina prima di
- * chiamarla). Il motivo è obbligatorio: uno sblocco senza spiegazione
- * non aiuta nessuno che riguardi lo scenario più avanti. */
+/** Solo Admin di Spazio, mai un Operatore — verificato qui dalla guardia
+ * (soloAdmin). Il parametro `sbloccatoDa` è usato solo dal Superadmin in
+ * ispezione, che non ha un'email di sessione. Il motivo è obbligatorio:
+ * uno sblocco senza spiegazione non aiuta nessuno che riguardi lo
+ * scenario più avanti. */
 export async function sbloccaScenarioAction(
   nomeSchema: string,
   scenarioId: number,
@@ -42,14 +43,18 @@ export async function sbloccaScenarioAction(
   sbloccatoDa: string | null
 ): Promise<RisultatoOperazioneSblocco> {
   try {
+    const contesto = await richiediAccessoScenario(nomeSchema, scenarioId, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!motivo.trim()) {
       return { success: false, error: 'Indica un motivo per lo sblocco.' };
     }
+    // Chi sblocca viene dalla sessione, non dal browser: la traccia non è
+    // falsificabile. Solo il Superadmin in ispezione non ha un'email.
+    const autore = contesto.email ?? (contesto.modalita === 'SALVAGENTE' ? sbloccatoDa : null);
     await pool.query(
       `INSERT INTO "${nomeSchema}".scenario_sblocchi (scenario_id, motivo, sbloccato_da)
        VALUES ($1, $2, $3)`,
-      [scenarioId, motivo.trim(), sbloccatoDa]
+      [scenarioId, motivo.trim(), autore]
     );
     await pool.query(`UPDATE "${nomeSchema}".scenari SET bloccato_il = NULL WHERE id = $1`, [
       scenarioId,
@@ -66,6 +71,7 @@ export async function ottieniStoricoSblocchi(
   scenarioId: number
 ): Promise<{ success: boolean; sblocchi: SbloccoScenario[]; error?: string }> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) {
       return { success: false, sblocchi: [], error: 'Nome schema non valido.' };
     }
@@ -101,6 +107,11 @@ export async function salvaVersioneRelazioneAction(
   testo: string
 ): Promise<{ success: boolean; numeroVersione?: number; error?: string }> {
   try {
+    // Stessi requisiti del chiamante (generaRelazionePropostaAction).
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['relazione'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const contatoreRis = await pool.query(
       `SELECT COALESCE(MAX(numero_versione), 0) + 1 AS prossimo
@@ -128,6 +139,7 @@ export async function ottieniStoricoRelazioni(
   scenarioId: number
 ): Promise<{ success: boolean; versioni: VersioneRelazione[]; error?: string }> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) {
       return { success: false, versioni: [], error: 'Nome schema non valido.' };
     }

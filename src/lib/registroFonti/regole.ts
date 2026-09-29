@@ -25,7 +25,7 @@ export interface EsitoRegola {
 // ---------------------------------------------------------------------------
 
 /** Dal 28/09/2024 si applica l'art. 63 sostituito dal D.Lgs. 136/2024. */
-export const DECORRENZA_CORRETTIVO_TER = '2024-09-28';
+const DECORRENZA_CORRETTIVO_TER = '2024-09-28';
 
 export interface ParametriCramDown extends EsitoRegola {
   percentualeMinima?: number;

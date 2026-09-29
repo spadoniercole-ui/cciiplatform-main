@@ -16,6 +16,7 @@
 
 import { pool } from '@/lib/db';
 import { seedXbrlTagMappings } from '@/db/seedXbrlTagMappings';
+import { PASSWORD_DA_CAMBIARE } from '@/lib/passwordTemporanea';
 
 let licenzeInizializzate = false;
 let spaziInizializzati = false;
@@ -164,6 +165,11 @@ export async function assicuraTabelleMfa(): Promise<void> {
   // lista si accorcia a ogni passo superato.
   await eseguiIstruzione(
     `ALTER TABLE public.mfa_challenge ADD COLUMN IF NOT EXISTS fattori_totali INTEGER`
+  );
+  // Codici TOTP / PIN errati sulla challenge: oltre il limite la challenge
+  // viene eliminata (vedi actions/mfa.ts), niente tentativi illimitati.
+  await eseguiIstruzione(
+    `ALTER TABLE public.mfa_challenge ADD COLUMN IF NOT EXISTS tentativi_falliti INTEGER NOT NULL DEFAULT 0`
   );
 }
 
@@ -328,6 +334,7 @@ const schemiUsernameOk = new Set<string>();
  */
 export async function backfillUsernameSchema(nomeSchema: string): Promise<void> {
   if (!nomeSchema || !/^[a-z0-9_]+$/.test(nomeSchema)) return;
+  await oscuraPasswordTemporanee(nomeSchema);
   if (schemiUsernameOk.has(nomeSchema)) return;
 
   try {
@@ -370,6 +377,41 @@ export async function backfillUsernameSchema(nomeSchema: string): Promise<void> 
   } catch (error) {
     // Non blocca mai la lettura: si riproverà alla prossima invocazione.
     console.error(`[backfillUsernameSchema] Errore su ${nomeSchema} (non bloccante):`, error);
+  }
+}
+
+const schemiPasswordOscurate = new Set<string>();
+
+/**
+ * Fino alla 0.115 `password_temporanea` conteneva la password temporanea IN
+ * CHIARO (leggibile da chi accede al database o a un backup). Qui la si
+ * sostituisce con il marcatore PASSWORD_DA_CAMBIARE: il significato ("deve
+ * cambiarla al primo accesso") resta identico, la password resta solo come
+ * hash in `password_hash`. Idempotente, memoizzato per processo; invocato da
+ * backfillUsernameSchema, cioè su ogni percorso che legge gli utenti di uno
+ * schema, e per tutti gli schemi al primo login (backfillUsernameGlobale).
+ */
+export async function oscuraPasswordTemporanee(nomeSchema: string): Promise<void> {
+  if (!nomeSchema || !/^[a-z0-9_]+$/.test(nomeSchema)) return;
+  if (schemiPasswordOscurate.has(nomeSchema)) return;
+  try {
+    for (const tabella of ['admin_workspace', 'utenti_spazio']) {
+      const esiste = await pool.query('SELECT to_regclass($1) AS t', [
+        `"${nomeSchema}".${tabella}`,
+      ]);
+      if (!esiste.rows[0]?.t) continue;
+      await pool.query(
+        `UPDATE "${nomeSchema}".${tabella} SET password_temporanea = $1
+          WHERE password_temporanea IS NOT NULL
+            AND btrim(password_temporanea) <> ''
+            AND password_temporanea <> $1`,
+        [PASSWORD_DA_CAMBIARE]
+      );
+    }
+    schemiPasswordOscurate.add(nomeSchema);
+  } catch (error) {
+    // Non blocca mai l'accesso: si riproverà alla prossima invocazione.
+    console.error(`[oscuraPasswordTemporanee] Errore su ${nomeSchema} (non bloccante):`, error);
   }
 }
 

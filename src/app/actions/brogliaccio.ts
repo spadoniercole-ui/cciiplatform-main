@@ -6,6 +6,7 @@
 // piattaforma e li scrive in un testo — nessun dato nuovo, solo
 // aggregazione.
 
+import { richiediAccessoScenario } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabellaBrogliaccio } from '@/db/provision';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
@@ -86,6 +87,7 @@ export async function ottieniBrogliaccio(
   scenarioId: number
 ): Promise<RisultatoBrogliaccio> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) {
       return { success: false, stato: STATO_VUOTO, error: 'Nome schema non valido.' };
     }
@@ -114,6 +116,10 @@ export async function generaLivello1BrogliaccioAction(
   scenarioId: number
 ): Promise<RisultatoBrogliaccio> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) {
       return { success: false, stato: STATO_VUOTO, error: 'Nome schema non valido.' };
     }
@@ -247,6 +253,10 @@ export async function impostaVarcoBrogliaccioAction(
   richiesto: boolean
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaBrogliaccio(nomeSchema);
     const colonna = livello === 2 ? 'livello2_richiesto' : 'livello3_richiesto';
@@ -271,6 +281,10 @@ export async function generaLivello2BrogliaccioAction(
   scenarioId: number
 ): Promise<RisultatoBrogliaccio> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) {
       return { success: false, stato: STATO_VUOTO, error: 'Nome schema non valido.' };
     }
@@ -344,6 +358,10 @@ export async function generaLivello3BrogliaccioAction(
   scenarioId: number
 ): Promise<RisultatoBrogliaccio> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) {
       return { success: false, stato: STATO_VUOTO, error: 'Nome schema non valido.' };
     }

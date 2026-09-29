@@ -10,6 +10,11 @@
 import { pool } from '@/lib/db';
 import { assicuraTabellaXbrlAzienda } from '@/db/provision';
 import { costruisciBundleIndici } from '@/lib/xbrl/indici';
+import {
+  richiediAccessoAzienda,
+  richiediAccessoSchema,
+  verificaRigaConsentita,
+} from '@/lib/autorizzazione';
 import type {
   AnalisiXbrlResult,
   DatiFinanziariPeriodo,
@@ -46,6 +51,7 @@ export async function ottieniStoricoXbrlAzienda(
   aziendaId: number
 ): Promise<RisultatoStoricoXbrlAzienda> {
   try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
     if (!validaSchema(nomeSchema)) {
       return { success: false, storico: [], error: 'Nome schema non valido.' };
     }
@@ -105,6 +111,7 @@ export async function salvaAnalisiXbrlAziendaAction(
   documentoId: number | null = null
 ): Promise<RisultatoOperazioneXbrlAzienda> {
   try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId, { modulo: ['xbrl'], livello: 'SCRITTURA' });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
 
     await assicuraTabellaXbrlAzienda(nomeSchema);
@@ -210,6 +217,11 @@ export async function eliminaAnalisiXbrlAziendaAction(
   id: number
 ): Promise<RisultatoOperazioneXbrlAzienda> {
   try {
+    const contesto = await richiediAccessoSchema(nomeSchema, {
+      modulo: ['xbrl'],
+      livello: 'SCRITTURA',
+    });
+    await verificaRigaConsentita(contesto, 'xbrl_storico_azienda', id);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(`DELETE FROM "${nomeSchema}".xbrl_storico_azienda WHERE id = $1`, [id]);
     return { success: true };

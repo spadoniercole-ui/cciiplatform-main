@@ -12,13 +12,18 @@
 // infrastrutturale di 4,5MB sul corpo della richiesta — lo stesso
 // limite che l'upload diretto era nato per aggirare. Accettabile per i
 // documenti di questo modulo (visure camerali, PDF allegati alle
-// proposte), quasi sempre ben sotto quella soglia.
+// proposte), quasi sempre ben sotto quella soglia. Con l'archivio su disco
+// (portable, edizione server) quel tetto non c'è: vedi limiteUploadByte.
 
 import { put } from '@/lib/blobStore';
 import { NextResponse } from 'next/server';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
+import { prefissoFileSpazio } from '@/lib/autorizzazione';
+import { limiteUploadByte } from '@/lib/edizioneServer';
 
-const DIMENSIONE_MASSIMA = 4 * 1024 * 1024; // 4MB, prudente sotto il tetto reale di Vercel (4,5MB)
+// 4MB su Vercel (prudente sotto il tetto reale di 4,5MB), 20MB su disco locale.
+const DIMENSIONE_MASSIMA = limiteUploadByte();
+const LIMITE_MB = DIMENSIONE_MASSIMA / 1024 / 1024;
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -48,13 +53,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (file.size > DIMENSIONE_MASSIMA) {
       return NextResponse.json(
         {
-          error: `File troppo grande (${(file.size / 1024 / 1024).toFixed(1)}MB) — limite temporaneo di 4MB dovuto a un problema noto di Vercel sull'upload diretto dal browser.`,
+          error:
+            LIMITE_MB < 20
+              ? `File troppo grande (${(file.size / 1024 / 1024).toFixed(1)}MB) — limite temporaneo di 4MB dovuto a un problema noto di Vercel sull'upload diretto dal browser.`
+              : `File troppo grande (${(file.size / 1024 / 1024).toFixed(1)}MB) — il limite è di ${LIMITE_MB}MB.`,
         },
         { status: 413 }
       );
     }
 
-    const blob = await put(file.name, file, {
+    // Il prefisso lega il file allo spazio: le azioni che lo leggono o lo
+    // eliminano verificano che appartenga allo spazio del chiamante.
+    const blob = await put(`${prefissoFileSpazio(contesto.spazioId)}${file.name}`, file, {
       access: 'private',
       addRandomSuffix: true,
     });

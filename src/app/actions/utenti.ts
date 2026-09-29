@@ -7,10 +7,14 @@
 // (admin_workspace): questi utenti non hanno ancora un proprio login reale
 // — è il prossimo passo naturale una volta che questa gestione esiste.
 
+import { PASSWORD_DA_CAMBIARE } from '@/lib/passwordTemporanea';
+import { messaggioErrore, richiediAccessoSchema } from '@/lib/autorizzazione';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { assicuraTabelleUtenti } from '@/db/provision';
 import { generaUsernameUnivoco, usernameEsisteGlobale } from '@/lib/generaUsername';
+import { chiudiSessioniUtente } from '@/lib/sessione';
+import { pool } from '@/lib/db';
 
 export type TipologiaUtente = 'OPERATIVO' | 'CONSULTATORE';
 
@@ -57,6 +61,7 @@ function generaPasswordTemporanea(): string {
 
 export async function ottieniUtentiSpazio(nomeSchema: string): Promise<RisultatoElencoUtenti> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     await assicuraTabelleUtenti(nomeSchema);
     // Garantisce/valorizza lo username per gli operatori creati prima della
     // 0.109 (idempotente e memoizzato per processo).
@@ -97,6 +102,7 @@ export async function creaUtenteSpazioAction(
   dati: DatiUtente
 ): Promise<RisultatoOperazioneUtente> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const nome = dati.nome.trim();
     const cognome = dati.cognome.trim();
     const email = (dati.email || '').trim().toLowerCase();
@@ -141,7 +147,7 @@ export async function creaUtenteSpazioAction(
         email,
         tipologia: dati.tipologia,
         passwordHash,
-        passwordTemporanea,
+        passwordTemporanea: PASSWORD_DA_CAMBIARE,
       })
       .returning({ id: tabelle.utenti_spazio.id });
 
@@ -195,6 +201,7 @@ export async function modificaUtenteSpazioAction(
   dati: DatiUtente
 ): Promise<RisultatoOperazioneUtente> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const nome = dati.nome.trim();
     const cognome = dati.cognome.trim();
     const email = dati.email.trim().toLowerCase();
@@ -256,13 +263,32 @@ export async function disabilitaUtenteSpazioAction(
   nomeSchema: string,
   id: number
 ): Promise<RisultatoOperazioneUtente> {
-  return impostaStatoUtente(nomeSchema, id, false);
+  try {
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    const esito = await impostaStatoUtente(nomeSchema, id, false);
+    if (esito.success) {
+      // Un utente disabilitato non deve restare collegato con una sessione già aperta.
+      const utente = await pool.query(
+        `SELECT username, email FROM "${contesto.nomeSchema}".utenti_spazio WHERE id = $1`,
+        [id]
+      );
+      if (utente.rows[0]) await chiudiSessioniUtente(contesto.spazioId, utente.rows[0]);
+    }
+    return esito;
+  } catch (error) {
+    return { success: false, error: messaggioErrore(error, 'Operazione non riuscita.') };
+  }
 }
 
 export async function riattivaUtenteSpazioAction(
   nomeSchema: string,
   id: number
 ): Promise<RisultatoOperazioneUtente> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+  } catch (error) {
+    return { success: false, error: messaggioErrore(error, 'Operazione non autorizzata.') };
+  }
   return impostaStatoUtente(nomeSchema, id, true);
 }
 
@@ -272,6 +298,7 @@ export async function rigeneraPasswordUtenteAction(
   id: number
 ): Promise<RisultatoOperazioneUtente> {
   try {
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -282,13 +309,18 @@ export async function rigeneraPasswordUtenteAction(
 
     const risultato = await db
       .update(tabelle.utenti_spazio)
-      .set({ passwordHash, passwordTemporanea })
+      .set({ passwordHash, passwordTemporanea: PASSWORD_DA_CAMBIARE })
       .where(eq(tabelle.utenti_spazio.id, id))
-      .returning({ id: tabelle.utenti_spazio.id });
+      .returning({
+        id: tabelle.utenti_spazio.id,
+        username: tabelle.utenti_spazio.username,
+        email: tabelle.utenti_spazio.email,
+      });
 
     if (risultato.length === 0) {
       return { success: false, error: 'Utente non trovato.' };
     }
+    await chiudiSessioniUtente(contesto.spazioId, risultato[0]);
 
     return { success: true, passwordTemporanea };
   } catch (error: any) {

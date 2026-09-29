@@ -16,6 +16,7 @@
 // Più fino a 3 campi extra propri, puramente informativi, per un totale
 // di 10 assieme ai 7 di base.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabelleScenari } from '@/db/provision';
 import type { PesoDomanda } from '@/lib/checklist/ministeriale';
@@ -66,6 +67,7 @@ export async function ottieniColonneChecklist(
     pesoDefault: 'RILEVANTE' as PesoDomanda,
   };
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { ...vuoto, error: 'Nome schema non valido.' };
     }
@@ -128,6 +130,7 @@ export async function aggiornaColonnaChecklistAction(
   dati: { etichetta?: string; attivo?: boolean }
 ): Promise<RisultatoOperazioneColonna> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     if (CAMPI_SEMPRE_ATTIVI.includes(campo) && dati.attivo === false) {
@@ -188,6 +191,7 @@ export async function aggiornaPesoDefaultChecklistAction(
   pesoDefault: PesoDomanda
 ): Promise<RisultatoOperazioneColonna> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleScenari(nomeSchema);
@@ -210,6 +214,7 @@ export async function aggiungiCampoExtraChecklistAction(
   etichetta: string
 ): Promise<RisultatoOperazioneColonna> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     if (!etichetta.trim()) return { success: false, error: "L'etichetta non può essere vuota." };
@@ -239,6 +244,7 @@ export async function eliminaCampoExtraChecklistAction(
   id: number
 ): Promise<RisultatoOperazioneColonna> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleScenari(nomeSchema);

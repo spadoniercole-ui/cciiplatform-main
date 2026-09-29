@@ -6,6 +6,7 @@
 // calcolato lato client dai due elenchi.
 
 import { pool } from '@/lib/db';
+import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
 import { assicuraTabelleVera } from '@/db/provision';
 import {
   chiaveCombinazione,
@@ -28,6 +29,7 @@ export async function ottieniMappaturaTitoliVera(
   nomeSchema: string
 ): Promise<RisultatoMappaturaTitoliVera> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema))
       return { success: false, mappatura: {}, error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
@@ -56,6 +58,7 @@ export async function salvaMappaturaTitoliVeraAction(
   voci: { norm: string; label: string; categoria: string }[]
 ): Promise<RisultatoOperazioneVera> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
     for (const v of voci) {
@@ -89,6 +92,7 @@ export interface RisultatoTitoliVera {
 /** Elenco completo delle sezioni VERA riconosciute (titolo + categoria) — il "catalogo" su cui agiscono Correggi/Dimentica. */
 export async function ottieniTitoliVera(nomeSchema: string): Promise<RisultatoTitoliVera> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema))
       return { success: false, titoli: [], error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
@@ -132,6 +136,7 @@ export async function aggiornaTitoloVeraAction(
   categoria: string
 ): Promise<RisultatoCorrezioneVera> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!categoria) return { success: false, error: 'Scegli una categoria.' };
     await assicuraTabelleVera(nomeSchema);
@@ -166,6 +171,7 @@ export async function dimenticaTitoloVeraAction(
   aziendaId: number
 ): Promise<RisultatoOperazioneVera> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
     const ris = await pool.query(
@@ -202,6 +208,7 @@ export async function ottieniMappaturaTrattamentiVera(
   nomeSchema: string
 ): Promise<RisultatoMappaturaTrattamenti> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema))
       return { success: false, mappatura: {}, error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
@@ -234,6 +241,7 @@ export interface RisultatoTrattamenti {
 
 export async function ottieniTrattamentiVera(nomeSchema: string): Promise<RisultatoTrattamenti> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema))
       return { success: false, trattamenti: [], error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
@@ -265,6 +273,7 @@ export async function salvaTrattamentiVeraAction(
   voci: { chiave: string; natura: string; stato: string; trattamento: TrattamentoVera }[]
 ): Promise<RisultatoOperazioneVera> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
     for (const v of voci) {
@@ -299,6 +308,7 @@ export async function aggiornaTrattamentoVeraAction(
   trattamento: TrattamentoVera
 ): Promise<RisultatoCorrezioneTrattamento> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
     await pool.query(
@@ -326,6 +336,7 @@ export async function dimenticaTrattamentoVeraAction(
   aziendaId: number
 ): Promise<RisultatoOperazioneVera> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
     await pool.query(
@@ -358,6 +369,7 @@ export async function ottieniDebitiVera(
   aziendaId: number
 ): Promise<RisultatoElencoVera> {
   try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
     if (!validaSchema(nomeSchema))
       return { success: false, righe: [], error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
@@ -396,6 +408,7 @@ export async function sostituisciDebitiVeraAction(
   documentoId: number | null = null
 ): Promise<RisultatoOperazioneVera> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
     await pool.query(`DELETE FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1`, [aziendaId]);

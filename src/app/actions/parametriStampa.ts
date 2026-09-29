@@ -2,6 +2,7 @@
 
 // Parametri di stampa dell'ente: margini, intestazione, pie' di pagina, logo.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabelleParametriSpazio } from '@/db/provision';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
@@ -37,6 +38,7 @@ export async function ottieniParametriStampaAction(nomeSchema: string): Promise<
   error?: string;
 }> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, parametri: daRiga(undefined), error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);

@@ -10,17 +10,21 @@
 // stato caricato alcun bilancio XBRL, la relazione lo dichiara
 // esplicitamente invece di inventare un quadro quantitativo.
 
+import {
+  richiediAccessoSchema,
+  richiediAccessoScenario,
+  verificaRigaConsentita,
+} from '@/lib/autorizzazione';
 import { perimetroPerPrompt } from '@/lib/revisore/perimetro';
 import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneServer';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { pool } from '@/lib/db';
-import { assicuraTabellaProposta } from '@/db/provision';
+import { assicuraTabellaProposta, assicuraTabellaSimulazioneRicevente } from '@/db/provision';
 import {
   ottieniLimitiRicevibilita,
   ottieniLimitiRicevibilitaRango,
-  type LimiteRicevibilita,
-  type LimiteRicevibilitaRango,
 } from '@/app/actions/parametriSpazio';
 import { ottieniRisposteChecklist } from '@/app/actions/checklist';
 import { ottieniModelliChecklist } from '@/app/actions/checklistModelli';
@@ -37,7 +41,16 @@ import { ottieniConfrontoLiquidatorio } from '@/app/actions/confrontoLiquidatori
 import { salvaVersioneRelazioneAction } from '@/app/actions/scenarioSblocco';
 import { ottieniIndiciAzienda } from '@/app/actions/aziendaConfig';
 import type { RangoLegale } from '@/lib/proposta/rangoLegale';
-import { raggruppaPerRango, etichettaRango } from '@/lib/proposta/rangoLegale';
+import { raggruppaPerRango } from '@/lib/proposta/rangoLegale';
+import {
+  verificaRicevibilitaEnte,
+  verificaRicevibilitaRighe,
+  type EsitoRicevibilita,
+  type EsitoRigaProposta,
+  type EstrazioneProposta,
+  type ModalitaProposta,
+  type RigaProposta,
+} from '@/lib/proposta/ricevibilita';
 import { CHECKLIST_MINISTERIALE } from '@/lib/checklist/ministeriale';
 import { calcolaQuadroQualitativo } from '@/lib/checklist/scoring';
 import { calcolaTrend, type PuntoStorico } from '@/lib/xbrl/trend';
@@ -48,20 +61,7 @@ function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
 }
 
-export type ModalitaProposta = 'UNICA_SOLUZIONE' | 'RATEALE';
-
-export interface RigaProposta {
-  id: number;
-  scenarioId: number;
-  categoriaCreditore: string;
-  importoDovuto: number;
-  percentualeOfferta: number;
-  modalita: ModalitaProposta;
-  numeroRate: number | null;
-  note: string | null;
-  rangoLegale: RangoLegale | null;
-  rilevantePerEnte: boolean;
-}
+export type { ModalitaProposta, RigaProposta } from '@/lib/proposta/ricevibilita';
 
 export interface RisultatoElencoProposta {
   success: boolean;
@@ -74,6 +74,7 @@ export async function ottieniPropostaScenario(
   scenarioId: number
 ): Promise<RisultatoElencoProposta> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema))
       return { success: false, righe: [], error: 'Nome schema non valido.' };
     await assicuraTabellaProposta(nomeSchema);
@@ -132,6 +133,10 @@ export async function aggiungiRigaPropostaAction(
   dati: DatiRigaProposta
 ): Promise<RisultatoOperazioneProposta> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const messaggioBloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
     if (messaggioBloccato) return { success: false, error: messaggioBloccato };
@@ -196,6 +201,11 @@ export async function eliminaRigaPropostaAction(
   id: number
 ): Promise<RisultatoOperazioneProposta> {
   try {
+    const contesto = await richiediAccessoSchema(nomeSchema, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
+    await verificaRigaConsentita(contesto, 'proposta_creditori', id);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const rigaRis = await pool.query(
       `SELECT scenario_id FROM "${nomeSchema}".proposta_creditori WHERE id = $1`,
@@ -228,6 +238,10 @@ export async function eliminaTuttaPropostaAction(
   scenarioId: number
 ): Promise<RisultatoOperazioneProposta> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const messaggioBloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
     if (messaggioBloccato) return { success: false, error: messaggioBloccato };
@@ -258,6 +272,11 @@ export async function impostaRigaRilevanteAction(
   rilevante: boolean
 ): Promise<RisultatoOperazioneProposta> {
   try {
+    const contesto = await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
+    await verificaRigaConsentita(contesto, 'proposta_creditori', rigaId);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
 
     if (rilevante) {
@@ -291,6 +310,11 @@ export async function modificaRigaPropostaAction(
   dati: DatiRigaProposta
 ): Promise<RisultatoOperazioneProposta> {
   try {
+    const contesto = await richiediAccessoSchema(nomeSchema, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
+    await verificaRigaConsentita(contesto, 'proposta_creditori', id);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const rigaRis = await pool.query(
       `SELECT scenario_id FROM "${nomeSchema}".proposta_creditori WHERE id = $1`,
@@ -339,17 +363,7 @@ export async function modificaRigaPropostaAction(
 // "Generale" se la categoria non ha un limite specifico).
 // ============================================================================
 
-export interface EsitoRigaProposta extends RigaProposta {
-  ricevibile: boolean;
-  motivazione: string;
-}
-
-export interface EsitoRicevibilita {
-  righe: EsitoRigaProposta[];
-  complessivamenteRicevibile: boolean;
-  /** Solo percorso Ricevente: false quando non c'è ancora nessuna estrazione dal documento — "non ricevibile" per assenza di dati è diverso da "non ricevibile" perché l'importo è sotto soglia, e vanno mostrati in modo diverso all'utente. */
-  datiDisponibili?: boolean;
-}
+export type { EsitoRigaProposta, EsitoRicevibilita } from '@/lib/proposta/ricevibilita';
 
 export interface RisultatoVerificaRicevibilita {
   success: boolean;
@@ -363,6 +377,7 @@ export async function verificaRicevibilitaProposta(
   tipoSpazio?: 'ENTE' | 'NON_ENTE'
 ): Promise<RisultatoVerificaRicevibilita> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     const [propostaRisultato, limitiRisultato, limitiRangoRisultato] = await Promise.all([
       ottieniPropostaScenario(nomeSchema, scenarioId),
       ottieniLimitiRicevibilita(nomeSchema, tipoSpazio),
@@ -386,6 +401,8 @@ export async function verificaRicevibilitaProposta(
       // Lettura diretta invece di importare da simulazioneRicevente.ts:
       // quel file importa già da qui (ottieniPropostaScenario), un
       // import nell'altro senso creerebbe un ciclo.
+      // La tabella può non esistere ancora se lo spazio non ha mai usato la simulazione.
+      await assicuraTabellaSimulazioneRicevente(nomeSchema);
       const estrazioneRis = await pool.query(
         `SELECT importo_dovuto_estratto, percentuale_offerta_estratta, modalita_estratta,
                 numero_rate_estratto, estrazione_riuscita, motivo_estrazione_mancata
@@ -393,7 +410,7 @@ export async function verificaRicevibilitaProposta(
         [scenarioId]
       );
       const rigaDb = estrazioneRis.rows[0];
-      const estrazione = rigaDb
+      const estrazione: EstrazioneProposta | null = rigaDb
         ? {
             estrazioneRiuscita: rigaDb.estrazione_riuscita ?? false,
             importoDovuto:
@@ -410,226 +427,21 @@ export async function verificaRicevibilitaProposta(
           }
         : null;
 
-      const rigaSintetica: EsitoRigaProposta = {
-        id: 0,
-        scenarioId,
-        categoriaCreditore: 'Proposta di cram down (estratta dal documento)',
-        importoDovuto: estrazione?.importoDovuto ?? 0,
-        percentualeOfferta: estrazione?.percentualeOfferta ?? 0,
-        modalita: (estrazione?.modalita as ModalitaProposta) ?? 'UNICA_SOLUZIONE',
-        numeroRate: estrazione?.numeroRate ?? null,
-        note: null,
-        rangoLegale: null,
-        rilevantePerEnte: true,
-        ricevibile: false,
-        motivazione: '',
-      };
-
-      if (!estrazione || estrazione.importoDovuto === null) {
-        return {
-          success: true,
-          esito: {
-            righe: [
-              {
-                ...rigaSintetica,
-                ricevibile: false,
-                motivazione:
-                  'Carica ed analizza la proposta di cram down prima di poter eseguire il riscontro con i parametri dell’ente.',
-              },
-            ],
-            complessivamenteRicevibile: false,
-            datiDisponibili: false,
-          },
-        };
-      }
-      if (!estrazione.estrazioneRiuscita) {
-        return {
-          success: true,
-          esito: {
-            righe: [
-              {
-                ...rigaSintetica,
-                ricevibile: false,
-                motivazione:
-                  estrazione.motivoMancata ||
-                  "L'AI non è riuscita a estrarre un importo chiaro dal documento — verifica manualmente.",
-              },
-            ],
-            complessivamenteRicevibile: false,
-            datiDisponibili: false,
-          },
-        };
-      }
-      if (!limiteEnte) {
-        return {
-          success: true,
-          esito: {
-            righe: [
-              {
-                ...rigaSintetica,
-                ricevibile: true,
-                motivazione: 'Nessuna soglia configurata per questo ente in Parametri di Spazio.',
-              },
-            ],
-            complessivamenteRicevibile: true,
-            datiDisponibili: true,
-          },
-        };
-      }
-
-      const importoOfferto = (rigaSintetica.importoDovuto * rigaSintetica.percentualeOfferta) / 100;
-      const motivi: string[] = [];
-      if (
-        limiteEnte.valoreLiquidazioneStimato !== null &&
-        limiteEnte.valoreLiquidazioneStimato > 0
-      ) {
-        if (importoOfferto < limiteEnte.valoreLiquidazioneStimato) {
-          motivi.push(
-            `offerta € ${importoOfferto.toLocaleString('it-IT')} inferiore al valore di liquidazione stimato (€ ${limiteEnte.valoreLiquidazioneStimato.toLocaleString('it-IT')}) — otterreste di più in liquidazione giudiziale`
-          );
-        }
-      }
-      if (rigaSintetica.percentualeOfferta < limiteEnte.percentualeMinima) {
-        motivi.push(
-          `offerta ${rigaSintetica.percentualeOfferta}% sotto il minimo richiesto (${limiteEnte.percentualeMinima}%)`
-        );
-      }
-      if (rigaSintetica.modalita === 'UNICA_SOLUZIONE' && !limiteEnte.unicaSoluzioneAmmessa) {
-        motivi.push("modalità 'unica soluzione' non ammessa");
-      }
-      if (rigaSintetica.modalita === 'RATEALE' && !limiteEnte.rateizzazioneAmmessa) {
-        motivi.push("modalità 'rateale' non ammessa");
-      }
-      const motivazionePositiva =
-        limiteEnte.valoreLiquidazioneStimato !== null && limiteEnte.valoreLiquidazioneStimato > 0
-          ? `Offerta € ${importoOfferto.toLocaleString('it-IT')} ≥ valore di liquidazione stimato € ${limiteEnte.valoreLiquidazioneStimato.toLocaleString('it-IT')}.`
-          : limiteEnte.percentualeMinima > 0
-            ? `Offerta ${rigaSintetica.percentualeOfferta}% ≥ percentuale minima richiesta ${limiteEnte.percentualeMinima}%.`
-            : 'Nessuna soglia configurata per questo ente — conforme per assenza di un vincolo, non per un controllo superato. Configura la soglia in Parametri di Spazio.';
-      const rigaFinale: EsitoRigaProposta = {
-        ...rigaSintetica,
-        ricevibile: motivi.length === 0,
-        motivazione: motivi.length === 0 ? motivazionePositiva : motivi.join('; '),
-      };
       return {
         success: true,
-        esito: {
-          righe: [rigaFinale],
-          complessivamenteRicevibile: rigaFinale.ricevibile,
-          datiDisponibili: true,
-        },
+        esito: verificaRicevibilitaEnte(scenarioId, estrazione, limiteEnte),
       };
     }
 
-    const limitiPerCategoria = new Map(
-      limitiRisultato.limiti.map((l) => [l.categoriaCreditore, l])
-    );
-    // Un limite può avere più nomi alternativi (INPS → "Enti
-    // previdenziali", "Ente previdenziale"...) — mappa ogni alias,
-    // normalizzato in minuscolo per un confronto case-insensitive, al
-    // limite a cui appartiene.
-    const limitiPerAlias = new Map<string, LimiteRicevibilita>();
-    for (const l of limitiRisultato.limiti) {
-      for (const a of l.alias || []) {
-        if (a.trim()) limitiPerAlias.set(a.trim().toLowerCase(), l);
-      }
-    }
-    const limitiPerRango = new Map(limitiRangoRisultato.limiti.map((l) => [l.rangoLegale, l]));
-    const generale = limitiPerCategoria.get('Generale');
-
-    const righe: EsitoRigaProposta[] = propostaRisultato.righe.map((riga) => {
-      // Corrispondenza a tre livelli, non un unico confronto per nome
-      // libero: (1) categoria esatta, se configurata con quel nome
-      // preciso; (1b) un alias configurato per quella categoria, se il
-      // nome esatto non combacia; (2) rango legale della riga, se
-      // impostato — un insieme chiuso di 6 valori, non ambiguo come un
-      // nome libero; (3) Generale, solo se nessuno dei livelli sopra ha
-      // dato risposta.
-      let limite: LimiteRicevibilita | LimiteRicevibilitaRango | undefined = limitiPerCategoria.get(
-        riga.categoriaCreditore
-      );
-      let livelloMatch: 'categoria' | 'alias' | 'rango' | 'generale' | 'nessuno' = limite
-        ? 'categoria'
-        : 'nessuno';
-      if (!limite) {
-        limite = limitiPerAlias.get(riga.categoriaCreditore.trim().toLowerCase());
-        if (limite) livelloMatch = 'alias';
-      }
-      if (!limite && riga.rangoLegale) {
-        limite = limitiPerRango.get(riga.rangoLegale);
-        if (limite) livelloMatch = 'rango';
-      }
-      if (!limite) {
-        limite = generale;
-        livelloMatch = limite ? 'generale' : 'nessuno';
-      }
-
-      if (!limite) {
-        return {
-          ...riga,
-          ricevibile: true,
-          motivazione:
-            'Nessun limite configurato — né per questa categoria, né per il suo rango legale (se impostato), né una soglia Generale. Verifica che almeno una di queste esista in Parametri di Spazio prima di considerare questo esito.',
-        };
-      }
-
-      const motivi: string[] = [];
-      const importoOfferto = (riga.importoDovuto * riga.percentualeOfferta) / 100;
-
-      // Criterio corretto ex CCII (art. 23, comma 2-bis, e prassi delle
-      // transazioni fiscali/contributive): la proposta è ricevibile se
-      // offre al creditore non meno di quanto otterrebbe in liquidazione
-      // giudiziale. Se per questa categoria è stato stimato un valore di
-      // liquidazione, è questo — non la percentuale minima — il test
-      // principale.
-      if (limite.valoreLiquidazioneStimato !== null && limite.valoreLiquidazioneStimato > 0) {
-        if (importoOfferto < limite.valoreLiquidazioneStimato) {
-          motivi.push(
-            `offerta € ${importoOfferto.toLocaleString('it-IT')} inferiore al valore di liquidazione stimato per questa categoria (€ ${limite.valoreLiquidazioneStimato.toLocaleString('it-IT')}) — il creditore otterrebbe di più in liquidazione giudiziale`
-          );
-        }
-      }
-      if (riga.percentualeOfferta < limite.percentualeMinima) {
-        motivi.push(
-          `offerta ${riga.percentualeOfferta}% sotto il minimo richiesto (${limite.percentualeMinima}%)`
-        );
-      }
-      if (riga.modalita === 'UNICA_SOLUZIONE' && !limite.unicaSoluzioneAmmessa) {
-        motivi.push("modalità 'unica soluzione' non ammessa per questa categoria");
-      }
-      if (riga.modalita === 'RATEALE' && !limite.rateizzazioneAmmessa) {
-        motivi.push("modalità 'rateale' non ammessa per questa categoria");
-      }
-
-      const etichettaLivello =
-        livelloMatch === 'categoria'
-          ? 'per questa categoria'
-          : livelloMatch === 'rango'
-            ? `per il rango legale "${riga.rangoLegale ? etichettaRango(riga.rangoLegale) : ''}" (nessuna soglia specifica trovata per il nome esatto di questa categoria)`
-            : 'dalla soglia Generale (nessuna soglia specifica trovata per categoria né per rango legale)';
-
-      let motivazionePositiva: string;
-      if (limite.valoreLiquidazioneStimato !== null && limite.valoreLiquidazioneStimato > 0) {
-        motivazionePositiva = `Offerta € ${importoOfferto.toLocaleString('it-IT')} ≥ valore di liquidazione stimato € ${limite.valoreLiquidazioneStimato.toLocaleString('it-IT')}, verificato ${etichettaLivello} (criterio ex CCII, configurato in Parametri di Spazio).`;
-      } else if (limite.percentualeMinima > 0) {
-        motivazionePositiva = `Offerta ${riga.percentualeOfferta}% ≥ percentuale minima richiesta ${limite.percentualeMinima}%, verificato ${etichettaLivello} (configurata in Parametri di Spazio).`;
-      } else {
-        motivazionePositiva = `Nessuna soglia configurata ${etichettaLivello} (né percentuale minima né valore di liquidazione, in Parametri di Spazio) — conforme per assenza di un vincolo da verificare, non per un controllo superato.`;
-      }
-
-      return {
-        ...riga,
-        ricevibile: motivi.length === 0,
-        motivazione: motivi.length === 0 ? motivazionePositiva : motivi.join('; '),
-      };
-    });
-
+    // Corrispondenza categoria → alias → rango legale → Generale e
+    // confronto con le soglie: logica pura in src/lib/proposta/ricevibilita.ts.
     return {
       success: true,
-      esito: {
-        righe,
-        complessivamenteRicevibile: righe.length > 0 && righe.every((r) => r.ricevibile),
-      },
+      esito: verificaRicevibilitaRighe(
+        propostaRisultato.righe,
+        limitiRisultato.limiti,
+        limitiRangoRisultato.limiti
+      ),
     };
   } catch (error: any) {
     console.error('[verificaRicevibilitaProposta] Errore:', error);
@@ -721,8 +533,12 @@ export async function generaRelazionePropostaAction(
   scenarioId: number
 ): Promise<RisultatoRelazioneProposta> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['relazione'],
+      livello: 'SCRITTURA',
+    });
     if (!anthropic) {
-      return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
+      return { success: false, error: messaggioChiaveAiMancante() };
     }
     const plusRis = await ottieniFunzioniPlusSpazio(nomeSchema);
     if (!plusRis.funzioni.relazioneAi) {
@@ -1078,7 +894,9 @@ Elabora la relazione di valutazione della proposta seguendo la struttura prescri
     console.error('[generaRelazionePropostaAction] Errore:', error);
     return {
       success: false,
-      error: `Errore durante la generazione della relazione: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Errore durante la generazione della relazione: ${error.message || error}`,
     };
   }
 }

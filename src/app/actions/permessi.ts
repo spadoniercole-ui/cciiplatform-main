@@ -5,6 +5,7 @@
 // controllo d'accesso di ogni pagina (per bloccare l'accesso diretto via
 // URL) — non due posti diversi che potrebbero disallinearsi.
 
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { MODULI_PERMESSO, type Modulo, type LivelloPermesso } from '@/lib/moduliPermesso';
 export type { Modulo, LivelloPermesso };
 
@@ -19,6 +20,7 @@ export async function ottieniPermessiUtente(
   utenteId: number
 ): Promise<RisultatoPermessi> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -56,6 +58,7 @@ export async function impostaPermessoAction(
   livello: LivelloPermesso
 ): Promise<RisultatoOperazionePermessi> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq, and } = await import('drizzle-orm');

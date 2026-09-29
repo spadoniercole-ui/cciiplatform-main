@@ -9,8 +9,8 @@
 // SQL diretto tramite il Pool di src/lib/db.ts per le tabelle di sistema
 // (spazi, licenze_spazio), coerente con licenze/sessioni/indici/parametri_sistema.
 
+import { PASSWORD_DA_CAMBIARE } from '@/lib/passwordTemporanea';
 import { revalidatePath } from 'next/cache';
-import { richiedeCambioPassword as valutaCambioPassword } from '@/lib/passwordTemporanea';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { pool } from '@/lib/db';
@@ -20,6 +20,17 @@ import { contaSpaziPerLicenza, getLicenzaPerId } from '@/app/actions/licenze';
 import { RUOLI_ADMIN_SPAZIO, type RuoloAdminSpazio } from '@/lib/ruoliAdminSpazio';
 import { generaSlug } from '@/lib/slug';
 import { generaUsernameUnivoco, usernameEsisteGlobale } from '@/lib/generaUsername';
+import { chiudiSessioniUtente } from '@/lib/sessione';
+import {
+  COOKIE_SPAZIO_ISPEZIONE,
+  messaggioErrore,
+  richiediAccessoSchema,
+  richiediSessione,
+  richiediSuperadmin,
+  risolviContestoSpazio,
+  type ContestoAccessoSpazio,
+} from '@/lib/autorizzazione';
+import { cookieSicuro } from '@/lib/cookieSicuro';
 
 export interface ActionResult {
   success: boolean;
@@ -112,6 +123,7 @@ export async function creaSpazioAction(
   data: CreaSpazioInput
 ): Promise<ActionResult & { codice?: string; passwordTemporanea?: string; username?: string }> {
   try {
+    await richiediSuperadmin();
     await assicuraTabelleSpazi();
 
     const descrizione = (data.descrizione || '').trim();
@@ -253,7 +265,7 @@ export async function creaSpazioAction(
           email: (admin.email || '').trim().toLowerCase(),
           cellulare: admin.cellulare.trim(),
           passwordHash,
-          passwordTemporanea,
+          passwordTemporanea: PASSWORD_DA_CAMBIARE,
           codiceConvalida,
         });
 
@@ -316,6 +328,7 @@ export async function riprovaProvisioningAction(
   codice: string
 ): Promise<ActionResult> {
   try {
+    await richiediSuperadmin();
     const nomeSchema = await provisionaSchemaSpazio(codice);
     await pool.query(
       'UPDATE spazi SET nome_schema = $1, schema_provisionato = true WHERE id = $2',
@@ -337,23 +350,16 @@ export async function riprovaProvisioningAction(
 // spazio sta ispezionando in questo momento.
 // ============================================================================
 
-const COOKIE_SPAZIO_ISPEZIONE = 'spazio_ispezione';
-
-export interface ContestoIspezione {
-  spazioId: number;
-  codice: string;
-  descrizione: string;
-  nomeSchema: string;
-  tipoSpazio: 'ENTE' | 'NON_ENTE';
-  giudicante: boolean;
-}
-
+// Il cookie di ispezione contiene SOLO l'id dello spazio scelto: i dati
+// dello spazio sono riletti dal database a ogni richiesta e il cookie vale
+// solo insieme a una sessione SUPERADMIN (vedi src/lib/autorizzazione.ts).
 export async function entraComeSalvagenteAction(spazioId: number): Promise<ActionResult> {
   try {
+    await richiediSuperadmin();
     const { cookies } = await import('next/headers');
 
     const risultato = await pool.query(
-      'SELECT id, codice, descrizione, nome_schema, schema_provisionato, tipo_spazio, giudicante FROM spazi WHERE id = $1',
+      'SELECT id, nome_schema, schema_provisionato FROM spazi WHERE id = $1',
       [spazioId]
     );
 
@@ -369,30 +375,21 @@ export async function entraComeSalvagenteAction(spazioId: number): Promise<Actio
       };
     }
 
-    const contesto: ContestoIspezione = {
-      spazioId: spazio.id,
-      codice: spazio.codice,
-      descrizione: spazio.descrizione,
-      nomeSchema: spazio.nome_schema,
-      tipoSpazio: spazio.tipo_spazio || 'NON_ENTE',
-      giudicante: spazio.giudicante || false,
-    };
-
     const cookieStore = await cookies();
-    cookieStore.set(COOKIE_SPAZIO_ISPEZIONE, JSON.stringify(contesto), {
+    cookieStore.set(COOKIE_SPAZIO_ISPEZIONE, String(spazio.id), {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: cookieSicuro(),
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 8, // 8 ore, come la sessione di autenticazione
     });
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[entraComeSalvagenteAction] Errore:', error);
     return {
       success: false,
-      error: `Impossibile entrare nello spazio: ${error.message || error}`,
+      error: messaggioErrore(error, 'Impossibile entrare nello spazio.'),
     };
   }
 }
@@ -402,19 +399,6 @@ export async function esciDaSalvagenteAction(): Promise<ActionResult> {
   const cookieStore = await cookies();
   cookieStore.delete(COOKIE_SPAZIO_ISPEZIONE);
   return { success: true };
-}
-
-export async function ottieniContestoIspezione(): Promise<ContestoIspezione | null> {
-  const { cookies } = await import('next/headers');
-  const cookieStore = await cookies();
-  const raw = cookieStore.get(COOKIE_SPAZIO_ISPEZIONE)?.value;
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw) as ContestoIspezione;
-  } catch {
-    return null;
-  }
 }
 
 export interface RisultatoElencoSpazi {
@@ -435,6 +419,7 @@ export interface RisultatoElencoSpazi {
  */
 export async function ottieniSpaziAction(): Promise<RisultatoElencoSpazi> {
   try {
+    await richiediSuperadmin();
     await assicuraTabelleSpazi();
     const risultato = await pool.query(`
       SELECT
@@ -519,6 +504,7 @@ export interface AnagraficaSpazioInput {
  */
 export async function eliminaSpazioCompletoAction(spazioId: number): Promise<ActionResult> {
   try {
+    await richiediSuperadmin();
     const spazioRis = await pool.query(`SELECT nome_schema FROM spazi WHERE id = $1`, [spazioId]);
     if (spazioRis.rows.length === 0) {
       return { success: false, error: 'Spazio non trovato.' };
@@ -548,6 +534,7 @@ export async function aggiornaAnagraficaSpazioAction(
   dati: AnagraficaSpazioInput
 ): Promise<ActionResult> {
   try {
+    await richiediSuperadmin();
     const descrizione = (dati.descrizione || '').trim();
     if (!descrizione) {
       return { success: false, error: 'La descrizione dello spazio è obbligatoria.' };
@@ -588,6 +575,7 @@ export interface SpazioPerScelta {
 
 export async function ottieniSpaziPerScelta(): Promise<SpazioPerScelta[]> {
   try {
+    await richiediSuperadmin();
     await assicuraTabelleSpazi();
     const risultato = await pool.query(
       `SELECT id, codice, descrizione FROM spazi WHERE schema_provisionato = true ORDER BY descrizione ASC`
@@ -618,6 +606,7 @@ export async function rigeneraPasswordAdminSpazioAction(
   adminId: number
 ): Promise<RisultatoNuovaPassword> {
   try {
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -628,13 +617,18 @@ export async function rigeneraPasswordAdminSpazioAction(
 
     const risultato = await db
       .update(tabelle.admin_workspace)
-      .set({ passwordHash, passwordTemporanea })
+      .set({ passwordHash, passwordTemporanea: PASSWORD_DA_CAMBIARE })
       .where(eq(tabelle.admin_workspace.id, adminId))
-      .returning({ id: tabelle.admin_workspace.id });
+      .returning({
+        id: tabelle.admin_workspace.id,
+        username: tabelle.admin_workspace.username,
+        email: tabelle.admin_workspace.email,
+      });
 
     if (risultato.length === 0) {
       return { success: false, error: 'Admin non trovato in questo spazio.' };
     }
+    await chiudiSessioniUtente(contesto.spazioId, risultato[0]);
 
     return { success: true, passwordTemporanea };
   } catch (error: any) {
@@ -659,6 +653,7 @@ export async function aggiornaEmailAdminAction(
   nuovaEmail: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     const email = (nuovaEmail || '').trim().toLowerCase();
     // Nessun controllo formale bloccante (era proprio il vincolo da cui ci
     // si voleva liberare); si rifiuta solo il vuoto per non perdere il dato.
@@ -717,6 +712,11 @@ export async function impostaNuovaPasswordAdminAction(
   nuovaPassword: string
 ): Promise<RisultatoNuovaPassword> {
   try {
+    // Solo l'Admin stesso (o il Superadmin) può impostare questa password.
+    const contesto = await richiediAccessoSchema(nomeSchema);
+    if (contesto.modalita !== 'SALVAGENTE' && contesto.adminId !== adminId) {
+      return { success: false, error: 'Operazione non autorizzata.' };
+    }
     if (!nuovaPassword || nuovaPassword.length < 8) {
       return { success: false, error: 'La nuova password deve contenere almeno 8 caratteri.' };
     }
@@ -732,11 +732,18 @@ export async function impostaNuovaPasswordAdminAction(
       .update(tabelle.admin_workspace)
       .set({ passwordHash, passwordTemporanea: null })
       .where(eq(tabelle.admin_workspace.id, adminId))
-      .returning({ id: tabelle.admin_workspace.id });
+      .returning({
+        id: tabelle.admin_workspace.id,
+        username: tabelle.admin_workspace.username,
+        email: tabelle.admin_workspace.email,
+      });
 
     if (risultato.length === 0) {
       return { success: false, error: 'Admin non trovato in questo spazio.' };
     }
+    // Le altre sessioni dell'Admin si chiudono; resta aperta quella corrente.
+    const sessione = await richiediSessione();
+    await chiudiSessioniUtente(contesto.spazioId, risultato[0], sessione.token);
 
     return { success: true };
   } catch (error: any) {
@@ -758,6 +765,11 @@ export async function impostaNuovaPasswordUtenteAction(
   nuovaPassword: string
 ): Promise<RisultatoNuovaPassword> {
   try {
+    // Solo l'utente stesso (o il Superadmin) può impostare questa password.
+    const contesto = await richiediAccessoSchema(nomeSchema);
+    if (contesto.modalita !== 'SALVAGENTE' && contesto.utenteId !== utenteId) {
+      return { success: false, error: 'Operazione non autorizzata.' };
+    }
     if (!nuovaPassword || nuovaPassword.length < 8) {
       return { success: false, error: 'La nuova password deve contenere almeno 8 caratteri.' };
     }
@@ -773,11 +785,18 @@ export async function impostaNuovaPasswordUtenteAction(
       .update(tabelle.utenti_spazio)
       .set({ passwordHash, passwordTemporanea: null })
       .where(eq(tabelle.utenti_spazio.id, utenteId))
-      .returning({ id: tabelle.utenti_spazio.id });
+      .returning({
+        id: tabelle.utenti_spazio.id,
+        username: tabelle.utenti_spazio.username,
+        email: tabelle.utenti_spazio.email,
+      });
 
     if (risultato.length === 0) {
       return { success: false, error: 'Utente non trovato in questo spazio.' };
     }
+    // Le altre sessioni dell'utente si chiudono; resta aperta quella corrente.
+    const sessione = await richiediSessione();
+    await chiudiSessioniUtente(contesto.spazioId, risultato[0], sessione.token);
 
     return { success: true };
   } catch (error: any) {
@@ -812,6 +831,7 @@ export interface RisultatoAdminSpazio {
  */
 export async function ottieniAdminSpazio(nomeSchema: string): Promise<RisultatoAdminSpazio> {
   try {
+    await richiediAccessoSchema(nomeSchema);
     // Auto-riparazione: garantisce la colonna username (e la valorizza) su
     // questo schema anche se creato prima della 0.109 e mai passato dal
     // backfill del login (es. superadmin in salvagente).
@@ -872,6 +892,7 @@ export async function diagnosticaEmailAdminAction(
   email: string
 ): Promise<{ success: boolean; spazi: SpazioConEmailAdmin[]; error?: string }> {
   try {
+    await richiediSuperadmin();
     const emailNormalizzata = email.trim().toLowerCase();
     if (!emailNormalizzata) return { success: false, spazi: [], error: "Indica un'email." };
 
@@ -938,6 +959,7 @@ export async function riparaIndiceAdminAction(
   nomeSchemaScelto: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediSuperadmin();
     const emailNormalizzata = email.trim().toLowerCase();
     if (!/^[a-z0-9_]+$/.test(nomeSchemaScelto)) {
       return { success: false, error: 'Nome schema non valido.' };
@@ -1000,172 +1022,11 @@ export async function riparaIndiceAdminAction(
 // accesso allo stesso posto.
 // ============================================================================
 
-export type LivelloPermesso = 'NESSUNO' | 'LETTURA' | 'SCRITTURA';
-
-export interface ContestoAccessoSpazio {
-  spazioId: number;
-  codice: string;
-  descrizione: string;
-  nomeSchema: string;
-  modalita: 'SALVAGENTE' | 'ADMIN_SPAZIO' | 'OPERATORE';
-  /** Solo per ADMIN_SPAZIO: id del record admin_workspace, per l'azione di cambio password. */
-  adminId?: number;
-  /** Solo per OPERATORE: id del record utenti_spazio, per cambio password e risoluzione permessi. */
-  utenteId?: number;
-  /** Email dell'utente loggato — ADMIN_SPAZIO e OPERATORE, per tracciare azioni sensibili (es. sblocco scenario). */
-  email?: string;
-  /** true se sta ancora usando una password temporanea da sostituire (ADMIN_SPAZIO o OPERATORE). */
-  richiedeCambioPassword?: boolean;
-  /** Solo per OPERATORE: permessi per modulo. SALVAGENTE e ADMIN_SPAZIO non sono mai ristretti. */
-  permessi?: Record<string, LivelloPermesso>;
-  /** Solo per OPERATORE: id delle aziende su cui può operare. */
-  aziendeConsentite?: number[];
-  /** ENTE cambia a cascata i limiti di ricevibilità (1 sola soglia invece di N categorie) e il feedback sulla Proposta — vedi RicevibilitaManager e PropostaScenario. */
-  tipoSpazio: 'ENTE' | 'NON_ENTE';
-  /** Predisposto, non ancora operativo altrove nel codice. */
-  giudicante: boolean;
-}
+export type { LivelloPermesso } from '@/lib/moduliPermesso';
+export type { ContestoAccessoSpazio } from '@/lib/autorizzazione';
 
 export async function ottieniContestoAccessoSpazio(
   codice: string
 ): Promise<ContestoAccessoSpazio | null> {
-  try {
-    // 1. Modalità salvagente (superadmin in ispezione)
-    const contestoIspezione = await ottieniContestoIspezione();
-    if (contestoIspezione && contestoIspezione.codice === codice) {
-      return { ...contestoIspezione, modalita: 'SALVAGENTE' };
-    }
-
-    // 2. Sessione reale di un Admin di Spazio
-    const { cookies } = await import('next/headers');
-    const cookieStore = await cookies();
-    const token = cookieStore.get('session_token')?.value;
-    if (!token) return null;
-
-    const risultato = await pool.query(
-      `SELECT s.ruolo, s.email, s.username, sp.id AS spazio_id, sp.codice, sp.descrizione, sp.nome_schema,
-              sp.tipo_spazio, sp.giudicante
-       FROM sessioni s
-       JOIN spazi sp ON sp.id = s.workspace_id
-       WHERE s.token = $1 AND s.expires_at > now()`,
-      [token]
-    );
-
-    if (risultato.rows.length === 0) return null;
-    const riga = risultato.rows[0];
-    if (riga.ruolo !== 'USER' || riga.codice !== codice) return null;
-
-    // Garantisce la colonna username su questo schema prima di leggerla
-    // (schemi creati prima della 0.109). Idempotente e memoizzato.
-    {
-      const { backfillUsernameSchema } = await import('@/db/ensureTables');
-      await backfillUsernameSchema(riga.nome_schema);
-    }
-
-    // Verifica se questa email è l'Admin di Spazio di questo schema. Se sì,
-    // nessuna restrizione di permessi (l'Admin non è mai ristretto).
-    let adminId: number | undefined;
-    let adminEmail: string | undefined;
-    let richiedeCambioPassword = false;
-    let eAdmin = false;
-    // Identità della sessione: username (chiave di login dalla 0.109). Le
-    // sessioni create prima del deploy hanno solo l'email: le si onora come
-    // fallback finché non scadono.
-    if (riga.username || riga.email) {
-      const { db } = await import('@/db/client');
-      const { getTabelleTenant } = await import('@/db/schema');
-      const { eq } = await import('drizzle-orm');
-      const tabelle = getTabelleTenant(riga.nome_schema);
-      const condAdmin = riga.username
-        ? eq(tabelle.admin_workspace.username, riga.username)
-        : eq(tabelle.admin_workspace.email, riga.email);
-      const adminRighe = await db
-        .select({
-          id: tabelle.admin_workspace.id,
-          email: tabelle.admin_workspace.email,
-          passwordTemporanea: tabelle.admin_workspace.passwordTemporanea,
-        })
-        .from(tabelle.admin_workspace)
-        .where(condAdmin)
-        .limit(1);
-      if (adminRighe.length > 0) {
-        eAdmin = true;
-        adminId = adminRighe[0].id;
-        adminEmail = adminRighe[0].email || undefined;
-        richiedeCambioPassword = valutaCambioPassword(adminRighe[0].passwordTemporanea);
-      }
-    }
-
-    if (eAdmin) {
-      return {
-        spazioId: riga.spazio_id,
-        codice: riga.codice,
-        descrizione: riga.descrizione,
-        nomeSchema: riga.nome_schema,
-        modalita: 'ADMIN_SPAZIO',
-        adminId,
-        email: adminEmail ?? riga.email,
-        richiedeCambioPassword,
-        tipoSpazio: riga.tipo_spazio || 'NON_ENTE',
-        giudicante: riga.giudicante || false,
-      };
-    }
-
-    // Non è l'Admin: verifica se è un Operatore/Consultatore, e se sì
-    // risolve i suoi permessi per modulo e le aziende consentite — la
-    // STESSA fonte che userà anche la sidebar per filtrare le voci
-    // visibili e il controllo d'accesso di ogni pagina, per non avere due
-    // posti diversi (e potenzialmente disallineati) che decidono cosa un
-    // utente può fare.
-    if (riga.username || riga.email) {
-      const { db } = await import('@/db/client');
-      const { getTabelleTenant } = await import('@/db/schema');
-      const { eq } = await import('drizzle-orm');
-      const tabelle = getTabelleTenant(riga.nome_schema);
-
-      const condUtente = riga.username
-        ? eq(tabelle.utenti_spazio.username, riga.username)
-        : eq(tabelle.utenti_spazio.email, riga.email);
-      const utenteRighe = await db.select().from(tabelle.utenti_spazio).where(condUtente).limit(1);
-
-      if (utenteRighe.length > 0) {
-        const utenteId = utenteRighe[0].id;
-
-        const permessiRighe = await db
-          .select()
-          .from(tabelle.permessi_utente)
-          .where(eq(tabelle.permessi_utente.utenteId, utenteId));
-        const permessi: Record<string, LivelloPermesso> = {};
-        for (const p of permessiRighe) permessi[p.modulo] = p.livello as LivelloPermesso;
-
-        const aziendeRighe = await db
-          .select()
-          .from(tabelle.utenti_aziende)
-          .where(eq(tabelle.utenti_aziende.utenteId, utenteId));
-        const aziendeConsentite = aziendeRighe.map((a) => a.aziendaId);
-
-        return {
-          spazioId: riga.spazio_id,
-          codice: riga.codice,
-          descrizione: riga.descrizione,
-          nomeSchema: riga.nome_schema,
-          modalita: 'OPERATORE',
-          utenteId,
-          email: utenteRighe[0].email || undefined,
-          richiedeCambioPassword: valutaCambioPassword(utenteRighe[0].passwordTemporanea),
-          permessi,
-          aziendeConsentite,
-          tipoSpazio: riga.tipo_spazio || 'NON_ENTE',
-          giudicante: riga.giudicante || false,
-        };
-      }
-    }
-
-    // Nessun Admin né Utente trovato per questa email in questo schema:
-    // sessione incoerente (es. utente cancellato dopo il login).
-    return null;
-  } catch (error) {
-    console.error('[ottieniContestoAccessoSpazio] Errore:', error);
-    return null;
-  }
+  return risolviContestoSpazio(codice);
 }

@@ -9,6 +9,7 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabelleSpazi } from '@/db/ensureTables';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export interface LicenzaOperativaSpazio {
   tier: string;
@@ -32,6 +33,7 @@ export async function ottieniLicenzaOperativaSpazio(
   nomeSchema: string
 ): Promise<RisultatoLicenzaOperativaSpazio> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
       return { success: false, licenza: null, error: 'Nome schema non valido.' };
     }

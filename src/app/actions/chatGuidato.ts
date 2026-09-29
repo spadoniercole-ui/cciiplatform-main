@@ -12,7 +12,9 @@
 // (vedi PosizioneEnteScenario, ChecklistScenario) — il chatbot è un
 // percorso alternativo, non l'unico.
 
+import { richiediAccessoAzienda, richiediAccessoScenario } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import { ottieniAnagraficaEnte, salvaAnagraficaEnteAction } from '@/app/actions/anagraficaEnte';
 import { aggiungiRigaDebitoEnteAction, ottieniDebitiEnte } from '@/app/actions/debitiEnte';
@@ -67,8 +69,9 @@ export async function chiediGuidaAnagrafica(
   cronologia: MessaggioChatGuidato[],
   messaggio: string
 ): Promise<RisultatoChatGuidato> {
+  await richiediAccessoAzienda(nomeSchema, aziendaId);
   if (!anthropic) {
-    return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
+    return { success: false, error: messaggioChiaveAiMancante() };
   }
 
   try {
@@ -188,7 +191,9 @@ REGOLE:
     console.error('[chiediGuidaAnagrafica] Errore:', error);
     return {
       success: false,
-      error: `Impossibile contattare l'assistente: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Impossibile contattare l'assistente: ${error.message || error}`,
     };
   }
 }
@@ -230,8 +235,9 @@ export async function chiediGuidaDebitiEnte(
   cronologia: MessaggioChatGuidato[],
   messaggio: string
 ): Promise<RisultatoChatGuidato> {
+  await richiediAccessoAzienda(nomeSchema, aziendaId);
   if (!anthropic) {
-    return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
+    return { success: false, error: messaggioChiaveAiMancante() };
   }
 
   try {
@@ -331,7 +337,9 @@ REGOLE:
     console.error('[chiediGuidaDebitiEnte] Errore:', error);
     return {
       success: false,
-      error: `Impossibile contattare l'assistente: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Impossibile contattare l'assistente: ${error.message || error}`,
     };
   }
 }
@@ -375,8 +383,9 @@ export async function chiediGuidaChecklist(
   cronologia: MessaggioChatGuidato[],
   messaggio: string
 ): Promise<RisultatoChatGuidato> {
+  await richiediAccessoScenario(nomeSchema, scenarioId);
   if (!anthropic) {
-    return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
+    return { success: false, error: messaggioChiaveAiMancante() };
   }
 
   try {
@@ -484,7 +493,9 @@ REGOLE:
     console.error('[chiediGuidaChecklist] Errore:', error);
     return {
       success: false,
-      error: `Impossibile contattare l'assistente: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Impossibile contattare l'assistente: ${error.message || error}`,
     };
   }
 }
@@ -554,8 +565,9 @@ export async function chiediGuidaProposta(
   cronologia: MessaggioChatGuidato[],
   messaggio: string
 ): Promise<RisultatoChatGuidato> {
+  await richiediAccessoScenario(nomeSchema, scenarioId);
   if (!anthropic) {
-    return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
+    return { success: false, error: messaggioChiaveAiMancante() };
   }
 
   try {
@@ -692,7 +704,9 @@ ${tipoProposta === 'RICEVUTA' ? "3. Se e solo se l'utente indica esplicitamente 
     console.error('[chiediGuidaProposta] Errore:', error);
     return {
       success: false,
-      error: `Impossibile contattare l'assistente: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Impossibile contattare l'assistente: ${error.message || error}`,
     };
   }
 }

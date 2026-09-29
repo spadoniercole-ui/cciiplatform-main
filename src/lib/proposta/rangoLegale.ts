@@ -76,7 +76,11 @@ export function raggruppaPerRango(righe: RigaConRango[]): RiepilogoRango[] {
     'POSTERGATO',
     null,
   ];
-  return Array.from(mappa.values()).sort(
-    (a, b) => ordine.indexOf(a.rango) - ordine.indexOf(b.rango)
-  );
+  // Un rango sconosciuto (es. valore legacy letto dal DB) non è in `ordine`:
+  // va in fondo, dopo i non classificati, non in testa (indexOf = -1).
+  const posizione = (rango: RangoLegale | null) => {
+    const i = ordine.indexOf(rango);
+    return i === -1 ? ordine.length : i;
+  };
+  return Array.from(mappa.values()).sort((a, b) => posizione(a.rango) - posizione(b.rango));
 }

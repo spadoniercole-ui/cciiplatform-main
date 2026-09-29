@@ -7,7 +7,15 @@
 // pre-compilarne alcune quando i dati lo consentono con certezza, il
 // resto va completato a mano — mai per invenzione.
 
+import {
+  messaggioErrore,
+  richiediAccessoSchema,
+  richiediAccessoScenario,
+  verificaAziendaConsentita,
+  verificaFileDelloSpazio,
+} from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { del, get } from '@/lib/blobStore';
 import { pool } from '@/lib/db';
 import { assicuraTabelleScenari } from '@/db/provision';
@@ -47,6 +55,7 @@ export async function ottieniChecklistMinisterialeAzienda(
 ): Promise<{ success: boolean; stato: StatoChecklistMinisterialeAzienda; error?: string }> {
   const statoVuoto: StatoChecklistMinisterialeAzienda = { risposte: [], quadro: null };
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) {
       return { success: false, stato: statoVuoto, error: 'Nome schema non valido.' };
     }
@@ -88,6 +97,7 @@ export async function salvaRispostaChecklistMinisterialeAziendaAction(
   note: string | null
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleScenari(nomeSchema);
     await pool.query(
@@ -117,6 +127,11 @@ export async function ereditaChecklistMinisterialeInScenarioAction(
   scenarioId: number
 ): Promise<{ success: boolean; copiate: number; error?: string }> {
   try {
+    // Chiamata automatica alla creazione dello scenario: nessun requisito di
+    // modulo, ma scenario e azienda devono essere accessibili; la query copia
+    // solo se lo scenario appartiene davvero a `aziendaId`.
+    const contesto = await richiediAccessoScenario(nomeSchema, scenarioId);
+    verificaAziendaConsentita(contesto, aziendaId);
     if (!validaSchema(nomeSchema)) {
       return { success: false, copiate: 0, error: 'Nome schema non valido.' };
     }
@@ -127,6 +142,9 @@ export async function ereditaChecklistMinisterialeInScenarioAction(
        SELECT $1, 'MINISTERIALE', domanda_id, risposta, note, now()
        FROM "${nomeSchema}".azienda_checklist_ministeriale_risposte
        WHERE azienda_id = $2 AND risposta IS NOT NULL
+         AND EXISTS (
+           SELECT 1 FROM "${nomeSchema}".scenari WHERE id = $1 AND azienda_id = $2
+         )
        ON CONFLICT (scenario_id, modello_chiave, domanda_id) DO NOTHING`,
       [scenarioId, aziendaId]
     );
@@ -160,12 +178,24 @@ export async function generaPreCompilazioneMinisterialeAction(
   visuraUrl: string,
   nomeFileVisura: string
 ): Promise<RisultatoPreCompilazioneMinisteriale> {
+  // Verifica fuori dal try: il `finally` sotto elimina il blob `visuraUrl`,
+  // e un chiamante non autorizzato non deve poter cancellare file altrui.
+  try {
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    verificaFileDelloSpazio(contesto, visuraUrl);
+  } catch (error) {
+    return {
+      success: false,
+      domandeCompilate: 0,
+      error: messaggioErrore(error, 'Operazione non autorizzata.'),
+    };
+  }
   try {
     if (!anthropic) {
       return {
         success: false,
         domandeCompilate: 0,
-        error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.',
+        error: messaggioChiaveAiMancante(),
       };
     }
     if (!validaSchema(nomeSchema)) {
@@ -311,7 +341,9 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
     return {
       success: false,
       domandeCompilate: 0,
-      error: `Impossibile pre-compilare: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Impossibile pre-compilare: ${error.message || error}`,
     };
   } finally {
     try {

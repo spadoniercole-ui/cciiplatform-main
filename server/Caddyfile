@@ -1,0 +1,26 @@
+# server/Caddyfile
+#
+# Reverse proxy HTTPS davanti alla piattaforma. Caddy inoltra l'intestazione
+# Host originale (necessaria al controllo di origine delle server action) e
+# aggiunge X-Forwarded-Proto/For.
+#
+# CCII_INDIRIZZI  nomi/IP con cui gli utenti raggiungono il server, separati
+#                 da virgola (es. "ccii.ente.local, 192.168.1.50").
+# CCII_TLS        "internal" = certificato emesso dalla CA locale di Caddy
+#                 (da installare sui PC, vedi guida); oppure i percorsi del
+#                 certificato fornito dall'IT: "/certificati/cert.pem /certificati/key.pem".
+
+{$CCII_INDIRIZZI:localhost} {
+	tls {$CCII_TLS:internal}
+	encode gzip
+	request_body {
+		max_size 30MB
+	}
+	reverse_proxy app:3000
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}

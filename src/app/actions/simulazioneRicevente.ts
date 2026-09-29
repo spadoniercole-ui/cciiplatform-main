@@ -8,7 +8,9 @@
 // aritmetica. Vedi il commento in db/provision.ts (assicuraTabella
 // SimulazioneRicevente) sul perché i PDF non si conservano.
 
+import { richiediAccessoScenario, verificaFileDelloSpazio } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { del, get } from '@/lib/blobStore';
 import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
 import { pool } from '@/lib/db';
@@ -99,17 +101,24 @@ export async function analizzaDocumentiRiceventeAction(
   documentiNominati: TreDocumentiRicevente,
   istruzioniOperatore?: string
 ): Promise<RisultatoAnalisiRicevente> {
+  // Prima di tutto e fuori dal try: il finally elimina i blob indicati dal chiamante.
+  const contesto = await richiediAccessoScenario(nomeSchema, scenarioId, {
+    modulo: ['report'],
+    livello: 'SCRITTURA',
+  });
   const documenti: DocumentoPdf[] = [
     documentiNominati.asseverazione,
     documentiNominati.propostaCramDown,
     documentiNominati.pianoSviluppo,
   ].filter((d): d is DocumentoPdf => d !== null);
+  // Ogni file deve appartenere a questo spazio, prima di leggerlo o eliminarlo.
+  for (const d of documenti) verificaFileDelloSpazio(contesto, d.url);
   const urlDaEliminare = documenti.map((d) => d.url);
   try {
     if (!anthropic) {
       return {
         success: false,
-        error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.',
+        error: messaggioChiaveAiMancante(),
       };
     }
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
@@ -445,7 +454,8 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
       success: false,
       error: scaduto
         ? "L'analisi ha superato il tempo massimo disponibile — riprova. Se i documenti sono molto voluminosi, carica solo le pagine rilevanti o un file per volta."
-        : `Impossibile analizzare i documenti: ${error.message || error}`,
+        : (erroreServizioEsterno(error, 'AI') ??
+          `Impossibile analizzare i documenti: ${error.message || error}`),
     };
   } finally {
     // I documenti non si conservano — riuscita o fallita che sia
@@ -466,6 +476,7 @@ export async function ottieniAnalisiRiceventeAction(
   scenarioId: number
 ): Promise<RisultatoAnalisiRicevente> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaSimulazioneRicevente(nomeSchema);
     const risultato = await pool.query(

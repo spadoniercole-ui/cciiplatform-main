@@ -15,6 +15,7 @@ import {
 } from '@/db/provision';
 import { componiFascicolo, type Evidenza, type TitoloPresunto } from '@/lib/fascicolo/evidenza';
 import { RISCONTRO_VUOTO, titoloPerCodice, type TitoloEnte } from '@/lib/titoliEnte/titoli';
+import { richiediAccessoAzienda, verificaRigaConsentita } from '@/lib/autorizzazione';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -32,7 +33,18 @@ export async function ottieniFascicoloAction(
   scenarioId: number | null
 ): Promise<{ success: boolean; fascicolo?: Evidenza[]; error?: string }> {
   try {
+    const contesto = await richiediAccessoAzienda(nomeSchema, aziendaId);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (scenarioId !== null) {
+      await verificaRigaConsentita(contesto, 'scenari', scenarioId);
+      // Lo scenario deve appartenere all'azienda richiesta.
+      const sc = await pool.query(`SELECT azienda_id FROM "${nomeSchema}".scenari WHERE id = $1`, [
+        scenarioId,
+      ]);
+      if (sc.rows.length > 0 && Number(sc.rows[0].azienda_id) !== Number(aziendaId)) {
+        return { success: false, error: "Scenario non appartenente all'azienda." };
+      }
+    }
     await assicuraTabellaProposta(nomeSchema);
     await assicuraTabellaDebitiEnte(nomeSchema);
     await assicuraTabelleVera(nomeSchema);

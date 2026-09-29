@@ -10,6 +10,7 @@
 import { pool } from '@/lib/db';
 import { assicuraTabellaAziende } from '@/db/provision';
 import type { AnagraficaEstratta } from '@/app/actions/visuraEstrazione';
+import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export interface RisultatoVerifica {
   success: boolean;
@@ -31,6 +32,7 @@ export async function creaAziendaInVerificaAction(
   dati: AnagraficaEstratta
 ): Promise<RisultatoVerifica> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!dati.ragioneSociale || dati.ragioneSociale.trim() === '') {
       return { success: false, error: 'La ragione sociale è obbligatoria.' };
@@ -148,6 +150,7 @@ export async function archiviaVerificaAction(
   motivo: string
 ): Promise<RisultatoVerifica> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!motivo || motivo.trim().length < 3) {
       // Il motivo è obbligatorio: un'archiviazione senza spiegazione è
@@ -167,24 +170,6 @@ export async function archiviaVerificaAction(
   }
 }
 
-/** Riporta una verifica archiviata nella coda di lavoro. */
-export async function riapriVerificaAction(
-  nomeSchema: string,
-  aziendaId: number
-): Promise<RisultatoVerifica> {
-  try {
-    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    await pool.query(
-      `UPDATE "${nomeSchema}".aziende SET verifica_archiviata = FALSE WHERE id = $1`,
-      [aziendaId]
-    );
-    return { success: true, aziendaId };
-  } catch (error: unknown) {
-    console.error('[riapriVerificaAction] Errore:', error);
-    return { success: false, error: `Riapertura non riuscita: ${(error as Error).message}` };
-  }
-}
-
 /** Registra l'esito della verifica, senza promuovere la posizione. */
 export async function registraEsitoVerificaAction(
   nomeSchema: string,
@@ -192,6 +177,7 @@ export async function registraEsitoVerificaAction(
   esito: string
 ): Promise<RisultatoVerifica> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(
       `UPDATE "${nomeSchema}".aziende SET verifica_esito = $2, verifica_eseguita_il = now() WHERE id = $1`,
@@ -216,6 +202,7 @@ export async function promuoviAziendaAction(
   aziendaId: number
 ): Promise<RisultatoVerifica> {
   try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await pool.query(`UPDATE "${nomeSchema}".aziende SET in_verifica = FALSE WHERE id = $1`, [
       aziendaId,
@@ -253,6 +240,7 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
   error?: string;
 }> {
   try {
+    const contesto = await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const r = await pool
       .query(
@@ -263,9 +251,14 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
           ORDER BY verifica_eseguita_il DESC`
       )
       .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+    // Operatori: solo le aziende assegnate dall'Admin di Spazio.
+    const righe =
+      contesto.modalita === 'OPERATORE'
+        ? r.rows.filter((x) => contesto.aziendeConsentite?.includes(Number(x.id)))
+        : r.rows;
     return {
       success: true,
-      righe: r.rows.map((x) => ({
+      righe: righe.map((x) => ({
         id: Number(x.id),
         ragioneSociale: String(x.ragione_sociale),
         partitaIva: x.partita_iva ? String(x.partita_iva) : null,
@@ -280,37 +273,6 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
     };
   } catch (error: unknown) {
     console.error('[ottieniStoricoVerificheAction] Errore:', error);
-    return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
-  }
-}
-
-export async function ottieniAziendeInVerificaAction(
-  nomeSchema: string
-): Promise<{ success: boolean; righe?: RigaVerifica[]; error?: string }> {
-  try {
-    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    const r = await pool
-      .query(
-        `SELECT id, ragione_sociale, partita_iva, verifica_esito, verifica_eseguita_il
-           FROM "${nomeSchema}".aziende
-          WHERE in_verifica = TRUE AND verifica_archiviata = FALSE
-          ORDER BY verifica_eseguita_il DESC NULLS LAST`
-      )
-      .catch(() => ({ rows: [] as Record<string, unknown>[] }));
-    return {
-      success: true,
-      righe: r.rows.map((x) => ({
-        id: Number(x.id),
-        ragioneSociale: String(x.ragione_sociale),
-        partitaIva: x.partita_iva ? String(x.partita_iva) : null,
-        esito: x.verifica_esito ? String(x.verifica_esito) : null,
-        eseguitaIl: x.verifica_eseguita_il
-          ? new Date(x.verifica_eseguita_il as string).toISOString()
-          : null,
-      })),
-    };
-  } catch (error: unknown) {
-    console.error('[ottieniAziendeInVerificaAction] Errore:', error);
     return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
   }
 }

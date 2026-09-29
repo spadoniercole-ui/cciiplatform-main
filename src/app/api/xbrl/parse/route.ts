@@ -12,11 +12,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { analizzaFileXbrl } from '@/lib/xbrl';
+import { rifiutaSeNonAutorizzato } from '@/lib/autorizzazione';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
+    const rifiuto = await rifiutaSeNonAutorizzato('SESSIONE');
+    if (rifiuto) return rifiuto;
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
 

@@ -6,6 +6,7 @@
 // non si salva mai, solo l'input — il calcolo (calcoloRedigente.ts) è
 // sempre ricalcolato dal vivo sui dati correnti.
 
+import { richiediAccessoScenario } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabellaSimulazioneRedigente } from '@/db/provision';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
@@ -91,6 +92,7 @@ export async function ottieniInputRedigente(
   };
 
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) return { ...vuoto, error: 'Nome schema non valido.' };
     await assicuraTabellaSimulazioneRedigente(nomeSchema);
 
@@ -216,6 +218,10 @@ export async function salvaLeveRedigenteAction(
   leve: LeveRedigente
 ): Promise<RisultatoOperazioneRedigente> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['simulazione'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
 
     await assicuraTabellaSimulazioneRedigente(nomeSchema);

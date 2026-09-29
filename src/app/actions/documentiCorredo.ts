@@ -8,10 +8,12 @@
 // informazione mancante deve lasciare un segnaposto tra parentesi
 // quadre, non riempirlo a caso.
 
+import { richiediAccessoScenario } from '@/lib/autorizzazione';
 import { perimetroPerPrompt } from '@/lib/revisore/perimetro';
 import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneServer';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { pool } from '@/lib/db';
 import { assicuraTabellaDocumentiCorredo } from '@/db/provision';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
@@ -54,6 +56,7 @@ export async function ottieniDocumentiCorredo(
   scenarioId: number
 ): Promise<RisultatoDocumentiCorredo> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) {
       return { success: false, documenti: [], error: 'Nome schema non valido.' };
     }
@@ -95,6 +98,10 @@ export async function salvaDocumentoCorredoAction(
   testo: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!tipoValido(tipo)) return { success: false, error: 'Tipo di documento non valido.' };
     await assicuraTabellaDocumentiCorredo(nomeSchema);
@@ -158,8 +165,12 @@ export async function generaDocumentoCorredoAction(
   tipo: string
 ): Promise<RisultatoGeneraDocumentoCorredo> {
   try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
     if (!anthropic) {
-      return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
+      return { success: false, error: messaggioChiaveAiMancante() };
     }
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!tipoValido(tipo)) return { success: false, error: 'Tipo di documento non valido.' };
@@ -271,7 +282,9 @@ export async function generaDocumentoCorredoAction(
     console.error('[generaDocumentoCorredoAction] Errore:', error);
     return {
       success: false,
-      error: `Errore durante la generazione del documento: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Errore durante la generazione del documento: ${error.message || error}`,
     };
   }
 }
