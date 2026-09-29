@@ -10,6 +10,7 @@
 
 import { richiediAccessoScenario, verificaFileDelloSpazio } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { del, get } from '@/lib/blobStore';
 import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
 import { pool } from '@/lib/db';
@@ -117,7 +118,7 @@ export async function analizzaDocumentiRiceventeAction(
     if (!anthropic) {
       return {
         success: false,
-        error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.',
+        error: messaggioChiaveAiMancante(),
       };
     }
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
@@ -453,7 +454,8 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
       success: false,
       error: scaduto
         ? "L'analisi ha superato il tempo massimo disponibile — riprova. Se i documenti sono molto voluminosi, carica solo le pagine rilevanti o un file per volta."
-        : `Impossibile analizzare i documenti: ${error.message || error}`,
+        : (erroreServizioEsterno(error, 'AI') ??
+          `Impossibile analizzare i documenti: ${error.message || error}`),
     };
   } finally {
     // I documenti non si conservano — riuscita o fallita che sia

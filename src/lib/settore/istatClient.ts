@@ -21,6 +21,8 @@
 // per pattern invece di assumere un nome fisso, e fallisce in modo
 // esplicito (non silenzioso) se non la trova.
 
+import { erroreServizioEsterno } from '@/lib/serviziEsterni';
+
 const ENDPOINT_BASE = 'https://esploradati.istat.it/SDMXWS/rest/data';
 const INTERVALLO_MINIMO_MS = 15_000; // margine di sicurezza sotto il limite di 5/min (12s)
 
@@ -200,7 +202,9 @@ export async function interrogaIstat(
     return {
       successo: false,
       punti: [],
-      errore: `Impossibile contattare ISTAT: ${error.message || error}`,
+      errore:
+        erroreServizioEsterno(error, 'ISTAT') ??
+        `Impossibile contattare ISTAT: ${error.message || error}`,
     };
   }
 }

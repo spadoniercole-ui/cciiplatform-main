@@ -91,6 +91,13 @@ anche la CI in `.github/workflows/ci.yml`).
 multi-spazio. Una modifica al codice condiviso deve funzionare **sia in cloud sia in
 portable**. Dettagli: `portable/REPORT-PORTABLE.md`.
 
+Modalità **rete locale** (`PORTABLE_LAN=1` in `config.bat`): Next resta su `127.0.0.1`;
+`portable/lan-https.mjs` (copiato nel pacchetto con `node-forge`) espone la piattaforma in
+HTTPS sulla rete, con certificato autofirmato in `dati/tls` o fornito dall'IT, e conserva
+l'`Host` originale (necessario al controllo di origine delle server action). Con
+`PORTABLE_HTTPS=1` i cookie di sessione diventano `Secure` (`src/lib/cookieSicuro.ts`).
+Errori di rete verso Anthropic/ISTAT → messaggi di `src/lib/serviziEsterni.ts`.
+
 ## Convenzioni
 
 - **Lingua**: UI, commenti, messaggi di commit e CHANGELOG in **italiano**.

@@ -20,6 +20,7 @@ import {
 import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { del, get } from '@/lib/blobStore';
 import { pool } from '@/lib/db';
 import {
@@ -433,7 +434,7 @@ export async function generaScreeningAziendaAction(
     if (!anthropic) {
       return {
         success: false,
-        error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.',
+        error: messaggioChiaveAiMancante(),
       };
     }
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
@@ -975,7 +976,9 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
     console.error('[generaScreeningAziendaAction] Errore:', error);
     return {
       success: false,
-      error: `Impossibile generare lo screening: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Impossibile generare lo screening: ${error.message || error}`,
     };
   } finally {
     // I documenti non si conservano: il file su Blob non deve restare lì.
@@ -1148,7 +1151,7 @@ export async function correggiPolaritaScreeningAction(
         success: false,
         domandeCorrette: 0,
         risposteInvertite: 0,
-        error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.',
+        error: messaggioChiaveAiMancante(),
       };
     }
     if (!validaSchema(nomeSchema)) {
@@ -1259,7 +1262,9 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
       success: false,
       domandeCorrette: 0,
       risposteInvertite: 0,
-      error: `Impossibile correggere la polarità: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Impossibile correggere la polarità: ${error.message || error}`,
     };
   }
 }

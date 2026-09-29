@@ -52,6 +52,34 @@ Avvio
 - Per spegnere: chiudi la finestra nera del server. I dati vengono salvati
   (cifrati) automaticamente durante l'uso e alla chiusura.
 
+Uso in rete locale (più PC dello stesso ufficio)
+-----------------------------------------------
+Un PC fa da "server" e gli altri usano la piattaforma dal browser, senza
+installare nulla.
+1) Sul PC server apri  config.bat  e imposta  PORTABLE_LAN=1
+   (porta predefinita 4443, modificabile con PORTABLE_LAN_PORTA).
+2) La PRIMA volta avvia  Avvia-CCII.bat  con clic destro →
+   "Esegui come amministratore": serve ad aprire la porta nel firewall di
+   Windows (solo reti private e di dominio). Dalle volte successive basta il
+   doppio clic. Se non puoi, chiedi all'IT di consentire in ingresso la
+   porta TCP 4443.
+3) All'avvio la finestra mostra gli indirizzi da aprire dagli altri PC, ad
+   esempio  https://pc-studio:4443  oppure  https://192.168.1.20:4443
+4) Al primo accesso da ogni PC il browser avvisa che il certificato non è
+   riconosciuto (è "autofirmato", creato al primo avvio in dati\tls): è
+   atteso; scegli "Avanzate" → "Procedi". Per evitare l'avviso l'IT può
+   installare il certificato (dati\tls\cert.pem) sui PC, oppure mettere in
+   dati\tls un proprio cert.pem + key.pem firmati dalla CA interna.
+- Il traffico è cifrato (HTTPS); il server interno resta su 127.0.0.1 e non
+  è raggiungibile direttamente dalla rete.
+- Il PC server deve restare acceso con la finestra aperta finché gli altri
+  lavorano; se lo spegni, gli altri vedono "Il server non risponde ancora".
+- Anche sul PC server si usa l'indirizzo https (si apre da solo).
+- Ogni persona deve avere il PROPRIO utente (Admin → Aziende → Operatori):
+  non condividete lo stesso login fra più PC.
+- Senza internet le funzioni AI e i dati ISTAT mostrano un messaggio chiaro;
+  tutto il resto funziona in rete locale.
+
 Sicurezza dei dati
 ------------------
 - Il file del database (dati\ccii.db.enc) è cifrato con AES-256-GCM, chiave
@@ -70,6 +98,9 @@ Limiti noti di questa edizione portable
 - Due spazi fissi (Redigente + Ricevente), un Admin per ciascuno. La parte
   SaaS del cloud (superadmin, gestione multi-spazio, licenze commerciali)
   è disattivata: gli spazi non si aggiungono né si rimuovono dall'interno.
-- Le funzioni AI e i dati di settore richiedono internet.
+- Le funzioni AI e i dati di settore richiedono internet (senza, messaggio
+  esplicito; il resto funziona).
+- In rete locale: pensata per un ufficio con pochi utenti contemporanei; un
+  solo PC server, nessun bilanciamento o replica.
 - Testata su Linux in fase di sviluppo; il collaudo su Windows va completato
   sulla macchina di destinazione.

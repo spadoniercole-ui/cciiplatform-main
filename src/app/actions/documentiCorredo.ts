@@ -13,6 +13,7 @@ import { perimetroPerPrompt } from '@/lib/revisore/perimetro';
 import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneServer';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { pool } from '@/lib/db';
 import { assicuraTabellaDocumentiCorredo } from '@/db/provision';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
@@ -169,7 +170,7 @@ export async function generaDocumentoCorredoAction(
       livello: 'SCRITTURA',
     });
     if (!anthropic) {
-      return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
+      return { success: false, error: messaggioChiaveAiMancante() };
     }
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!tipoValido(tipo)) return { success: false, error: 'Tipo di documento non valido.' };
@@ -281,7 +282,9 @@ export async function generaDocumentoCorredoAction(
     console.error('[generaDocumentoCorredoAction] Errore:', error);
     return {
       success: false,
-      error: `Errore durante la generazione del documento: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Errore durante la generazione del documento: ${error.message || error}`,
     };
   }
 }

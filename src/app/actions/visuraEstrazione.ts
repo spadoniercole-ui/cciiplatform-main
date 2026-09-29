@@ -23,6 +23,7 @@
 // caricato su questa piattaforma.
 
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { richiediSessione } from '@/lib/autorizzazione';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -101,8 +102,7 @@ export async function estraiAnagraficaDaVisuraAction(
     if (!anthropic) {
       return {
         success: false,
-        error:
-          'Estrazione non disponibile: la chiave API non è configurata sul server. I campi vanno compilati a mano.',
+        error: `${messaggioChiaveAiMancante()} I campi vanno compilati a mano.`,
       };
     }
     if (!pdfBase64 || pdfBase64.length < 100) {
@@ -207,6 +207,11 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo:
     return { success: true, anagrafica, nonTrovati };
   } catch (error: unknown) {
     console.error('[estraiAnagraficaDaVisuraAction] Errore:', error);
-    return { success: false, error: `Estrazione non riuscita: ${(error as Error).message}` };
+    return {
+      success: false,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Estrazione non riuscita: ${(error as Error).message}`,
+    };
   }
 }

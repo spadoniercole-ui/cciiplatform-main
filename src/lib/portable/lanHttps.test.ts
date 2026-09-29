@@ -3,7 +3,6 @@ import crypto from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
 import type { AddressInfo } from 'node:net';
-// @ts-expect-error modulo .mjs senza tipi: è il proxy spedito con la portable
 import { generaCertificato, inoltra } from '../../../portable/lan-https.mjs';
 
 // Proxy HTTPS della modalità rete locale (portable/lan-https.mjs): certificato
