@@ -8,6 +8,7 @@
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import { pool } from '@/lib/db';
+import { cookieSicuro } from '@/lib/cookieSicuro';
 
 const DURATA_SESSIONE_ORE = 8;
 
@@ -32,7 +33,7 @@ export async function creaSessione(
   cookieStore.set('session_token', token, {
     httpOnly: true,
     // Secure solo in produzione E non nell'edizione portable (HTTP locale).
-    secure: process.env.NODE_ENV === 'production' && process.env.PORTABLE !== '1',
+    secure: cookieSicuro(),
     sameSite: 'lax',
     path: '/',
     expires: scadenza,

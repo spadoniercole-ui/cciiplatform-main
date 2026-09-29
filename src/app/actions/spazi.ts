@@ -29,6 +29,7 @@ import {
   risolviContestoSpazio,
   type ContestoAccessoSpazio,
 } from '@/lib/autorizzazione';
+import { cookieSicuro } from '@/lib/cookieSicuro';
 
 export interface ActionResult {
   success: boolean;
@@ -376,7 +377,7 @@ export async function entraComeSalvagenteAction(spazioId: number): Promise<Actio
     const cookieStore = await cookies();
     cookieStore.set(COOKIE_SPAZIO_ISPEZIONE, String(spazio.id), {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production' && process.env.PORTABLE !== '1',
+      secure: cookieSicuro(),
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 8, // 8 ore, come la sessione di autenticazione

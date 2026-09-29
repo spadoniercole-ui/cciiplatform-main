@@ -12,6 +12,7 @@ import { pool } from '@/lib/db';
 import { assicuraTabelleMfa } from '@/db/ensureTables';
 import { generaSegretoBase32 } from '@/lib/mfa/totp';
 import type { FattoreMfa, DatiAvvioChallenge } from '@/lib/mfa/tipi';
+import { cookieSicuro } from '@/lib/cookieSicuro';
 
 export const COOKIE_PENDING = 'mfa_pending';
 const DURATA_CHALLENGE_MIN = 10;
@@ -19,7 +20,7 @@ const DURATA_CHALLENGE_MIN = 10;
 function cookieOpts(scadenza: Date) {
   return {
     httpOnly: true as const,
-    secure: process.env.NODE_ENV === 'production' && process.env.PORTABLE !== '1',
+    secure: cookieSicuro(),
     sameSite: 'lax' as const,
     path: '/',
     expires: scadenza,
