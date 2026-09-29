@@ -93,6 +93,30 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.114.0 — 2026-09-29
+
+**Edizione portable in rete locale** (Portable 1.1.0)
+
+- Nuova modalità **rete locale** dell'edizione portable: un PC fa da server e
+  gli altri PC dell'ufficio usano la piattaforma dal browser, in **HTTPS**.
+  Si attiva con `PORTABLE_LAN=1` in `config.bat`; all'avvio sono mostrati gli
+  indirizzi da aprire. Il server interno resta su 127.0.0.1; un proxy HTTPS
+  (`lan-https.mjs`) espone solo la porta cifrata (predefinita 4443), con
+  certificato autofirmato creato al primo avvio o fornito dall'IT
+  (`dati\tls\cert.pem` + `key.pem`). Il launcher prova ad aprire la porta
+  nel firewall di Windows (reti private e di dominio).
+- Cookie di sessione `Secure` anche nella portable quando è in HTTPS.
+- Funzioni AI e dati ISTAT: senza internet, con chiave API assente o non
+  valida, o con servizio sovraccarico compare un messaggio chiaro invece di
+  un errore tecnico; il resto della piattaforma funziona normalmente.
+- README della portable: istruzioni per l'uso in rete locale.
+
+Verificato: type-check, lint, test (815), build cloud e portable; portable in
+modalità rete locale provata dall'indirizzo di rete della macchina: due
+utenti contemporanei (54 pagine), Operatore con cookie Secure e chiusura
+della sessione al cambio password; porta interna non raggiungibile dalla
+rete, HTTP semplice rifiutato.
+
 ## 0.113.0 — 2026-09-28
 
 **Correzioni emerse dai test e pulizia**

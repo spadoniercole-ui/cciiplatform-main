@@ -13,6 +13,7 @@
 
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { pool } from '@/lib/db';
 import { assicuraTabelleParametriSpazio } from '@/db/provision';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
@@ -182,7 +183,8 @@ async function riscontraSuFonti(prompt: string, domini: string[]): Promise<Risco
     return {
       ...RISCONTRO_VUOTO,
       esito: 'NON_VERIFICABILE',
-      motivo: 'Fonte non raggiungibile o risposta non interpretabile.',
+      motivo:
+        erroreServizioEsterno(e, 'AI') ?? 'Fonte non raggiungibile o risposta non interpretabile.',
       eseguitoIl: adesso,
     };
   }
@@ -477,8 +479,7 @@ export async function ricercaMateriaAction(
     if (!anthropic)
       return {
         success: false,
-        error:
-          'Ricerca automatica non disponibile in questo ambiente (nessuna chiave AI o nessuna rete).',
+        error: messaggioChiaveAiMancante(),
       };
     const domini = [dominio, ...DOMINI_NORMA];
     let testo = '';
@@ -503,17 +504,18 @@ export async function ricercaMateriaAction(
         .join('\n');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      const amichevole = erroreServizioEsterno(e, 'AI');
       console.error('[ricercaMateriaAction]', msg);
       await pool.query(
         `UPDATE "${nomeSchema}".materie_ente SET esito_ricerca = $2, aggiornato_il = now() WHERE id = $1`,
         [
           materiaId,
-          `Ricerca del ${new Date().toLocaleString('it-IT')}: rifiutata dal servizio AI — ${msg.slice(0, 200)}`,
+          `Ricerca del ${new Date().toLocaleString('it-IT')}: ${amichevole ?? `rifiutata dal servizio AI — ${msg.slice(0, 200)}`}`,
         ]
       );
       return {
         success: false,
-        error: `La ricerca è stata rifiutata dal servizio AI: ${msg.slice(0, 200)}`,
+        error: amichevole ?? `La ricerca è stata rifiutata dal servizio AI: ${msg.slice(0, 200)}`,
       };
     }
     const adesso = new Date();
@@ -646,8 +648,7 @@ export async function avviaRicercaDifferitaAction(
     if (!anthropic)
       return {
         success: false,
-        error:
-          'Ricerca automatica non disponibile in questo ambiente (nessuna chiave AI o nessuna rete).',
+        error: messaggioChiaveAiMancante(),
       };
     const nomeSchema = contesto.nomeSchema;
     const cfg = await pool.query(
@@ -705,7 +706,12 @@ export async function avviaRicercaDifferitaAction(
     return { success: true, materie: m.rows.length, lottoId: lotto.id };
   } catch (error: unknown) {
     const msg = (error as Error).message || String(error);
-    return { success: false, error: `Invio in differita non riuscito: ${msg.slice(0, 200)}` };
+    return {
+      success: false,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Invio in differita non riuscito: ${msg.slice(0, 200)}`,
+    };
   }
 }
 
@@ -782,6 +788,9 @@ export async function verificaRicercaDifferitaAction(codiceSpazio: string): Prom
     return { success: true, stato: 'CONCLUSA', proposte, aVuoto };
   } catch (error: unknown) {
     const msg = (error as Error).message || String(error);
-    return { success: false, error: `Verifica non riuscita: ${msg.slice(0, 200)}` };
+    return {
+      success: false,
+      error: erroreServizioEsterno(error, 'AI') ?? `Verifica non riuscita: ${msg.slice(0, 200)}`,
+    };
   }
 }

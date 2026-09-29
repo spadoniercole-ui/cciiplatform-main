@@ -8,6 +8,7 @@
 
 import { ErroreAutorizzazione, richiediAccessoScenario } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno } from '@/lib/serviziEsterni';
 import { pool } from '@/lib/db';
 import { assicuraTabellaConfrontoLiquidatorio } from '@/db/provision';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
@@ -196,7 +197,11 @@ Non esprimere valutazioni su QUESTA specifica proposta — il riscontro con il n
         `INSERT INTO "${nomeSchema}".confronto_liquidatorio (scenario_id, errore, generato_il)
          VALUES ($1, $2, now())
          ON CONFLICT (scenario_id) DO UPDATE SET errore = $2, generato_il = now()`,
-        [scenarioId, `Errore durante la ricerca: ${error.message || error}`]
+        [
+          scenarioId,
+          erroreServizioEsterno(error, 'AI') ??
+            `Errore durante la ricerca: ${error.message || error}`,
+        ]
       );
     } catch {
       // Anche il salvataggio dell'errore può fallire — a quel punto
@@ -328,7 +333,7 @@ Non dare un giudizio finale sulla convenienza della proposta concreta — le per
         nomeSchema,
         scenarioId,
         null,
-        `Errore durante la ricerca: ${error.message || error}`
+        erroreServizioEsterno(error, 'AI') ?? `Errore durante la ricerca: ${error.message || error}`
       );
     } catch {
       // Anche il salvataggio dell'errore può fallire — resta nei log.

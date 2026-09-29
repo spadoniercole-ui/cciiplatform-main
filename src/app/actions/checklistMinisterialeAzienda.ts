@@ -15,6 +15,7 @@ import {
   verificaFileDelloSpazio,
 } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { del, get } from '@/lib/blobStore';
 import { pool } from '@/lib/db';
 import { assicuraTabelleScenari } from '@/db/provision';
@@ -194,7 +195,7 @@ export async function generaPreCompilazioneMinisterialeAction(
       return {
         success: false,
         domandeCompilate: 0,
-        error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.',
+        error: messaggioChiaveAiMancante(),
       };
     }
     if (!validaSchema(nomeSchema)) {
@@ -340,7 +341,9 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
     return {
       success: false,
       domandeCompilate: 0,
-      error: `Impossibile pre-compilare: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Impossibile pre-compilare: ${error.message || error}`,
     };
   } finally {
     try {

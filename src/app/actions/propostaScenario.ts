@@ -19,6 +19,7 @@ import { perimetroPerPrompt } from '@/lib/revisore/perimetro';
 import { correggiConRevisore, notaCorrezione } from '@/lib/revisore/correzioneServer';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { pool } from '@/lib/db';
 import { assicuraTabellaProposta, assicuraTabellaSimulazioneRicevente } from '@/db/provision';
 import {
@@ -537,7 +538,7 @@ export async function generaRelazionePropostaAction(
       livello: 'SCRITTURA',
     });
     if (!anthropic) {
-      return { success: false, error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' };
+      return { success: false, error: messaggioChiaveAiMancante() };
     }
     const plusRis = await ottieniFunzioniPlusSpazio(nomeSchema);
     if (!plusRis.funzioni.relazioneAi) {
@@ -893,7 +894,9 @@ Elabora la relazione di valutazione della proposta seguendo la struttura prescri
     console.error('[generaRelazionePropostaAction] Errore:', error);
     return {
       success: false,
-      error: `Errore durante la generazione della relazione: ${error.message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Errore durante la generazione della relazione: ${error.message || error}`,
     };
   }
 }

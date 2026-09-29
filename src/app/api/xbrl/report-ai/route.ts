@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { NextRequest, NextResponse } from 'next/server';
 import { rifiutaSeNonAutorizzato } from '@/lib/autorizzazione';
 
@@ -57,10 +58,7 @@ export async function POST(req: NextRequest) {
     const rifiuto = await rifiutaSeNonAutorizzato('SUPERADMIN');
     if (rifiuto) return rifiuto;
     if (!anthropic) {
-      return NextResponse.json(
-        { error: 'Chiave API ANTHROPIC_API_KEY non configurata nel server.' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: messaggioChiaveAiMancante() }, { status: 500 });
     }
 
     const body: ReportRequestBody = await req.json();
@@ -179,7 +177,11 @@ Elabora la relazione tecnico-diagnostica seguendo la struttura prescritta.
   } catch (err: any) {
     console.error('Errore API Report AI:', err);
     return NextResponse.json(
-      { error: `Errore durante la generazione della relazione AI: ${err.message || err}` },
+      {
+        error:
+          erroreServizioEsterno(err, 'AI') ??
+          `Errore durante la generazione della relazione AI: ${err.message || err}`,
+      },
       { status: 500 }
     );
   }

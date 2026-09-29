@@ -37,3 +37,12 @@ REM proposta sul Redigente, e sul Ricevente tutta la parte ente
 REM (anagrafica, posizione debitoria, limiti, proposta ricevuta).
 REM Metti a 0 per partire con spazi VUOTI.
 set "PORTABLE_SEED_DEMO=1"
+
+REM ---- Rete locale ----
+REM 0 = la piattaforma si usa solo da QUESTO PC (predefinito).
+REM 1 = anche dagli altri PC dell'ufficio, in HTTPS, all'indirizzo
+REM     https://<nome-di-questo-pc>:<porta> (mostrato all'avvio).
+REM     Questo PC deve restare acceso con la finestra aperta.
+REM     Per un certificato dell'ente: metti cert.pem e key.pem in dati\tls.
+set "PORTABLE_LAN=0"
+set "PORTABLE_LAN_PORTA=4443"
