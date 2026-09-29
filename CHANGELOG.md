@@ -93,6 +93,22 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.116.1 — 2026-09-29
+
+**Sicurezza: libreria Excel aggiornata**
+
+- **Sostituita la libreria che legge e scrive i file Excel** (SheetJS
+  `xlsx`): la versione 0.18.5 pubblicata su npm aveva vulnerabilità note
+  (inquinamento del prototipo e blocco su file costruiti ad arte) che non
+  verranno mai corrette lì. Ora si usa la build ufficiale 0.20.3 da
+  cdn.sheetjs.com, con la stessa interfaccia: nessun cambiamento per gli
+  utenti in import ed export di Check List, modello di Check List,
+  Proposta, Posizione Aggiornata, Debiti verso l'ente (anche tracciati
+  INPS con date), anagrafica titoli e report XBRL.
+- Nuovo test di andata e ritorno (export → file .xlsx → import) sui
+  moduli principali e sulla lettura delle date, così un futuro cambio di
+  versione che rompa i file Excel fa fallire la CI.
+
 ## 0.116.0 — 2026-09-29
 
 **Sicurezza: password temporanee, tentativi di accesso, costi AI**
