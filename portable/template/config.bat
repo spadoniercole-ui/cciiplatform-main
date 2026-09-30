@@ -5,8 +5,10 @@ REM  Al PRIMO avvio (database vuoto) questi valori creano DUE spazi
 REM  di lavoro fissi con i rispettivi Admin:
 REM    - REDIGENTE (NON_ENTE): lo studio che PREDISPONE la proposta
 REM    - RICEVENTE (ENTE):     l'ente creditore che VALUTA la proposta
-REM  Sono due login separati (email diverse): si entra con l'uno o
-REM  con l'altro, si esce e si rientra per cambiare lato.
+REM  Sono due login separati: si entra con il NOME UTENTE, che e'
+REM  nome.cognome dell'Admin in minuscolo (non l'email). Con i valori
+REM  sotto: admin.redigente e admin.ricevente. Si esce e si rientra
+REM  per cambiare lato.
 REM  Dopo il primo avvio questi valori vengono ignorati (i dati sono
 REM  gia' nel database).
 REM ============================================================
@@ -29,7 +31,9 @@ set "PORTABLE_ENTE_ADMIN_EMAIL=ricevente@locale"
 set "PORTABLE_ENTE_ADMIN_CELLULARE="
 set "PORTABLE_ENTE_ADMIN_PASSWORD=ricevente1234"
 
-REM NOTA: le due email DEVONO essere diverse (sono i due login separati).
+REM NOTA: se i due Admin hanno lo stesso nome e cognome, al secondo
+REM vengono aggiunte due cifre (es. mario.rossi01): lo username effettivo e'
+REM scritto nella finestra nera ad ogni avvio.
 
 REM ---- Demo pre-caricata (stessa azienda sui due lati) ----
 REM Al primo avvio semina un caso completo gia' navigabile: azienda +
