@@ -6,8 +6,12 @@ node_modules/
 out/
 *.tsbuildinfo
 
-# Build portable (chiavetta USB)
+# Build portable (chiavetta USB) e il suo ZIP da scaricare
 portable-dist/
+/ccii-portable.zip
+# Cartelle con i due punti nel nome (es. "C:ccii", da un percorso Windows
+# digitato in bash): Windows non le accetta e il pull fallirebbe.
+/*:*
 
 # Variabili d'ambiente e segreti
 .env
