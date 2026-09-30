@@ -448,6 +448,23 @@ async function seedDemoPortable(redigente: SpazioCreato, ricevente: SpazioCreato
   }
 }
 
+/** Scrive nella finestra del launcher gli username di accesso degli Admin,
+ * letti dal database: ad OGNI avvio, perché si accede con lo username
+ * (nome.cognome dal config.bat del primo avvio), non con l'email. */
+export async function mostraAccessiPortable(): Promise<void> {
+  try {
+    const { pool } = await import('@/lib/db');
+    const r = await pool.query(
+      'SELECT username, codice_spazio FROM admin_spazio_index ORDER BY codice_spazio'
+    );
+    if (r.rows.length === 0) return;
+    const elenco = r.rows.map((x: any) => `"${x.username}" (${x.codice_spazio})`).join(', ');
+    console.info(`[portable] Accesso con il NOME UTENTE, non l'email: ${elenco}.`);
+  } catch (e) {
+    console.error('[portable] Elenco degli username non disponibile (non blocca l’avvio):', e);
+  }
+}
+
 export async function bootstrapPortable(): Promise<void> {
   const { assicuraTabelleSpazi, assicuraIndiceAdminSpazio } = await import('@/db/ensureTables');
 
@@ -491,10 +508,6 @@ export async function bootstrapPortable(): Promise<void> {
   // indipendenti; creaSpazioPortable è idempotente per codice.
   const redCreato = await creaSpazioPortable(redigente);
   const enteCreato = await creaSpazioPortable(ricevente);
-
-  console.info(
-    `[portable] Due spazi pronti — login con username: "admin.redigente" e "admin.ricevente" (nome.cognome degli admin configurati).`
-  );
 
   // Demo coerente sui due lati (stessa azienda; parte ente completa sul
   // Ricevente). Non blocca l'avvio in caso di errore.

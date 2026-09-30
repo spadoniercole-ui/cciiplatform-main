@@ -170,10 +170,9 @@ export async function initPortableDb(): Promise<void> {
     await et.assicuraIndiceAdminSpazio();
     await et.assicuraIndiceUtenteSpazio();
 
-    if (fresco) {
-      const { bootstrapPortable } = await import('@/lib/portableBootstrap');
-      await bootstrapPortable();
-    }
+    const { bootstrapPortable, mostraAccessiPortable } = await import('@/lib/portableBootstrap');
+    if (fresco) await bootstrapPortable();
+    await mostraAccessiPortable();
     await persistiOra();
   })();
   return stato.inizializzazione;

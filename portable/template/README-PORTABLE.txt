@@ -22,11 +22,12 @@ Preparazione (una volta sola)
 3) Configurazione iniziale (facoltativa):
    - Apri  config.bat  con un editor di testo. Al primo avvio vengono creati
      DUE spazi di lavoro sulla stessa istanza, con due login separati:
-       * REDIGENTE (chi PREDISPONE la proposta) — default redigente@locale
-       * RICEVENTE (l'ente che VALUTA la proposta) — default ricevente@locale
+       * REDIGENTE (chi PREDISPONE la proposta) — nome utente admin.redigente
+       * RICEVENTE (l'ente che VALUTA la proposta) — nome utente admin.ricevente
      È lo stesso caso visto dai due lati. Puoi cambiare nomi, email e
-     password (le due email DEVONO restare diverse). Questi valori valgono
-     SOLO al primo avvio.
+     password. Il NOME UTENTE per accedere è  nome.cognome  dell'Admin, in
+     minuscolo (es. Mario Rossi -> mario.rossi): NON è l'email. Questi valori
+     valgono SOLO al primo avvio: dopo, modificarli non cambia nulla.
 
 Demo pre-caricata
 -----------------
@@ -44,11 +45,20 @@ Avvio
   ATTENZIONE: la passphrase cifra i dati. Se la dimentichi, i dati non sono
   recuperabili. Usa la stessa passphrase ad ogni avvio.
 - Il browser si apre su  http://127.0.0.1:4028
-- Accedi con uno dei due login impostati in config.bat. Di default:
-    * Redigente:  redigente@locale / redigente1234
-    * Ricevente:  ricevente@locale / ricevente1234
-  (cambia le password al primo accesso). Per passare da un lato all'altro:
-  esci e rientra con l'altra email.
+- Accedi con il NOME UTENTE (non l'email) e la password. Di default:
+    * Redigente:  admin.redigente / redigente1234
+    * Ricevente:  admin.ricevente / ricevente1234
+  Gli username effettivi sono scritti nella finestra nera ad ogni avvio
+  (riga "[portable] Accesso con il NOME UTENTE ...").
+- Al primo accesso di ogni Admin viene chiesta la VERIFICA IN DUE
+  PASSAGGI: installa sul telefono un'app come Google Authenticator o
+  Microsoft Authenticator, inquadra il QR (o inserisci a mano la chiave
+  mostrata) e scrivi il codice a 6 cifre. Funziona anche senza internet,
+  purché l'ora del PC e del telefono siano corrette. Dagli accessi
+  successivi: nome utente, password e codice dell'app.
+- Per non usare le password predefinite, impostale in config.bat PRIMA
+  del primo avvio.
+- Per passare da un lato all'altro: esci e rientra con l'altro nome utente.
 - Per spegnere: chiudi la finestra nera del server. I dati vengono salvati
   (cifrati) automaticamente durante l'uso e alla chiusura.
 

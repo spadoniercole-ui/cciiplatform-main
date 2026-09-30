@@ -93,6 +93,21 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.116.4 — 2026-09-30
+
+**Portable: si accede con il nome utente, non con l'email** (Portable 1.1.3)
+
+- `README-PORTABLE.txt` e `config.bat` indicavano come credenziali le email
+  (`redigente@locale`), che la pagina di accesso rifiuta con "Credenziali
+  non valide": da tempo si accede con il **nome utente** `nome.cognome`
+  dell'Admin (di default `admin.redigente` e `admin.ricevente`). Corretti
+  entrambi, con la regola per ricavare lo username da nome e cognome.
+- La finestra del launcher scrive **ad ogni avvio** gli username effettivi,
+  letti dal database. Prima compariva solo al primo avvio una riga con i
+  nomi predefiniti, anche quando in `config.bat` erano stati cambiati.
+- Il README spiega la **verifica in due passaggi** chiesta al primo accesso
+  di ogni Admin (app Authenticator sul telefono, funziona anche offline).
+
 ## 0.116.3 — 2026-09-29
 
 **Portable: il launcher spiega perché manca server.js** (Portable 1.1.2)
