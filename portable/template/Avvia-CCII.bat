@@ -13,6 +13,44 @@ set "PORT=4028"
 set "HOSTNAME=127.0.0.1"
 set "PORTABLE_DATA_DIR=%~dp0dati"
 
+REM --- Verifica, PRIMA della passphrase, che il pacchetto sia completo ---
+REM Senza server.js individua la causa piu' probabile e la spiega. Solo "if" su
+REM una riga (niente blocchi tra parentesi ne' etichette): il percorso della
+REM cartella puo' contenere parentesi, es. "(x86)".
+set "CARTELLA=%~dp0"
+set "CAUSA="
+set "ANNIDATO="
+REM Dentro la cartella temporanea = aperto da uno ZIP senza estrarlo.
+setlocal EnableDelayedExpansion
+set "IN_TEMP=0"
+if defined TEMP if /i not "!CARTELLA:%TEMP%=!"=="!CARTELLA!" set "IN_TEMP=1"
+endlocal & set "IN_TEMP=%IN_TEMP%"
+if not exist "server.js" if "%IN_TEMP%"=="1" set "CAUSA=ZIP"
+if not exist "server.js" if not defined CAUSA if exist "..\build-portable.mjs" set "CAUSA=SORGENTI"
+if not exist "server.js" if not defined CAUSA for /d %%d in (*) do if exist "%%d\server.js" set "ANNIDATO=%%d"
+if not exist "server.js" if not defined CAUSA if defined ANNIDATO set "CAUSA=ANNIDATO"
+if not exist "server.js" if not defined CAUSA set "CAUSA=INCOMPLETO"
+if defined CAUSA echo.
+if defined CAUSA echo  ERRORE: server.js non trovato nella cartella
+if defined CAUSA echo    "%CARTELLA%"
+if defined CAUSA echo.
+if "%CAUSA%"=="ZIP" echo  Stai avviando il launcher dall'interno di un file ZIP: Windows ha estratto
+if "%CAUSA%"=="ZIP" echo  solo questo file in una cartella temporanea. Estrai prima TUTTO l'archivio
+if "%CAUSA%"=="ZIP" echo  - tasto destro sul file ZIP, "Estrai tutto" - e avvia Avvia-CCII.bat
+if "%CAUSA%"=="ZIP" echo  dalla cartella estratta.
+if "%CAUSA%"=="SORGENTI" echo  Questa e' la cartella dei sorgenti, portable\template. Esegui
+if "%CAUSA%"=="SORGENTI" echo  "npm run build:portable" e avvia Avvia-CCII.bat dalla cartella portable-dist.
+if "%CAUSA%"=="ANNIDATO" echo  server.js si trova nella sottocartella "%ANNIDATO%": il pacchetto e' stato
+if "%CAUSA%"=="ANNIDATO" echo  costruito con una versione precedente a Portable 1.1.1. Aggiorna i sorgenti,
+if "%CAUSA%"=="ANNIDATO" echo  esegui di nuovo "npm run build:portable" e sostituisci i file del programma,
+if "%CAUSA%"=="ANNIDATO" echo  lasciando la cartella "dati".
+if "%CAUSA%"=="INCOMPLETO" echo  Il pacchetto e' incompleto: la copia si e' interrotta, oppure l'antivirus ha
+if "%CAUSA%"=="INCOMPLETO" echo  messo in quarantena server.js. Ricopia l'intera cartella portable-dist, o
+if "%CAUSA%"=="INCOMPLETO" echo  ricostruiscila con "npm run build:portable", e riprova.
+if defined CAUSA echo.
+if defined CAUSA pause
+if defined CAUSA exit /b 1
+
 REM --- Configurazione dello spazio/admin (modificabile in config.bat) ---
 if exist "config.bat" call "config.bat"
 
@@ -47,16 +85,6 @@ if not defined NODEEXE ( where node >nul 2>nul && set "NODEEXE=node" )
 if not defined NODEEXE (
   echo.
   echo  Node non trovato. Metti node.exe in .\node\ oppure installa Node.js, poi riavvia.
-  pause
-  exit /b 1
-)
-
-REM --- Verifica che il pacchetto sia quello costruito (deve esserci server.js) ---
-if not exist "server.js" (
-  echo.
-  echo  ERRORE: server.js non trovato in questa cartella.
-  echo  Stai lanciando dalla cartella giusta? Deve essere la cartella "portable-dist"
-  echo  prodotta da "npm run build:portable", non i sorgenti.
   pause
   exit /b 1
 )

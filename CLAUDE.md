@@ -148,6 +148,8 @@ deve funzionare **in cloud, in portable e sul server**. La CI costruisce anche l
   romperebbero i permessi salvati.
 - Nuove chiamate AI a consumo raggiungibili con la sola sessione: passarle da
   `consumaQuotaAi` (`src/lib/limiteAi.ts`).
-- `xlsx` 0.18.5 (npm) ha vulnerabilità note senza correzione: va sostituito con la build
-  SheetJS 0.20.x da cdn.sheetjs.com (stessa API), non con un'altra versione da npm.
+- `xlsx` è la build SheetJS 0.20.x da cdn.sheetjs.com, salvata in `vendor/xlsx-0.20.3.tgz`
+  (`"xlsx": "file:vendor/…"`): così `npm ci` in CI e nell'immagine Docker non dipende dal CDN.
+  Non tornare alle versioni npm (0.18.5 ha vulnerabilità senza correzione); per aggiornare,
+  scaricare il nuovo `.tgz` in `vendor/`. `src/lib/excel/sheetjs.test.ts` verifica import/export.
 - `README.md` è boilerplate generico: questo file è la documentazione di riferimento.

@@ -1,6 +1,6 @@
 {
   "name": "cciiplatform",
-  "version": "0.116.1",
+  "version": "0.116.4",
   "type": "module",
   "private": true,
   "engines": {
@@ -41,7 +41,7 @@
     "react-dom": "19.0.3",
     "recharts": "^2.15.2",
     "sonner": "^1.7.4",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "file:vendor/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
