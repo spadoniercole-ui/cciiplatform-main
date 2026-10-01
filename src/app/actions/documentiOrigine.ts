@@ -10,7 +10,8 @@ import { assicuraTabellaDocumentiOrigine } from '@/db/provision';
 import { improntaValida, type DescrittoreDocumento } from '@/lib/fascicolo/impronta';
 import { richiediAccessoAzienda } from '@/lib/autorizzazione';
 
-export type TipoDocumentoOrigine = 'POSIZIONE_ENTE' | 'VERA' | 'VISURA' | 'PROPOSTA' | 'XBRL';
+export type TipoDocumentoOrigine =
+  'POSIZIONE_ENTE' | 'VERA' | 'VISURA' | 'PROPOSTA' | 'XBRL' | 'BILANCINO' | 'PIANO_AZIENDALE';
 
 export async function registraDocumentoOrigineAction(
   nomeSchema: string,

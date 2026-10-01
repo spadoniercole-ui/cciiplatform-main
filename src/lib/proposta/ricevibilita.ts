@@ -39,6 +39,8 @@ export interface EsitoRicevibilita {
   complessivamenteRicevibile: boolean;
   /** Solo percorso Ricevente: false quando non c'è ancora nessuna estrazione dal documento — "non ricevibile" per assenza di dati è diverso da "non ricevibile" perché l'importo è sotto soglia, e vanno mostrati in modo diverso all'utente. */
   datiDisponibili?: boolean;
+  /** false = la proposta non è ancora stata analizzata (nessuna estrazione). */
+  analisiEseguita?: boolean;
 }
 
 /** Campi di una soglia usati dalla verifica (comuni ai limiti per categoria e per rango). */
@@ -284,6 +286,7 @@ export function verificaRicevibilitaEnte(
       ],
       complessivamenteRicevibile: false,
       datiDisponibili: false,
+      analisiEseguita: false,
     };
   }
   if (!estrazione.estrazioneRiuscita) {

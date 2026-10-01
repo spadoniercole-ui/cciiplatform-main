@@ -9,6 +9,8 @@ REM ============================================================
 
 set "PORTABLE=1"
 set "NODE_ENV=production"
+REM Fuso orario del server: UTC (le date si mostrano nel fuso del browser)
+set "TZ=UTC"
 set "PORT=4028"
 set "HOSTNAME=127.0.0.1"
 set "PORTABLE_DATA_DIR=%~dp0dati"

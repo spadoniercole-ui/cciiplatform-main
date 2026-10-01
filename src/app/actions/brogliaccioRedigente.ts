@@ -31,12 +31,9 @@ import { MODELLO_MINISTERIALE } from '@/lib/checklist/costanti';
 import { CHECKLIST_MINISTERIALE } from '@/lib/checklist/ministeriale';
 import { calcolaQuadroQualitativo, type RispostaPerCalcolo } from '@/lib/checklist/scoring';
 import { ottieniTestPraticoAzienda } from '@/app/actions/testPraticoAzienda';
-import { ottieniInputRedigente } from '@/app/actions/simulazioneRedigente';
 import { ottieniDatiSettore } from '@/app/actions/datiSettore';
-import {
-  calcolaCrescitaStoricaAzienda,
-  calcolaCrescitaStoricaSettore,
-} from '@/lib/simulazione/calcolo';
+import { crescitaAzienda, crescitaDaSerie } from '@/lib/piano/automatico';
+import { sintesiPianoScenarioAction } from '@/app/actions/sintesiPiano';
 import { generaConfrontoLiquidatorioRedigenteSeNecessarioAction } from '@/app/actions/confrontoLiquidatorio';
 
 function validaSchema(nomeSchema: string): boolean {
@@ -78,23 +75,15 @@ export async function generaBrogliaccioRedigenteAction(
     }
     const aziendaId = scenarioRis.scenario.aziendaId;
 
-    const [
-      aziendaRis,
-      storicoRis,
-      posizioneRis,
-      risposteRis,
-      testoPraticoRis,
-      simulazioneRis,
-      settoreRis,
-    ] = await Promise.all([
-      ottieniAziendaPerId(nomeSchema, aziendaId),
-      ottieniStoricoXbrlAzienda(nomeSchema, aziendaId),
-      ottienePosizioneAggiornata(nomeSchema, scenarioId),
-      ottieniRisposteChecklist(nomeSchema, scenarioId, MODELLO_MINISTERIALE),
-      ottieniTestPraticoAzienda(nomeSchema, aziendaId),
-      ottieniInputRedigente(nomeSchema, scenarioId),
-      ottieniDatiSettore(nomeSchema, aziendaId),
-    ]);
+    const [aziendaRis, storicoRis, posizioneRis, risposteRis, testoPraticoRis, settoreRis] =
+      await Promise.all([
+        ottieniAziendaPerId(nomeSchema, aziendaId),
+        ottieniStoricoXbrlAzienda(nomeSchema, aziendaId),
+        ottienePosizioneAggiornata(nomeSchema, scenarioId),
+        ottieniRisposteChecklist(nomeSchema, scenarioId, MODELLO_MINISTERIALE),
+        ottieniTestPraticoAzienda(nomeSchema, aziendaId),
+        ottieniDatiSettore(nomeSchema, aziendaId),
+      ]);
 
     const paragrafi: string[] = [];
 
@@ -164,32 +153,38 @@ export async function generaBrogliaccioRedigenteAction(
 
     // 6. Dati di Settore
     if (settoreRis.success && settoreRis.punti.length > 0 && storicoRis.success) {
-      const crescitaSettore = calcolaCrescitaStoricaSettore(settoreRis.punti);
-      const puntiAzienda = [...storicoRis.storico]
-        .sort((a, b) => (a.annoBilancio || 0) - (b.annoBilancio || 0))
-        .map((b) => ({
-          ricaviVendite: b.datiFinanziari.ricaviVendite,
-          ebitda: b.datiFinanziari.ebitda,
-          ebit: b.datiFinanziari.ebit,
-          ammortamenti: b.datiFinanziari.ammortamenti,
-        }));
-      const crescitaAzienda = calcolaCrescitaStoricaAzienda(puntiAzienda);
+      const crescitaSettore = crescitaDaSerie(settoreRis.punti);
+      const crescitaAz = crescitaAzienda(
+        storicoRis.storico
+          .filter((b) => b.annoBilancio)
+          .map((b) => ({
+            anno: b.annoBilancio as number,
+            ricaviVendite: b.datiFinanziari.ricaviVendite,
+          }))
+          .sort((a, b) => b.anno - a.anno)
+      );
       paragrafi.push(
-        `DATI DI SETTORE (gruppo ATECO ${settoreRis.info?.gruppo || 'n/d'}): crescita storica del settore ${crescitaSettore !== null ? (crescitaSettore * 100).toFixed(1) + '%' : 'non disponibile'} l'anno, crescita storica dell'azienda ${crescitaAzienda !== null ? (crescitaAzienda * 100).toFixed(1) + '%' : 'non disponibile'} l'anno.`
+        `DATI DI SETTORE (gruppo ATECO ${settoreRis.info?.gruppo || 'n/d'}): crescita storica del settore ${crescitaSettore ? crescitaSettore.tasso.toFixed(1).replace('.', ',') + '%' : 'non disponibile'} l'anno, crescita storica dell'azienda ${crescitaAz ? crescitaAz.tasso.toFixed(1).replace('.', ',') + '%' : 'non disponibile'} l'anno.`
       );
     } else {
       paragrafi.push('DATI DI SETTORE: non ancora disponibili per questa azienda.');
     }
 
-    // 7. Simulazione Redigente
-    if (simulazioneRis.success && simulazioneRis.risultato) {
-      const s = simulazioneRis.risultato;
-      paragrafi.push(
-        `SIMULAZIONE: flusso annuo disponibile ${EURO(s.flussoDisponibile)}, rata annua ${EURO(s.rataAnnua)}, DSCR ${s.dscr === null ? 'n/d' : s.dscr.toFixed(2).replace('.', ',')} — piano ${s.viabile ? 'sostenibile con le leve attuali' : 'non ancora sostenibile: le leve vanno riviste'}.`
-      );
-    } else {
-      paragrafi.push('SIMULAZIONE: nessuna simulazione ancora impostata per questo scenario.');
-    }
+    // 7. Piano di sviluppo (sostituisce la vecchia simulazione a levette):
+    // i dati di settore appena letti si passano, non si rileggono.
+    const piano = await sintesiPianoScenarioAction(
+      nomeSchema,
+      scenarioId,
+      aziendaId,
+      'DA_DEFINIRE',
+      settoreRis.success
+        ? {
+            punti: settoreRis.punti,
+            descrizione: settoreRis.info ? `ATECO ${settoreRis.info.gruppo}` : null,
+          }
+        : null
+    );
+    paragrafi.push(piano.testo);
 
     const testo = paragrafi.join('\n\n');
 

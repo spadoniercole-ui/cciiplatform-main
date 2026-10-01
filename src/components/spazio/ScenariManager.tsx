@@ -121,7 +121,7 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
       nomeNuovo,
       tipoNuovo,
       origineNuova,
-      // La simulazione a levette è sempre attiva per il Redigente; il flag
+      // Il piano di sviluppo è sempre attivo per il Redigente; il flag
       // conta solo per il Ricevente (RICEVUTA).
       tipoNuovo === 'RICEVUTA' ? simulazioneAttivaNuova : true
     );
@@ -297,13 +297,12 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                     className="mt-0.5"
                   />
                   <span>
-                    <span className="font-bold">
-                      Attiva la simulazione per la sostenibilità del piano aziendale
-                    </span>
+                    <span className="font-bold">Attiva l’analisi del piano aziendale</span>
                     <span className="block text-[10px] text-slate-500 mt-0.5">
-                      Lo strumento a &quot;levette&quot; (personale, giorni di incasso/pagamento,
-                      imposte) per valutare se il piano regge. Richiede la funzione Simulazione
-                      abilitata sullo spazio.
+                      Aggiunge il passo «Piano di sviluppo»: piano a macro-voci del bilancio e
+                      confronto del piano dell’azienda con il piano automatico di settore, con i
+                      semafori. È l’ultima attività, dopo la valutazione. Richiede la funzione
+                      Simulazione abilitata sullo spazio.
                     </span>
                   </span>
                 </label>

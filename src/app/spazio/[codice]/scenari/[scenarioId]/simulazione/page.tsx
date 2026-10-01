@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { ottieniFunzioniPlusSpazio } from '@/app/actions/funzioniPlus';
-import { SimulazioneRedigenteScenario } from '@/components/spazio/SimulazioneRedigenteScenario';
+import { PianoSviluppoScenario } from '@/components/spazio/PianoSviluppoScenario';
 import { FunzionePlusNonAbilitata } from '@/components/spazio/FunzionePlusNonAbilitata';
 
 export default async function SimulazioneScenarioPage({
@@ -22,7 +22,7 @@ export default async function SimulazioneScenarioPage({
 
   const plusRis = await ottieniFunzioniPlusSpazio(contesto.nomeSchema);
   if (!plusRis.funzioni.simulazione) {
-    return <FunzionePlusNonAbilitata nomeFunzione="Simulazione" />;
+    return <FunzionePlusNonAbilitata nomeFunzione="Piano di sviluppo" />;
   }
 
   const scenarioRis = await ottieniScenarioPerId(contesto.nomeSchema, Number(scenarioId));
@@ -30,7 +30,8 @@ export default async function SimulazioneScenarioPage({
     redirect(`/spazio/${codice}/scenari`);
   }
 
-  // Lo strumento a levette (sostenibilità del piano) è sempre disponibile per
+  // Il piano di sviluppo (e, per il Ricevente, il confronto con il piano
+  // dell'azienda) è sempre disponibile per
   // il Redigente (DA_DEFINIRE). Per il Ricevente (RICEVUTA) compare solo se lo
   // scenario è stato creato con il flag "simulazione attiva". Chi arriva
   // sull'URL diretto senza i requisiti viene rimandato alla Panoramica.
@@ -41,9 +42,12 @@ export default async function SimulazioneScenarioPage({
 
   if (simulazioneDisponibile) {
     return (
-      <SimulazioneRedigenteScenario
+      <PianoSviluppoScenario
         nomeSchema={contesto.nomeSchema}
+        codice={codice}
         scenarioId={Number(scenarioId)}
+        aziendaId={scenario.aziendaId}
+        tipoProposta={scenario.tipoProposta === 'RICEVUTA' ? 'RICEVUTA' : 'DA_DEFINIRE'}
       />
     );
   }

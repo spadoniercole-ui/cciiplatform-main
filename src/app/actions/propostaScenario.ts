@@ -55,7 +55,6 @@ import { CHECKLIST_MINISTERIALE } from '@/lib/checklist/ministeriale';
 import { calcolaQuadroQualitativo } from '@/lib/checklist/scoring';
 import { calcolaTrend, type PuntoStorico } from '@/lib/xbrl/trend';
 import { ottieniFunzioniPlusSpazio } from '@/app/actions/funzioniPlus';
-import { calcolaRaccomandazioniRedigente } from '@/lib/simulazione/raccomandazioniRedigente';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -409,23 +408,26 @@ export async function verificaRicevibilitaProposta(
          FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
         [scenarioId]
       );
+      // Una riga con le sole dichiarazioni della lista di controllo (nessuna
+      // analisi ancora eseguita) non è un'estrazione fallita.
       const rigaDb = estrazioneRis.rows[0];
-      const estrazione: EstrazioneProposta | null = rigaDb
-        ? {
-            estrazioneRiuscita: rigaDb.estrazione_riuscita ?? false,
-            importoDovuto:
-              rigaDb.importo_dovuto_estratto !== null
-                ? Number(rigaDb.importo_dovuto_estratto)
-                : null,
-            percentualeOfferta:
-              rigaDb.percentuale_offerta_estratta !== null
-                ? Number(rigaDb.percentuale_offerta_estratta)
-                : null,
-            modalita: rigaDb.modalita_estratta as ModalitaProposta | null,
-            numeroRate: rigaDb.numero_rate_estratto,
-            motivoMancata: rigaDb.motivo_estrazione_mancata,
-          }
-        : null;
+      const estrazione: EstrazioneProposta | null =
+        rigaDb && rigaDb.estrazione_riuscita !== null
+          ? {
+              estrazioneRiuscita: rigaDb.estrazione_riuscita ?? false,
+              importoDovuto:
+                rigaDb.importo_dovuto_estratto !== null
+                  ? Number(rigaDb.importo_dovuto_estratto)
+                  : null,
+              percentualeOfferta:
+                rigaDb.percentuale_offerta_estratta !== null
+                  ? Number(rigaDb.percentuale_offerta_estratta)
+                  : null,
+              modalita: rigaDb.modalita_estratta as ModalitaProposta | null,
+              numeroRate: rigaDb.numero_rate_estratto,
+              motivoMancata: rigaDb.motivo_estrazione_mancata,
+            }
+          : null;
 
       return {
         success: true,
@@ -755,31 +757,24 @@ REGOLE TASSATIVE DI REDAZIONE:
       return '\nCONFRONTO CON LO SCENARIO LIQUIDATORIO — GIÀ RICERCATO: non ancora generato (si genera automaticamente quando si apre o si aggiorna il Brogliaccio) — dichiara questa sezione come non ancora disponibile.\n';
     })();
 
-    // Raccomandazioni azionabili — solo Redigente: quali leve della
-    // Simulazione muovere (e verso quale valore) per rendere il piano
-    // sostenibile (DSCR ≥ 1). Calcolate deterministicamente da
-    // calcolaRaccomandazioniRedigente, così la Relazione non dà solo un
-    // giudizio statico ma indica cosa cambiare. Import dinamico per
-    // spezzare il ciclo con simulazioneRedigente (che importa da qui).
+    // Raccomandazioni — solo Redigente: dal piano di sviluppo (motore
+    // deterministico e autoverifica sul piano di settore), non più dalla
+    // vecchia simulazione a levette. Import dinamico: pianoSviluppo importa
+    // da questo file.
     const bloccoRaccomandazioni = await (async () => {
       if (scenario.tipoProposta === 'RICEVUTA') return '';
       try {
-        const { ottieniInputRedigente } = await import('@/app/actions/simulazioneRedigente');
-        const simRis = await ottieniInputRedigente(nomeSchema, scenarioId);
-        if (!simRis.success || !simRis.input || !simRis.risultato) {
-          return '\nRACCOMANDAZIONI DALLA SIMULAZIONE: la Simulazione non è ancora impostata per questo scenario — nella sezione Raccomandazioni segnala che, senza la Simulazione, non è possibile indicare parametri concreti da modificare.\n';
+        const { sintesiPianoScenarioAction } = await import('@/app/actions/sintesiPiano');
+        const piano = await sintesiPianoScenarioAction(
+          nomeSchema,
+          scenarioId,
+          scenario.aziendaId,
+          'DA_DEFINIRE'
+        );
+        if (!piano.disponibile) {
+          return `\nRACCOMANDAZIONI DAL PIANO DI SVILUPPO: ${piano.testo} Nella sezione Raccomandazioni segnala che, senza il piano, non è possibile indicare ipotesi concrete da rivedere.\n`;
         }
-        const esito = calcolaRaccomandazioniRedigente(simRis.input, simRis.risultato);
-        if (esito.viabile) {
-          return `\nRACCOMANDAZIONI DALLA SIMULAZIONE — il piano è GIÀ SOSTENIBILE (DSCR ${esito.dscr === null ? 'n/d' : esito.dscr.toFixed(2).replace('.', ',')}, flusso disponibile a copertura della rata): nella sezione Raccomandazioni confermalo e indica che i parametri attuali della Simulazione reggono, senza inventare correzioni non necessarie.\n`;
-        }
-        const righe = esito.raccomandazioni
-          .map(
-            (r) =>
-              `- ${r.titolo}: da ${r.valoreAttuale}${r.valoreObiettivo ? ` a ${r.valoreObiettivo}` : ' (da sola non basta)'}. ${r.descrizione}`
-          )
-          .join('\n');
-        return `\nRACCOMANDAZIONI DALLA SIMULAZIONE — il piano NON è sostenibile (DSCR ${esito.dscr === null ? 'n/d' : esito.dscr.toFixed(2).replace('.', ',')}, scoperto annuo ${Math.round(esito.gapFlusso).toLocaleString('it-IT')} €). Queste leve — calcolate, non stimate — riportano il DSCR a 1 se mosse una alla volta tenendo ferme le altre; nella sezione 5 RACCOMANDAZIONI OPERATIVE riportale ESPLICITAMENTE (parametro attuale → valore obiettivo), fedelmente e senza cifre diverse, spiegando che vanno lette come alternative o combinabili:\n${righe}\n`;
+        return `\nRACCOMANDAZIONI DAL PIANO DI SVILUPPO — dati calcolati dalla piattaforma, da riportare fedelmente e senza cifre diverse:\n${piano.testo}\nNella sezione 5 RACCOMANDAZIONI OPERATIVE: ${piano.vincoli.length ? 'indica i vincoli che scattano e le ipotesi da rivedere per superarli, senza inventare leve o valori non presenti qui sopra' : 'indica che con le ipotesi attuali nessun vincolo scatta'}; richiama le ipotesi che l’autoverifica segnala da documentare.\n`;
       } catch (erroreRacc) {
         console.error('[generaRelazionePropostaAction] Raccomandazioni non calcolate:', erroreRacc);
         return '';
