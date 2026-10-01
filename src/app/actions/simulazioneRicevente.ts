@@ -20,10 +20,7 @@ import {
 } from '@/app/actions/propostaScenario';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniDatiSettore } from '@/app/actions/datiSettore';
-import {
-  calcolaCrescitaStoricaAzienda,
-  calcolaCrescitaStoricaSettore,
-} from '@/lib/simulazione/calcolo';
+import { crescitaAzienda, crescitaDaSerie } from '@/lib/piano/automatico';
 import { ottieniLimitiRicevibilita } from '@/app/actions/parametriSpazio';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -206,27 +203,27 @@ export async function analizzaDocumentiRiceventeAction(
         `Ultimo bilancio XBRL disponibile (anno ${ultimo.annoBilancio || 'n/d'}): ricavi delle vendite € ${ultimo.datiFinanziari.ricaviVendite.toLocaleString('it-IT')}, EBITDA € ${ultimo.datiFinanziari.ebitda.toLocaleString('it-IT')}, patrimonio netto € ${ultimo.datiFinanziari.patrimonioNetto.toLocaleString('it-IT')}, totale debiti € ${ultimo.datiFinanziari.totaleDebiti.toLocaleString('it-IT')}.`
       );
 
-      const puntiStorici = [...storicoRis.storico]
-        .sort((a, b) => (a.annoBilancio || 0) - (b.annoBilancio || 0))
-        .map((b) => ({
-          ricaviVendite: b.datiFinanziari.ricaviVendite,
-          ebitda: b.datiFinanziari.ebitda,
-          ebit: b.datiFinanziari.ebit,
-          ammortamenti: b.datiFinanziari.ammortamenti,
-        }));
-      const crescitaAzienda = calcolaCrescitaStoricaAzienda(puntiStorici);
-      if (crescitaAzienda !== null) {
+      const crescitaAz = crescitaAzienda(
+        storicoRis.storico
+          .filter((x) => x.annoBilancio)
+          .map((x) => ({
+            anno: x.annoBilancio as number,
+            ricaviVendite: x.datiFinanziari.ricaviVendite,
+          }))
+          .sort((x, y) => y.anno - x.anno)
+      );
+      if (crescitaAz) {
         blocchiContesto.push(
-          `Crescita storica dei ricavi dell'azienda, calcolata dai bilanci depositati: ${(crescitaAzienda * 100).toFixed(1)}% l'anno.`
+          `Crescita storica dei ricavi dell'azienda, calcolata dai bilanci depositati: ${crescitaAz.tasso.toFixed(1)}% l'anno.`
         );
       }
     }
 
     if (settoreRis.success && settoreRis.punti.length > 0) {
-      const crescitaSettore = calcolaCrescitaStoricaSettore(settoreRis.punti);
-      if (crescitaSettore !== null) {
+      const crescitaSettore = crescitaDaSerie(settoreRis.punti);
+      if (crescitaSettore) {
         blocchiContesto.push(
-          `Crescita storica del settore ISTAT di riferimento (gruppo ATECO ${settoreRis.info?.gruppo || 'n/d'}): ${(crescitaSettore * 100).toFixed(1)}% l'anno.`
+          `Crescita storica del settore ISTAT di riferimento (gruppo ATECO ${settoreRis.info?.gruppo || 'n/d'}): ${crescitaSettore.tasso.toFixed(1)}% l'anno.`
         );
       }
     }

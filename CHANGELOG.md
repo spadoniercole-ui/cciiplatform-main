@@ -93,6 +93,209 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.109.118 — 2026-10-01
+
+Chiusura del Piano di sviluppo: Brogliaccio e Relazione leggono il nuovo
+piano, la vecchia simulazione a levette è eliminata.
+
+- Nuova sintesi unica del piano per i testi (`sintesiPianoScenarioAction`),
+  per entrambi i lati, con gli stessi calcoli che l'operatore vede nel passo
+  «Piano di sviluppo»: esito e vincoli della variante «base», riferimento
+  di settore, autoverifica (Redigente) o confronto con il piano
+  dell'azienda (Ricevente), variante «elaborazione-ai» se presente, rate
+  della proposta.
+- **Brogliaccio Redigente**: il paragrafo «Simulazione» (che leggeva ancora
+  la vecchia simulazione, non più compilabile dalla 0.109.113) diventa
+  «Piano di sviluppo».
+- **Brogliaccio Ricevente**: se il flag dello scenario è acceso, il livello
+  3 riporta anche il piano e il confronto con il piano dell'azienda.
+- **Relazione del Redigente**: le raccomandazioni operative si basano sui
+  vincoli del piano e sulle ipotesi da documentare segnalate
+  dall'autoverifica, da riportare fedelmente; non più sulle leve della
+  vecchia simulazione.
+- Dati di settore letti una volta sola: chi li ha già (Brogliaccio) li passa
+  alla sintesi.
+- Eliminati `lib/simulazione/*`, `actions/simulazioneRedigente.ts`,
+  `SimulazioneRedigenteScenario.tsx` (non più montato) e le tabelle
+  `simulazione_scenario` e `simulazione_redigente` (eliminate
+  all'avvio). Restano `simulazione_ricevente` (analisi dei documenti del
+  Ricevente, altra cosa) e il nome della route `simulazione`.
+- Test: 451 (43 erano della vecchia simulazione).
+
+## 0.109.117 — 2026-10-01
+
+Valutazione della proposta, quarto passo: il terzo livello dell'AI sul piano
+di sviluppo, per Ricevente e Redigente, e l'autoverifica con i semafori per
+il Redigente.
+
+- Nel passo «Piano di sviluppo», pulsante «Elabora le ipotesi con l'AI»
+  (entrambi i lati). L'AI scrive solo le ipotesi d'ingresso, cella per
+  cella, ciascuna con una motivazione di una frase che richiama il dato da
+  cui viene; i risultati (EBITDA, utile, cassa, copertura delle rate) li
+  calcola il motore della piattaforma. Il risultato si salva come variante
+  «elaborazione-ai»: le varianti dell'operatore restano come sono.
+  - Ricevente: parte dal piano dell'azienda e lo riconduce al riferimento
+    di settore e allo storico dove l'azienda è più ottimista.
+  - Redigente: cerca un piano che generi la cassa per le rate della
+    proposta, dicendo su quali leve agisce; se non è possibile con ipotesi
+    plausibili, lo dice nella sintesi.
+- Velocità: una sola chiamata all'AI, con i dati già caricati nella pagina
+  (nessuna nuova lettura dal database); risposta breve in JSON, validata
+  senza seconde chiamate: righe, tipi e intervalli fuori regola si
+  scartano e si elencano nelle note della variante. Le motivazioni passano
+  dal lessico (sostituzioni deterministiche dei termini non ammessi).
+- Le motivazioni si leggono sotto ogni cella e nella stampa del piano;
+  modificando una cella a mano, la motivazione dell'AI su quella cella
+  sparisce (non è più l'ipotesi dell'AI).
+- **Autoverifica del Redigente**: lo stesso riquadro dei semafori confronta
+  la variante sullo schermo con il piano automatico di settore, voce per
+  voce e anno per anno, prima del deposito.
+- Soglie dei semafori in Parametri di Spazio per entrambi i tipi di
+  spazio («Confronto con il piano di settore»).
+
+## 0.109.116 — 2026-10-01
+
+Valutazione della proposta ricevuta, terzo passo: il piano dell'azienda a
+confronto con il piano automatico di settore, con i semafori.
+
+- Nel passo «Piano di sviluppo» dello scenario ricevuto (solo se il flag
+  dello scenario lo attiva: resta l'ultima attività) compare il riquadro
+  «Confronto con il piano dell'azienda».
+- **Piano automatico** (il riferimento): ricavi che crescono come il
+  settore (tasso annuo composto della serie ISTAT del gruppo ATECO; se
+  manca, come l'azienda negli ultimi bilanci; se manca anche quella,
+  invariati), margini costanti, crediti e fornitori proporzionali ai
+  ricavi, investimenti pari agli ammortamenti. Tasso limitato a ±20%.
+- **Piano dell'azienda** da Excel in qualsiasi formato (voci in righe,
+  anni in colonne, unità in euro, migliaia o milioni riconosciuta
+  dall'intestazione; più voci sulla stessa riga si sommano; le voci
+  calcolate come EBITDA e utile non si importano) oppure da **PDF letto
+  dall'AI**, con la fonte di ogni riga. In entrambi i casi la tabella
+  normalizzata si controlla e si corregge prima del salvataggio, con
+  conferma. L'abbinamento delle voci resta memorizzato per azienda.
+  «Modello Excel» per chi vuole compilare direttamente.
+- Il piano dell'azienda passa nello **stesso motore** del piano
+  automatico: si confrontano grandezze calcolate allo stesso modo (ricavi,
+  valore della produzione, costi, EBITDA, oneri finanziari, risultato,
+  flusso di gestione, crediti, fornitori, cassa).
+- **Semafori per direzione**: lo scostamento prudente è sempre verde;
+  quello favorevole all'azienda è verde fino al 10%, giallo fino al 25%,
+  rosso oltre. Soglie dell'ente in Parametri di Spazio › «Confronto con il
+  piano dell'azienda». Anni e righe che l'azienda non indica: «non
+  confrontabile», mai verdi per difetto.
+- Sintesi delle voci da approfondire, vincoli che scattano con le ipotesi
+  dell'azienda, stampa del confronto, «Copia nella variante azienda» per
+  mettere alla prova le ipotesi nel piano.
+- Il flag alla creazione dello scenario ricevuto si chiama ora «Attiva
+  l'analisi del piano aziendale» e descrive il nuovo passo (il vecchio
+  testo parlava ancora delle «levette»).
+
+## 0.109.115 — 2026-09-30
+
+Valutazione della proposta ricevuta, secondo passo: import del bilancino in
+qualsiasi formato nei dati attualizzati (Posizione Aggiornata).
+
+- Nuovo pulsante «Importa bilancino (qualsiasi formato)»: .xlsx, .xls,
+  .ods, .csv. Il file resta nel browser; al server arrivano solo le
+  macro-voci, il nome del file e la sua impronta.
+- Colonne riconosciute da sole (riga di intestazione, codice, descrizione,
+  Dare e Avere oppure saldo), tutte correggibili. Quattro modi di leggere
+  gli importi: Dare/Avere separati, saldo con segno (positivo = dare o
+  positivo = avere), importi senza segno. Numeri in formato italiano,
+  anglosassone, tra parentesi o con suffisso D/A.
+- Ogni conto riceve una categoria proposta dalla descrizione (30
+  categorie, compresi i rettificativi e i conti «a doppia natura»: banca,
+  Erario, enti previdenziali cambiano lato secondo il saldo). Totali e
+  risultato del periodo si escludono per evitare doppi conteggi. Filtro «Da
+  controllare» per i conti senza proposta o con proposta incerta.
+- Riepilogo nelle macro-voci del prospetto e **controllo di quadratura**:
+  attivo = passivo + netto, compreso il risultato del periodo. Se non
+  quadra lo dice, con la differenza e i conti senza categoria.
+- Conferma in finestra dell'applicativo prima di portare i valori nel
+  prospetto; poi resta il «Salva» del prospetto (doppia conferma).
+- **Tracciato memorizzato** per azienda e formato del file: al caricamento
+  successivo colonne e classificazione si riprendono e restano da
+  controllare solo i conti nuovi. Stesso formato su un'altra azienda:
+  si riprendono solo le colonne.
+- Data di riferimento proposta dal titolo del foglio o dal nome del file.
+- Provenienza registrata: il caricamento salvato porta «Da bilancino» e il
+  collegamento al documento d'origine (impronta SHA-256), come Situazione
+  debitoria e V.E.R.A. per il fascicolo di evidenza.
+- Il vecchio «Importa compilato» sul nostro modello resta.
+
+## 0.109.114 — 2026-09-30
+
+Valutazione della proposta ricevuta, primo passo: lista di controllo e avvio.
+
+- Nel passo Proposta (percorso Ricevente), sopra il pulsante compare la
+  lista «Prima di avviare la valutazione»: proposta di cram down scelta;
+  asseverazione e piano aziendale caricati oppure dichiarati «Non
+  pervenuto»; almeno una posizione aggiornata caricata oppure dichiarata
+  non pervenuta; dati ISTAT di settore aggiornati da non più di 30 giorni,
+  con il pulsante «Aggiorna ora» direttamente nella lista.
+- La voce «Analisi del piano di sviluppo» è solo informativa: dice se il
+  flag dello scenario la attiva e ricorda che è l'ultima attività, dopo la
+  valutazione. Non blocca mai l'avvio.
+- Ogni voce mancante indica dove si trova nell'applicativo.
+- Il pulsante «Analizza» diventa «Avvia la valutazione» ed è attivo solo a
+  lista completa.
+- Le dichiarazioni «non pervenuto» restano salvate sullo scenario (nuova
+  colonna `dichiarazioni` di `simulazione_ricevente`).
+- Una riga con le sole dichiarazioni non viene più letta come «estrazione
+  dell'importo fallita».
+- Nel riquadro «Confronto con la Situazione Debitoria dell'Ente», prima
+  di qualsiasi analisi, il messaggio diceva «L'analisi è stata fatta, ma
+  non ha trovato un importo chiaro». Ora distingue «non ancora analizzata»
+  da «estrazione non riuscita».
+- **Portable, accesso impossibile su un PC con fuso italiano**: PGlite
+  scrive le date in UTC ma rilegge le colonne TIMESTAMP come ora locale, e
+  fissa all'avvio un fuso a scarto fisso senza ora legale. La sfida MFA
+  risultava scaduta appena creata e il login tornava alla schermata
+  iniziale senza messaggi. Riprodotto in sandbox con fuso Europe/Rome.
+  Ora il server portable lavora in UTC (in `portableDb.ts` e in
+  `Avvia-CCII.bat`), e la sessione del database è sempre in UTC. Le date
+  si mostrano nel fuso del browser.
+
+## 0.109.113 — 2026-09-25
+
+**Piano di sviluppo sulle macro-voci del bilancio: sostituisce la simulazione a leve**
+
+Decisioni di Ercole: (1) niente dettaglio del personale per categoria —
+lavoriamo su medie e la scelta fra due operai e un quadro e' qualitativa: la
+leva agisce sul cumulato, dentro i costi della produzione; (2) il modello si
+costruisce sulle macro-voci gia' lette dal parser XBRL, cosi' ogni ipotesi ha
+di fronte il dato storico; (3) orizzonte fino a cinque anni, per scenario;
+(4) stesso modello per Redigente e Ricevente; (5) la simulazione a leve va
+cestinata.
+
+- **Motore puro** `lib/piano/piano.ts`: righe di ipotesi (ricavi, altri
+  ricavi, costi operativi senza ammortamenti, ammortamenti, oneri finanziari,
+  aliquota d'imposta, investimenti, crediti verso clienti, debiti verso
+  fornitori, debiti verso banche, apporti dei soci), ciascuna per anno in %
+  sull'anno prima o in valore assoluto; righe derivate (valore della
+  produzione, EBITDA, EBIT, imposte, risultato, flussi di cassa, disponibilita',
+  patrimonio netto, debiti previdenziali al netto delle rate, totali).
+  **Rate del piano di rientro dalla proposta**, ente separato dagli altri
+  creditori, distribuite per anno sui mesi delle rate. Copertura delle rate =
+  flusso di gestione / (rate + rimborsi bancari). Vincoli: cassa negativa,
+  rate non coperte, patrimonio netto negativo o sotto il capitale, perdita.
+  Sintesi in due righe. Deterministico.
+- **Tabella** `PianoSviluppoScenario.tsx` (scheda «Piano di sviluppo», ex
+  Simulazione, stesso indirizzo): colonne dello storico (fino a tre bilanci) e
+  degli anni del piano; celle di ipotesi con alternanza % / €; righe derivate
+  in grassetto; copertura delle rate in rosso sotto 1; esito e vincoli; note
+  sulle ipotesi; **varianti** (base + copie per «giocare con gli scenari»);
+  stampa del piano.
+- Tabella `piano_sviluppo` (scenario, variante, orizzonte, ipotesi, note).
+- La vecchia simulazione (leve, categorie di personale, tre scenari) non e'
+  piu' raggiungibile dall'interfaccia. I suoi file e le sue tabelle restano
+  nel repository finche' il Brogliaccio e l'analisi della proposta, che oggi
+  li leggono, non passano al piano: prossima tappa.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (avviso «serve un bilancio XBRL»
+sullo scenario demo; il motore e' coperto dai test con il caso DEO GRIFO).
+
 ## 0.109.112 — 2026-09-24
 
 **Impaginazione della stampa riequilibrata**

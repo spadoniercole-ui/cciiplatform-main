@@ -26,6 +26,14 @@ export interface PosizioneAggiornata {
   deliberato: boolean;
   dati: DatiFinanziariPeriodo;
   aggiornataIl: string | null;
+  /** 'bilancino' = importato da un bilancino di verifica; 'prospetto' = modello della piattaforma; 'manuale' o null = a mano. */
+  origine: string | null;
+  documentoId: number | null;
+}
+
+export interface ProvenienzaPosizione {
+  origine: 'bilancino' | 'prospetto' | 'manuale';
+  documentoId: number | null;
 }
 
 export interface RisultatoPosizioneAggiornata {
@@ -41,6 +49,8 @@ const VUOTA: PosizioneAggiornata = {
   deliberato: false,
   dati: DATI_VUOTI,
   aggiornataIl: null,
+  origine: null,
+  documentoId: null,
 };
 
 function rigaAPosizione(r: any): PosizioneAggiornata {
@@ -50,6 +60,8 @@ function rigaAPosizione(r: any): PosizioneAggiornata {
     deliberato: r.deliberato,
     dati: { ...DATI_VUOTI, ...r.dati },
     aggiornataIl: r.updated_at?.toString?.() ?? null,
+    origine: r.origine ?? null,
+    documentoId: r.documento_id ?? null,
   };
 }
 
@@ -73,7 +85,7 @@ export async function ottienePosizioneAggiornata(
     await assicuraTabellaPosizioneAggiornata(nomeSchema);
 
     const risultato = await pool.query(
-      `SELECT id, data_riferimento, deliberato, dati, updated_at
+      `SELECT id, data_riferimento, deliberato, dati, updated_at, origine, documento_id
        FROM "${nomeSchema}".posizione_aggiornata WHERE scenario_id = $1
        ORDER BY data_riferimento DESC NULLS LAST, updated_at DESC
        LIMIT 1`,
@@ -113,7 +125,7 @@ export async function ottieniTuttePosizioniAggiornate(
     }
     await assicuraTabellaPosizioneAggiornata(nomeSchema);
     const risultato = await pool.query(
-      `SELECT id, data_riferimento, deliberato, dati, updated_at
+      `SELECT id, data_riferimento, deliberato, dati, updated_at, origine, documento_id
        FROM "${nomeSchema}".posizione_aggiornata WHERE scenario_id = $1
        ORDER BY data_riferimento DESC NULLS LAST, updated_at DESC`,
       [scenarioId]
@@ -143,13 +155,23 @@ export async function salvaPosizioneAggiornataAction(
   dataRiferimento: string | null,
   deliberato: boolean,
   dati: DatiFinanziariPeriodo,
-  id?: number | null
+  id?: number | null,
+  provenienza?: ProvenienzaPosizione | null
 ): Promise<RisultatoOperazionePosizione> {
   try {
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const messaggioBloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
     if (messaggioBloccato) return { success: false, error: messaggioBloccato };
     await assicuraTabellaPosizioneAggiornata(nomeSchema);
+    // La provenienza si scrive solo quando è nota (import appena fatto):
+    // un salvataggio a mano successivo non cancella quella registrata.
+    const aggiornaProvenienza = async (condizione: string, parametri: unknown[]) => {
+      if (!provenienza) return;
+      await pool.query(
+        `UPDATE "${nomeSchema}".posizione_aggiornata SET origine = $${parametri.length + 1}, documento_id = $${parametri.length + 2} WHERE ${condizione}`,
+        [...parametri, provenienza.origine, provenienza.documentoId]
+      );
+    };
 
     if (id) {
       await pool.query(
@@ -158,15 +180,17 @@ export async function salvaPosizioneAggiornataAction(
          WHERE id = $1 AND scenario_id = $5`,
         [id, dataRiferimento, deliberato, JSON.stringify(dati), scenarioId]
       );
+      await aggiornaProvenienza('id = $1 AND scenario_id = $2', [id, scenarioId]);
       return { success: true };
     }
 
     try {
-      await pool.query(
+      const inserita = await pool.query(
         `INSERT INTO "${nomeSchema}".posizione_aggiornata (scenario_id, data_riferimento, deliberato, dati)
-         VALUES ($1, $2, $3, $4)`,
+         VALUES ($1, $2, $3, $4) RETURNING id`,
         [scenarioId, dataRiferimento, deliberato, JSON.stringify(dati)]
       );
+      await aggiornaProvenienza('id = $1', [inserita.rows[0].id]);
       return { success: true };
     } catch (erroreInsert: any) {
       // Vincolo unico (scenario_id, data_riferimento): già esiste un
@@ -178,6 +202,10 @@ export async function salvaPosizioneAggiornataAction(
            SET deliberato = $3, dati = $4, updated_at = now()
            WHERE scenario_id = $1 AND data_riferimento IS NOT DISTINCT FROM $2`,
           [scenarioId, dataRiferimento, deliberato, JSON.stringify(dati)]
+        );
+        await aggiornaProvenienza(
+          'scenario_id = $1 AND data_riferimento IS NOT DISTINCT FROM $2::date',
+          [scenarioId, dataRiferimento]
         );
         return { success: true };
       }

@@ -489,6 +489,37 @@ export async function assicuraTabellaPosizioneAggiornata(nomeSchema: string): Pr
     sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_posizione_aggiornata_scenario_data
         ON ${s}.posizione_aggiornata (scenario_id, data_riferimento)`
   );
+  // Provenienza (0.109.115): da quale file arriva il caricamento (bilancino
+  // importato → documenti_origine con impronta) e come è stato compilato.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.posizione_aggiornata ADD COLUMN IF NOT EXISTS documento_id INTEGER`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.posizione_aggiornata ADD COLUMN IF NOT EXISTS origine TEXT`
+  );
+}
+
+/**
+ * Tracciati dei bilancini (0.109.115). Un bilancino di verifica arriva nel
+ * formato del software contabile dell'azienda: colonne, segno degli importi
+ * e piano dei conti cambiano. La prima volta l'operatore conferma colonne e
+ * classificazione dei conti; qui si memorizza tutto, per azienda e per
+ * «firma» dell'intestazione, così il caricamento successivo dello stesso
+ * formato si riconosce da solo e chiede conferma solo sui conti nuovi.
+ */
+export async function assicuraTabellaTracciatiBilancino(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.tracciati_bilancino (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL,
+      firma TEXT NOT NULL,
+      colonne JSONB NOT NULL,
+      mappa JSONB NOT NULL DEFAULT '{}'::jsonb,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now(),
+      UNIQUE (azienda_id, firma)
+    )`
+  );
 }
 
 export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promise<void> {
@@ -825,6 +856,58 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.titoli_ente_config ADD COLUMN IF NOT EXISTS lotto_ricerca_il TIMESTAMP`
   );
+  // Piano di sviluppo (0.109.113): ipotesi per riga e per anno, per scenario
+  // e per variante (base, prudente, favorevole). Sostituisce la simulazione
+  // a leve. Le tabelle della vecchia simulazione restano, non piu' usate.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.piano_sviluppo (
+      scenario_id INTEGER NOT NULL,
+      variante TEXT NOT NULL DEFAULT 'base',
+      orizzonte INTEGER NOT NULL DEFAULT 5,
+      ipotesi JSONB NOT NULL DEFAULT '{}',
+      note TEXT,
+      salvato_il TIMESTAMP NOT NULL DEFAULT now(),
+      PRIMARY KEY (scenario_id, variante)
+    )`
+  );
+  // Vecchia simulazione a levette (sostituita dal Piano di sviluppo nella
+  // 0.109.113 e tolta dal codice nella 0.109.118, su indicazione di Ercole:
+  // «la simulazione attuale la puoi cestinare»). Le sue tabelle si
+  // eliminano: nessuna parte dell'applicativo le legge più.
+  await eseguiDdlTenant(sql`DROP TABLE IF EXISTS ${s}.simulazione_scenario`);
+  await eseguiDdlTenant(sql`DROP TABLE IF EXISTS ${s}.simulazione_redigente`);
+  // Piano dell'azienda (0.109.116): il piano depositato dall'azienda,
+  // normalizzato sulle righe d'ipotesi del nostro piano (valori in euro per
+  // anno solare), da confrontare con il piano automatico di settore.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.piano_aziendale (
+      scenario_id INTEGER PRIMARY KEY,
+      valori JSONB NOT NULL,
+      origine TEXT NOT NULL,
+      nome_file TEXT,
+      documento_id INTEGER,
+      note TEXT,
+      salvato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  // Abbinamento voci del file → righe del piano, memorizzato per azienda.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.tracciati_piano_aziendale (
+      azienda_id INTEGER PRIMARY KEY,
+      abbinamento JSONB NOT NULL DEFAULT '{}'::jsonb,
+      unita INTEGER NOT NULL DEFAULT 1,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  // Soglie dei semafori del confronto (verde / giallo, in %). NULL = predefinite 10 / 25.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_confronto_piano (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      soglia_verde NUMERIC,
+      soglia_gialla NUMERIC,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
   // Parametri di stampa (0.109.111): margini, intestazione, pie' di pagina,
   // logo dell'ente (immagine come data URL, al massimo ~300 KB).
   await eseguiDdlTenant(
@@ -845,66 +928,6 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
       id INTEGER PRIMARY KEY DEFAULT 1,
       parametri JSONB,
       aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
-    )`
-  );
-}
-
-/**
- * Leve della Simulazione per uno scenario — solo l'INPUT (le tre leve
- * scelte dall'operatore). L'output (traiettoria, DSCR, esito) non si
- * salva mai: è sempre ricalcolato dal vivo sui dati correnti
- * (calcolaSimulazione, deterministico) — salvare un risultato lo
- * renderebbe stantio ogni volta che XBRL, Posizione Aggiornata o
- * Proposta cambiano dopo il primo lancio.
- */
-export async function assicuraTabellaSimulazione(nomeSchema: string): Promise<void> {
-  const s = sql.identifier(nomeSchema);
-  await assicuraTabelleScenari(nomeSchema);
-
-  await eseguiDdlTenant(
-    sql`CREATE TABLE IF NOT EXISTS ${s}.simulazione_scenario (
-      scenario_id INTEGER PRIMARY KEY REFERENCES ${s}.scenari(id) ON DELETE CASCADE,
-      riduzione_costi_pct NUMERIC NOT NULL DEFAULT 0,
-      riduzione_personale_pct NUMERIC NOT NULL DEFAULT 0,
-      mesi_allungamento_rate INTEGER NOT NULL DEFAULT 0,
-      crescita_ricavi_manuale NUMERIC,
-      salvata_il TIMESTAMP
-    )`
-  );
-  // Difensivo: se la tabella esisteva già da una versione precedente,
-  // CREATE TABLE IF NOT EXISTS non aggiunge la colonna nuova da sola.
-  await eseguiDdlTenant(
-    sql`ALTER TABLE ${s}.simulazione_scenario ADD COLUMN IF NOT EXISTS crescita_ricavi_manuale NUMERIC`
-  );
-}
-
-/**
- * Simulazione Redigente — input per lo strumento "un solo stato, non tre
- * scenari" di chi scrive una proposta (tipoProposta = DA_DEFINIRE). Le
- * aliquote previdenziali/INAIL per categoria vivono qui, per scenario,
- * come scelta pragmatica dichiarata — non a livello di Parametri di
- * Spazio come i pesi della Check List, per non bloccare tutto il resto
- * dietro una sezione di configurazione separata non ancora costruita. Se
- * in futuro serve condividerle tra scenari dello stesso spazio, si
- * sposta lì senza perdere nulla di quanto già inserito qui.
- */
-export async function assicuraTabellaSimulazioneRedigente(nomeSchema: string): Promise<void> {
-  const s = sql.identifier(nomeSchema);
-  await assicuraTabelleScenari(nomeSchema);
-
-  await eseguiDdlTenant(
-    sql`CREATE TABLE IF NOT EXISTS ${s}.simulazione_redigente (
-      scenario_id INTEGER PRIMARY KEY REFERENCES ${s}.scenari(id) ON DELETE CASCADE,
-      costi_produzione_altri NUMERIC,
-      personale JSONB NOT NULL DEFAULT '{}',
-      aliquote_personale JSONB NOT NULL DEFAULT '{}',
-      giorni_incasso_clienti NUMERIC NOT NULL DEFAULT 30,
-      giorni_pagamento_fornitori NUMERIC NOT NULL DEFAULT 30,
-      giorni_baseline NUMERIC NOT NULL DEFAULT 30,
-      aliquota_imposte_reddito NUMERIC NOT NULL DEFAULT 43,
-      aliquota_irap NUMERIC NOT NULL DEFAULT 3.9,
-      numero_rate_medie INTEGER NOT NULL DEFAULT 84,
-      salvata_il TIMESTAMP
     )`
   );
 }
@@ -965,6 +988,13 @@ export async function assicuraTabellaSimulazioneRicevente(nomeSchema: string): P
   );
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS motivo_estrazione_mancata TEXT`
+  );
+  // Lista di controllo della valutazione (0.109.114): le dichiarazioni
+  // dell'istruttore («asseverazione non pervenuta», «piano non pervenuto»,
+  // «posizione aggiornata non pervenuta») restano sullo scenario, così la
+  // lista non va ricompilata a ogni accesso.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS dichiarazioni JSONB NOT NULL DEFAULT '{}'::jsonb`
   );
 }
 

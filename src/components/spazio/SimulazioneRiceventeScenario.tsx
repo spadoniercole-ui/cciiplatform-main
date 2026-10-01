@@ -10,6 +10,8 @@ import {
   RefreshCw,
   CheckCircle2,
   Printer,
+  Circle,
+  Info,
 } from 'lucide-react';
 import {
   analizzaDocumentiRiceventeAction,
@@ -21,6 +23,14 @@ import {
   type GiudizioFinaleRicevente,
 } from '@/app/actions/giudizioRicevente';
 import { stampaTesto } from '@/lib/stampaTesto';
+import {
+  ottieniStatoValutazioneAction,
+  salvaDichiarazioniValutazioneAction,
+  type StatoValutazione,
+  type DichiarazioniValutazione,
+} from '@/app/actions/valutazioneRicevente';
+import { aggiornaDatiSettoreAction } from '@/app/actions/datiSettore';
+import { valutaListaControllo, type StatoDocumento } from '@/lib/valutazione/listaControllo';
 
 function handleStampaAnalisi(testo: string, generataIl: string | null) {
   stampaTesto('Analisi Proposta — Ricevente', testo, generataIl);
@@ -30,6 +40,7 @@ interface Props {
   nomeSchema: string;
   scenarioId: number;
   codice: string;
+  aziendaId: number;
   /** Il genitore (Proposta) mostra un confronto basato sullo stesso esito di ricevibilità — senza questo, resta con dati vecchi finché non si ricarica la pagina, anche se l'analisi qui dentro è appena riuscita. */
   onAnalisiCompletata?: () => void;
 }
@@ -39,13 +50,14 @@ type SlotDocumento = 'asseverazione' | 'propostaCramDown' | 'pianoSviluppo';
 const SLOT: { id: SlotDocumento; label: string; obbligatorio: boolean }[] = [
   { id: 'propostaCramDown', label: 'Proposta di cram down', obbligatorio: true },
   { id: 'asseverazione', label: 'Asseverazione del professionista', obbligatorio: false },
-  { id: 'pianoSviluppo', label: 'Piano di sviluppo', obbligatorio: false },
+  { id: 'pianoSviluppo', label: 'Piano di sviluppo dell’azienda', obbligatorio: false },
 ];
 
 export function SimulazioneRiceventeScenario({
   nomeSchema,
   scenarioId,
   codice,
+  aziendaId,
   onAnalisiCompletata,
 }: Props) {
   const [fileScelti, setFileScelti] = useState<Partial<Record<SlotDocumento, File>>>({});
@@ -60,6 +72,36 @@ export function SimulazioneRiceventeScenario({
   const [errore, setErrore] = useState<string | null>(null);
   // Piccolo prompt libero per questa generazione (usa-e-getta, non salvato).
   const [istruzioniAI, setIstruzioniAI] = useState('');
+  // Lista di controllo (0.109.114): stato lato server e dichiarazioni.
+  const [stato, setStato] = useState<StatoValutazione | null>(null);
+  const [dichiarazioni, setDichiarazioni] = useState<DichiarazioniValutazione>({});
+  const [settoreInCorso, setSettoreInCorso] = useState(false);
+
+  const caricaStato = async () => {
+    const ris = await ottieniStatoValutazioneAction(nomeSchema, scenarioId, aziendaId);
+    if (ris.success) {
+      setStato(ris);
+      setDichiarazioni(ris.dichiarazioni);
+    } else if (ris.error) {
+      setErrore(ris.error);
+    }
+  };
+
+  const cambiaDichiarazione = async (chiave: keyof DichiarazioniValutazione, valore: boolean) => {
+    const nuove = { ...dichiarazioni, [chiave]: valore };
+    setDichiarazioni(nuove);
+    const ris = await salvaDichiarazioniValutazioneAction(nomeSchema, scenarioId, nuove);
+    if (!ris.success) setErrore(ris.error || 'Impossibile salvare la dichiarazione.');
+  };
+
+  const handleAggiornaSettore = async () => {
+    setSettoreInCorso(true);
+    setErrore(null);
+    const ris = await aggiornaDatiSettoreAction(nomeSchema, aziendaId);
+    if (!ris.success) setErrore(ris.error || 'Aggiornamento dei dati di settore non riuscito.');
+    await caricaStato();
+    setSettoreInCorso(false);
+  };
 
   const carica = async () => {
     setCaricamento(true);
@@ -74,6 +116,7 @@ export function SimulazioneRiceventeScenario({
       setGenerataIl(analisiRis.generataIl || null);
     }
     if (giudizioRis.success && giudizioRis.giudizio) setGiudizio(giudizioRis.giudizio);
+    await caricaStato();
     setCaricamento(false);
   };
 
@@ -106,7 +149,11 @@ export function SimulazioneRiceventeScenario({
 
   const handleAnalizza = async () => {
     if (!fileScelti.propostaCramDown) {
-      setErrore('Carica almeno la proposta di cram down prima di analizzare.');
+      setErrore('Carica almeno la proposta di cram down prima di avviare la valutazione.');
+      return;
+    }
+    if (lista && !lista.pronta) {
+      setErrore(`Prima di avviare la valutazione completa: ${lista.mancanti.join('; ')}.`);
       return;
     }
     setAnalisiInCorso(true);
@@ -172,6 +219,23 @@ export function SimulazioneRiceventeScenario({
     }
   };
 
+  const statoDoc = (slot: SlotDocumento, dichiarato: boolean | undefined): StatoDocumento =>
+    fileScelti[slot] ? 'caricato' : dichiarato ? 'assente_dichiarato' : 'mancante';
+
+  const lista = stato
+    ? valutaListaControllo({
+        propostaSelezionata: Boolean(fileScelti.propostaCramDown),
+        asseverazione: statoDoc('asseverazione', dichiarazioni.asseverazioneNonPervenuta),
+        pianoAziendale: statoDoc('pianoSviluppo', dichiarazioni.pianoAziendaleNonPervenuto),
+        posizioniAggiornate: stato.posizioniAggiornate,
+        posizioneNonPervenutaDichiarata: Boolean(dichiarazioni.posizioneNonPervenuta),
+        settore: stato.settore,
+        pianoSviluppoAttivo: stato.pianoSviluppoAttivo,
+        oggi: new Date().toISOString(),
+      })
+    : null;
+  const pronta = Boolean(lista?.pronta);
+
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
 
   return (
@@ -181,10 +245,12 @@ export function SimulazioneRiceventeScenario({
           Analisi Proposta — Ricevente
         </h2>
         <p className="text-[11px] text-slate-500 mt-1">
-          Tre documenti, ciascuno identificabile singolarmente per l&apos;analisi. Solo la proposta
-          di cram down è obbligatoria — senza di lei l&apos;analisi non parte. Gli altri due sono
-          opzionali, ma la loro assenza pesa sul giudizio finale. I documenti non vengono conservati
-          dopo l&apos;analisi, solo il risultato testuale.
+          Tre documenti, ciascuno identificabile singolarmente. La proposta di cram down è
+          obbligatoria; per asseverazione e piano aziendale, se non sono arrivati, spunta «Non
+          pervenuto»: la loro assenza pesa sul giudizio finale ma resta dichiarata. Prima
+          dell&apos;avvio controlla la lista qui sotto (posizione aggiornata, dati ISTAT di
+          settore). I documenti non vengono conservati dopo la valutazione, solo il risultato
+          testuale.
         </p>
       </div>
 
@@ -238,16 +304,39 @@ export function SimulazioneRiceventeScenario({
                     <X className="w-3.5 h-3.5" /> Rimuovi
                   </button>
                 ) : (
-                  <label className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg transition-colors cursor-pointer">
-                    <Upload className="w-3.5 h-3.5" />
-                    Scegli file
-                    <input
-                      type="file"
-                      accept="application/pdf,.pdf"
-                      className="hidden"
-                      onChange={(e) => handleScegli(s.id, e.target.files?.[0] || null)}
-                    />
-                  </label>
+                  <div className="flex items-center gap-3">
+                    {!s.obbligatorio && (
+                      <label className="flex items-center gap-1.5 text-[10px] text-slate-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(
+                            s.id === 'asseverazione'
+                              ? dichiarazioni.asseverazioneNonPervenuta
+                              : dichiarazioni.pianoAziendaleNonPervenuto
+                          )}
+                          onChange={(e) =>
+                            cambiaDichiarazione(
+                              s.id === 'asseverazione'
+                                ? 'asseverazioneNonPervenuta'
+                                : 'pianoAziendaleNonPervenuto',
+                              e.target.checked
+                            )
+                          }
+                        />
+                        Non pervenuto
+                      </label>
+                    )}
+                    <label className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg transition-colors cursor-pointer">
+                      <Upload className="w-3.5 h-3.5" />
+                      Scegli file
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        className="hidden"
+                        onChange={(e) => handleScegli(s.id, e.target.files?.[0] || null)}
+                      />
+                    </label>
+                  </div>
                 )}
               </div>
             </div>
@@ -271,10 +360,59 @@ export function SimulazioneRiceventeScenario({
           </p>
         </div>
 
+        {lista && (
+          <div className="border border-slate-200 rounded-lg p-4 space-y-2 bg-slate-50">
+            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Prima di avviare la valutazione
+            </h4>
+            {lista.voci.map((v) => (
+              <div key={v.id} className="flex items-start gap-2 text-xs">
+                {v.informativa ? (
+                  <Info className="w-4 h-4 shrink-0 mt-0.5 text-slate-400" />
+                ) : v.ok ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+                ) : (
+                  <Circle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                )}
+                <div className="flex-1">
+                  <span className="font-bold text-slate-800">{v.etichetta}</span>
+                  <span className="text-slate-600"> — {v.dettaglio}</span>
+                  {!v.ok && v.percorso && (
+                    <span className="block text-[10px] text-slate-500">Dove: {v.percorso}</span>
+                  )}
+                  {v.id === 'posizione' && stato && stato.posizioniAggiornate === 0 && (
+                    <label className="flex items-center gap-1.5 text-[10px] text-slate-600 mt-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(dichiarazioni.posizioneNonPervenuta)}
+                        onChange={(e) =>
+                          cambiaDichiarazione('posizioneNonPervenuta', e.target.checked)
+                        }
+                      />
+                      Nessuna posizione aggiornata pervenuta: si valuta sui dati del bilancio
+                    </label>
+                  )}
+                  {v.id === 'settore' && stato?.settore.applicabile && (
+                    <button
+                      type="button"
+                      onClick={handleAggiornaSettore}
+                      disabled={settoreInCorso}
+                      className="mt-1 flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${settoreInCorso ? 'animate-spin' : ''}`} />
+                      {settoreInCorso ? 'Aggiornamento ISTAT…' : 'Aggiorna ora'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <button
           type="button"
           onClick={handleAnalizza}
-          disabled={analisiInCorso || !fileScelti.propostaCramDown}
+          disabled={analisiInCorso || !fileScelti.propostaCramDown || !pronta}
           className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold uppercase tracking-wider rounded-lg text-xs transition-colors"
         >
           {analisiInCorso ? (
@@ -282,7 +420,7 @@ export function SimulazioneRiceventeScenario({
           ) : (
             <Sparkles className="w-3.5 h-3.5" />
           )}
-          {analisiInCorso ? 'Caricamento e analisi...' : 'Analizza'}
+          {analisiInCorso ? 'Caricamento e valutazione...' : 'Avvia la valutazione'}
         </button>
       </div>
 

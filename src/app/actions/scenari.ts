@@ -25,7 +25,7 @@ export interface Scenario {
   origineProposta: string;
   rigaRilevanteBloccata: boolean;
   archiviato: boolean;
-  /** Ricevente (ENTE): abilita lo strumento di Simulazione a levette (sostenibilità del piano) anche su questo scenario. Scelto alla creazione. Per il Redigente la simulazione è sempre disponibile, quindi questo flag è ininfluente lì. */
+  /** Ricevente (ENTE): abilita il passo «Piano di sviluppo» (confronto con il piano dell'azienda, ipotesi dell'AI) su questo scenario. Scelto alla creazione. Per il Redigente il piano è sempre disponibile, quindi questo flag è ininfluente lì. */
   simulazioneAttiva: boolean;
   /** Solo percorso Ricevente — valorizzato quando la Relazione finale è stata generata. Da quel momento lo scenario è sola lettura permanente. */
   bloccatoIl: string | null;

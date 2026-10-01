@@ -729,7 +729,8 @@ export function PropostaScenario({
                   0
                 );
                 if (!rigaEstratta || rigaEstratta.importoDovuto === 0) {
-                  const giaAnalizzatoSenzaValore = !!rigaEstratta?.motivazione;
+                  const giaAnalizzatoSenzaValore =
+                    !!rigaEstratta?.motivazione && esito?.analisiEseguita !== false;
                   return (
                     <div className="flex items-start gap-2 text-xs text-slate-500">
                       <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
@@ -841,6 +842,7 @@ export function PropostaScenario({
               nomeSchema={nomeSchema}
               scenarioId={scenarioId}
               codice={codice}
+              aziendaId={aziendaId}
               onAnalisiCompletata={carica}
             />
           )}

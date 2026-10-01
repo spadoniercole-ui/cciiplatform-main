@@ -24,10 +24,8 @@ import { ottienePosizioneAggiornata } from '@/app/actions/posizioneAggiornata';
 import { ottieniDatiSettore } from '@/app/actions/datiSettore';
 import { ottieniAnalisiRiceventeAction } from '@/app/actions/simulazioneRicevente';
 import { generaConfrontoLiquidatorioSeNecessarioAction } from '@/app/actions/confrontoLiquidatorio';
-import {
-  calcolaCrescitaStoricaAzienda,
-  calcolaCrescitaStoricaSettore,
-} from '@/lib/simulazione/calcolo';
+import { crescitaAzienda, crescitaDaSerie } from '@/lib/piano/automatico';
+import { sintesiPianoScenarioAction } from '@/app/actions/sintesiPiano';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -362,18 +360,18 @@ export async function generaLivello3BrogliaccioAction(
     const paragrafi: string[] = [];
 
     if (settoreRis.success && settoreRis.punti.length > 0 && storicoRis.success) {
-      const crescitaSettore = calcolaCrescitaStoricaSettore(settoreRis.punti);
-      const puntiAzienda = [...storicoRis.storico]
-        .sort((a, b) => (a.annoBilancio || 0) - (b.annoBilancio || 0))
-        .map((b) => ({
-          ricaviVendite: b.datiFinanziari.ricaviVendite,
-          ebitda: b.datiFinanziari.ebitda,
-          ebit: b.datiFinanziari.ebit,
-          ammortamenti: b.datiFinanziari.ammortamenti,
-        }));
-      const crescitaAzienda = calcolaCrescitaStoricaAzienda(puntiAzienda);
+      const crescitaSettore = crescitaDaSerie(settoreRis.punti);
+      const crescitaAz = crescitaAzienda(
+        storicoRis.storico
+          .filter((b) => b.annoBilancio)
+          .map((b) => ({
+            anno: b.annoBilancio as number,
+            ricaviVendite: b.datiFinanziari.ricaviVendite,
+          }))
+          .sort((a, b) => b.anno - a.anno)
+      );
       paragrafi.push(
-        `DATI DI SETTORE (gruppo ATECO ${settoreRis.info?.gruppo || 'n/d'}): crescita storica del settore ${crescitaSettore !== null ? (crescitaSettore * 100).toFixed(1) + '%' : 'non disponibile'} l'anno, crescita storica dell'azienda ${crescitaAzienda !== null ? (crescitaAzienda * 100).toFixed(1) + '%' : 'non disponibile'} l'anno.`
+        `DATI DI SETTORE (gruppo ATECO ${settoreRis.info?.gruppo || 'n/d'}): crescita storica del settore ${crescitaSettore ? crescitaSettore.tasso.toFixed(1).replace('.', ',') + '%' : 'non disponibile'} l'anno, crescita storica dell'azienda ${crescitaAz ? crescitaAz.tasso.toFixed(1).replace('.', ',') + '%' : 'non disponibile'} l'anno.`
       );
     } else {
       paragrafi.push('DATI DI SETTORE: non ancora disponibili per questa azienda.');
@@ -385,6 +383,23 @@ export async function generaLivello3BrogliaccioAction(
       );
     } else {
       paragrafi.push('SIMULAZIONE: nessuna analisi ancora generata per questo scenario.');
+    }
+
+    // Piano di sviluppo: solo se il flag dello scenario lo attiva (ultima attività).
+    if (scenarioRis.scenario.simulazioneAttiva) {
+      const piano = await sintesiPianoScenarioAction(
+        nomeSchema,
+        scenarioId,
+        scenarioRis.scenario.aziendaId,
+        'RICEVUTA',
+        settoreRis.success
+          ? {
+              punti: settoreRis.punti,
+              descrizione: settoreRis.info ? `ATECO ${settoreRis.info.gruppo}` : null,
+            }
+          : null
+      );
+      paragrafi.push(piano.testo);
     }
 
     const testo = paragrafi.join('\n\n');

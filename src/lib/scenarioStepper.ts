@@ -158,9 +158,9 @@ export const PASSI_SCENARIO_DA_DEFINIRE: PassoScenario[] = [
   {
     numero: 5,
     id: 'simulazione',
-    label: 'Simulazione',
+    label: 'Piano di sviluppo',
     descrizione:
-      'Leve da muovere (personale, giorni di incasso/pagamento, imposte) finché gli indici non tornano in equilibrio — uno strumento di scrittura, non di lettura.',
+      'Il piano sulle macro-voci del bilancio XBRL: ipotesi per riga e per anno, rate del piano di rientro, cassa e patrimonio netto che ne derivano, fino a cinque anni.',
     modulo: null,
     stato: 'pronta',
     icon: FlaskConical,
@@ -197,21 +197,21 @@ export const PASSI_SCENARIO_DA_DEFINIRE: PassoScenario[] = [
   },
 ];
 
-/** Passo Simulazione a levette — riusabile: sempre presente per il Redigente,
+/** Passo «Piano di sviluppo» — riusabile: sempre presente per il Redigente,
  * inserito nel percorso Ricevente solo se lo scenario ha il flag attivo. */
 const PASSO_SIMULAZIONE: PassoScenario = {
   numero: 0, // rinumerato da passiScenario in base alla posizione
   id: 'simulazione',
-  label: 'Simulazione',
+  label: 'Piano di sviluppo',
   descrizione:
-    'Leve da muovere (personale, giorni di incasso/pagamento, imposte) finché gli indici non tornano in equilibrio — uno strumento di scrittura per valutare la sostenibilità del piano, non di lettura.',
+    'Il piano sulle macro-voci del bilancio XBRL, a confronto con il piano automatico di settore e con il piano dell’azienda (semafori); ipotesi anche scritte dall’AI, calcolo sempre del motore.',
   modulo: null,
   stato: 'pronta',
   icon: FlaskConical,
 };
 
 /**
- * Passi dello scenario. Per il Ricevente (RICEVUTA) la Simulazione a levette
+ * Passi dello scenario. Per il Ricevente (RICEVUTA) il Piano di sviluppo
  * è opzionale: compare solo se lo scenario è stato creato con il flag
  * `simulazioneAttiva`. Inserita dopo "Dati di Settore", prima del Brogliaccio.
  * I passi vengono rinumerati in sequenza in base alla posizione effettiva.
