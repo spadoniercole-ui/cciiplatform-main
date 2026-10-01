@@ -82,7 +82,7 @@ Quando avevo bloccato il Tipo Proposta a "Ricevuta" per gli spazi ENTE
 (punto 8, qualche consegna fa), avevo aggiornato lo stato di default
 del **tipo**, ma non quello dell'**origine** — che restava sempre
 `'Studio'`, un valore mai valido per "Ricevuta" (le origini ammesse lì
-sono solo Ente/Tribunale). Il menu a tendina *mostrava* "Ente" perché
+sono solo Ente/Tribunale). Il menu a tendina _mostrava_ "Ente" perché
 il browser, quando il valore reale non corrisponde a nessuna opzione
 disponibile nella lista, visualizza la prima — ma lo stato interno
 restava ancora "Studio", ed era quello inviato al server alla
@@ -92,6 +92,26 @@ con il tipo di spazio.
 
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
+
+## 0.117.0 — 2026-10-01 (Portable 1.2.0)
+
+Riallineamento delle due linee di lavoro. Dalla 0.109.112 (24/09) il codice
+era proseguito su due strade: nel repository le versioni 0.110.0–0.116.4
+(sicurezza e permessi, edizione on-premise, portable in rete locale,
+SheetJS, accesso con nome utente) e, nella sessione di sviluppo con
+Ercole, le versioni 0.109.113–0.109.118 (valutazione della proposta
+ricevuta, import del bilancino, piano dell'azienda con i semafori, AI sul
+piano, eliminazione della simulazione a levette). Questa versione le unisce:
+contiene tutto il contenuto di entrambe, descritto nelle voci qui sotto.
+
+- Le azioni nuove della linea 0.109.113–118 passano dalla guardia centrale
+  di autorizzazione (`src/lib/autorizzazione.ts`), come tutte le altre.
+- Il riscontro con i parametri dell'ente, spostato in
+  `src/lib/proposta/ricevibilita.ts`, distingue ancora «proposta non ancora
+  analizzata» da «estrazione non riuscita».
+- `simulazioneRedigente.ts` (che nel repository aveva ricevuto le guardie)
+  resta eliminato con la vecchia simulazione.
+- Portable 1.2.0: comprende il fuso orario UTC della 0.109.114.
 
 ## 0.116.4 — 2026-09-30
 
@@ -290,6 +310,7 @@ Finora i permessi per modulo (Nessun accesso / Sola lettura / Lettura e
 scrittura) e le aziende assegnate valevano solo per ciò che la sidebar e le
 pagine mostravano: chiamando direttamente le azioni, un Operatore poteva
 scrivere dove aveva la sola lettura e vedere aziende non sue.
+
 - Un Operatore legge e modifica solo le aziende assegnate (e i loro scenari,
   debiti, righe di proposta, posizioni aggiornate, bilanci XBRL); gli elenchi
   mostrano solo quelle.
@@ -321,6 +342,7 @@ action sono endpoint pubblici: fino a oggi quasi nessuna verificava la
 sessione, per cui bastava conoscerne l'identificativo (presente nel codice
 scaricato dal browser) per leggere o modificare i dati di qualunque spazio,
 entrare come amministratore o azzerare il database.
+
 - Nuovo modulo unico `src/lib/autorizzazione.ts`: l'identità arriva solo
   dalla sessione; lo spazio passato dal browser è accettato solo se coincide
   con quello dell'utente (il Superadmin opera su tutti).
@@ -342,6 +364,209 @@ Verificato: type-check, lint, test (inclusi 14 nuovi sulla guardia), build
 cloud e portable; login e navigazione di tutte le pagine dei due spazi
 dell'edizione portable.
 
+## 0.109.118 — 2026-10-01
+
+Chiusura del Piano di sviluppo: Brogliaccio e Relazione leggono il nuovo
+piano, la vecchia simulazione a levette è eliminata.
+
+- Nuova sintesi unica del piano per i testi (`sintesiPianoScenarioAction`),
+  per entrambi i lati, con gli stessi calcoli che l'operatore vede nel passo
+  «Piano di sviluppo»: esito e vincoli della variante «base», riferimento
+  di settore, autoverifica (Redigente) o confronto con il piano
+  dell'azienda (Ricevente), variante «elaborazione-ai» se presente, rate
+  della proposta.
+- **Brogliaccio Redigente**: il paragrafo «Simulazione» (che leggeva ancora
+  la vecchia simulazione, non più compilabile dalla 0.109.113) diventa
+  «Piano di sviluppo».
+- **Brogliaccio Ricevente**: se il flag dello scenario è acceso, il livello
+  3 riporta anche il piano e il confronto con il piano dell'azienda.
+- **Relazione del Redigente**: le raccomandazioni operative si basano sui
+  vincoli del piano e sulle ipotesi da documentare segnalate
+  dall'autoverifica, da riportare fedelmente; non più sulle leve della
+  vecchia simulazione.
+- Dati di settore letti una volta sola: chi li ha già (Brogliaccio) li passa
+  alla sintesi.
+- Eliminati `lib/simulazione/*`, `actions/simulazioneRedigente.ts`,
+  `SimulazioneRedigenteScenario.tsx` (non più montato) e le tabelle
+  `simulazione_scenario` e `simulazione_redigente` (eliminate
+  all'avvio). Restano `simulazione_ricevente` (analisi dei documenti del
+  Ricevente, altra cosa) e il nome della route `simulazione`.
+- Test: 451 (43 erano della vecchia simulazione).
+
+## 0.109.117 — 2026-10-01
+
+Valutazione della proposta, quarto passo: il terzo livello dell'AI sul piano
+di sviluppo, per Ricevente e Redigente, e l'autoverifica con i semafori per
+il Redigente.
+
+- Nel passo «Piano di sviluppo», pulsante «Elabora le ipotesi con l'AI»
+  (entrambi i lati). L'AI scrive solo le ipotesi d'ingresso, cella per
+  cella, ciascuna con una motivazione di una frase che richiama il dato da
+  cui viene; i risultati (EBITDA, utile, cassa, copertura delle rate) li
+  calcola il motore della piattaforma. Il risultato si salva come variante
+  «elaborazione-ai»: le varianti dell'operatore restano come sono.
+  - Ricevente: parte dal piano dell'azienda e lo riconduce al riferimento
+    di settore e allo storico dove l'azienda è più ottimista.
+  - Redigente: cerca un piano che generi la cassa per le rate della
+    proposta, dicendo su quali leve agisce; se non è possibile con ipotesi
+    plausibili, lo dice nella sintesi.
+- Velocità: una sola chiamata all'AI, con i dati già caricati nella pagina
+  (nessuna nuova lettura dal database); risposta breve in JSON, validata
+  senza seconde chiamate: righe, tipi e intervalli fuori regola si
+  scartano e si elencano nelle note della variante. Le motivazioni passano
+  dal lessico (sostituzioni deterministiche dei termini non ammessi).
+- Le motivazioni si leggono sotto ogni cella e nella stampa del piano;
+  modificando una cella a mano, la motivazione dell'AI su quella cella
+  sparisce (non è più l'ipotesi dell'AI).
+- **Autoverifica del Redigente**: lo stesso riquadro dei semafori confronta
+  la variante sullo schermo con il piano automatico di settore, voce per
+  voce e anno per anno, prima del deposito.
+- Soglie dei semafori in Parametri di Spazio per entrambi i tipi di
+  spazio («Confronto con il piano di settore»).
+
+## 0.109.116 — 2026-10-01
+
+Valutazione della proposta ricevuta, terzo passo: il piano dell'azienda a
+confronto con il piano automatico di settore, con i semafori.
+
+- Nel passo «Piano di sviluppo» dello scenario ricevuto (solo se il flag
+  dello scenario lo attiva: resta l'ultima attività) compare il riquadro
+  «Confronto con il piano dell'azienda».
+- **Piano automatico** (il riferimento): ricavi che crescono come il
+  settore (tasso annuo composto della serie ISTAT del gruppo ATECO; se
+  manca, come l'azienda negli ultimi bilanci; se manca anche quella,
+  invariati), margini costanti, crediti e fornitori proporzionali ai
+  ricavi, investimenti pari agli ammortamenti. Tasso limitato a ±20%.
+- **Piano dell'azienda** da Excel in qualsiasi formato (voci in righe,
+  anni in colonne, unità in euro, migliaia o milioni riconosciuta
+  dall'intestazione; più voci sulla stessa riga si sommano; le voci
+  calcolate come EBITDA e utile non si importano) oppure da **PDF letto
+  dall'AI**, con la fonte di ogni riga. In entrambi i casi la tabella
+  normalizzata si controlla e si corregge prima del salvataggio, con
+  conferma. L'abbinamento delle voci resta memorizzato per azienda.
+  «Modello Excel» per chi vuole compilare direttamente.
+- Il piano dell'azienda passa nello **stesso motore** del piano
+  automatico: si confrontano grandezze calcolate allo stesso modo (ricavi,
+  valore della produzione, costi, EBITDA, oneri finanziari, risultato,
+  flusso di gestione, crediti, fornitori, cassa).
+- **Semafori per direzione**: lo scostamento prudente è sempre verde;
+  quello favorevole all'azienda è verde fino al 10%, giallo fino al 25%,
+  rosso oltre. Soglie dell'ente in Parametri di Spazio › «Confronto con il
+  piano dell'azienda». Anni e righe che l'azienda non indica: «non
+  confrontabile», mai verdi per difetto.
+- Sintesi delle voci da approfondire, vincoli che scattano con le ipotesi
+  dell'azienda, stampa del confronto, «Copia nella variante azienda» per
+  mettere alla prova le ipotesi nel piano.
+- Il flag alla creazione dello scenario ricevuto si chiama ora «Attiva
+  l'analisi del piano aziendale» e descrive il nuovo passo (il vecchio
+  testo parlava ancora delle «levette»).
+
+## 0.109.115 — 2026-09-30
+
+Valutazione della proposta ricevuta, secondo passo: import del bilancino in
+qualsiasi formato nei dati attualizzati (Posizione Aggiornata).
+
+- Nuovo pulsante «Importa bilancino (qualsiasi formato)»: .xlsx, .xls,
+  .ods, .csv. Il file resta nel browser; al server arrivano solo le
+  macro-voci, il nome del file e la sua impronta.
+- Colonne riconosciute da sole (riga di intestazione, codice, descrizione,
+  Dare e Avere oppure saldo), tutte correggibili. Quattro modi di leggere
+  gli importi: Dare/Avere separati, saldo con segno (positivo = dare o
+  positivo = avere), importi senza segno. Numeri in formato italiano,
+  anglosassone, tra parentesi o con suffisso D/A.
+- Ogni conto riceve una categoria proposta dalla descrizione (30
+  categorie, compresi i rettificativi e i conti «a doppia natura»: banca,
+  Erario, enti previdenziali cambiano lato secondo il saldo). Totali e
+  risultato del periodo si escludono per evitare doppi conteggi. Filtro «Da
+  controllare» per i conti senza proposta o con proposta incerta.
+- Riepilogo nelle macro-voci del prospetto e **controllo di quadratura**:
+  attivo = passivo + netto, compreso il risultato del periodo. Se non
+  quadra lo dice, con la differenza e i conti senza categoria.
+- Conferma in finestra dell'applicativo prima di portare i valori nel
+  prospetto; poi resta il «Salva» del prospetto (doppia conferma).
+- **Tracciato memorizzato** per azienda e formato del file: al caricamento
+  successivo colonne e classificazione si riprendono e restano da
+  controllare solo i conti nuovi. Stesso formato su un'altra azienda:
+  si riprendono solo le colonne.
+- Data di riferimento proposta dal titolo del foglio o dal nome del file.
+- Provenienza registrata: il caricamento salvato porta «Da bilancino» e il
+  collegamento al documento d'origine (impronta SHA-256), come Situazione
+  debitoria e V.E.R.A. per il fascicolo di evidenza.
+- Il vecchio «Importa compilato» sul nostro modello resta.
+
+## 0.109.114 — 2026-09-30
+
+Valutazione della proposta ricevuta, primo passo: lista di controllo e avvio.
+
+- Nel passo Proposta (percorso Ricevente), sopra il pulsante compare la
+  lista «Prima di avviare la valutazione»: proposta di cram down scelta;
+  asseverazione e piano aziendale caricati oppure dichiarati «Non
+  pervenuto»; almeno una posizione aggiornata caricata oppure dichiarata
+  non pervenuta; dati ISTAT di settore aggiornati da non più di 30 giorni,
+  con il pulsante «Aggiorna ora» direttamente nella lista.
+- La voce «Analisi del piano di sviluppo» è solo informativa: dice se il
+  flag dello scenario la attiva e ricorda che è l'ultima attività, dopo la
+  valutazione. Non blocca mai l'avvio.
+- Ogni voce mancante indica dove si trova nell'applicativo.
+- Il pulsante «Analizza» diventa «Avvia la valutazione» ed è attivo solo a
+  lista completa.
+- Le dichiarazioni «non pervenuto» restano salvate sullo scenario (nuova
+  colonna `dichiarazioni` di `simulazione_ricevente`).
+- Una riga con le sole dichiarazioni non viene più letta come «estrazione
+  dell'importo fallita».
+- Nel riquadro «Confronto con la Situazione Debitoria dell'Ente», prima
+  di qualsiasi analisi, il messaggio diceva «L'analisi è stata fatta, ma
+  non ha trovato un importo chiaro». Ora distingue «non ancora analizzata»
+  da «estrazione non riuscita».
+- **Portable, accesso impossibile su un PC con fuso italiano**: PGlite
+  scrive le date in UTC ma rilegge le colonne TIMESTAMP come ora locale, e
+  fissa all'avvio un fuso a scarto fisso senza ora legale. La sfida MFA
+  risultava scaduta appena creata e il login tornava alla schermata
+  iniziale senza messaggi. Riprodotto in sandbox con fuso Europe/Rome.
+  Ora il server portable lavora in UTC (in `portableDb.ts` e in
+  `Avvia-CCII.bat`), e la sessione del database è sempre in UTC. Le date
+  si mostrano nel fuso del browser.
+
+## 0.109.113 — 2026-09-25
+
+**Piano di sviluppo sulle macro-voci del bilancio: sostituisce la simulazione a leve**
+
+Decisioni di Ercole: (1) niente dettaglio del personale per categoria —
+lavoriamo su medie e la scelta fra due operai e un quadro e' qualitativa: la
+leva agisce sul cumulato, dentro i costi della produzione; (2) il modello si
+costruisce sulle macro-voci gia' lette dal parser XBRL, cosi' ogni ipotesi ha
+di fronte il dato storico; (3) orizzonte fino a cinque anni, per scenario;
+(4) stesso modello per Redigente e Ricevente; (5) la simulazione a leve va
+cestinata.
+
+- **Motore puro** `lib/piano/piano.ts`: righe di ipotesi (ricavi, altri
+  ricavi, costi operativi senza ammortamenti, ammortamenti, oneri finanziari,
+  aliquota d'imposta, investimenti, crediti verso clienti, debiti verso
+  fornitori, debiti verso banche, apporti dei soci), ciascuna per anno in %
+  sull'anno prima o in valore assoluto; righe derivate (valore della
+  produzione, EBITDA, EBIT, imposte, risultato, flussi di cassa, disponibilita',
+  patrimonio netto, debiti previdenziali al netto delle rate, totali).
+  **Rate del piano di rientro dalla proposta**, ente separato dagli altri
+  creditori, distribuite per anno sui mesi delle rate. Copertura delle rate =
+  flusso di gestione / (rate + rimborsi bancari). Vincoli: cassa negativa,
+  rate non coperte, patrimonio netto negativo o sotto il capitale, perdita.
+  Sintesi in due righe. Deterministico.
+- **Tabella** `PianoSviluppoScenario.tsx` (scheda «Piano di sviluppo», ex
+  Simulazione, stesso indirizzo): colonne dello storico (fino a tre bilanci) e
+  degli anni del piano; celle di ipotesi con alternanza % / €; righe derivate
+  in grassetto; copertura delle rate in rosso sotto 1; esito e vincoli; note
+  sulle ipotesi; **varianti** (base + copie per «giocare con gli scenari»);
+  stampa del piano.
+- Tabella `piano_sviluppo` (scenario, variante, orizzonte, ipotesi, note).
+- La vecchia simulazione (leve, categorie di personale, tre scenari) non e'
+  piu' raggiungibile dall'interfaccia. I suoi file e le sue tabelle restano
+  nel repository finche' il Brogliaccio e l'analisi della proposta, che oggi
+  li leggono, non passano al piano: prossima tappa.
+
+Verificato: type-check (entrambi i controlli), lint, test, build cloud e
+portable, lancio di prova sulla portable (avviso «serve un bilancio XBRL»
+sullo scenario demo; il motore e' coperto dai test con il caso DEO GRIFO).
+
 ## 0.109.112 — 2026-09-24
 
 **Impaginazione della stampa riequilibrata**
@@ -349,6 +574,7 @@ dell'edizione portable.
 Ercole: «dobbiamo trovare un equilibrio nell'impaginazione». Dall'anteprima:
 intestazione compressa, logo minuscolo, pie' dell'ente attaccato al contenuto,
 mezza pagina vuota.
+
 - In stampa la **testata dell'ente si ripete su ogni pagina** e il **pie'
   dell'ente sta in fondo alla pagina** (posizione fissa; il corpo riserva lo
   spazio). A schermo, nell'anteprima della finestra, restano nel flusso.
@@ -367,15 +593,16 @@ portable. L'effetto va giudicato in cloud con «Anteprima di stampa».
 
 Ercole: per non mettere mano al codice ogni volta. Parametri di Spazio ›
 Stampa (`ParametriStampaManager.tsx`, tabella `parametri_stampa`):
+
 - margini in millimetri (5-40) applicati con `@page`;
 - intestazione su piu' righe e pie' di pagina dell'ente;
 - logo (PNG, JPEG, SVG, WEBP, fino a 300 KB), conservato come data URL, in
   testa accanto all'intestazione;
 - «Anteprima di stampa» per vedere l'effetto senza un documento.
-I parametri si caricano una volta per spazio (`ParametriStampaLoader` nel
-layout) e valgono per ogni stampa: Screening, relazioni, riscontri,
-prospetti, note. Il piede tecnico con versione e impronta resta, dopo il pie'
-di pagina dell'ente.
+  I parametri si caricano una volta per spazio (`ParametriStampaLoader` nel
+  layout) e valgono per ogni stampa: Screening, relazioni, riscontri,
+  prospetti, note. Il piede tecnico con versione e impronta resta, dopo il pie'
+  di pagina dell'ente.
 
 Verificato: type-check (entrambi i controlli), lint, test, build cloud e
 portable, lancio di prova sulla portable (salvataggio dei parametri con
@@ -408,6 +635,7 @@ l.fall. al posto degli artt. 185-186; il rilievo REV-003 «eliminato con
 riscrittura» nella 106, dove in realta' il controllo non esisteva); due punti
 da riscontrare (art. 23 c. 2-bis; responsabilita' dell'amministratore, che e'
 livello 4). Ercole ha confermato i quattro interventi:
+
 1. **Riconciliazione dell'importo dell'art. 25-novies** (motore delle soglie,
    riga INPS con lavoratori): il motivo dice quale importo e' stato confrontato
    (contributi scaduti dai valori per le soglie, al netto di sanzioni e
@@ -440,6 +668,7 @@ portable.
 Giudizio di Libra: impianto corretto (pre-istruttoria interna, nessun
 accertamento, IAI dichiarato come non probatorio). Cinque precisazioni,
 tutte accolte:
+
 1. **IAI**: la dichiarazione dice ora che l'indice rileva soltanto come
    criterio di priorita' del fascicolo, senza valore probatorio autonomo
    (art. 3 CCII impone la rilevazione tempestiva, non attribuisce prova a un
@@ -476,6 +705,7 @@ portable.
 
 Ercole: tre punti di stampa creano confusione; il documento e' uno, con la
 copertina come suo elemento.
+
 - **«Stampa lo Screening (PDF)»**, unico pulsante, nel riquadro
   dell'indice: apre una piccola finestra che elenca il contenuto (copertina
   con l'indice, relazione di Screening, riscontri normativi) e il flag
@@ -498,6 +728,7 @@ cloud.
 Ercole: «perche' nella nota non riportiamo tutti i riferimenti del report?».
 Fatto: la nota metodologica diventa l'allegato unico dei riferimenti
 (`lib/iai/riferimentiHtml.ts`, dati da `datiRiferimentiAction`):
+
 1. perimetro e destinazione per esteso;
 2. documenti di origine con impronta abbreviata (dodici cifre, l'intera
    nell'applicativo) e data di caricamento;
@@ -509,9 +740,9 @@ Fatto: la nota metodologica diventa l'allegato unico dei riferimenti
 5. parametri e metodo dell'indice (pesi con quota, vincoli, fasce, basi);
 6. revisione automatica: controlli eseguiti e rilievi residui, che con
    l'allegato non stanno piu' in calce al testo della relazione.
-La copertina perde il blocco dei riferimenti e rimanda all'allegato. Il flag
-nei Parametri dell'indice si chiama ora «Allega Riferimenti e metodo»,
-attivo per default.
+   La copertina perde il blocco dei riferimenti e rimanda all'allegato. Il flag
+   nei Parametri dell'indice si chiama ora «Allega Riferimenti e metodo»,
+   attivo per default.
 
 Da estendere a Relazione dello scenario e documenti di corredo con la stessa
 funzione.
@@ -528,6 +759,7 @@ Variante di Ercole: la nota si stampa nel report con un flag attivo per
 default; togliendo la spunta il PDF esce senza. Cosi' i pesi non stanno in
 copertina, dove distraggono, ma in fondo, dove chi vuole capire il numero li
 trova, e non vanno chiesti.
+
 - `lib/iai/notaHtml.ts`: una sola funzione per la nota (pesi con quota,
   vincoli, fasce, basi), usata dalla stampa a parte nei Parametri e
   dall'allegato in coda al PDF dello Screening (dopo la relazione, su pagina
@@ -568,6 +800,7 @@ ritorno ai predefiniti).
 **La copertina si stampa, e porta i riferimenti**
 
 Ercole: «e non la stampi? non metti i riferimenti?». Fatto.
+
 - **«Stampa copertina»** sul riquadro dell'IAI: quadrante, barre, vincoli,
   sintesi, determinanti e lacune per dimensione, **riferimenti normativi per
   dimensione** (art. 25-novies; D.L. 269/2003 art. 44 c. 9; CCII artt. 2 e 3;
@@ -632,6 +865,7 @@ esistente: non vista a schermo nel sandbox, da guardare in cloud.
 
 Ercole: cinque euro per la ricerca dei riferimenti sono troppi. La spesa
 viene soprattutto dalle pagine lette, che entrano nel contesto del modello.
+
 - **Da otto a quattro ricerche per materia**, con l'istruzione di aprire
   solo le pagine che servono.
 - **La spesa stimata compare prima del clic**: nella finestra di avvio, in
@@ -672,6 +906,7 @@ nel nome).
 Dal primo giro in cloud di Ercole: su tre materie, due restavano «in attesa
 della ricerca» benche' la ricerca fosse partita su tutte. Il modello non aveva
 restituito nulla di utilizzabile e il codice taceva. Ora:
+
 - l'esito dell'ultima ricerca resta sulla materia (`esito_ricerca`) e si
   legge: «nessuna circolare o norma trovata», oppure «risposta non nel
   formato atteso» con l'inizio della risposta, oppure «rifiutata dal servizio
@@ -825,10 +1060,10 @@ come proposti.
   livello decisionale: se sottoporre il caso al dirigente per un confronto
   con l'azienda o per la richiesta di liquidazione giudiziale), RELAZIONE
   (livello dirigenziale: dati storici + valutazione attuale + dati di settore
-  + scenari, a supporto della valutazione della proposta e dell'intenzione
-  di voto), CORREDO (bozze per il professionista). La dichiarazione dice da
-  dove vengono i dati e che valore hanno, a che cosa serve l'elaborato, che
-  cosa NON e'.
+  - scenari, a supporto della valutazione della proposta e dell'intenzione
+    di voto), CORREDO (bozze per il professionista). La dichiarazione dice da
+    dove vengono i dati e che valore hanno, a che cosa serve l'elaborato, che
+    cosa NON e'.
 - **Inserita prima della generazione** nei prompt di Screening, Relazione e
   documenti di corredo («scrivi per questo livello di lettura e non oltre»)
   e **in testa a ogni elaborato** (sostituisce l'intestazione di livello;
@@ -1008,7 +1243,7 @@ scomparivano, perche' l'AI rileggeva la visura ogni volta.
   inventato. Il JSON e' normalizzato senza eccezioni (date italiane, importi
   con separatori, campi mancanti).
 - **Salvati con l'impronta SHA-256 della visura** (`azienda_screening.
-  visura_fatti`, `visura_impronta`); la visura entra nel fascicolo come
+visura_fatti`, `visura_impronta`); la visura entra nel fascicolo come
   documento di origine (`documenti_origine`, tipo VISURA).
 - **Avvisi deterministici**, in testa alla relazione e nel nuovo pannello
   «Fatti della visura»: procedura concorsuale risultante dalla visura e non
@@ -1060,6 +1295,7 @@ portable, lancio di prova sulla portable.
 
 Riscontro di Ercole su fonti notarili e dottrinali (Comitato Triveneto,
 massime T.A.1 e T.A.4; CNN Studio 88-2021/I; Federnotizie; FNC):
+
 - `CC-2482bis-ter` → **vigente**: artt. 2446/2447 e 2482-bis/ter c.c., con la
   causa di scioglimento dell'art. 2484 n. 4.
 - `DL23-2020-6` → **vigente**: art. 6 del D.L. 23/2020 come sostituito dalla
@@ -1072,9 +1308,9 @@ massime T.A.1 e T.A.4; CNN Studio 88-2021/I; Federnotizie; FNC):
   capitale al netto delle riserve), da riportare come tale (Libra REV-007).
 - Corretto il riscontro sul patrimonio netto negativo dei Riscontri normativi:
   rimanda alla sospensione e alla scadenza 2026, non accerta obblighi.
-Il materiale di riscontro attribuiva la proroga al «D.L. 69/2023»: e' un
-errore (quel decreto riguarda il regime transitorio del cram down); le proroghe
-sono nei decreti 228/2021 e 198/2022. `DL69-2023-1bis` resta «da verificare».
+  Il materiale di riscontro attribuiva la proroga al «D.L. 69/2023»: e' un
+  errore (quel decreto riguarda il regime transitorio del cram down); le proroghe
+  sono nei decreti 228/2021 e 198/2022. `DL69-2023-1bis` resta «da verificare».
 
 Verificato: type-check (entrambi i controlli), lint, test, build cloud e
 portable.
@@ -1087,6 +1323,7 @@ Richiesta di Ercole: l'avviso usava `window.alert`, che mostra l'intestazione
 tecnica del browser («… vercel.app dice») e non puo' indicare la strada. Ora e'
 una finestra dell'applicativo (`RevisioneTesto.tsx`), aperta dal pannello
 Revisione del testo interessato:
+
 - dice che il PDF non puo' uscire e perche' (quanti controlli «Bloccato»);
 - elenca che cosa fare in tre passi, con il PERCORSO nelle parole
   dell'interfaccia (es. «Scenari › apri lo scenario › scheda "Relazione" ›
@@ -1094,7 +1331,7 @@ Revisione del testo interessato:
   alle prime armi ha i riferimenti;
 - il pulsante «Vai ai rilievi» apre il dettaglio dei controlli e porta il
   riquadro a schermo.
-Il meccanismo e' un evento del browser: chi chiama l'esportazione non cambia.
+  Il meccanismo e' un evento del browser: chi chiama l'esportazione non cambia.
 
 Verificato: type-check (entrambi i controlli), lint, test, build cloud e
 portable, lancio di prova sulla portable.
@@ -1167,6 +1404,7 @@ pannello `FascicoloEvidenza.tsx`. Ogni importo diventa un'evidenza con
 identificativo stabile (`EV-PRO-…`, `EV-ENT-…`, `EV-VER-…`, `EV-CAL-…`), ente,
 natura, rango, data e stato. Si compone AL VOLO da proposta, posizione debitoria
 dell'ente e V.E.R.A.: nessuna tabella nuova, sempre coerente con i dati.
+
 - Una voce V.E.R.A. «potenziale» ha importo NON NOTO, mai zero: il totale e'
   dichiarato come minimo (e' il caso dei 14.914 € contro la soglia di 15.000 €).
 - I valori calcolati (offerto, saldo, totali) dichiarano da che cosa derivano.
@@ -1271,6 +1509,7 @@ e' una citazione) e li esaminera' il revisore sugli output generati.
 **3. Nuova nomenclatura (scelta di Ercole).** La verifica della piattaforma
 confronta l'offerta con i parametri dell'ente, non la completezza dei
 documenti: vale la formula che Libra da' per «conforme».
+
 - «Limiti di ricevibilita'» → **«Parametri di riscontro della proposta»**
 - «Esito ricevibilita'» → **«Riscontro con i parametri dell'ente»**
 - «Ricevibile / Non ricevibile» → **«Coerente / Non coerente con i parametri
@@ -1282,12 +1521,13 @@ documenti: vale la formula che Libra da' per «conforme».
   attenzione»; «Quadro solido» → «Nessuna criticita' netta rilevata»
 - «pavimento minimo» → «termine di confronto (valore stimato, non soglia
   legale)»; indici: «Solidita' patrimoniale» → «Struttura patrimoniale»
-Toccati 27 file, prompt compresi. Le note predefinite dei
-parametri gia' salvate negli spazi esistenti si aggiornano da sole, ma solo se
-identiche al testo originale: una nota riscritta dall'ente non si tocca.
+  Toccati 27 file, prompt compresi. Le note predefinite dei
+  parametri gia' salvate negli spazi esistenti si aggiornano da sole, ma solo se
+  identiche al testo originale: una nota riscritta dall'ente non si tocca.
 
 **4. Intenzioni di voto (precisazione di Ercole).** L'adesione e' un'intenzione
 di voto sulla proposta nel suo insieme, con due momenti a specchio.
+
 - Ricevente: la tabella diventa un promemoria facoltativo; la quota si ricava
   dall'attestazione e si inserisce a mano; l'ente non si esprime sul voto altrui.
 - Redigente: «intenzioni di voto raccolte». Con voti incompleti il pannello
@@ -1313,6 +1553,7 @@ perche' alla proposta mancavano i dati da cui dipendono. Ora ci sono.
 Proposta, per entrambi i percorsi (`InquadramentoProposta.tsx`). Tre dati nuovi
 sullo scenario, tutti facoltativi e senza default: uno scenario esistente resta
 "da compilare".
+
 - **Strumento scelto**: elenco completo — accordi degli artt. 57, 60 e 61 (con
   transazione ex art. 63), accordo transattivo in composizione negoziata
   (art. 23, c. 2-bis), concordato preventivo, piano di ristrutturazione soggetto
@@ -1401,6 +1642,7 @@ controlla che ogni fonte citata esista e possa sostenere un esito.
 (`src/lib/registroFonti/regole.ts`). Ogni regola restituisce due formule: la
 stessa norma letta da chi riceve e da chi costruisce la proposta produce
 messaggi diversi.
+
 - **Parametri del cram down (art. 63)**: la soglia si sceglie in base alla
   data della PROPOSTA, non di oggi. Dal 28/09/2024: 50% con altri aderenti
   almeno al 25%, altrimenti 60% e dieci anni, esclusi sanzioni e interessi.
@@ -1620,10 +1862,11 @@ per quanto. Una riga ha la fase vuota: senza l'informazione non si esclude.
 **Rete di sicurezza per i casi senza regola** — "un warning grande come una
 casa", nelle parole di Ercole. Due situazioni fermano la conferma finche' non
 si sceglie:
-  - due SALDI dello stesso ente mappati a mano;
-  - posizioni previdenziali in tabella E fogli dell'istituto sullo stesso
-    debito — la tabella avrebbe avuto la precedenza in silenzio.
-Nessun default silenzioso: il pulsante di conferma resta disabilitato.
+
+- due SALDI dello stesso ente mappati a mano;
+- posizioni previdenziali in tabella E fogli dell'istituto sullo stesso
+  debito — la tabella avrebbe avuto la precedenza in silenzio.
+  Nessun default silenzioso: il pulsante di conferma resta disabilitato.
 
 **Trovati dal lancio di prova**, tutti prima della consegna:
 
@@ -2234,10 +2477,11 @@ restava invisibile: la piattaforma lo dava per non accertabile e, diventato
 accertabile, tacerlo sarebbe stato peggio.
 
 Tre stati distinti, non due:
-  - **accertato e presente** -> fra gli elementi a carico, con i periodi;
-  - **non accertato** (manca l'Elenco Deleghe) -> fra le cose da accertare;
-  - **accertato e ASSENTE** -> ne' l'uno ne' l'altro: non e' una lacuna, e non
-    e' un elemento a carico.
+
+- **accertato e presente** -> fra gli elementi a carico, con i periodi;
+- **non accertato** (manca l'Elenco Deleghe) -> fra le cose da accertare;
+- **accertato e ASSENTE** -> ne' l'uno ne' l'altro: non e' una lacuna, e non
+  e' un elemento a carico.
 
 **6 test nuovi** (236 in tutto), fra cui quello sul terzo stato — il caso che
 in questi giorni e' sfuggito piu' volte, perche' `false` e `null` si
@@ -2352,10 +2596,10 @@ gia' fatto tutto. Ora basta l'Anagrafica Ente compilata.
 **Tre fogli nuovi nel triage**, ciascuno con il flag "non disponibile" — un
 documento che manca viene ESCLUSO dalle verifiche, non lasciato in attesa:
 
-  - **Elenco denunce (UNIEMENS)** -> contributi dovuti per anno e denunce non
-    presentate;
-  - **Lista Inadempienze** -> il non versato certificato dall'istituto;
-  - **Elenco Deleghe (F24)** -> le date di versamento.
+- **Elenco denunce (UNIEMENS)** -> contributi dovuti per anno e denunce non
+  presentate;
+- **Lista Inadempienze** -> il non versato certificato dall'istituto;
+- **Elenco Deleghe (F24)** -> le date di versamento.
 
 **Il terzo requisito dell'art. 25-novies era sempre "non verificabile".** Ora
 non lo e' piu'. Ma attenzione alla distinzione che ha richiesto il terzo file:
@@ -2471,8 +2715,8 @@ con il loro motivo, e si possono riaprire.
 l'esito registrato invecchiava in silenzio, e un elenco di verifiche vecchie
 era indistinguibile da uno di verifiche fatte ieri.
 
-Ogni verifica mostra ora la propria eta': *recente*, *in scadenza*
-nell'ultimo mese di validita', *da rivedere* oltre i sei mesi. L'avviso
+Ogni verifica mostra ora la propria eta': _recente_, _in scadenza_
+nell'ultimo mese di validita', _da rivedere_ oltre i sei mesi. L'avviso
 arriva PRIMA della scadenza, non dopo: avvisare dopo e' inutile, serve il
 tempo di rifarla. La soglia non e' una regola di legge ma una convenzione di
 lavoro, ed e' scritto nel file.
@@ -2755,19 +2999,19 @@ forza. Un semaforo che dice sempre la stessa cosa non e' un semaforo.
 
 Aggiunti alla schermata di conferma:
 
-  - **Bilancio XBRL** -> patrimonio netto e indici CCII. Analizzato via la
-    rotta `/api/xbrl/parse` gia' esistente, non chiamando la libreria dal
-    componente: `analizzaFileXbrl` legge le mappature dei tag dal database, e
-    importarla in un client component trascina `pg` nel bundle del browser —
-    la build fallisce con "Can't resolve 'fs'". Difetto trovato dalla build.
-  - **Posizione V.E.R.A.** -> l'esposizione. Le mappature di titoli e
-    trattamenti restano vuote: in fase di triage non si chiede all'operatore
-    di classificare, la classificazione fine si fa nella scheda dedicata se
-    la posizione viene presa in carico.
-  - **Due valori per la soglia INPS**: presenza di lavoratori
-    subordinati/parasubordinati e contributi DOVUTI nell'anno precedente.
-    Nessun documento li porta — i contributi dovuti vengono dai flussi
-    UNIEMENS, non dal file V.E.R.A.
+- **Bilancio XBRL** -> patrimonio netto e indici CCII. Analizzato via la
+  rotta `/api/xbrl/parse` gia' esistente, non chiamando la libreria dal
+  componente: `analizzaFileXbrl` legge le mappature dei tag dal database, e
+  importarla in un client component trascina `pg` nel bundle del browser —
+  la build fallisce con "Can't resolve 'fs'". Difetto trovato dalla build.
+- **Posizione V.E.R.A.** -> l'esposizione. Le mappature di titoli e
+  trattamenti restano vuote: in fase di triage non si chiede all'operatore
+  di classificare, la classificazione fine si fa nella scheda dedicata se
+  la posizione viene presa in carico.
+- **Due valori per la soglia INPS**: presenza di lavoratori
+  subordinati/parasubordinati e contributi DOVUTI nell'anno precedente.
+  Nessun documento li porta — i contributi dovuti vengono dai flussi
+  UNIEMENS, non dal file V.E.R.A.
 
 Ogni caricamento e' indipendente e facoltativo: se uno fallisce, l'indicatore
 registra quella dimensione come mancante e lo dichiara. Meglio un giudizio
@@ -2807,15 +3051,15 @@ forma giuridica — e si ottiene subito l'indicatore.
 **Perche' l'azienda viene comunque salvata**, invece di calcolare tutto al
 volo senza scrivere nulla:
 
-  - decidere di NON procedere e' a sua volta una decisione amministrativa:
-    senza traccia non resta memoria di chi ha verificato cosa, e in un ente
-    e' la traccia che protegge chi decide;
-  - i documenti caricati vengono sempre eliminati dopo l'elaborazione: senza
-    esito salvato, due funzionari sulla stessa azienda otterrebbero report
-    diversi e nessuno ricostruibile;
-  - un secondo percorso che ricalcola esposizione, soglie e indici finirebbe
-    per divergere da quello esistente — e' successo tre volte in questo
-    progetto.
+- decidere di NON procedere e' a sua volta una decisione amministrativa:
+  senza traccia non resta memoria di chi ha verificato cosa, e in un ente
+  e' la traccia che protegge chi decide;
+- i documenti caricati vengono sempre eliminati dopo l'elaborazione: senza
+  esito salvato, due funzionari sulla stessa azienda otterrebbero report
+  diversi e nessuno ricostruibile;
+- un secondo percorso che ricalcola esposizione, soglie e indici finirebbe
+  per divergere da quello esistente — e' successo tre volte in questo
+  progetto.
 
 Il costo da abbattere non era il salvataggio: erano i quindici campi
 digitati. Quelli ora arrivano dalla visura, e ne restano due o tre da
@@ -2851,13 +3095,13 @@ pagina.
 **Due difetti che solo il collaudo a schermo poteva trovare** — e che erano
 la ragione per cui, nella 0.109.46, il semaforo non compariva affatto:
 
-  - la tabella dello storico XBRL si chiama `xbrl_storico_azienda`, non
-    `xbrl_storico`;
-  - ogni lettura dell'indicatore e' OPZIONALE, perche' quelle tabelle
-    nascono solo quando la rispettiva scheda viene usata la prima volta. Una
-    tabella assente significa "dato non disponibile" — informazione
-    legittima per l'indicatore — non un errore che debba far fallire il
-    calcolo e sparire il semaforo dalla pagina.
+- la tabella dello storico XBRL si chiama `xbrl_storico_azienda`, non
+  `xbrl_storico`;
+- ogni lettura dell'indicatore e' OPZIONALE, perche' quelle tabelle
+  nascono solo quando la rispettiva scheda viene usata la prima volta. Una
+  tabella assente significa "dato non disponibile" — informazione
+  legittima per l'indicatore — non un errore che debba far fallire il
+  calcolo e sparire il semaforo dalla pagina.
 
 **Collaudato a schermo** su un'azienda demo senza dati, dove restituisce
 esattamente cio' che deve: rosso, "Approfondimenti necessari", "Perimetro non
@@ -2887,17 +3131,17 @@ patrimoniale e finanziario, quadro qualitativo.
 **Non e' una media ponderata**, e la scelta e' documentata nel file perche'
 sopravviva a chi lo leggera' fra sei mesi:
 
-  1. NON C'E' UNA POPOLAZIONE DI RIFERIMENTO: si valuta un'azienda alla
-     volta, quindi non esiste la distribuzione rispetto a cui standardizzare.
-     Qualunque normalizzazione sarebbe una soglia decisa da noi e presentata
-     come statistica.
-  2. LE GRANDEZZE NON SONO COMPENSABILI: una media direbbe che un buon
-     patrimonio netto compensa il superamento della soglia dell'art.
-     25-novies, che e' un fatto giuridico. Produrrebbe un verde su
-     un'azienda che l'ente e' tenuto a segnalare.
-  3. I DATI MANCANO QUASI SEMPRE: in un indicatore compensatorio il dato
-     mancante diventa implicitamente un valore favorevole — verde per
-     assenza di prove.
+1. NON C'E' UNA POPOLAZIONE DI RIFERIMENTO: si valuta un'azienda alla
+   volta, quindi non esiste la distribuzione rispetto a cui standardizzare.
+   Qualunque normalizzazione sarebbe una soglia decisa da noi e presentata
+   come statistica.
+2. LE GRANDEZZE NON SONO COMPENSABILI: una media direbbe che un buon
+   patrimonio netto compensa il superamento della soglia dell'art.
+   25-novies, che e' un fatto giuridico. Produrrebbe un verde su
+   un'azienda che l'ente e' tenuto a segnalare.
+3. I DATI MANCANO QUASI SEMPRE: in un indicatore compensatorio il dato
+   mancante diventa implicitamente un valore favorevole — verde per
+   assenza di prove.
 
 Si adotta una regola GERARCHICA e NON COMPENSATORIA: ogni livello puo'
 peggiorare l'esito, nessuno puo' migliorarlo.
@@ -2962,11 +3206,11 @@ Ogni backup generato finora contiene quell'errore: si rigenera, non si ripara.
 **Corretto alla radice.** Il generatore raccoglie ora l'`udt_name` di ogni
 colonna mentre costruisce la struttura, e lo passa al serializzatore:
 
-  - `udt_name` che comincia con `_` -> array Postgres vero, con il tipo
-    dichiarato esplicitamente (`ARRAY[...]::text[]`);
-  - `json` / `jsonb` -> il valore INTERO serializzato come JSON, qualunque
-    forma abbia;
-  - tutto il resto -> come prima.
+- `udt_name` che comincia con `_` -> array Postgres vero, con il tipo
+  dichiarato esplicitamente (`ARRAY[...]::text[]`);
+- `json` / `jsonb` -> il valore INTERO serializzato come JSON, qualunque
+  forma abbia;
+- tutto il resto -> come prima.
 
 **8 test nuovi** (168 in tutto), fra cui il ciclo completo su un database che
 contiene proprio quella forma di dato: dopo il ripristino il contenuto e'
@@ -3002,13 +3246,13 @@ parti.
 
 **Due difetti trovati DAL collaudo, dopo la prima correzione:**
 
-*Testo in chiaro scambiato per binario.* Il criterio era "ogni byte e' ASCII
+_Testo in chiaro scambiato per binario._ Il criterio era "ogni byte e' ASCII
 stampabile", ma un backup in chiaro contiene accenti nei propri commenti:
 veniva ricodificato in base64 e il server lo dichiarava cifrato, chiedendo
 una passphrase inesistente. La domanda giusta e' "sono byte UTF-8 validi?",
 posta con `TextDecoder` in modalita' `fatal`.
 
-*Il pool portable avvelenava la transazione.* Su un testo multi-istruzione
+_Il pool portable avvelenava la transazione._ Su un testo multi-istruzione
 tentava `query()`, falliva, e solo allora ripiegava su `exec()`. Ma dentro una
 transazione quel primo tentativo la abortisce: ogni comando successivo
 rispondeva "current transaction is aborted", nascondendo l'errore vero. Il
@@ -3080,11 +3324,11 @@ messaggio leggibile, ma il caricamento continuava a non concludersi. La
 strada dello storage esterno porta con se' due dipendenze fuori dal nostro
 controllo:
 
-  - una variabile d'ambiente (`BLOB_READ_WRITE_TOKEN`) da configurare sul
-    progetto;
-  - una chiamata di conferma che arriva DAI server dello storage VERSO il
-    deploy — e sulle anteprime la protezione degli accessi di Vercel la
-    blocca, per cui il caricamento non risulta mai concluso.
+- una variabile d'ambiente (`BLOB_READ_WRITE_TOKEN`) da configurare sul
+  progetto;
+- una chiamata di conferma che arriva DAI server dello storage VERSO il
+  deploy — e sulle anteprime la protezione degli accessi di Vercel la
+  blocca, per cui il caricamento non risulta mai concluso.
 
 **Rimossa del tutto.** Il file viene ora spezzato dal browser in parti da
 1,5 MB e inviato con piu' Server Action normali; il server le ricompone.
@@ -3123,10 +3367,10 @@ del file in corso..." senza concludersi mai.
 Causa: la rotta `/api/backup-upload` riceve **due chiamate diverse**, e io
 avevo applicato lo stesso controllo a entrambe.
 
-  1. `blob.generate-client-token` — dal BROWSER, per chiedere il permesso di
-     caricare. Porta i cookie di sessione.
-  2. `blob.upload-completed` — dai server dello storage, a caricamento
-     concluso. E' macchina-a-macchina e NON porta alcun cookie.
+1. `blob.generate-client-token` — dal BROWSER, per chiedere il permesso di
+   caricare. Porta i cookie di sessione.
+2. `blob.upload-completed` — dai server dello storage, a caricamento
+   concluso. E' macchina-a-macchina e NON porta alcun cookie.
 
 Il controllo "sei il Superadmin?" respingeva la seconda con 403. Lo storage la
 ritentava, il caricamento non veniva mai dato per concluso, e il browser
@@ -3449,11 +3693,11 @@ un database VUOTO e verificano che il secondo sia identico al primo.
 
 **Due difetti trovati proprio da quel test, entrambi invisibili a occhio:**
 
-1. *Le sequenze venivano create dopo le tabelle.* Ma i `DEFAULT nextval(...)`
+1. _Le sequenze venivano create dopo le tabelle._ Ma i `DEFAULT nextval(...)`
    delle colonne SERIAL le referenziano: il ripristino falliva alla prima
    CREATE TABLE con "relation does not exist". Ora si creano prima e il valore
    corrente si imposta in fondo, a dati caricati.
-2. *Un array vuoto produceva `ARRAY[]`*, che Postgres rifiuta ("cannot
+2. _Un array vuoto produceva `ARRAY[]`_, che Postgres rifiuta ("cannot
    determine type of empty array"). Ora usa `'{}'`. Tocca direttamente la
    colonna `alias TEXT[]` dei Limiti di Ricevibilita': un'azienda senza alias
    avrebbe fatto fallire il ripristino dell'INTERO database.
@@ -3623,7 +3867,7 @@ mancanti resta da fare.
 
 La ricevibilità di una proposta è un giudizio che spetta all'ente creditore
 che la riceve (fissa lui le soglie e valuta): non ha senso nel percorso
-Redigente, dove il professionista *predispone* la proposta. Compariva invece
+Redigente, dove il professionista _predispone_ la proposta. Compariva invece
 per errore anche lì, con esiti fuorvianti (righe tutte "RICEVIBILE" verdi
 quando in realtà non c'era alcuna soglia da verificare, e messaggi
 auto-contraddittori tipo "Nessuna soglia configurata dalla soglia
@@ -3925,7 +4169,7 @@ costruzione". Ora è una sintesi vera, con dentro il confronto con lo
 scenario liquidatorio richiesto fin dall'inizio.
 
 - **Sintesi unica, non i 3 livelli con varchi del Ricevente** — quel
-  disegno serve a chi *valuta* una proposta ricevuta; chi *redige*
+  disegno serve a chi _valuta_ una proposta ricevuta; chi _redige_
   ha bisogno di un riepilogo ordinato di tutto quanto acquisito, come
   trampolino per scrivere la Proposta (che nel percorso Redigente viene
   dopo, non prima). Il Brogliaccio raccoglie, in un colpo d'occhio:
@@ -3937,7 +4181,7 @@ scenario liquidatorio richiesto fin dall'inizio.
 - **Confronto con lo scenario liquidatorio, adattato al Redigente** — lo
   stesso meccanismo del Ricevente (`confrontoLiquidatorio.ts`, ricerca
   web reale, "parcheggiata" per la Relazione, freschezza 24h), ma dal
-  punto di vista di chi redige verso *tutti* i creditori: il termine di
+  punto di vista di chi redige verso _tutti_ i creditori: il termine di
   paragone non è il saldo verso un singolo ente e i suoi limiti (che per
   il Redigente non esistono), ma la massa debitoria complessiva dai
   bilanci e i tassi di recupero medi di settore, come pavimento minimo
@@ -3999,7 +4243,7 @@ completa.
   login (`admin_spazio_index`) ha l'email come chiave unica su tutta
   la piattaforma — ma la creazione di un nuovo Admin di Spazio
   sovrascriveva quell'indice senza controllo (`ON CONFLICT DO
-  UPDATE`), se la stessa email era già usata come Admin altrove.
+UPDATE`), se la stessa email era già usata come Admin altrove.
   Risultato osservato: creare un Admin del Redigente con la stessa
   email dell'Admin del Ricevente ha fatto sparire quest'ultimo dal
   login — il suo account esisteva ancora intatto nel proprio schema,
@@ -4133,7 +4377,7 @@ completa.
   duplicato, mantenuta la versione già esistente.
 - **La parte davvero mancante**: il pre-riempimento della riga nuova
   in Proposta con la percentuale media configurata (l'esempio "proposta
-  media 30%, modifico solo la riga INPS al 100%") non c'era ancora — 
+  media 30%, modifico solo la riga INPS al 100%") non c'era ancora —
   aggiunta ora in `PropostaScenario.tsx`, senza toccare un form che
   l'utente ha già iniziato a compilare.
 
@@ -4948,7 +5192,7 @@ Check List), tutte confermate nella build.
 **Tre problemi reali segnalati, tutti confermati e corretti**
 
 - **Il più grave, un mio errore di design**: la consegna precedente
-  aveva spostato i *dati* di Posizione Ente ad Azienda, ma il punto di
+  aveva spostato i _dati_ di Posizione Ente ad Azienda, ma il punto di
   accesso restava raggiungibile solo passando per uno Scenario — senza
   una scheda diretta in Azienda, dove ora quei dati vivono davvero.
   Aggiunta la scheda "Posizione Ente" accanto a Screening nel menu di
@@ -5155,7 +5399,7 @@ completa.
 **Trovata la causa vera — non un bug tecnico, un errore di design nel valore stesso**
 
 "Ente" come origine di una proposta ricevuta non aveva senso: uno
-spazio ENTE è il *destinatario*, non può essere anche l'origine di
+spazio ENTE è il _destinatario_, non può essere anche l'origine di
 qualcosa che riceve da se stesso. L'osservazione che ha sbloccato
 tutto: creando lo scenario con "Tribunale" funzionava, con "Ente" no —
 segno che il valore stesso era sbagliato, non la validazione attorno
@@ -5318,7 +5562,7 @@ scritta).
 
 Richiesta diretta dopo aver notato che una correzione al codice (blocco
 tipo proposta per gli spazi ENTE) non cambia retroattivamente i dati già
-creati con le vecchie regole — serviva un modo per ripulire *quello*
+creati con le vecchie regole — serviva un modo per ripulire _quello_
 spazio senza azzerare l'intero database.
 
 - **Nuovo pulsante "Elimina"** in Manutenzione Spazi, per ogni spazio —
@@ -7166,7 +7410,7 @@ stesso nonostante fosse un errore noto e documentato nel codice.
   importata da `parametriSpazio.ts` invece di essere esportata da lì.
 - **Aggiunta una verifica automatica permanente**
   (`scripts/check-use-server-exports.sh`, agganciata a `npm run
-  type-check`): controlla che nessun file `'use server'` esporti
+type-check`): controlla che nessun file `'use server'` esporti
   costanti/classi non-funzione. Non mi affiderò più a un controllo
   manuale fatto a mente prima di ogni consegna — ora fa parte della
   verifica standard ed è impossibile dimenticarlo.
@@ -7192,7 +7436,7 @@ nella lettura/scrittura, ma ho trovato — e corretto — due problemi reali:
   questo pattern (Indici e Tab XBRL, sia per azienda che per spazio):
   ora un salvataggio fallito annulla il toggle e mostra il motivo.
 - **Il salvataggio stesso reso più robusto**: sostituito l'`INSERT ...
-  ON CONFLICT` (che richiede un vincolo univoco esattamente combaciante)
+ON CONFLICT` (che richiede un vincolo univoco esattamente combaciante)
   con un `UPDATE` seguito da `INSERT` solo se nessuna riga è stata
   aggiornata — non dipende più dal presupposto che il vincolo univoco
   della tabella sia esattamente quello atteso, più resistente a tabelle
@@ -7492,6 +7736,7 @@ dall'azienda) — è l'input che scatena l'intero ciclo di verifica
   menu di selezione scenario mostra tipo e origine accanto al nome.
 
 **Fix operativi (nota 1 del messaggio precedente):**
+
 - Corretto un bug reale in "Configurazione Check List": le combo dei pesi
   (e tutti gli input numerici della pagina) non avevano un colore di
   testo/sfondo esplicito — su alcune configurazioni risultavano bianco su
@@ -7580,7 +7825,7 @@ Prima di continuare a costruire funzionalità, verificato con fonti ufficiali: l
   automaticamente a `/cambio-password/[codice]` finché l'Admin non ne
   imposta una propria (pagina separata, senza sidebar, per non permettere
   di aggirare il passaggio navigando altrove).
-- Aggiunta una colonna `email` a `sessioni`, necessaria per sapere *quale*
+- Aggiunta una colonna `email` a `sessioni`, necessaria per sapere _quale_
   admin ha fatto login (prima si sapeva solo lo spazio, non la persona) —
   serve a collegare la sessione al record giusto in `admin_workspace` per
   applicare il cambio password.

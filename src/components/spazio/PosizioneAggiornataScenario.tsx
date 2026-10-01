@@ -8,13 +8,22 @@
 // spazio) — l'operatore aggiunge solo la colonna della posizione aggiornata.
 
 import React, { useEffect, useState } from 'react';
-import { ClipboardEdit, Download, Upload, Save, AlertTriangle } from 'lucide-react';
+import {
+  ClipboardEdit,
+  Download,
+  Upload,
+  Save,
+  AlertTriangle,
+  FileSpreadsheet,
+} from 'lucide-react';
 import {
   ottieniTuttePosizioniAggiornate,
   salvaPosizioneAggiornataAction,
   eliminaPosizioneAggiornataAction,
   type PosizioneAggiornata as TipoPosizioneAggiornata,
+  type ProvenienzaPosizione,
 } from '@/app/actions/posizioneAggiornata';
+import { ImportaBilancino, type EsitoImportBilancino } from '@/components/spazio/ImportaBilancino';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniAnniStoricoMax } from '@/app/actions/parametriSpazio';
 import { CAMPI_POSIZIONE, DATI_VUOTI } from '@/lib/posizioneAggiornata/schemaCampi';
@@ -63,6 +72,9 @@ export function PosizioneAggiornataScenario({
   const [salvato, setSalvato] = useState(false);
   const [importazioneInCorso, setImportazioneInCorso] = useState(false);
   const [esitoImportazione, setEsitoImportazione] = useState<string | null>(null);
+  // Import del bilancino (0.109.115): file in lettura e provenienza da salvare.
+  const [fileBilancino, setFileBilancino] = useState<File | null>(null);
+  const [provenienza, setProvenienza] = useState<ProvenienzaPosizione | null>(null);
 
   const carica = async () => {
     setCaricamento(true);
@@ -117,13 +129,15 @@ export function PosizioneAggiornataScenario({
         dataRiferimento || null,
         deliberato,
         dati,
-        idInModifica
+        idInModifica,
+        provenienza
       );
       if (!risultato.success) {
         setErrore(risultato.error || 'Impossibile salvare.');
         return;
       }
       setSalvato(true);
+      setProvenienza(null);
       await carica();
     } finally {
       setSalvataggio(false);
@@ -137,6 +151,20 @@ export function PosizioneAggiornataScenario({
     setDeliberato(false);
     setSalvato(false);
     setErrore(null);
+    setProvenienza(null);
+  };
+
+  const handleApplicaBilancino = (esito: EsitoImportBilancino) => {
+    setDati(esito.dati);
+    if (!dataRiferimento && esito.dataRiferimento) setDataRiferimento(esito.dataRiferimento);
+    setProvenienza({ origine: 'bilancino', documentoId: esito.documentoId });
+    setSalvato(false);
+    setFileBilancino(null);
+    setEsitoImportazione(
+      `Bilancino «${esito.nomeFile}» portato nel prospetto (${esito.conti} conti${
+        esito.quadrata ? ', in quadratura' : ', NON in quadratura'
+      }). Controlla data e valori, poi premi Salva.`
+    );
   };
 
   const handleSelezionaPosizione = (pos: TipoPosizioneAggiornata) => {
@@ -168,6 +196,7 @@ export function PosizioneAggiornataScenario({
     try {
       const { dati: datiImportati } = await importaPosizioneExcel(file);
       setDati(datiImportati);
+      setProvenienza({ origine: 'prospetto', documentoId: null });
       setSalvato(false);
       setEsitoImportazione(
         'Prospetto importato — controlla i valori e premi Salva per confermare.'
@@ -243,6 +272,11 @@ export function PosizioneAggiornataScenario({
                 {!pos.deliberato && (
                   <span className="ml-2 text-[10px] text-amber-600 uppercase font-bold">
                     Verifica intermedia
+                  </span>
+                )}
+                {pos.origine === 'bilancino' && (
+                  <span className="ml-2 text-[10px] text-blue-600 uppercase font-bold">
+                    Da bilancino
                   </span>
                 )}
               </button>
@@ -324,6 +358,23 @@ export function PosizioneAggiornataScenario({
               }}
             />
           </label>
+          <label className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase rounded-lg transition-colors cursor-pointer">
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            Importa bilancino (qualsiasi formato)
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv,.ods"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setEsitoImportazione(null);
+                  setFileBilancino(file);
+                }
+                e.target.value = '';
+              }}
+            />
+          </label>
           <button
             type="button"
             onClick={handleSalva}
@@ -337,6 +388,16 @@ export function PosizioneAggiornataScenario({
           <div className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
             {esitoImportazione}
           </div>
+        )}
+        {fileBilancino && (
+          <ImportaBilancino
+            key={`${fileBilancino.name}-${fileBilancino.lastModified}`}
+            nomeSchema={nomeSchema}
+            aziendaId={aziendaId}
+            file={fileBilancino}
+            onApplica={handleApplicaBilancino}
+            onChiudi={() => setFileBilancino(null)}
+          />
         )}
         {salvato && (
           <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">

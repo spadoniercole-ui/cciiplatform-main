@@ -43,6 +43,15 @@ export function ParametriSpazioManager({ codice, tipoSpazio }: Props) {
           ? 'Valore di liquidazione e % minima per categoria di creditore.'
           : 'Il punto di partenza per ogni nuova riga di Proposta, modificabile riga per riga.',
     },
+    {
+      href: `/spazio/${codice}/parametri/confronto-piano`,
+      icon: Scale,
+      titolo: 'Confronto con il piano di settore',
+      descrizione:
+        tipoSpazio === 'ENTE'
+          ? 'Soglie dei semafori sullo scostamento del piano dell’azienda, in senso favorevole, dal piano automatico di settore.'
+          : 'Soglie dei semafori dell’autoverifica: scostamento del piano, in senso favorevole, dal piano automatico di settore.',
+    },
     ...(tipoSpazio === 'ENTE'
       ? [
           {

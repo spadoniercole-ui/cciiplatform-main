@@ -128,6 +128,14 @@ export async function initPortableDb(): Promise<void> {
   if (stato.pglite) return;
   if (stato.inizializzazione) return stato.inizializzazione;
   stato.inizializzazione = (async () => {
+    // Fuso orario: il processo della portable lavora in UTC (0.109.114).
+    // PGlite scrive le date JavaScript in UTC ma rilegge le colonne
+    // TIMESTAMP come ora locale, e all'avvio fissa un fuso a scarto fisso
+    // (es. «Etc/GMT-1», senza ora legale). Su un PC italiano la sfida MFA
+    // risultava scaduta nel momento stesso in cui veniva creata
+    // (`expires_at > now()` falso): accesso impossibile, senza messaggi.
+    // Anche Avvia-CCII.bat imposta TZ=UTC; qui lo si garantisce comunque.
+    process.env.TZ = 'UTC';
     const { PGlite } = await import('@electric-sql/pglite');
     const { drizzle } = await import('drizzle-orm/pglite');
 
@@ -157,6 +165,9 @@ export async function initPortableDb(): Promise<void> {
       stato.pglite = await PGlite.create();
       fresco = true;
     }
+    // Il fuso salvato nel database al primo avvio (quello del PC di allora)
+    // non deve contare: la sessione lavora sempre in UTC.
+    await stato.pglite.exec(`SET TIME ZONE 'UTC'`);
     stato.drizzleInstance = drizzle(stato.pglite);
     avviaAutosave();
 
