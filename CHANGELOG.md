@@ -93,6 +93,47 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.122.0 — 2026-10-02 (Portable 1.2.7)
+
+Seconda consegna della rielaborazione del percorso dopo lo screening:
+**l'istruttoria della proposta ricevuta è una pagina sola.** Prima erano
+sette passi in pagine diverse (Proposta, Situazione Debitoria, Posizione
+Aggiornata, Indici, Settore, Brogliaccio, Relazione), con quattro
+caricamenti, tre stampe e un giro dalla sidebar per ogni passo.
+
+- **Lo scenario si apre sull'istruttoria.** Per una proposta ricevuta non
+  c'è più la panoramica dei passi: si entra direttamente nella pagina, che
+  procede in fasi.
+- **1 · Documenti ricevuti — un solo caricamento.** Si caricano insieme
+  tutti i PDF arrivati dall'azienda. La prima lettura riconosce che cos'è
+  ciascuno (proposta, attestazione, piano, situazione contabile, altro;
+  correggibile) e dalla situazione contabile ricava i valori della
+  Posizione Aggiornata: niente secondo caricamento. Tutti i documenti,
+  lettere comprese, entrano nella valutazione.
+- **2 · Conferme.** Inquadramento precompilato; valori della posizione
+  aggiornata da confermare con un clic; posizione dell'ente ripresa dallo
+  screening (V.E.R.A.), da aggiornare solo con un file più recente;
+  documenti non pervenuti. I dati ISTAT di settore si aggiornano da soli.
+- **3 · Valutazione, a video.** Esito e lettura critica sulla pagina; non
+  c'è più la stampa separata dell'«Analisi Proposta». Il confronto con la
+  liquidazione si prepara in sottofondo.
+- **Indici in tabella**, anche nello scenario: una riga per indice, una
+  colonna per periodo, con la Posizione aggiornata e la PFN in fondo. Le
+  schede una per indice sono eliminate.
+- **Una domanda, poi la chiusura.** «Vuoi mettere alla prova il piano
+  dell'azienda prima di chiudere?» (il piano si attiva anche a scenario
+  già creato), poi **4 · Chiusura**: la Relazione sulla stessa pagina.
+- **Relazione di chiusura rifatta per il Ricevente.** Non ripete lo
+  screening né l'elenco degli indici: esito e proposta di intenzione di
+  voto; che cosa è cambiato dallo screening (posizione aggiornata contro
+  l'ultimo bilancio, indici che cambiano esito, debito verso l'ente);
+  credibilità della proposta (lettura critica, settore, piano se messo
+  alla prova); confronto con la liquidazione; al massimo cinque
+  raccomandazioni.
+- **Brogliaccio del Ricevente eliminato.** Il confronto con la
+  liquidazione, che dipendeva da lui, si prepara a fine valutazione o alla
+  generazione della Relazione. Il Brogliaccio del Redigente resta, per ora.
+
 ## 0.121.0 — 2026-10-02 (Portable 1.2.6)
 
 Prima consegna della rielaborazione del percorso dopo lo screening:

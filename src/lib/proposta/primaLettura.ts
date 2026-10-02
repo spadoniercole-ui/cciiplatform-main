@@ -24,7 +24,29 @@ export interface DatoLetto<T> {
   documento: string | null;
 }
 
+/** Che cosa è ciascun documento ricevuto: lo decide la lettura, l'istruttore può correggere. */
+export type TipoDocumentoRicevuto =
+  'PROPOSTA' | 'ATTESTAZIONE' | 'PIANO' | 'SITUAZIONE_CONTABILE' | 'ALTRO';
+
+export const ETICHETTA_TIPO_DOCUMENTO: Record<TipoDocumentoRicevuto, string> = {
+  PROPOSTA: 'Proposta',
+  ATTESTAZIONE: 'Attestazione / asseverazione',
+  PIANO: 'Piano',
+  SITUAZIONE_CONTABILE: 'Situazione contabile aggiornata',
+  ALTRO: 'Altro (lettera, convocazione…)',
+};
+
+const TIPI: TipoDocumentoRicevuto[] = [
+  'PROPOSTA',
+  'ATTESTAZIONE',
+  'PIANO',
+  'SITUAZIONE_CONTABILE',
+  'ALTRO',
+];
+
 export interface PrimaLettura {
+  /** Classificazione dei documenti, per titolo. */
+  documenti: { documento: string; tipo: TipoDocumentoRicevuto }[];
   strumento: DatoLetto<StrumentoProposta>;
   /** AAAA-MM-GG */
   dataDeposito: DatoLetto<string>;
@@ -72,6 +94,15 @@ const percentualeValida = (v: unknown): number | null => {
 export function normalizzaPrimaLettura(grezzo: unknown): PrimaLettura {
   const g = obj(grezzo);
   return {
+    documenti: (Array.isArray(g.documenti) ? g.documenti : [])
+      .map(obj)
+      .filter((d) => str(d.documento))
+      .map((d) => ({
+        documento: str(d.documento)!,
+        tipo: TIPI.includes(d.tipo as TipoDocumentoRicevuto)
+          ? (d.tipo as TipoDocumentoRicevuto)
+          : 'ALTRO',
+      })),
     strumento: dato(g.strumento, strumentoValido),
     dataDeposito: dato(g.dataDeposito, dataValida),
     quotaAltriAderenti: dato(g.quotaAltriAderenti, percentualeValida),
@@ -95,9 +126,10 @@ Usa "ALTRO" solo se lo strumento è dichiarato ma non è fra questi; null se i d
 2. "dataDeposito": la data di deposito (o di presentazione) della proposta, AAAA-MM-GG; null se non c'è.
 3. "quotaAltriAderenti": la percentuale dei crediti degli ALTRI creditori che hanno aderito (o aderiranno) all'accordo, sull'indebitamento complessivo. Spesso non è nella proposta ma nell'attestazione del professionista: leggi tutti i documenti. Numero fra 0 e 100; null se non è indicata.
 4. "percentualeOffertaEnte": la percentuale di soddisfacimento offerta a questo ente (0-100); null se non è indicata.
+5. "documenti": per OGNI documento allegato, il suo titolo e il tipo fra: "PROPOSTA" (la proposta/domanda di accordo o transazione), "ATTESTAZIONE" (relazione del professionista attestatore/asseveratore), "PIANO" (piano di risanamento o industriale), "SITUAZIONE_CONTABILE" (situazione patrimoniale/economica aggiornata, bilancino, elenco creditori con saldi), "ALTRO" (lettere, convocazioni, altro). Un solo tipo per documento.
 
 Per ciascun dato: "passo" = la frase del documento, breve e testuale; "documento" = il titolo del documento. Se un dato manca, valore null e niente passo: non dedurre, non stimare. In "note" segnala in poche parole contraddizioni fra documenti o dati ambigui.
 
 Rispondi SOLO con JSON valido:
-{"strumento":{"valore":null,"passo":null,"documento":null},"dataDeposito":{"valore":null,"passo":null,"documento":null},"quotaAltriAderenti":{"valore":null,"passo":null,"documento":null},"percentualeOffertaEnte":{"valore":null,"passo":null,"documento":null},"note":[]}`;
+{"documenti":[{"documento":"titolo","tipo":"PROPOSTA"}],"strumento":{"valore":null,"passo":null,"documento":null},"dataDeposito":{"valore":null,"passo":null,"documento":null},"quotaAltriAderenti":{"valore":null,"passo":null,"documento":null},"percentualeOffertaEnte":{"valore":null,"passo":null,"documento":null},"note":[]}`;
 }

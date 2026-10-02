@@ -47,3 +47,16 @@ describe('prima lettura dei documenti ricevuti', () => {
     expect(t).toContain('non dedurre');
   });
 });
+
+describe('classificazione dei documenti ricevuti', () => {
+  it('tipi ammessi, il resto è «altro»', () => {
+    const p = normalizzaPrimaLettura({
+      documenti: [
+        { documento: '02_Proposta.pdf', tipo: 'PROPOSTA' },
+        { documento: '06_Situazione.pdf', tipo: 'SITUAZIONE_CONTABILE' },
+        { documento: '07_Lettera.pdf', tipo: 'LETTERA' },
+      ],
+    });
+    expect(p.documenti.map((d) => d.tipo)).toEqual(['PROPOSTA', 'SITUAZIONE_CONTABILE', 'ALTRO']);
+  });
+});

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
-import { IndiciScenario } from '@/components/spazio/IndiciScenario';
+import { TabellaIndiciPeriodi } from '@/components/spazio/TabellaIndiciPeriodi';
 
 export default async function IndiciScenarioPage({
   params,
@@ -14,5 +14,13 @@ export default async function IndiciScenarioPage({
     redirect(`/spazio/${codice}/scenari/${scenarioId}`);
   }
 
-  return <IndiciScenario nomeSchema={contesto.nomeSchema} scenarioId={Number(scenarioId)} />;
+  // Tabella unica (righe = indici, colonne = periodi): più leggibile delle
+  // schede una per indice, e identica a quella di Analisi Bilancio.
+  return (
+    <TabellaIndiciPeriodi
+      nomeSchema={contesto.nomeSchema}
+      scenarioId={Number(scenarioId)}
+      titolo="Indici per periodo, con la Posizione aggiornata"
+    />
+  );
 }

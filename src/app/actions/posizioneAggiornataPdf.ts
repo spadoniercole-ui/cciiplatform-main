@@ -10,11 +10,8 @@ import { del, get } from '@/lib/blobStore';
 import { richiediAccessoScenario, verificaFileDelloSpazio } from '@/lib/autorizzazione';
 import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { verificaScenarioNonBloccato } from '@/app/actions/scenari';
-import {
-  normalizzaLetturaPosizione,
-  promptLetturaPosizione,
-  type LetturaPosizionePdf,
-} from '@/lib/posizioneAggiornata/letturaPdf';
+import type { LetturaPosizionePdf } from '@/lib/posizioneAggiornata/letturaPdf';
+import { leggiPosizioneDaPdf } from '@/lib/posizioneAggiornata/letturaPdfServer';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 120 * 1000, maxRetries: 1 }) : null;
@@ -43,62 +40,12 @@ export async function leggiPosizioneDaPdfAction(
     if (!buffer.subarray(0, 5).toString('latin1').startsWith('%PDF-'))
       return { success: false, error: `«${documento.nome}» non è un PDF valido.` };
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 110 * 1000);
-    let risposta: Anthropic.Messages.Message;
-    try {
-      risposta = await anthropic.messages.create(
-        {
-          model: 'claude-sonnet-5',
-          max_tokens: 2000,
-          thinking: { type: 'disabled' },
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'document',
-                  source: {
-                    type: 'base64',
-                    media_type: 'application/pdf',
-                    data: buffer.toString('base64'),
-                  },
-                  title: documento.nome,
-                },
-                { type: 'text', text: promptLetturaPosizione() },
-              ],
-            },
-          ],
-        },
-        { signal: controller.signal }
-      );
-    } finally {
-      clearTimeout(timer);
-    }
-    const testo = risposta.content
-      .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('\n');
-    const i = testo.indexOf('{');
-    const j = testo.lastIndexOf('}');
-    let grezzo: unknown = null;
-    try {
-      grezzo = i >= 0 && j > i ? JSON.parse(testo.slice(i, j + 1)) : null;
-    } catch {
-      grezzo = null;
-    }
-    if (!grezzo)
+    const lettura = await leggiPosizioneDaPdf(anthropic, buffer.toString('base64'), documento.nome);
+    if (!lettura)
       return {
         success: false,
         error:
-          'La lettura del documento non ha prodotto una risposta leggibile: riprova o compila a mano.',
-      };
-    const lettura = normalizzaLetturaPosizione(grezzo);
-    if (lettura.trovati.length === 0)
-      return {
-        success: false,
-        error:
-          'Nel documento non sono stati trovati valori di bilancio da riportare nel prospetto.',
+          'Nel documento non sono stati trovati valori di bilancio da riportare nel prospetto: riprova o compila a mano.',
       };
     return { success: true, lettura };
   } catch (error: unknown) {

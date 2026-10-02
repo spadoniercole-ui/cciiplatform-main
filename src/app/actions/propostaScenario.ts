@@ -37,12 +37,25 @@ import {
 import { aggiornaDatiSettoreSeNecessarioAction } from '@/app/actions/datiSettore';
 import { ottieniStoricoXbrlAzienda, type BilancioStoricoAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
-import { ottieniConfrontoLiquidatorio } from '@/app/actions/confrontoLiquidatorio';
+import {
+  generaConfrontoLiquidatorioSeNecessarioAction,
+  ottieniConfrontoLiquidatorio,
+} from '@/app/actions/confrontoLiquidatorio';
 import { salvaVersioneRelazioneAction } from '@/app/actions/scenarioSblocco';
 import { ottieniIndiciAzienda } from '@/app/actions/aziendaConfig';
 import type { RangoLegale } from '@/lib/proposta/rangoLegale';
 import { raggruppaPerRango } from '@/lib/proposta/rangoLegale';
 import { voceStrumento } from '@/lib/proposta/inquadramento';
+import {
+  contestoRelazioneRicevente,
+  ISTRUZIONI_RELAZIONE_RICEVENTE,
+} from '@/lib/relazione/contestoRicevente';
+import { ottienePosizioneAggiornata } from '@/app/actions/posizioneAggiornata';
+import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
+import { ottieniDatiSettore } from '@/app/actions/datiSettore';
+import { crescitaAzienda, crescitaDaSerie } from '@/lib/piano/automatico';
+import { costruisciBundleIndici } from '@/lib/xbrl/indici';
+import { sintesiPianoScenarioAction } from '@/app/actions/sintesiPiano';
 import {
   verificaRicevibilitaEnte,
   verificaRicevibilitaRighe,
@@ -762,11 +775,21 @@ REGOLE TASSATIVE DI REDAZIONE:
     // Redigente esiste davvero, anche lì il confronto viene ricercato e
     // parcheggiato, quindi la Relazione lo usa come per il Ricevente.
     const bloccoConfrontoLiquidatorio = await (async () => {
-      const ris = await ottieniConfrontoLiquidatorio(nomeSchema, scenarioId);
+      let ris = await ottieniConfrontoLiquidatorio(nomeSchema, scenarioId);
+      // Ricevente: il Brogliaccio non c'è più; se il confronto non è già
+      // pronto (si prepara a fine valutazione) lo si prepara adesso.
+      if (isRicevuta && !(ris.success && ris.testo)) {
+        await generaConfrontoLiquidatorioSeNecessarioAction(
+          nomeSchema,
+          scenarioId,
+          scenario.aziendaId
+        );
+        ris = await ottieniConfrontoLiquidatorio(nomeSchema, scenarioId);
+      }
       if (ris.success && ris.testo) {
         return `\nCONFRONTO CON LO SCENARIO LIQUIDATORIO — GIÀ RICERCATO (${ris.generatoIl ? `generato il ${new Date(ris.generatoIl).toLocaleDateString('it-IT')}` : 'data non disponibile'}):\n${ris.testo}\n`;
       }
-      return '\nCONFRONTO CON LO SCENARIO LIQUIDATORIO — GIÀ RICERCATO: non ancora generato (si genera automaticamente quando si apre o si aggiorna il Brogliaccio) — dichiara questa sezione come non ancora disponibile.\n';
+      return '\nCONFRONTO CON LO SCENARIO LIQUIDATORIO — GIÀ RICERCATO: non ancora generato (la ricerca non è riuscita) — dichiara questa sezione come non ancora disponibile.\n';
     })();
 
     // Raccomandazioni — solo Redigente: dal piano di sviluppo (motore
@@ -867,6 +890,99 @@ ${righeProposta
             : `QUADRO QUALITATIVO (CHECK LIST DELLO SCREENING, direttrici dell'ente): ${risposte} risposte su ${totali} domande — quadro non ancora completo, dichiaralo senza trarne conclusioni.`;
     }
 
+    // Relazione di chiusura del Ricevente: il contesto di ciò che è cambiato
+    // dallo screening (src/lib/relazione/contestoRicevente.ts).
+    const contestoRicevente = isRicevuta
+      ? await (async () => {
+          const [scrDel, posRis, veraRis, settRis, analisiRis, giudRis] = await Promise.all([
+            pool
+              .query(
+                `SELECT generato_il FROM "${nomeSchema}".azienda_screening WHERE azienda_id = $1`,
+                [scenario.aziendaId]
+              )
+              .catch(() => ({ rows: [] as Record<string, unknown>[] })),
+            ottienePosizioneAggiornata(nomeSchema, scenarioId),
+            ottieniDebitiVera(nomeSchema, scenario.aziendaId),
+            ottieniDatiSettore(nomeSchema, scenario.aziendaId),
+            pool
+              .query(
+                `SELECT analisi FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
+                [scenarioId]
+              )
+              .catch(() => ({ rows: [] as Record<string, unknown>[] })),
+            import('@/app/actions/giudizioRicevente').then((m) =>
+              m.calcolaGiudizioFinaleRicevente(nomeSchema, scenarioId)
+            ),
+          ]);
+          const pa = posRis.success && posRis.esiste ? posRis.posizione : null;
+          const bundlePa = pa ? costruisciBundleIndici(pa.dati) : null;
+          const vera =
+            veraRis.success && veraRis.righe.length > 0
+              ? veraRis.righe
+                  .filter(
+                    (r) =>
+                      r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare'
+                  )
+                  .reduce((a, r) => a + r.importo, 0)
+              : null;
+          const crescSett =
+            settRis.success && settRis.punti.length > 0 ? crescitaDaSerie(settRis.punti) : null;
+          const crescAz = crescitaAzienda(
+            storico
+              .filter((x) => x.annoBilancio)
+              .map((x) => ({
+                anno: x.annoBilancio as number,
+                ricaviVendite: x.datiFinanziari.ricaviVendite,
+              }))
+              .sort((x, y) => y.anno - x.anno)
+          );
+          const piano = scenario.simulazioneAttiva
+            ? await sintesiPianoScenarioAction(
+                nomeSchema,
+                scenarioId,
+                scenario.aziendaId,
+                'RICEVUTA',
+                settRis.success
+                  ? {
+                      punti: settRis.punti,
+                      descrizione: settRis.info ? `ATECO ${settRis.info.gruppo}` : null,
+                    }
+                  : null
+              ).catch(() => null)
+            : null;
+          const g = giudRis.success ? giudRis.giudizio : null;
+          return contestoRelazioneRicevente({
+            screeningDel: scrDel.rows[0]?.generato_il
+              ? new Date(scrDel.rows[0].generato_il as string).toISOString()
+              : null,
+            ultimoBilancio: ultimoBilancio
+              ? {
+                  anno: ultimoBilancio.annoBilancio,
+                  dati: ultimoBilancio.datiFinanziari,
+                  indici: [...ultimoBilancio.indici, ...ultimoBilancio.altriIndici],
+                }
+              : null,
+            posizioneAggiornata:
+              pa && bundlePa
+                ? {
+                    data: pa.dataRiferimento,
+                    dati: pa.dati,
+                    indici: [...bundlePa.indici, ...bundlePa.altriIndici],
+                  }
+                : null,
+            debitoEnteVera: vera,
+            esito:
+              g && g.livello !== 'non_disponibile'
+                ? { etichetta: g.etichetta, motivazione: g.motivazione }
+                : null,
+            letturaCritica: (analisiRis.rows[0]?.analisi as string | null) ?? null,
+            crescitaSettore: crescSett ? crescSett.tasso : null,
+            crescitaAzienda: crescAz ? crescAz.tasso : null,
+            sintesiPiano: piano && piano.disponibile ? piano.testo : null,
+          });
+        })()
+      : '';
+
     const userPrompt = `
 SCENARIO: ${scenario.nome} (${scenario.ragioneSocialeAzienda})
 CODICE ATECO DELL'AZIENDA: ${aziendaRisultato.success && aziendaRisultato.azienda?.codiceAteco ? aziendaRisultato.azienda.codiceAteco : 'non indicato — se manca, la ricerca settoriale nella sezione 2bis non può essere mirata, dichiaralo esplicitamente invece di generalizzare'}
@@ -907,7 +1023,7 @@ ${
 }`
 }
 
-${costruisciBloccoQuantitativo(ultimoBilancio, codiciAbilitati, trend)}
+${isRicevuta ? contestoRicevente : costruisciBloccoQuantitativo(ultimoBilancio, codiciAbilitati, trend)}
 
 Elabora la relazione di valutazione della proposta seguendo la struttura prescritta.
 `;
@@ -916,7 +1032,10 @@ Elabora la relazione di valutazione della proposta seguendo la struttura prescri
       model: 'claude-sonnet-5',
       max_tokens: 6000,
       thinking: { type: 'disabled' },
-      system: systemInstruction + perimetroPerPrompt('RELAZIONE') + istruzioniLessicoPerPrompt(),
+      system:
+        (isRicevuta ? ISTRUZIONI_RELAZIONE_RICEVENTE : systemInstruction) +
+        perimetroPerPrompt('RELAZIONE') +
+        istruzioniLessicoPerPrompt(),
       messages: [{ role: 'user', content: userPrompt }],
     });
 

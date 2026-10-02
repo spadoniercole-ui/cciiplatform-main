@@ -81,12 +81,22 @@ export default async function ScenarioLayout({
           ciascuna, vive solo nella Panoramica (page.tsx) — un solo posto
           di verità, non due esposizioni della stessa informazione.
           Da dentro un passo, questo link riporta lì. */}
-      <Link
-        href={base}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-blue-600 transition-colors"
-      >
-        <LayoutGrid className="w-3.5 h-3.5" /> Torna alla Panoramica
-      </Link>
+      {scenario.tipoProposta === 'RICEVUTA' ? (
+        // Proposta ricevuta: l'istruttoria è una pagina sola, si torna lì.
+        <Link
+          href={`${base}/proposta`}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-blue-600 transition-colors"
+        >
+          <LayoutGrid className="w-3.5 h-3.5" /> Torna all’istruttoria
+        </Link>
+      ) : (
+        <Link
+          href={base}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-blue-600 transition-colors"
+        >
+          <LayoutGrid className="w-3.5 h-3.5" /> Torna alla Panoramica
+        </Link>
+      )}
 
       {children}
     </div>
