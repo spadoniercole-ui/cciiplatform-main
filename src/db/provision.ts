@@ -1020,6 +1020,20 @@ export async function assicuraTabellaSimulazioneRicevente(nomeSchema: string): P
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS dichiarazioni JSONB NOT NULL DEFAULT '{}'::jsonb`
   );
+  // Percorso in quattro tempi (0.120): i documenti caricati restano
+  // disponibili fra la PRIMA LETTURA (strumento, data, quota degli
+  // aderenti, letti dai documenti) e la VALUTAZIONE, che parte solo dopo
+  // che l'istruttore ha confermato l'inquadramento. Eliminati a valutazione
+  // riuscita, come sempre.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS documenti_caricati JSONB`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS prima_lettura JSONB`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS prima_lettura_il TIMESTAMP`
+  );
 }
 
 /**

@@ -24,6 +24,12 @@ import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniDatiSettore } from '@/app/actions/datiSettore';
 import { crescitaAzienda, crescitaDaSerie } from '@/lib/piano/automatico';
 import { ottieniLimitiRicevibilita } from '@/app/actions/parametriSpazio';
+import { voceStrumento } from '@/lib/proposta/inquadramento';
+import {
+  normalizzaPrimaLettura,
+  promptPrimaLettura,
+  type PrimaLettura,
+} from '@/lib/proposta/primaLettura';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 // timeout esplicito + maxRetries: 1 (non il default 2): due chiamate pesanti in
@@ -92,13 +98,82 @@ export interface TreDocumentiRicevente {
   pianoSviluppo: DocumentoPdf | null;
 }
 
-export async function analizzaDocumentiRiceventeAction(
+type DocumentoScaricato = { nome: string; base64: string };
+
+/** Scarica e controlla i PDF dallo storage dello spazio. */
+async function scaricaDocumenti(
+  documenti: DocumentoPdf[]
+): Promise<{ documenti: DocumentoScaricato[] } | { error: string }> {
+  const out: DocumentoScaricato[] = [];
+  for (const doc of documenti) {
+    const risultatoGet = await get(doc.url, { access: 'private' });
+    if (!risultatoGet || risultatoGet.statusCode !== 200) {
+      return { error: `Impossibile scaricare "${doc.nome}" dallo storage.` };
+    }
+    const buffer = Buffer.from(await new Response(risultatoGet.stream).arrayBuffer());
+    if (buffer.length > DIMENSIONE_MASSIMA_FILE) {
+      return { error: `"${doc.nome}" supera i 20MB consentiti per file.` };
+    }
+    const base64 = buffer.toString('base64');
+    if (!isPdfValido(base64)) {
+      return { error: `"${doc.nome}" non è un PDF valido — solo file PDF sono ammessi.` };
+    }
+    out.push({ nome: doc.nome, base64 });
+  }
+  return { documenti: out };
+}
+
+/** I documenti caricati al primo passo e non ancora consumati dalla valutazione. */
+async function leggiDocumentiCaricati(
+  nomeSchema: string,
+  scenarioId: number
+): Promise<TreDocumentiRicevente | null> {
+  const r = await pool
+    .query(
+      `SELECT documenti_caricati FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
+      [scenarioId]
+    )
+    .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+  const d = r.rows[0]?.documenti_caricati as TreDocumentiRicevente | null | undefined;
+  return d ?? null;
+}
+
+/** Riga degli alias dell'ente per i prompt (l'ente nei documenti ha altri nomi). */
+async function rigaAliasEnte(nomeSchema: string): Promise<string> {
+  const limitiEnteRis = await ottieniLimitiRicevibilita(nomeSchema, 'ENTE');
+  const aliasEnte = limitiEnteRis.success ? limitiEnteRis.limiti[0]?.alias || [] : [];
+  return aliasEnte.length > 0
+    ? ` Questo ente può comparire nei documenti con nomi o termini diversi dal proprio acronimo: considera equivalenti ${aliasEnte.join(', ')}.`
+    : '';
+}
+
+export interface StatoDocumentiRicevente {
+  success: boolean;
+  /** Nomi dei documenti caricati e in attesa di valutazione, per posto. */
+  documenti?: {
+    asseverazione: string | null;
+    propostaCramDown: string | null;
+    pianoSviluppo: string | null;
+  } | null;
+  primaLettura?: PrimaLettura | null;
+  primaLetturaIl?: string | null;
+  /** La prima lettura non è riuscita (i documenti però sono caricati). */
+  erroreLettura?: string;
+  error?: string;
+}
+
+/**
+ * PASSO 1 e 2: carica i documenti così come li ha mandati l'azienda e ne fa
+ * la PRIMA LETTURA (strumento, data di deposito, quota degli altri aderenti,
+ * percentuale offerta all'ente), citando il passo e il documento. I file
+ * restano disponibili per la valutazione, che parte dopo la conferma
+ * dell'inquadramento. Una nuova carica sostituisce (ed elimina) la precedente.
+ */
+export async function caricaDocumentiRiceventeAction(
   nomeSchema: string,
   scenarioId: number,
-  documentiNominati: TreDocumentiRicevente,
-  istruzioniOperatore?: string
-): Promise<RisultatoAnalisiRicevente> {
-  // Prima di tutto e fuori dal try: il finally elimina i blob indicati dal chiamante.
+  documentiNominati: TreDocumentiRicevente
+): Promise<StatoDocumentiRicevente> {
   const contesto = await richiediAccessoScenario(nomeSchema, scenarioId, {
     modulo: ['report'],
     livello: 'SCRITTURA',
@@ -108,9 +183,175 @@ export async function analizzaDocumentiRiceventeAction(
     documentiNominati.propostaCramDown,
     documentiNominati.pianoSviluppo,
   ].filter((d): d is DocumentoPdf => d !== null);
-  // Ogni file deve appartenere a questo spazio, prima di leggerlo o eliminarlo.
   for (const d of documenti) verificaFileDelloSpazio(contesto, d.url);
-  const urlDaEliminare = documenti.map((d) => d.url);
+  if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+  const messaggioBloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
+  if (messaggioBloccato) return { success: false, error: messaggioBloccato };
+  if (!documentiNominati.propostaCramDown) {
+    return { success: false, error: 'Serve almeno la proposta.' };
+  }
+  await assicuraTabellaSimulazioneRicevente(nomeSchema);
+
+  // Sostituzione: i file della carica precedente non restano orfani.
+  const precedenti = await leggiDocumentiCaricati(nomeSchema, scenarioId);
+  const nuoviUrl = new Set(documenti.map((d) => d.url));
+  const daEliminare = [
+    precedenti?.asseverazione,
+    precedenti?.propostaCramDown,
+    precedenti?.pianoSviluppo,
+  ].filter((d): d is DocumentoPdf => !!d && !nuoviUrl.has(d.url));
+  await Promise.all(daEliminare.map((d) => del(d.url).catch(() => undefined)));
+
+  await pool.query(
+    `INSERT INTO "${nomeSchema}".simulazione_ricevente (scenario_id, documenti_caricati, prima_lettura, prima_lettura_il)
+     VALUES ($1, $2, NULL, NULL)
+     ON CONFLICT (scenario_id) DO UPDATE SET documenti_caricati = $2, prima_lettura = NULL, prima_lettura_il = NULL`,
+    [scenarioId, JSON.stringify(documentiNominati)]
+  );
+  const nomi = {
+    asseverazione: documentiNominati.asseverazione?.nome ?? null,
+    propostaCramDown: documentiNominati.propostaCramDown.nome,
+    pianoSviluppo: documentiNominati.pianoSviluppo?.nome ?? null,
+  };
+
+  // Prima lettura: se non riesce, i documenti restano caricati e
+  // l'inquadramento si compila a mano.
+  try {
+    if (!anthropic)
+      return { success: true, documenti: nomi, erroreLettura: messaggioChiaveAiMancante() };
+    const scaricati = await scaricaDocumenti(documenti);
+    if ('error' in scaricati)
+      return { success: true, documenti: nomi, erroreLettura: scaricati.error };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 120 * 1000);
+    let risposta: Anthropic.Messages.Message;
+    try {
+      risposta = await anthropic.messages.create(
+        {
+          model: 'claude-sonnet-5',
+          max_tokens: 1500,
+          thinking: { type: 'disabled' },
+          messages: [
+            {
+              role: 'user',
+              content: [
+                ...scaricati.documenti.map((doc): Anthropic.Messages.ContentBlockParam => ({
+                  type: 'document',
+                  source: { type: 'base64', media_type: 'application/pdf', data: doc.base64 },
+                  title: doc.nome,
+                })),
+                { type: 'text', text: promptPrimaLettura(await rigaAliasEnte(nomeSchema)) },
+              ],
+            },
+          ],
+        },
+        { signal: controller.signal }
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+    const testo = risposta.content
+      .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n')
+      .replace(/```json|```/g, '')
+      .trim();
+    const inizio = testo.indexOf('{');
+    const fine = testo.lastIndexOf('}');
+    let grezzo: unknown = null;
+    try {
+      grezzo = inizio >= 0 && fine > inizio ? JSON.parse(testo.slice(inizio, fine + 1)) : null;
+    } catch {
+      grezzo = null;
+    }
+    if (!grezzo) {
+      return {
+        success: true,
+        documenti: nomi,
+        erroreLettura:
+          'La prima lettura non ha prodotto una risposta leggibile: compila l’inquadramento a mano.',
+      };
+    }
+    const primaLettura = normalizzaPrimaLettura(grezzo);
+    await pool.query(
+      `UPDATE "${nomeSchema}".simulazione_ricevente SET prima_lettura = $2, prima_lettura_il = now() WHERE scenario_id = $1`,
+      [scenarioId, JSON.stringify(primaLettura)]
+    );
+    return {
+      success: true,
+      documenti: nomi,
+      primaLettura,
+      primaLetturaIl: new Date().toISOString(),
+    };
+  } catch (error: unknown) {
+    console.error('[caricaDocumentiRiceventeAction] Prima lettura:', error);
+    return {
+      success: true,
+      documenti: nomi,
+      erroreLettura:
+        erroreServizioEsterno(error, 'AI') ??
+        `Prima lettura non riuscita: ${(error as Error).message}. Compila l’inquadramento a mano.`,
+    };
+  }
+}
+
+/** Documenti in attesa di valutazione e prima lettura, per riaprire la pagina dove si era. */
+export async function ottieniDocumentiRiceventeAction(
+  nomeSchema: string,
+  scenarioId: number
+): Promise<StatoDocumentiRicevente> {
+  try {
+    await richiediAccessoScenario(nomeSchema, scenarioId);
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabellaSimulazioneRicevente(nomeSchema);
+    const r = await pool.query(
+      `SELECT documenti_caricati, prima_lettura, prima_lettura_il FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
+      [scenarioId]
+    );
+    const x = r.rows[0];
+    const d = (x?.documenti_caricati ?? null) as TreDocumentiRicevente | null;
+    return {
+      success: true,
+      documenti: d
+        ? {
+            asseverazione: d.asseverazione?.nome ?? null,
+            propostaCramDown: d.propostaCramDown?.nome ?? null,
+            pianoSviluppo: d.pianoSviluppo?.nome ?? null,
+          }
+        : null,
+      primaLettura: x?.prima_lettura ? normalizzaPrimaLettura(x.prima_lettura) : null,
+      primaLetturaIl: x?.prima_lettura_il ? new Date(x.prima_lettura_il).toISOString() : null,
+    };
+  } catch (error: unknown) {
+    return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
+  }
+}
+
+export async function analizzaDocumentiRiceventeAction(
+  nomeSchema: string,
+  scenarioId: number,
+  istruzioniOperatore?: string
+): Promise<RisultatoAnalisiRicevente> {
+  await richiediAccessoScenario(nomeSchema, scenarioId, {
+    modulo: ['report'],
+    livello: 'SCRITTURA',
+  });
+  if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+  await assicuraTabellaSimulazioneRicevente(nomeSchema);
+  // I documenti sono quelli CARICATI al primo passo (e già letti nella
+  // prima lettura): la valutazione non li richiede di nuovo.
+  const salvati = await leggiDocumentiCaricati(nomeSchema, scenarioId);
+  const documentiNominati: TreDocumentiRicevente = {
+    asseverazione: salvati?.asseverazione ?? null,
+    propostaCramDown: salvati?.propostaCramDown ?? null,
+    pianoSviluppo: salvati?.pianoSviluppo ?? null,
+  };
+  const documenti: DocumentoPdf[] = [
+    documentiNominati.asseverazione,
+    documentiNominati.propostaCramDown,
+    documentiNominati.pianoSviluppo,
+  ].filter((d): d is DocumentoPdf => d !== null);
+  let valutazioneRiuscita = false;
   try {
     if (!anthropic) {
       return {
@@ -136,6 +377,22 @@ export async function analizzaDocumentiRiceventeAction(
     if (documenti.length > NUMERO_MASSIMO_FILE) {
       return { success: false, error: `Massimo ${NUMERO_MASSIMO_FILE} file per volta.` };
     }
+    // La valutazione parte solo dopo che l'istruttore ha CONFERMATO
+    // l'inquadramento (strumento, data, quota): sono le sue scelte, non
+    // quelle della prima lettura.
+    const inq = await pool.query(
+      `SELECT strumento_proposta, data_deposito_proposta, quota_altri_aderenti_manuale
+         FROM "${nomeSchema}".scenari WHERE id = $1`,
+      [scenarioId]
+    );
+    const inquadramento = inq.rows[0] ?? {};
+    if (!inquadramento.strumento_proposta) {
+      return {
+        success: false,
+        error:
+          'Prima della valutazione conferma l’inquadramento della proposta (strumento, data di deposito, quota degli altri aderenti) e salvalo.',
+      };
+    }
 
     // I file sono già su Vercel Blob (caricati direttamente dal browser,
     // vedi il Route Handler blob-upload) — questa funzione li scarica da
@@ -144,25 +401,9 @@ export async function analizzaDocumentiRiceventeAction(
     // di Vercel per il corpo di una funzione non si applica più qui. Lo
     // store è privato — fetch() diretto sull'URL fallirebbe (richiede
     // autenticazione), serve get() del SDK.
-    const documentiConDati: { nome: string; base64: string }[] = [];
-    for (const doc of documenti) {
-      const risultatoGet = await get(doc.url, { access: 'private' });
-      if (!risultatoGet || risultatoGet.statusCode !== 200) {
-        return { success: false, error: `Impossibile scaricare "${doc.nome}" dallo storage.` };
-      }
-      const buffer = Buffer.from(await new Response(risultatoGet.stream).arrayBuffer());
-      if (buffer.length > DIMENSIONE_MASSIMA_FILE) {
-        return { success: false, error: `"${doc.nome}" supera i 20MB consentiti per file.` };
-      }
-      const base64 = buffer.toString('base64');
-      if (!isPdfValido(base64)) {
-        return {
-          success: false,
-          error: `"${doc.nome}" non è un PDF valido — solo file PDF sono ammessi.`,
-        };
-      }
-      documentiConDati.push({ nome: doc.nome, base64 });
-    }
+    const scaricati = await scaricaDocumenti(documenti);
+    if ('error' in scaricati) return { success: false, error: scaricati.error };
+    const documentiConDati = scaricati.documenti;
 
     await assicuraTabellaSimulazioneRicevente(nomeSchema);
 
@@ -186,6 +427,19 @@ export async function analizzaDocumentiRiceventeAction(
     ]);
 
     const blocchiContesto: string[] = [];
+    const voce = voceStrumento(String(inquadramento.strumento_proposta));
+    blocchiContesto.push(
+      `Inquadramento confermato dall'istruttore: strumento ${voce ? `${voce.etichetta} (${voce.riferimento})` : inquadramento.strumento_proposta}${
+        inquadramento.data_deposito_proposta
+          ? `, deposito il ${String(inquadramento.data_deposito_proposta).split('-').reverse().join('/')}`
+          : ''
+      }${
+        inquadramento.quota_altri_aderenti_manuale !== null &&
+        inquadramento.quota_altri_aderenti_manuale !== undefined
+          ? `, quota degli altri aderenti ${(Number(inquadramento.quota_altri_aderenti_manuale) * 100).toLocaleString('it-IT', { maximumFractionDigits: 1 })}%`
+          : ''
+      }. Leggi i documenti alla luce di questo strumento; se i documenti lo contraddicono, segnalalo.`
+    );
 
     const rigaRilevante = propostaRis.success
       ? propostaRis.righe.find((r) => r.rilevantePerEnte)
@@ -432,6 +686,7 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
       ]
     );
 
+    valutazioneRiuscita = true;
     return {
       success: true,
       analisi,
@@ -455,15 +710,22 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
           `Impossibile analizzare i documenti: ${error.message || error}`),
     };
   } finally {
-    // I documenti non si conservano — riuscita o fallita che sia
-    // l'analisi, il file caricato su Blob non deve restare lì.
-    try {
-      await Promise.all(urlDaEliminare.map((url) => del(url)));
-    } catch (erroreEliminazione) {
-      console.error(
-        '[analizzaDocumentiRiceventeAction] Errore eliminazione blob:',
-        erroreEliminazione
-      );
+    // I documenti non si conservano oltre la valutazione: a valutazione
+    // RIUSCITA si eliminano. Se fallisce restano, per riprovare senza
+    // ricaricarli (stessa regola della visura del triage).
+    if (valutazioneRiuscita) {
+      try {
+        await Promise.all(documenti.map((d) => del(d.url)));
+        await pool.query(
+          `UPDATE "${nomeSchema}".simulazione_ricevente SET documenti_caricati = NULL WHERE scenario_id = $1`,
+          [scenarioId]
+        );
+      } catch (erroreEliminazione) {
+        console.error(
+          '[analizzaDocumentiRiceventeAction] Errore eliminazione blob:',
+          erroreEliminazione
+        );
+      }
     }
   }
 }
