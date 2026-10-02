@@ -86,6 +86,13 @@ const vuota = (): RigaDebitoTriage => ({
   prospettoId: null,
 });
 
+/** Riga ancora intonsa: nessuna descrizione e nessun importo. */
+const rigaVuota = (r: RigaDebitoTriage) =>
+  r.descrizione.trim() === '' &&
+  r.importoAnnoCorrente === null &&
+  r.importoAnnoPrecedente === null &&
+  r.importoAnnoMeno2 === null;
+
 const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
 
 export function DebitiTriage({
@@ -251,7 +258,13 @@ export function DebitiTriage({
           </p>
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => setHaProspetti(true)}
+              onClick={() => {
+                setHaProspetti(true);
+                // Con i prospetti la tabella manuale non si apre da sola: nasce
+                // vuota e compare solo con le posizioni estratte dai file o se
+                // l'operatore sceglie di aggiungere una posizione a mano.
+                setRighe((r) => r.filter((x) => !rigaVuota(x)));
+              }}
               className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50"
             >
               <Table2 className="h-3.5 w-3.5" />
@@ -412,7 +425,7 @@ export function DebitiTriage({
             onClick={() => setRighe([...righe, vuota()])}
             className="text-[11px] font-bold text-sky-700 hover:underline"
           >
-            Aggiungi una posizione a mano
+            Voglio inserire una posizione a mano
           </button>
         </div>
       )}
@@ -423,7 +436,7 @@ export function DebitiTriage({
           c'erano ancora, ma non si vedevano più, e il secondo file da mappare
           diventava irraggiungibile. Ora convivono: sopra i file, sotto la
           tabella che raccoglie tutto. */}
-      {haProspetti !== null && (
+      {(haProspetti === false || (haProspetti === true && righe.length > 0)) && (
         <div className="space-y-3">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[56rem] text-xs">

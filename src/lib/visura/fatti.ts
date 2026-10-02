@@ -83,6 +83,16 @@ export function normalizzaFattiVisura(grezzo: unknown): FattiVisura {
   const g = obj(grezzo);
   const addettiG = obj(g.addetti);
   const addettiN = num(addettiG.numero);
+  const procedure = arr(g.procedureConcorsuali)
+    .map(obj)
+    .filter((p) => str(p.tipo))
+    .map((p) => ({
+      tipo: str(p.tipo)!,
+      data: data(p.data),
+      stato: str(p.stato),
+      tribunale: str(p.tribunale),
+      riferimento: str(p.riferimento),
+    }));
   return {
     denominazione: str(g.denominazione),
     codiceFiscale: str(g.codiceFiscale),
@@ -99,24 +109,37 @@ export function normalizzaFattiVisura(grezzo: unknown): FattiVisura {
       .map(obj)
       .filter((a) => str(a.nome))
       .map((a) => ({ nome: str(a.nome)!, carica: str(a.carica) ?? 'carica non indicata' })),
-    procedureConcorsuali: arr(g.procedureConcorsuali)
-      .map(obj)
-      .filter((p) => str(p.tipo))
-      .map((p) => ({
-        tipo: str(p.tipo)!,
-        data: data(p.data),
-        stato: str(p.stato),
-        tribunale: str(p.tribunale),
-        riferimento: str(p.riferimento),
-      })),
+    // La composizione negoziata (e le misure protettive che la accompagnano)
+    // NON è una procedura concorsuale: è un percorso stragiudiziale con
+    // l'esperto (artt. 12 ss. CCII). Se il modello la riporta qui, la si
+    // sposta fra gli atti rilevanti — altrimenti fa scattare il vincolo
+    // «procedura concorsuale pendente» dell'IAI su un'impresa che sta
+    // facendo esattamente ciò che il Codice le chiede.
+    procedureConcorsuali: procedure.filter((p) => !eComposizioneNegoziata(p.tipo)),
     trasferimentiSede: arr(g.trasferimentiSede)
       .map(obj)
       .filter((t) => str(t.a) || str(t.da))
       .map((t) => ({ data: data(t.data), da: str(t.da), a: str(t.a) })),
-    attiRilevanti: arr(g.attiRilevanti)
-      .map(obj)
-      .filter((a) => str(a.descrizione))
-      .map((a) => ({ data: data(a.data), descrizione: str(a.descrizione)! })),
+    attiRilevanti: [
+      ...arr(g.attiRilevanti)
+        .map(obj)
+        .filter((a) => str(a.descrizione))
+        .map((a) => ({ data: data(a.data), descrizione: str(a.descrizione)! })),
+      ...procedure
+        .filter((p) => eComposizioneNegoziata(p.tipo))
+        .map((p) => ({
+          data: p.data,
+          descrizione: [
+            p.tipo,
+            p.stato ? `stato «${p.stato}»` : null,
+            p.tribunale,
+            p.riferimento,
+            '(non è una procedura concorsuale)',
+          ]
+            .filter(Boolean)
+            .join(' — '),
+        })),
+    ],
     dataVisura: data(g.dataVisura),
   };
 }
@@ -134,8 +157,16 @@ export function estraiJson(testo: string): unknown {
   }
 }
 
+/** Composizione negoziata o misure protettive/cautelari: percorso stragiudiziale, non concorsuale. */
+export function eComposizioneNegoziata(tipo: string): boolean {
+  return /composizione\s+negoziat|misure\s+protettiv|misure\s+cautelar|esperto\s+(indipendente|nominat)/i.test(
+    tipo
+  );
+}
+
 /** Una procedura e' «pendente» se lo stato non dice che e' chiusa. */
 export function proceduraPendente(p: ProceduraConcorsuale): boolean {
+  if (eComposizioneNegoziata(p.tipo)) return false;
   const s = (p.stato ?? '').toLowerCase();
   if (!s) return true; // stato non indicato: si segnala, non si presume chiusa
   return !/chius|conclus|revocat|cessat|estint|omologat[oa]\s+ed\s+eseguit|esecuzione\s+completat|archiviat/.test(
@@ -246,4 +277,4 @@ export const PROMPT_ESTRAZIONE_VISURA = `Leggi la visura camerale allegata ed es
   "attiRilevanti": [{"data": "AAAA-MM-GG"|null, "descrizione": string}],
   "dataVisura": "AAAA-MM-GG"|null
 }
-Regole: un dato che non c'è è null, mai inventato né dedotto. "procedureConcorsuali" comprende concordati, liquidazioni giudiziali, fallimenti, accordi di ristrutturazione, composizioni negoziate, amministrazioni straordinarie, liquidazioni coatte: riporta tipo, data e STATO esattamente come scritti nella visura. "attiRilevanti": affitti o cessioni d'azienda, fusioni, scissioni, trasformazioni, riduzioni di capitale, scioglimenti. Nessuna valutazione, nessun giudizio.`;
+Regole: un dato che non c'è è null, mai inventato né dedotto. "procedureConcorsuali" comprende concordati, liquidazioni giudiziali, fallimenti, accordi di ristrutturazione, amministrazioni straordinarie, liquidazioni coatte: riporta tipo, data e STATO esattamente come scritti nella visura. La composizione negoziata della crisi e le misure protettive NON sono procedure concorsuali: riportale in "attiRilevanti" con data e stato. "attiRilevanti": affitti o cessioni d'azienda, fusioni, scissioni, trasformazioni, riduzioni di capitale, scioglimenti. Nessuna valutazione, nessun giudizio.`;

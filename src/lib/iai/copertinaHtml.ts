@@ -24,8 +24,20 @@ function quadranteSvg(valore: number, colore: string): string {
 
 export function htmlCopertinaIai(
   esito: EsitoIai,
-  intestazione: { azienda: string; codiceFiscale: string | null; ente: string; data: string }
+  intestazione: {
+    azienda: string;
+    codiceFiscale: string | null;
+    ente: string;
+    data: string;
+    /** Identificativi presso l'ente (matricola, posizioni…): il riconoscimento aziendale. */
+    identificativi?: { etichetta: string; valore: string }[];
+  }
 ): string {
+  const ident = intestazione.identificativi?.length
+    ? `<p class="ident">${intestazione.identificativi
+        .map((x) => `<span><b>${esc(x.etichetta)}</b> ${esc(x.valore)}</span>`)
+        .join('')}</p>`
+    : '';
   const colore = COLORI[esito.fascia.indiceFascia] ?? COLORI[3];
   const barre = esito.componenti
     .map((c) => {
@@ -59,14 +71,14 @@ export function htmlCopertinaIai(
     .join('');
 
   return `<style>
-  .cop h2{font-size:15px;margin:18px 0 6px;color:#0f172a}
+  .cop h2{font-size:13px;margin:12px 0 4px;color:#0f172a}
   .cop .testa{display:flex;gap:24px;align-items:flex-start;margin-top:8px}
   .cop .fascia{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px;border-radius:4px;background:${colore}22;color:${colore};margin-top:4px}
   .cop .lettura{font-size:11px;color:#475569;max-width:220px;margin-top:6px}
   .cop table{width:100%;border-collapse:collapse}
   .cop .vincoli li{font-size:11px;color:#991b1b;margin:3px 0}
-  .cop .sintesi{white-space:pre-wrap;font-size:12px;line-height:1.5;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;margin-top:10px}
-  .cop .dim{border:1px solid #e2e8f0;border-radius:6px;padding:8px;margin:6px 0;font-size:11px}
+  .cop .sintesi{white-space:pre-wrap;font-size:11px;line-height:1.4;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px;margin-top:10px}
+  .cop .dim{border:1px solid #e2e8f0;border-radius:6px;padding:5px 8px;margin:4px 0;font-size:10px;line-height:1.35}
   .cop .dim ul{margin:4px 0 0 16px;padding:0}
   .cop .lacune li{color:#92400e}
   .cop .muto{color:#94a3b8;margin:4px 0 0}
@@ -74,9 +86,11 @@ export function htmlCopertinaIai(
   .cop .uso{color:#64748b}
   .cop .dich{font-size:10px;color:#64748b;font-style:italic;margin-top:10px}
   .cop .meta{font-size:11px;color:#475569}
+  .cop .ident{font-size:11px;color:#0f172a;margin:2px 0 0;display:flex;flex-wrap:wrap;gap:4px 14px}
 </style>
 <div class="cop">
   <p class="meta">${esc(intestazione.azienda)}${intestazione.codiceFiscale ? ` — C.F. ${esc(intestazione.codiceFiscale)}` : ''} · ${esc(intestazione.ente)} · calcolato il ${esc(intestazione.data)}</p>
+  ${ident}
   <div class="testa">
     <div style="text-align:center">${quadranteSvg(esito.indice, colore)}<br><span class="fascia">${esc(esito.fascia.nome)}</span><p class="lettura">${esc(esito.fascia.lettura)}</p></div>
     <div style="flex:1"><table>${barre}</table>${vincoli}</div>

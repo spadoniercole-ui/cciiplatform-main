@@ -91,3 +91,29 @@ describe('fatti della visura', () => {
     expect(t).toContain('affitto di azienda');
   });
 });
+
+describe('composizione negoziata', () => {
+  it('non è una procedura concorsuale: finisce fra gli atti rilevanti e non è pendente', () => {
+    const f = normalizzaFattiVisura({
+      procedureConcorsuali: [
+        {
+          tipo: 'Composizione negoziata della crisi d’impresa',
+          data: '2026-03-10',
+          stato: 'in corso',
+        },
+        { tipo: 'Concordato preventivo', data: '2019-01-10', stato: 'omologato' },
+      ],
+    });
+    expect(f.procedureConcorsuali.map((p) => p.tipo)).toEqual(['Concordato preventivo']);
+    expect(f.attiRilevanti.some((a) => /Composizione negoziata/.test(a.descrizione))).toBe(true);
+    expect(
+      proceduraPendente({
+        tipo: 'Misure protettive',
+        data: null,
+        stato: null,
+        tribunale: null,
+        riferimento: null,
+      })
+    ).toBe(false);
+  });
+});

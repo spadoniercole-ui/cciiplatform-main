@@ -996,6 +996,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
                 <th className="p-3">Natura</th>
                 <th className="p-3">Stato</th>
                 <th className="p-3">Importo</th>
+                <th className="p-3">Materia</th>
                 <th className="p-3">Categoria</th>
                 <th className="p-3">Trattamento</th>
               </tr>
@@ -1027,9 +1028,39 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
                       {r.trattamento === 'potenziale' ? 'ignoto' : euro(r.importo)}
                     </td>
                     <td className="p-3">
-                      <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-700">
-                        {etichettaTipoDebito(r.categoria, mappaEtichette)}
-                      </span>
+                      {r.materia ? (
+                        <span
+                          className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                            r.materia.confermata
+                              ? 'bg-emerald-50 text-emerald-800'
+                              : 'bg-amber-50 text-amber-800'
+                          }`}
+                          title={
+                            r.materia.via === 'codice'
+                              ? `Dal codice di partita${r.materia.confermata ? ' — materia confermata' : ' — materia non ancora confermata'}`
+                              : 'Proposta dalla descrizione: nessun codice di partita nella riga'
+                          }
+                        >
+                          {r.materia.nome}
+                          {r.materia.via === 'descrizione' ? ' ?' : ''}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      {r.categoria ? (
+                        <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-700">
+                          {etichettaTipoDebito(r.categoria, mappaEtichette)}
+                        </span>
+                      ) : (
+                        <span
+                          className="text-[10px] text-slate-500 italic"
+                          title="La categoria di calcolo viene dal titolo di sezione (Mappatura titoli V.E.R.A.), non dalla materia: mappando il titolo, si applica anche alle righe già caricate."
+                        >
+                          titolo di sezione da mappare
+                        </span>
+                      )}
                     </td>
                     <td className="p-3">
                       <span

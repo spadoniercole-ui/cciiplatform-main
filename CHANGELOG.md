@@ -93,6 +93,68 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.118.0 — 2026-10-02 (Portable 1.2.1)
+
+Correttivi emersi caricando l'azienda demo ARETUSEA: triage, Screening,
+Posizione Ente, Analisi Bilancio.
+
+- **Triage — caricamento manuale solo su richiesta.** Scegliendo «Sì, ho
+  dei prospetti» la riga vuota per l'inserimento a mano non compare più; si
+  apre solo con «Voglio inserire una posizione a mano».
+- **Triage — riepilogo in PDF.** Alla fine della verifica, «Stampa il
+  riepilogo del triage (PDF)»: indicazione del triage (accertato e da
+  accertare), valori misurati per le soglie, documenti caricati con l'uso
+  che se n'è fatto, ciò che è stato letto, perimetro. È il documento da
+  consegnare al responsabile.
+- **Ritardo oltre 90 giorni.** Lo Screening, i Riscontri normativi e l'IAI
+  leggono ora lo stesso dato del triage (`src/lib/soglie25novies/datiAzienda.ts`):
+  prima la valutazione delle soglie lo fissava a «non determinabile» e
+  ignorava le posizioni del triage. Quando mancano Lista Inadempienze ed
+  Elenco Deleghe, il ritardo si misura sui periodi delle partite
+  contabilizzate del V.E.R.A. (scadenza il 16 del mese successivo). L'esito
+  dell'Elenco denunce si conserva anche quando non manca nulla, così l'IAI
+  non segnala più «esito del triage sulle denunce non conservato».
+- **V.E.R.A. — versamenti e cartelle sospese.** La «Sezione F24» (pagamenti)
+  non è più letta come debito: niente più voci «7699999901» a importo
+  ignoto. Una cartella sospesa dal giudice ha l'importo della colonna
+  Sospeso ed è esclusa dalle somme, non «importo ignoto». Senza Situazione
+  Debitoria caricata lo Screening non scrive più «contabilizzato 0 vs VERA»
+  e non definisce il debito «non contabilizzato».
+- **V.E.R.A. — materia e categoria.** Nuova colonna «Materia»: la riga
+  «TS 27 flusso Uniemens non versato» si aggancia alla materia dell'ente
+  (Flussi Uniemens) dal codice di partita, attraverso titoli e codici
+  indicativi; senza codice si propone per descrizione (segnata con «?»). La
+  categoria di calcolo resta quella del titolo di sezione: se la mappatura
+  è fatta dopo il triage si applica anche alle righe già caricate, e finché
+  manca la cella dice «titolo di sezione da mappare» invece di «Non
+  classificato».
+- **Composizione negoziata.** Non è una procedura concorsuale: dalla visura
+  finisce fra gli atti rilevanti e non fa più scattare il vincolo IAI
+  «procedura concorsuale pendente» (vale anche per gli screening già fatti).
+- **Parametri dell'ente prima dello Screening.** Il vincolo ora è anche
+  sul server: lo Screening non si elabora senza almeno un parametro
+  dell'ente salvato. Il triage, in uno spazio ENTE, non genera più lo
+  screening: conserva la visura e porta a Posizione Ente › Anagrafica. Al
+  primo salvataggio dei parametri parte da sola la prima elaborazione, con
+  avanzamento visibile. Nella scheda Screening, se la prima elaborazione è
+  automatica, si avvisa che il PDF è già completo e si chiede «Vuoi
+  rilanciare l'elaborazione dello screening? Sì / No»: No porta all'inizio
+  dello screening, Sì riapre la scelta fra aggiornare i documenti o tenere
+  quelli che ci sono. Spazi non ENTE invariati.
+- **Identificativi dell'ente.** Matricola, posizioni e gli altri parametri
+  salvati compaiono nella scheda Screening, nella copertina del PDF,
+  nell'allegato «Riferimenti e metodo» e nel contesto passato all'AI.
+- **Visura conservata.** La visura trattenuta resta come documento
+  dell'azienda anche dopo lo screening riuscito; una visura nuova
+  sostituisce la precedente, che viene eliminata.
+- **Analisi Bilancio › Indici — i calcoli.** Sopra le scelte, la tabella dei
+  valori di ogni indice abilitato per ciascun bilancio caricato, con soglia
+  ed esito. Nello scenario gli stessi indici restano ricalcolati anche sulla
+  Posizione Aggiornata.
+- **Stampa.** Niente più pagine bianche: si protegge la riga, non la tabella
+  intera, i titoli restano attaccati al loro contenuto, l'intestazione delle
+  tabelle si ripete e la copertina dello Screening è più compatta.
+
 ## 0.117.0 — 2026-10-01 (Portable 1.2.0)
 
 Riallineamento delle due linee di lavoro. Dalla 0.109.112 (24/09) il codice

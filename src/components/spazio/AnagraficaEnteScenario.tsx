@@ -1,8 +1,13 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Save } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { RefreshCw, Save } from 'lucide-react';
+import { ottieniVisuraTriageAction } from '@/app/actions/visuraTriage';
+import {
+  generaScreeningAziendaAction,
+  ottieniScreeningAzienda,
+} from '@/app/actions/screeningAzienda';
 import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import {
   ottieniAnagraficaEnte,
@@ -36,6 +41,12 @@ export function AnagraficaEnteScenario({ nomeSchema, aziendaId, onSalvato }: Pro
   const [salvataggio, setSalvataggio] = useState(false);
   const [salvato, setSalvato] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  // Prima elaborazione automatica dello screening, lanciata dal salvataggio.
+  const [primaElab, setPrimaElab] = useState<
+    { stato: 'in_corso' } | { stato: 'fatta' } | { stato: 'errore'; motivo: string } | null
+  >(null);
+  const pathname = usePathname();
+  const urlScreening = pathname.replace(/\/posizione-ente(\/.*)?$/, '/screening');
 
   useDichiaraContestoAssistente({ pagina: 'anagrafica-ente', nomeSchema, scenarioId: aziendaId });
 
@@ -91,10 +102,47 @@ export function AnagraficaEnteScenario({ nomeSchema, aziendaId, onSalvato }: Pro
       // refresh "Posizione Ente" resterebbe arancione finché non si ricarica
       // a mano la pagina, pur avendo salvato l'anagrafica.
       router.refresh();
+      setSalvataggio(false);
+      await lanciaPrimaElaborazione();
+      return;
     } else {
       setErrore(risultato.error || 'Impossibile salvare.');
     }
     setSalvataggio(false);
+  };
+
+  /**
+   * Con i parametri dell'ente salvati l'azienda si riconosce con i
+   * riferimenti INTERNI: è il momento giusto per la prima elaborazione dello
+   * screening, con la visura già trattenuta dal triage. Parte solo se lo
+   * screening non esiste ancora — un rilancio è sempre una scelta
+   * dell'operatore, dalla scheda Screening.
+   */
+  const lanciaPrimaElaborazione = async () => {
+    try {
+      const [scr, vis] = await Promise.all([
+        ottieniScreeningAzienda(nomeSchema, aziendaId),
+        ottieniVisuraTriageAction(nomeSchema, aziendaId),
+      ]);
+      if (!scr.success || scr.stato.esiste || !vis.success || !vis.visura) return;
+      setPrimaElab({ stato: 'in_corso' });
+      const g = await generaScreeningAziendaAction(
+        nomeSchema,
+        aziendaId,
+        vis.visura.url,
+        vis.visura.nome,
+        undefined,
+        'AUTOMATICA'
+      );
+      if (g.success) {
+        setPrimaElab({ stato: 'fatta' });
+        router.refresh();
+      } else {
+        setPrimaElab({ stato: 'errore', motivo: g.error ?? 'errore non specificato' });
+      }
+    } catch (e) {
+      setPrimaElab({ stato: 'errore', motivo: String(e) });
+    }
   };
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
@@ -155,6 +203,35 @@ export function AnagraficaEnteScenario({ nomeSchema, aziendaId, onSalvato }: Pro
         {salvato && (
           <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
             Anagrafica salvata.
+          </p>
+        )}
+        {primaElab?.stato === 'in_corso' && (
+          <p className="text-[11px] text-slate-700 bg-blue-50 border border-blue-200 rounded-lg p-2.5 flex items-start gap-2">
+            <RefreshCw className="w-3.5 h-3.5 mt-0.5 shrink-0 animate-spin" />
+            <span>
+              <span className="font-bold">Prima elaborazione dello screening in corso</span> con la
+              visura raccolta nella verifica e i parametri dell’ente appena salvati — fino a due
+              minuti e mezzo. Puoi restare qui o continuare con le altre schede.
+            </span>
+          </p>
+        )}
+        {primaElab?.stato === 'fatta' && (
+          <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+            Prima elaborazione dello screening completata: il PDF è già disponibile in{' '}
+            <a href={urlScreening} className="font-bold underline">
+              Screening
+            </a>
+            , e la Check List è sbloccata.
+          </p>
+        )}
+        {primaElab?.stato === 'errore' && (
+          <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+            La prima elaborazione dello screening non è riuscita: {primaElab.motivo} — puoi
+            lanciarla da{' '}
+            <a href={urlScreening} className="font-bold underline">
+              Screening
+            </a>
+            ; la visura resta disponibile.
           </p>
         )}
       </div>

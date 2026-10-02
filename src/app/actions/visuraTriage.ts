@@ -1,6 +1,11 @@
 'use server';
 
-// Visura del triage: trattenuta fino allo screening, poi distrutta.
+// Visura del triage: trattenuta come documento di riferimento dell'azienda.
+//
+// 0.118: resta disponibile anche dopo lo screening riuscito, finché non la
+// sostituisce una visura più recente (la precedente viene eliminata qui).
+// Serve a rilanciare l'elaborazione — e a farla partire al salvataggio dei
+// parametri dell'ente — senza ricercare e ricaricare ogni volta il file.
 //
 // PERCHÉ ESISTE. La piattaforma elimina sempre i documenti dopo
 // l'elaborazione. Applicata alla lettera, quella regola faceva sì che la
@@ -19,6 +24,7 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabellaAziende } from '@/db/provision';
+import { del } from '@/lib/blobStore';
 import {
   richiediAccessoAzienda,
   richiediAccessoSchema,
@@ -46,6 +52,17 @@ export async function registraVisuraTriageAction(
     verificaFileDelloSpazio(contesto, url);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaAziende(nomeSchema);
+    // Una sola visura per azienda: la nuova sostituisce la precedente, e il
+    // file precedente non deve restare orfano sullo storage.
+    const prec = await pool
+      .query(`SELECT visura_triage_url FROM "${nomeSchema}".aziende WHERE id = $1`, [aziendaId])
+      .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+    const urlPrec = prec.rows[0]?.visura_triage_url as string | null | undefined;
+    if (urlPrec && urlPrec !== url) {
+      await del(urlPrec).catch((e) =>
+        console.error('[registraVisuraTriageAction] Eliminazione precedente:', e)
+      );
+    }
     await pool.query(
       `UPDATE "${nomeSchema}".aziende
           SET visura_triage_url = $2, visura_triage_nome = $3, visura_triage_il = now()
