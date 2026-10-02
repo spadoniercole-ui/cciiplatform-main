@@ -1,7 +1,8 @@
 'use client';
 
-// Inquadramento della proposta — in testa alla scheda Proposta, per entrambi
-// i percorsi. Tre dati (strumento, data di deposito, quota degli altri
+// Inquadramento della proposta. Per il Redigente in testa alla scheda; per
+// il Ricevente DOPO il caricamento e la prima lettura dei documenti, con i
+// valori letti come proposta da confermare. Tre dati (strumento, data di deposito, quota degli altri
 // aderenti) da cui dipende quale regola del registro delle fonti si applica.
 //
 // La regola viene ricalcolata nel browser a ogni modifica (logica pura in
@@ -37,6 +38,19 @@ interface Props {
   tipoProposta: TipoProposta;
   /** Cambia quando le righe della proposta cambiano: il pannello le rilegge. */
   versioneRighe: number;
+  /**
+   * Valori proposti dalla PRIMA LETTURA dei documenti (percorso Ricevente):
+   * precompilano i campi finché l'inquadramento non è stato salvato. Restano
+   * proposte: l'istruttore verifica e salva.
+   */
+  suggerimento?: {
+    strumento: string | null;
+    dataDeposito: string | null;
+    /** Percentuale 0..100. */
+    quotaPercento: number | null;
+  } | null;
+  /** true quando l'inquadramento è salvato e non ci sono modifiche in sospeso. */
+  onStato?: (confermato: boolean) => void;
 }
 
 interface AdesioneForm {
@@ -76,6 +90,8 @@ export function InquadramentoProposta({
   tipoSpazio,
   tipoProposta,
   versioneRighe,
+  suggerimento = null,
+  onStato,
 }: Props) {
   const [dati, setDati] = useState<DatiInquadramento | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
@@ -86,6 +102,8 @@ export function InquadramentoProposta({
   const [modificato, setModificato] = useState(false);
   const [salvataggio, setSalvataggio] = useState(false);
   const [salvato, setSalvato] = useState(false);
+  // I campi mostrano valori della prima lettura, non ancora confermati.
+  const [daPrimaLettura, setDaPrimaLettura] = useState(false);
 
   const percorso = tipoProposta === 'RICEVUTA' ? 'RICEVENTE' : 'REDIGENTE';
 
@@ -127,6 +145,35 @@ export function InquadramentoProposta({
     carica(modificato);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, scenarioId, versioneRighe]);
+
+  // Prima lettura: si applica solo se l'inquadramento non è mai stato
+  // salvato e l'istruttore non ha già cominciato a scrivere.
+  const chiaveSuggerimento = suggerimento ? JSON.stringify(suggerimento) : '';
+  useEffect(() => {
+    if (!dati || !suggerimento || dati.strumento || (modificato && !daPrimaLettura)) return;
+    if (
+      !suggerimento.strumento &&
+      !suggerimento.dataDeposito &&
+      suggerimento.quotaPercento === null
+    )
+      return;
+    setStrumento(suggerimento.strumento ?? '');
+    setDataDeposito(suggerimento.dataDeposito ?? '');
+    setQuotaTesto(
+      suggerimento.quotaPercento === null
+        ? ''
+        : String(suggerimento.quotaPercento).replace('.', ',')
+    );
+    setDaPrimaLettura(true);
+    setModificato(true);
+    setSalvato(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dati, chiaveSuggerimento]);
+
+  useEffect(() => {
+    if (dati) onStato?.(Boolean(dati.strumento) && !modificato);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dati, modificato]);
 
   const righePerQuota: RigaPerQuota[] = useMemo(
     () =>
@@ -174,6 +221,9 @@ export function InquadramentoProposta({
     setModificato(true);
     setSalvato(false);
   };
+  const percorsoRiceventeSenzaScelte = percorso === 'RICEVENTE' && !dati.strumento;
+  // Proposta ricevuta senza righe: la quota non si «calcola», si legge.
+  const senzaRighe = percorso === 'RICEVENTE' && dati.righe.length === 0;
 
   const handleSalva = async () => {
     if (quotaTestoNonValido) return;
@@ -194,6 +244,7 @@ export function InquadramentoProposta({
       return;
     }
     setModificato(false);
+    setDaPrimaLettura(false);
     setSalvato(true);
     await carica(false);
   };
@@ -242,6 +293,19 @@ export function InquadramentoProposta({
       {solaLettura && (
         <div className="flex items-center gap-2 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2">
           <Lock className="w-3.5 h-3.5" /> Scenario in sola lettura: i dati non sono modificabili.
+        </div>
+      )}
+
+      {daPrimaLettura && (
+        <div className="text-[11px] text-sky-900 bg-sky-50 border border-sky-200 rounded-lg p-2.5">
+          I campi sono precompilati con la <span className="font-bold">prima lettura</span> dei
+          documenti: verifica strumento, data e quota (i passi citati sono qui sopra), correggi se
+          serve e salva. La valutazione parte solo dopo il salvataggio.
+        </div>
+      )}
+      {percorsoRiceventeSenzaScelte && !daPrimaLettura && (
+        <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+          La prima lettura non ha trovato questi dati nei documenti: indicali tu e salva.
         </div>
       )}
 
@@ -301,7 +365,9 @@ export function InquadramentoProposta({
               placeholder={
                 calcolata.quota !== null
                   ? `${perc(calcolata.quota)} (calcolata)`
-                  : 'non calcolabile'
+                  : senzaRighe
+                    ? 'dai documenti, es. 45'
+                    : 'non calcolabile'
               }
               onChange={(e) => {
                 setQuotaTesto(e.target.value);
@@ -309,7 +375,7 @@ export function InquadramentoProposta({
               }}
               className={`${CLASSE_CAMPO} ${quotaTestoNonValido ? 'border-red-400' : ''}`}
             />
-            {quotaTesto.trim() !== '' && !solaLettura && (
+            {quotaTesto.trim() !== '' && !solaLettura && !senzaRighe && (
               <button
                 type="button"
                 onClick={() => {
@@ -326,6 +392,11 @@ export function InquadramentoProposta({
           <p className="text-[10px] mt-1 text-slate-500">
             {quotaTestoNonValido ? (
               <span className="text-red-600">Inserire un valore tra 0 e 100.</span>
+            ) : senzaRighe ? (
+              <>
+                Per una proposta ricevuta la quota si legge nei documenti (di solito
+                nell’attestazione): la prima lettura la propone, tu la confermi o la correggi.
+              </>
             ) : calcolata.quota !== null ? (
               <>
                 Dalle righe: <strong>{perc(calcolata.quota)}</strong> ({euro(calcolata.numeratore)}{' '}

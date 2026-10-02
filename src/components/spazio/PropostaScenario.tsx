@@ -391,15 +391,19 @@ export function PropostaScenario({
 
   return (
     <div className="space-y-6">
-      {/* Inquadramento: per entrambi i percorsi, prima delle righe — da
-          strumento, data e quota dipende quale norma governa la proposta. */}
-      <InquadramentoProposta
-        nomeSchema={nomeSchema}
-        scenarioId={scenarioId}
-        tipoSpazio={tipoSpazio}
-        tipoProposta={tipoProposta}
-        versioneRighe={versioneRighe}
-      />
+      {/* Inquadramento in testa solo per il REDIGENTE, che la proposta la
+          scrive. Per il RICEVENTE viene DOPO il caricamento e la prima
+          lettura dei documenti (dentro SimulazioneRiceventeScenario): prima
+          si legge ciò che è arrivato, poi si sceglie. */}
+      {tipoProposta !== 'RICEVUTA' && (
+        <InquadramentoProposta
+          nomeSchema={nomeSchema}
+          scenarioId={scenarioId}
+          tipoSpazio={tipoSpazio}
+          tipoProposta={tipoProposta}
+          versioneRighe={versioneRighe}
+        />
+      )}
 
       {/* Il pannello sopra resta montato durante le riletture: smontarlo
           farebbe perdere cio' che l'operatore sta compilando. */}
@@ -708,6 +712,21 @@ export function PropostaScenario({
             </>
           )}
 
+          {/* Percorso del Ricevente: documenti → prima lettura → scelte →
+              valutazione. Il confronto con la Situazione Debitoria è un
+              risultato e viene dopo. */}
+          {tipoProposta === 'RICEVUTA' && (
+            <SimulazioneRiceventeScenario
+              nomeSchema={nomeSchema}
+              scenarioId={scenarioId}
+              codice={codice}
+              aziendaId={aziendaId}
+              tipoSpazio={tipoSpazio}
+              versioneRighe={versioneRighe}
+              onAnalisiCompletata={carica}
+            />
+          )}
+
           {tipoProposta === 'RICEVUTA' && (
             <div className="bg-white border border-slate-200 rounded-xl p-5">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-3">
@@ -835,16 +854,6 @@ export function PropostaScenario({
                 );
               })()}
             </div>
-          )}
-
-          {tipoProposta === 'RICEVUTA' && (
-            <SimulazioneRiceventeScenario
-              nomeSchema={nomeSchema}
-              scenarioId={scenarioId}
-              codice={codice}
-              aziendaId={aziendaId}
-              onAnalisiCompletata={carica}
-            />
           )}
         </>
       )}

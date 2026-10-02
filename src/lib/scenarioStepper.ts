@@ -37,7 +37,7 @@ const PASSI_SCENARIO_RICEVUTA: PassoScenario[] = [
     id: 'proposta',
     label: 'Proposta',
     descrizione:
-      'Cosa l\u2019azienda offre, riga per riga, più i tre documenti della fase di analisi (proposta di cram down, asseverazione, piano di sviluppo). Solo la proposta di cram down è obbligatoria; l\u2019assenza degli altri due penalizza il giudizio finale, non lo blocca. Il quadro qui raccolto (righe + documenti + Screening dell\u2019azienda) alimenta il giudizio complessivo, non un semplice riscontro numerico.',
+      'In quattro passi: carichi i documenti ricevuti (proposta, asseverazione, piano) così come li ha mandati l\u2019azienda; la piattaforma ne fa una prima lettura e propone strumento, data di deposito e quota degli altri aderenti, citando il passo; confermi o correggi le scelte; parte la valutazione. Solo la proposta è obbligatoria; l\u2019assenza degli altri documenti pesa sul giudizio, non lo blocca.',
     modulo: 'report',
     stato: 'pronta',
     icon: FileText,

@@ -93,6 +93,34 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.120.0 — 2026-10-02 (Portable 1.2.3)
+
+**Proposta ricevuta: prima si legge, poi si sceglie.** L'inquadramento
+(strumento, data di deposito, quota degli altri aderenti) stava in testa
+alla scheda, prima di qualunque documento: l'istruttore doveva sfogliare i
+file, scegliere lo strumento e cercare la quota in un documento che non è
+la proposta. Ora il percorso del Ricevente è in quattro passi:
+
+1. **Documenti ricevuti** — si caricano così come li ha mandati l'azienda
+   (proposta obbligatoria; asseverazione e piano, o «non pervenuto»).
+2. **Prima lettura** — la piattaforma legge i documenti e propone lo
+   strumento che sembra scelto, la data di deposito, la quota degli altri
+   creditori aderenti (anche dall'attestazione) e il soddisfacimento
+   offerto all'ente, ciascuno con il passo citato e il documento da cui
+   viene. Ciò che non trova lo dice; non deduce.
+3. **Le tue scelte** — l'inquadramento arriva precompilato come proposta,
+   segnalata come tale; l'istruttore conferma o corregge e salva. Per una
+   proposta ricevuta la quota non si «calcola dalle righe»: si legge.
+4. **Valutazione** — parte solo con i documenti caricati e le scelte
+   salvate (vincolo anche sul server); strumento, data e quota confermati
+   entrano nel contesto dell'analisi. Il confronto con la Situazione
+   Debitoria, che è un risultato, ora viene dopo.
+
+I documenti restano disponibili fra la prima lettura e la valutazione (non
+vanno ricaricati) e vengono eliminati a valutazione riuscita; se la
+valutazione fallisce restano, per riprovare. Una nuova carica sostituisce
+la precedente. Il percorso del Redigente non cambia.
+
 ## 0.119.0 — 2026-10-02 (Portable 1.2.2)
 
 - **Impresa minore sui tre esercizi.** Il riscontro dell'art. 2, lett. d)
