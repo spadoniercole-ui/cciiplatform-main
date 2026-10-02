@@ -23,6 +23,7 @@ import {
   type ParametriIai,
 } from '@/lib/iai/indice';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
+import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 const num = (v: unknown): number | null =>
@@ -101,6 +102,7 @@ export async function calcolaIaiAction(
       ? normalizzaFattiVisura(scr.rows[0].visura_fatti)
       : null;
     const oggi = new Date().toISOString().slice(0, 10);
+    const denunce = await leggiDatiSoglieAzienda(nomeSchema, aziendaId).catch(() => null);
     const pendente = fatti?.procedureConcorsuali.find(proceduraPendente) ?? null;
     const avvisi = fatti ? avvisiDaFattiVisura(fatti, oggi) : [];
 
@@ -112,7 +114,10 @@ export async function calcolaIaiAction(
           esposizione: r.esposizione,
         })),
         importiNonNoti: riep.IMPORTO_NON_NOTO,
-        denunceAssenti: null,
+        // Esito del triage sull'Elenco denunce: null solo se non è mai stato letto.
+        denunceAssenti: denunce?.esitoDenunceConservato
+          ? denunce.denunceNonPresentate !== null
+          : null,
         addetti: fatti?.addetti?.numero ?? null,
       },
       bilancio: {

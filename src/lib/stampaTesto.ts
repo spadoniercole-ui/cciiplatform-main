@@ -54,8 +54,16 @@ function stilePagina(): string {
     body { max-width:none; margin:0; ${conTestata ? 'padding-top:96px;' : ''} ${conPie ? 'padding-bottom:48px;' : ''} }
     .testata { position:fixed; top:0; left:0; right:0; margin:0; background:#fff; }
     .pie-ente { position:fixed; bottom:0; left:0; right:0; margin:0; background:#fff; }
-    h1 { page-break-after:avoid; }
-    table, tr { page-break-inside:avoid; }
+    /* Un titolo non resta mai in fondo a una pagina senza il suo contenuto. */
+    h1, h2, h3, h4 { page-break-after:avoid; break-after:avoid; }
+    /* Si protegge la RIGA, non la tabella intera: una tabella lunga che
+       «non si spezza» veniva spinta per intero alla pagina dopo, lasciando
+       il titolo da solo e mezza pagina bianca. L'intestazione si ripete. */
+    tr, .dim, li { page-break-inside:avoid; break-inside:avoid; }
+    thead { display:table-header-group; }
+    /* Il pie' fisso non deve generare una pagina vuota in coda. */
+    body > :last-child { margin-bottom:0; }
+    .salto { page-break-before:always; break-before:page; height:0; margin:0; padding:0; }
   }`;
 }
 function testataEnte(): string {

@@ -1183,6 +1183,11 @@ export async function assicuraTabelleScreeningAzienda(nomeSchema: string): Promi
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.azienda_screening ADD COLUMN IF NOT EXISTS visura_impronta TEXT`
   );
+  // Origine della generazione (0.118): AUTOMATICA = lanciata al primo
+  // salvataggio dei parametri dell'ente; MANUALE = dal pulsante.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.azienda_screening ADD COLUMN IF NOT EXISTS origine TEXT`
+  );
   // Storico delle generazioni (0.109.90): la riga corrente si sovrascrive,
   // ma ogni generazione resta qui con versione della piattaforma e impronta
   // della visura.

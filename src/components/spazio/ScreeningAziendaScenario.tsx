@@ -95,9 +95,10 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           parametriIai: rif.parametriIai ?? null,
           parametriPersonalizzati: rif.parametriPersonalizzati ?? false,
           revisione,
+          identificativi: stato.identificativiEnte,
         });
     }
-    const salto = '<div style="page-break-before:always"></div>';
+    const salto = '<div class="salto"></div>';
     const corpo = conAllegato
       ? revisione.testoRivisto
       : revisione.testoRivisto + appendiceRilievi(revisione);
@@ -125,6 +126,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
     azienda: stato?.visuraFatti?.denominazione ?? `Azienda ${aziendaId}`,
     codiceFiscale: stato?.visuraFatti?.codiceFiscale ?? null,
     ente: tipoSpazio === 'ENTE' ? 'Ricevente' : 'Redigente',
+    identificativi: stato?.identificativiEnte ?? [],
   };
   // Secondi trascorsi dall'avvio: la generazione dura fino a due minuti e
   // mezzo, e un pulsante che gira da solo non dice se sta lavorando o e' fermo.
@@ -154,6 +156,9 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
     null
   );
   const [vuoleAggiornare, setVuoleAggiornare] = useState<boolean | null>(null);
+  // Prima elaborazione AUTOMATICA (al salvataggio dei parametri dell'ente):
+  // si chiede se rilanciarla prima di mostrare i documenti di partenza.
+  const [rilancio, setRilancio] = useState<'si' | null>(null);
   // Piccolo prompt libero per questa generazione (usa-e-getta, non salvato).
   const [istruzioniAI, setIstruzioniAI] = useState('');
 
@@ -328,8 +333,8 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
       if (risultato.success) {
         await carica();
         setVisuraFile(null);
-        // La visura ha finito il suo lavoro ed e' stata eliminata dal server.
-        setVisuraTriage(null);
+        // La visura resta conservata come documento dell'azienda (0.118).
+        setVuoleAggiornare(null);
         // Screening appena generato → la Check List deve sbloccarsi (e
         // mostrare il badge delle domande) subito, non solo dopo un'altra
         // azione. Il semaforo è renderizzato dal layout (Server Component),
@@ -372,6 +377,20 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
         </p>
       </div>
 
+      {tipoSpazio !== 'NON_ENTE' && (stato?.identificativiEnte.length ?? 0) > 0 && (
+        <p className="text-[11px] text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1">
+          <span className="font-bold uppercase text-[10px] text-slate-500 tracking-wider">
+            Identificativi presso l’ente
+          </span>
+          {stato!.identificativiEnte.map((x) => (
+            <span key={x.etichetta}>
+              <span className="text-slate-500">{x.etichetta}</span>{' '}
+              <span className="font-bold">{x.valore}</span>
+            </span>
+          ))}
+        </p>
+      )}
+
       {errore && (
         <div className="flex items-start gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -386,7 +405,66 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           una chiamata al modello, per leggere un giudizio che era già lì. */}
       {attenzione && <SemaforoAttenzione attenzione={attenzione} />}
 
-      <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+      {tipoSpazio !== 'NON_ENTE' && stato && stato.identificativiEnte.length === 0 && (
+        <div className="flex items-start gap-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <p className="leading-relaxed">
+            <span className="font-bold">Prima i parametri dell’ente.</span> Lo screening si elabora
+            solo dopo aver salvato almeno un parametro dell’ente per questa azienda (Posizione Ente
+            › Anagrafica: matricola, posizione…): da lì in poi l’azienda si riconosce con i tuoi
+            riferimenti interni, non con quelli camerali.
+            {visuraTriage &&
+              ' La visura raccolta nella verifica è conservata: al salvataggio la prima elaborazione parte da sola.'}
+          </p>
+        </div>
+      )}
+
+      {tipoSpazio !== 'NON_ENTE' &&
+        stato?.esiste &&
+        stato.origine === 'AUTOMATICA' &&
+        rilancio === null && (
+          <div className="border border-sky-200 bg-sky-50 rounded-xl p-5 space-y-3">
+            <p className="text-xs text-slate-700 leading-relaxed">
+              È stata fatta una <span className="font-bold">prima elaborazione</span> dello
+              screening al salvataggio dei parametri dell’ente
+              {stato.generatoIl ? ` (${new Date(stato.generatoIl).toLocaleString('it-IT')})` : ''}:
+              il PDF che hai a disposizione è già completo — copertina, relazione, riscontri
+              normativi e allegato.
+            </p>
+            <p className="text-xs font-bold text-slate-900">
+              Vuoi rilanciare l’elaborazione dello screening?
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setRilancio('si')}
+                className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              >
+                Sì
+              </button>
+              <button
+                onClick={() =>
+                  document
+                    .getElementById('inizio-screening')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+                className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-900 text-white hover:bg-slate-800"
+              >
+                No
+              </button>
+            </div>
+          </div>
+        )}
+
+      <div
+        className={`bg-white border border-slate-200 rounded-xl p-5 space-y-4 ${
+          tipoSpazio !== 'NON_ENTE' &&
+          stato?.esiste &&
+          stato.origine === 'AUTOMATICA' &&
+          rilancio === null
+            ? 'hidden'
+            : ''
+        }`}
+      >
         <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
           Documenti di partenza
         </h3>
@@ -508,7 +586,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
                 : visuraTriage
                   ? `disponibile: ${visuraTriage.nome} (trattenuta, non serve ricaricarla)`
                   : stato?.nomeFileVisura
-                    ? `usata nell’ultimo screening: ${stato.nomeFileVisura} — non conservata: per rigenerare va ricaricata`
+                    ? `usata nell’ultimo screening: ${stato.nomeFileVisura} — non più disponibile: per rigenerare va ricaricata`
                     : 'nessuno ancora — obbligatorio per generare'}
             </span>
             <label className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg transition-colors cursor-pointer">
@@ -553,7 +631,11 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
         <button
           type="button"
           onClick={handleGenera}
-          disabled={generazioneInCorso || (!visuraFile && !visuraTriage)}
+          disabled={
+            generazioneInCorso ||
+            (!visuraFile && !visuraTriage) ||
+            (tipoSpazio !== 'NON_ENTE' && (stato?.identificativiEnte.length ?? 0) === 0)
+          }
           title={
             !visuraFile && !visuraTriage ? 'Carica prima il fascicolo storico (PDF)' : undefined
           }
@@ -619,6 +701,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
         )}
       </div>
 
+      {stato?.esiste && <div id="inizio-screening" className="scroll-mt-4" />}
       {stato?.esiste && (
         <CopertinaIai
           nomeSchema={nomeSchema}

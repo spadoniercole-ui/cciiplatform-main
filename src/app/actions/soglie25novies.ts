@@ -24,6 +24,7 @@ import {
 } from '@/lib/soglie25novies/calcolo';
 import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 
 export interface ValoriSoglie {
   conLavoratoriSubordinati: boolean | null;
@@ -229,11 +230,12 @@ export async function valutaSoglieAction(
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
 
-    const lettura = await ottieniValoriSoglieAction(nomeSchema, aziendaId);
-    if (!lettura.success || !lettura.valori) {
-      return { success: false, error: lettura.error };
-    }
-    const v = lettura.valori;
+    // Stessa lettura dell'indicatore del triage: posizioni della tabella,
+    // anagrafica, V.E.R.A. e — soprattutto — il ritardo oltre 90 giorni che
+    // il triage ha calcolato dalle inadempienze/deleghe. Prima qui era fisso
+    // a null e lo Screening diceva «esito non esprimibile».
+    const lettura = await leggiDatiSoglieAzienda(nomeSchema, aziendaId);
+    if (!lettura) return { success: false, error: 'Azienda non trovata.' };
 
     let ente: Ente25Novies | null = null;
     let categorieSenzaEnte: string[] = [];
@@ -252,17 +254,7 @@ export async function valutaSoglieAction(
     }
 
     const dati: DatiSoglie = {
-      conLavoratori: v.conLavoratoriSubordinati,
-      contributiScaduti: v.contributiScaduti,
-      contributiDovutiAnnoPrecedente: v.contributiDovutiAnnoPrecedente,
-      annoContributiDovuti: v.annoContributiDovuti,
-      sanzioniPresunte: v.sanzioniPresunteVera,
-      premiInail: v.premiInail,
-      ivaScaduta: v.ivaScaduta,
-      volumeAffari: v.volumeAffari,
-      creditiAffidati: v.creditiAffidatiAer,
-      formaAER: lettura.formaAER ?? null,
-      ritardoOltre90Giorni: null,
+      ...lettura.dati,
       vociImportoIgnoto: await contaVociVeraIgnote(nomeSchema, aziendaId),
     };
 

@@ -127,6 +127,10 @@ export function materiaSuggeritaPerDescrizione(
     [/anf|prestazion/, /prestazion|anf/],
     [/sentenza|fallimento|giudicato/, /sentenz|giudizial|fallimen|accertamenti giudizial/],
     [/variazion|vig/, /variazion|vig/],
+    [
+      /agente della riscossione|cartell|avvis[oi] di addebito|\badr\b/,
+      /riscossion|cartell|addebit|ruol/,
+    ],
   ];
   for (const [rxDescr, rxMateria] of regole) {
     if (rxDescr.test(d)) {

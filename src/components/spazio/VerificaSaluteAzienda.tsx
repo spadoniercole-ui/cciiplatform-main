@@ -24,8 +24,14 @@
 // campi da digitare. Quelli ora arrivano dalla visura.
 
 import { dichiarazionePerimetro } from '@/lib/revisore/perimetro';
+import {
+  htmlRiepilogoTriage,
+  type DocumentoTriage,
+  type ValoriTriage,
+} from '@/lib/triage/riepilogoHtml';
+import { stampaHtml } from '@/lib/stampaTesto';
 import React, { useEffect, useState } from 'react';
-import { Stethoscope, Upload, Check, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Stethoscope, Upload, Check, AlertTriangle, ArrowRight, Printer } from 'lucide-react';
 import {
   estraiAnagraficaDaVisuraAction,
   type AnagraficaEstratta,
@@ -58,11 +64,10 @@ import {
   partiteInpsPerAnzianita,
 } from '@/lib/denunce/analisi';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
-import { generaScreeningAziendaAction } from '@/app/actions/screeningAzienda';
 import { generaPreCompilazioneMinisterialeAction } from '@/app/actions/checklistMinisterialeAzienda';
 import { registraVisuraTriageAction } from '@/app/actions/visuraTriage';
 import { salvaAnalisiXbrlAziendaAction } from '@/app/actions/xbrlAzienda';
-import { analizzaVera, estraiRigheVera } from '@/lib/debitiEnte/veraImport';
+import { analizzaVera, estraiRigheVera, ritardoDaVera } from '@/lib/debitiEnte/veraImport';
 import { sostituisciDebitiVeraAction } from '@/app/actions/posizioneVera';
 import { salvaValoriSoglieParzialeAction } from '@/app/actions/soglie25novies';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
@@ -152,6 +157,9 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
   // dice che il documento non c'è e va escluso dalle verifiche, invece di
   // lasciare l'indicatore in attesa di qualcosa che non arriverà.
   const [esitoFogli, setEsitoFogli] = useState<string[]>([]);
+  // Per il riepilogo stampabile: documenti letti e valori misurati.
+  const [documentiTriage, setDocumentiTriage] = useState<DocumentoTriage[]>([]);
+  const [valoriTriage, setValoriTriage] = useState<ValoriTriage | null>(null);
   /**
    * Data a cui la verifica è riferita.
    *
@@ -265,8 +273,45 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       let fileF24Aggregato: File | null = null;
       let fileInadempienze: File | null = null;
       let fileRuoli: File | null = null;
+      const ETICHETTA_PROSPETTO: Record<string, string> = {
+        VERA: 'Posizione V.E.R.A.',
+        DENUNCE: 'Elenco denunce (DM10/UniEmens)',
+        DELEGHE: 'Elenco deleghe F24 per periodo',
+        F24_AGGREGATO: 'F24 aggregato per anno',
+        INADEMPIENZE: 'Lista inadempienze',
+        RUOLI: 'Ruoli esattoriali',
+        SCONOSCIUTO: 'Struttura non riconosciuta',
+      };
+      const documenti: DocumentoTriage[] = [];
+      if (fileVisura)
+        documenti.push({ nome: fileVisura.name, tipo: 'Visura camerale', esito: 'Anagrafica' });
+      for (const fx of fileXbrl)
+        documenti.push({
+          nome: fx.name,
+          tipo: 'Bilancio XBRL',
+          esito: 'Equilibrio economico-finanziario',
+        });
       for (const f of fileProspetti) {
         const tipo = await riconosciProspetto(f);
+        const giaVisto =
+          (tipo === 'VERA' && fileVera) ||
+          (tipo === 'DENUNCE' && fileDenunce) ||
+          (tipo === 'DELEGHE' && fileDelegheDettaglio) ||
+          (tipo === 'F24_AGGREGATO' && fileF24Aggregato) ||
+          (tipo === 'INADEMPIENZE' && fileInadempienze) ||
+          (tipo === 'RUOLI' && fileRuoli);
+        documenti.push({
+          nome: f.name,
+          tipo: ETICHETTA_PROSPETTO[tipo] ?? tipo,
+          esito:
+            tipo === 'SCONOSCIUTO'
+              ? 'Non usato'
+              : giaVisto
+                ? 'Non usato: secondo file dello stesso tipo'
+                : tipo === 'F24_AGGREGATO'
+                  ? 'Solo totali annui: non misura il ritardo'
+                  : 'Letto e usato',
+        });
         if (tipo === 'VERA' && !fileVera) fileVera = f;
         else if (tipo === 'DENUNCE' && !fileDenunce) fileDenunce = f;
         // Deleghe per periodo e F24 aggregato NON si contendono lo stesso
@@ -328,10 +373,14 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         }
       }
 
+      // Ritardo misurato sui periodi del V.E.R.A.: ripiego quando manca la
+      // Lista Inadempienze (che resta la fonte prioritaria).
+      let ritardoVera: ReturnType<typeof ritardoDaVera> = null;
       if (fileVera) {
         setAvanzamento('Lettura della Posizione V.E.R.A....');
         try {
           const analisi = await analizzaVera(fileVera);
+          ritardoVera = ritardoDaVera(analisi.sezioni, new Date(`${dataVerifica}T12:00:00Z`));
           // Mappature vuote: in fase di triage non si chiede all'operatore di
           // classificare titoli e trattamenti. Le righe non riconosciute
           // restano tali e la classificazione fine si fa più avanti, nella
@@ -368,6 +417,10 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       let ritardo90: boolean | null = null;
       let periodiRitardo: number | null = null;
       let mancanti: string | null = null;
+      // true quando l'Elenco denunce è stato letto: anche «nessuna mancante»
+      // è un esito, e va conservato (stringa vuota) perché lo Screening e
+      // l'IAI non lo scambino per un dato assente.
+      let denunceAnalizzate = false;
       const riferimento = new Date(`${dataVerifica}T12:00:00Z`);
       const annoPrec = riferimento.getUTCFullYear() - 1;
 
@@ -379,6 +432,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
           note.push(`Elenco denunce non riconosciuto: mancano ${r.colonneMancanti.join(', ')}.`);
         } else {
           righeDenunce = r.righe;
+          denunceAnalizzate = true;
           const a = analizzaDenunce(r.righe, riferimento, annoPrec);
           dovutoAnnoPrec = a.dovutoPerAnno[annoPrec] ?? null;
           if (a.periodiMancanti.length > 0) {
@@ -507,6 +561,19 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         );
       }
 
+      // Né Lista Inadempienze né Elenco Deleghe utilizzabile: il ritardo si
+      // misura sui periodi delle partite del V.E.R.A. Prima restava «non
+      // determinabile» pur avendo nel file, riga per riga, periodo e importo.
+      if (ritardo90 === null && ritardoVera) {
+        ritardo90 = ritardoVera.partite > 0;
+        periodiRitardo = ritardoVera.periodi.length;
+        note.push(
+          ritardoVera.partite > 0
+            ? `Ritardo oltre 90 giorni misurato sul V.E.R.A.: ${ritardoVera.partite} partite contabilizzate (${ritardoVera.periodi.length} periodi, dal ${[...ritardoVera.periodi].sort()[0]} al ${[...ritardoVera.periodi].sort().pop()}) per ${Math.round(ritardoVera.importo).toLocaleString('it-IT')} €, scadute — il 16 del mese successivo al periodo — da oltre 90 giorni alla data della verifica.`
+            : 'Ritardo oltre 90 giorni misurato sul V.E.R.A.: nessuna partita contabilizzata scaduta da oltre 90 giorni alla data della verifica.'
+        );
+      }
+
       if (scelteFonti['vera:elenchi'] === 'VERA') {
         note.push(
           'Fonte del debito: il V.E.R.A., per scelta. Inadempienze e ruoli non sono stati sommati, perché già compresi.'
@@ -517,6 +584,18 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         );
       }
       setEsitoFogli(note);
+      setDocumentiTriage(documenti);
+      setValoriTriage({
+        conLavoratori: conLavoratori === '' ? null : conLavoratori === 'si',
+        annoPrecedente: annoPrec,
+        contributiDovutiAnnoPrecedente:
+          dovutoAnnoPrec ?? (contributiDovuti.trim() === '' ? null : Number(contributiDovuti)),
+        nonVersatoOltre90: nonVersato,
+        ritardoOltre90Giorni: ritardo90,
+        periodiInRitardo: periodiRitardo,
+        denunceNonPresentate: mancanti ?? (denunceAnalizzate ? '' : null),
+        creditiAffidatiAgente: creditiAffidatiNetti,
+      });
 
       // ---- I due valori della soglia INPS --------------------------------
       if (conLavoratori !== '' || contributiDovuti.trim() !== '' || note.length > 0) {
@@ -543,7 +622,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
           ritardoOltre90Giorni: ritardo90 ?? undefined,
           creditiAffidatiAer: creditiAffidatiNetti ?? undefined,
           periodiInRitardo: periodiRitardo ?? undefined,
-          denunceNonPresentate: mancanti ?? undefined,
+          denunceNonPresentate: mancanti ?? (denunceAnalizzate ? '' : undefined),
           soglieAggiornateAl: dataVerifica,
         });
         // Se il salvataggio fallisce, i valori letti dai fogli non arrivano
@@ -612,6 +691,46 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     setAziendaId(null);
   };
 
+  const stampaRiepilogo = () => {
+    const sede = dati
+      ? [
+          dati.indirizzoSedeLegale,
+          dati.cap,
+          dati.citta,
+          dati.provincia ? `(${dati.provincia})` : null,
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : null;
+    stampaHtml(
+      `Riepilogo del triage — ${dati?.ragioneSociale ?? 'azienda'}`,
+      htmlRiepilogoTriage({
+        azienda: dati?.ragioneSociale ?? 'Azienda',
+        codiceFiscale: dati?.codiceFiscale ?? null,
+        partitaIva: dati?.partitaIva ?? null,
+        sede: sede || null,
+        dataVerifica,
+        perimetro: dichiarazionePerimetro('TRIAGE'),
+        documenti: documentiTriage,
+        note: esitoFogli,
+        valori: valoriTriage ?? {
+          conLavoratori: conLavoratori === '' ? null : conLavoratori === 'si',
+          annoPrecedente: new Date(`${dataVerifica}T12:00:00Z`).getUTCFullYear() - 1,
+          contributiDovutiAnnoPrecedente:
+            contributiDovuti.trim() === '' ? null : Number(contributiDovuti),
+          nonVersatoOltre90: null,
+          ritardoOltre90Giorni: null,
+          periodiInRitardo: null,
+          denunceNonPresentate: null,
+          creditiAffidatiAgente: null,
+        },
+        attenzione,
+      }),
+      undefined,
+      new Date().toISOString()
+    );
+  };
+
   const procedi = async () => {
     if (!aziendaId) return;
     setInCorso(true);
@@ -621,7 +740,9 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     try {
       if (!fileVisura) {
         problemi.push(
-          'Visura non disponibile in questa sessione: screening e check list non sono stati generati.'
+          tipoSpazio === 'NON_ENTE'
+            ? 'Visura non disponibile in questa sessione: la check list non è stata pre-compilata.'
+            : 'Visura non disponibile in questa sessione: per lo screening andrà caricata nella scheda Screening.'
         );
       } else {
         setAvanzamento('Caricamento della visura...');
@@ -651,30 +772,26 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
           problemi.push(`Caricamento della visura non riuscito: ${String(e)}`);
         }
 
-        if (urlVisura) {
-          setAvanzamento('Generazione di screening e check list — un minuto circa...');
+        // SPAZIO ENTE: lo screening NON si genera qui. Il vincolo è che nessuna
+        // funzione successiva parta prima che l'ente abbia salvato almeno un
+        // suo parametro (matricola, posizione…): da lì in poi l'azienda si
+        // riconosce con i riferimenti interni e non con quelli camerali. La
+        // visura resta trattenuta e la prima elaborazione parte da sola al
+        // salvataggio dell'Anagrafica Ente.
+        if (urlVisura && tipoSpazio === 'NON_ENTE') {
+          setAvanzamento('Pre-compilazione della check list — un minuto circa...');
           try {
-            const g =
-              tipoSpazio === 'NON_ENTE'
-                ? await generaPreCompilazioneMinisterialeAction(
-                    nomeSchema,
-                    aziendaId,
-                    urlVisura,
-                    fileVisura.name
-                  )
-                : await generaScreeningAziendaAction(
-                    nomeSchema,
-                    aziendaId,
-                    urlVisura,
-                    fileVisura.name
-                  );
+            const g = await generaPreCompilazioneMinisterialeAction(
+              nomeSchema,
+              aziendaId,
+              urlVisura,
+              fileVisura.name
+            );
             if (!g.success) {
-              problemi.push(
-                `${tipoSpazio === 'NON_ENTE' ? 'Check List' : 'Screening'} non generata: ${g.error ?? 'errore'}`
-              );
+              problemi.push(`Check List non generata: ${g.error ?? 'errore'}`);
             }
           } catch (e) {
-            problemi.push(`Screening non generato: ${String(e)}`);
+            problemi.push(`Check List non generata: ${String(e)}`);
           }
         }
       }
@@ -687,9 +804,12 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       }
 
       if (problemi.length === 0) {
-        // Tutto riuscito: si va direttamente alla scheda, dove screening e
-        // check list sono pronti.
-        window.location.href = `/spazio/${codice}/aziende/${aziendaId}`;
+        // ENTE: si va ai parametri dell'ente, il passo che sblocca il resto.
+        // NON_ENTE: alla scheda, dove la check list è pronta.
+        window.location.href =
+          tipoSpazio === 'NON_ENTE'
+            ? `/spazio/${codice}/aziende/${aziendaId}`
+            : `/spazio/${codice}/aziende/${aziendaId}/posizione-ente`;
         return;
       }
 
@@ -1031,8 +1151,9 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             ))}
           </ul>
           <p className="text-[11px] text-slate-500 leading-relaxed">
-            Screening e check list si generano dalla scheda azienda, come si è sempre fatto: nulla è
-            andato perduto, manca solo la preparazione automatica.
+            {tipoSpazio === 'NON_ENTE'
+              ? 'La check list si genera dalla scheda azienda, come si è sempre fatto: nulla è andato perduto, manca solo la preparazione automatica.'
+              : 'Salva i parametri dell’ente in Posizione Ente › Anagrafica: con la visura disponibile la prima elaborazione dello screening parte da sola; altrimenti caricala nella scheda Screening.'}
           </p>
           <a
             href={`/spazio/${codice}/aziende/${aziendaId}`}
@@ -1078,19 +1199,39 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             </p>
           )}
 
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={stampaRiepilogo}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase rounded-lg"
+              title="Documenti caricati e letti, valori misurati, indicazione del triage e perimetro: da consegnare al responsabile"
+            >
+              <Printer className="w-3.5 h-3.5" /> Stampa il riepilogo del triage (PDF)
+            </button>
+          </div>
+
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
             <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">E adesso?</h3>
             <p className="text-[11px] text-slate-500 leading-relaxed">
               La verifica è registrata: resta consultabile anche se decidi di non proseguire, ed è
               la traccia di chi ha guardato questa posizione e quando.
             </p>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Procedendo, l&apos;azienda entra fra quelle in lavorazione e vengono generati{' '}
-              <span className="font-bold">screening e check list</span> — un minuto circa. Li
-              troverai già pronti nella scheda: sono <span className="font-bold">preliminari</span>,
-              perché nascono senza la posizione debitoria e senza le tue risposte, e si rigenerano
-              quando avrai completato quei due passaggi.
-            </p>
+            {tipoSpazio === 'NON_ENTE' ? (
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Procedendo, l&apos;azienda entra fra quelle in lavorazione e viene pre-compilata la{' '}
+                <span className="font-bold">check list</span> — un minuto circa. La troverai già
+                pronta nella scheda.
+              </p>
+            ) : (
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Procedendo, l&apos;azienda entra fra quelle in lavorazione e si apre{' '}
+                <span className="font-bold">Posizione Ente › Anagrafica</span>: salva almeno un
+                parametro dell&apos;ente (matricola, posizione…) perché da lì in poi l&apos;azienda
+                si riconosce con i tuoi riferimenti interni. Al salvataggio parte da sola la prima
+                elaborazione dello <span className="font-bold">screening</span> con la visura
+                caricata qui, che resta conservata.
+              </p>
+            )}
             {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}
             <div className="flex flex-wrap gap-3">
               <button

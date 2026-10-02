@@ -20,10 +20,8 @@ import {
   type Ente25Novies,
 } from '@/lib/soglie25novies/calcolo';
 import { ottieniParametriSoglieAction } from '@/app/actions/parametriSoglie';
-import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
+import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 import { sintetizzaSoglie } from '@/lib/soglie25novies/sintesi';
-import { ottieniDebitiTriageAction } from '@/app/actions/debitiTriage';
-import { valoriSoglieDaPosizioni } from '@/lib/debitiTriage/modello';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export interface RisultatoAttenzione {
@@ -52,89 +50,16 @@ export async function ottieniAttenzioneScreeningAction(
     await assicuraTabellaDebitiEnte(nomeSchema);
     await assicuraTabelleVera(nomeSchema);
 
-    // ---- Anagrafica -------------------------------------------------------
+    // ---- Dati delle soglie: una sola lettura, condivisa con lo Screening ----
+    const lettura = await leggiDatiSoglieAzienda(nomeSchema, aziendaId);
+    if (!lettura) return { success: false, error: 'Azienda non trovata.' };
     const az = await pool.query(
-      `SELECT anno_costituzione, forma_giuridica, con_lavoratori_subordinati,
-              contributi_scaduti, contributi_dovuti_anno_precedente, sanzioni_presunte_vera,
-              premi_inail, iva_scaduta, volume_affari, crediti_affidati_aer,
-              ritardo_oltre_90_giorni, periodi_in_ritardo
-         FROM "${nomeSchema}".aziende WHERE id = $1`,
+      `SELECT anno_costituzione, periodi_in_ritardo FROM "${nomeSchema}".aziende WHERE id = $1`,
       [aziendaId]
     );
-    if (az.rows.length === 0) return { success: false, error: 'Azienda non trovata.' };
-    const a = az.rows[0];
-
-    // ---- Esposizione verso l'ente ----------------------------------------
-    // A livello AZIENDA la fonte è la Posizione V.E.R.A., non la Situazione
-    // Debitoria.
-    //
-    // Il V.E.R.A. è il documento con cui l'istituto certifica lo stato del
-    // passivo: comprende le partite in lavorazione e le sanzioni, ed è la
-    // fotografia dell'esposizione reale — stabile, valida per tutti gli
-    // scenari. Il contabilizzato è un'altra grandezza, che risponde a
-    // un'altra domanda ("su cosa si fanno i conti quando arriva una
-    // proposta"), ed è per questo che la Situazione Debitoria è tornata
-    // dentro lo scenario. Leggerla qui significherebbe far dipendere il
-    // triage da un dato che appartiene a un momento successivo.
-    //
-    // Il join sulle categorie è permissivo: in triage i titoli non sono
-    // mappati, quindi la categoria è spesso assente, e un join stretto
-    // escluderebbe l'intero file riportando zero.
-    const espVera = await pool
-      .query(
-        `SELECT COALESCE(SUM(v.importo), 0) AS totale
-           FROM "${nomeSchema}".debiti_vera v
-           LEFT JOIN "${nomeSchema}".categorie_tipo_debito c ON c.codice = v.categoria
-          WHERE v.azienda_id = $1
-            AND v.trattamento IN ('contabilizzato', 'da_contabilizzare')
-            AND (c.contribuisce IS NULL OR c.contribuisce = TRUE)`,
-        [aziendaId]
-      )
-      .catch(() => ({ rows: [{ totale: 0 }] }));
-    const daVera = Number(espVera.rows[0]?.totale ?? 0);
-
-    // Il valore inserito a mano ha comunque la precedenza: è una
-    // dichiarazione esplicita dell'operatore, non una deduzione.
-    const esposizione = num(a.contributi_scaduti) ?? (daVera > 0 ? daVera : null);
-
-    // ---- Posizioni debitorie della tabella -------------------------------
-    // Sono i numeri reali su cui si calcolano le soglie, raccolti a mano o
-    // dai prospetti. Hanno la PRECEDENZA sui campi dell'anagrafica: quelli
-    // restano come ripiego per le aziende verificate prima che la tabella
-    // esistesse.
-    const posizioniRis = await ottieniDebitiTriageAction(nomeSchema, aziendaId);
-    const daPosizioni = valoriSoglieDaPosizioni(posizioniRis.righe ?? []);
-
-    // ---- Soglie di segnalazione ------------------------------------------
-    const dati: DatiSoglie = {
-      conLavoratori:
-        a.con_lavoratori_subordinati === null || a.con_lavoratori_subordinati === undefined
-          ? null
-          : Boolean(a.con_lavoratori_subordinati),
-      // La colonna manuale se c'è; altrimenti l'esposizione effettivamente
-      // caricata (Situazione Debitoria e Posizione V.E.R.A.).
-      //
-      // Senza questo ripiego il file V.E.R.A. non arrivava MAI al calcolo
-      // delle soglie: finisce in `debiti_vera`, mentre il test leggeva solo
-      // la colonna `contributi_scaduti` dell'anagrafica. Chi caricava il
-      // V.E.R.A. dalla Verifica salute azienda si vedeva dire "soglie non
-      // determinabili" pur avendo fornito l'esposizione.
-      contributiScaduti:
-        daPosizioni.contributiScaduti ?? num(a.contributi_scaduti) ?? esposizione ?? null,
-      contributiDovutiAnnoPrecedente:
-        daPosizioni.contributiDovutiAnnoPrecedente ?? num(a.contributi_dovuti_anno_precedente),
-      annoContributiDovuti: null,
-      sanzioniPresunte: num(a.sanzioni_presunte_vera),
-      premiInail: daPosizioni.premiInail ?? num(a.premi_inail),
-      ivaScaduta: daPosizioni.ivaScaduta ?? num(a.iva_scaduta),
-      volumeAffari: daPosizioni.volumeAffari ?? num(a.volume_affari),
-      creditiAffidati: num(a.crediti_affidati_aer),
-      formaAER: formaAERdaAnagrafica(a.forma_giuridica),
-      ritardoOltre90Giorni:
-        a.ritardo_oltre_90_giorni === null || a.ritardo_oltre_90_giorni === undefined
-          ? null
-          : Boolean(a.ritardo_oltre_90_giorni),
-    };
+    const a = az.rows[0] ?? {};
+    const dati: DatiSoglie = lettura.dati;
+    const esposizione = lettura.esposizione;
     // Le soglie configurate per lo spazio, non le costanti: altrimenti la
     // pagina dei Parametri sarebbe una configurazione senza effetto.
     const par = await ottieniParametriSoglieAction(nomeSchema);

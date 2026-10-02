@@ -44,6 +44,8 @@ export interface DatiRiferimenti {
   parametriIai: ParametriIai | null;
   parametriPersonalizzati: boolean;
   revisione: Revisione | null;
+  /** Identificativi dell'azienda presso l'ente (matricola, posizioni…). */
+  identificativi?: { etichetta: string; valore: string }[];
 }
 
 const ETICHETTA_TIPO_DOC: Record<string, string> = {
@@ -66,6 +68,14 @@ export function htmlRiferimentiEMetodo(d: DatiRiferimenti): string {
   parti.push(
     `<h3 style="font-size:12px">1. Perimetro e destinazione</h3><p style="white-space:pre-wrap;font-size:10px">${esc(dichiarazionePerimetro(d.fase))}</p>`
   );
+
+  if (d.identificativi?.length) {
+    parti.push(
+      `<p style="font-size:10px"><b>Identificativi presso l’ente:</b> ${d.identificativi
+        .map((x) => `${esc(x.etichetta)} ${esc(x.valore)}`)
+        .join(' · ')}</p>`
+    );
+  }
 
   // 2. Documenti di origine
   parti.push(`<h3 style="font-size:12px">2. Documenti di origine</h3>`);

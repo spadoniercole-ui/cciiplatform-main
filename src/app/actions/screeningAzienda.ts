@@ -40,6 +40,11 @@ import { ottieniEtichetteTipoDebito } from '@/app/actions/tipoDebitoConfig';
 import { calcolaQuadroDirettrici, type QuadroDirettrici } from '@/lib/checklist/scoringDirettrici';
 import { deveEliminareVisura } from '@/lib/screening/conservazioneVisura';
 import {
+  leggiIdentificativiEnte,
+  testoIdentificativi,
+  type IdentificativoEnte,
+} from '@/lib/anagraficaEnte/identificativi';
+import {
   calcolaRiscontri,
   type Riscontri,
   type BilancioRiscontri,
@@ -174,6 +179,10 @@ export interface StatoScreeningAzienda {
   nomeFileVisura: string | null;
   quadro: QuadroDirettrici | null;
   relazioneTesto: string | null;
+  /** AUTOMATICA = prima elaborazione al salvataggio dei parametri dell'ente. */
+  origine: 'AUTOMATICA' | 'MANUALE' | null;
+  /** Identificativi dell'ente (matricola, posizioni…) salvati per l'azienda. */
+  identificativiEnte: IdentificativoEnte[];
 }
 
 export async function ottieniScreeningAzienda(
@@ -190,6 +199,8 @@ export async function ottieniScreeningAzienda(
     nomeFileVisura: null,
     quadro: null,
     relazioneTesto: null,
+    origine: null,
+    identificativiEnte: [],
   };
   try {
     await richiediAccessoAzienda(nomeSchema, aziendaId);
@@ -198,10 +209,14 @@ export async function ottieniScreeningAzienda(
     await assicuraTabelleScreeningAzienda(nomeSchema);
 
     const screeningRis = await pool.query(
-      `SELECT sezioni, nome_file_visura, generato_il, relazione_testo, visura_fatti, visura_impronta FROM "${nomeSchema}".azienda_screening WHERE azienda_id = $1`,
+      `SELECT sezioni, nome_file_visura, generato_il, relazione_testo, visura_fatti, visura_impronta, origine FROM "${nomeSchema}".azienda_screening WHERE azienda_id = $1`,
       [aziendaId]
     );
-    if (screeningRis.rows.length === 0) return { success: true, stato: vuoto };
+    const identificativiEnte = await leggiIdentificativiEnte(nomeSchema, aziendaId).catch(
+      () => [] as IdentificativoEnte[]
+    );
+    if (screeningRis.rows.length === 0)
+      return { success: true, stato: { ...vuoto, identificativiEnte } };
 
     const sezioni: SezioneChecklist[] = screeningRis.rows[0].sezioni;
     const risposteRis = await pool.query(
@@ -254,6 +269,8 @@ export async function ottieniScreeningAzienda(
         nomeFileVisura: screeningRis.rows[0].nome_file_visura,
         quadro,
         relazioneTesto: screeningRis.rows[0].relazione_testo,
+        origine: screeningRis.rows[0].origine ?? null,
+        identificativiEnte,
       },
     };
   } catch (error: any) {
@@ -419,7 +436,9 @@ export async function generaScreeningAziendaAction(
   aziendaId: number,
   visuraUrl: string,
   nomeFileVisura: string,
-  istruzioniOperatore?: string
+  istruzioniOperatore?: string,
+  /** AUTOMATICA quando parte dal salvataggio dei parametri dell'ente. */
+  origine: 'AUTOMATICA' | 'MANUALE' = 'MANUALE'
 ): Promise<RisultatoGenerazioneScreening> {
   // Verifica fuori dal try: il `finally` sotto elimina il blob `visuraUrl`
   // e non deve mai girare per un chiamante non autorizzato.
@@ -438,6 +457,21 @@ export async function generaScreeningAziendaAction(
       };
     }
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+
+    // VINCOLO: nessuna elaborazione senza almeno un parametro dell'ente.
+    // Da quel momento l'azienda si riconosce con i riferimenti interni
+    // dell'ente (matricola, posizioni…) e non più con quelli camerali; uno
+    // screening generato prima li perde, e ritrovare i documenti
+    // dell'azienda diventa una ricerca ogni volta. Prima il vincolo stava
+    // solo nell'interfaccia, e il triage lo scavalcava.
+    const identificativi = await leggiIdentificativiEnte(nomeSchema, aziendaId);
+    if (identificativi.length === 0) {
+      return {
+        success: false,
+        error:
+          'Prima dello screening salva almeno un parametro dell’ente per questa azienda (Posizione Ente › Anagrafica Ente: matricola, posizione…). La visura resta disponibile: al salvataggio la prima elaborazione parte da sola.',
+      };
+    }
 
     // Il file è già su Vercel Blob (caricato direttamente dal browser,
     // vedi il Route Handler blob-upload) — questa funzione lo scarica da
@@ -487,6 +521,11 @@ export async function generaScreeningAziendaAction(
     const direttrici = direttriciTutte;
 
     const blocchiContesto: string[] = [];
+    // Riferimenti INTERNI dell'ente: con questi l'azienda si ritrova negli
+    // archivi dell'ente. La relazione li cita come identificativi.
+    blocchiContesto.push(
+      `Identificativi dell'azienda presso l'ente (usali per riferirti all'azienda insieme alla denominazione; non sono dati camerali): ${testoIdentificativi(identificativi)}.`
+    );
     if (storicoRis.success && storicoRis.storico.length > 0) {
       const ordinatoDesc = [...storicoRis.storico].sort(
         (a, b) => (b.annoBilancio || 0) - (a.annoBilancio || 0)
@@ -603,9 +642,20 @@ export async function generaScreeningAziendaAction(
         )
         .join('; ');
       const deltaTotale = perCat.filter((x) => !x.neutra).reduce((a, x) => a + x.delta, 0);
-      blocchiContesto.push(
-        `Verifica certo-per-certo (Posizione VERA, dal file di verifica dell'ente): ${testoPerCat}. Delta complessivo non contabilizzato: ${formatta(deltaTotale)} — è la quota che il file di verifica riporta oltre a quanto l'ente ha già contabilizzato, e che in presenza di proposta dovrà essere contabilizzata.`
-      );
+      // Senza Situazione Debitoria caricata il confronto «contabilizzato 0 vs
+      // VERA …» non è un delta: è l'assenza di uno dei due termini. Allo
+      // Screening è il caso normale (la Situazione Debitoria appartiene allo
+      // scenario), e il PDF diceva che tutto il debito era «non contabilizzato».
+      const contabCaricato = debitiRis.success && debitiRis.righe.length > 0;
+      if (contabCaricato) {
+        blocchiContesto.push(
+          `Verifica certo-per-certo (Posizione VERA, dal file di verifica dell'ente): ${testoPerCat}. Delta complessivo non contabilizzato: ${formatta(deltaTotale)} — è la quota che il file di verifica riporta oltre a quanto l'ente ha già contabilizzato, e che in presenza di proposta dovrà essere contabilizzata.`
+        );
+      } else {
+        blocchiContesto.push(
+          `Situazione Debitoria contabilizzata non ancora caricata: il confronto certo-per-certo con il file di verifica non è eseguibile in questa fase e si farà nello scenario. NON descrivere il debito come «non contabilizzato» per questo motivo.`
+        );
+      }
 
       // Esposizione totale verso l'ente = contabilizzato + da contabilizzare
       // (perimetro non neutro): il debito complessivo dell'azienda verso l'ente.
@@ -923,9 +973,9 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
     const relazioneConAvvisi = testaAvvisiVisura + relazioneCorretta;
 
     await pool.query(
-      `INSERT INTO "${nomeSchema}".azienda_screening (azienda_id, direttrici_usate, sezioni, relazione_testo, nome_file_visura, visura_fatti, visura_impronta, generato_il)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, now())
-       ON CONFLICT (azienda_id) DO UPDATE SET direttrici_usate = $2, sezioni = $3, relazione_testo = $4, nome_file_visura = $5, visura_fatti = $6, visura_impronta = $7, generato_il = now()`,
+      `INSERT INTO "${nomeSchema}".azienda_screening (azienda_id, direttrici_usate, sezioni, relazione_testo, nome_file_visura, visura_fatti, visura_impronta, generato_il, origine)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, now(), $8)
+       ON CONFLICT (azienda_id) DO UPDATE SET direttrici_usate = $2, sezioni = $3, relazione_testo = $4, nome_file_visura = $5, visura_fatti = $6, visura_impronta = $7, generato_il = now(), origine = $8`,
       [
         aziendaId,
         JSON.stringify(direttrici),
@@ -934,6 +984,7 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
         nomeFileVisura,
         visuraFatti ? JSON.stringify(visuraFatti) : null,
         visuraImpronta,
+        origine,
       ]
     );
     // Storico: ogni generazione resta, con versione della piattaforma e

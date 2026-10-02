@@ -54,6 +54,26 @@ function indiceStato(intestazioni: string[]): number {
   return norm.findIndex((h) => h === 'stato');
 }
 
+/**
+ * Sezione dei VERSAMENTI (la «Sezione F24» del VERA): elenca i pagamenti
+ * fatti, non debiti. Letta come debito produceva righe «voce <matricola>»
+ * a importo zero, cioè posizioni potenziali inesistenti.
+ */
+export function eSezioneVersamenti(intestazioni: string[]): boolean {
+  const norm = intestazioni.map(normalizzaEtichetta);
+  return norm.some((h) => h === 'tipo versamento' || h === 'data versamento');
+}
+
+function indicePeriodo(intestazioni: string[]): number {
+  const norm = intestazioni.map(normalizzaEtichetta);
+  return norm.findIndex((h) => h === 'periodo');
+}
+
+function indiceSospeso(intestazioni: string[]): number {
+  const norm = intestazioni.map(normalizzaEtichetta);
+  return norm.findIndex((h) => h === 'sospeso');
+}
+
 export interface SezioneVera {
   titolo: string;
   intestazioni: string[];
@@ -61,7 +81,7 @@ export interface SezioneVera {
   idxVoce: number;
   numeroRighe: number;
   totale: number;
-  righe: { voce: string; importo: number; stato: string }[];
+  righe: { voce: string; importo: number; stato: string; periodo?: string }[];
 }
 
 export interface AnalisiVera {
@@ -83,9 +103,28 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
   // righe di dettaglio.
   const idxCredito = indiceCredito(s.intestazioni);
   const idxStato = indiceStato(s.intestazioni);
+  const idxSospeso = indiceSospeso(s.intestazioni);
+  const idxPeriodo = indicePeriodo(s.intestazioni);
   const righe = s.righe.map((r, n) => {
     const debito = idxImporto >= 0 ? parseNumero(r[idxImporto]) : 0;
     const credito = idxCredito >= 0 ? parseNumero(r[idxCredito]) : 0;
+    // Cartella SOSPESA (Agente della Riscossione): il «Totale debito» è zero
+    // perché l'importo è congelato da un provvedimento, non perché sia
+    // ignoto. L'importo è quello della colonna Sospeso, e la riga si marca
+    // come sospesa: non entra nell'esposizione esigibile.
+    const sospeso = idxSospeso >= 0 ? parseNumero(r[idxSospeso]) : 0;
+    if (Math.abs(debito - credito) < 0.005 && sospeso > 0.005) {
+      return {
+        voce:
+          idxVoce >= 0 && testoCella(r[idxVoce]).trim() !== ''
+            ? testoCella(r[idxVoce])
+            : `Riga ${n + 1}`,
+        importo: sospeso,
+        // Solo «Sospeso»: la nota (es. estremi dell'opposizione) renderebbe
+        // ogni combinazione natura/stato unica e da mappare una per una.
+        stato: 'Sospeso',
+      };
+    }
     return {
       voce:
         idxVoce >= 0 && testoCella(r[idxVoce]).trim() !== ''
@@ -93,6 +132,7 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
           : `Riga ${n + 1}`,
       importo: debito - credito,
       stato: idxStato >= 0 ? testoCella(r[idxStato]).trim() : '',
+      ...(idxPeriodo >= 0 ? { periodo: testoCella(r[idxPeriodo]).trim() } : {}),
     };
   });
   const totale = righe.reduce((a, r) => a + r.importo, 0);
@@ -117,7 +157,9 @@ export async function analizzaVera(file: File, foglio?: string): Promise<Analisi
         ? FOGLIO_VERA_DEFAULT
         : fogli[0];
   const { aoa, foglioLetto } = await leggiFoglioAoa(file, foglioScelto);
-  const sezioni = estraiTutteLeSezioni(aoa).map(sezioneVeraDa);
+  const sezioni = estraiTutteLeSezioni(aoa)
+    .filter((s) => !eSezioneVersamenti(s.intestazioni))
+    .map(sezioneVeraDa);
   const titoliMap = new Map<string, string>();
   for (const s of sezioni) {
     const norm = normalizzaEtichetta(s.titolo);
@@ -151,6 +193,8 @@ export function chiaveCombinazione(natura: string, stato: string): string {
 
 /** Trattamento suggerito per una combinazione mai vista, da confermare dall'operatore. */
 function suggerisciTrattamento(stato: string, importo: number): TrattamentoVera {
+  // Sospeso da un giudice: importo noto ma non esigibile, fuori dalle somme.
+  if (/^sospes/i.test(stato.trim())) return 'ignora';
   if (Math.abs(importo) < 0.005) return 'potenziale'; // natura presente ma importo ignoto
   return stato.trim() === '' ? 'contabilizzato' : 'da_contabilizzare';
 }
@@ -250,4 +294,47 @@ export function estraiRigheVera(
     }
   }
   return { righe, titoliNonMappati: nonMappati, combinazioniNonMappate: combNonMappate };
+}
+
+/**
+ * RITARDO OLTRE 90 GIORNI dal V.E.R.A. (art. 25-novies, comma 1, lett. a).
+ *
+ * Le sezioni di gestione del V.E.R.A. riportano, partita per partita, il
+ * PERIODO di competenza del contributo non versato («202506 - 202506»). Il
+ * contributo di un periodo scade il 16 del mese successivo: se alla data di
+ * riferimento sono passati più di 90 giorni, la partita è in ritardo.
+ *
+ * Contano solo le partite contabilizzate (stato vuoto) e con importo: le
+ * cartelle dell'Agente della Riscossione non hanno periodo e restano fuori,
+ * come vuole la regola sulle partite passate a ruolo. null = il file non
+ * porta periodi, quindi il ritardo da qui non si misura.
+ */
+export function ritardoDaVera(
+  sezioni: SezioneVera[],
+  riferimento: Date
+): { partite: number; importo: number; periodi: string[] } | null {
+  let conPeriodo = false;
+  let partite = 0;
+  let importo = 0;
+  const periodi: string[] = [];
+  for (const s of sezioni) {
+    for (const r of s.righe) {
+      if (r.periodo === undefined) continue;
+      const m = r.periodo.match(/(\d{4})\s*\/?\s*(\d{2})\s*$/);
+      if (!m) continue;
+      conPeriodo = true;
+      if (r.stato.trim() !== '' || r.importo <= 0.005) continue;
+      const anno = Number(m[1]);
+      const mese = Number(m[2]); // 1..12, periodo di competenza (fine)
+      const scadenza = Date.UTC(anno, mese, 16); // 16 del mese successivo
+      const giorni = (riferimento.getTime() - scadenza) / 86_400_000;
+      if (giorni > 90) {
+        partite++;
+        importo += r.importo;
+        const p = `${m[1]}/${m[2]}`;
+        if (!periodi.includes(p)) periodi.push(p);
+      }
+    }
+  }
+  return conPeriodo ? { partite, importo, periodi } : null;
 }

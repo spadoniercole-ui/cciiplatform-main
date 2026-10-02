@@ -7,7 +7,14 @@
 
 import { pool } from '@/lib/db';
 import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
-import { assicuraTabelleVera } from '@/db/provision';
+import { assicuraTabelleParametriSpazio, assicuraTabelleVera } from '@/db/provision';
+import { normalizzaEtichetta } from '@/lib/debitiEnte/tracciatoCore';
+import {
+  materiaPerRigaVera,
+  type MateriaMinima,
+  type MateriaRigaVera,
+} from '@/lib/titoliEnte/materiaVera';
+import type { StatoMateria } from '@/lib/titoliEnte/materie';
 import {
   chiaveCombinazione,
   type RigaVera,
@@ -356,6 +363,8 @@ export async function dimenticaTrattamentoVeraAction(
 
 export interface RigaVeraSalvata extends RigaVera {
   id: number;
+  /** Materia (tipologia di credito) dell'ente, dal codice o dalla descrizione. */
+  materia?: MateriaRigaVera | null;
 }
 
 export interface RisultatoElencoVera {
@@ -378,6 +387,52 @@ export async function ottieniDebitiVera(
        WHERE azienda_id = $1 ORDER BY id ASC`,
       [aziendaId]
     );
+
+    // Categoria di calcolo: le righe caricate in triage nascono senza (lì
+    // non si mappa nulla). Se il titolo di sezione è stato mappato DOPO, la
+    // mappatura vale anche per loro — altrimenti restavano «Non
+    // classificato» finché qualcuno non ricaricava il file.
+    const mappa = await pool.query(
+      `SELECT titolo_norm, categoria FROM "${nomeSchema}".vera_titoli`
+    );
+    const perTitolo = new Map<string, string>(
+      mappa.rows.map((x) => [String(x.titolo_norm), String(x.categoria)])
+    );
+    for (const x of r.rows) {
+      if (x.categoria) continue;
+      const cat = perTitolo.get(normalizzaEtichetta(x.sezione));
+      if (!cat) continue;
+      x.categoria = cat;
+      await pool.query(`UPDATE "${nomeSchema}".debiti_vera SET categoria = $2 WHERE id = $1`, [
+        x.id,
+        cat,
+      ]);
+    }
+
+    // Materia dell'ente (Flussi Uniemens, Note di rettifica…): dal codice di
+    // partita nella natura, attraverso i titoli e le materie mappate.
+    let titoli: { codice: string; materiaId: number | null }[] = [];
+    let materie: MateriaMinima[] = [];
+    try {
+      await assicuraTabelleParametriSpazio(nomeSchema);
+      const t = await pool.query(`SELECT codice, materia_id FROM "${nomeSchema}".titoli_ente`);
+      titoli = t.rows.map((x) => ({
+        codice: String(x.codice),
+        materiaId: x.materia_id === null ? null : Number(x.materia_id),
+      }));
+      const m = await pool.query(
+        `SELECT id, nome, codici_indicativi, stato FROM "${nomeSchema}".materie_ente`
+      );
+      materie = m.rows.map((x) => ({
+        id: Number(x.id),
+        nome: String(x.nome),
+        codiciIndicativi: x.codici_indicativi ?? null,
+        stato: (x.stato ?? 'DA_RICERCARE') as StatoMateria,
+      }));
+    } catch {
+      // Spazio senza materie: la colonna resta vuota.
+    }
+
     return {
       success: true,
       righe: r.rows.map((x) => ({
@@ -388,6 +443,7 @@ export async function ottieniDebitiVera(
         categoria: x.categoria,
         stato: x.stato ?? '',
         trattamento: (x.trattamento ?? 'contabilizzato') as TrattamentoVera,
+        materia: materie.length ? materiaPerRigaVera(x.voce, x.sezione, titoli, materie) : null,
       })),
     };
   } catch (error: any) {
