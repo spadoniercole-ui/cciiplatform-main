@@ -93,6 +93,31 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.119.0 — 2026-10-02 (Portable 1.2.2)
+
+- **Impresa minore sui tre esercizi.** Il riscontro dell'art. 2, lett. d)
+  legge tutti i bilanci caricati, non solo l'ultimo: attivo e ricavi sugli
+  ultimi tre esercizi (si confronta il valore più alto, perché il requisito
+  deve ricorrere in ciascuno), debiti sull'ultimo. L'avviso «il riscontro
+  usa l'ultimo bilancio» compare solo se i bilanci sono meno di tre.
+- **Analisi Bilancio › Indici affiancati.** I valori per anno a sinistra, le
+  scelte degli indici a destra: niente più scorrimento.
+- **Identificativi dell'ente ovunque.** Una volta salvati, matricola,
+  posizioni e gli altri parametri dell'ente compaiono in evidenza — con
+  P.IVA e C.F. dopo, in secondo piano — nella testata della scheda azienda,
+  nella testata degli scenari, nell'elenco aziende (anche nella ricerca) e
+  nel cruscotto dello spazio. Ogni stampa fatta dalla scheda azienda o da
+  uno scenario riporta sotto il titolo denominazione e identificativi.
+- **Salva e ricarica la configurazione dello spazio.** In Parametri di
+  Spazio: «Salva la configurazione» scarica un file con tutte le pagine dei
+  parametri, le direttrici, titoli e materie dell'ente, le etichette
+  dell'Anagrafica Ente, le mappature V.E.R.A., le strutture dei prospetti e
+  la stampa con il logo; «Ricarica da file» la sostituisce in una sola
+  transazione (tutto o niente), conservando gli id e riallineando le
+  sequenze. Aziende, scenari, utenti e licenze non sono nel file. Un file di
+  uno spazio di tipo diverso richiede una conferma esplicita; i campi che la
+  versione di arrivo non conosce vengono ignorati e dichiarati.
+
 ## 0.118.0 — 2026-10-02 (Portable 1.2.1)
 
 Correttivi emersi caricando l'azienda demo ARETUSEA: triage, Screening,

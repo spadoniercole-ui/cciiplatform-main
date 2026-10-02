@@ -22,6 +22,7 @@ import {
   Gauge,
   Printer,
 } from 'lucide-react';
+import { ConfigurazioneSpazioFile } from '@/components/spazio/ConfigurazioneSpazioFile';
 
 interface Props {
   nomeSchema: string;
@@ -29,7 +30,7 @@ interface Props {
   tipoSpazio: 'ENTE' | 'NON_ENTE';
 }
 
-export function ParametriSpazioManager({ codice, tipoSpazio }: Props) {
+export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props) {
   const voci = [
     {
       href: `/spazio/${codice}/parametri/ricevibilita`,
@@ -146,6 +147,8 @@ export function ParametriSpazioManager({ codice, tipoSpazio }: Props) {
           serve modificarla.
         </p>
       </div>
+
+      <ConfigurazioneSpazioFile nomeSchema={nomeSchema} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {voci.map((v) => (

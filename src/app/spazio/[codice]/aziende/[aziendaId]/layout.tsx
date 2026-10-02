@@ -9,6 +9,9 @@ import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniStatoAnalisiBilancioStep } from '@/app/actions/analisiBilancioStep';
 import { anagraficaAziendaCompleta } from '@/lib/anagraficaAzienda';
+import { leggiIdentificativiEnte } from '@/lib/anagraficaEnte/identificativi';
+import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
+import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
 
 type StatoStep = 'bloccato' | 'attivo' | 'completo';
 
@@ -52,6 +55,10 @@ export default async function AziendaLayout({
     ottieniStatoAnalisiBilancioStep(contesto.nomeSchema, aziendaNum),
   ]);
   const domandeMancanti = pendenteScreening.totali - pendenteScreening.risposte;
+  // Identificativi presso l'ente: in testata, in evidenza, appena salvati.
+  const identificativi = isEnte
+    ? await leggiIdentificativiEnte(contesto.nomeSchema, aziendaNum).catch(() => [])
+    : [];
 
   // Completamento dei passi (unica fonte del semaforo).
   const anagraficaCompleta = anagraficaAziendaCompleta(
@@ -180,10 +187,18 @@ export default async function AziendaLayout({
               ) : null}
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              {azienda.partitaIva ? `P.IVA ${azienda.partitaIva}` : ''}
-              {azienda.partitaIva && azienda.codiceFiscale ? ' · ' : ''}
-              {azienda.codiceFiscale ? `C.F. ${azienda.codiceFiscale}` : ''}
+              <IdentificativiEnte
+                identificativi={identificativi}
+                partitaIva={azienda.partitaIva}
+                codiceFiscale={azienda.codiceFiscale}
+              />
             </p>
+            <RiferimentoAziendaStampa
+              azienda={azienda.ragioneSociale}
+              identificativi={identificativi}
+              partitaIva={azienda.partitaIva ?? null}
+              codiceFiscale={azienda.codiceFiscale ?? null}
+            />
             {(azienda.rappresentanteLegale || azienda.citta) && (
               <p className="text-[11px] text-slate-400 mt-0.5">
                 {azienda.rappresentanteLegale

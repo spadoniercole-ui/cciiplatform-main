@@ -45,6 +45,7 @@ export default async function DashboardSpazioPage({
     partitaIva: a.partitaIva,
     codiceFiscale: a.codiceFiscale,
     attiva: a.attiva,
+    identificativiEnte: a.identificativiEnte ?? [],
   }));
 
   const righeUtenti: RigaUtente[] = risultatoAdmin.success

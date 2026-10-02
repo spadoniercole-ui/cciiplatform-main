@@ -85,6 +85,12 @@ export interface BilancioRiscontri {
 export interface InputRiscontri {
   /** Dati dell'ultimo bilancio XBRL, se presente. */
   bilancio?: BilancioRiscontri | null;
+  /**
+   * Parametri dimensionali di TUTTI i bilanci caricati (anche l'ultimo). Per
+   * l'impresa minore la legge chiede attivo e ricavi nei tre esercizi
+   * antecedenti: si usano gli ultimi tre disponibili.
+   */
+  dimensioniPerAnno?: { anno: number | null; totaleAttivo: number; ricavi: number }[];
   /** Esposizione totale verso l'ente (posizione debitoria di dettaglio), saldo. */
   esposizioneEnte?: number | null;
   /** Esposizione totale VERA (contabilizzato + da contabilizzare). */
@@ -108,16 +114,48 @@ export function calcolaRiscontri(input: InputRiscontri): Riscontri {
   const b = input.bilancio ?? null;
 
   // --- Parametri dimensionali: impresa minore (art. 2) -------------------
+  // Art. 2, c. 1, lett. d): attivo e ricavi «nei tre esercizi antecedenti»,
+  // debiti (anche non scaduti) all'ultimo dato. Si leggono TUTTI i bilanci
+  // caricati, gli ultimi tre per anno; il valore confrontato è il più alto,
+  // perché il requisito deve ricorrere in ciascun esercizio.
   if (b) {
+    const ricaviDi = (x: { ricaviVendite: number; valoreProduzione: number }) =>
+      x.ricaviVendite > 0 ? x.ricaviVendite : x.valoreProduzione;
+    const esercizi = (
+      input.dimensioniPerAnno && input.dimensioniPerAnno.length > 0
+        ? [...input.dimensioniPerAnno]
+        : [{ anno: b.anno, totaleAttivo: b.totaleAttivo, ricavi: ricaviDi(b) }]
+    )
+      .sort((x, y) => (y.anno ?? 0) - (x.anno ?? 0))
+      .slice(0, 3);
+    const anni = esercizi.map((e) => e.anno ?? 'n/d').reverse();
+    const fonteTre =
+      esercizi.length > 1
+        ? `Bilanci XBRL ${anni.join(', ')} (valore più alto)`
+        : `Bilancio XBRL (${b.anno ? `bilancio ${b.anno}` : 'ultimo bilancio'})`;
     const annoTxt = b.anno ? `bilancio ${b.anno}` : 'ultimo bilancio';
-    const ricavi = b.ricaviVendite > 0 ? b.ricaviVendite : b.valoreProduzione;
-    const soglieMinore: [string, number, number][] = [
-      ['Attivo patrimoniale', b.totaleAttivo, SOGLIA_IMPRESA_MINORE.attivo],
-      ['Ricavi', ricavi, SOGLIA_IMPRESA_MINORE.ricavi],
-      ['Debiti complessivi', b.totaleDebiti, SOGLIA_IMPRESA_MINORE.debiti],
+    const soglieMinore: [string, number, number, string][] = [
+      [
+        'Attivo patrimoniale',
+        Math.max(...esercizi.map((e) => e.totaleAttivo)),
+        SOGLIA_IMPRESA_MINORE.attivo,
+        fonteTre,
+      ],
+      [
+        'Ricavi',
+        Math.max(...esercizi.map((e) => e.ricavi)),
+        SOGLIA_IMPRESA_MINORE.ricavi,
+        fonteTre,
+      ],
+      [
+        'Debiti complessivi',
+        b.totaleDebiti,
+        SOGLIA_IMPRESA_MINORE.debiti,
+        `Bilancio XBRL (${annoTxt})`,
+      ],
     ];
     let tuttiSotto = true;
-    for (const [nome, valore, soglia] of soglieMinore) {
+    for (const [nome, valore, soglia, fonte] of soglieMinore) {
       const esito: EsitoSoglia = valore <= soglia ? 'sotto' : 'sopra';
       if (esito === 'sopra') tuttiSotto = false;
       soglie.push({
@@ -126,7 +164,7 @@ export function calcolaRiscontri(input: InputRiscontri): Riscontri {
         soglia: `≤ ${euro(soglia)}`,
         sogliaValore: soglia,
         esito,
-        fonte: `Bilancio XBRL (${annoTxt})`,
+        fonte,
         articolo: '2',
       });
     }
@@ -135,12 +173,22 @@ export function calcolaRiscontri(input: InputRiscontri): Riscontri {
       numero: '2',
       categoria: 'soglia',
       motivo: tuttiSotto
-        ? 'I tre parametri dimensionali risultano sotto le soglie: profilo compatibile con «impresa minore» (da confermare sui tre esercizi).'
+        ? `I tre parametri dimensionali risultano sotto le soglie: profilo compatibile con «impresa minore»${esercizi.length < 3 ? ' (da confermare sui tre esercizi)' : ''}.`
         : 'Almeno un parametro dimensionale supera la soglia dell’impresa minore.',
     });
-    datiMancanti.push(
-      'Impresa minore: la legge richiede i valori dei TRE esercizi antecedenti; il riscontro automatico usa l’ultimo bilancio disponibile.'
-    );
+    if (esercizi.length < 3) {
+      datiMancanti.push(
+        `Impresa minore: la legge richiede attivo e ricavi dei TRE esercizi antecedenti; ${
+          esercizi.length === 1
+            ? 'è caricato un solo bilancio'
+            : `sono caricati i bilanci ${anni.join(' e ')}`
+        }. Carica gli altri per completare il riscontro.`
+      );
+    } else if (tuttiSotto) {
+      datiMancanti.push(
+        `Impresa minore: riscontro sugli esercizi ${anni.join(', ')}, gli ultimi caricati. I tre esercizi rilevanti sono quelli antecedenti il deposito dell’istanza: se ne è stato approvato uno più recente, va caricato.`
+      );
+    }
   } else {
     datiMancanti.push(
       'Bilancio XBRL assente: parametri dimensionali (impresa minore) e indici di bilancio non calcolabili automaticamente.'

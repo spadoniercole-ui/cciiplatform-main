@@ -419,7 +419,25 @@ export async function calcolaRiscontriNormativiAzienda(
         .reduce((acc, r) => acc + r.importo, 0);
     }
 
-    const riscontri = calcolaRiscontri({ bilancio, esposizioneEnte, esposizioneVera });
+    // Tutti i bilanci caricati, non solo l'ultimo: l'impresa minore si
+    // misura sui tre esercizi.
+    const dimensioniPerAnno =
+      storicoRis.success && storicoRis.storico.length > 0
+        ? storicoRis.storico.map((x) => ({
+            anno: x.annoBilancio,
+            totaleAttivo: x.datiFinanziari.totaleAttivo,
+            ricavi:
+              x.datiFinanziari.ricaviVendite > 0
+                ? x.datiFinanziari.ricaviVendite
+                : x.datiFinanziari.valoreProduzione,
+          }))
+        : [];
+    const riscontri = calcolaRiscontri({
+      bilancio,
+      esposizioneEnte,
+      esposizioneVera,
+      dimensioniPerAnno,
+    });
     return { success: true, riscontri };
   } catch (error: any) {
     console.error('[calcolaRiscontriNormativiAzienda] Errore:', error);
