@@ -305,7 +305,9 @@ export function InquadramentoProposta({
       )}
       {percorsoRiceventeSenzaScelte && !daPrimaLettura && (
         <div className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-          La prima lettura non ha trovato questi dati nei documenti: indicali tu e salva.
+          {suggerimento
+            ? 'La prima lettura non ha trovato questi dati nei documenti: indicali tu e salva.'
+            : 'Indica strumento, data di deposito e quota degli altri aderenti, poi salva.'}
         </div>
       )}
 

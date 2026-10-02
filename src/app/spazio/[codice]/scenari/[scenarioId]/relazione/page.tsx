@@ -8,7 +8,8 @@ import { FunzionePlusNonAbilitata } from '@/components/spazio/FunzionePlusNonAbi
 // La generazione della Relazione legge un confronto liquidatorio già
 // pronto (generato a parte, a fine Brogliaccio) — non fa più ricerca
 // web lei stessa, il default implicito basta di nuovo.
-export const maxDuration = 120;
+// Ricevente: la relazione può preparare anche il confronto liquidatorio.
+export const maxDuration = 300;
 
 export default async function RelazioneScenarioPage({
   params,

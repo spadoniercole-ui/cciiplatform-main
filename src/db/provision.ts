@@ -1042,6 +1042,11 @@ export async function assicuraTabellaSimulazioneRicevente(nomeSchema: string): P
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS prima_lettura_il TIMESTAMP`
   );
+  // Valori della situazione contabile ricevuta, letti al caricamento e da
+  // confermare come Posizione Aggiornata (0.122).
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS posizione_letta JSONB`
+  );
 }
 
 /**

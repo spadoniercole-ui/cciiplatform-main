@@ -6,6 +6,8 @@
 // (vedi RelazioneAiScenario.tsx), sbloccato solo a flusso completo — non
 // vive più qui insieme all'acquisizione.
 
+import { TabellaIndiciPeriodi } from '@/components/spazio/TabellaIndiciPeriodi';
+import { ChiusuraIstruttoria, type DatiChiusura } from '@/components/spazio/ChiusuraIstruttoria';
 import React, { useEffect, useState } from 'react';
 import {
   Plus,
@@ -62,6 +64,8 @@ interface Props {
   nomeScenario: string;
   rigaRilevanteBloccataIniziale: boolean;
   codice: string;
+  /** Percorso Ricevente: dati per la chiusura (piano e Relazione) sulla stessa pagina. */
+  chiusura?: DatiChiusura;
 }
 
 const FORM_VUOTO = {
@@ -105,11 +109,14 @@ export function PropostaScenario({
   nomeScenario,
   rigaRilevanteBloccataIniziale,
   codice,
+  chiusura,
 }: Props) {
   const [righe, setRighe] = useState<RigaProposta[]>([]);
   const [debitiEnte, setDebitiEnte] = useState<RigaDebitoEnte[]>([]);
   const [categorie, setCategorie] = useState<LimiteRicevibilita[]>([]);
   const [esito, setEsito] = useState<EsitoRicevibilita | null>(null);
+  // La valutazione è fatta quando l'estrazione dai documenti c'è.
+  const valutazioneFatta = Boolean(esito && esito.datiDisponibili !== false);
   const [azienda, setAzienda] = useState<Azienda | null>(null);
   const [caricamento, setCaricamento] = useState(true);
   const [errore, setErrore] = useState<string | null>(null);
@@ -727,7 +734,7 @@ export function PropostaScenario({
             />
           )}
 
-          {tipoProposta === 'RICEVUTA' && (
+          {tipoProposta === 'RICEVUTA' && valutazioneFatta && (
             <div className="bg-white border border-slate-200 rounded-xl p-5">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-3">
                 <Scale className="w-4 h-4 text-blue-600" />
@@ -854,6 +861,27 @@ export function PropostaScenario({
                 );
               })()}
             </div>
+          )}
+
+          {/* Dopo la valutazione: indici con la posizione aggiornata, la
+              domanda sul piano e la chiusura con la Relazione. */}
+          {tipoProposta === 'RICEVUTA' && valutazioneFatta && (
+            <>
+              <TabellaIndiciPeriodi
+                nomeSchema={nomeSchema}
+                scenarioId={scenarioId}
+                titolo="Indici: bilanci depositati e posizione aggiornata"
+              />
+              {chiusura && (
+                <ChiusuraIstruttoria
+                  nomeSchema={nomeSchema}
+                  scenarioId={scenarioId}
+                  aziendaId={aziendaId}
+                  codice={codice}
+                  dati={chiusura}
+                />
+              )}
+            </>
           )}
         </>
       )}

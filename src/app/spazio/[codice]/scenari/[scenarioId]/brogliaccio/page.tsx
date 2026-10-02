@@ -1,8 +1,6 @@
 import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
-import { ottieniFunzioniPlusSpazio } from '@/app/actions/funzioniPlus';
-import { BrogliaccioEnteScenario } from '@/components/spazio/BrogliaccioEnteScenario';
 import { BrogliaccioRedigenteScenario } from '@/components/spazio/BrogliaccioRedigenteScenario';
 
 // Generare un livello qui innesca, silenziosamente, la ricerca web
@@ -35,14 +33,7 @@ export default async function BrogliaccioPage({
     );
   }
 
-  const plusRis = await ottieniFunzioniPlusSpazio(contesto.nomeSchema);
-
-  return (
-    <BrogliaccioEnteScenario
-      nomeSchema={contesto.nomeSchema}
-      scenarioId={Number(scenarioId)}
-      plusDatiSettore={plusRis.funzioni.datiSettore}
-      plusSimulazione={plusRis.funzioni.simulazione}
-    />
-  );
+  // Ricevente: il Brogliaccio non esiste più. L'istruttoria è una pagina
+  // sola e il documento da consegnare è la Relazione di chiusura.
+  redirect(`/spazio/${codice}/scenari/${scenarioId}/proposta`);
 }

@@ -25,23 +25,26 @@ export default async function ScenarioPanoramicaPage({
   }
   const scenario = risultato.scenario!;
 
+  // Proposta ricevuta: l'istruttoria è una sola pagina (documenti →
+  // conferme → valutazione → chiusura). Niente panoramica di passi da
+  // percorrere uno per uno dalla sidebar.
+  if (scenario.tipoProposta === 'RICEVUTA') {
+    redirect(`/spazio/${codice}/scenari/${scenarioId}/proposta`);
+  }
+
   // Stessi indicatori di completamento mostrati nello stepper: la
   // Panoramica e lo stepper sono la stessa informazione in due punti
   // diversi, non due fonti diverse.
-  const [propostaRis, checklistRis, xbrlRis, debitiEnteRis, posizioneRis] = await Promise.all([
+  const [propostaRis, checklistRis, xbrlRis, posizioneRis] = await Promise.all([
     ottieniPropostaScenario(contesto.nomeSchema, Number(scenarioId)),
     ottieniRisposteChecklist(contesto.nomeSchema, Number(scenarioId)),
     ottieniStoricoXbrlAzienda(contesto.nomeSchema, scenario.aziendaId),
-    scenario.tipoProposta === 'RICEVUTA'
-      ? ottieniDebitiEnte(contesto.nomeSchema, scenario.aziendaId)
-      : Promise.resolve({ success: true, righe: [] as any[] }),
     ottienePosizioneAggiornata(contesto.nomeSchema, Number(scenarioId)),
   ]);
   const completato: Record<string, boolean> = {
     proposta: propostaRis.success && propostaRis.righe.length > 0,
     checklist: checklistRis.success && checklistRis.risposte.length > 0,
     xbrl: xbrlRis.success && xbrlRis.storico.length > 0,
-    'posizione-ente': debitiEnteRis.success && debitiEnteRis.righe.length > 0,
     'posizione-aggiornata': posizioneRis.success && posizioneRis.esiste,
     indici:
       (xbrlRis.success && xbrlRis.storico.length > 0) ||

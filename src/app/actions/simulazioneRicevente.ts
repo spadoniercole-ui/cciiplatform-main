@@ -29,7 +29,16 @@ import {
   normalizzaPrimaLettura,
   promptPrimaLettura,
   type PrimaLettura,
+  type TipoDocumentoRicevuto,
 } from '@/lib/proposta/primaLettura';
+import {
+  classificaDocumenti,
+  elencoDaSalvato,
+  ruoliDaDocumenti,
+  type DocumentoRicevuto,
+} from '@/lib/proposta/documentiRicevuti';
+import type { LetturaPosizionePdf } from '@/lib/posizioneAggiornata/letturaPdf';
+import { leggiPosizioneDaPdf } from '@/lib/posizioneAggiornata/letturaPdfServer';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 // timeout esplicito + maxRetries: 1 (non il default 2): due chiamate pesanti in
@@ -136,15 +145,14 @@ async function scaricaDocumenti(
 async function leggiDocumentiCaricati(
   nomeSchema: string,
   scenarioId: number
-): Promise<TreDocumentiRicevente | null> {
+): Promise<DocumentoRicevuto[]> {
   const r = await pool
     .query(
       `SELECT documenti_caricati FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
       [scenarioId]
     )
     .catch(() => ({ rows: [] as Record<string, unknown>[] }));
-  const d = r.rows[0]?.documenti_caricati as TreDocumentiRicevente | null | undefined;
-  return d ?? null;
+  return elencoDaSalvato(r.rows[0]?.documenti_caricati);
 }
 
 /** Riga degli alias dell'ente per i prompt (l'ente nei documenti ha altri nomi). */
@@ -158,79 +166,81 @@ async function rigaAliasEnte(nomeSchema: string): Promise<string> {
 
 export interface StatoDocumentiRicevente {
   success: boolean;
-  /** Nomi dei documenti caricati e in attesa di valutazione, per posto. */
-  documenti?: {
-    asseverazione: string | null;
-    propostaCramDown: string | null;
-    pianoSviluppo: string | null;
-  } | null;
+  /** Documenti caricati e in attesa di valutazione, con il tipo assegnato. */
+  documenti?: { nome: string; tipo: TipoDocumentoRicevuto }[] | null;
   primaLettura?: PrimaLettura | null;
   primaLetturaIl?: string | null;
+  /** Valori della situazione contabile letti dal documento, da confermare. */
+  posizioneLetta?: LetturaPosizionePdf | null;
   /** La prima lettura non è riuscita (i documenti però sono caricati). */
   erroreLettura?: string;
   error?: string;
 }
 
+const pubblici = (el: DocumentoRicevuto[]) => el.map((d) => ({ nome: d.nome, tipo: d.tipo }));
+
 /**
- * PASSO 1 e 2: carica i documenti così come li ha mandati l'azienda e ne fa
- * la PRIMA LETTURA (strumento, data di deposito, quota degli altri aderenti,
- * percentuale offerta all'ente), citando il passo e il documento. I file
- * restano disponibili per la valutazione, che parte dopo la conferma
- * dell'inquadramento. Una nuova carica sostituisce (ed elimina) la precedente.
+ * PASSI 1 e 2: un solo caricamento per TUTTI i documenti ricevuti, così come
+ * li ha mandati l'azienda. La prima lettura li classifica (proposta,
+ * attestazione, piano, situazione contabile, altro) e propone strumento,
+ * data di deposito, quota degli altri aderenti e offerta all'ente, citando
+ * il passo; dalla situazione contabile, se c'è, ricava i valori della
+ * Posizione Aggiornata da confermare. I file restano fino alla valutazione.
+ * Una nuova carica sostituisce (ed elimina) la precedente.
  */
 export async function caricaDocumentiRiceventeAction(
   nomeSchema: string,
   scenarioId: number,
-  documentiNominati: TreDocumentiRicevente
+  documenti: DocumentoPdf[]
 ): Promise<StatoDocumentiRicevente> {
   const contesto = await richiediAccessoScenario(nomeSchema, scenarioId, {
     modulo: ['report'],
     livello: 'SCRITTURA',
   });
-  const documenti: DocumentoPdf[] = [
-    documentiNominati.asseverazione,
-    documentiNominati.propostaCramDown,
-    documentiNominati.pianoSviluppo,
-  ].filter((d): d is DocumentoPdf => d !== null);
   for (const d of documenti) verificaFileDelloSpazio(contesto, d.url);
   if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
   const messaggioBloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
   if (messaggioBloccato) return { success: false, error: messaggioBloccato };
-  if (!documentiNominati.propostaCramDown) {
-    return { success: false, error: 'Serve almeno la proposta.' };
-  }
+  if (documenti.length === 0) return { success: false, error: 'Nessun documento caricato.' };
+  if (documenti.length > NUMERO_MASSIMO_FILE)
+    return { success: false, error: `Massimo ${NUMERO_MASSIMO_FILE} documenti.` };
   await assicuraTabellaSimulazioneRicevente(nomeSchema);
 
   // Sostituzione: i file della carica precedente non restano orfani.
   const precedenti = await leggiDocumentiCaricati(nomeSchema, scenarioId);
   const nuoviUrl = new Set(documenti.map((d) => d.url));
-  const daEliminare = [
-    precedenti?.asseverazione,
-    precedenti?.propostaCramDown,
-    precedenti?.pianoSviluppo,
-  ].filter((d): d is DocumentoPdf => !!d && !nuoviUrl.has(d.url));
-  await Promise.all(daEliminare.map((d) => del(d.url).catch(() => undefined)));
-
-  await pool.query(
-    `INSERT INTO "${nomeSchema}".simulazione_ricevente (scenario_id, documenti_caricati, prima_lettura, prima_lettura_il)
-     VALUES ($1, $2, NULL, NULL)
-     ON CONFLICT (scenario_id) DO UPDATE SET documenti_caricati = $2, prima_lettura = NULL, prima_lettura_il = NULL`,
-    [scenarioId, JSON.stringify(documentiNominati)]
+  await Promise.all(
+    precedenti.filter((d) => !nuoviUrl.has(d.url)).map((d) => del(d.url).catch(() => undefined))
   );
-  const nomi = {
-    asseverazione: documentiNominati.asseverazione?.nome ?? null,
-    propostaCramDown: documentiNominati.propostaCramDown.nome,
-    pianoSviluppo: documentiNominati.pianoSviluppo?.nome ?? null,
-  };
+
+  let elenco = classificaDocumenti(documenti, []);
+  const salva = async (lettura: PrimaLettura | null, posizione: LetturaPosizionePdf | null) =>
+    pool.query(
+      `INSERT INTO "${nomeSchema}".simulazione_ricevente (scenario_id, documenti_caricati, prima_lettura, prima_lettura_il, posizione_letta)
+       VALUES ($1, $2, $3, CASE WHEN $3::jsonb IS NULL THEN NULL ELSE now() END, $4)
+       ON CONFLICT (scenario_id) DO UPDATE SET documenti_caricati = $2, prima_lettura = $3,
+         prima_lettura_il = CASE WHEN $3::jsonb IS NULL THEN NULL ELSE now() END, posizione_letta = $4`,
+      [
+        scenarioId,
+        JSON.stringify({ elenco }),
+        lettura ? JSON.stringify(lettura) : null,
+        posizione ? JSON.stringify(posizione) : null,
+      ]
+    );
+  await salva(null, null);
 
   // Prima lettura: se non riesce, i documenti restano caricati e
-  // l'inquadramento si compila a mano.
+  // classificati dal nome del file; l'inquadramento si compila a mano.
   try {
     if (!anthropic)
-      return { success: true, documenti: nomi, erroreLettura: messaggioChiaveAiMancante() };
+      return {
+        success: true,
+        documenti: pubblici(elenco),
+        erroreLettura: messaggioChiaveAiMancante(),
+      };
     const scaricati = await scaricaDocumenti(documenti);
     if ('error' in scaricati)
-      return { success: true, documenti: nomi, erroreLettura: scaricati.error };
+      return { success: true, documenti: pubblici(elenco), erroreLettura: scaricati.error };
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 120 * 1000);
     let risposta: Anthropic.Messages.Message;
@@ -238,7 +248,7 @@ export async function caricaDocumentiRiceventeAction(
       risposta = await anthropic.messages.create(
         {
           model: 'claude-sonnet-5',
-          max_tokens: 1500,
+          max_tokens: 2000,
           thinking: { type: 'disabled' },
           messages: [
             {
@@ -262,9 +272,7 @@ export async function caricaDocumentiRiceventeAction(
     const testo = risposta.content
       .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
       .map((b) => b.text)
-      .join('\n')
-      .replace(/```json|```/g, '')
-      .trim();
+      .join('\n');
     const inizio = testo.indexOf('{');
     const fine = testo.lastIndexOf('}');
     let grezzo: unknown = null;
@@ -276,31 +284,72 @@ export async function caricaDocumentiRiceventeAction(
     if (!grezzo) {
       return {
         success: true,
-        documenti: nomi,
+        documenti: pubblici(elenco),
         erroreLettura:
-          'La prima lettura non ha prodotto una risposta leggibile: compila l’inquadramento a mano.',
+          'La prima lettura non ha prodotto una risposta leggibile: controlla il tipo dei documenti e compila l’inquadramento a mano.',
       };
     }
     const primaLettura = normalizzaPrimaLettura(grezzo);
-    await pool.query(
-      `UPDATE "${nomeSchema}".simulazione_ricevente SET prima_lettura = $2, prima_lettura_il = now() WHERE scenario_id = $1`,
-      [scenarioId, JSON.stringify(primaLettura)]
-    );
+    elenco = classificaDocumenti(documenti, primaLettura.documenti);
+
+    // Situazione contabile ricevuta: i suoi valori vanno nella Posizione
+    // Aggiornata senza un secondo caricamento.
+    const situazione = ruoliDaDocumenti(elenco).situazioneContabile;
+    let posizione: LetturaPosizionePdf | null = null;
+    if (situazione) {
+      const doc = scaricati.documenti.find((d) => d.nome === situazione.nome);
+      if (doc) {
+        posizione = await leggiPosizioneDaPdf(anthropic, doc.base64, doc.nome, 100 * 1000).catch(
+          () => null
+        );
+      }
+    }
+    await salva(primaLettura, posizione);
     return {
       success: true,
-      documenti: nomi,
+      documenti: pubblici(elenco),
       primaLettura,
       primaLetturaIl: new Date().toISOString(),
+      posizioneLetta: posizione,
     };
   } catch (error: unknown) {
     console.error('[caricaDocumentiRiceventeAction] Prima lettura:', error);
     return {
       success: true,
-      documenti: nomi,
+      documenti: pubblici(elenco),
       erroreLettura:
         erroreServizioEsterno(error, 'AI') ??
         `Prima lettura non riuscita: ${(error as Error).message}. Compila l’inquadramento a mano.`,
     };
+  }
+}
+
+/** L'istruttore corregge il tipo di un documento ricevuto. */
+export async function aggiornaTipoDocumentoRiceventeAction(
+  nomeSchema: string,
+  scenarioId: number,
+  nome: string,
+  tipo: TipoDocumentoRicevuto
+): Promise<{
+  success: boolean;
+  documenti?: { nome: string; tipo: TipoDocumentoRicevuto }[];
+  error?: string;
+}> {
+  try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['report'],
+      livello: 'SCRITTURA',
+    });
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    const elenco = await leggiDocumentiCaricati(nomeSchema, scenarioId);
+    const nuovo = elenco.map((d) => (d.nome === nome ? { ...d, tipo } : d));
+    await pool.query(
+      `UPDATE "${nomeSchema}".simulazione_ricevente SET documenti_caricati = $2 WHERE scenario_id = $1`,
+      [scenarioId, JSON.stringify({ elenco: nuovo })]
+    );
+    return { success: true, documenti: pubblici(nuovo) };
+  } catch (error: unknown) {
+    return { success: false, error: `Aggiornamento non riuscito: ${(error as Error).message}` };
   }
 }
 
@@ -314,22 +363,18 @@ export async function ottieniDocumentiRiceventeAction(
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaSimulazioneRicevente(nomeSchema);
     const r = await pool.query(
-      `SELECT documenti_caricati, prima_lettura, prima_lettura_il FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
+      `SELECT documenti_caricati, prima_lettura, prima_lettura_il, posizione_letta FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
       [scenarioId]
     );
     const x = r.rows[0];
-    const d = (x?.documenti_caricati ?? null) as TreDocumentiRicevente | null;
+    const elenco = elencoDaSalvato(x?.documenti_caricati);
     return {
       success: true,
-      documenti: d
-        ? {
-            asseverazione: d.asseverazione?.nome ?? null,
-            propostaCramDown: d.propostaCramDown?.nome ?? null,
-            pianoSviluppo: d.pianoSviluppo?.nome ?? null,
-          }
-        : null,
+      documenti: elenco.length ? pubblici(elenco) : null,
       primaLettura: x?.prima_lettura ? normalizzaPrimaLettura(x.prima_lettura) : null,
       primaLetturaIl: x?.prima_lettura_il ? new Date(x.prima_lettura_il).toISOString() : null,
+      // Già normalizzata al salvataggio.
+      posizioneLetta: (x?.posizione_letta as LetturaPosizionePdf | null) ?? null,
     };
   } catch (error: unknown) {
     return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
@@ -349,16 +394,21 @@ export async function analizzaDocumentiRiceventeAction(
   await assicuraTabellaSimulazioneRicevente(nomeSchema);
   // I documenti sono quelli CARICATI al primo passo (e già letti nella
   // prima lettura): la valutazione non li richiede di nuovo.
-  const salvati = await leggiDocumentiCaricati(nomeSchema, scenarioId);
+  const ruoli = ruoliDaDocumenti(await leggiDocumentiCaricati(nomeSchema, scenarioId));
   const documentiNominati: TreDocumentiRicevente = {
-    asseverazione: salvati?.asseverazione ?? null,
-    propostaCramDown: salvati?.propostaCramDown ?? null,
-    pianoSviluppo: salvati?.pianoSviluppo ?? null,
+    asseverazione: ruoli.attestazione,
+    propostaCramDown: ruoli.proposta,
+    pianoSviluppo: ruoli.piano,
   };
+  // Tutti i documenti ricevuti entrano nella lettura: anche la situazione
+  // contabile e gli altri (lettere, convocazioni) possono contenere ciò che
+  // serve a valutare.
   const documenti: DocumentoPdf[] = [
-    documentiNominati.asseverazione,
-    documentiNominati.propostaCramDown,
-    documentiNominati.pianoSviluppo,
+    ruoli.proposta,
+    ruoli.attestazione,
+    ruoli.piano,
+    ruoli.situazioneContabile,
+    ...ruoli.altri,
   ].filter((d): d is DocumentoPdf => d !== null);
   let valutazioneRiuscita = false;
   try {
@@ -514,9 +564,11 @@ export async function analizzaDocumentiRiceventeAction(
     );
 
     const documentiPresenti = [
-      documentiNominati.propostaCramDown ? 'la proposta di cram down' : null,
-      documentiNominati.asseverazione ? "l'asseverazione del professionista" : null,
-      documentiNominati.pianoSviluppo ? 'il piano di sviluppo' : null,
+      documentiNominati.propostaCramDown ? 'la proposta' : null,
+      documentiNominati.asseverazione ? "l'attestazione del professionista" : null,
+      documentiNominati.pianoSviluppo ? 'il piano' : null,
+      ruoli.situazioneContabile ? 'la situazione contabile aggiornata' : null,
+      ruoli.altri.length ? `altri documenti (${ruoli.altri.map((d) => d.nome).join(', ')})` : null,
     ].filter(Boolean);
     const documentiMancanti = [
       !documentiNominati.asseverazione ? 'Asseverazione del professionista' : null,

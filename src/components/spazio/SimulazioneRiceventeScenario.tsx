@@ -1,6 +1,23 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+// ISTRUTTORIA DELLA PROPOSTA RICEVUTA — una sola pagina, tre fasi.
+//
+//   1. Ricezione: un unico caricamento di tutto ciò che l'azienda ha mandato
+//      (proposta, attestazione, piano, situazione contabile, lettere). La
+//      prima lettura classifica i documenti e propone strumento, data, quota
+//      degli altri aderenti e offerta all'ente, citando il passo; dalla
+//      situazione contabile ricava i valori della Posizione Aggiornata.
+//   2. Conferme: inquadramento, posizione aggiornata, posizione dell'ente
+//      (quella dello screening), documenti non pervenuti. Tutto arriva
+//      precompilato: l'istruttore conferma o corregge. I dati ISTAT di
+//      settore si aggiornano da soli.
+//   3. Valutazione: un clic, risultati a video. Nessuna stampa qui: il
+//      documento è uno, la Relazione di chiusura.
+//
+// Prima erano sette passi in pagine diverse, ognuno con il suo caricamento:
+// lo stesso dato chiesto più volte e un giro dalla sidebar per ogni passo.
+
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Upload,
   FileText,
@@ -9,11 +26,11 @@ import {
   Sparkles,
   RefreshCw,
   CheckCircle2,
-  Printer,
   Circle,
   Info,
 } from 'lucide-react';
 import {
+  aggiornaTipoDocumentoRiceventeAction,
   analizzaDocumentiRiceventeAction,
   caricaDocumentiRiceventeAction,
   ottieniAnalisiRiceventeAction,
@@ -21,25 +38,32 @@ import {
   type DocumentoPdf,
 } from '@/app/actions/simulazioneRicevente';
 import { InquadramentoProposta } from '@/components/spazio/InquadramentoProposta';
-import type { PrimaLettura } from '@/lib/proposta/primaLettura';
+import {
+  ETICHETTA_TIPO_DOCUMENTO,
+  type PrimaLettura,
+  type TipoDocumentoRicevuto,
+} from '@/lib/proposta/primaLettura';
 import { voceStrumento } from '@/lib/proposta/inquadramento';
 import {
   calcolaGiudizioFinaleRicevente,
   type GiudizioFinaleRicevente,
 } from '@/app/actions/giudizioRicevente';
-import { stampaTesto } from '@/lib/stampaTesto';
 import {
   ottieniStatoValutazioneAction,
   salvaDichiarazioniValutazioneAction,
   type StatoValutazione,
   type DichiarazioniValutazione,
 } from '@/app/actions/valutazioneRicevente';
-import { aggiornaDatiSettoreAction } from '@/app/actions/datiSettore';
+import {
+  aggiornaDatiSettoreAction,
+  aggiornaDatiSettoreSeNecessarioAction,
+} from '@/app/actions/datiSettore';
 import { valutaListaControllo, type StatoDocumento } from '@/lib/valutazione/listaControllo';
-
-function handleStampaAnalisi(testo: string, generataIl: string | null) {
-  stampaTesto('Analisi Proposta — Ricevente', testo, generataIl);
-}
+import { salvaPosizioneAggiornataAction } from '@/app/actions/posizioneAggiornata';
+import type { LetturaPosizionePdf } from '@/lib/posizioneAggiornata/letturaPdf';
+import { CAMPI_POSIZIONE } from '@/lib/posizioneAggiornata/schemaCampi';
+import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
+import { generaConfrontoLiquidatorioSeNecessarioAction } from '@/app/actions/confrontoLiquidatorio';
 
 interface Props {
   nomeSchema: string;
@@ -49,17 +73,24 @@ interface Props {
   tipoSpazio: 'ENTE' | 'NON_ENTE';
   /** Versione delle righe della proposta (per l'inquadramento). */
   versioneRighe: number;
-  /** Il genitore (Proposta) mostra un confronto basato sullo stesso esito di ricevibilità — senza questo, resta con dati vecchi finché non si ricarica la pagina, anche se l'analisi qui dentro è appena riuscita. */
+  /** Il genitore aggiorna i pannelli che dipendono dalla valutazione. */
   onAnalisiCompletata?: () => void;
 }
 
-type SlotDocumento = 'asseverazione' | 'propostaCramDown' | 'pianoSviluppo';
+type Documento = { nome: string; tipo: TipoDocumentoRicevuto };
 
-const SLOT: { id: SlotDocumento; label: string; obbligatorio: boolean }[] = [
-  { id: 'propostaCramDown', label: 'Proposta di cram down', obbligatorio: true },
-  { id: 'asseverazione', label: 'Asseverazione del professionista', obbligatorio: false },
-  { id: 'pianoSviluppo', label: 'Piano di sviluppo dell’azienda', obbligatorio: false },
-];
+const euro = (n: number) => `€ ${Math.round(n).toLocaleString('it-IT')}`;
+
+function TitoloFase({ numero, testo }: { numero: number; testo: string }) {
+  return (
+    <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider flex items-center gap-2">
+      <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">
+        {numero}
+      </span>
+      {testo}
+    </h3>
+  );
+}
 
 export function SimulazioneRiceventeScenario({
   nomeSchema,
@@ -70,7 +101,17 @@ export function SimulazioneRiceventeScenario({
   versioneRighe,
   onAnalisiCompletata,
 }: Props) {
-  const [fileScelti, setFileScelti] = useState<Partial<Record<SlotDocumento, File>>>({});
+  const [fileScelti, setFileScelti] = useState<File[]>([]);
+  const [documenti, setDocumenti] = useState<Documento[] | null>(null);
+  const [primaLettura, setPrimaLettura] = useState<PrimaLettura | null>(null);
+  const [posizioneLetta, setPosizioneLetta] = useState<LetturaPosizionePdf | null>(null);
+  const [dataPosizione, setDataPosizione] = useState('');
+  const [salvataggioPosizione, setSalvataggioPosizione] = useState(false);
+  const [erroreLettura, setErroreLettura] = useState<string | null>(null);
+  const [letturaInCorso, setLetturaInCorso] = useState(false);
+  const [inquadramentoConfermato, setInquadramentoConfermato] = useState(false);
+  const [debitoEnte, setDebitoEnte] = useState<{ totale: number; righe: number } | null>(null);
+
   const [analisi, setAnalisi] = useState<string | null>(null);
   const [nomiFileAnalizzati, setNomiFileAnalizzati] = useState<string[]>([]);
   const [documentiMancanti, setDocumentiMancanti] = useState<string[]>([]);
@@ -80,19 +121,11 @@ export function SimulazioneRiceventeScenario({
   const [caricamento, setCaricamento] = useState(true);
   const [analisiInCorso, setAnalisiInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
-  // Piccolo prompt libero per questa generazione (usa-e-getta, non salvato).
   const [istruzioniAI, setIstruzioniAI] = useState('');
-  // Lista di controllo (0.109.114): stato lato server e dichiarazioni.
   const [stato, setStato] = useState<StatoValutazione | null>(null);
   const [dichiarazioni, setDichiarazioni] = useState<DichiarazioniValutazione>({});
   const [settoreInCorso, setSettoreInCorso] = useState(false);
-  // Percorso in quattro tempi: documenti caricati → prima lettura →
-  // inquadramento confermato → valutazione.
-  const [caricati, setCaricati] = useState<Record<SlotDocumento, string | null> | null>(null);
-  const [primaLettura, setPrimaLettura] = useState<PrimaLettura | null>(null);
-  const [erroreLettura, setErroreLettura] = useState<string | null>(null);
-  const [letturaInCorso, setLetturaInCorso] = useState(false);
-  const [inquadramentoConfermato, setInquadramentoConfermato] = useState(false);
+  const settoreAvviato = useRef(false);
 
   const caricaStato = async () => {
     const ris = await ottieniStatoValutazioneAction(nomeSchema, scenarioId, aziendaId);
@@ -122,14 +155,23 @@ export function SimulazioneRiceventeScenario({
 
   const carica = async () => {
     setCaricamento(true);
-    const [analisiRis, giudizioRis, docRis] = await Promise.all([
+    const [analisiRis, giudizioRis, docRis, veraRis] = await Promise.all([
       ottieniAnalisiRiceventeAction(nomeSchema, scenarioId),
       calcolaGiudizioFinaleRicevente(nomeSchema, scenarioId),
       ottieniDocumentiRiceventeAction(nomeSchema, scenarioId),
+      ottieniDebitiVera(nomeSchema, aziendaId),
     ]);
     if (docRis.success) {
-      setCaricati(docRis.documenti ?? null);
+      setDocumenti(docRis.documenti ?? null);
       setPrimaLettura(docRis.primaLettura ?? null);
+      setPosizioneLetta(docRis.posizioneLetta ?? null);
+      setDataPosizione(docRis.posizioneLetta?.dataRiferimento ?? '');
+    }
+    if (veraRis.success && veraRis.righe.length > 0) {
+      const valide = veraRis.righe.filter(
+        (r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare'
+      );
+      setDebitoEnte({ totale: valide.reduce((a, r) => a + r.importo, 0), righe: valide.length });
     }
     if (analisiRis.success && analisiRis.analisi) {
       setAnalisi(analisiRis.analisi);
@@ -147,66 +189,69 @@ export function SimulazioneRiceventeScenario({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, scenarioId]);
 
-  const handleScegli = (slot: SlotDocumento, file: File | null) => {
-    setErrore(null);
-    if (!file) return;
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      setErrore(`"${file.name}" non è un PDF — solo file PDF sono ammessi.`);
-      return;
-    }
-    if (file.size > 20 * 1024 * 1024) {
-      setErrore(`"${file.name}" supera i 20MB consentiti.`);
-      return;
-    }
-    setFileScelti((prev) => ({ ...prev, [slot]: file }));
-  };
+  // Dati ISTAT di settore: si aggiornano da soli quando servono (cache di
+  // 24 ore), non sono un compito dell'istruttore.
+  useEffect(() => {
+    if (!documenti || settoreAvviato.current) return;
+    settoreAvviato.current = true;
+    void aggiornaDatiSettoreSeNecessarioAction(nomeSchema, aziendaId).then(() => caricaStato());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documenti]);
 
-  const handleRimuovi = (slot: SlotDocumento) => {
+  const handleScegli = (lista: FileList | null) => {
+    setErrore(null);
+    if (!lista) return;
+    const nuovi: File[] = [];
+    for (const f of Array.from(lista)) {
+      if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) {
+        setErrore(
+          `«${f.name}» non è un PDF: per ora si caricano documenti PDF (il piano in Excel si importa nel Piano di sviluppo).`
+        );
+        continue;
+      }
+      if (f.size > 20 * 1024 * 1024) {
+        setErrore(`«${f.name}» supera i 20 MB consentiti.`);
+        continue;
+      }
+      nuovi.push(f);
+    }
     setFileScelti((prev) => {
-      const nuovi = { ...prev };
-      delete nuovi[slot];
-      return nuovi;
+      const nomi = new Set(prev.map((f) => f.name));
+      return [...prev, ...nuovi.filter((f) => !nomi.has(f.name))];
     });
   };
 
-  /** Passi 1 e 2: carica i documenti così come sono arrivati e ne fa la prima lettura. */
+  /** Fase 1: carica tutto ciò che è arrivato e ne fa la prima lettura. */
   const handleCaricaELeggi = async () => {
-    if (!fileScelti.propostaCramDown) {
-      setErrore('Serve almeno la proposta.');
-      return;
-    }
+    if (fileScelti.length === 0) return;
     setLetturaInCorso(true);
     setErrore(null);
     setErroreLettura(null);
     try {
-      const documentiCaricati: Partial<Record<SlotDocumento, DocumentoPdf>> = {};
-      for (const s of SLOT) {
-        const file = fileScelti[s.id];
-        if (!file) continue;
+      const caricati: DocumentoPdf[] = [];
+      for (const file of fileScelti) {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('codice', codice);
         const rispostaUpload = await fetch('/api/blob-upload', { method: 'POST', body: formData });
         const corpoUpload = await rispostaUpload.json();
         if (!rispostaUpload.ok || corpoUpload.error) {
-          setErrore(corpoUpload.error || `Impossibile caricare "${file.name}".`);
+          setErrore(corpoUpload.error || `Impossibile caricare «${file.name}».`);
           return;
         }
-        documentiCaricati[s.id] = { nome: file.name, url: corpoUpload.url };
+        caricati.push({ nome: file.name, url: corpoUpload.url });
       }
-      const r = await caricaDocumentiRiceventeAction(nomeSchema, scenarioId, {
-        asseverazione: documentiCaricati.asseverazione || null,
-        propostaCramDown: documentiCaricati.propostaCramDown!,
-        pianoSviluppo: documentiCaricati.pianoSviluppo || null,
-      });
+      const r = await caricaDocumentiRiceventeAction(nomeSchema, scenarioId, caricati);
       if (!r.success) {
         setErrore(r.error || 'Caricamento non riuscito.');
         return;
       }
-      setCaricati(r.documenti ?? null);
+      setDocumenti(r.documenti ?? null);
       setPrimaLettura(r.primaLettura ?? null);
+      setPosizioneLetta(r.posizioneLetta ?? null);
+      setDataPosizione(r.posizioneLetta?.dataRiferimento ?? '');
       setErroreLettura(r.erroreLettura ?? null);
-      setFileScelti({});
+      setFileScelti([]);
     } catch (error: unknown) {
       setErrore((error as Error).message || 'Errore durante il caricamento dei documenti.');
     } finally {
@@ -214,9 +259,35 @@ export function SimulazioneRiceventeScenario({
     }
   };
 
-  /** Passo 4: la valutazione, sui documenti già caricati e con l'inquadramento confermato. */
+  const cambiaTipo = async (nome: string, tipo: TipoDocumentoRicevuto) => {
+    const r = await aggiornaTipoDocumentoRiceventeAction(nomeSchema, scenarioId, nome, tipo);
+    if (r.success && r.documenti) setDocumenti(r.documenti);
+    else setErrore(r.error || 'Impossibile aggiornare il tipo del documento.');
+  };
+
+  const confermaPosizione = async () => {
+    if (!posizioneLetta) return;
+    setSalvataggioPosizione(true);
+    const r = await salvaPosizioneAggiornataAction(
+      nomeSchema,
+      scenarioId,
+      dataPosizione || null,
+      false,
+      posizioneLetta.dati,
+      null,
+      { origine: 'documento', documentoId: null }
+    );
+    setSalvataggioPosizione(false);
+    if (!r.success) {
+      setErrore(r.error || 'Impossibile salvare la posizione aggiornata.');
+      return;
+    }
+    await caricaStato();
+  };
+
+  /** Fase 3: la valutazione, sui documenti già caricati e con le conferme fatte. */
   const handleAnalizza = async () => {
-    if (!caricati?.propostaCramDown) {
+    if (!documenti) {
       setErrore('Carica prima i documenti ricevuti.');
       return;
     }
@@ -225,7 +296,7 @@ export function SimulazioneRiceventeScenario({
       return;
     }
     if (lista && !lista.pronta) {
-      setErrore(`Prima di avviare la valutazione completa: ${lista.mancanti.join('; ')}.`);
+      setErrore(`Prima di avviare la valutazione: ${lista.mancanti.join('; ')}.`);
       return;
     }
     setAnalisiInCorso(true);
@@ -245,10 +316,20 @@ export function SimulazioneRiceventeScenario({
         setGenerataIl(risultato.generataIl || null);
         setTroncata(risultato.troncata || false);
         // I documenti hanno finito il loro lavoro e sono stati eliminati.
-        setCaricati(null);
+        setDocumenti(null);
         const giudizioRis = await calcolaGiudizioFinaleRicevente(nomeSchema, scenarioId);
         if (giudizioRis.success && giudizioRis.giudizio) setGiudizio(giudizioRis.giudizio);
+        // Il confronto con la liquidazione serve alla Relazione: si prepara
+        // ora, in sottofondo (prima lo faceva il Brogliaccio).
+        void generaConfrontoLiquidatorioSeNecessarioAction(nomeSchema, scenarioId, aziendaId);
         onAnalisiCompletata?.();
+        setTimeout(
+          () =>
+            document
+              .getElementById('esito-valutazione')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+          200
+        );
       } else {
         setErrore(risultato.error || "Impossibile completare l'analisi.");
       }
@@ -259,18 +340,19 @@ export function SimulazioneRiceventeScenario({
     }
   };
 
-  const statoDoc = (slot: SlotDocumento, dichiarato: boolean | undefined): StatoDocumento =>
-    caricati?.[slot] || fileScelti[slot]
-      ? 'caricato'
-      : dichiarato
-        ? 'assente_dichiarato'
-        : 'mancante';
+  const presente = (tipo: TipoDocumentoRicevuto) =>
+    Boolean(documenti?.some((d) => d.tipo === tipo));
+  const statoDoc = (
+    tipo: TipoDocumentoRicevuto,
+    dichiarato: boolean | undefined
+  ): StatoDocumento =>
+    presente(tipo) ? 'caricato' : dichiarato ? 'assente_dichiarato' : 'mancante';
 
   const lista = stato
     ? valutaListaControllo({
-        propostaSelezionata: Boolean(caricati?.propostaCramDown),
-        asseverazione: statoDoc('asseverazione', dichiarazioni.asseverazioneNonPervenuta),
-        pianoAziendale: statoDoc('pianoSviluppo', dichiarazioni.pianoAziendaleNonPervenuto),
+        propostaSelezionata: presente('PROPOSTA'),
+        asseverazione: statoDoc('ATTESTAZIONE', dichiarazioni.asseverazioneNonPervenuta),
+        pianoAziendale: statoDoc('PIANO', dichiarazioni.pianoAziendaleNonPervenuto),
         posizioniAggiornate: stato.posizioniAggiornate,
         posizioneNonPervenutaDichiarata: Boolean(dichiarazioni.posizioneNonPervenuta),
         settore: stato.settore,
@@ -280,10 +362,8 @@ export function SimulazioneRiceventeScenario({
     : null;
   const pronta = Boolean(lista?.pronta);
 
-  // Rientro da un passo aperto dalla lista di controllo (es. Posizione
-  // Aggiornata): si torna esattamente al passo 4, non in cima alla scheda.
-  // Il contenuto arriva dopo il caricamento, quindi lo scorrimento del
-  // browser sull'ancora non basterebbe.
+  // Rientro da un passo aperto da qui (es. Posizione Aggiornata): si torna
+  // alla valutazione, non in cima alla scheda.
   useEffect(() => {
     if (caricamento || typeof window === 'undefined') return;
     if (window.location.hash !== '#valutazione') return;
@@ -299,19 +379,20 @@ export function SimulazioneRiceventeScenario({
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
 
+  const fase2Visibile = Boolean(documenti) || Boolean(analisi);
+  const urlPosizione = `/spazio/${codice}/scenari/${scenarioId}/posizione-aggiornata?ritorno=valutazione`;
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-          Analisi Proposta — Ricevente
+          Istruttoria della proposta
         </h2>
         <p className="text-[11px] text-slate-500 mt-1">
-          Quattro passi: carichi i documenti ricevuti; la piattaforma ne fa una prima lettura e ti
-          propone strumento, data e quota degli altri aderenti; confermi o correggi le scelte; poi
-          parte la valutazione. La proposta è obbligatoria; per asseverazione e piano, se non sono
-          arrivati, spunta «Non pervenuto»: l’assenza pesa sul giudizio ma resta dichiarata. I
-          documenti restano disponibili fino alla valutazione e poi vengono eliminati: resta solo il
-          risultato.
+          Tre fasi su questa pagina: carichi tutto ciò che l’azienda ha mandato; confermi ciò che la
+          piattaforma ha letto; avvii la valutazione. I documenti restano disponibili fino alla
+          valutazione, poi vengono eliminati: resta il risultato. Il documento da consegnare è uno,
+          la Relazione di chiusura in fondo alla pagina.
         </p>
       </div>
 
@@ -322,62 +403,52 @@ export function SimulazioneRiceventeScenario({
         </div>
       )}
 
-      {giudizio && giudizio.livello !== 'non_disponibile' && (
-        <div
-          className={`border rounded-xl p-4 ${
-            giudizio.coloreEtichetta === 'verde'
-              ? 'bg-emerald-50 border-emerald-200'
-              : giudizio.coloreEtichetta === 'giallo'
-                ? 'bg-amber-50 border-amber-200'
-                : 'bg-red-50 border-red-200'
-          }`}
-        >
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-            Giudizio complessivo
-          </span>
-          <span className="text-sm font-bold text-slate-900 block">{giudizio.etichetta}</span>
-          <p className="text-[11px] text-slate-600 mt-1">{giudizio.motivazione}</p>
-        </div>
-      )}
-
-      {/* 1 · DOCUMENTI RICEVUTI, così come li ha mandati l'azienda. */}
+      {/* ---------------- 1 · RICEZIONE ---------------- */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-        <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider flex items-center gap-2">
-          <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">
-            1
-          </span>
-          Documenti ricevuti
-        </h3>
-        {caricati ? (
-          <div className="space-y-2">
-            <ul className="text-xs text-slate-700 space-y-1">
-              {SLOT.map((s) => (
-                <li key={s.id} className="flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-slate-400" />
-                  {s.label}:{' '}
-                  {caricati[s.id] ? (
-                    <span className="font-bold">{caricati[s.id]}</span>
-                  ) : (
-                    <span className="text-slate-400">
-                      {(
-                        s.id === 'asseverazione'
-                          ? dichiarazioni.asseverazioneNonPervenuta
-                          : s.id === 'pianoSviluppo'
-                            ? dichiarazioni.pianoAziendaleNonPervenuto
-                            : false
-                      )
-                        ? 'non pervenuto'
-                        : 'non caricato'}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
+        <TitoloFase numero={1} testo="Documenti ricevuti" />
+        {documenti ? (
+          <div className="space-y-3">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="text-[10px] uppercase text-slate-500 font-bold border-b border-slate-100">
+                  <th className="py-1.5">Documento</th>
+                  <th className="py-1.5">Riconosciuto come</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {documenti.map((d) => (
+                  <tr key={d.nome}>
+                    <td className="py-1.5 text-slate-800">
+                      <FileText className="w-3.5 h-3.5 text-slate-400 inline mr-1" />
+                      {d.nome}
+                    </td>
+                    <td className="py-1.5">
+                      <select
+                        value={d.tipo}
+                        onChange={(e) =>
+                          cambiaTipo(d.nome, e.target.value as TipoDocumentoRicevuto)
+                        }
+                        className="p-1 text-xs border border-slate-200 rounded bg-white text-slate-900"
+                      >
+                        {(Object.keys(ETICHETTA_TIPO_DOCUMENTO) as TipoDocumentoRicevuto[]).map(
+                          (t) => (
+                            <option key={t} value={t}>
+                              {ETICHETTA_TIPO_DOCUMENTO[t]}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
             <button
               type="button"
               onClick={() => {
-                setCaricati(null);
+                setDocumenti(null);
                 setPrimaLettura(null);
+                setPosizioneLetta(null);
                 setErroreLettura(null);
               }}
               className="text-[10px] font-bold uppercase text-sky-700 hover:underline"
@@ -388,73 +459,49 @@ export function SimulazioneRiceventeScenario({
         ) : (
           <>
             <p className="text-[11px] text-slate-500">
-              Carica i file così come li ha inviati l’azienda. Prima di chiederti qualunque scelta,
-              la piattaforma li legge e ti propone strumento, data di deposito e quota degli altri
-              creditori aderenti, indicando dove li ha trovati.
+              Carica insieme tutti i file ricevuti, così come li ha inviati l’azienda: proposta,
+              attestazione, piano, situazione contabile, lettere. La piattaforma riconosce che cos’è
+              ciascuno, propone strumento, data e quota degli altri aderenti e legge i valori della
+              situazione contabile.
             </p>
-            {SLOT.map((s) => {
-              const file = fileScelti[s.id];
-              return (
-                <div key={s.id}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-700 flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-slate-400" />
-                      {s.label}
-                      {s.obbligatorio && <span className="text-red-500"> *</span>}
-                      {file ? ` — selezionato: ${file.name}` : ''}
+            <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed border-slate-300 hover:border-sky-400 rounded-xl p-6 cursor-pointer text-xs text-slate-600">
+              <Upload className="w-5 h-5 text-slate-400" />
+              Scegli i documenti (PDF, anche più di uno)
+              <input
+                type="file"
+                multiple
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={(e) => {
+                  handleScegli(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            {fileScelti.length > 0 && (
+              <ul className="text-xs text-slate-700 space-y-1">
+                {fileScelti.map((f) => (
+                  <li key={f.name} className="flex items-center justify-between">
+                    <span>
+                      <FileText className="w-3.5 h-3.5 text-slate-400 inline mr-1" />
+                      {f.name}
                     </span>
-                    {file ? (
-                      <button
-                        type="button"
-                        onClick={() => handleRimuovi(s.id)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-slate-400 hover:text-red-600 text-[10px] font-bold uppercase"
-                      >
-                        <X className="w-3.5 h-3.5" /> Rimuovi
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        {!s.obbligatorio && (
-                          <label className="flex items-center gap-1.5 text-[10px] text-slate-600 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(
-                                s.id === 'asseverazione'
-                                  ? dichiarazioni.asseverazioneNonPervenuta
-                                  : dichiarazioni.pianoAziendaleNonPervenuto
-                              )}
-                              onChange={(e) =>
-                                cambiaDichiarazione(
-                                  s.id === 'asseverazione'
-                                    ? 'asseverazioneNonPervenuta'
-                                    : 'pianoAziendaleNonPervenuto',
-                                  e.target.checked
-                                )
-                              }
-                            />
-                            Non pervenuto
-                          </label>
-                        )}
-                        <label className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg transition-colors cursor-pointer">
-                          <Upload className="w-3.5 h-3.5" />
-                          Scegli file
-                          <input
-                            type="file"
-                            accept="application/pdf,.pdf"
-                            className="hidden"
-                            onChange={(e) => handleScegli(s.id, e.target.files?.[0] || null)}
-                          />
-                        </label>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
+                    <button
+                      type="button"
+                      onClick={() => setFileScelti((p) => p.filter((x) => x.name !== f.name))}
+                      className="text-slate-400 hover:text-red-600"
+                      title="Togli"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             <button
               type="button"
               onClick={handleCaricaELeggi}
-              disabled={letturaInCorso || !fileScelti.propostaCramDown}
+              disabled={letturaInCorso || fileScelti.length === 0}
               className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold uppercase tracking-wider rounded-lg text-xs transition-colors"
             >
               {letturaInCorso ? (
@@ -462,114 +509,91 @@ export function SimulazioneRiceventeScenario({
               ) : (
                 <Upload className="w-3.5 h-3.5" />
               )}
-              {letturaInCorso ? 'Caricamento e prima lettura…' : 'Carica e leggi i documenti'}
+              {letturaInCorso
+                ? 'Caricamento e prima lettura… (fino a due minuti)'
+                : 'Carica e leggi i documenti'}
             </button>
           </>
         )}
+
+        {documenti && erroreLettura && (
+          <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+            {erroreLettura}
+          </p>
+        )}
+        {documenti && primaLettura && (
+          <div className="space-y-2 border-t border-slate-100 pt-3">
+            <p className="text-[10px] font-bold uppercase text-slate-500">
+              Prima lettura — una lettura rapida, non una valutazione
+            </p>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(
+                [
+                  [
+                    'Strumento che sembra scelto',
+                    primaLettura.strumento.valore
+                      ? (() => {
+                          const v = voceStrumento(primaLettura.strumento.valore);
+                          return v
+                            ? `${v.etichetta} (${v.riferimento})`
+                            : primaLettura.strumento.valore;
+                        })()
+                      : null,
+                    primaLettura.strumento,
+                  ],
+                  [
+                    'Data di deposito',
+                    primaLettura.dataDeposito.valore
+                      ? primaLettura.dataDeposito.valore.split('-').reverse().join('/')
+                      : null,
+                    primaLettura.dataDeposito,
+                  ],
+                  [
+                    'Quota degli altri creditori aderenti',
+                    primaLettura.quotaAltriAderenti.valore !== null
+                      ? `${primaLettura.quotaAltriAderenti.valore.toLocaleString('it-IT')}%`
+                      : null,
+                    primaLettura.quotaAltriAderenti,
+                  ],
+                  [
+                    'Soddisfacimento offerto all’ente',
+                    primaLettura.percentualeOffertaEnte.valore !== null
+                      ? `${primaLettura.percentualeOffertaEnte.valore.toLocaleString('it-IT')}%`
+                      : null,
+                    primaLettura.percentualeOffertaEnte,
+                  ],
+                ] as const
+              ).map(([etichetta, valore, d]) => (
+                <div key={etichetta} className="border border-slate-200 rounded-lg p-3">
+                  <dt className="text-[10px] font-bold uppercase text-slate-500">{etichetta}</dt>
+                  <dd className="text-xs text-slate-900 font-bold mt-0.5">
+                    {valore ?? (
+                      <span className="font-normal text-slate-400">non trovato nei documenti</span>
+                    )}
+                  </dd>
+                  {valore && d.passo && (
+                    <dd className="text-[10px] text-slate-500 mt-1 italic">
+                      «{d.passo}»{d.documento ? ` — ${d.documento}` : ''}
+                    </dd>
+                  )}
+                </div>
+              ))}
+            </dl>
+            {primaLettura.note.length > 0 && (
+              <ul className="text-[11px] text-amber-800 space-y-0.5">
+                {primaLettura.note.map((n, i) => (
+                  <li key={i}>— {n}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* 2 · PRIMA LETTURA: cosa sembra aver scelto l'azienda. */}
-      {caricati && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-          <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">
-              2
-            </span>
-            Prima lettura dei documenti
-          </h3>
-          {erroreLettura && (
-            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
-              {erroreLettura}
-            </p>
-          )}
-          {primaLettura ? (
-            <>
-              <p className="text-[11px] text-slate-500">
-                Una lettura rapida e grossolana, non una valutazione: serve a orientare le scelte
-                del passo successivo. Ogni dato riporta il passo e il documento da cui viene.
-              </p>
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {(
-                  [
-                    [
-                      'Strumento che sembra scelto',
-                      primaLettura.strumento.valore
-                        ? (() => {
-                            const v = voceStrumento(primaLettura.strumento.valore);
-                            return v
-                              ? `${v.etichetta} (${v.riferimento})`
-                              : primaLettura.strumento.valore;
-                          })()
-                        : null,
-                      primaLettura.strumento,
-                    ],
-                    [
-                      'Data di deposito',
-                      primaLettura.dataDeposito.valore
-                        ? primaLettura.dataDeposito.valore.split('-').reverse().join('/')
-                        : null,
-                      primaLettura.dataDeposito,
-                    ],
-                    [
-                      'Quota degli altri creditori aderenti',
-                      primaLettura.quotaAltriAderenti.valore !== null
-                        ? `${primaLettura.quotaAltriAderenti.valore.toLocaleString('it-IT')}%`
-                        : null,
-                      primaLettura.quotaAltriAderenti,
-                    ],
-                    [
-                      'Soddisfacimento offerto all’ente',
-                      primaLettura.percentualeOffertaEnte.valore !== null
-                        ? `${primaLettura.percentualeOffertaEnte.valore.toLocaleString('it-IT')}%`
-                        : null,
-                      primaLettura.percentualeOffertaEnte,
-                    ],
-                  ] as const
-                ).map(([etichetta, valore, d]) => (
-                  <div key={etichetta} className="border border-slate-200 rounded-lg p-3">
-                    <dt className="text-[10px] font-bold uppercase text-slate-500">{etichetta}</dt>
-                    <dd className="text-xs text-slate-900 font-bold mt-0.5">
-                      {valore ?? (
-                        <span className="font-normal text-slate-400">
-                          non trovato nei documenti
-                        </span>
-                      )}
-                    </dd>
-                    {valore && d.passo && (
-                      <dd className="text-[10px] text-slate-500 mt-1 italic">
-                        «{d.passo}»{d.documento ? ` — ${d.documento}` : ''}
-                      </dd>
-                    )}
-                  </div>
-                ))}
-              </dl>
-              {primaLettura.note.length > 0 && (
-                <ul className="text-[11px] text-amber-800 space-y-0.5">
-                  {primaLettura.note.map((n, i) => (
-                    <li key={i}>— {n}</li>
-                  ))}
-                </ul>
-              )}
-            </>
-          ) : (
-            !erroreLettura && (
-              <p className="text-[11px] text-slate-500">
-                Nessuna prima lettura disponibile per questi documenti: compila le scelte a mano.
-              </p>
-            )
-          )}
-        </div>
-      )}
-
-      {/* 3 · LE TUE SCELTE: l'inquadramento, precompilato dalla prima lettura. */}
-      {(caricati || analisi) && (
-        <div className="space-y-2">
-          <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">
-              3
-            </span>
-            Le tue scelte
-          </h3>
+      {/* ---------------- 2 · CONFERME ---------------- */}
+      {fase2Visibile && (
+        <div className="space-y-4">
+          <TitoloFase numero={2} testo="Conferma ciò che è stato letto" />
           <InquadramentoProposta
             nomeSchema={nomeSchema}
             scenarioId={scenarioId}
@@ -587,50 +611,169 @@ export function SimulazioneRiceventeScenario({
             }
             onStato={setInquadramentoConfermato}
           />
+
+          {documenti && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Posizione aggiornata dalla situazione contabile ricevuta */}
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
+                <h4 className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+                  Posizione contabile aggiornata
+                </h4>
+                {stato && stato.posizioniAggiornate > 0 ? (
+                  <p className="text-xs text-emerald-800 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" /> Posizione aggiornata salvata.{' '}
+                    <a href={urlPosizione} className="text-sky-700 font-bold hover:underline">
+                      Rivedi
+                    </a>
+                  </p>
+                ) : posizioneLetta ? (
+                  <>
+                    <p className="text-[11px] text-slate-500">
+                      Letta dalla situazione contabile ricevuta: {posizioneLetta.trovati.length}{' '}
+                      valori. Controlla e conferma.
+                    </p>
+                    <label className="block text-[10px] text-slate-500">
+                      Data di riferimento{' '}
+                      <input
+                        type="date"
+                        value={dataPosizione}
+                        onChange={(e) => setDataPosizione(e.target.value)}
+                        className="ml-1 p-1 text-xs border border-slate-200 rounded text-slate-900"
+                      />
+                    </label>
+                    <table className="w-full text-xs">
+                      <tbody className="divide-y divide-slate-100">
+                        {CAMPI_POSIZIONE.filter((c) =>
+                          posizioneLetta.trovati.includes(c.chiave)
+                        ).map((c) => (
+                          <tr key={c.chiave}>
+                            <td className="py-1 text-slate-600">{c.etichetta}</td>
+                            <td className="py-1 text-right tabular-nums text-slate-900">
+                              {euro(posizioneLetta.dati[c.chiave])}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {posizioneLetta.note.length > 0 && (
+                      <p className="text-[10px] text-amber-800">
+                        {posizioneLetta.note.join(' — ')}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={confermaPosizione}
+                        disabled={salvataggioPosizione}
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
+                      >
+                        {salvataggioPosizione ? 'Salvataggio…' : 'Conferma'}
+                      </button>
+                      <a
+                        href={urlPosizione}
+                        className="text-[10px] text-sky-700 font-bold hover:underline"
+                      >
+                        Correggi nel prospetto completo
+                      </a>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-slate-500">
+                      {presente('SITUAZIONE_CONTABILE')
+                        ? `La situazione contabile «${documenti.find((d) => d.tipo === 'SITUAZIONE_CONTABILE')?.nome}» non è stata letta in automatico: portala nel prospetto con «Leggi situazione contabile (PDF)».`
+                        : 'Nessuna situazione contabile fra i documenti ricevuti.'}
+                    </p>
+                    <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(dichiarazioni.posizioneNonPervenuta)}
+                        onChange={(e) =>
+                          cambiaDichiarazione('posizioneNonPervenuta', e.target.checked)
+                        }
+                      />
+                      Non pervenuta: si valuta sui dati del bilancio
+                    </label>
+                    <a
+                      href={urlPosizione}
+                      className="text-[10px] text-sky-700 font-bold hover:underline"
+                    >
+                      Oppure caricala a parte (Excel o PDF)
+                    </a>
+                  </>
+                )}
+              </div>
+
+              {/* Posizione dell'ente: quella dello screening, non si ricarica */}
+              <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
+                <h4 className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+                  Posizione debitoria verso l’ente
+                </h4>
+                {debitoEnte ? (
+                  <p className="text-xs text-slate-800">
+                    Dal V.E.R.A. dello screening:{' '}
+                    <span className="font-bold">{euro(debitoEnte.totale)}</span> ({debitoEnte.righe}{' '}
+                    partite contabilizzate o da contabilizzare). Non serve ricaricarla.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Nessun V.E.R.A. caricato per questa azienda.
+                  </p>
+                )}
+                <a
+                  href={`/spazio/${codice}/aziende/${aziendaId}/posizione-ente`}
+                  className="text-[10px] text-sky-700 font-bold hover:underline"
+                >
+                  Aggiorna solo se hai un file più recente
+                </a>
+
+                <h4 className="text-[10px] font-bold uppercase text-slate-500 tracking-wider pt-2">
+                  Documenti non pervenuti
+                </h4>
+                {(
+                  [
+                    ['ATTESTAZIONE', 'asseverazioneNonPervenuta', 'Attestazione / asseverazione'],
+                    ['PIANO', 'pianoAziendaleNonPervenuto', 'Piano'],
+                  ] as const
+                ).map(([tipo, chiave, etichetta]) =>
+                  presente(tipo) ? (
+                    <p
+                      key={tipo}
+                      className="text-[11px] text-emerald-800 flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" /> {etichetta}: ricevuto
+                    </p>
+                  ) : (
+                    <label
+                      key={tipo}
+                      className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={Boolean(dichiarazioni[chiave])}
+                        onChange={(e) => cambiaDichiarazione(chiave, e.target.checked)}
+                      />
+                      {etichetta}: non pervenuto (pesa sul giudizio)
+                    </label>
+                  )
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* 4 · VALUTAZIONE: parte solo con documenti caricati e scelte salvate. */}
-      {caricati && (
+      {/* ---------------- 3 · VALUTAZIONE ---------------- */}
+      {documenti && (
         <div
           id="valutazione"
           className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 scroll-mt-4"
         >
-          <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">
-              4
-            </span>
-            Valutazione della proposta
-          </h3>
-          {!inquadramentoConfermato && (
-            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
-              La valutazione si avvia dopo aver confermato e salvato le scelte del passo 3.
-            </p>
-          )}
-          <div>
-            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-              Istruzioni per l&apos;AI (facoltative, solo per questa analisi)
-            </label>
-            <textarea
-              value={istruzioniAI}
-              onChange={(e) => setIstruzioniAI(e.target.value)}
-              rows={2}
-              placeholder="Es. verifica in particolare la sostenibilità del piano rispetto ai dati di settore…"
-              className="w-full p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 outline-none focus:border-blue-500"
-            />
-            <p className="text-[10px] text-slate-400 mt-1">
-              Indicazioni specifiche per questa generazione. Non sostituiscono le regole del sistema
-              e non vengono salvate.
-            </p>
-          </div>
-
+          <TitoloFase numero={3} testo="Valutazione della proposta" />
           {lista && (
-            <div className="border border-slate-200 rounded-lg p-4 space-y-2 bg-slate-50">
-              <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Prima di avviare la valutazione
-              </h4>
+            <ul className="space-y-1.5">
               {lista.voci.map((v) => (
-                <div key={v.id} className="flex items-start gap-2 text-xs">
+                <li key={v.id} className="flex items-start gap-2 text-xs">
                   {v.informativa ? (
                     <Info className="w-4 h-4 shrink-0 mt-0.5 text-slate-400" />
                   ) : v.ok ? (
@@ -641,46 +784,39 @@ export function SimulazioneRiceventeScenario({
                   <div className="flex-1">
                     <span className="font-bold text-slate-800">{v.etichetta}</span>
                     <span className="text-slate-600"> — {v.dettaglio}</span>
-                    {!v.ok && v.percorso && (
-                      <span className="block text-[10px] text-slate-500">Dove: {v.percorso}</span>
-                    )}
-                    {v.id === 'posizione' && stato && stato.posizioniAggiornate === 0 && (
-                      <a
-                        href={`/spazio/${codice}/scenari/${scenarioId}/posizione-aggiornata?ritorno=valutazione`}
-                        className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
-                      >
-                        <Upload className="w-3 h-3" /> Carica la situazione contabile (anche PDF)
-                      </a>
-                    )}
-                    {v.id === 'posizione' && stato && stato.posizioniAggiornate === 0 && (
-                      <label className="flex items-center gap-1.5 text-[10px] text-slate-600 mt-1 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(dichiarazioni.posizioneNonPervenuta)}
-                          onChange={(e) =>
-                            cambiaDichiarazione('posizioneNonPervenuta', e.target.checked)
-                          }
-                        />
-                        Nessuna posizione aggiornata pervenuta: si valuta sui dati del bilancio
-                      </label>
-                    )}
-                    {v.id === 'settore' && stato?.settore.applicabile && (
+                    {v.id === 'settore' && !v.ok && stato?.settore.applicabile && (
                       <button
                         type="button"
                         onClick={handleAggiornaSettore}
                         disabled={settoreInCorso}
-                        className="mt-1 flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+                        className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-[10px] uppercase rounded"
                       >
                         <RefreshCw className={`w-3 h-3 ${settoreInCorso ? 'animate-spin' : ''}`} />
-                        {settoreInCorso ? 'Aggiornamento ISTAT…' : 'Aggiorna ora'}
+                        {settoreInCorso ? 'Aggiornamento ISTAT…' : 'Riprova'}
                       </button>
                     )}
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-
+          {!inquadramentoConfermato && (
+            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+              La valutazione si avvia dopo aver confermato e salvato l’inquadramento (fase 2).
+            </p>
+          )}
+          <details>
+            <summary className="text-[10px] font-bold uppercase text-slate-500 cursor-pointer">
+              Istruzioni per l’AI (facoltative)
+            </summary>
+            <textarea
+              value={istruzioniAI}
+              onChange={(e) => setIstruzioniAI(e.target.value)}
+              rows={2}
+              placeholder="Es. verifica in particolare la sostenibilità del piano rispetto ai dati di settore…"
+              className="mt-1 w-full p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 outline-none focus:border-blue-500"
+            />
+          </details>
           <button
             type="button"
             onClick={handleAnalizza}
@@ -692,58 +828,65 @@ export function SimulazioneRiceventeScenario({
             ) : (
               <Sparkles className="w-3.5 h-3.5" />
             )}
-            {analisiInCorso ? 'Valutazione in corso…' : 'Avvia la valutazione'}
+            {analisiInCorso
+              ? 'Valutazione in corso… (fino a quattro minuti)'
+              : 'Avvia la valutazione'}
           </button>
         </div>
       )}
 
-      {analisi && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
-            <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">Analisi</h3>
-            <div className="flex items-center gap-3">
-              {generataIl && (
-                <span className="text-[10px] text-slate-400">
-                  Generata il {new Date(generataIl).toLocaleString('it-IT')}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => handleStampaAnalisi(analisi, generataIl)}
-                className="flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[9px] uppercase rounded transition-colors"
-                title="Apre una finestra di stampa — da lì puoi salvare come PDF"
-              >
-                <Printer className="w-3 h-3" /> Stampa / PDF
-              </button>
+      {/* Esito, a video */}
+      {(giudizio || analisi) && (
+        <div id="esito-valutazione" className="space-y-4 scroll-mt-4">
+          {giudizio && giudizio.livello !== 'non_disponibile' && (
+            <div
+              className={`border rounded-xl p-4 ${
+                giudizio.coloreEtichetta === 'verde'
+                  ? 'bg-emerald-50 border-emerald-200'
+                  : giudizio.coloreEtichetta === 'giallo'
+                    ? 'bg-amber-50 border-amber-200'
+                    : 'bg-red-50 border-red-200'
+              }`}
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                Esito della valutazione
+              </span>
+              <span className="text-sm font-bold text-slate-900 block">{giudizio.etichetta}</span>
+              <p className="text-[11px] text-slate-600 mt-1">{giudizio.motivazione}</p>
             </div>
-          </div>
-          {nomiFileAnalizzati.length > 0 && (
-            <p className="text-[10px] text-slate-400 mb-1">
-              Basata su: {nomiFileAnalizzati.join(', ')}
-            </p>
           )}
-          {troncata && (
-            <p className="flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              Il testo qui sotto si interrompe prima della fine — ha raggiunto il limite di
-              lunghezza consentito. Il giudizio complessivo resta comunque affidabile, basato sui
-              dati estratti separatamente.
-            </p>
+          {analisi && (
+            <details className="bg-white border border-slate-200 rounded-xl p-5" open={!giudizio}>
+              <summary className="font-bold text-slate-900 uppercase text-xs tracking-wider cursor-pointer">
+                Lettura critica dei documenti
+                {generataIl && (
+                  <span className="ml-2 text-[10px] font-normal normal-case text-slate-400">
+                    del {new Date(generataIl).toLocaleString('it-IT')}
+                  </span>
+                )}
+              </summary>
+              {nomiFileAnalizzati.length > 0 && (
+                <p className="text-[10px] text-slate-400 mt-2">
+                  Basata su: {nomiFileAnalizzati.join(', ')}
+                </p>
+              )}
+              {troncata && (
+                <p className="text-[11px] text-amber-700 mt-2">
+                  Il testo si interrompe prima della fine (limite di lunghezza); l’esito resta
+                  affidabile, calcolato sui dati estratti.
+                </p>
+              )}
+              {documentiMancanti.length > 0 && (
+                <p className="flex items-center gap-1.5 text-[11px] text-amber-700 mt-2">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Mancano: {documentiMancanti.join(', ')} — l’esito ne tiene conto.
+                </p>
+              )}
+              <div className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed mt-3">
+                {analisi}
+              </div>
+            </details>
           )}
-          {documentiMancanti.length > 0 ? (
-            <p className="flex items-center gap-1.5 text-[11px] text-amber-700 mb-3">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              Mancano: {documentiMancanti.join(', ')} — il giudizio complessivo ne tiene conto.
-            </p>
-          ) : (
-            <p className="flex items-center gap-1.5 text-[11px] text-emerald-700 mb-3">
-              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-              Tutti e tre i documenti sono stati caricati.
-            </p>
-          )}
-          <div className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
-            {analisi}
-          </div>
         </div>
       )}
     </div>

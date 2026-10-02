@@ -382,3 +382,34 @@ export async function verificaScenarioNonBloccato(
   }
   return null;
 }
+
+/**
+ * Attiva il Piano di sviluppo su uno scenario ricevuto: la domanda «vuoi
+ * mettere alla prova il piano dell'azienda?» si pone a fine valutazione,
+ * non più solo alla creazione dello scenario.
+ */
+export async function attivaPianoSviluppoAction(
+  nomeSchema: string,
+  scenarioId: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
+    const bloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
+    if (bloccato) return { success: false, error: bloccato };
+    const { db } = await import('@/db/client');
+    const { getTabelleTenant } = await import('@/db/schema');
+    const { eq } = await import('drizzle-orm');
+    const tabelle = getTabelleTenant(nomeSchema);
+    await db
+      .update(tabelle.scenari)
+      .set({ simulazioneAttiva: true })
+      .where(eq(tabelle.scenari.id, scenarioId));
+    return { success: true };
+  } catch (error: unknown) {
+    console.error('[attivaPianoSviluppoAction] Errore:', error);
+    return { success: false, error: `Impossibile attivare il piano: ${(error as Error).message}` };
+  }
+}
