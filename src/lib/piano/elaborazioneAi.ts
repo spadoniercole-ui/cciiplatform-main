@@ -114,7 +114,7 @@ export function promptElaborazione(c: ContestoElaborazione): string {
 Scrivi SOLO ipotesi d'ingresso: il calcolo (EBITDA, utile, cassa, copertura delle rate) lo fa la piattaforma. Righe ammesse e forma:
 ${RIGHE_INPUT.map((r) => `- ${r}: ${ETICHETTA_RIGA[r]} — ${r === 'aliquotaImposte' ? 'percentuale (tipo "abs", valore in %)' : RIGHE_FLUSSO.has(r) ? 'valore assoluto in euro (tipo "abs")' : 'variazione % sull’anno prima (tipo "pct") oppure valore in euro (tipo "abs")'}`).join('\n')}
 
-Regole: ${c.orizzonte} valori per riga (uno per anno, null se lasci il valore dell'anno prima); variazioni % tra -50 e +50; ogni valore non nullo con una motivazione di una frase (al massimo 25 parole) che richiama il dato su cui si fonda (storico, settore, piano dell'azienda, rate). Ometti le righe che non tocchi. ${lessicoBreve()}
+Regole: compila TUTTE le righe e TUTTI gli anni — ${c.orizzonte} valori per ogni riga, nessun null (una voce che non cambia si scrive con variazione 0, oppure 0 € per investimenti e apporti); variazioni % tra -50 e +50; ogni valore con una motivazione di una frase (al massimo 25 parole) che richiama il dato su cui si fonda (storico, settore, piano dell'azienda, rate); per i valori invariati basta «invariato». Il primo anno del piano parte dallo STATO ATTUALE (il primo esercizio dello storico): non rivedere il passato. ${lessicoBreve()}
 
 DATI
 ${testoContesto(c)}
@@ -141,6 +141,31 @@ export function motivazionePulita(testo: string, massimo = 300): string {
       t.slice(0, r.posizione) + r.voce.formulaSostitutiva + t.slice(r.posizione + r.trovato.length);
   }
   return t;
+}
+
+const NOTA_COME_PRIMA = 'Non indicato dall’AI: come l’anno prima.';
+
+/**
+ * Celle lasciate vuote dal modello in una riga che ha toccato: si riempiono
+ * con il significato dichiarato («come l'anno prima») — 0% per le variazioni,
+ * lo stesso valore per i valori assoluti — invece di restare vuote.
+ */
+function completaRiga(r: RigaInput, arr: (Ipotesi | null)[]): (Ipotesi | null)[] {
+  let prec: Ipotesi | null = null;
+  return arr.map((ip) => {
+    if (ip) {
+      prec = ip;
+      return ip;
+    }
+    if (prec && (prec.tipo === 'abs' || r === 'aliquotaImposte'))
+      return { tipo: prec.tipo, valore: prec.valore, motivazione: NOTA_COME_PRIMA };
+    if (r === 'aliquotaImposte') return null;
+    return {
+      tipo: RIGHE_FLUSSO.has(r) ? 'abs' : 'pct',
+      valore: 0,
+      motivazione: NOTA_COME_PRIMA,
+    };
+  });
 }
 
 /** Valida la risposta del modello: solo righe, tipi e intervalli ammessi. */
@@ -185,7 +210,17 @@ export function validaRisposta(json: unknown, orizzonte: number): EsitoElaborazi
         ...(motivazione ? { motivazione } : {}),
       };
     });
-    if (arr.some(Boolean)) ipotesi[r] = arr;
+    if (arr.some(Boolean)) ipotesi[r] = completaRiga(r, arr);
+  }
+  // Righe non toccate: scritte esplicite («invariato»), così la tabella non
+  // ha celle vuote accanto a celle piene. L'aliquota resta quella implicita.
+  const toccate = Object.keys(ipotesi).length > 0;
+  for (const r of RIGHE_INPUT) {
+    if (!toccate || ipotesi[r] || r === 'aliquotaImposte') continue;
+    ipotesi[r] = Array.from({ length: orizzonte }, () => ({
+      tipo: RIGHE_FLUSSO.has(r) ? ('abs' as const) : ('pct' as const),
+      valore: 0,
+    }));
   }
   const sintesi = typeof obj.sintesi === 'string' ? motivazionePulita(obj.sintesi, 600) : '';
   return { ipotesi, sintesi, scartati };

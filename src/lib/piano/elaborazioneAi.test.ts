@@ -81,14 +81,22 @@ describe('elaborazione con l’AI: validazione della risposta', () => {
     );
     expect(e.ipotesi.ricaviVendite).toEqual([
       { tipo: 'pct', valore: 3, motivazione: 'In linea con il settore (2%).' },
-      null,
-      null,
+      { tipo: 'pct', valore: 0, motivazione: 'Non indicato dall’AI: come l’anno prima.' },
+      { tipo: 'pct', valore: 0, motivazione: 'Non indicato dall’AI: come l’anno prima.' },
     ]);
     expect(e.ipotesi.investimenti?.[0]).toEqual({
       tipo: 'abs',
       valore: 40000,
       motivazione: 'Mantenimento.',
     });
+    // Nessuna cella vuota: i valori assoluti proseguono, le righe non toccate sono «invariate».
+    expect(e.ipotesi.investimenti?.[2]).toMatchObject({ tipo: 'abs', valore: 40000 });
+    expect(e.ipotesi.oneriFinanziari).toEqual([
+      { tipo: 'pct', valore: 0 },
+      { tipo: 'pct', valore: 0 },
+      { tipo: 'pct', valore: 0 },
+    ]);
+    expect(e.ipotesi.apportiSoci?.every((x) => x?.tipo === 'abs' && x.valore === 0)).toBe(true);
     expect(e.ipotesi.aliquotaImposte).toBeUndefined();
     expect(e.scartati.join(' ')).toMatch(/ebitda/);
     expect(e.scartati.length).toBe(3);

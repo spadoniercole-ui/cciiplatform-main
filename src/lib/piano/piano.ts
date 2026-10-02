@@ -45,7 +45,7 @@ export const RIGHE_INPUT: RigaInput[] = [
 
 export const ETICHETTA_RIGA: Record<RigaInput, string> = {
   ricaviVendite: 'Ricavi delle vendite e delle prestazioni',
-  altriRicavi: 'Altri ricavi (valore della produzione − ricavi)',
+  altriRicavi: 'Altri ricavi e variazioni (valore della produzione − ricavi)',
   costiOperativi: 'Costi della produzione (senza ammortamenti; personale compreso)',
   ammortamenti: 'Ammortamenti e svalutazioni',
   oneriFinanziari: 'Oneri finanziari',
@@ -193,7 +193,7 @@ export function calcolaPiano(
 
   let prev = {
     ricaviVendite: s.ricaviVendite,
-    altriRicavi: Math.max(0, s.valoreProduzione - s.ricaviVendite),
+    altriRicavi: s.valoreProduzione - s.ricaviVendite,
     costiOperativi: Math.max(0, s.costiProduzione - s.ammortamenti),
     ammortamenti: s.ammortamenti,
     oneriFinanziari: s.oneriFinanziari,

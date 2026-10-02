@@ -9,7 +9,10 @@ import {
   assicuraTabellaXbrlAzienda,
   assicuraTabelleParametriSpazio,
   assicuraTabellaProposta,
+  assicuraTabellaPosizioneAggiornata,
 } from '@/db/provision';
+import { storicoDaStatoAttuale, type PartenzaPiano } from '@/lib/piano/statoAttuale';
+import { DATI_VUOTI } from '@/lib/posizioneAggiornata/schemaCampi';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import Anthropic from '@anthropic-ai/sdk';
 import { verificaScenarioNonBloccato } from '@/app/actions/scenari';
@@ -36,7 +39,9 @@ const num = (v: unknown): number =>
       : 0;
 
 export interface DatiPianoSviluppo {
-  storico: EsercizioStorico[]; // dal piu' recente
+  /** Dal più recente; in testa lo STATO ATTUALE (posizione aggiornata se più recente del bilancio). */
+  storico: EsercizioStorico[];
+  partenza: PartenzaPiano;
   rate: RatePiano;
   orizzonte: number;
   ipotesi: IpotesiPiano;
@@ -64,7 +69,7 @@ export async function ottieniPianoSviluppoAction(
       `SELECT anno_bilancio, dati_finanziari FROM "${nomeSchema}".xbrl_storico_azienda WHERE azienda_id = $1 AND anno_bilancio IS NOT NULL ORDER BY anno_bilancio DESC LIMIT 3`,
       [aziendaId]
     );
-    const storico: EsercizioStorico[] = bil.rows.map((r) => {
+    const storicoXbrl: EsercizioStorico[] = bil.rows.map((r) => {
       const d = (r.dati_finanziari ?? {}) as Record<string, unknown>;
       return {
         anno: Number(r.anno_bilancio),
@@ -87,6 +92,23 @@ export async function ottieniPianoSviluppoAction(
         totaleDebiti: num(d.totaleDebiti),
       };
     });
+    // Stato attuale: la posizione aggiornata più recente, se successiva al bilancio.
+    await assicuraTabellaPosizioneAggiornata(nomeSchema);
+    const pa = await pool.query(
+      `SELECT data_riferimento, dati FROM "${nomeSchema}".posizione_aggiornata WHERE scenario_id = $1
+       ORDER BY data_riferimento DESC NULLS LAST, updated_at DESC LIMIT 1`,
+      [scenarioId]
+    );
+    const rigaPa = pa.rows[0];
+    const { storico, partenza } = storicoDaStatoAttuale(
+      storicoXbrl,
+      rigaPa?.data_riferimento
+        ? {
+            dataRiferimento: new Date(rigaPa.data_riferimento).toISOString().slice(0, 10),
+            dati: { ...DATI_VUOTI, ...(rigaPa.dati ?? {}) },
+          }
+        : null
+    );
     const piano = await pool.query(
       `SELECT * FROM "${nomeSchema}".piano_sviluppo WHERE scenario_id = $1 AND variante = $2`,
       [scenarioId, variante]
@@ -134,6 +156,7 @@ export async function ottieniPianoSviluppoAction(
       success: true,
       dati: {
         storico,
+        partenza,
         rate,
         orizzonte,
         ipotesi: (piano.rows[0]?.ipotesi as IpotesiPiano) ?? {},

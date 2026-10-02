@@ -93,6 +93,40 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.123.0 — 2026-10-02 (Portable 1.2.8)
+
+Terza consegna della rielaborazione del percorso dopo lo screening:
+**torna il cruscotto, a manopole, sul piano di sviluppo.**
+
+- **Si parte dallo stato attuale.** Il punto di partenza del piano è la
+  posizione aggiornata più recente, se è successiva all'ultimo bilancio
+  depositato; altrimenti l'ultimo bilancio. Una posizione infrannuale (es. al
+  30/06) porta il conto economico a dodici mesi in proporzione; se contiene
+  solo lo stato patrimoniale, il conto economico è quello dell'ultimo
+  bilancio. Il passato non si modifica.
+- **Orizzonte di 3, 4 o 5 anni**, a scelta. Allungandolo, ogni ipotesi
+  prosegue con l'ultimo valore.
+- **Una manopola per macro-voce** (ricavi, altri ricavi, costi operativi,
+  ammortamenti, oneri finanziari, aliquota, crediti clienti, debiti
+  fornitori, debiti bancari, investimenti, apporti dei soci), raggruppate per
+  Ricavi / Costi / Circolante / Finanza. Ogni manopola vale per tutti gli anni
+  del piano. Si gira trascinando, con le frecce o scrivendo il valore; doppio
+  clic la riporta a riposo. Il risultato si ricalcola subito: quattro spie
+  (EBITDA dell'ultimo anno, cassa minima, copertura minima delle rate,
+  patrimonio netto finale) e una tabella dei risultati. L'arco delle manopole
+  prende il colore dello stato del piano.
+- **L'AI gira le manopole.** Le ipotesi scritte dall'AI si leggono sulle
+  manopole (con la media e l'avviso «diversa per anno» quando variano).
+- **Niente più celle vuote nel piano dell'AI.** Il modello deve compilare
+  tutte le righe e tutti gli anni; le celle che lascia comunque vuote si
+  riempiono con «come l'anno prima» e le righe che non tocca risultano
+  invariate in modo esplicito.
+- La tabella anno per anno resta, chiusa sotto il cruscotto, per ritoccare un
+  singolo anno.
+- Gli «altri ricavi» seguono lo storico anche quando il valore della
+  produzione è inferiore ai ricavi (variazioni negative delle rimanenze): il
+  primo anno del piano non salta più rispetto al bilancio.
+
 ## 0.122.0 — 2026-10-02 (Portable 1.2.7)
 
 Seconda consegna della rielaborazione del percorso dopo lo screening:
