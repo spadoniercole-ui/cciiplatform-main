@@ -93,6 +93,21 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.120.1 — 2026-10-02 (Portable 1.2.4)
+
+- **Posizione Aggiornata anche da PDF.** La situazione contabile infrannuale
+  arriva spesso in PDF (situazione patrimoniale, conto economico di periodo,
+  elenco creditori), ma il passo accettava solo Excel, CSV e ODS: il
+  documento ricevuto non si poteva caricare. Nuovo pulsante «Leggi
+  situazione contabile (PDF)»: la piattaforma legge il documento e porta i
+  valori e la data di riferimento nel prospetto; ciò che il documento non
+  espone resta a zero ed è elencato. Si salva con «Salva» dopo il
+  controllo; il file non si conserva. Provenienza registrata «Da documento
+  PDF».
+- **Dalla lista di controllo al caricamento in un clic.** Nella valutazione
+  della proposta, la voce «Posizione contabile aggiornata» porta
+  direttamente al passo con «Carica la situazione contabile (anche PDF)».
+
 ## 0.120.0 — 2026-10-02 (Portable 1.2.3)
 
 **Proposta ricevuta: prima si legge, poi si sceglie.** L'inquadramento

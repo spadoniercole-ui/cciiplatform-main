@@ -625,6 +625,14 @@ export function SimulazioneRiceventeScenario({
                       <span className="block text-[10px] text-slate-500">Dove: {v.percorso}</span>
                     )}
                     {v.id === 'posizione' && stato && stato.posizioniAggiornate === 0 && (
+                      <a
+                        href={`/spazio/${codice}/scenari/${scenarioId}/posizione-aggiornata`}
+                        className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+                      >
+                        <Upload className="w-3 h-3" /> Carica la situazione contabile (anche PDF)
+                      </a>
+                    )}
+                    {v.id === 'posizione' && stato && stato.posizioniAggiornate === 0 && (
                       <label className="flex items-center gap-1.5 text-[10px] text-slate-600 mt-1 cursor-pointer">
                         <input
                           type="checkbox"

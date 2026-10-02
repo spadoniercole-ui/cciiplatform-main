@@ -21,6 +21,7 @@ export default async function PosizioneAggiornataPage({
   return (
     <PosizioneAggiornataScenario
       nomeSchema={contesto.nomeSchema}
+      codice={codice}
       scenarioId={Number(scenarioId)}
       aziendaId={scenario.aziendaId}
       nomeScenario={scenario.nome}
