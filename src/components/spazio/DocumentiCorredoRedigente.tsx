@@ -103,8 +103,9 @@ export function DocumentiCorredoRedigente({ nomeSchema, scenarioId, aziendaId }:
             Documenti di corredo
           </h2>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            Bozze scritte dall&apos;assistente sulla base del quadro raccolto (proposta,
-            Brogliaccio, test pratico, confronto liquidatorio). Si redigono insieme alla proposta.
+            Bozze scritte dall&apos;assistente sulla base del quadro raccolto (proposta, sintesi
+            dello scenario, test pratico, confronto liquidatorio). Si redigono insieme alla
+            proposta.
           </p>
         </div>
       </div>

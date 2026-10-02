@@ -66,6 +66,8 @@ interface Props {
   codice: string;
   /** Percorso Ricevente: dati per la chiusura (piano e Relazione) sulla stessa pagina. */
   chiusura?: DatiChiusura;
+  /** Redigente: avvisa la pagina quando le righe cambiano (il piano rilegge le rate). */
+  onRigheCambiate?: (versione: number) => void;
 }
 
 const FORM_VUOTO = {
@@ -110,6 +112,7 @@ export function PropostaScenario({
   rigaRilevanteBloccataIniziale,
   codice,
   chiusura,
+  onRigheCambiate,
 }: Props) {
   const [righe, setRighe] = useState<RigaProposta[]>([]);
   const [debitiEnte, setDebitiEnte] = useState<RigaDebitoEnte[]>([]);
@@ -151,6 +154,10 @@ export function PropostaScenario({
   // Avanza a ogni rilettura delle righe: l'Inquadramento della proposta le
   // rilegge, perche' la quota degli aderenti si calcola su di esse.
   const [versioneRighe, setVersioneRighe] = useState(0);
+  useEffect(() => {
+    if (versioneRighe > 0) onRigheCambiate?.(versioneRighe);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versioneRighe]);
 
   const carica = async () => {
     setCaricamento(true);

@@ -39,6 +39,7 @@ import { ottieniStoricoXbrlAzienda, type BilancioStoricoAzienda } from '@/app/ac
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import {
   generaConfrontoLiquidatorioSeNecessarioAction,
+  generaConfrontoLiquidatorioRedigenteSeNecessarioAction,
   ottieniConfrontoLiquidatorio,
 } from '@/app/actions/confrontoLiquidatorio';
 import { salvaVersioneRelazioneAction } from '@/app/actions/scenarioSblocco';
@@ -760,7 +761,7 @@ REGOLE TASSATIVE DI REDAZIONE:
 5. Formato Markdown, 900-1300 parole, articolato in queste sezioni:
    1. SINTESI ESECUTIVA (${sintesiTesto})
    2. ${sezione2Titolo}
-   2bis. CONFRONTO CON LO SCENARIO LIQUIDATORIO — il testo per questa sezione è già fornito qui sotto (CONFRONTO CON LO SCENARIO LIQUIDATORIO — GIÀ RICERCATO), generato con ricerca web separatamente: riportalo, integrandolo nel tono della relazione, senza riscriverlo da zero né aggiungere numeri che non ci sono già. Se il testo fornito segnala che la ricerca non è ancora disponibile, dichiara questa sezione come "non ancora disponibile — sarà nel prossimo Brogliaccio generato" invece di inventare un confronto.
+   2bis. CONFRONTO CON LO SCENARIO LIQUIDATORIO — il testo per questa sezione è già fornito qui sotto (CONFRONTO CON LO SCENARIO LIQUIDATORIO — GIÀ RICERCATO), generato con ricerca web separatamente: riportalo, integrandolo nel tono della relazione, senza riscriverlo da zero né aggiungere numeri che non ci sono già. Se il testo fornito segnala che la ricerca non è ancora disponibile, dichiara questa sezione come "non ancora disponibile" invece di inventare un confronto.
    3. QUADRO QUALITATIVO (CHECK LIST) (${isRicevuta ? 'la Check List dello Screening, generata sulle direttrici dell’ente: per un ente è questo lo strumento qualitativo, non la Check List Ministeriale — non citarla' : 'Ministeriale, e ogni check list aggiuntiva fornita — ciascuna con la propria etichetta; criticità strutturali aperte, se presenti'})
    4. QUADRO QUANTITATIVO (INDICI E DATI DI BILANCIO XBRL) (indici forniti, severità, situazione debitoria/PFN, andamento storico se disponibile — o la dichiarazione esplicita di assenza dati)
    5. RACCOMANDAZIONI OPERATIVE (che tengano conto di tutti i quadri insieme, non separatamente)
@@ -776,14 +777,21 @@ REGOLE TASSATIVE DI REDAZIONE:
     // parcheggiato, quindi la Relazione lo usa come per il Ricevente.
     const bloccoConfrontoLiquidatorio = await (async () => {
       let ris = await ottieniConfrontoLiquidatorio(nomeSchema, scenarioId);
-      // Ricevente: il Brogliaccio non c'è più; se il confronto non è già
-      // pronto (si prepara a fine valutazione) lo si prepara adesso.
-      if (isRicevuta && !(ris.success && ris.testo)) {
-        await generaConfrontoLiquidatorioSeNecessarioAction(
-          nomeSchema,
-          scenarioId,
-          scenario.aziendaId
-        );
+      // Il Brogliaccio non c'è più in nessuno dei due percorsi: se il
+      // confronto non è già pronto lo si prepara adesso.
+      if (!(ris.success && ris.testo)) {
+        if (isRicevuta)
+          await generaConfrontoLiquidatorioSeNecessarioAction(
+            nomeSchema,
+            scenarioId,
+            scenario.aziendaId
+          );
+        else
+          await generaConfrontoLiquidatorioRedigenteSeNecessarioAction(
+            nomeSchema,
+            scenarioId,
+            scenario.aziendaId
+          );
         ris = await ottieniConfrontoLiquidatorio(nomeSchema, scenarioId);
       }
       if (ris.success && ris.testo) {
