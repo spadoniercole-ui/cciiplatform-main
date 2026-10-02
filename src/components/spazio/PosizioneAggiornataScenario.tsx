@@ -24,6 +24,8 @@ import {
   type ProvenienzaPosizione,
 } from '@/app/actions/posizioneAggiornata';
 import { ImportaBilancino, type EsitoImportBilancino } from '@/components/spazio/ImportaBilancino';
+import { leggiPosizioneDaPdfAction } from '@/app/actions/posizioneAggiornataPdf';
+import { FileText } from 'lucide-react';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniAnniStoricoMax } from '@/app/actions/parametriSpazio';
 import { CAMPI_POSIZIONE, DATI_VUOTI } from '@/lib/posizioneAggiornata/schemaCampi';
@@ -37,6 +39,8 @@ import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
 
 interface Props {
   nomeSchema: string;
+  /** Codice dello spazio: serve al caricamento dei file. */
+  codice: string;
   scenarioId: number;
   aziendaId: number;
   nomeScenario: string;
@@ -49,6 +53,7 @@ function formatEuro(val: number | null | undefined): string {
 
 export function PosizioneAggiornataScenario({
   nomeSchema,
+  codice,
   scenarioId,
   aziendaId,
   nomeScenario,
@@ -67,6 +72,7 @@ export function PosizioneAggiornataScenario({
   const [idInModifica, setIdInModifica] = useState<number | null>(null);
 
   const [caricamento, setCaricamento] = useState(true);
+  const [letturaPdfInCorso, setLetturaPdfInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [salvataggio, setSalvataggio] = useState(false);
   const [salvato, setSalvato] = useState(false);
@@ -190,6 +196,56 @@ export function PosizioneAggiornataScenario({
     esportaPosizioneExcel(nomeScenario, riferimenti, dati);
   };
 
+  /** Situazione contabile ricevuta in PDF: la legge l'AI e la porta nel prospetto. */
+  const handleLeggiPdf = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setEsitoImportazione(`«${file.name}» non è un PDF.`);
+      return;
+    }
+    setLetturaPdfInCorso(true);
+    setEsitoImportazione(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('codice', codice);
+      const up = await fetch('/api/blob-upload', { method: 'POST', body: fd });
+      const corpo = await up.json().catch(() => ({}));
+      if (!up.ok || corpo.error) {
+        setEsitoImportazione(corpo.error || `Impossibile caricare «${file.name}».`);
+        return;
+      }
+      const r = await leggiPosizioneDaPdfAction(nomeSchema, scenarioId, {
+        nome: file.name,
+        url: corpo.url,
+      });
+      if (!r.success || !r.lettura) {
+        setEsitoImportazione(r.error || 'Lettura non riuscita.');
+        return;
+      }
+      const l = r.lettura;
+      setIdInModifica(null);
+      setDati(l.dati);
+      if (l.dataRiferimento) setDataRiferimento(l.dataRiferimento);
+      setDeliberato(false);
+      setProvenienza({ origine: 'documento', documentoId: null });
+      setSalvato(false);
+      const etichetta = (k: string) => CAMPI_POSIZIONE.find((c) => c.chiave === k)?.etichetta ?? k;
+      setEsitoImportazione(
+        `«${file.name}» letto: ${l.trovati.length} valori portati nel prospetto${
+          l.dataRiferimento
+            ? `, situazione al ${l.dataRiferimento.split('-').reverse().join('/')}`
+            : ''
+        }. ${
+          l.mancanti.length
+            ? `Non esposti nel documento (restano a zero, completali se li hai): ${l.mancanti.map(etichetta).join('; ')}. `
+            : ''
+        }${l.note.length ? `Note della lettura: ${l.note.join(' — ')}. ` : ''}Controlla i valori, poi premi Salva.`
+      );
+    } finally {
+      setLetturaPdfInCorso(false);
+    }
+  };
+
   const handleImporta = async (file: File) => {
     setImportazioneInCorso(true);
     setEsitoImportazione(null);
@@ -279,6 +335,11 @@ export function PosizioneAggiornataScenario({
                     Da bilancino
                   </span>
                 )}
+                {pos.origine === 'documento' && (
+                  <span className="ml-2 text-[10px] text-blue-600 uppercase font-bold">
+                    Da documento PDF
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -355,6 +416,21 @@ export function PosizioneAggiornataScenario({
                 const file = e.target.files?.[0];
                 if (file) handleImporta(file);
                 e.target.value = '';
+              }}
+            />
+          </label>
+          <label className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase rounded-lg transition-colors cursor-pointer">
+            <FileText className="w-3.5 h-3.5" />
+            {letturaPdfInCorso ? 'Lettura del PDF…' : 'Leggi situazione contabile (PDF)'}
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              disabled={letturaPdfInCorso}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) void handleLeggiPdf(file);
               }}
             />
           </label>

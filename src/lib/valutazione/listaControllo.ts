@@ -95,7 +95,7 @@ export function valutaListaControllo(i: InputListaControllo): EsitoListaControll
         ? `${i.posizioniAggiornate} ${i.posizioniAggiornate === 1 ? 'caricamento' : 'caricamenti'} nei dati attualizzati.`
         : i.posizioneNonPervenutaDichiarata
           ? 'Dichiarata non pervenuta: la valutazione userà l’ultimo bilancio.'
-          : 'Carica il bilancino o la situazione contabile ricevuti, oppure dichiarala non pervenuta.',
+          : 'Carica il bilancino o la situazione contabile ricevuti (Excel o PDF), oppure dichiarala non pervenuta.',
     percorso: posOk ? null : 'Scenari › questo scenario › passo «Posizione Aggiornata»',
   });
 

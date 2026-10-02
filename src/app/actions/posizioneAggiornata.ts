@@ -37,7 +37,7 @@ export interface PosizioneAggiornata {
 }
 
 export interface ProvenienzaPosizione {
-  origine: 'bilancino' | 'prospetto' | 'manuale';
+  origine: 'bilancino' | 'prospetto' | 'manuale' | 'documento';
   documentoId: number | null;
 }
 
