@@ -104,7 +104,8 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
     perAnno.map((a) => a.mappa.get(codice)?.soglia).find((x) => !!x) ?? '—';
 
   return (
-    <div className="space-y-4">
+    // Affiancati: a sinistra i calcoli, a destra le scelte — senza scorrere.
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] items-start">
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
           <TrendingUp className="w-4 h-4 text-blue-600" />
@@ -172,7 +173,7 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
           </div>
         )}
       </div>
-      <div className="max-w-2xl bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
           <TrendingUp className="w-4 h-4 text-blue-600" />
           <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">

@@ -8,6 +8,7 @@
 // Configurazione XBRL e Indici — niente due schermate diverse per la
 // stessa cosa.
 
+import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus, Building2, ArrowRight, Ban, RotateCcw, X, Search } from 'lucide-react';
@@ -112,7 +113,12 @@ export function AziendeManager({ nomeSchema, codice }: Props) {
   const q = ricerca.trim().toLowerCase();
   const aziendeFiltrate = q
     ? aziende.filter((a) =>
-        [a.ragioneSociale, a.codiceFiscale, a.partitaIva]
+        [
+          a.ragioneSociale,
+          a.codiceFiscale,
+          a.partitaIva,
+          ...(a.identificativiEnte ?? []).map((x) => x.valore),
+        ]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(q))
       )
@@ -244,7 +250,7 @@ export function AziendeManager({ nomeSchema, codice }: Props) {
               type="text"
               value={ricerca}
               onChange={(e) => setRicerca(e.target.value)}
-              placeholder="Cerca per ragione sociale, CF o P.IVA..."
+              placeholder="Cerca per ragione sociale, matricola, CF o P.IVA..."
               className="w-64 max-w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 text-slate-900"
             />
             {ricerca && (
@@ -290,6 +296,11 @@ export function AziendeManager({ nomeSchema, codice }: Props) {
                 <div className="font-bold text-slate-900 text-xs group-hover:text-blue-600 transition-colors">
                   {azienda.ragioneSociale}
                 </div>
+                {(azienda.identificativiEnte?.length ?? 0) > 0 && (
+                  <div className="mt-0.5">
+                    <IdentificativiEnte identificativi={azienda.identificativiEnte!} compatto />
+                  </div>
+                )}
                 <div className="text-[10px] text-slate-400 font-mono mt-0.5">
                   {azienda.codiceFiscale || 'CF N/D'} · {azienda.partitaIva || 'P.IVA N/D'} · ATECO{' '}
                   {azienda.codiceAteco || 'N/D'}

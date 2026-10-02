@@ -3,6 +3,9 @@ import Link from 'next/link';
 import { ArrowLeft, LayoutGrid } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
+import { leggiRiferimentoAzienda } from '@/lib/anagraficaEnte/identificativi';
+import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
+import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
 
 export default async function ScenarioLayout({
   children,
@@ -31,6 +34,10 @@ export default async function ScenarioLayout({
   }
 
   const base = `/spazio/${codice}/scenari/${scenarioId}`;
+  // Testata dell'azienda: identificativi presso l'ente in evidenza.
+  const riferimento = await leggiRiferimentoAzienda(contesto.nomeSchema, scenario.aziendaId).catch(
+    () => null
+  );
 
   return (
     <div className="max-w-5xl space-y-4">
@@ -52,6 +59,17 @@ export default async function ScenarioLayout({
                 : 'Proposta da definire —'}{' '}
               {scenario.origineProposta}
             </p>
+            {riferimento && (
+              <p className="mt-1">
+                <IdentificativiEnte
+                  identificativi={riferimento.identificativi}
+                  partitaIva={riferimento.partitaIva}
+                  codiceFiscale={riferimento.codiceFiscale}
+                  compatto
+                />
+              </p>
+            )}
+            {riferimento && <RiferimentoAziendaStampa {...riferimento} />}
           </div>
           <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-600">
             {scenario.stato}

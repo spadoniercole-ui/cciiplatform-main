@@ -11,6 +11,8 @@ export interface RigaAzienda {
   partitaIva: string | null;
   codiceFiscale: string | null;
   attiva: boolean;
+  /** Identificativi presso l'ente: in evidenza, prima dei camerali. */
+  identificativiEnte?: { etichetta: string; valore: string }[];
 }
 export interface RigaUtente {
   nome: string;
@@ -118,11 +120,15 @@ export function DashboardPannelli({
         ) : (
           <div className="divide-y divide-slate-100">
             {aziende.slice(0, MAX).map((a) => {
-              const rif = a.partitaIva
+              const camerale = a.partitaIva
                 ? `P.IVA ${a.partitaIva}`
                 : a.codiceFiscale
                   ? `C.F. ${a.codiceFiscale}`
                   : null;
+              const ente = (a.identificativiEnte ?? [])
+                .map((x) => `${x.etichetta} ${x.valore}`)
+                .join(' · ');
+              const rif = ente ? (camerale ? `${ente} — ${camerale}` : ente) : camerale;
               return (
                 <Link
                   key={a.id}

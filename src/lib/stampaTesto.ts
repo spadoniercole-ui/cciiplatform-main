@@ -30,6 +30,40 @@ let parametriStampa: ParametriStampa = PARAMETRI_STAMPA_PREDEFINITI;
 export function impostaParametriStampa(p: ParametriStampa | null): void {
   parametriStampa = p ?? PARAMETRI_STAMPA_PREDEFINITI;
 }
+/**
+ * RIFERIMENTO DELL'AZIENDA in ogni stampa fatta dentro la scheda azienda o
+ * uno scenario: denominazione e identificativi presso l'ente in evidenza,
+ * dati camerali dopo. Lo imposta il layout (RiferimentoAziendaStampa) e lo
+ * azzera all'uscita, così una stampa fuori contesto non porta un'azienda
+ * sbagliata.
+ */
+export interface RiferimentoAziendaStampa {
+  azienda: string;
+  identificativi: { etichetta: string; valore: string }[];
+  partitaIva: string | null;
+  codiceFiscale: string | null;
+}
+let riferimentoAzienda: RiferimentoAziendaStampa | null = null;
+export function impostaRiferimentoAziendaStampa(r: RiferimentoAziendaStampa | null): void {
+  riferimentoAzienda = r;
+}
+function rigaRiferimentoAzienda(): string {
+  const r = riferimentoAzienda;
+  if (!r) return '';
+  const ident = r.identificativi
+    .map((x) => `${escH(x.etichetta)} <b>${escH(x.valore)}</b>`)
+    .join(' · ');
+  const camerali = [
+    r.partitaIva ? `P.IVA ${escH(r.partitaIva)}` : null,
+    r.codiceFiscale && r.codiceFiscale !== r.partitaIva ? `C.F. ${escH(r.codiceFiscale)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return `<div class="rif-azienda"><b>${escH(r.azienda)}</b>${ident ? ` — ${ident}` : ''}${
+    camerali ? ` <span class="camerali">${camerali}</span>` : ''
+  }</div>`;
+}
+
 const escH = (s: string) =>
   s
     .replace(/&/g, '&amp;')
@@ -49,6 +83,8 @@ function stilePagina(): string {
   .testata { display:flex; align-items:center; gap:18px; border-bottom:1px solid #cbd5e1; padding-bottom:10px; margin-bottom:18px; }
   .testata img { max-height:72px; max-width:220px; }
   .testata .ente { font-size:13px; color:#334155; white-space:pre-line; line-height:1.35; letter-spacing:.02em; }
+  .rif-azienda { font-size:12px; color:#1e293b; margin:0 0 14px; }
+  .rif-azienda .camerali { font-size:10px; color:#94a3b8; margin-left:6px; }
   .pie-ente { font-size:10px; color:#64748b; white-space:pre-line; border-top:1px solid #cbd5e1; padding-top:6px; margin-top:24px; text-align:center; }
   @media print {
     body { max-width:none; margin:0; ${conTestata ? 'padding-top:96px;' : ''} ${conPie ? 'padding-bottom:48px;' : ''} }
@@ -147,6 +183,7 @@ export function stampaHtml(
 <body>
   ${testataEnte()}
   <h1>${escH(titolo)}</h1>
+  ${rigaRiferimentoAzienda()}
   ${sottotitolo ? `<div class="sub">${escH(sottotitolo)}</div>` : ''}
   ${corpoHtml}
   ${pieEnte()}
@@ -179,6 +216,7 @@ export function stampaTesto(titolo: string, testo: string, dataGenerazione: stri
 <body>
   ${testataEnte()}
   <h1>${escH(titolo)}</h1>
+  ${rigaRiferimentoAzienda()}
   ${dataFormattata ? `<div class="data">Generato il ${dataFormattata}</div>` : ''}
   <div class="testo">${escH(testo)}</div>
   ${pieEnte()}

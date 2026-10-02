@@ -12,6 +12,7 @@
 // di lettere e relazioni li richiedono per esteso — vedi i documenti reali
 // di riferimento (convocazione INPS/INAIL e piano di risanamento).
 
+import { leggiIdentificativiEntePerAziende } from '@/lib/anagraficaEnte/identificativi';
 import { assicuraTabellaAziende } from '@/db/provision';
 import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
 
@@ -20,6 +21,8 @@ export interface Azienda {
   ragioneSociale: string;
   codiceFiscale: string | null;
   partitaIva: string | null;
+  /** Identificativi presso l'ente (solo negli elenchi; vuoto se non salvati). */
+  identificativiEnte?: { etichetta: string; valore: string }[];
   codiceAteco: string | null;
   logoUrl: string | null;
   attiva: boolean;
@@ -140,9 +143,14 @@ export async function ottieniAziende(nomeSchema: string): Promise<RisultatoElenc
         ? righe.filter((r) => contesto.aziendeConsentite?.includes(Number(r.id)))
         : righe;
 
+    const mappate = consentite.map(mappaRigaAzienda);
+    const ident = await leggiIdentificativiEntePerAziende(
+      nomeSchema,
+      mappate.map((a) => a.id)
+    ).catch(() => new Map());
     return {
       success: true,
-      aziende: consentite.map(mappaRigaAzienda),
+      aziende: mappate.map((a) => ({ ...a, identificativiEnte: ident.get(a.id) ?? [] })),
     };
   } catch (error: any) {
     console.error('[ottieniAziende] Errore:', error);
