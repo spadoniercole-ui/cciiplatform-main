@@ -894,6 +894,10 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
       PRIMARY KEY (scenario_id, variante)
     )`
   );
+  // Ricevente (0.125): rettifiche delle manopole sul piano dell'azienda.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS rettifiche JSONB`
+  );
   // Vecchia simulazione a levette (sostituita dal Piano di sviluppo nella
   // 0.109.113 e tolta dal codice nella 0.109.118, su indicazione di Ercole:
   // «la simulazione attuale la puoi cestinare»). Le sue tabelle si

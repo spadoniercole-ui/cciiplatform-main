@@ -93,6 +93,32 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.125.0 — 2026-10-02 (Portable 1.2.10)
+
+Correttivi sul piano di sviluppo, dopo la prova di Ercole sulla demo
+(«l'AI non interviene e due schemi che dicono cose diverse non aiutano»).
+
+- **Ricevente: si parte dal piano dell'azienda.** Chi riceve la proposta non
+  costruisce un piano suo, mette alla prova quello ricevuto. Con il piano
+  dell'azienda caricato, a manopole ferme il cruscotto mostra esattamente
+  quel piano (proiettato dallo stato attuale) e ogni manopola lo
+  **rettifica** in percentuale, uguale per tutti gli anni: −10 sui ricavi =
+  ogni anno il 10% in meno di quanto dichiarato. Le righe che il piano
+  dell'azienda non contiene restano sulle manopole ordinarie.
+- **Un solo schema.** Per il Ricevente il confronto con il riferimento di
+  settore (dove l'azienda è ottimista) sta sopra, il cruscotto sotto: a
+  manopole ferme i numeri coincidono con la colonna «azienda» del confronto.
+  Sparisce «Copia nella variante azienda», non serve più. Il Redigente resta
+  com'era: parte dallo stato attuale e costruisce il proprio piano.
+- **L'AI torna a intervenire.** La risposta chiesta all'AI era troppo lunga
+  (ogni riga per ogni anno con la motivazione) e si troncava: ora l'AI
+  imposta **una manopola per riga** con la motivazione — per il Ricevente
+  le rettifiche sul piano dell'azienda — e la piattaforma la estende a tutti
+  gli anni.
+- **Rate del Ricevente nel piano.** Le rate vengono dalla lettura della
+  proposta ricevuta (la posizione dell'ente), non solo dalle righe scritte a
+  mano; si calcolano sull'orizzonte massimo, così allungandolo non spariscono.
+
 ## 0.124.0 — 2026-10-02 (Portable 1.2.9)
 
 Quarta consegna della rielaborazione del percorso dopo lo screening:

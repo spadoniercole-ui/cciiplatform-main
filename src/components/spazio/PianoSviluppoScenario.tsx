@@ -48,6 +48,13 @@ import {
   type DefinizioneManopola,
 } from '@/lib/piano/statoAttuale';
 import { Manopola } from '@/components/spazio/Manopola';
+import {
+  applicaRettifiche,
+  definizioneRettifica,
+  righeDelPianoAzienda,
+  type Rettifiche,
+} from '@/lib/piano/rettifiche';
+import { ipotesiDaPianoAzienda } from '@/lib/piano/pianoAziendale';
 
 const GRUPPI: DefinizioneManopola['gruppo'][] = ['Ricavi', 'Costi', 'Circolante', 'Finanza'];
 
@@ -104,6 +111,8 @@ export function PianoSviluppoScenario({
 }: Props) {
   const [dati, setDati] = useState<DatiPianoSviluppo | null>(null);
   const [ipotesi, setIpotesi] = useState<IpotesiPiano>({});
+  // Ricevente con il piano dell'azienda: le manopole lo rettificano.
+  const [rettifiche, setRettifiche] = useState<Rettifiche>({});
   const [orizzonte, setOrizzonte] = useState(5);
   const [variante, setVariante] = useState('base');
   const [note, setNote] = useState('');
@@ -119,6 +128,7 @@ export function PianoSviluppoScenario({
     if (!r.success || !r.dati) return setErrore(r.error ?? 'Lettura non riuscita.');
     setDati(r.dati);
     setIpotesi(r.dati.ipotesi);
+    setRettifiche(r.dati.rettifiche ?? {});
     setOrizzonte(r.dati.orizzonte);
     setNote(r.dati.note ?? '');
     setVariante(r.dati.variante);
@@ -129,14 +139,32 @@ export function PianoSviluppoScenario({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, scenarioId, aziendaId]);
 
+  // Ricevente: il punto di partenza è il piano dell'azienda, se caricato.
+  const pianoAzienda =
+    tipoProposta === 'RICEVUTA' ? (contestoConfronto?.pianoAzienda ?? null) : null;
+  const ipAzienda = useMemo(() => {
+    if (!pianoAzienda || !dati || dati.storico.length === 0) return null;
+    const ip = ipotesiDaPianoAzienda(pianoAzienda, dati.storico[0].anno + 1, orizzonte);
+    return righeDelPianoAzienda(ip).size ? ip : null;
+  }, [pianoAzienda, dati, orizzonte]);
+  const righeAzienda = useMemo(
+    () => (ipAzienda ? righeDelPianoAzienda(ipAzienda) : new Set<RigaInput>()),
+    [ipAzienda]
+  );
+  const modoRettifica = !!ipAzienda;
+  const ipotesiEffettive = useMemo(
+    () => (ipAzienda ? applicaRettifiche(ipAzienda, rettifiche, ipotesi) : ipotesi),
+    [ipAzienda, rettifiche, ipotesi]
+  );
+
   const esito = useMemo(() => {
     if (!dati || dati.storico.length === 0) return null;
     const rate = {
       ente: dati.rate.ente.slice(0, orizzonte),
       altri: dati.rate.altri.slice(0, orizzonte),
     };
-    return calcolaPiano(dati.storico[0], orizzonte, ipotesi, rate, dati.capitaleSociale);
-  }, [dati, ipotesi, orizzonte]);
+    return calcolaPiano(dati.storico[0], orizzonte, ipotesiEffettive, rate, dati.capitaleSociale);
+  }, [dati, ipotesiEffettive, orizzonte]);
 
   if (errore)
     return (
@@ -166,6 +194,7 @@ export function PianoSviluppoScenario({
         : 'ok';
 
   const setCella = (riga: RigaInput, i: number, ip: Ipotesi | null) => {
+    if (righeAzienda.has(riga)) return; // la riga segue il piano dell'azienda e la sua manopola
     const arr = [...(ipotesi[riga] ?? [])];
     while (arr.length < orizzonte) arr.push(null);
     arr[i] = ip;
@@ -270,8 +299,9 @@ export function PianoSviluppoScenario({
       scenarioId,
       variante,
       orizzonte,
-      ipotesi,
-      note || null
+      ipotesiEffettive,
+      note || null,
+      modoRettifica ? rettifiche : null
     );
     if (!r.success) return setErrore(r.error ?? 'Errore.');
     await carica(variante);
@@ -301,7 +331,7 @@ export function PianoSviluppoScenario({
         },
         pianoAzienda: contestoConfronto.pianoAzienda,
         scostamenti: contestoConfronto.scostamenti,
-        ipotesiCorrenti: tipoProposta === 'RICEVUTA' ? null : ipotesi,
+        ipotesiCorrenti: ipotesi,
         vincoli: esito.vincoli.map((v) => v.testo),
       });
       if (!r.success) {
@@ -366,8 +396,29 @@ export function PianoSviluppoScenario({
     );
   };
 
+  // Ricevente: prima il piano dell'azienda contro il riferimento (dove è
+  // ottimista), poi il cruscotto che lo rettifica. Redigente: in coda,
+  // come autoverifica della propria variante.
+  const confronto = (
+    <ConfrontoPianoAziendale
+      nomeSchema={nomeSchema}
+      codice={codice}
+      scenarioId={scenarioId}
+      aziendaId={aziendaId}
+      dati={dati}
+      orizzonte={orizzonte}
+      onVarianteCreata={(v) => carica(v)}
+      lato={tipoProposta === 'RICEVUTA' ? 'RICEVUTA' : 'DA_DEFINIRE'}
+      ipotesiCorrenti={ipotesiEffettive}
+      nomeVariante={variante}
+      onContesto={setContestoConfronto}
+      senzaCopia={tipoProposta === 'RICEVUTA'}
+    />
+  );
+
   return (
     <div className="space-y-4">
+      {tipoProposta === 'RICEVUTA' && confronto}
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
         <div className="flex items-start gap-2 flex-wrap">
           <TrendingUp className="w-4 h-4 text-blue-600 mt-0.5" />
@@ -375,13 +426,29 @@ export function PianoSviluppoScenario({
             <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
               Piano di sviluppo
             </h2>
-            <p className="text-[11px] text-slate-600 mt-0.5">
-              Si parte dallo stato attuale — <strong>{dati.partenza.etichetta}</strong> — e si
-              proietta in avanti. Gira le manopole: ogni manopola vale per tutti gli anni del piano
-              e il risultato si ricalcola subito. Per ritoccare un solo anno apri la tabella anno
-              per anno. Il personale è dentro i costi operativi; le rate del piano di rientro
-              vengono dalla proposta.
-            </p>
+            {modoRettifica ? (
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Si parte dal <strong>piano dell’azienda</strong>, proiettato dallo stato attuale (
+                <strong>{dati.partenza.etichetta}</strong>). A manopole ferme vedi il piano così
+                come l’ha presentato l’azienda; ogni manopola lo rettifica, uguale per tutti gli
+                anni: −10 sui ricavi = ogni anno il 10% in meno di quanto dichiarato. Le rate del
+                piano di rientro vengono dalla proposta.
+              </p>
+            ) : tipoProposta === 'RICEVUTA' ? (
+              <p className="text-[11px] text-amber-800 mt-0.5">
+                Il piano dell’azienda non è ancora caricato: caricalo nel riquadro qui sopra e le
+                manopole partiranno da quello. Intanto lavorano sullo stato attuale —{' '}
+                <strong>{dati.partenza.etichetta}</strong>.
+              </p>
+            ) : (
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Si parte dallo stato attuale — <strong>{dati.partenza.etichetta}</strong> — e si
+                proietta in avanti. Gira le manopole: ogni manopola vale per tutti gli anni del
+                piano e il risultato si ricalcola subito. Per ritoccare un solo anno apri la tabella
+                anno per anno. Il personale è dentro i costi operativi; le rate del piano di rientro
+                vengono dalla proposta.
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <label className="text-[10px] font-bold text-slate-500 uppercase">Variante</label>
@@ -406,8 +473,9 @@ export function PianoSviluppoScenario({
                   scenarioId,
                   n,
                   orizzonte,
-                  ipotesi,
-                  note || null
+                  ipotesiEffettive,
+                  note || null,
+                  modoRettifica ? rettifiche : null
                 );
                 if (!r.success) return setErrore(r.error ?? 'Errore.');
                 await carica(n);
@@ -422,14 +490,22 @@ export function PianoSviluppoScenario({
               onClick={elaboraConAi}
               disabled={aiInCorso || !contestoConfronto || !esito}
               className="flex items-center gap-1 px-2 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
-              title="L’AI scrive le ipotesi cella per cella con la motivazione; il calcolo resta al motore. Una sola chiamata, salvata come variante «elaborazione-ai»."
+              title={
+                modoRettifica
+                  ? 'L’AI rettifica le righe del piano dell’azienda dove è più ottimista del riferimento, con la motivazione; il calcolo resta al motore. Salvata come variante «elaborazione-ai».'
+                  : 'L’AI imposta le manopole, una per riga, con la motivazione; il calcolo resta al motore. Salvata come variante «elaborazione-ai».'
+              }
             >
               {aiInCorso ? (
                 <RefreshCw className="w-3 h-3 animate-spin" />
               ) : (
                 <Sparkles className="w-3 h-3" />
               )}
-              {aiInCorso ? 'Elaborazione…' : 'Elabora le ipotesi con l’AI'}
+              {aiInCorso
+                ? 'Elaborazione…'
+                : modoRettifica
+                  ? 'L’AI rettifica il piano dell’azienda'
+                  : 'L’AI imposta le manopole'}
             </button>
             {variante !== 'base' && (
               <button
@@ -519,7 +595,31 @@ export function PianoSviluppoScenario({
                   <div className="flex flex-wrap justify-center gap-1">
                     {manopole
                       .filter((m) => m.gruppo === g)
-                      .map((m) => {
+                      .map((m0) => {
+                        if (righeAzienda.has(m0.riga)) {
+                          const m = definizioneRettifica(m0);
+                          const r = rettifiche[m.riga];
+                          return (
+                            <Manopola
+                              key={m.riga}
+                              etichetta={m.etichetta}
+                              valore={r?.valore ?? 0}
+                              min={m.min}
+                              max={m.max}
+                              passo={m.passo}
+                              neutro={m.neutro}
+                              unita={m.unita}
+                              aiuto={r?.motivazione ? `${m.aiuto}\nAI: ${r.motivazione}` : m.aiuto}
+                              stato={statoGlobale}
+                              daAi={!!r?.motivazione}
+                              onChange={(v) => {
+                                setRettifiche((x) => ({ ...x, [m.riga]: { valore: v } }));
+                                setModificato(true);
+                              }}
+                            />
+                          );
+                        }
+                        const m = m0;
                         const l = letturaManopola(m, ipotesi, orizzonte);
                         return (
                           <Manopola
@@ -645,7 +745,8 @@ export function PianoSviluppoScenario({
                       </td>
                     ))}
                     {anniPiano.map((a, i) => {
-                      const ip = ipotesi[riga]?.[i] ?? null;
+                      const ip = ipotesiEffettive[riga]?.[i] ?? null;
+                      const daAzienda = righeAzienda.has(riga);
                       return (
                         <td key={a.anno} className="px-1 py-1 text-right">
                           <div className="flex items-center justify-end gap-1">
@@ -653,6 +754,7 @@ export function PianoSviluppoScenario({
                               type="number"
                               step="any"
                               value={ip ? ip.valore : ''}
+                              disabled={daAzienda}
                               placeholder={
                                 RIGHE_FLUSSO.has(riga)
                                   ? riga === 'aliquotaImposte'
@@ -798,19 +900,7 @@ export function PianoSviluppoScenario({
         </p>
       )}
 
-      <ConfrontoPianoAziendale
-        nomeSchema={nomeSchema}
-        codice={codice}
-        scenarioId={scenarioId}
-        aziendaId={aziendaId}
-        dati={dati}
-        orizzonte={orizzonte}
-        onVarianteCreata={(v) => carica(v)}
-        lato={tipoProposta === 'RICEVUTA' ? 'RICEVUTA' : 'DA_DEFINIRE'}
-        ipotesiCorrenti={ipotesi}
-        nomeVariante={variante}
-        onContesto={setContestoConfronto}
-      />
+      {tipoProposta !== 'RICEVUTA' && confronto}
 
       <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
         <label className="block text-[9px] font-bold text-slate-400 uppercase">
