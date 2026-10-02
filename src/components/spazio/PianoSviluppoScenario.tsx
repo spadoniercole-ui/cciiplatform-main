@@ -24,6 +24,7 @@ import {
   type DatiPianoSviluppo,
 } from '@/app/actions/pianoSviluppo';
 import {
+  aliquotaImplicita,
   ETICHETTA_RIGA,
   RIGHE_FLUSSO,
   RIGHE_INPUT,
@@ -40,6 +41,47 @@ import {
   type ContestoConfronto,
 } from '@/components/spazio/ConfrontoPianoAziendale';
 import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
+import {
+  applicaManopola,
+  definizioniManopole,
+  letturaManopola,
+  type DefinizioneManopola,
+} from '@/lib/piano/statoAttuale';
+import { Manopola } from '@/components/spazio/Manopola';
+
+const GRUPPI: DefinizioneManopola['gruppo'][] = ['Ricavi', 'Costi', 'Circolante', 'Finanza'];
+
+/** Allunga le ipotesi quando cresce l'orizzonte: l'ultimo valore di ogni riga prosegue. */
+function estendiIpotesi(ip: IpotesiPiano, orizzonte: number): IpotesiPiano {
+  const out: IpotesiPiano = {};
+  for (const [r, arr] of Object.entries(ip) as [RigaInput, (Ipotesi | null)[]][]) {
+    const a = [...(arr ?? [])].slice(0, orizzonte);
+    const ultimo = [...a].reverse().find(Boolean) ?? null;
+    while (a.length < orizzonte)
+      a.push(ultimo ? { tipo: ultimo.tipo, valore: ultimo.valore } : null);
+    out[r] = a;
+  }
+  return out;
+}
+
+function Spia({
+  etichetta,
+  valore,
+  ok,
+}: {
+  etichetta: string;
+  valore: string;
+  ok: boolean | null;
+}) {
+  const colore = ok === null ? 'bg-slate-300' : ok ? 'bg-emerald-500' : 'bg-red-500';
+  return (
+    <div className="flex-1 min-w-[120px] bg-white border border-slate-200 rounded-lg px-3 py-2">
+      <span className="text-[9px] text-slate-400 uppercase font-bold block">{etichetta}</span>
+      <span className="text-sm font-bold text-slate-900 block tabular-nums">{valore}</span>
+      <div className={`h-1.5 rounded-full mt-1 ${colore}`} />
+    </div>
+  );
+}
 
 interface Props {
   nomeSchema: string;
@@ -114,6 +156,14 @@ export function PianoSviluppoScenario({
   const storico = [...dati.storico].reverse(); // dal piu' vecchio
   const base = dati.storico[0];
   const anniPiano = esito?.anni ?? [];
+  const manopole = definizioniManopole(base, aliquotaImplicita(base) ?? 27.9);
+  const statoGlobale: 'ok' | 'attenzione' | 'critico' = !esito
+    ? 'ok'
+    : esito.vincoli.some((v) => v.codice === 'CASSA_NEGATIVA' || v.codice === 'RATE_NON_COPERTE')
+      ? 'critico'
+      : esito.vincoli.length
+        ? 'attenzione'
+        : 'ok';
 
   const setCella = (riga: RigaInput, i: number, ip: Ipotesi | null) => {
     const arr = [...(ipotesi[riga] ?? [])];
@@ -131,7 +181,7 @@ export function PianoSviluppoScenario({
       case 'ricaviVendite':
         return s.ricaviVendite;
       case 'altriRicavi':
-        return Math.max(0, s.valoreProduzione - s.ricaviVendite);
+        return s.valoreProduzione - s.ricaviVendite;
       case 'costiOperativi':
         return Math.max(0, s.costiProduzione - s.ammortamenti);
       case 'ammortamenti':
@@ -326,10 +376,10 @@ export function PianoSviluppoScenario({
               Piano di sviluppo
             </h2>
             <p className="text-[11px] text-slate-600 mt-0.5">
-              Le righe sono le macro-voci del bilancio XBRL, così ogni ipotesi ha di fronte il dato
-              da cui parte. Per ogni riga di ipotesi e ogni anno: variazione % sull’anno prima,
-              oppure valore assoluto. Le righe in grassetto si calcolano. Il personale è dentro i
-              costi della produzione: la leva agisce sul cumulato. Le rate del piano di rientro
+              Si parte dallo stato attuale — <strong>{dati.partenza.etichetta}</strong> — e si
+              proietta in avanti. Gira le manopole: ogni manopola vale per tutti gli anni del piano
+              e il risultato si ricalcola subito. Per ritoccare un solo anno apri la tabella anno
+              per anno. Il personale è dentro i costi operativi; le rate del piano di rientro
               vengono dalla proposta.
             </p>
           </div>
@@ -406,168 +456,316 @@ export function PianoSviluppoScenario({
             <select
               value={orizzonte}
               onChange={(e) => {
-                setOrizzonte(Number(e.target.value));
+                const n = Number(e.target.value);
+                setOrizzonte(n);
+                setIpotesi((ip) => estendiIpotesi(ip, n));
                 setModificato(true);
               }}
               className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg"
             >
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n}>
-                  {n} {n === 1 ? 'anno' : 'anni'}
-                </option>
-              ))}
+              {Array.from(new Set([orizzonte, 3, 4, 5]))
+                .sort((a, b) => a - b)
+                .map((n) => (
+                  <option key={n} value={n}>
+                    {n} {n === 1 ? 'anno' : 'anni'}
+                  </option>
+                ))}
             </select>
           </div>
         </div>
 
-        <div className="overflow-x-auto border border-slate-200 rounded-lg">
-          <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-[9px] uppercase text-slate-500">
-              <tr>
-                <th className="px-2 py-2 text-left font-bold sticky left-0 bg-slate-50 min-w-64">
-                  Voce
-                </th>
-                {storico.map((s) => (
-                  <th key={s.anno} className="px-2 py-2 text-right font-bold">
-                    {s.anno}
-                  </th>
-                ))}
-                {anniPiano.map((a) => (
-                  <th key={a.anno} className="px-2 py-2 text-right font-bold text-blue-700">
-                    {a.anno} (piano)
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {RIGHE_INPUT.map((riga) => (
-                <tr key={riga}>
-                  <td className="px-2 py-1.5 text-slate-800 sticky left-0 bg-white">
-                    {ETICHETTA_RIGA[riga]}
-                  </td>
-                  {storico.map((s) => (
-                    <td key={s.anno} className="px-2 py-1.5 text-right text-slate-600 tabular-nums">
-                      {riga === 'aliquotaImposte' ? '—' : fmt(valoreStorico(riga, s))}
-                    </td>
-                  ))}
-                  {anniPiano.map((a, i) => {
-                    const ip = ipotesi[riga]?.[i] ?? null;
-                    return (
-                      <td key={a.anno} className="px-1 py-1 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <input
-                            type="number"
-                            step="any"
-                            value={ip ? ip.valore : ''}
-                            placeholder={
-                              RIGHE_FLUSSO.has(riga)
-                                ? riga === 'aliquotaImposte'
-                                  ? fmt(valorePiano(riga, a))
-                                  : '0'
-                                : '0%'
-                            }
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              if (v === '') return setCella(riga, i, null);
-                              setCella(riga, i, {
-                                tipo: ip?.tipo ?? (RIGHE_FLUSSO.has(riga) ? 'abs' : 'pct'),
-                                valore: Number(v),
-                              });
+        {esito && (
+          <div className="space-y-3">
+            <div className="flex gap-2 flex-wrap">
+              {(() => {
+                const ultimo = anniPiano[anniPiano.length - 1];
+                const coperture = anniPiano
+                  .map((a) => a.coperturaRate)
+                  .filter((c): c is number => c !== null);
+                const copMin = coperture.length ? Math.min(...coperture) : null;
+                return (
+                  <>
+                    <Spia
+                      etichetta={`EBITDA ${ultimo?.anno ?? ''}`}
+                      valore={euro(ultimo?.ebitda ?? 0)}
+                      ok={(ultimo?.ebitda ?? 0) > 0}
+                    />
+                    <Spia
+                      etichetta="Cassa minima"
+                      valore={euro(esito.cassaMinima)}
+                      ok={esito.cassaMinima >= 0}
+                    />
+                    <Spia
+                      etichetta="Copertura rate (minima)"
+                      valore={copMin === null ? 'nessuna rata' : `${copMin.toFixed(2)}×`}
+                      ok={copMin === null ? null : copMin >= 1}
+                    />
+                    <Spia
+                      etichetta={`Patrimonio netto ${ultimo?.anno ?? ''}`}
+                      valore={euro(ultimo?.patrimonioNetto ?? 0)}
+                      ok={(ultimo?.patrimonioNetto ?? 0) >= 0}
+                    />
+                  </>
+                );
+              })()}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              {GRUPPI.map((g) => (
+                <div key={g} className="border border-slate-200 rounded-lg p-2">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    {g}
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-1">
+                    {manopole
+                      .filter((m) => m.gruppo === g)
+                      .map((m) => {
+                        const l = letturaManopola(m, ipotesi, orizzonte);
+                        return (
+                          <Manopola
+                            key={m.riga}
+                            etichetta={m.etichetta}
+                            valore={l.valore}
+                            min={m.min}
+                            max={m.max}
+                            passo={m.passo}
+                            neutro={m.neutro}
+                            unita={m.unita}
+                            aiuto={m.aiuto}
+                            stato={statoGlobale}
+                            variaPerAnno={l.variaPerAnno}
+                            daAi={l.daAi}
+                            onChange={(v) => {
+                              setIpotesi((ip) => applicaManopola(m, ip, orizzonte, v));
+                              setModificato(true);
                             }}
-                            className="w-20 p-1 text-xs text-right bg-blue-50 border border-blue-200 rounded"
-                            title={`${ETICHETTA_RIGA[riga]} — ${a.anno}: risultato ${fmt(valorePiano(riga, a))}${ip?.motivazione ? `\nAI: ${ip.motivazione}` : ''}`}
                           />
-                          {!RIGHE_FLUSSO.has(riga) && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setCella(riga, i, {
-                                  tipo: ip?.tipo === 'abs' ? 'pct' : 'abs',
-                                  valore: ip?.tipo === 'abs' ? 0 : valorePiano(riga, a),
-                                })
-                              }
-                              className="text-[9px] font-bold text-slate-500 w-5"
-                              title="Alterna % sull’anno prima / valore assoluto"
-                            >
-                              {ip?.tipo === 'abs' ? '€' : '%'}
-                            </button>
-                          )}
-                          {RIGHE_FLUSSO.has(riga) && riga !== 'aliquotaImposte' && (
-                            <span className="text-[9px] text-slate-400 w-5">€</span>
-                          )}
-                          {riga === 'aliquotaImposte' && (
-                            <span className="text-[9px] text-slate-400 w-5">%</span>
-                          )}
-                        </div>
-                        {ip?.tipo === 'pct' && (
-                          <span className="block text-[9px] text-slate-400 tabular-nums">
-                            = {fmt(valorePiano(riga, a))}
-                          </span>
-                        )}
-                        {ip?.motivazione && (
-                          <span
-                            className="block text-[9px] text-violet-700 text-left max-w-36 leading-tight mt-0.5"
-                            title={ip.motivazione}
-                          >
-                            AI:{' '}
-                            {ip.motivazione.length > 70
-                              ? `${ip.motivazione.slice(0, 70)}…`
-                              : ip.motivazione}
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
+                        );
+                      })}
+                  </div>
+                </div>
               ))}
-              {RIGHE_DERIVATE.map((d) => (
-                <tr key={String(d.chiave)} className={d.forte ? 'bg-slate-50 font-bold' : ''}>
-                  <td
-                    className={`px-2 py-1.5 text-slate-900 sticky left-0 ${d.forte ? 'bg-slate-50' : 'bg-white'}`}
-                  >
-                    {d.etichetta}
+            </div>
+
+            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 text-[9px] uppercase text-slate-500">
+                  <tr>
+                    <th className="px-2 py-2 text-left font-bold">Risultato</th>
+                    <th className="px-2 py-2 text-right font-bold">
+                      {base.anno} {dati.partenza.fonte === 'posizione' ? '(attuale)' : ''}
+                    </th>
+                    {anniPiano.map((a) => (
+                      <th key={a.anno} className="px-2 py-2 text-right font-bold text-blue-700">
+                        {a.anno}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(
+                    [
+                      ['Ricavi', base.ricaviVendite, (a) => a.ricaviVendite],
+                      [
+                        'EBITDA',
+                        base.valoreProduzione - base.costiProduzione + base.ammortamenti,
+                        (a) => a.ebitda,
+                      ],
+                      ['Risultato d’esercizio', base.utileEsercizio, (a) => a.utile],
+                      ['Flusso di gestione', null, (a) => a.flussoGestione],
+                      ['Rate del piano di rientro', null, (a) => a.rateEnte + a.rateAltri],
+                      [
+                        'Cassa a fine anno',
+                        base.disponibilitaLiquide,
+                        (a) => a.disponibilitaLiquide,
+                      ],
+                      ['Patrimonio netto', base.patrimonioNetto, (a) => a.patrimonioNetto],
+                    ] as [string, number | null, (a: (typeof anniPiano)[number]) => number][]
+                  ).map(([et, b, f]) => (
+                    <tr key={et}>
+                      <td className="px-2 py-1.5 text-slate-800">{et}</td>
+                      <td className="px-2 py-1.5 text-right text-slate-500 tabular-nums">
+                        {fmt(b)}
+                      </td>
+                      {anniPiano.map((a) => {
+                        const v = f(a);
+                        return (
+                          <td
+                            key={a.anno}
+                            className={`px-2 py-1.5 text-right tabular-nums font-medium ${v < 0 && et !== 'Rate del piano di rientro' ? 'text-red-700' : 'text-slate-900'}`}
+                          >
+                            {fmt(v)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <details className="group">
+          <summary className="cursor-pointer text-[11px] font-bold text-blue-700 hover:underline">
+            Tabella anno per anno — per ritoccare un singolo anno e vedere tutte le voci
+          </summary>
+          <div className="overflow-x-auto border border-slate-200 rounded-lg mt-2">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 text-[9px] uppercase text-slate-500">
+                <tr>
+                  <th className="px-2 py-2 text-left font-bold sticky left-0 bg-slate-50 min-w-64">
+                    Voce
+                  </th>
+                  {storico.map((s) => (
+                    <th key={s.anno} className="px-2 py-2 text-right font-bold">
+                      {s.anno}
+                      {s === base && dati.partenza.fonte === 'posizione' ? ' (attuale)' : ''}
+                    </th>
+                  ))}
+                  {anniPiano.map((a) => (
+                    <th key={a.anno} className="px-2 py-2 text-right font-bold text-blue-700">
+                      {a.anno} (piano)
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {RIGHE_INPUT.map((riga) => (
+                  <tr key={riga}>
+                    <td className="px-2 py-1.5 text-slate-800 sticky left-0 bg-white">
+                      {ETICHETTA_RIGA[riga]}
+                    </td>
+                    {storico.map((s) => (
+                      <td
+                        key={s.anno}
+                        className="px-2 py-1.5 text-right text-slate-600 tabular-nums"
+                      >
+                        {riga === 'aliquotaImposte' ? '—' : fmt(valoreStorico(riga, s))}
+                      </td>
+                    ))}
+                    {anniPiano.map((a, i) => {
+                      const ip = ipotesi[riga]?.[i] ?? null;
+                      return (
+                        <td key={a.anno} className="px-1 py-1 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <input
+                              type="number"
+                              step="any"
+                              value={ip ? ip.valore : ''}
+                              placeholder={
+                                RIGHE_FLUSSO.has(riga)
+                                  ? riga === 'aliquotaImposte'
+                                    ? fmt(valorePiano(riga, a))
+                                    : '0'
+                                  : '0%'
+                              }
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '') return setCella(riga, i, null);
+                                setCella(riga, i, {
+                                  tipo: ip?.tipo ?? (RIGHE_FLUSSO.has(riga) ? 'abs' : 'pct'),
+                                  valore: Number(v),
+                                });
+                              }}
+                              className="w-20 p-1 text-xs text-right bg-blue-50 border border-blue-200 rounded"
+                              title={`${ETICHETTA_RIGA[riga]} — ${a.anno}: risultato ${fmt(valorePiano(riga, a))}${ip?.motivazione ? `\nAI: ${ip.motivazione}` : ''}`}
+                            />
+                            {!RIGHE_FLUSSO.has(riga) && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setCella(riga, i, {
+                                    tipo: ip?.tipo === 'abs' ? 'pct' : 'abs',
+                                    valore: ip?.tipo === 'abs' ? 0 : valorePiano(riga, a),
+                                  })
+                                }
+                                className="text-[9px] font-bold text-slate-500 w-5"
+                                title="Alterna % sull’anno prima / valore assoluto"
+                              >
+                                {ip?.tipo === 'abs' ? '€' : '%'}
+                              </button>
+                            )}
+                            {RIGHE_FLUSSO.has(riga) && riga !== 'aliquotaImposte' && (
+                              <span className="text-[9px] text-slate-400 w-5">€</span>
+                            )}
+                            {riga === 'aliquotaImposte' && (
+                              <span className="text-[9px] text-slate-400 w-5">%</span>
+                            )}
+                          </div>
+                          {ip?.tipo === 'pct' && (
+                            <span className="block text-[9px] text-slate-400 tabular-nums">
+                              = {fmt(valorePiano(riga, a))}
+                            </span>
+                          )}
+                          {ip?.motivazione && (
+                            <span
+                              className="block text-[9px] text-violet-700 text-left max-w-36 leading-tight mt-0.5"
+                              title={ip.motivazione}
+                            >
+                              AI:{' '}
+                              {ip.motivazione.length > 70
+                                ? `${ip.motivazione.slice(0, 70)}…`
+                                : ip.motivazione}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {RIGHE_DERIVATE.map((d) => (
+                  <tr key={String(d.chiave)} className={d.forte ? 'bg-slate-50 font-bold' : ''}>
+                    <td
+                      className={`px-2 py-1.5 text-slate-900 sticky left-0 ${d.forte ? 'bg-slate-50' : 'bg-white'}`}
+                    >
+                      {d.etichetta}
+                    </td>
+                    {storico.map((s) => (
+                      <td
+                        key={s.anno}
+                        className="px-2 py-1.5 text-right text-slate-700 tabular-nums"
+                      >
+                        {fmt(d.storico(s))}
+                      </td>
+                    ))}
+                    {anniPiano.map((a) => {
+                      const v = a[d.chiave] as number;
+                      return (
+                        <td
+                          key={a.anno}
+                          className={`px-2 py-1.5 text-right tabular-nums ${v < 0 && ['utile', 'disponibilitaLiquide', 'patrimonioNetto', 'flussoNetto'].includes(String(d.chiave)) ? 'text-red-700' : 'text-slate-900'}`}
+                        >
+                          {fmt(v)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                <tr className="bg-blue-50">
+                  <td className="px-2 py-1.5 text-slate-900 sticky left-0 bg-blue-50 font-bold">
+                    Copertura delle rate (flusso di gestione / rate e rimborsi)
                   </td>
                   {storico.map((s) => (
-                    <td key={s.anno} className="px-2 py-1.5 text-right text-slate-700 tabular-nums">
-                      {fmt(d.storico(s))}
+                    <td key={s.anno} className="px-2 py-1.5 text-right text-slate-400">
+                      —
                     </td>
                   ))}
-                  {anniPiano.map((a) => {
-                    const v = a[d.chiave] as number;
-                    return (
-                      <td
-                        key={a.anno}
-                        className={`px-2 py-1.5 text-right tabular-nums ${v < 0 && ['utile', 'disponibilitaLiquide', 'patrimonioNetto', 'flussoNetto'].includes(String(d.chiave)) ? 'text-red-700' : 'text-slate-900'}`}
-                      >
-                        {fmt(v)}
-                      </td>
-                    );
-                  })}
+                  {anniPiano.map((a) => (
+                    <td
+                      key={a.anno}
+                      className={`px-2 py-1.5 text-right font-bold tabular-nums ${a.coperturaRate !== null && a.coperturaRate < 1 ? 'text-red-700' : 'text-emerald-700'}`}
+                    >
+                      {a.coperturaRate === null ? '—' : `${a.coperturaRate.toFixed(2)}×`}
+                    </td>
+                  ))}
                 </tr>
-              ))}
-              <tr className="bg-blue-50">
-                <td className="px-2 py-1.5 text-slate-900 sticky left-0 bg-blue-50 font-bold">
-                  Copertura delle rate (flusso di gestione / rate e rimborsi)
-                </td>
-                {storico.map((s) => (
-                  <td key={s.anno} className="px-2 py-1.5 text-right text-slate-400">
-                    —
-                  </td>
-                ))}
-                {anniPiano.map((a) => (
-                  <td
-                    key={a.anno}
-                    className={`px-2 py-1.5 text-right font-bold tabular-nums ${a.coperturaRate !== null && a.coperturaRate < 1 ? 'text-red-700' : 'text-emerald-700'}`}
-                  >
-                    {a.coperturaRate === null ? '—' : `${a.coperturaRate.toFixed(2)}×`}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        </details>
         <p className="text-[10px] text-slate-500">
-          Ultimo bilancio di partenza: {base.anno}. Rate dalla proposta: ente{' '}
+          Partenza: {dati.partenza.etichetta}. Rate dalla proposta: ente{' '}
           {euro(dati.rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))}, altri creditori{' '}
           {euro(dati.rate.altri.slice(0, orizzonte).reduce((x, y) => x + y, 0))}.
         </p>
