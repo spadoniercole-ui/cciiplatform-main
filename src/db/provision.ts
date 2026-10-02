@@ -1028,6 +1028,14 @@ export async function assicuraTabellaSimulazioneRicevente(nomeSchema: string): P
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS documenti_caricati JSONB`
   );
+  // Base dell'art. 63 (0.121): capitale al netto di sanzioni, interessi e
+  // somme aggiuntive, e percentuale offerta su quella base.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS importo_capitale_estratto NUMERIC`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS percentuale_capitale_estratta NUMERIC`
+  );
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS prima_lettura JSONB`
   );

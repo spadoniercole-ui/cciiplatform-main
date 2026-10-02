@@ -33,6 +33,7 @@ import { corpoRiscontriHtml } from '@/components/spazio/RiscontriNormativi';
 import { calcolaRiscontriNormativiAzienda } from '@/app/actions/screeningAzienda';
 import { valutaSoglieAction } from '@/app/actions/soglie25novies';
 import { stampaHtml } from '@/lib/stampaTesto';
+import { markdownInHtml } from '@/lib/stampa/markdown';
 import { appendiceRilievi } from '@/lib/revisore/correzione';
 import { datiRiferimentiAction } from '@/app/actions/iai';
 import { revisionaTesto } from '@/lib/revisore/revisore';
@@ -109,7 +110,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
         data: new Date().toLocaleString('it-IT'),
       }) +
         salto +
-        `<h2 style="font-size:14px">Relazione di Screening</h2><div style="white-space:pre-wrap;font-size:12px;line-height:1.5">${esc(corpo)}</div>` +
+        `<h2 style="font-size:14px">Relazione di Screening</h2><div class="md" style="font-size:12px;line-height:1.5">${markdownInHtml(corpo)}</div>` +
         salto +
         `<h2 style="font-size:14px">Riscontri normativi</h2>${riscontri}` +
         (allegato ? salto + allegato : ''),
