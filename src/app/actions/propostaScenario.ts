@@ -42,6 +42,7 @@ import { salvaVersioneRelazioneAction } from '@/app/actions/scenarioSblocco';
 import { ottieniIndiciAzienda } from '@/app/actions/aziendaConfig';
 import type { RangoLegale } from '@/lib/proposta/rangoLegale';
 import { raggruppaPerRango } from '@/lib/proposta/rangoLegale';
+import { voceStrumento } from '@/lib/proposta/inquadramento';
 import {
   verificaRicevibilitaEnte,
   verificaRicevibilitaRighe,
@@ -404,7 +405,8 @@ export async function verificaRicevibilitaProposta(
       await assicuraTabellaSimulazioneRicevente(nomeSchema);
       const estrazioneRis = await pool.query(
         `SELECT importo_dovuto_estratto, percentuale_offerta_estratta, modalita_estratta,
-                numero_rate_estratto, estrazione_riuscita, motivo_estrazione_mancata
+                numero_rate_estratto, estrazione_riuscita, motivo_estrazione_mancata,
+                importo_capitale_estratto, percentuale_capitale_estratta
          FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
         [scenarioId]
       );
@@ -426,6 +428,16 @@ export async function verificaRicevibilitaProposta(
               modalita: rigaDb.modalita_estratta as ModalitaProposta | null,
               numeroRate: rigaDb.numero_rate_estratto,
               motivoMancata: rigaDb.motivo_estrazione_mancata,
+              importoCapitale:
+                rigaDb.importo_capitale_estratto !== null &&
+                rigaDb.importo_capitale_estratto !== undefined
+                  ? Number(rigaDb.importo_capitale_estratto)
+                  : null,
+              percentualeOffertaCapitale:
+                rigaDb.percentuale_capitale_estratta !== null &&
+                rigaDb.percentuale_capitale_estratta !== undefined
+                  ? Number(rigaDb.percentuale_capitale_estratta)
+                  : null,
             }
           : null;
 
@@ -736,7 +748,7 @@ REGOLE TASSATIVE DI REDAZIONE:
    1. SINTESI ESECUTIVA (${sintesiTesto})
    2. ${sezione2Titolo}
    2bis. CONFRONTO CON LO SCENARIO LIQUIDATORIO — il testo per questa sezione è già fornito qui sotto (CONFRONTO CON LO SCENARIO LIQUIDATORIO — GIÀ RICERCATO), generato con ricerca web separatamente: riportalo, integrandolo nel tono della relazione, senza riscriverlo da zero né aggiungere numeri che non ci sono già. Se il testo fornito segnala che la ricerca non è ancora disponibile, dichiara questa sezione come "non ancora disponibile — sarà nel prossimo Brogliaccio generato" invece di inventare un confronto.
-   3. QUADRO QUALITATIVO (CHECK LIST) (Ministeriale, e ogni check list aggiuntiva fornita — ciascuna con la propria etichetta; criticità strutturali aperte, se presenti)
+   3. QUADRO QUALITATIVO (CHECK LIST) (${isRicevuta ? 'la Check List dello Screening, generata sulle direttrici dell’ente: per un ente è questo lo strumento qualitativo, non la Check List Ministeriale — non citarla' : 'Ministeriale, e ogni check list aggiuntiva fornita — ciascuna con la propria etichetta; criticità strutturali aperte, se presenti'})
    4. QUADRO QUANTITATIVO (INDICI E DATI DI BILANCIO XBRL) (indici forniti, severità, situazione debitoria/PFN, andamento storico se disponibile — o la dichiarazione esplicita di assenza dati)
    5. RACCOMANDAZIONI OPERATIVE (che tengano conto di tutti i quadri insieme, non separatamente)
 6. Chiudi SEMPRE con una sezione finale "AVVERTENZA" (poche righe, non conteggiata nel limite di parole sopra): dichiara esplicitamente che questa relazione è un output automatico generato sulla base dei parametri configurati in Parametri di Spazio, non un giudizio professionale, e che spetta al professionista incaricato valutarla nel merito e decidere se asseverarla.
@@ -807,11 +819,59 @@ ${righeProposta
   )
   .join('\n')}`;
 
+    // Inquadramento confermato dall'istruttore: lo strumento si chiama con
+    // il suo nome (prima la relazione titolava «composizione negoziata» una
+    // proposta di accordo ex art. 57).
+    const inqRis = await pool
+      .query(
+        `SELECT strumento_proposta, data_deposito_proposta, quota_altri_aderenti_manuale
+           FROM "${nomeSchema}".scenari WHERE id = $1`,
+        [scenarioId]
+      )
+      .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+    const inq = inqRis.rows[0] ?? {};
+    const voceInq = voceStrumento(inq.strumento_proposta as string | null);
+    const bloccoInquadramento = voceInq
+      ? `\nINQUADRAMENTO CONFERMATO DALL'ISTRUTTORE: ${voceInq.etichetta} (${voceInq.riferimento})${
+          inq.data_deposito_proposta
+            ? `, deposito il ${String(inq.data_deposito_proposta).split('-').reverse().join('/')}`
+            : ''
+        }${
+          inq.quota_altri_aderenti_manuale !== null &&
+          inq.quota_altri_aderenti_manuale !== undefined
+            ? `, quota degli altri aderenti ${(Number(inq.quota_altri_aderenti_manuale) * 100).toLocaleString('it-IT', { maximumFractionDigits: 1 })}%`
+            : ''
+        }. Usa SOLO questo nome per lo strumento, nel titolo e nel testo.\n`
+      : '\nINQUADRAMENTO: strumento non ancora confermato — non attribuire alla proposta uno strumento specifico.\n';
+
+    // Quadro qualitativo dell'ENTE: la Check List generata dallo Screening
+    // (direttrici dell'ente), non la Check List Ministeriale, che per un
+    // ente non è lo strumento di lavoro.
+    let bloccoQualitativoEnte = '';
+    if (isRicevuta) {
+      const { ottieniScreeningAzienda } = await import('@/app/actions/screeningAzienda');
+      const scr = await ottieniScreeningAzienda(nomeSchema, scenario.aziendaId);
+      const totali = scr.success ? scr.stato.sezioni.reduce((a, x) => a + x.domande.length, 0) : 0;
+      const risposte = scr.success
+        ? scr.stato.risposte.filter((r) => r.risposta !== null).length
+        : 0;
+      bloccoQualitativoEnte =
+        !scr.success || !scr.stato.esiste
+          ? 'QUADRO QUALITATIVO (CHECK LIST DELLO SCREENING): screening non disponibile per questa azienda.'
+          : scr.stato.quadro
+            ? `QUADRO QUALITATIVO (CHECK LIST DELLO SCREENING, direttrici dell'ente): ${scr.stato.quadro.etichetta}${
+                scr.stato.quadro.punteggio !== null
+                  ? ` (punteggio ${scr.stato.quadro.punteggio}/100)`
+                  : ''
+              }, ${risposte} risposte su ${totali} domande.`
+            : `QUADRO QUALITATIVO (CHECK LIST DELLO SCREENING, direttrici dell'ente): ${risposte} risposte su ${totali} domande — quadro non ancora completo, dichiaralo senza trarne conclusioni.`;
+    }
+
     const userPrompt = `
 SCENARIO: ${scenario.nome} (${scenario.ragioneSocialeAzienda})
 CODICE ATECO DELL'AZIENDA: ${aziendaRisultato.success && aziendaRisultato.azienda?.codiceAteco ? aziendaRisultato.azienda.codiceAteco : 'non indicato — se manca, la ricerca settoriale nella sezione 2bis non può essere mirata, dichiaralo esplicitamente invece di generalizzare'}
 TIPO PROPOSTA: ${scenario.tipoProposta === 'RICEVUTA' ? 'Ricevuta da' : 'Da definire —'} ${scenario.origineProposta}
-${focusEnte}${bloccoConfrontoLiquidatorio}${bloccoRaccomandazioni}
+${isRicevuta ? bloccoInquadramento : ''}${focusEnte}${bloccoConfrontoLiquidatorio}${bloccoRaccomandazioni}
 ${bloccoProposta}
 
 RIEPILOGO PER RANGO LEGALE (famiglie della liquidazione giudiziale): ${raggruppaPerRango(
@@ -823,14 +883,17 @@ RIEPILOGO PER RANGO LEGALE (famiglie della liquidazione giudiziale): ${raggruppa
       )
       .join('; ')}
 
-QUADRO QUALITATIVO CHECK LIST MINISTERIALE: ${quadro.etichetta}${quadro.percentualeCriticitaComplessiva !== null ? ` (criticità pesata ${quadro.percentualeCriticitaComplessiva}%)` : ' (nessuna domanda ancora risposta)'}
+${
+  isRicevuta
+    ? bloccoQualitativoEnte
+    : `QUADRO QUALITATIVO CHECK LIST MINISTERIALE: ${quadro.etichetta}${quadro.percentualeCriticitaComplessiva !== null ? ` (criticità pesata ${quadro.percentualeCriticitaComplessiva}%)` : ' (nessuna domanda ancora risposta)'}
 CRITICITÀ STRUTTURALI ANCORA APERTE: ${
-      quadro.criticitaStrutturaliAperte.length > 0
-        ? quadro.criticitaStrutturaliAperte
-            .map((c) => `${c.id} (${c.sezione}): ${c.domanda}`)
-            .join('; ')
-        : 'Nessuna'
-    }
+        quadro.criticitaStrutturaliAperte.length > 0
+          ? quadro.criticitaStrutturaliAperte
+              .map((c) => `${c.id} (${c.sezione}): ${c.domanda}`)
+              .join('; ')
+          : 'Nessuna'
+      }
 ${
   quadriCustom.length > 0
     ? '\n' +
@@ -841,6 +904,7 @@ ${
         )
         .join('\n')
     : ''
+}`
 }
 
 ${costruisciBloccoQuantitativo(ultimoBilancio, codiciAbilitati, trend)}

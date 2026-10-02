@@ -77,6 +77,10 @@ export interface EstrazioneOffertaRicevente {
   modalita: 'UNICA_SOLUZIONE' | 'RATEALE' | null;
   numeroRate: number | null;
   motivoMancata: string | null;
+  /** Credito al netto di sanzioni, interessi e somme aggiuntive (base art. 63). */
+  importoCapitale?: number | null;
+  /** Percentuale offerta su quella base. */
+  percentualeOffertaCapitale?: number | null;
 }
 
 export interface RisultatoAnalisiRicevente {
@@ -99,6 +103,11 @@ export interface TreDocumentiRicevente {
 }
 
 type DocumentoScaricato = { nome: string; base64: string };
+
+function numeroONull(v: unknown): number | null {
+  const n = typeof v === 'string' ? Number(v.replace(',', '.')) : v;
+  return typeof n === 'number' && Number.isFinite(n) ? n : null;
+}
 
 /** Scarica e controlla i PDF dallo storage dello spazio. */
 async function scaricaDocumenti(
@@ -531,7 +540,7 @@ export async function analizzaDocumentiRiceventeAction(
         ? ` Questo ente può comparire nei documenti con nomi o termini diversi dal proprio acronimo interno — considera equivalenti a questo stesso ente anche: ${aliasEnte.join(', ')}. Se il documento usa uno di questi termini (o una variante plausibile, es. al plurale o con un aggettivo diverso), trattalo come riferito a questo ente: non dichiarare l'estrazione fallita solo perché l'acronimo esatto non compare mai nel testo.`
         : '';
 
-    const promptTestuale = `Sei un assistente che aiuta un ente (creditore) a valutare criticamente una proposta di composizione negoziata della crisi d'impresa ricevuta. Documenti allegati: ${documentiPresenti.join(', ')}.${documentiMancanti.length > 0 ? ` Mancano invece: ${documentiMancanti.join(', ')} — segnalalo esplicitamente all'inizio della relazione, è un'assenza rilevante per il giudizio.` : ''}${rigaAlias}
+    const promptTestuale = `Sei un assistente che aiuta un ente (creditore) a valutare criticamente una proposta ricevuta da un'impresa in crisi, nell'ambito dello strumento indicato nell'inquadramento confermato qui sotto (chiamalo con quel nome, non con un altro). Documenti allegati: ${documentiPresenti.join(', ')}.${documentiMancanti.length > 0 ? ` Mancano invece: ${documentiMancanti.join(', ')} — segnalalo esplicitamente all'inizio della relazione, è un'assenza rilevante per il giudizio.` : ''}${rigaAlias}
 
 Il tuo compito NON è ricalcolare o riscrivere la proposta — è leggere criticamente cosa dichiarano i documenti allegati e confrontarlo con i dati che la piattaforma ha già raccolto sull'azienda, segnalando esplicitamente ogni incoerenza o affermazione poco credibile. Esempio del tipo di cosa da cercare: se un documento dichiara "il fatturato crescerà del 3% nei prossimi anni" ma il settore di riferimento è stagnante o in calo da tempo, questa è un'incoerenza da segnalare chiaramente, non da glissare.
 
@@ -562,10 +571,14 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
   "estrazioneRiuscita": true,
   "importoDovuto": 0,
   "percentualeOfferta": 0,
+  "importoCapitale": null,
+  "percentualeOffertaCapitale": null,
   "modalita": "UNICA_SOLUZIONE",
   "numeroRate": null,
   "motivoMancata": null
 }
+
+"importoDovuto" e "percentualeOfferta" riguardano il credito TOTALE dell'ente. "importoCapitale" è lo stesso credito al netto di sanzioni, interessi e somme aggiuntive (per un ente previdenziale: i soli contributi), e "percentualeOffertaCapitale" la percentuale offerta su quel capitale: es. «100% dei contributi e 30% delle somme aggiuntive» → percentualeOffertaCapitale 100. Se il documento non distingue capitale e accessori, lasciali null: non stimarli.
 
 "modalita" deve essere esattamente "UNICA_SOLUZIONE" o "RATEALE". Prima di dichiarare l'estrazione fallita, verifica se il documento usa uno dei termini indicati sopra come equivalenti a questo ente (categoria di credito, non solo nome proprio) — se sì, l'importo relativo a quella categoria è l'importo di questo ente. Solo se davvero non c'è alcun riferimento, nemmeno tematico, a questo ente, imposta "estrazioneRiuscita": false e spiega perché in "motivoMancata" (es. "il documento non menziona questo ente né i termini a esso equivalenti" o "l'importo offerto non è quantificato").`;
 
@@ -656,13 +669,15 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
     await pool.query(
       `INSERT INTO "${nomeSchema}".simulazione_ricevente
         (scenario_id, analisi, nomi_file, generata_il, nome_asseverazione, nome_proposta_cram_down, nome_piano_sviluppo,
-         importo_dovuto_estratto, percentuale_offerta_estratta, modalita_estratta, numero_rate_estratto, estrazione_riuscita, motivo_estrazione_mancata)
-       VALUES ($1, $2, $3, now(), $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         importo_dovuto_estratto, percentuale_offerta_estratta, modalita_estratta, numero_rate_estratto, estrazione_riuscita, motivo_estrazione_mancata,
+         importo_capitale_estratto, percentuale_capitale_estratta)
+       VALUES ($1, $2, $3, now(), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        ON CONFLICT (scenario_id) DO UPDATE SET
         analisi = $2, nomi_file = $3, generata_il = now(),
         nome_asseverazione = $4, nome_proposta_cram_down = $5, nome_piano_sviluppo = $6,
         importo_dovuto_estratto = $7, percentuale_offerta_estratta = $8, modalita_estratta = $9,
-        numero_rate_estratto = $10, estrazione_riuscita = $11, motivo_estrazione_mancata = $12`,
+        numero_rate_estratto = $10, estrazione_riuscita = $11, motivo_estrazione_mancata = $12,
+        importo_capitale_estratto = $13, percentuale_capitale_estratta = $14`,
       [
         scenarioId,
         analisi,
@@ -683,6 +698,8 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
         estrazione?.estrazioneRiuscita ?? false,
         estrazione?.motivoMancata ??
           "L'assistente non ha risposto in un formato leggibile durante l'estrazione — riprova; se si ripete, il documento potrebbe essere troppo lungo o complesso per questo passaggio.",
+        numeroONull(estrazione?.importoCapitale),
+        numeroONull(estrazione?.percentualeOffertaCapitale),
       ]
     );
 
@@ -741,7 +758,8 @@ export async function ottieniAnalisiRiceventeAction(
     const risultato = await pool.query(
       `SELECT analisi, nomi_file, generata_il, nome_asseverazione, nome_piano_sviluppo,
               importo_dovuto_estratto, percentuale_offerta_estratta, modalita_estratta,
-              numero_rate_estratto, estrazione_riuscita, motivo_estrazione_mancata
+              numero_rate_estratto, estrazione_riuscita, motivo_estrazione_mancata,
+              importo_capitale_estratto, percentuale_capitale_estratta
        FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
       [scenarioId]
     );
@@ -768,6 +786,10 @@ export async function ottieniAnalisiRiceventeAction(
         modalita: r.modalita_estratta,
         numeroRate: r.numero_rate_estratto,
         motivoMancata: r.motivo_estrazione_mancata,
+        importoCapitale:
+          r.importo_capitale_estratto !== null ? Number(r.importo_capitale_estratto) : null,
+        percentualeOffertaCapitale:
+          r.percentuale_capitale_estratta !== null ? Number(r.percentuale_capitale_estratta) : null,
       },
     };
   } catch (error: any) {

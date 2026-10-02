@@ -7,6 +7,7 @@
 // bisogno in tre punti diversi, una sola implementazione.
 
 import { APP_VERSION } from '@/lib/appVersion';
+import { markdownInHtml, STILE_MARKDOWN } from '@/lib/stampa/markdown';
 
 /**
  * Parametri di stampa dell'ente (Parametri di Spazio › Stampa): margini,
@@ -177,7 +178,7 @@ export function stampaHtml(
   th { text-transform: uppercase; font-size: 10px; color: #64748b; letter-spacing: .04em; }
   tr.tot { font-weight: bold; background: #f8fafc; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .note { color: #94a3b8; font-size: 10px; margin-top: 16px; }${STILE_PIEDE}${stilePagina()}
+  .note { color: #94a3b8; font-size: 10px; margin-top: 16px; }${STILE_MARKDOWN}${STILE_PIEDE}${stilePagina()}
 </style>
 </head>
 <body>
@@ -210,7 +211,7 @@ export function stampaTesto(titolo: string, testo: string, dataGenerazione: stri
   body { font-family: Georgia, serif; max-width: 720px; margin: 40px auto; color: #1e293b; line-height: 1.6; font-size: 13px; }
   h1 { font-size: 20px; border-bottom: 2px solid #1e293b; padding-bottom: 8px; margin: 0 0 6px; }
   .data { color: #64748b; font-size: 12px; margin-bottom: 24px; }
-  .testo { white-space: pre-wrap; font-size: 13px; }${STILE_PIEDE}${stilePagina()}
+  .testo { font-size: 13px; }${STILE_MARKDOWN}${STILE_PIEDE}${stilePagina()}
 </style>
 </head>
 <body>
@@ -218,7 +219,7 @@ export function stampaTesto(titolo: string, testo: string, dataGenerazione: stri
   <h1>${escH(titolo)}</h1>
   ${rigaRiferimentoAzienda()}
   ${dataFormattata ? `<div class="data">Generato il ${dataFormattata}</div>` : ''}
-  <div class="testo">${escH(testo)}</div>
+  <div class="testo md">${markdownInHtml(testo)}</div>
   ${pieEnte()}
   ${piedeDocumento(impronta, dataGenerazione)}
 </body>

@@ -457,7 +457,9 @@ describe('verificaRicevibilitaEnte (soglia unica dell’ente)', () => {
       estrazione({ percentualeOfferta: null }),
       soglia({ percentualeMinima: 10 })
     );
-    expect(esito.righe[0].motivazione).toBe('offerta 0% sotto il minimo richiesto (10%)');
+    expect(esito.righe[0].motivazione).toBe(
+      'offerta 0% sul totale (il documento non distingue capitale e accessori), sotto il minimo richiesto (10%)'
+    );
   });
 
   it('valore di liquidazione 0 ignorato; nessun vincolo → conforme per assenza di vincolo', () => {
@@ -490,4 +492,32 @@ describe('comportamenti da validare (conservati invariati)', () => {
   it.todo(
     'ENTE: modalità non estratta dal documento oggi è assunta "unica soluzione" — valutare un esito "dati incompleti"'
   );
+});
+
+describe('verificaRicevibilitaEnte — base dell’art. 63 sul capitale', () => {
+  const base: EstrazioneProposta = {
+    estrazioneRiuscita: true,
+    importoDovuto: 48599.97,
+    percentualeOfferta: 93.8,
+    modalita: 'RATEALE',
+    numeroRate: 60,
+    motivoMancata: null,
+  };
+
+  it('100% dei contributi con stralcio delle somme aggiuntive: coerente sul capitale', () => {
+    const esito = verificaRicevibilitaEnte(
+      1,
+      { ...base, importoCapitale: 44299.34, percentualeOffertaCapitale: 100 },
+      soglia({ percentualeMinima: 100 })
+    );
+    expect(esito.complessivamenteRicevibile).toBe(true);
+    expect(esito.righe[0].motivazione).toContain('sul capitale');
+    expect(esito.righe[0].motivazione).toContain('93.8%');
+  });
+
+  it('senza distinzione fra capitale e accessori resta il confronto sul totale, dichiarato', () => {
+    const esito = verificaRicevibilitaEnte(1, base, soglia({ percentualeMinima: 100 }));
+    expect(esito.complessivamenteRicevibile).toBe(false);
+    expect(esito.righe[0].motivazione).toContain('sul totale');
+  });
 });

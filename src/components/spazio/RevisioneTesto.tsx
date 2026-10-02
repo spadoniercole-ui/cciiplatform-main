@@ -9,6 +9,7 @@
 // schermo, con i rilievi in evidenza, perche' chi lavora deve vedere che cosa
 // non va per poterlo rigenerare o riscrivere.
 
+import { markdownInHtml } from '@/lib/stampa/markdown';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ShieldCheck, ShieldAlert, ChevronDown, ChevronRight } from 'lucide-react';
 import { revisionaTesto, type EsitoControllo, type Revisione } from '@/lib/revisore/revisore';
@@ -72,15 +73,13 @@ export function stampaConCopertina(
 ): void {
   const revisione = revisionaTesto(testo, tipo, { fascicolo });
   // Con l'allegato «Riferimenti e metodo» i rilievi residui stanno li', non in calce al testo.
-  const corpo = (
+  // Il testo dell'AI è Markdown: in stampa diventa titoli e tabelle veri.
+  const corpo = markdownInHtml(
     allegatoHtml ? revisione.testoRivisto : revisione.testoRivisto + appendiceRilievi(revisione)
-  )
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  );
   stampaHtml(
     titolo,
-    `${copertinaHtml}<div style="page-break-before:always"></div><h2 style="font-size:14px">Relazione</h2><div style="white-space:pre-wrap;font-size:12px;line-height:1.5">${corpo}</div>${allegatoHtml ? `<div style="page-break-before:always"></div>${allegatoHtml}` : ''}`,
+    `${copertinaHtml}<div style="page-break-before:always"></div><h2 style="font-size:14px">Relazione</h2><div class="md" style="font-size:12px;line-height:1.5">${corpo}</div>${allegatoHtml ? `<div style="page-break-before:always"></div>${allegatoHtml}` : ''}`,
     undefined,
     dataGenerazione
   );

@@ -242,6 +242,13 @@ export interface EstrazioneProposta {
   estrazioneRiuscita: boolean;
   importoDovuto: number | null;
   percentualeOfferta: number | null;
+  /**
+   * Base dell'art. 63: il credito al netto di sanzioni, interessi e somme
+   * aggiuntive, e la percentuale offerta su quella base. null se il
+   * documento non permette di distinguerli.
+   */
+  importoCapitale?: number | null;
+  percentualeOffertaCapitale?: number | null;
   modalita: ModalitaProposta | null;
   numeroRate: number | null;
   motivoMancata: string | null;
@@ -330,9 +337,25 @@ export function verificaRicevibilitaEnte(
       );
     }
   }
-  if (rigaSintetica.percentualeOfferta < limiteEnte.percentualeMinima) {
+  // La percentuale minima si misura sul CAPITALE (crediti al netto di
+  // sanzioni, interessi e somme aggiuntive), come le soglie dell'art. 63:
+  // misurarla sul totale faceva risultare «non coerente» un'offerta del
+  // 100% dei contributi solo perché le somme aggiuntive sono stralciate.
+  const baseCapitale =
+    estrazione.importoCapitale !== null &&
+    estrazione.importoCapitale !== undefined &&
+    estrazione.importoCapitale > 0 &&
+    estrazione.percentualeOffertaCapitale !== null &&
+    estrazione.percentualeOffertaCapitale !== undefined;
+  const percentualeConfronto = baseCapitale
+    ? (estrazione.percentualeOffertaCapitale as number)
+    : rigaSintetica.percentualeOfferta;
+  const descrizioneBase = baseCapitale
+    ? ` sul capitale (€ ${(estrazione.importoCapitale as number).toLocaleString('it-IT')}, al netto di sanzioni, interessi e somme aggiuntive; sul totale ${rigaSintetica.percentualeOfferta}%)`
+    : ' sul totale (il documento non distingue capitale e accessori)';
+  if (percentualeConfronto < limiteEnte.percentualeMinima) {
     motivi.push(
-      `offerta ${rigaSintetica.percentualeOfferta}% sotto il minimo richiesto (${limiteEnte.percentualeMinima}%)`
+      `offerta ${percentualeConfronto}%${descrizioneBase}, sotto il minimo richiesto (${limiteEnte.percentualeMinima}%)`
     );
   }
   if (rigaSintetica.modalita === 'UNICA_SOLUZIONE' && !limiteEnte.unicaSoluzioneAmmessa) {
@@ -344,7 +367,7 @@ export function verificaRicevibilitaEnte(
   const motivazionePositiva = haValoreLiquidazione(limiteEnte)
     ? `Offerta € ${importoOfferto.toLocaleString('it-IT')} ≥ valore di liquidazione stimato € ${limiteEnte.valoreLiquidazioneStimato.toLocaleString('it-IT')}.`
     : limiteEnte.percentualeMinima > 0
-      ? `Offerta ${rigaSintetica.percentualeOfferta}% ≥ percentuale minima richiesta ${limiteEnte.percentualeMinima}%.`
+      ? `Offerta ${percentualeConfronto}%${descrizioneBase} ≥ percentuale minima richiesta ${limiteEnte.percentualeMinima}%.`
       : 'Nessuna soglia configurata per questo ente — conforme per assenza di un vincolo, non per un controllo superato. Configura la soglia in Parametri di Spazio.';
   const rigaFinale: EsitoRigaProposta = {
     ...rigaSintetica,

@@ -93,6 +93,30 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.121.0 — 2026-10-02 (Portable 1.2.6)
+
+Prima consegna della rielaborazione del percorso dopo lo screening:
+correzioni di sostanza della valutazione e della Relazione.
+
+- **Base dell'art. 63 nel riscontro.** La percentuale minima dell'ente si
+  misura ora sul capitale — il credito al netto di sanzioni, interessi e
+  somme aggiuntive — come le soglie dell'art. 63. Prima si misurava sul
+  totale: un'offerta del 100% dei contributi con il 30% delle somme
+  aggiuntive risultava «93,8%, non coerente» con un minimo del 100%. La
+  lettura dei documenti estrae anche capitale e percentuale sul capitale;
+  se il documento non li distingue, il riscontro resta sul totale e lo
+  dichiara.
+- **Lo strumento con il suo nome.** Relazione e analisi della proposta
+  leggono l'inquadramento confermato: niente più «composizione negoziata»
+  per una proposta di accordo ex art. 57.
+- **La Check List giusta.** Per l'ente il quadro qualitativo della Relazione
+  è la Check List dello Screening (direttrici dell'ente), non la Check List
+  Ministeriale.
+- **Tabelle vere in stampa.** I testi dell'AI (Relazione, analisi della
+  proposta, Screening, brogliacci) sono Markdown: in stampa diventano
+  titoli, elenchi e tabelle con le colonne numeriche allineate, invece di
+  barre verticali, «##» e «**» in chiaro.
+
 ## 0.120.2 — 2026-10-02 (Portable 1.2.5)
 
 - **Ritorno al punto di partenza.** Aperta dalla lista di controllo della
