@@ -44,6 +44,8 @@ interface Props {
   scenarioId: number;
   aziendaId: number;
   nomeScenario: string;
+  /** Aperto dalla lista di controllo della valutazione: dove tornare. */
+  ritornoA?: string | null;
 }
 
 function formatEuro(val: number | null | undefined): string {
@@ -57,6 +59,7 @@ export function PosizioneAggiornataScenario({
   scenarioId,
   aziendaId,
   nomeScenario,
+  ritornoA = null,
 }: Props) {
   // Colonne di riferimento: fino agli ultimi N anni dal file XBRL (N =
   // parametro di spazio), in ordine cronologico crescente (il più recente a
@@ -144,6 +147,11 @@ export function PosizioneAggiornataScenario({
       }
       setSalvato(true);
       setProvenienza(null);
+      // Aperto dalla valutazione della proposta: salvato, si torna lì.
+      if (ritornoA) {
+        window.location.href = ritornoA;
+        return;
+      }
       await carica();
     } finally {
       setSalvataggio(false);
@@ -270,6 +278,20 @@ export function PosizioneAggiornataScenario({
 
   return (
     <div className="space-y-6">
+      {ritornoA && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-sky-900 bg-sky-50 border border-sky-200 rounded-lg p-3">
+          <span>
+            Sei qui dalla <span className="font-bold">valutazione della proposta</span>: al
+            salvataggio torni automaticamente al punto da cui sei partito.
+          </span>
+          <a
+            href={ritornoA}
+            className="px-3 py-1.5 bg-white border border-sky-300 hover:bg-sky-100 text-sky-800 font-bold text-[10px] uppercase rounded-lg"
+          >
+            ← Torna alla valutazione
+          </a>
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <ClipboardEdit className="w-4 h-4 text-blue-600" />
         <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">

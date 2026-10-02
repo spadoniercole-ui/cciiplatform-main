@@ -280,6 +280,23 @@ export function SimulazioneRiceventeScenario({
     : null;
   const pronta = Boolean(lista?.pronta);
 
+  // Rientro da un passo aperto dalla lista di controllo (es. Posizione
+  // Aggiornata): si torna esattamente al passo 4, non in cima alla scheda.
+  // Il contenuto arriva dopo il caricamento, quindi lo scorrimento del
+  // browser sull'ancora non basterebbe.
+  useEffect(() => {
+    if (caricamento || typeof window === 'undefined') return;
+    if (window.location.hash !== '#valutazione') return;
+    const t = setTimeout(
+      () =>
+        document
+          .getElementById('valutazione')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      150
+    );
+    return () => clearTimeout(t);
+  }, [caricamento]);
+
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
 
   return (
@@ -575,7 +592,10 @@ export function SimulazioneRiceventeScenario({
 
       {/* 4 · VALUTAZIONE: parte solo con documenti caricati e scelte salvate. */}
       {caricati && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+        <div
+          id="valutazione"
+          className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 scroll-mt-4"
+        >
           <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">
               4
@@ -626,7 +646,7 @@ export function SimulazioneRiceventeScenario({
                     )}
                     {v.id === 'posizione' && stato && stato.posizioniAggiornate === 0 && (
                       <a
-                        href={`/spazio/${codice}/scenari/${scenarioId}/posizione-aggiornata`}
+                        href={`/spazio/${codice}/scenari/${scenarioId}/posizione-aggiornata?ritorno=valutazione`}
                         className="mt-1 inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
                       >
                         <Upload className="w-3 h-3" /> Carica la situazione contabile (anche PDF)

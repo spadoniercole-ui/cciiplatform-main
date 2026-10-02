@@ -93,6 +93,15 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.120.2 — 2026-10-02 (Portable 1.2.5)
+
+- **Ritorno al punto di partenza.** Aperta dalla lista di controllo della
+  valutazione, la Posizione Aggiornata mostra «← Torna alla valutazione» e,
+  al salvataggio, riporta direttamente al passo 4 della Proposta (non in
+  cima alla scheda né nei menù), con documenti, prima lettura e scelte già
+  al loro posto. La destinazione del ritorno è costruita dal server, mai
+  presa dall'indirizzo.
+
 ## 0.120.1 — 2026-10-02 (Portable 1.2.4)
 
 - **Posizione Aggiornata anche da PDF.** La situazione contabile infrannuale
