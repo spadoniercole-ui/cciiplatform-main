@@ -15,15 +15,22 @@ import { storicoDaStatoAttuale, type PartenzaPiano } from '@/lib/piano/statoAttu
 import { DATI_VUOTI } from '@/lib/posizioneAggiornata/schemaCampi';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import Anthropic from '@anthropic-ai/sdk';
-import { verificaScenarioNonBloccato } from '@/app/actions/scenari';
+import { ottieniScenarioPerId, verificaScenarioNonBloccato } from '@/app/actions/scenari';
 import { estraiJson } from '@/lib/visura/fatti';
+import { rettifichePulite, applicaRettifiche, type Rettifiche } from '@/lib/piano/rettifiche';
+import { ipotesiDaPianoAzienda, valoriPuliti } from '@/lib/piano/pianoAziendale';
 import {
   VARIANTE_AI,
+  modoRettifiche,
   promptElaborazione,
+  validaRettificheAi,
   validaRisposta,
   type ContestoElaborazione,
 } from '@/lib/piano/elaborazioneAi';
-import { ottieniPropostaScenario } from '@/app/actions/propostaScenario';
+import {
+  ottieniPropostaScenario,
+  verificaRicevibilitaProposta,
+} from '@/app/actions/propostaScenario';
 import {
   rateDaProposta,
   type EsercizioStorico,
@@ -45,6 +52,8 @@ export interface DatiPianoSviluppo {
   rate: RatePiano;
   orizzonte: number;
   ipotesi: IpotesiPiano;
+  /** Ricevente: rettifiche delle manopole sul piano dell'azienda. */
+  rettifiche: Rettifiche;
   variante: string;
   varianti: string[];
   note: string | null;
@@ -121,6 +130,20 @@ export async function ottieniPianoSviluppoAction(
     ).rows.map((r) => String(r.variante));
     const orizzonte = piano.rows[0]?.orizzonte ? Number(piano.rows[0].orizzonte) : 5;
     const prop = await ottieniPropostaScenario(nomeSchema, scenarioId);
+    // Ricevente: le righe non si scrivono a mano, vengono dalla lettura della
+    // proposta ricevuta (la riga sintetica della posizione dell'ente).
+    let righeRate = prop.success ? prop.righe : [];
+    if (righeRate.length === 0) {
+      const sc = await ottieniScenarioPerId(nomeSchema, scenarioId);
+      if (sc.success && sc.scenario?.tipoProposta === 'RICEVUTA') {
+        const es = await verificaRicevibilitaProposta(nomeSchema, scenarioId, 'ENTE');
+        if (es.success && es.esito && es.esito.datiDisponibili !== false)
+          righeRate = es.esito.righe.map((r) => ({
+            ...r,
+            categoriaCreditore: r.rilevantePerEnte ? 'INPS' : r.categoriaCreditore,
+          }));
+      }
+    }
     // Le categorie dell'ente dello spazio: quelle marcate con un ente 25-novies nei parametri di riscontro.
     let categorieEnte = new Set<string>();
     try {
@@ -133,15 +156,16 @@ export async function ottieniPianoSviluppoAction(
     } catch {
       /* tabella assente: nessuna categoria dell'ente */
     }
+    // Rate sull'orizzonte massimo: l'orizzonte si può allungare a schermo.
     const rate = rateDaProposta(
-      (prop.success ? prop.righe : []).map((r) => ({
+      righeRate.map((r) => ({
         categoriaCreditore: r.categoriaCreditore,
         importoDovuto: r.importoDovuto,
         percentualeOfferta: r.percentualeOfferta,
         numeroRate: r.numeroRate,
         modalita: r.modalita,
       })),
-      orizzonte,
+      5,
       (c) =>
         categorieEnte.has(c.trim().toLowerCase()) ||
         /\binps\b|\binail\b|agenzia delle entrate/i.test(c)
@@ -160,6 +184,7 @@ export async function ottieniPianoSviluppoAction(
         rate,
         orizzonte,
         ipotesi: (piano.rows[0]?.ipotesi as IpotesiPiano) ?? {},
+        rettifiche: rettifichePulite(piano.rows[0]?.rettifiche),
         variante,
         varianti: varianti.length ? varianti : ['base'],
         note: piano.rows[0]?.note ?? null,
@@ -184,7 +209,8 @@ export async function salvaPianoSviluppoAction(
   variante: string,
   orizzonte: number,
   ipotesi: IpotesiPiano,
-  note: string | null
+  note: string | null,
+  rettifiche: Rettifiche | null = null
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
@@ -202,10 +228,17 @@ export async function salvaPianoSviluppoAction(
     const o = Math.max(1, Math.min(5, Math.round(orizzonte)));
     await assicuraTabelleParametriSpazio(contesto.nomeSchema);
     await pool.query(
-      `INSERT INTO "${contesto.nomeSchema}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, salvato_il)
-       VALUES ($1, $2, $3, $4, $5, now())
-       ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, salvato_il = now()`,
-      [scenarioId, v, o, JSON.stringify(ipotesi), note?.trim() || null]
+      `INSERT INTO "${contesto.nomeSchema}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, salvato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, now())
+       ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, rettifiche = $6, salvato_il = now()`,
+      [
+        scenarioId,
+        v,
+        o,
+        JSON.stringify(ipotesi),
+        note?.trim() || null,
+        rettifiche ? JSON.stringify(rettifichePulite(rettifiche)) : null,
+      ]
     );
     return { success: true };
   } catch (error: unknown) {
@@ -267,7 +300,7 @@ function contestoPulito(c: ContestoElaborazione): ContestoElaborazione | null {
     },
     pianoAzienda: c.lato === 'RICEVUTA' ? (c.pianoAzienda ?? null) : null,
     scostamenti: c.lato === 'RICEVUTA' ? (c.scostamenti ?? []).slice(0, 12) : [],
-    ipotesiCorrenti: c.lato === 'DA_DEFINIRE' ? (c.ipotesiCorrenti ?? null) : null,
+    ipotesiCorrenti: c.ipotesiCorrenti ?? null,
     vincoli: (c.vincoli ?? []).slice(0, 10).map((v) => String(v).slice(0, 200)),
   };
 }
@@ -312,7 +345,7 @@ export async function elaboraPianoConAiAction(
     const anthropic = new Anthropic({ apiKey, timeout: SCADENZA_AI_MS, maxRetries: 1 });
     const risposta = await anthropic.messages.create({
       model: 'claude-sonnet-5',
-      max_tokens: 3000,
+      max_tokens: 6000,
       thinking: { type: 'disabled' },
       messages: [{ role: 'user', content: promptElaborazione(c) }],
     });
@@ -320,15 +353,33 @@ export async function elaboraPianoConAiAction(
       .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
       .map((b) => b.text)
       .join('\n');
-    const esito = validaRisposta(estraiJson(testo), c.orizzonte);
-    if (Object.keys(esito.ipotesi).length === 0)
-      return {
-        success: false,
-        error: `L’AI non ha prodotto ipotesi utilizzabili${esito.sintesi ? `: ${esito.sintesi}` : '.'} Riprova o compila le ipotesi a mano.`,
-      };
+    const json = estraiJson(testo);
+    let esito;
+    let rettifiche: Rettifiche | null = null;
+    if (modoRettifiche(c)) {
+      // Ricevente: rettifiche sul piano dell'azienda; le ipotesi effettive
+      // si calcolano qui, così la variante salvata è già completa.
+      const pianoAz = valoriPuliti(c.pianoAzienda);
+      const ipAz = ipotesiDaPianoAzienda(pianoAz, c.storico[0].anno + 1, c.orizzonte);
+      esito = validaRettificheAi(json, Object.keys(pianoAz) as (keyof typeof pianoAz)[]);
+      rettifiche = esito.rettifiche ?? {};
+      if (Object.keys(rettifiche).length === 0)
+        return {
+          success: false,
+          error: `L’AI non ha prodotto rettifiche utilizzabili${esito.sintesi ? `: ${esito.sintesi}` : '.'} Riprova o gira le manopole a mano.`,
+        };
+      esito.ipotesi = applicaRettifiche(ipAz, rettifiche, c.ipotesiCorrenti ?? {});
+    } else {
+      esito = validaRisposta(json, c.orizzonte);
+      if (Object.keys(esito.ipotesi).length === 0)
+        return {
+          success: false,
+          error: `L’AI non ha prodotto ipotesi utilizzabili${esito.sintesi ? `: ${esito.sintesi}` : '.'} Riprova o gira le manopole a mano.`,
+        };
+    }
     await assicuraTabelleParametriSpazio(s);
     const nota = [
-      `Ipotesi scritte dall’AI il ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}; i risultati li calcola il motore della piattaforma. Ogni cella ha la sua motivazione.`,
+      `Ipotesi impostate dall’AI il ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}; i risultati li calcola il motore della piattaforma.`,
       esito.sintesi,
       esito.scartati.length
         ? `Valori scartati perché fuori dagli intervalli ammessi: ${esito.scartati.join('; ')}.`
@@ -337,10 +388,17 @@ export async function elaboraPianoConAiAction(
       .filter(Boolean)
       .join('\n');
     await pool.query(
-      `INSERT INTO "${s}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, salvato_il)
-       VALUES ($1, $2, $3, $4, $5, now())
-       ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, salvato_il = now()`,
-      [scenarioId, VARIANTE_AI, c.orizzonte, JSON.stringify(esito.ipotesi), nota]
+      `INSERT INTO "${s}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, salvato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, now())
+       ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, rettifiche = $6, salvato_il = now()`,
+      [
+        scenarioId,
+        VARIANTE_AI,
+        c.orizzonte,
+        JSON.stringify(esito.ipotesi),
+        nota,
+        rettifiche ? JSON.stringify(rettifiche) : null,
+      ]
     );
     return {
       success: true,

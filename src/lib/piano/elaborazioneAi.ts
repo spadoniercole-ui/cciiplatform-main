@@ -17,6 +17,7 @@
 // breve e validata qui, senza seconde chiamate di correzione.
 
 import { cercaTerminiLessico, LESSICO, SOSTITUZIONI_DIRETTE } from '@/lib/lessico/lessico';
+import { rettifichePulite, type Rettifiche } from './rettifiche';
 import {
   ETICHETTA_RIGA,
   RIGHE_FLUSSO,
@@ -104,27 +105,60 @@ function lessicoBreve(): string {
   return `Nelle motivazioni non usare come giudizio i termini ${vietati.join(', ')}; non dire che l'azienda è in crisi o insolvente; nessun giudizio sulle persone. Descrivi dati e ipotesi.`;
 }
 
+/** Il Ricevente con il piano dell'azienda caricato rettifica quel piano; gli altri casi girano le manopole. */
+export function modoRettifiche(c: ContestoElaborazione): boolean {
+  return (
+    c.lato === 'RICEVUTA' &&
+    !!c.pianoAzienda &&
+    Object.values(c.pianoAzienda).some((v) => v && Object.keys(v).length > 0)
+  );
+}
+
+/**
+ * Prompt dell'AI. Risposta compatta: UN valore per riga (una manopola),
+ * uguale per tutti gli anni — così il modello non deve scrivere decine di
+ * celle (la risposta lunga si troncava e l'elaborazione falliva).
+ */
 export function promptElaborazione(c: ContestoElaborazione): string {
-  const compito =
-    c.lato === 'RICEVUTA'
-      ? `Sei l'analista dell'ente creditore che ha RICEVUTO la proposta. Scrivi le ipotesi di un piano alternativo, ragionevole e documentato: parti dal piano dell'azienda e riconducilo al riferimento di settore e allo storico dove l'azienda è più ottimista senza ragioni nei dati; dove il piano dell'azienda è in linea, conservalo. Se il piano dell'azienda manca, parti dal riferimento di settore e dallo storico.`
-      : `Sei l'analista che REDIGE la proposta. Scrivi le ipotesi di un piano ragionevole e documentato che, se i dati lo consentono, generi la cassa per pagare le rate della proposta: indica su quali leve agisci (ricavi, costi, incassi, pagamenti, investimenti, apporti) restando entro valori plausibili rispetto a storico e settore. Se le rate non si possono coprire con ipotesi plausibili, non forzare: dillo nella sintesi.`;
-  return `${compito}
+  if (modoRettifiche(c)) {
+    const righe = Object.keys(c.pianoAzienda ?? {}).filter((r) =>
+      RIGHE_INPUT.includes(r as RigaInput)
+    ) as RigaInput[];
+    return `Sei l'analista dell'ente creditore che ha RICEVUTO la proposta. Il punto di partenza è il PIANO DELL'AZIENDA: non costruisci un piano tuo, lo metti alla prova. Per ogni riga del piano dell'azienda indica UNA rettifica percentuale, uguale per tutti gli anni: 0 se la riga è credibile così; negativa dove l'azienda è più ottimista del riferimento di settore e dello storico senza ragioni nei dati (per i costi, positiva se l'azienda li sottostima). Esempio: ricavi −10 = ogni anno il 10% in meno di quanto dichiara l'azienda.
 
-Scrivi SOLO ipotesi d'ingresso: il calcolo (EBITDA, utile, cassa, copertura delle rate) lo fa la piattaforma. Righe ammesse e forma:
-${RIGHE_INPUT.map((r) => `- ${r}: ${ETICHETTA_RIGA[r]} — ${r === 'aliquotaImposte' ? 'percentuale (tipo "abs", valore in %)' : RIGHE_FLUSSO.has(r) ? 'valore assoluto in euro (tipo "abs")' : 'variazione % sull’anno prima (tipo "pct") oppure valore in euro (tipo "abs")'}`).join('\n')}
+Righe da rettificare (una voce ciascuna, valore tra −50 e +50):
+${righe.map((r) => `- ${r}: ${ETICHETTA_RIGA[r]}`).join('\n')}
 
-Regole: compila TUTTE le righe e TUTTI gli anni — ${c.orizzonte} valori per ogni riga, nessun null (una voce che non cambia si scrive con variazione 0, oppure 0 € per investimenti e apporti); variazioni % tra -50 e +50; ogni valore con una motivazione di una frase (al massimo 25 parole) che richiama il dato su cui si fonda (storico, settore, piano dell'azienda, rate); per i valori invariati basta «invariato». Il primo anno del piano parte dallo STATO ATTUALE (il primo esercizio dello storico): non rivedere il passato. ${lessicoBreve()}
+Ogni valore con una motivazione di una frase (al massimo 25 parole) che richiama il dato su cui si fonda (scostamento dal riferimento, storico, settore). Il calcolo lo fa la piattaforma. ${lessicoBreve()}
 
 DATI
 ${testoContesto(c)}
 
 Rispondi SOLO con JSON:
-{"ipotesi": {"ricaviVendite": [{"tipo": "pct", "valore": 3, "motivazione": "..."}, null]}, "sintesi": "tre frasi al massimo: impostazione e limiti"}`;
+{"rettifiche": {"ricaviVendite": {"valore": -10, "motivazione": "..."}}, "sintesi": "tre frasi al massimo: impostazione e limiti"}`;
+  }
+  const compito =
+    c.lato === 'RICEVUTA'
+      ? `Sei l'analista dell'ente creditore che ha RICEVUTO la proposta. Il piano dell'azienda non è stato caricato: imposta ipotesi prudenti e documentate a partire dallo stato attuale, dallo storico e dal riferimento di settore.`
+      : `Sei l'analista che REDIGE la proposta. Imposta ipotesi ragionevoli e documentate che, se i dati lo consentono, generino la cassa per pagare le rate della proposta, restando entro valori plausibili rispetto a storico e settore. Se le rate non si possono coprire con ipotesi plausibili, non forzare: dillo nella sintesi.`;
+  return `${compito}
+
+Imposti le MANOPOLE del piano: per ogni riga UN valore, uguale per tutti gli anni, a partire dallo STATO ATTUALE (il primo esercizio dello storico; il passato non si modifica). Il calcolo (EBITDA, utile, cassa, copertura delle rate) lo fa la piattaforma. Righe e forma:
+${RIGHE_INPUT.map((r) => `- ${r}: ${ETICHETTA_RIGA[r]} — ${r === 'aliquotaImposte' ? '"abs", aliquota in %' : RIGHE_FLUSSO.has(r) ? '"abs", euro per anno' : '"pct", variazione % annua'}`).join('\n')}
+
+Regole: tutte le righe; variazioni % tra -50 e +50 (0 = invariato); ogni valore con una motivazione di una frase (al massimo 25 parole) che richiama il dato su cui si fonda. ${lessicoBreve()}
+
+DATI
+${testoContesto(c)}
+
+Rispondi SOLO con JSON:
+{"ipotesi": {"ricaviVendite": {"tipo": "pct", "valore": 3, "motivazione": "..."}}, "sintesi": "tre frasi al massimo: impostazione e limiti"}`;
 }
 
 export interface EsitoElaborazione {
   ipotesi: IpotesiPiano;
+  /** Solo nel modo rettifiche (Ricevente con il piano dell'azienda). */
+  rettifiche?: Rettifiche;
   sintesi: string;
   scartati: string[];
 }
@@ -177,15 +211,20 @@ export function validaRisposta(json: unknown, orizzonte: number): EsitoElaborazi
     string,
     unknown
   >;
-  for (const [riga, valori] of Object.entries(grezze)) {
+  for (const [riga, grezzo] of Object.entries(grezze)) {
+    let valori: unknown = grezzo;
     if (!RIGHE_INPUT.includes(riga as RigaInput)) {
       scartati.push(`riga sconosciuta «${riga}»`);
       continue;
     }
-    if (!Array.isArray(valori)) continue;
     const r = riga as RigaInput;
+    // Una manopola: un solo valore per la riga, uguale per tutti gli anni.
+    if (valori && typeof valori === 'object' && !Array.isArray(valori))
+      valori = Array.from({ length: orizzonte }, () => grezzo);
+    if (!Array.isArray(valori)) continue;
+    const celle = valori as unknown[];
     const arr: (Ipotesi | null)[] = Array.from({ length: orizzonte }, (_, i) => {
-      const v = valori[i] as Record<string, unknown> | null | undefined;
+      const v = celle[i] as Record<string, unknown> | null | undefined;
       if (!v || typeof v !== 'object') return null;
       const valore = Number(v.valore);
       let tipo = v.tipo === 'abs' ? 'abs' : 'pct';
@@ -224,4 +263,31 @@ export function validaRisposta(json: unknown, orizzonte: number): EsitoElaborazi
   }
   const sintesi = typeof obj.sintesi === 'string' ? motivazionePulita(obj.sintesi, 600) : '';
   return { ipotesi, sintesi, scartati };
+}
+
+/** Valida le rettifiche dell'AI sul piano dell'azienda. */
+export function validaRettificheAi(json: unknown, righeAmmesse: RigaInput[]): EsitoElaborazione {
+  const obj = (json && typeof json === 'object' ? json : {}) as Record<string, unknown>;
+  const grezze = rettifichePulite(obj.rettifiche);
+  const scartati: string[] = [];
+  const rettifiche: Rettifiche = {};
+  for (const [r, v] of Object.entries(grezze) as [
+    RigaInput,
+    { valore: number; motivazione?: string },
+  ][]) {
+    if (!righeAmmesse.includes(r)) {
+      scartati.push(`riga non presente nel piano dell’azienda «${r}»`);
+      continue;
+    }
+    if (Math.abs(v.valore) > 50) {
+      scartati.push(`${ETICHETTA_RIGA[r]}: ${v.valore}% fuori intervallo`);
+      continue;
+    }
+    rettifiche[r] = {
+      valore: v.valore,
+      ...(v.motivazione ? { motivazione: motivazionePulita(v.motivazione) } : {}),
+    };
+  }
+  const sintesi = typeof obj.sintesi === 'string' ? motivazionePulita(obj.sintesi, 600) : '';
+  return { ipotesi: {}, rettifiche, sintesi, scartati };
 }

@@ -52,6 +52,8 @@ interface Props {
   nomeVariante: string;
   /** Il contesto per l'elaborazione con l'AI, già calcolato qui: il genitore non lo rilegge. */
   onContesto?: (c: ContestoConfronto) => void;
+  /** Ricevente: niente «copia nella variante», il cruscotto parte già dal piano dell'azienda. */
+  senzaCopia?: boolean;
 }
 
 export interface ContestoConfronto {
@@ -87,6 +89,7 @@ export function ConfrontoPianoAziendale({
   ipotesiCorrenti,
   nomeVariante,
   onContesto,
+  senzaCopia,
 }: Props) {
   const redigente = lato === 'DA_DEFINIRE';
   const chi = redigente ? 'piano' : 'azienda';
@@ -461,14 +464,16 @@ export function ConfrontoPianoAziendale({
               >
                 <Printer className="w-3.5 h-3.5" /> Stampa il confronto
               </button>
-              <button
-                type="button"
-                onClick={copiaInVariante}
-                className="flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
-                title="Porta le ipotesi dell’azienda in una variante del piano, per metterle alla prova"
-              >
-                <Copy className="w-3.5 h-3.5" /> Copia nella variante «azienda»
-              </button>
+              {!senzaCopia && (
+                <button
+                  type="button"
+                  onClick={copiaInVariante}
+                  className="flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+                  title="Porta le ipotesi dell’azienda in una variante del piano, per metterle alla prova"
+                >
+                  <Copy className="w-3.5 h-3.5" /> Copia nella variante «azienda»
+                </button>
+              )}
               <button
                 type="button"
                 onClick={elimina}
