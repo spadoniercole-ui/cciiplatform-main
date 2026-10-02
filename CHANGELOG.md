@@ -93,6 +93,35 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.124.0 — 2026-10-02 (Portable 1.2.9)
+
+Quarta consegna della rielaborazione del percorso dopo lo screening:
+**la lavorazione della proposta (Redigente) è una pagina sola**, specchio
+dell'istruttoria del Ricevente. Prima erano nove passi in pagine diverse
+(XBRL, Posizione aggiornata, Indici, Check List, Settore, Piano, Brogliaccio,
+Proposta, Relazione), con un giro dalla sidebar per ognuno.
+
+- **1. Stato attuale dell'azienda**: cosa c'è e cosa manca (bilanci XBRL,
+  posizione aggiornata, Test pratico, Check List Ministeriale), ognuno con il
+  pulsante per completarlo; crescita del settore contro quella dell'azienda
+  (aggiornata da sola); indici in tabella per periodo.
+- **2. La proposta**: inquadramento e righe del piano di rientro.
+- **3. Il piano di sviluppo con le manopole**, sulla stessa pagina: quando
+  cambiano le righe della proposta il piano rilegge le rate e dice subito se
+  reggono.
+- **4. Documenti di corredo e Relazione**: l'unico momento in cui si produce
+  un documento formale.
+- **Il Brogliaccio del Redigente non c'è più.** La sintesi dello scenario la
+  compone la piattaforma quando servono i documenti di corredo, aggiornata,
+  senza un passo dell'utente; il confronto con lo scenario liquidatorio si
+  prepara alla Relazione se manca.
+- **Rientro al punto di partenza** anche per bilanci, Check List e Test
+  pratico (oltre alla posizione aggiornata): la pagina di servizio mostra «Sei
+  qui dalla lavorazione della proposta» e il pulsante per tornare all'altezza
+  da cui si era partiti.
+- La panoramica dei passi dello scenario non esiste più: lo scenario si apre
+  direttamente sulla sua pagina, per entrambi i percorsi.
+
 ## 0.123.0 — 2026-10-02 (Portable 1.2.8)
 
 Terza consegna della rielaborazione del percorso dopo lo screening:

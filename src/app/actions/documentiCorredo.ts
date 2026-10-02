@@ -20,6 +20,7 @@ import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { verificaRicevibilitaProposta } from '@/app/actions/propostaScenario';
 import { ottieniBrogliaccio } from '@/app/actions/brogliaccio';
+import { generaBrogliaccioRedigenteAction } from '@/app/actions/brogliaccioRedigente';
 import { ottieniConfrontoLiquidatorio } from '@/app/actions/confrontoLiquidatorio';
 import { ottieniTestPraticoAzienda } from '@/app/actions/testPraticoAzienda';
 import { DOCUMENTI_CORREDO, type TipoDocumentoCorredo } from '@/lib/documentiCorredo/costanti';
@@ -193,10 +194,14 @@ export async function generaDocumentoCorredoAction(
 
     await assicuraTabellaDocumentiCorredo(nomeSchema);
 
+    // Sintesi dello scenario (ex Brogliaccio): la compone la piattaforma ora,
+    // aggiornata, senza un passo dell'utente; prepara anche il confronto
+    // liquidatorio se manca. Se non riesce si usa l'ultima salvata.
+    const sintesiFresca = await generaBrogliaccioRedigenteAction(nomeSchema, scenarioId);
     const [aziendaRis, esitoRis, brogliaccioRis, confrontoRis, testPraticoRis] = await Promise.all([
       ottieniAziendaPerId(nomeSchema, aziendaId),
       verificaRicevibilitaProposta(nomeSchema, scenarioId, 'NON_ENTE'),
-      ottieniBrogliaccio(nomeSchema, scenarioId),
+      sintesiFresca.success ? sintesiFresca : ottieniBrogliaccio(nomeSchema, scenarioId),
       ottieniConfrontoLiquidatorio(nomeSchema, scenarioId),
       ottieniTestPraticoAzienda(nomeSchema, aziendaId),
     ]);
@@ -232,9 +237,9 @@ export async function generaDocumentoCorredoAction(
     }
 
     if (brogliaccioRis.success && brogliaccioRis.stato.livello1Testo) {
-      blocchi.push(`SINTESI DELLO SCENARIO (Brogliaccio):\n${brogliaccioRis.stato.livello1Testo}`);
+      blocchi.push(`SINTESI DELLO SCENARIO:\n${brogliaccioRis.stato.livello1Testo}`);
     } else {
-      blocchi.push('SINTESI DELLO SCENARIO (Brogliaccio): non ancora generata.');
+      blocchi.push('SINTESI DELLO SCENARIO: non disponibile.');
     }
 
     if (confrontoRis.success && confrontoRis.testo) {

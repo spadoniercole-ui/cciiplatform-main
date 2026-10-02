@@ -46,6 +46,8 @@ interface Props {
   nomeScenario: string;
   /** Aperto dalla lista di controllo della valutazione: dove tornare. */
   ritornoA?: string | null;
+  ritornoDa?: string;
+  ritornoPulsante?: string;
 }
 
 function formatEuro(val: number | null | undefined): string {
@@ -60,6 +62,8 @@ export function PosizioneAggiornataScenario({
   aziendaId,
   nomeScenario,
   ritornoA = null,
+  ritornoDa = 'valutazione della proposta',
+  ritornoPulsante = 'Torna alla valutazione',
 }: Props) {
   // Colonne di riferimento: fino agli ultimi N anni dal file XBRL (N =
   // parametro di spazio), in ordine cronologico crescente (il più recente a
@@ -281,14 +285,14 @@ export function PosizioneAggiornataScenario({
       {ritornoA && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-sky-900 bg-sky-50 border border-sky-200 rounded-lg p-3">
           <span>
-            Sei qui dalla <span className="font-bold">valutazione della proposta</span>: al
-            salvataggio torni automaticamente al punto da cui sei partito.
+            Sei qui dalla <span className="font-bold">{ritornoDa}</span>: al salvataggio torni
+            automaticamente al punto da cui sei partito.
           </span>
           <a
             href={ritornoA}
             className="px-3 py-1.5 bg-white border border-sky-300 hover:bg-sky-100 text-sky-800 font-bold text-[10px] uppercase rounded-lg"
           >
-            ← Torna alla valutazione
+            ← {ritornoPulsante}
           </a>
         </div>
       )}
