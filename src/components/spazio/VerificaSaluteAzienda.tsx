@@ -31,7 +31,7 @@ import {
 } from '@/lib/triage/riepilogoHtml';
 import { stampaHtml } from '@/lib/stampaTesto';
 import React, { useEffect, useState } from 'react';
-import { Stethoscope, Upload, Check, AlertTriangle, ArrowRight, Printer } from 'lucide-react';
+import { Stethoscope, Upload, Check, AlertTriangle, ArrowRight, Printer, Info } from 'lucide-react';
 import {
   estraiAnagraficaDaVisuraAction,
   type AnagraficaEstratta,
@@ -116,6 +116,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
   const [fase, setFase] = useState<Fase>('caricamento');
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  const [avvisoCiclo, setAvvisoCiclo] = useState<string | null>(null);
   const [nonTrovati, setNonTrovati] = useState<string[]>([]);
   const [dati, setDati] = useState<AnagraficaEstratta | null>(null);
   const [aziendaId, setAziendaId] = useState<number | null>(null);
@@ -245,6 +246,11 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         return;
       }
       setAziendaId(c.aziendaId);
+      if (c.cicloArchiviato) {
+        setAvvisoCiclo(
+          'Questa azienda aveva già un’istruttoria: screening, Check List, posizioni debitorie e valori delle soglie sono stati archiviati e si riparte da zero. Il lavoro precedente resta consultabile nello Screening, in «Istruttorie precedenti».'
+        );
+      }
 
       // ---- Posizioni debitorie e strutture mappate ----------------------
       // Si salvano PRIMA di calcolare l'indicatore, che le legge.
@@ -838,6 +844,13 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
           decidi di procedere — ma la verifica resta comunque registrata.
         </p>
       </div>
+
+      {avvisoCiclo && (
+        <div className="flex items-start gap-2 text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-lg p-3">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <p>{avvisoCiclo}</p>
+        </div>
+      )}
 
       {errore && (
         <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">

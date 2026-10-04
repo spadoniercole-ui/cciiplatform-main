@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ScreeningAziendaScenario } from '@/components/spazio/ScreeningAziendaScenario';
+import { IstruttoriePrecedenti } from '@/components/spazio/IstruttoriePrecedenti';
 
 // Due chiamate AI in parallelo (questionario + relazione), ciascuna con
 // timeout di 150s (vedi screeningAzienda.ts) — margine sopra quello,
@@ -22,11 +23,14 @@ export default async function ScreeningAziendaPage({
   if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
 
   return (
-    <ScreeningAziendaScenario
-      nomeSchema={contesto.nomeSchema}
-      aziendaId={Number(aziendaId)}
-      codice={codice}
-      tipoSpazio={contesto.tipoSpazio}
-    />
+    <div className="space-y-5">
+      <ScreeningAziendaScenario
+        nomeSchema={contesto.nomeSchema}
+        aziendaId={Number(aziendaId)}
+        codice={codice}
+        tipoSpazio={contesto.tipoSpazio}
+      />
+      <IstruttoriePrecedenti nomeSchema={contesto.nomeSchema} aziendaId={Number(aziendaId)} />
+    </div>
   );
 }

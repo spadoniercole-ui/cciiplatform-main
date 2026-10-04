@@ -7,6 +7,7 @@
 // una pratica vera. Ma la verifica lascia comunque traccia, perché decidere
 // di non procedere è a sua volta una decisione amministrativa.
 
+import { apriNuovoCiclo, elencaCicli, type CicloArchiviato } from '@/lib/cicloAzienda';
 import { pool } from '@/lib/db';
 import { assicuraTabellaAziende } from '@/db/provision';
 import type { AnagraficaEstratta } from '@/app/actions/visuraEstrazione';
@@ -15,6 +16,8 @@ import { richiediAccessoSchema } from '@/lib/autorizzazione';
 export interface RisultatoVerifica {
   success: boolean;
   aziendaId?: number;
+  /** L'azienda era già nota e il lavoro precedente è stato archiviato: si riparte da zero. */
+  cicloArchiviato?: boolean;
   error?: string;
 }
 
@@ -100,7 +103,24 @@ export async function creaAziendaInVerificaAction(
           dati.annoCostituzione,
         ]
       );
-      return { success: true, aziendaId: id };
+      // Nuovo triage = nuova istruttoria: il lavoro precedente (screening,
+      // check list, posizioni, soglie) va in archivio e si riparte da zero.
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const esito = await apriNuovoCiclo(
+          async (sql, params) => (await client.query(sql, params)).rows,
+          nomeSchema,
+          id
+        );
+        await client.query('COMMIT');
+        return { success: true, aziendaId: id, cicloArchiviato: esito.archiviato };
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw e;
+      } finally {
+        client.release();
+      }
     }
 
     const r = await pool.query(
@@ -274,5 +294,27 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
   } catch (error: unknown) {
     console.error('[ottieniStoricoVerificheAction] Errore:', error);
     return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
+  }
+}
+
+/** Cicli di istruttoria archiviati di un'azienda (sola lettura). */
+export async function elencaCicliAziendaAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<{ success: boolean; cicli?: CicloArchiviato[]; error?: string }> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    const cicli = await elencaCicli(
+      async (sql, params) => (await pool.query(sql, params)).rows,
+      nomeSchema,
+      aziendaId
+    );
+    return { success: true, cicli };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: `Lettura dell'archivio non riuscita: ${(error as Error).message}`,
+    };
   }
 }

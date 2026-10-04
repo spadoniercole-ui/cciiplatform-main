@@ -93,6 +93,25 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.128.0 — 2026-10-05 (Portable 1.2.15)
+
+**Nuovo triage = nuova istruttoria.** Rifacendo il triage su un'azienda già
+nota (stessa P.IVA o codice fiscale) lo screening si presentava già pronto,
+con la Check List compilata, e la nuova verifica leggeva dati vecchi. Ora il
+lavoro precedente va in archivio e si riparte da zero (scelta di Ercole:
+archivio e ripartenza vuota).
+
+- Vanno in archivio e si azzerano: lo screening (relazione, sezioni, fatti
+  della visura) e le risposte alla sua Check List, la Check List ministeriale
+  dell'azienda, le posizioni debitorie del triage, il V.E.R.A. e i valori della
+  scheda Soglie di segnalazione.
+- Restano: l'anagrafica dell'azienda e quella presso l'ente, i bilanci XBRL
+  (fatti per esercizio), gli scenari già aperti, lo storico delle generazioni.
+- Il triage avvisa quando succede. Il lavoro archiviato si consulta in sola
+  lettura nello Screening, riquadro «Istruttorie precedenti»
+  (`azienda_cicli_archivio`, logica in `src/lib/cicloAzienda.ts` con i suoi
+  test). L'archiviazione avviene in una sola transazione.
+
 ## 0.127.0 — 2026-10-04 (Portable 1.2.14)
 
 Prime correzioni dalla prova di Ercole sul percorso Ricevente.
