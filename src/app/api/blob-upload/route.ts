@@ -18,7 +18,7 @@
 import { put } from '@/lib/blobStore';
 import { NextResponse } from 'next/server';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
-import { prefissoFileSpazio } from '@/lib/autorizzazione';
+import { prefissoFileSpazio, rifiutaSeNonAutorizzato } from '@/lib/autorizzazione';
 import { limiteUploadByte } from '@/lib/edizioneServer';
 
 // 4MB su Vercel (prudente sotto il tetto reale di 4,5MB), 20MB su disco locale.
@@ -27,6 +27,21 @@ const LIMITE_MB = DIMENSIONE_MASSIMA / 1024 / 1024;
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
+    // Prima la sessione, poi la dimensione dichiarata, e solo dopo si legge il
+    // corpo: chi non è autenticato non deve poter far caricare in memoria al
+    // server un corpo arbitrario (le route non hanno il limite delle server
+    // action). Il margine copre l'involucro multipart.
+    const rifiuto = await rifiutaSeNonAutorizzato('SESSIONE');
+    if (rifiuto) return rifiuto as NextResponse;
+    const dichiarata = Number(request.headers.get('content-length') || 0);
+    if (!dichiarata || dichiarata > DIMENSIONE_MASSIMA + 64 * 1024) {
+      return NextResponse.json(
+        {
+          error: `File troppo grande o dimensione non dichiarata — il limite è di ${LIMITE_MB}MB.`,
+        },
+        { status: 413 }
+      );
+    }
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const codiceSpazio = formData.get('codice') as string | null;
@@ -62,6 +77,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
+    // Il tipo dichiarato dal browser non basta: un PDF comincia con «%PDF-».
+    const testa = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+    if (String.fromCharCode(...testa) !== '%PDF-') {
+      return NextResponse.json({ error: 'Il file non è un PDF valido.' }, { status: 400 });
+    }
+
     // Il prefisso lega il file allo spazio: le azioni che lo leggono o lo
     // eliminano verificano che appartenga allo spazio del chiamante.
     const blob = await put(`${prefissoFileSpazio(contesto.spazioId)}${file.name}`, file, {
@@ -72,6 +93,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ url: blob.url });
   } catch (error: any) {
     console.error('[blob-upload] Errore:', error);
-    return NextResponse.json({ error: error.message || 'Errore upload.' }, { status: 500 });
+    return NextResponse.json({ error: 'Errore durante il caricamento del file.' }, { status: 500 });
   }
 }

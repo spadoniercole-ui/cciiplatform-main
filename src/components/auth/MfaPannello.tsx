@@ -81,6 +81,10 @@ export function MfaPannello({ onCompletato, onAnnulla }: Props) {
   const submitPin = async (e: React.FormEvent) => {
     e.preventDefault();
     const fase = stato?.fase;
+    if (fase === 'PIN_SETUP' && !/^\d{6}$/.test(pin)) {
+      setErrore('Il PIN deve essere di 6 cifre.');
+      return;
+    }
     if (fase === 'PIN_SETUP' && pin !== pinConferma) {
       setErrore('I due PIN non coincidono.');
       return;
@@ -180,7 +184,7 @@ export function MfaPannello({ onCompletato, onAnnulla }: Props) {
                 <KeyRound className="w-4 h-4 text-blue-600" /> Imposta il tuo PIN
               </div>
               <p className="text-[11px] text-slate-500">
-                Un PIN personale di 4-6 cifre, distinto dalla password. Ti verrà chiesto a ogni
+                Un PIN personale di 6 cifre, distinto dalla password. Ti verrà chiesto a ogni
                 accesso.
               </p>
             </div>

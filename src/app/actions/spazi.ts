@@ -515,6 +515,12 @@ export async function eliminaSpazioCompletoAction(spazioId: number): Promise<Act
       await pool.query(`DROP SCHEMA IF EXISTS "${nomeSchema.replace(/"/g, '""')}" CASCADE`);
     }
     await pool.query(`DELETE FROM public.sessioni WHERE workspace_id = $1`, [spazioId]);
+    // Anche le credenziali MFA (segreto TOTP, hash del PIN) degli utenti dello
+    // spazio: senza FK resterebbero, e un nome utente riusato in seguito le
+    // erediterebbe. La tabella può non esistere ancora (nessun accesso fatto).
+    await pool
+      .query(`DELETE FROM public.mfa_credenziali WHERE workspace_id = $1`, [spazioId])
+      .catch(() => {});
     // Il DELETE su spazi fa scattare la CASCADE già dichiarata sulle
     // altre tabelle globali collegate — non serve ripeterla qui.
     await pool.query(`DELETE FROM public.spazi WHERE id = $1`, [spazioId]);

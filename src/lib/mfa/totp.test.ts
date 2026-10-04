@@ -3,6 +3,7 @@ import {
   base32Decode,
   base32Encode,
   codiceTotp,
+  verificaTotpPasso,
   generaSegretoBase32,
   otpauthUri,
   verificaTotp,
@@ -237,5 +238,19 @@ describe('otpauthUri', () => {
     const label = decodeURIComponent(uri.slice('otpauth://totp/'.length, uri.indexOf('?')));
     expect(label).toBe('Ente ÷ Prova:utente è/àccentato');
     expect(uri).not.toContain(' ');
+  });
+});
+
+describe('verificaTotpPasso — step per impedire il riuso', () => {
+  it('restituisce lo step del codice, entro la finestra', () => {
+    const ora = 1_700_000_000_000;
+    const step = Math.floor(ora / 1000 / 30);
+    expect(verificaTotpPasso(SEGRETO_RFC, codiceTotp(SEGRETO_RFC, ora), 1, ora)).toBe(step);
+    const precedente = codiceTotp(SEGRETO_RFC, ora - 30_000);
+    expect(verificaTotpPasso(SEGRETO_RFC, precedente, 1, ora)).toBe(step - 1);
+  });
+  it('null per codici errati o malformati', () => {
+    expect(verificaTotpPasso(SEGRETO_RFC, '12345', 1)).toBeNull();
+    expect(verificaTotpPasso(SEGRETO_RFC, 'abcdef', 1)).toBeNull();
   });
 });

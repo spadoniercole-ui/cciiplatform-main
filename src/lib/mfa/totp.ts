@@ -97,25 +97,41 @@ export function codiceTotp(segretoBase32: string, nowMs: number = Date.now()): s
 }
 
 /**
- * Verifica un codice TOTP con finestra ±`finestra` step. Confronto a tempo
- * costante per non rivelare via timing quante cifre sono corrette.
+ * Verifica un codice TOTP con finestra ±`finestra` step e restituisce lo step
+ * a cui corrisponde (null se non valido). Lo step serve a impedire il riuso
+ * dello stesso codice: chi lo verifica registra l'ultimo step accettato e
+ * rifiuta quelli non successivi. Confronto a tempo costante per non rivelare
+ * via timing quante cifre sono corrette.
  */
+export function verificaTotpPasso(
+  segretoBase32: string,
+  codiceInserito: string,
+  finestra = 1,
+  nowMs: number = Date.now()
+): number | null {
+  const codice = String(codiceInserito || '').replace(/\s+/g, '');
+  if (!/^\d{6}$/.test(codice)) return null;
+  const segreto = base32Decode(segretoBase32);
+  if (segreto.length === 0) return null;
+  const stepCorrente = Math.floor(nowMs / 1000 / PASSO_SECONDI);
+  let trovato: number | null = null;
+  for (let w = -finestra; w <= finestra; w++) {
+    const atteso = hotp(segreto, stepCorrente + w);
+    const a = Buffer.from(atteso);
+    const b = Buffer.from(codice);
+    if (a.length === b.length && crypto.timingSafeEqual(a, b) && trovato === null) {
+      trovato = stepCorrente + w;
+    }
+  }
+  return trovato;
+}
+
+/** Come verificaTotpPasso, ma risponde solo sì/no. */
 export function verificaTotp(
   segretoBase32: string,
   codiceInserito: string,
   finestra = 1,
   nowMs: number = Date.now()
 ): boolean {
-  const codice = String(codiceInserito || '').replace(/\s+/g, '');
-  if (!/^\d{6}$/.test(codice)) return false;
-  const segreto = base32Decode(segretoBase32);
-  if (segreto.length === 0) return false;
-  const stepCorrente = Math.floor(nowMs / 1000 / PASSO_SECONDI);
-  for (let w = -finestra; w <= finestra; w++) {
-    const atteso = hotp(segreto, stepCorrente + w);
-    const a = Buffer.from(atteso);
-    const b = Buffer.from(codice);
-    if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
-  }
-  return false;
+  return verificaTotpPasso(segretoBase32, codiceInserito, finestra, nowMs) !== null;
 }

@@ -9,6 +9,7 @@ import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import { pool } from '@/lib/db';
 import { cookieSicuro } from '@/lib/cookieSicuro';
+import { improntaToken } from '@/lib/improntaToken';
 
 const DURATA_SESSIONE_ORE = 8;
 
@@ -26,7 +27,7 @@ export async function creaSessione(
 
   await pool.query(
     'INSERT INTO sessioni (token, ruolo, workspace_id, email, username, expires_at) VALUES ($1, $2, $3, $4, $5, $6)',
-    [token, ruolo, workspaceId, email || null, username || null, scadenza]
+    [improntaToken(token), ruolo, workspaceId, email || null, username || null, scadenza]
   );
 
   const cookieStore = await cookies();
@@ -59,6 +60,11 @@ export async function chiudiSessioniUtente(
       WHERE workspace_id = $1
         AND ((username IS NOT NULL AND username = $2) OR (email IS NOT NULL AND email = $3))
         AND token <> $4`,
-    [spazioId, identita.username, identita.email?.toLowerCase() ?? null, eccettoToken ?? '']
+    [
+      spazioId,
+      identita.username,
+      identita.email?.toLowerCase() ?? null,
+      eccettoToken ? improntaToken(eccettoToken) : '',
+    ]
   );
 }

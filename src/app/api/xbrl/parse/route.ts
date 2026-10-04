@@ -16,10 +16,18 @@ import { rifiutaSeNonAutorizzato } from '@/lib/autorizzazione';
 
 export const runtime = 'nodejs';
 
+const LIMITE_BYTE = 15 * 1024 * 1024;
+
 export async function POST(req: NextRequest) {
   try {
     const rifiuto = await rifiutaSeNonAutorizzato('SESSIONE');
     if (rifiuto) return rifiuto;
+    // Un'istanza XBRL di bilancio pesa qualche centinaio di KB: 15MB sono un
+    // margine ampio e impediscono di far leggere al server corpi arbitrari.
+    const dichiarata = Number(req.headers.get('content-length') || 0);
+    if (!dichiarata || dichiarata > LIMITE_BYTE) {
+      return NextResponse.json({ error: 'File troppo grande (limite 15MB).' }, { status: 413 });
+    }
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
 
@@ -33,6 +41,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (file.size > LIMITE_BYTE) {
+      return NextResponse.json({ error: 'File troppo grande (limite 15MB).' }, { status: 413 });
+    }
     const xmlContent = await file.text();
     const risultato = await analizzaFileXbrl(xmlContent, file.name);
 
