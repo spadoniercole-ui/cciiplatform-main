@@ -93,6 +93,18 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.126.1 — 2026-10-04 (Portable 1.2.12)
+
+Allineamenti emersi scrivendo la guida operativa del Ricevente.
+
+- **Lista di controllo della valutazione**: i suggerimenti indicavano passi
+  che nell'istruttoria su una sola pagina non esistono più («Proposta di cram
+  down › Scegli file», passo «Posizione Aggiornata» degli scenari). Ora
+  rimandano alle fasi della pagina: «Documenti ricevuti», «Posizione contabile
+  aggiornata», «Documenti non pervenuti».
+- **Utenti**: il permesso del modulo Piano di sviluppo compariva senza nome;
+  ora si chiama «Piano di sviluppo».
+
 ## 0.126.0 — 2026-10-04 (Portable 1.2.11)
 
 Verifica di sicurezza di server e software, chiesta da Ercole prima di aprire
