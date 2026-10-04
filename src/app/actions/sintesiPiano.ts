@@ -17,6 +17,7 @@ import { crescitaDiRiferimento, ipotesiAutomatiche, type PuntoSerie } from '@/li
 import { confrontaPiani } from '@/lib/piano/confronto';
 import { anniDelPiano, ipotesiDaPianoAzienda, valoriPuliti } from '@/lib/piano/pianoAziendale';
 import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
+import { soluzionePulita } from '@/lib/piano/riceventeSalvataggio';
 
 export interface SintesiPiano {
   disponibile: boolean;
@@ -115,6 +116,23 @@ export async function sintesiPianoScenarioAction(
       righe.push(
         `VARIANTE «elaborazione-ai» (ipotesi scritte dall’AI con motivazione, risultati del motore): ${pAi.sintesi.replace(/\n/g, ' ')}${sintesiAi ? ` Impostazione dichiarata: ${sintesiAi}` : ''}`
       );
+    }
+    // Ricevente: la soluzione verde salvata (motore), con la lettura dell'AI.
+    if (lato === 'RICEVUTA') {
+      const solRis = await pool
+        .query(
+          `SELECT variante, soluzione FROM "${nomeSchema}".piano_sviluppo
+            WHERE scenario_id = $1 AND soluzione IS NOT NULL ORDER BY salvato_il DESC LIMIT 1`,
+          [scenarioId]
+        )
+        .catch(() => ({ rows: [] as { variante: string; soluzione: unknown }[] }));
+      const sol = soluzionePulita(solRis.rows[0]?.soluzione);
+      if (sol) {
+        righe.push(
+          `SOLUZIONE VERDE CALCOLATA DAL MOTORE (variante «${solRis.rows[0].variante}»; condizioni con cui il piano regge, non un giudizio sulla proposta):\n${sol.testo}`
+        );
+        if (sol.commentoAi) righe.push(`Lettura della soluzione: ${sol.commentoAi}`);
+      }
     }
     righe.push(
       `Rate della proposta nell’orizzonte: ente ${euro(rate.ente.reduce((a, b) => a + b, 0))}, altri creditori ${euro(rate.altri.reduce((a, b) => a + b, 0))}.`

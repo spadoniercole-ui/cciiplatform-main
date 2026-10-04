@@ -44,8 +44,15 @@ export function applicaRettifiche(
   for (const r of righe) {
     const k = rettifiche[r]?.valore ?? 0;
     const fattore = 1 + Math.max(-LIMITE_RETTIFICA, Math.min(LIMITE_RETTIFICA, k)) / 100;
+    // Si scalano i valori assoluti. Un'ipotesi in % (gli anni oltre il piano
+    // dell'azienda, che crescono con il settore) resta com'è: parte dal
+    // valore dell'anno prima, già rettificato, e lo spostamento si conserva.
     out[r] = (ipAzienda[r] ?? []).map((ip) =>
-      ip ? { tipo: ip.tipo, valore: Math.round(ip.valore * fattore * 100) / 100 } : null
+      ip
+        ? ip.tipo === 'abs'
+          ? { tipo: ip.tipo, valore: Math.round(ip.valore * fattore * 100) / 100 }
+          : { ...ip }
+        : null
     );
   }
   return out;

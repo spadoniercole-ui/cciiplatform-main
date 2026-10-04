@@ -23,8 +23,27 @@ interface Props {
   variaPerAnno?: boolean;
   daAi?: boolean;
   disabilitata?: boolean;
+  /**
+   * Ricevente: fasce colorate sotto la manopola, una per serie (azienda,
+   * sistema): lo scostamento della serie rettificata dal riferimento di
+   * settore, verde / giallo / rosso con le soglie dell'ente.
+   */
+  fasce?: { etichetta: string; luce: 'verde' | 'giallo' | 'rosso' | 'nc' }[];
   onChange: (v: number) => void;
 }
+
+const COLORE_FASCIA = {
+  verde: 'bg-emerald-500',
+  giallo: 'bg-amber-400',
+  rosso: 'bg-red-500',
+  nc: 'bg-slate-200',
+};
+const TESTO_FASCIA = {
+  verde: 'entro soglia o prudente',
+  giallo: 'ottimista oltre la soglia verde',
+  rosso: 'ottimista oltre la soglia gialla',
+  nc: 'non confrontabile con il settore',
+};
 
 const COLORE = { ok: '#059669', attenzione: '#d97706', critico: '#dc2626' };
 const INIZIO = 135; // gradi: arco da 135° a 405° (270° di corsa)
@@ -60,6 +79,7 @@ export function Manopola({
   variaPerAnno,
   daAi,
   disabilitata,
+  fasce,
   onChange,
 }: Props) {
   const trascina = useRef<{ y: number; x: number; v: number } | null>(null);
@@ -178,6 +198,20 @@ export function Manopola({
           </span>
         )}
       </span>
+      {fasce && fasce.length > 0 && (
+        <div className="w-full mt-1 space-y-0.5">
+          {fasce.map((f) => (
+            <div
+              key={f.etichetta}
+              className="flex items-center gap-1"
+              title={`${f.etichetta}: ${TESTO_FASCIA[f.luce]}`}
+            >
+              <span className="text-[8px] text-slate-500 w-8 text-left">{f.etichetta}</span>
+              <span className={`flex-1 h-1.5 rounded-full ${COLORE_FASCIA[f.luce]}`} />
+            </div>
+          ))}
+        </div>
+      )}
       {variaPerAnno && (
         <span className="text-[9px] text-amber-700 leading-tight">
           diversa per anno: girando la uniformi

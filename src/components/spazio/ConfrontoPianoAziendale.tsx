@@ -54,10 +54,14 @@ interface Props {
   onContesto?: (c: ContestoConfronto) => void;
   /** Ricevente: niente «copia nella variante», il cruscotto parte già dal piano dell'azienda. */
   senzaCopia?: boolean;
+  /** Rate del piano di rientro scelto con le domande; se assenti, quelle della proposta. */
+  rateScelte?: { ente: number[]; altri: number[] } | null;
 }
 
 export interface ContestoConfronto {
   crescita: { tasso: number; descrizione: string };
+  /** Soglie dell'ente per i semafori (Parametri di Spazio). */
+  soglie: { verde: number; giallo: number };
   pianoAzienda: ValoriPianoAzienda | null;
   scostamenti: { voce: string; luce: 'giallo' | 'rosso'; ottimismoMassimo: number }[];
 }
@@ -90,6 +94,7 @@ export function ConfrontoPianoAziendale({
   nomeVariante,
   onContesto,
   senzaCopia,
+  rateScelte,
 }: Props) {
   const redigente = lato === 'DA_DEFINIRE';
   const chi = redigente ? 'piano' : 'azienda';
@@ -110,7 +115,7 @@ export function ConfrontoPianoAziendale({
   const base = dati.storico[0];
   const primoAnno = base.anno + 1;
   const anniPiano = Array.from({ length: orizzonte }, (_, i) => primoAnno + i);
-  const rate = {
+  const rate = rateScelte ?? {
     ente: dati.rate.ente.slice(0, orizzonte),
     altri: dati.rate.altri.slice(0, orizzonte),
   };
@@ -148,12 +153,13 @@ export function ConfrontoPianoAziendale({
     const esito = confrontaPiani(auto.anni, azienda.anni, ipAz, conf.soglie, anniConDati);
     return { crescita, auto, azienda, esito, ipAz };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conf, dati, orizzonte, redigente ? ipotesiCorrenti : null]);
+  }, [conf, dati, orizzonte, redigente ? ipotesiCorrenti : null, rateScelte]);
 
   useEffect(() => {
     if (!calcolo || !onContesto) return;
     onContesto({
       crescita: { tasso: calcolo.crescita.tasso, descrizione: calcolo.crescita.descrizione },
+      soglie: conf?.soglie ?? { verde: 10, giallo: 25 },
       pianoAzienda: redigente ? null : (conf?.piano?.valori ?? null),
       scostamenti: redigente
         ? []

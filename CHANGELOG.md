@@ -93,6 +93,46 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.129.0 — 2026-10-05 (Portable 1.2.16)
+
+**Piano del Ricevente: invertito l'ordine dei fattori**, come chiesto da
+Ercole («si parte dal piano di impresa»). Il Redigente resta com'è.
+
+1. **Piano dell'azienda sulle manopole, con i colori.** A manopole ferme il
+   cruscotto è il piano presentato dall'azienda. Sotto ogni manopola una
+   fascia «azienda» dice quanto la voce si discosta dal riferimento di
+   settore, con le soglie dell'ente (verde / giallo / rosso). Oltre l'ultimo
+   anno dichiarato, ricavi, costi, crediti e fornitori proseguono con la
+   crescita di settore.
+2. **Variante di sistema** («Sì, affianca il piano di sistema»): il
+   riferimento di settore calcolato dal motore si mette sotto i dati
+   dell'azienda, riga per riga nella tabella dei risultati. Le manopole
+   rettificano entrambe le serie e mostrano due fasce, azienda e sistema.
+3. **Piano di rientro nell'arco del piano.** Domande che il piano non dice:
+   unica soluzione o rate, quanti mesi, quota subito, sul totale offerto a
+   tutti i creditori (non sul solo debito verso l'ente). Se la proposta non
+   indica il totale si scrive lì. Se l'ammortamento esce dall'orizzonte, ci
+   si ferma e si sceglie: ammortamento adeguato al piano o piano allungato
+   (orizzonte ora fino a 10 anni).
+4. **Soluzione verde.** Il motore cerca la combinazione di manopole più
+   vicina al piano dell'azienda con cui la cassa non va mai sotto zero, le
+   rate sono coperte dal flusso di gestione e il patrimonio netto non è
+   negativo. Posiziona le manopole e indica, per ogni voce mossa, la
+   differenza dal piano dell'azienda e dal piano di sistema, con cassa
+   minima, patrimonio netto finale e copertura delle rate dei tre piani. Se il
+   verde non si raggiunge entro ±50% per voce, lo dice e mostra i vincoli che
+   restano. L'AI scrive la lettura della soluzione (lessico della
+   piattaforma) senza spostare numeri.
+
+- La soluzione salvata con la variante entra nella Relazione di chiusura.
+- Logica pura in `src/lib/piano/ricevente.ts` e
+  `src/lib/piano/riceventeSalvataggio.ts`, con i test; colonne
+  `piano_sviluppo.piano_rientro`, `serie_sistema`, `soluzione`.
+- Corretto: una rettifica percentuale non moltiplica più le crescite in % degli
+  anni estesi (contava due volte).
+- Sul Ricevente con il piano dell'azienda il vecchio pulsante «L'AI rettifica
+  il piano dell'azienda» lascia il posto al passo 4.
+
 ## 0.128.0 — 2026-10-05 (Portable 1.2.15)
 
 **Nuovo triage = nuova istruttoria.** Rifacendo il triage su un'azienda già
