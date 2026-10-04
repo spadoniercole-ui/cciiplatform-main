@@ -93,6 +93,26 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.126.2 — 2026-10-04 (Portable 1.2.13)
+
+Scheda **Soglie di segnalazione** dell'azienda: ora dice quale valore usa il
+calcolo e da dove viene, dopo la segnalazione di Ercole (campo «Contributi
+scaduti e non versati» vuoto con il V.E.R.A. caricato).
+
+- Con il campo vuoto il calcolo usava già il totale del V.E.R.A. caricato
+  (partite contabilizzate e da contabilizzare), ma la scheda non lo diceva e
+  il campo sembrava un dato mancante. Ora sotto il campo compare «Campo
+  vuoto: il calcolo usa … dal V.E.R.A. caricato».
+- Le posizioni caricate nel triage prevalgono sul valore scritto a mano: ora
+  la scheda lo dichiara («Il valore scritto qui non viene usato: prevale …»).
+  Vale per contributi scaduti, contributi dovuti nell'anno precedente, premi
+  INAIL, IVA scaduta e volume d'affari.
+- Sanzioni presunte: la nota chiarisce che vanno lette nel file V.E.R.A. e
+  scritte a mano; la piattaforma non le ricava da sola.
+- L'ordine di precedenza (triage, valore della scheda, V.E.R.A.) sta in un
+  solo punto, `src/lib/soglie25novies/fonti.ts`, con i suoi test. Il calcolo
+  non cambia.
+
 ## 0.126.1 — 2026-10-04 (Portable 1.2.12)
 
 Allineamenti emersi scrivendo la guida operativa del Ricevente.

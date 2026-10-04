@@ -19,6 +19,7 @@ import type { DatiSoglie } from './calcolo';
 import { formaAERdaAnagrafica } from './formaAER';
 import { ottieniDebitiTriageAction } from '@/app/actions/debitiTriage';
 import { valoriSoglieDaPosizioni } from '@/lib/debitiTriage/modello';
+import { scegliValore, type ValoriUsati } from './fonti';
 
 const num = (v: unknown): number | null =>
   v === null || v === undefined || v === '' ? null : Number(v);
@@ -31,6 +32,8 @@ export interface DatiSoglieAzienda {
   esitoDenunceConservato: boolean;
   /** Esposizione verso l'ente: valore manuale, altrimenti somma del V.E.R.A. */
   esposizione: number | null;
+  /** Valore effettivamente usato per ciascun importo e la sua fonte (vedi fonti.ts). */
+  usati: ValoriUsati;
 }
 
 export async function leggiDatiSoglieAzienda(
@@ -70,20 +73,39 @@ export async function leggiDatiSoglieAzienda(
   const posizioniRis = await ottieniDebitiTriageAction(nomeSchema, aziendaId);
   const daPosizioni = valoriSoglieDaPosizioni(posizioniRis.righe ?? []);
 
+  const usati: ValoriUsati = {};
+  const scegli = <K extends keyof ValoriUsati>(
+    k: K,
+    pos: number | null | undefined,
+    man: number | null,
+    vera: number | null = null
+  ): number | null => {
+    const u = scegliValore(pos, man, vera);
+    if (u) usati[k] = u;
+    return u ? u.valore : null;
+  };
+
   const dati: DatiSoglie = {
     conLavoratori:
       a.con_lavoratori_subordinati === null || a.con_lavoratori_subordinati === undefined
         ? null
         : Boolean(a.con_lavoratori_subordinati),
-    contributiScaduti:
-      daPosizioni.contributiScaduti ?? num(a.contributi_scaduti) ?? esposizione ?? null,
-    contributiDovutiAnnoPrecedente:
-      daPosizioni.contributiDovutiAnnoPrecedente ?? num(a.contributi_dovuti_anno_precedente),
+    contributiScaduti: scegli(
+      'contributiScaduti',
+      daPosizioni.contributiScaduti,
+      num(a.contributi_scaduti),
+      daVera
+    ),
+    contributiDovutiAnnoPrecedente: scegli(
+      'contributiDovutiAnnoPrecedente',
+      daPosizioni.contributiDovutiAnnoPrecedente,
+      num(a.contributi_dovuti_anno_precedente)
+    ),
     annoContributiDovuti: num(a.anno_contributi_dovuti),
     sanzioniPresunte: num(a.sanzioni_presunte_vera),
-    premiInail: daPosizioni.premiInail ?? num(a.premi_inail),
-    ivaScaduta: daPosizioni.ivaScaduta ?? num(a.iva_scaduta),
-    volumeAffari: daPosizioni.volumeAffari ?? num(a.volume_affari),
+    premiInail: scegli('premiInail', daPosizioni.premiInail, num(a.premi_inail)),
+    ivaScaduta: scegli('ivaScaduta', daPosizioni.ivaScaduta, num(a.iva_scaduta)),
+    volumeAffari: scegli('volumeAffari', daPosizioni.volumeAffari, num(a.volume_affari)),
     creditiAffidati: num(a.crediti_affidati_aer),
     formaAER: formaAERdaAnagrafica(a.forma_giuridica),
     ritardoOltre90Giorni:
@@ -93,6 +115,7 @@ export async function leggiDatiSoglieAzienda(
   };
   return {
     dati,
+    usati,
     esposizione,
     denunceNonPresentate: a.denunce_non_presentate ? String(a.denunce_non_presentate) : null,
     // Stringa vuota = Elenco denunce letto, nessun periodo mancante.

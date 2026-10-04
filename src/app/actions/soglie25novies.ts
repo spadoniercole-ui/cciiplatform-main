@@ -25,6 +25,7 @@ import {
 import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
+import type { ValoriUsati } from '@/lib/soglie25novies/fonti';
 
 export interface ValoriSoglie {
   conLavoratoriSubordinati: boolean | null;
@@ -210,6 +211,8 @@ export interface RisultatoEsitoSoglie {
   /** Categorie dei Limiti di Ricevibilita' prive di collegamento all'ente. */
   categorieSenzaEnte?: string[];
   error?: string;
+  /** Valore usato per ciascun importo e la sua fonte (triage, scheda, V.E.R.A.). */
+  usati?: ValoriUsati;
 }
 
 /**
@@ -272,7 +275,7 @@ export async function valutaSoglieAction(
       );
     }
 
-    return { success: true, esito, ente, categorieSenzaEnte };
+    return { success: true, esito, ente, categorieSenzaEnte, usati: lettura.usati };
   } catch (error: unknown) {
     console.error('[valutaSoglieAction] Errore:', error);
     return { success: false, error: `Valutazione non riuscita: ${(error as Error).message}` };

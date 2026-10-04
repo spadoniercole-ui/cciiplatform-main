@@ -16,6 +16,7 @@
 // valore: e' quello che rende compilabile un modulo di numeri altrimenti
 // astratti.
 
+import type { ValoreUsato, ValoriUsati } from '@/lib/soglie25novies/fonti';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Save, AlertTriangle, Info, Gauge } from 'lucide-react';
 import {
@@ -60,16 +61,46 @@ const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
 const testo = (n: number | null) => (n === null || n === undefined ? '' : String(n));
 const numero = (v: string): number | null => (v.trim() === '' ? null : Number(v));
 
+/**
+ * Che cosa usa davvero il calcolo per questo campo, quando non è il valore
+ * scritto qui: il campo vuoto non è un dato mancante se c'è il V.E.R.A., e
+ * le posizioni del triage prevalgono sul valore scritto a mano.
+ */
+function NotaValoreUsato({ usato, scritto }: { usato?: ValoreUsato; scritto: number | null }) {
+  if (!usato || usato.fonte === 'manuale') return null;
+  const da =
+    usato.fonte === 'triage'
+      ? 'dalle posizioni caricate nel triage'
+      : 'dal V.E.R.A. caricato (partite contabilizzate e da contabilizzare)';
+  return (
+    <p className="text-[10px] mt-1 leading-snug text-sky-800 bg-sky-50 border border-sky-100 rounded px-2 py-1">
+      {scritto === null ? (
+        <>
+          Campo vuoto: il calcolo usa <b className="font-mono">{euro(usato.valore)}</b> {da}. Scrivi
+          un valore solo se vuoi sostituirlo.
+        </>
+      ) : (
+        <>
+          Il valore scritto qui non viene usato: prevale{' '}
+          <b className="font-mono">{euro(usato.valore)}</b> {da}.
+        </>
+      )}
+    </p>
+  );
+}
+
 function CampoEuro({
   etichetta,
   fonte,
   valore,
   onCambia,
+  usato,
 }: {
   etichetta: string;
   fonte: string;
   valore: number | null;
   onCambia: (v: number | null) => void;
+  usato?: ValoreUsato;
 }) {
   return (
     <div>
@@ -84,6 +115,7 @@ function CampoEuro({
         onChange={(e) => onCambia(numero(e.target.value))}
         className={`${CLASSE_CAMPO} font-mono`}
       />
+      <NotaValoreUsato usato={usato} scritto={valore} />
       <p className="text-[10px] text-slate-400 mt-1 leading-snug">{fonte}</p>
     </div>
   );
@@ -95,6 +127,7 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
   const [formaRiconosciuta, setFormaRiconosciuta] = useState(false);
   const [esito, setEsito] = useState<EsitoSoglie | null>(null);
   const [ente, setEnte] = useState<Ente25Novies | null>(null);
+  const [usati, setUsati] = useState<ValoriUsati>({});
   const [caricamento, setCaricamento] = useState(true);
   const [salvataggio, setSalvataggio] = useState(false);
   const [messaggio, setMessaggio] = useState<string | null>(null);
@@ -105,6 +138,7 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
     if (r.success && r.esito) {
       setEsito(r.esito);
       setEnte(r.ente ?? null);
+      setUsati(r.usati ?? {});
     }
   }, [nomeSchema, aziendaId, tipoSpazio]);
 
@@ -207,12 +241,14 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
               etichetta="Contributi scaduti e non versati"
               fonte="Dai flussi UNIEMENS inviati all'istituto, o dal file V.E.R.A. richiesto all'INPS."
               valore={valori.contributiScaduti}
+              usato={usati.contributiScaduti}
               onCambia={(v) => setValori({ ...valori, contributiScaduti: v })}
             />
             <CampoEuro
               etichetta="Contributi dovuti nell'anno precedente"
               fonte="Totale annuo dei contributi DOVUTI (non del debito): dai flussi UNIEMENS. È la base su cui si calcola il 30%."
               valore={valori.contributiDovutiAnnoPrecedente}
+              usato={usati.contributiDovutiAnnoPrecedente}
               onCambia={(v) => setValori({ ...valori, contributiDovutiAnnoPrecedente: v })}
             />
           </div>
@@ -235,7 +271,7 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
             </div>
             <CampoEuro
               etichetta="Sanzioni presunte (V.E.R.A.)"
-              fonte="Dal file V.E.R.A. Sono una presunzione — si determinano al pagamento — e restano FUORI dal test di soglia, che si misura sui soli contributi."
+              fonte="Da leggere nel file V.E.R.A. e scrivere qui: la piattaforma non le ricava da sola. Sono una presunzione — si determinano al pagamento — e restano FUORI dal test di soglia, che si misura sui soli contributi."
               valore={valori.sanzioniPresunteVera}
               onCambia={(v) => setValori({ ...valori, sanzioniPresunteVera: v })}
             />
@@ -250,6 +286,7 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
               etichetta="Premi assicurativi non versati"
               fonte="Dall'estratto conto INAIL o dalla comunicazione di irregolarità."
               valore={valori.premiInail}
+              usato={usati.premiInail}
               onCambia={(v) => setValori({ ...valori, premiInail: v })}
             />
           </div>
@@ -265,12 +302,14 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
                 etichetta="Debito IVA scaduto"
                 fonte="Dalle liquidazioni periodiche IVA (LIPE) non versate."
                 valore={valori.ivaScaduta}
+                usato={usati.ivaScaduta}
                 onCambia={(v) => setValori({ ...valori, ivaScaduta: v })}
               />
               <CampoEuro
                 etichetta="Volume d'affari anno precedente"
                 fonte="Dalla dichiarazione IVA annuale. Serve al requisito del 10%; oltre 20.000 € la segnalazione scatta comunque."
                 valore={valori.volumeAffari}
+                usato={usati.volumeAffari}
                 onCambia={(v) => setValori({ ...valori, volumeAffari: v })}
               />
             </div>
