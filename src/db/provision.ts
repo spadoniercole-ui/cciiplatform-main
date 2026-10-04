@@ -898,6 +898,17 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS rettifiche JSONB`
   );
+  // Ricevente (0.129): piano di rientro scelto con le domande, variante di
+  // sistema accesa o no, soluzione verde trovata dal motore.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS piano_rientro JSONB`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS serie_sistema BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS soluzione JSONB`
+  );
   // Vecchia simulazione a levette (sostituita dal Piano di sviluppo nella
   // 0.109.113 e tolta dal codice nella 0.109.118, su indicazione di Ercole:
   // «la simulazione attuale la puoi cestinare»). Le sue tabelle si

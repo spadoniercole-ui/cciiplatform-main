@@ -17,6 +17,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import {
+  commentaSoluzionePianoAction,
   eliminaVariantePianoAction,
   elaboraPianoConAiAction,
   ottieniPianoSviluppoAction,
@@ -55,6 +56,23 @@ import {
   type Rettifiche,
 } from '@/lib/piano/rettifiche';
 import { ipotesiDaPianoAzienda } from '@/lib/piano/pianoAziendale';
+import { ipotesiAutomatiche } from '@/lib/piano/automatico';
+import {
+  ORIZZONTE_MASSIMO,
+  cercaSoluzioneVerde,
+  differenzeSoluzione,
+  estendiConTrend,
+  ipotesiAssoluteDa,
+  luceManopola,
+  rateDaPianoRientro,
+  type PianoRientro,
+} from '@/lib/piano/ricevente';
+import {
+  indicatori,
+  testoSoluzione,
+  type SoluzioneSalvata,
+} from '@/lib/piano/riceventeSalvataggio';
+import { PassiPianoRicevente } from '@/components/spazio/PassiPianoRicevente';
 
 const GRUPPI: DefinizioneManopola['gruppo'][] = ['Ricavi', 'Costi', 'Circolante', 'Finanza'];
 
@@ -122,6 +140,12 @@ export function PianoSviluppoScenario({
   const [contestoConfronto, setContestoConfronto] = useState<ContestoConfronto | null>(null);
   const [aiInCorso, setAiInCorso] = useState(false);
   const [avvisoAi, setAvvisoAi] = useState<string | null>(null);
+  // Ricevente, ordine dei fattori (0.129): variante di sistema, piano di
+  // rientro, soluzione verde.
+  const [serieSistema, setSerieSistema] = useState(false);
+  const [pianoRientro, setPianoRientro] = useState<PianoRientro | null>(null);
+  const [soluzione, setSoluzione] = useState<SoluzioneSalvata | null>(null);
+  const [soluzioneInCorso, setSoluzioneInCorso] = useState(false);
 
   const carica = async (v = variante) => {
     const r = await ottieniPianoSviluppoAction(nomeSchema, scenarioId, aziendaId, v);
@@ -132,6 +156,9 @@ export function PianoSviluppoScenario({
     setOrizzonte(r.dati.orizzonte);
     setNote(r.dati.note ?? '');
     setVariante(r.dati.variante);
+    setSerieSistema(r.dati.serieSistema);
+    setPianoRientro(r.dati.pianoRientro);
+    setSoluzione(r.dati.soluzione);
     setModificato(false);
   };
   useEffect(() => {
@@ -142,11 +169,14 @@ export function PianoSviluppoScenario({
   // Ricevente: il punto di partenza è il piano dell'azienda, se caricato.
   const pianoAzienda =
     tipoProposta === 'RICEVUTA' ? (contestoConfronto?.pianoAzienda ?? null) : null;
+  const tassoSettore = contestoConfronto?.crescita.tasso ?? 0;
   const ipAzienda = useMemo(() => {
     if (!pianoAzienda || !dati || dati.storico.length === 0) return null;
     const ip = ipotesiDaPianoAzienda(pianoAzienda, dati.storico[0].anno + 1, orizzonte);
-    return righeDelPianoAzienda(ip).size ? ip : null;
-  }, [pianoAzienda, dati, orizzonte]);
+    if (!righeDelPianoAzienda(ip).size) return null;
+    // Oltre l'ultimo anno dichiarato dall'azienda si prosegue con il settore.
+    return estendiConTrend(ip, orizzonte, tassoSettore);
+  }, [pianoAzienda, dati, orizzonte, tassoSettore]);
   const righeAzienda = useMemo(
     () => (ipAzienda ? righeDelPianoAzienda(ipAzienda) : new Set<RigaInput>()),
     [ipAzienda]
@@ -157,14 +187,35 @@ export function PianoSviluppoScenario({
     [ipAzienda, rettifiche, ipotesi]
   );
 
+  // Rate: dal piano di rientro scelto con le domande, altrimenti dalla proposta.
+  const rate = useMemo(() => {
+    if (!dati) return { ente: [], altri: [] };
+    if (pianoRientro) return rateDaPianoRientro(dati.offerto, pianoRientro, orizzonte);
+    return { ente: dati.rate.ente.slice(0, orizzonte), altri: dati.rate.altri.slice(0, orizzonte) };
+  }, [dati, pianoRientro, orizzonte]);
+
   const esito = useMemo(() => {
     if (!dati || dati.storico.length === 0) return null;
-    const rate = {
-      ente: dati.rate.ente.slice(0, orizzonte),
-      altri: dati.rate.altri.slice(0, orizzonte),
-    };
     return calcolaPiano(dati.storico[0], orizzonte, ipotesiEffettive, rate, dati.capitaleSociale);
-  }, [dati, ipotesiEffettive, orizzonte]);
+  }, [dati, ipotesiEffettive, orizzonte, rate]);
+
+  // Riferimento di settore e variante di sistema: le stesse rettifiche delle
+  // manopole valgono per le righe del piano dell'azienda anche qui.
+  const sistema = useMemo(() => {
+    if (!dati || dati.storico.length === 0 || !ipAzienda || !contestoConfronto) return null;
+    const base = dati.storico[0];
+    const auto = ipotesiAutomatiche(base, orizzonte, tassoSettore);
+    const riferimento = calcolaPiano(base, orizzonte, auto, rate, dati.capitaleSociale);
+    const ipSis = ipotesiAssoluteDa(riferimento.anni, [...righeAzienda]);
+    const rettificato = calcolaPiano(
+      base,
+      orizzonte,
+      applicaRettifiche(ipSis, rettifiche, auto),
+      rate,
+      dati.capitaleSociale
+    );
+    return { riferimento, rettificato };
+  }, [dati, ipAzienda, contestoConfronto, orizzonte, tassoSettore, rate, righeAzienda, rettifiche]);
 
   if (errore)
     return (
@@ -301,7 +352,8 @@ export function PianoSviluppoScenario({
       orizzonte,
       ipotesiEffettive,
       note || null,
-      modoRettifica ? rettifiche : null
+      modoRettifica ? rettifiche : null,
+      modoRettifica ? { pianoRientro, serieSistema, soluzione } : {}
     );
     if (!r.success) return setErrore(r.error ?? 'Errore.');
     await carica(variante);
@@ -342,6 +394,81 @@ export function PianoSviluppoScenario({
       await carica(VARIANTE_AI);
     } finally {
       setAiInCorso(false);
+    }
+  };
+
+  /** Passo 4: il motore cerca la combinazione verde, l'AI ne scrive la lettura. */
+  const calcolaSoluzione = async () => {
+    if (!dati || !ipAzienda || !sistema) return;
+    setSoluzioneInCorso(true);
+    setErrore(null);
+    try {
+      const base = dati.storico[0];
+      // Si parte sempre dal piano dell'azienda: manopole a zero, nessun apporto aggiunto.
+      const ipOrdinarie: IpotesiPiano = { ...ipotesi };
+      if (soluzione?.apportoIniziale && ipOrdinarie.apportiSoci?.[0]) {
+        const arr = [...ipOrdinarie.apportiSoci];
+        const v = (arr[0]?.valore ?? 0) - soluzione.apportoIniziale;
+        arr[0] = v > 0 ? { tipo: 'abs', valore: v } : null;
+        ipOrdinarie.apportiSoci = arr;
+      }
+      const ing = {
+        storico: base,
+        orizzonte,
+        ipAzienda,
+        ipOrdinarie,
+        rate,
+        capitaleSociale: dati.capitaleSociale,
+      };
+      const sol = cercaSoluzioneVerde(ing);
+      const pianoAz = calcolaPiano(
+        base,
+        orizzonte,
+        applicaRettifiche(ipAzienda, {}, ipOrdinarie),
+        rate,
+        dati.capitaleSociale
+      );
+      const diff = differenzeSoluzione(sol, sistema.riferimento.anni);
+      const ind = {
+        azienda: indicatori(pianoAz),
+        sistema: indicatori(sistema.riferimento),
+        soluzione: indicatori(sol.esito),
+      };
+      const off = pianoRientro?.offerto ?? dati.offerto;
+      const testo = testoSoluzione(sol, diff, ind, pianoRientro, orizzonte, off.ente + off.altri);
+      const salvata: SoluzioneSalvata = {
+        verde: sol.verde,
+        rettifiche: Object.fromEntries(
+          Object.entries(sol.rettifiche).map(([k, v]) => [k, v?.valore ?? 0])
+        ),
+        apportoIniziale: sol.apportoIniziale,
+        differenze: diff,
+        indicatori: ind,
+        testo,
+        commentoAi: null,
+        calcolataIl: new Date().toISOString(),
+      };
+      // Le manopole si posizionano sulla soluzione.
+      setRettifiche(sol.rettifiche);
+      if (sol.apportoIniziale > 0) {
+        const arr = [...(ipOrdinarie.apportiSoci ?? [])];
+        while (arr.length < orizzonte) arr.push(null);
+        arr[0] = { tipo: 'abs', valore: (arr[0]?.valore ?? 0) + sol.apportoIniziale };
+        setIpotesi({ ...ipOrdinarie, apportiSoci: arr });
+      } else setIpotesi(ipOrdinarie);
+      setSoluzione(salvata);
+      setModificato(true);
+      // La lettura dell'AI, se disponibile: non sposta numeri.
+      const c = await commentaSoluzionePianoAction(codice, scenarioId, testo, {
+        crescita: contestoConfronto?.crescita.descrizione ?? '',
+        scostamenti: (contestoConfronto?.scostamenti ?? []).map(
+          (x) => `${x.voce} (${x.luce}, fino a +${x.ottimismoMassimo}%)`
+        ),
+      });
+      if (c.success && c.commento) setSoluzione({ ...salvata, commentoAi: c.commento });
+      else setAvvisoAi(c.error ?? null);
+    } finally {
+      setSoluzioneInCorso(false);
     }
   };
 
@@ -421,6 +548,7 @@ export function PianoSviluppoScenario({
       nomeVariante={variante}
       onContesto={setContestoConfronto}
       senzaCopia={tipoProposta === 'RICEVUTA'}
+      rateScelte={tipoProposta === 'RICEVUTA' && pianoRientro ? rate : null}
     />
   );
 
@@ -436,11 +564,12 @@ export function PianoSviluppoScenario({
             </h2>
             {modoRettifica ? (
               <p className="text-[11px] text-slate-600 mt-0.5">
-                Si parte dal <strong>piano dell’azienda</strong>, proiettato dallo stato attuale (
-                <strong>{dati.partenza.etichetta}</strong>). A manopole ferme vedi il piano così
-                come l’ha presentato l’azienda; ogni manopola lo rettifica, uguale per tutti gli
-                anni: −10 sui ricavi = ogni anno il 10% in meno di quanto dichiarato. Le rate del
-                piano di rientro vengono dalla proposta.
+                <strong>1 · Piano dell’azienda.</strong> Le manopole partono dal piano presentato
+                dall’azienda, proiettato dallo stato attuale (
+                <strong>{dati.partenza.etichetta}</strong>); la fascia «azienda» sotto ogni manopola
+                dice quanto quella voce si discosta dal riferimento di settore. Ogni manopola
+                rettifica la voce in percentuale, uguale per tutti gli anni. Poi, nei passi 2–4
+                sotto la tabella: variante di sistema, piano di rientro, soluzione verde.
               </p>
             ) : tipoProposta === 'RICEVUTA' ? (
               <p className="text-[11px] text-amber-800 mt-0.5">
@@ -483,7 +612,8 @@ export function PianoSviluppoScenario({
                   orizzonte,
                   ipotesiEffettive,
                   note || null,
-                  modoRettifica ? rettifiche : null
+                  modoRettifica ? rettifiche : null,
+                  modoRettifica ? { pianoRientro, serieSistema, soluzione } : {}
                 );
                 if (!r.success) return setErrore(r.error ?? 'Errore.');
                 await carica(n);
@@ -493,28 +623,30 @@ export function PianoSviluppoScenario({
             >
               <Plus className="w-3 h-3" /> Nuova variante da questa
             </button>
-            <button
-              type="button"
-              onClick={elaboraConAi}
-              disabled={aiInCorso || !contestoConfronto || !esito}
-              className="flex items-center gap-1 px-2 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
-              title={
-                modoRettifica
-                  ? 'L’AI rettifica le righe del piano dell’azienda dove è più ottimista del riferimento, con la motivazione; il calcolo resta al motore. Salvata come variante «elaborazione-ai».'
-                  : 'L’AI imposta le manopole, una per riga, con la motivazione; il calcolo resta al motore. Salvata come variante «elaborazione-ai».'
-              }
-            >
-              {aiInCorso ? (
-                <RefreshCw className="w-3 h-3 animate-spin" />
-              ) : (
-                <Sparkles className="w-3 h-3" />
-              )}
-              {aiInCorso
-                ? 'Elaborazione…'
-                : modoRettifica
-                  ? 'L’AI rettifica il piano dell’azienda'
-                  : 'L’AI imposta le manopole'}
-            </button>
+            {!modoRettifica && (
+              <button
+                type="button"
+                onClick={elaboraConAi}
+                disabled={aiInCorso || !contestoConfronto || !esito}
+                className="flex items-center gap-1 px-2 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
+                title={
+                  modoRettifica
+                    ? 'L’AI rettifica le righe del piano dell’azienda dove è più ottimista del riferimento, con la motivazione; il calcolo resta al motore. Salvata come variante «elaborazione-ai».'
+                    : 'L’AI imposta le manopole, una per riga, con la motivazione; il calcolo resta al motore. Salvata come variante «elaborazione-ai».'
+                }
+              >
+                {aiInCorso ? (
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3 h-3" />
+                )}
+                {aiInCorso
+                  ? 'Elaborazione…'
+                  : modoRettifica
+                    ? 'L’AI rettifica il piano dell’azienda'
+                    : 'L’AI imposta le manopole'}
+              </button>
+            )}
             {variante !== 'base' && (
               <button
                 type="button"
@@ -547,7 +679,12 @@ export function PianoSviluppoScenario({
               }}
               className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg"
             >
-              {Array.from(new Set([orizzonte, 3, 4, 5]))
+              {Array.from(
+                new Set([
+                  orizzonte,
+                  ...Array.from({ length: ORIZZONTE_MASSIMO - 2 }, (_, i) => i + 3),
+                ])
+              )
                 .sort((a, b) => a - b)
                 .map((n) => (
                   <option key={n} value={n}>
@@ -620,6 +757,34 @@ export function PianoSviluppoScenario({
                               aiuto={r?.motivazione ? `${m.aiuto}\nAI: ${r.motivazione}` : m.aiuto}
                               stato={statoGlobale}
                               daAi={!!r?.motivazione}
+                              fasce={
+                                sistema && esito && contestoConfronto
+                                  ? [
+                                      {
+                                        etichetta: 'azienda',
+                                        luce: luceManopola(
+                                          esito.anni,
+                                          sistema.riferimento.anni,
+                                          m.riga,
+                                          contestoConfronto.soglie
+                                        ),
+                                      },
+                                      ...(serieSistema
+                                        ? [
+                                            {
+                                              etichetta: 'sistema',
+                                              luce: luceManopola(
+                                                sistema.rettificato.anni,
+                                                sistema.riferimento.anni,
+                                                m.riga,
+                                                contestoConfronto.soglie
+                                              ),
+                                            },
+                                          ]
+                                        : []),
+                                    ]
+                                  : undefined
+                              }
                               onChange={(v) => {
                                 setRettifiche((x) => ({ ...x, [m.riga]: { valore: v } }));
                                 setModificato(true);
@@ -690,27 +855,74 @@ export function PianoSviluppoScenario({
                       ['Patrimonio netto', base.patrimonioNetto, (a) => a.patrimonioNetto],
                     ] as [string, number | null, (a: (typeof anniPiano)[number]) => number][]
                   ).map(([et, b, f]) => (
-                    <tr key={et}>
-                      <td className="px-2 py-1.5 text-slate-800">{et}</td>
-                      <td className="px-2 py-1.5 text-right text-slate-500 tabular-nums">
-                        {fmt(b)}
-                      </td>
-                      {anniPiano.map((a) => {
-                        const v = f(a);
-                        return (
-                          <td
-                            key={a.anno}
-                            className={`px-2 py-1.5 text-right tabular-nums font-medium ${v < 0 && et !== 'Rate del piano di rientro' ? 'text-red-700' : 'text-slate-900'}`}
-                          >
-                            {fmt(v)}
+                    <React.Fragment key={et}>
+                      <tr>
+                        <td className="px-2 py-1.5 text-slate-800">{et}</td>
+                        <td className="px-2 py-1.5 text-right text-slate-500 tabular-nums">
+                          {fmt(b)}
+                        </td>
+                        {anniPiano.map((a) => {
+                          const v = f(a);
+                          return (
+                            <td
+                              key={a.anno}
+                              className={`px-2 py-1.5 text-right tabular-nums font-medium ${v < 0 && et !== 'Rate del piano di rientro' ? 'text-red-700' : 'text-slate-900'}`}
+                            >
+                              {fmt(v)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      {modoRettifica && serieSistema && sistema && (
+                        <tr className="bg-sky-50/50">
+                          <td className="px-2 py-1 pl-5 text-[10px] text-sky-800">
+                            piano di sistema
                           </td>
-                        );
-                      })}
-                    </tr>
+                          <td className="px-2 py-1" />
+                          {sistema.rettificato.anni.map((a) => {
+                            const v = f(a);
+                            return (
+                              <td
+                                key={a.anno}
+                                className={`px-2 py-1 text-right tabular-nums text-[11px] ${v < 0 && et !== 'Rate del piano di rientro' ? 'text-red-600' : 'text-sky-900'}`}
+                              >
+                                {fmt(v)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
             </div>
+            {modoRettifica && (
+              <PassiPianoRicevente
+                offerto={dati.offerto}
+                rientroProposta={dati.rientroProposta}
+                pianoRientro={pianoRientro}
+                orizzonte={orizzonte}
+                serieSistema={serieSistema}
+                sistemaDisponibile={!!sistema}
+                soluzione={soluzione}
+                soluzioneInCorso={soluzioneInCorso}
+                onSerieSistema={(v) => {
+                  setSerieSistema(v);
+                  setModificato(true);
+                }}
+                onPianoRientro={(p, nuovoOrizzonte) => {
+                  setPianoRientro(p);
+                  if (nuovoOrizzonte && nuovoOrizzonte !== orizzonte) {
+                    setOrizzonte(nuovoOrizzonte);
+                    setIpotesi((ip) => estendiIpotesi(ip, nuovoOrizzonte));
+                  }
+                  setSoluzione(null);
+                  setModificato(true);
+                }}
+                onCalcola={calcolaSoluzione}
+              />
+            )}
           </div>
         )}
 

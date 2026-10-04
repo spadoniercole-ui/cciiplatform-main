@@ -15,6 +15,7 @@ import { storicoDaStatoAttuale, type PartenzaPiano } from '@/lib/piano/statoAttu
 import { DATI_VUOTI } from '@/lib/posizioneAggiornata/schemaCampi';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import Anthropic from '@anthropic-ai/sdk';
+import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import { ottieniScenarioPerId, verificaScenarioNonBloccato } from '@/app/actions/scenari';
 import { estraiJson } from '@/lib/visura/fatti';
 import { rettifichePulite, applicaRettifiche, type Rettifiche } from '@/lib/piano/rettifiche';
@@ -37,6 +38,12 @@ import {
   type IpotesiPiano,
   type RatePiano,
 } from '@/lib/piano/piano';
+import { ORIZZONTE_MASSIMO, type PianoRientro, type TotaleOfferto } from '@/lib/piano/ricevente';
+import {
+  pianoRientroPulito,
+  soluzionePulita,
+  type SoluzioneSalvata,
+} from '@/lib/piano/riceventeSalvataggio';
 
 const num = (v: unknown): number =>
   typeof v === 'number' && Number.isFinite(v)
@@ -59,6 +66,16 @@ export interface DatiPianoSviluppo {
   note: string | null;
   capitaleSociale: number | null;
   salvatoIl: string | null;
+  /** Totale offerto dalla proposta: all'ente e agli altri creditori. */
+  offerto: TotaleOfferto;
+  /** Piano di rientro come lo dice la proposta (risposte proposte alle domande). */
+  rientroProposta: PianoRientro;
+  /** Piano di rientro scelto per questa variante, se fissato. */
+  pianoRientro: PianoRientro | null;
+  /** Ricevente: la variante di sistema è accesa accanto al piano dell'azienda. */
+  serieSistema: boolean;
+  /** Ricevente: soluzione verde salvata con la variante. */
+  soluzione: SoluzioneSalvata | null;
 }
 
 export async function ottieniPianoSviluppoAction(
@@ -157,6 +174,9 @@ export async function ottieniPianoSviluppoAction(
       /* tabella assente: nessuna categoria dell'ente */
     }
     // Rate sull'orizzonte massimo: l'orizzonte si può allungare a schermo.
+    const eEnte = (c: string) =>
+      categorieEnte.has(c.trim().toLowerCase()) ||
+      /\binps\b|\binail\b|agenzia delle entrate/i.test(c);
     const rate = rateDaProposta(
       righeRate.map((r) => ({
         categoriaCreditore: r.categoriaCreditore,
@@ -165,11 +185,26 @@ export async function ottieniPianoSviluppoAction(
         numeroRate: r.numeroRate,
         modalita: r.modalita,
       })),
-      5,
-      (c) =>
-        categorieEnte.has(c.trim().toLowerCase()) ||
-        /\binps\b|\binail\b|agenzia delle entrate/i.test(c)
+      ORIZZONTE_MASSIMO,
+      eEnte
     );
+    // Totale offerto a tutti i creditori e piano di rientro della proposta:
+    // il punto di partenza delle domande sul piano di rientro.
+    const offerto: TotaleOfferto = { ente: 0, altri: 0 };
+    let mesiProposta = 0;
+    for (const r of righeRate) {
+      const o = (Number(r.importoDovuto) * Number(r.percentualeOfferta)) / 100;
+      if (!Number.isFinite(o)) continue;
+      if (eEnte(r.categoriaCreditore)) offerto.ente += o;
+      else offerto.altri += o;
+      if (r.modalita === 'RATEALE' && r.numeroRate)
+        mesiProposta = Math.max(mesiProposta, Number(r.numeroRate));
+    }
+    const rientroProposta: PianoRientro = {
+      modalita: mesiProposta > 1 ? 'RATEALE' : 'UNICA',
+      mesi: mesiProposta > 1 ? mesiProposta : 0,
+      anticipoPct: 0,
+    };
     const scr = await pool
       .query(`SELECT visura_fatti FROM "${nomeSchema}".azienda_screening WHERE azienda_id = $1`, [
         aziendaId,
@@ -192,6 +227,14 @@ export async function ottieniPianoSviluppoAction(
         salvatoIl: piano.rows[0]?.salvato_il
           ? new Date(piano.rows[0].salvato_il).toISOString()
           : null,
+        offerto: {
+          ente: Math.round(offerto.ente * 100) / 100,
+          altri: Math.round(offerto.altri * 100) / 100,
+        },
+        rientroProposta,
+        pianoRientro: pianoRientroPulito(piano.rows[0]?.piano_rientro),
+        serieSistema: piano.rows[0]?.serie_sistema === true,
+        soluzione: soluzionePulita(piano.rows[0]?.soluzione),
       },
     };
   } catch (error: unknown) {
@@ -210,7 +253,12 @@ export async function salvaPianoSviluppoAction(
   orizzonte: number,
   ipotesi: IpotesiPiano,
   note: string | null,
-  rettifiche: Rettifiche | null = null
+  rettifiche: Rettifiche | null = null,
+  extra: {
+    pianoRientro?: PianoRientro | null;
+    serieSistema?: boolean;
+    soluzione?: SoluzioneSalvata | null;
+  } = {}
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
@@ -225,12 +273,15 @@ export async function salvaPianoSviluppoAction(
         .toLowerCase()
         .replace(/[^a-z0-9_-]/g, '')
         .slice(0, 30) || 'base';
-    const o = Math.max(1, Math.min(5, Math.round(orizzonte)));
+    const o = Math.max(1, Math.min(ORIZZONTE_MASSIMO, Math.round(orizzonte)));
     await assicuraTabelleParametriSpazio(contesto.nomeSchema);
+    const rientro = pianoRientroPulito(extra.pianoRientro);
+    const sol = soluzionePulita(extra.soluzione);
     await pool.query(
-      `INSERT INTO "${contesto.nomeSchema}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, salvato_il)
-       VALUES ($1, $2, $3, $4, $5, $6, now())
-       ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, rettifiche = $6, salvato_il = now()`,
+      `INSERT INTO "${contesto.nomeSchema}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, piano_rientro, serie_sistema, soluzione, salvato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+       ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, rettifiche = $6,
+         piano_rientro = $7, serie_sistema = $8, soluzione = $9, salvato_il = now()`,
       [
         scenarioId,
         v,
@@ -238,6 +289,9 @@ export async function salvaPianoSviluppoAction(
         JSON.stringify(ipotesi),
         note?.trim() || null,
         rettifiche ? JSON.stringify(rettifichePulite(rettifiche)) : null,
+        rientro ? JSON.stringify(rientro) : null,
+        extra.serieSistema === true,
+        sol ? JSON.stringify(sol) : null,
       ]
     );
     return { success: true };
@@ -284,7 +338,7 @@ const SCADENZA_AI_MS = 120 * 1000;
 function contestoPulito(c: ContestoElaborazione): ContestoElaborazione | null {
   const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
   if (!c || (c.lato !== 'RICEVUTA' && c.lato !== 'DA_DEFINIRE')) return null;
-  const orizzonte = Math.max(1, Math.min(5, Math.round(n(c.orizzonte))));
+  const orizzonte = Math.max(1, Math.min(ORIZZONTE_MASSIMO, Math.round(n(c.orizzonte))));
   if (!Array.isArray(c.storico) || c.storico.length === 0) return null;
   return {
     lato: c.lato,
@@ -411,6 +465,78 @@ export async function elaboraPianoConAiAction(
     return {
       success: false,
       error: `Elaborazione con l’AI non riuscita: ${(error as Error).message || error}`,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ricevente: lettura della soluzione verde (0.129)
+// ---------------------------------------------------------------------------
+
+/**
+ * L'AI scrive la lettura della soluzione trovata dal motore. Riceve solo testi
+ * già calcolati (piano dell'azienda, piano di sistema, piano di rientro,
+ * soluzione) e non sposta numeri: la soluzione resta quella del motore.
+ */
+export async function commentaSoluzionePianoAction(
+  codiceSpazio: string,
+  scenarioId: number,
+  testoSoluzione: string,
+  contesto: { crescita: string; scostamenti: string[] }
+): Promise<{ success: boolean; commento?: string; error?: string }> {
+  try {
+    const contestoSpazio = await ottieniContestoAccessoSpazio(codiceSpazio);
+    if (!contestoSpazio) return { success: false, error: 'Accesso non valido.' };
+    await richiediAccessoScenario(contestoSpazio.nomeSchema, scenarioId, {
+      modulo: ['simulazione'],
+      livello: 'SCRITTURA',
+    });
+    const bloccato = await verificaScenarioNonBloccato(contestoSpazio.nomeSchema, scenarioId);
+    if (bloccato) return { success: false, error: bloccato };
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey)
+      return {
+        success: false,
+        error:
+          'Chiave API ANTHROPIC_API_KEY non configurata nel server: la soluzione è calcolata, la lettura dell’AI non è disponibile.',
+      };
+    const testo = String(testoSoluzione ?? '').slice(0, 4000);
+    const crescita = String(contesto?.crescita ?? '').slice(0, 400);
+    const scostamenti = (Array.isArray(contesto?.scostamenti) ? contesto.scostamenti : [])
+      .slice(0, 12)
+      .map((s) => String(s).slice(0, 200));
+    const prompt = `Sei l'assistente di un funzionario di un ente creditore pubblico che istruisce una proposta di regolazione della crisi d'impresa ricevuta da un'azienda.
+Il motore della piattaforma ha messo alla prova il piano dell'azienda e ha calcolato la combinazione di rettifiche più vicina al piano dell'azienda con cui il piano resta verde. Questi sono i risultati, già calcolati:
+
+${testo}
+
+Riferimento di settore: ${crescita || 'non disponibile'}.
+Voci del piano dell'azienda più ottimiste del riferimento: ${scostamenti.length ? scostamenti.join('; ') : 'nessuna oltre le soglie'}.
+
+Scrivi in italiano una lettura breve (al massimo 220 parole, 2-3 paragrafi, niente elenchi puntati) per il funzionario:
+- che cosa dice la soluzione sul piano dell'azienda e su quali ipotesi poggia;
+- quali domande fare all'azienda per verificare che le rettifiche siano raggiungibili;
+- che cosa cambia rispetto al piano di sistema.
+Regole: usa SOLO i numeri qui sopra, senza ricalcolarli né aggiungerne; non esprimere giudizi riservati al professionista o al tribunale (vedi il lessico sotto); non dire che l'azienda è o non è in crisi; parla di ipotesi da verificare, non di certezze.${istruzioniLessicoPerPrompt()}`;
+    const anthropic = new Anthropic({ apiKey, timeout: SCADENZA_AI_MS, maxRetries: 1 });
+    const risposta = await anthropic.messages.create({
+      model: 'claude-sonnet-5',
+      max_tokens: 1200,
+      thinking: { type: 'disabled' },
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const commento = risposta.content
+      .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n')
+      .trim();
+    if (!commento) return { success: false, error: 'L’AI non ha prodotto una lettura.' };
+    return { success: true, commento: commento.slice(0, 6000) };
+  } catch (error: unknown) {
+    console.error('[commentaSoluzionePianoAction]', error);
+    return {
+      success: false,
+      error: `Lettura dell’AI non riuscita: ${(error as Error).message || error}`,
     };
   }
 }
