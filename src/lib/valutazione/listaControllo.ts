@@ -58,7 +58,9 @@ export function valutaListaControllo(i: InputListaControllo): EsitoListaControll
     dettaglio: i.propostaSelezionata
       ? 'Selezionata.'
       : 'Obbligatoria: senza la proposta la valutazione non parte.',
-    percorso: i.propostaSelezionata ? null : 'Qui sopra, «Proposta di cram down» › Scegli file',
+    percorso: i.propostaSelezionata
+      ? null
+      : 'Qui sopra, fase 1 «Documenti ricevuti» › Scegli i documenti, poi «Carica e leggi i documenti»',
   });
 
   const doc = (
@@ -78,7 +80,7 @@ export function valutaListaControllo(i: InputListaControllo): EsitoListaControll
           : 'Selezionalo, oppure dichiaralo non pervenuto.',
     percorso:
       s === 'mancante'
-        ? `Qui sopra, «${etichetta}» › Scegli file, oppure spunta «Non pervenuto»`
+        ? `Qui sopra, fase 1 «Documenti ricevuti» (riconosciuto come «${etichetta}»), oppure fase 2 «Documenti non pervenuti»`
         : null,
   });
   voci.push(doc('asseverazione', 'Asseverazione del professionista', i.asseverazione));
@@ -96,7 +98,9 @@ export function valutaListaControllo(i: InputListaControllo): EsitoListaControll
         : i.posizioneNonPervenutaDichiarata
           ? 'Dichiarata non pervenuta: la valutazione userà l’ultimo bilancio.'
           : 'Carica il bilancino o la situazione contabile ricevuti (Excel o PDF), oppure dichiarala non pervenuta.',
-    percorso: posOk ? null : 'Scenari › questo scenario › passo «Posizione Aggiornata»',
+    percorso: posOk
+      ? null
+      : 'Qui sopra, fase 2 «Posizione contabile aggiornata» › Conferma, oppure «Non pervenuta»',
   });
 
   if (!i.settore.applicabile) {

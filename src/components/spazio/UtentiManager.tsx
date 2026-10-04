@@ -28,6 +28,7 @@ const ETICHETTE_MODULO: Record<string, string> = {
   xbrl: 'Import XBRL',
   report: 'Proposta',
   relazione: 'Relazione AI',
+  simulazione: 'Piano di sviluppo',
 };
 
 interface Props {
