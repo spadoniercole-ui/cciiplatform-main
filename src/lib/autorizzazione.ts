@@ -18,6 +18,7 @@
 // Modulo neutro (niente 'use server'): può esportare costanti e classi, ed è
 // importato da actions, layout e route API.
 
+import { improntaToken } from '@/lib/improntaToken';
 import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { pool } from '@/lib/db';
@@ -100,7 +101,7 @@ const sessionePerToken = cache(async (token: string): Promise<SessioneValida | n
     const ris = await pool.query(
       `SELECT ruolo, workspace_id, email, username FROM sessioni
        WHERE token = $1 AND expires_at > now()`,
-      [token]
+      [improntaToken(token)]
     );
     if (ris.rows.length === 0) return null;
     const r = ris.rows[0];

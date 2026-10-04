@@ -171,6 +171,11 @@ export async function assicuraTabelleMfa(): Promise<void> {
   await eseguiIstruzione(
     `ALTER TABLE public.mfa_challenge ADD COLUMN IF NOT EXISTS tentativi_falliti INTEGER NOT NULL DEFAULT 0`
   );
+  // Ultimo step TOTP accettato per l'identità: lo stesso codice non vale due
+  // volte (né in sequenza né in richieste parallele). Vedi actions/mfa.ts.
+  await eseguiIstruzione(
+    `ALTER TABLE public.mfa_credenziali ADD COLUMN IF NOT EXISTS totp_ultimo_passo BIGINT`
+  );
 }
 
 export async function assicuraTabelleSpazi(): Promise<void> {

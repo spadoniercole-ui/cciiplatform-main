@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { improntaToken } from '@/lib/improntaToken';
 import { redirect } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
 import { TopStatusBar } from '@/components/brand/TopStatusBar';
@@ -20,7 +21,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const risultato = await pool.query(
     'SELECT ruolo, workspace_id, expires_at FROM sessioni WHERE token = $1',
-    [sessionToken]
+    [improntaToken(sessionToken)]
   );
 
   if (risultato.rows.length === 0 || new Date(risultato.rows[0].expires_at) < new Date()) {

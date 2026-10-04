@@ -14,7 +14,12 @@ import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import QRCode from 'qrcode';
 import { pool } from '@/lib/db';
-import { otpauthUri, verificaTotp } from '@/lib/mfa/totp';
+import { otpauthUri, verificaTotpPasso } from '@/lib/mfa/totp';
+import {
+  azzeraTentativiCondivisi,
+  messaggioBlocco,
+  registraFallimentoCondiviso,
+} from '@/lib/tentativiAccessoCondivisi';
 import { COOKIE_PENDING } from '@/lib/mfa/challenge';
 import { creaSessione } from '@/lib/sessione';
 import type { FattoreMfa, StatoMfa, RispostaPassoMfa } from '@/lib/mfa/tipi';
@@ -23,6 +28,51 @@ const EMITTENTE = 'CCIIPlatform';
 // Oltre questo numero di codici o PIN errati la verifica viene annullata e
 // bisogna ripartire dal login (con la password).
 const MAX_TENTATIVI_FALLITI = 5;
+
+// Il limite per challenge da solo non basta: chi conosce la password può
+// aprire challenge nuove a volontà, e richieste parallele sulla stessa
+// challenge venivano confrontate tutte prima che il contatore salisse. Per
+// questo ogni verifica PRENOTA un tentativo, prima del confronto, su due
+// contatori aggiornati in modo atomico nel database:
+//  - quello della challenge (al massimo MAX_TENTATIVI_FALLITI confronti);
+//  - quello dell'identità (tentativiAccessoCondivisi, chiave "mfa:<identità>"),
+//    che sopravvive alle challenge e blocca per 15 minuti dopo 5 errori.
+// Se il fattore è corretto la prenotazione viene restituita.
+function chiaveIdentita(ch: RigaChallenge): string {
+  return `mfa:${ch.identita_key}`;
+}
+
+/** Prenota un tentativo; se non è concesso chiude la challenge e lo dice. */
+async function prenotaTentativo(ch: RigaChallenge): Promise<RispostaPassoMfa | null> {
+  const r = await pool.query(
+    `UPDATE public.mfa_challenge SET tentativi_falliti = tentativi_falliti + 1
+      WHERE token = $1 AND tentativi_falliti < $2 RETURNING tentativi_falliti`,
+    [ch.token, MAX_TENTATIVI_FALLITI]
+  );
+  const identita = await registraFallimentoCondiviso(pool, chiaveIdentita(ch));
+  if (r.rows.length === 0 || identita.bloccato) {
+    await pool.query('DELETE FROM public.mfa_challenge WHERE token = $1', [ch.token]);
+    const cookieStore = await cookies();
+    cookieStore.delete(COOKIE_PENDING);
+    return {
+      success: false,
+      error: identita.bloccato
+        ? messaggioBlocco(identita.secondiRimanenti)
+        : 'Troppi tentativi errati. Rifai il login.',
+    };
+  }
+  return null;
+}
+
+/** Fattore corretto: restituisce la prenotazione e azzera il contatore d'identità. */
+async function restituisciTentativo(ch: RigaChallenge): Promise<void> {
+  await pool.query(
+    `UPDATE public.mfa_challenge SET tentativi_falliti = GREATEST(tentativi_falliti - 1, 0)
+      WHERE token = $1`,
+    [ch.token]
+  );
+  await azzeraTentativiCondivisi(pool, chiaveIdentita(ch));
+}
 
 interface RigaChallenge {
   token: string;
@@ -83,16 +133,15 @@ export async function mfaStato(): Promise<StatoMfa> {
 }
 
 /**
- * Registra un codice o PIN errato. Al raggiungimento del limite elimina la
- * challenge: per riprovare bisogna rifare il login con la password.
+ * Codice o PIN errato: il tentativo è già stato prenotato e resta contato. Se
+ * era l'ultimo concesso la challenge viene chiusa: si riparte dal login.
  */
 async function registraTentativoFallito(
   ch: RigaChallenge,
   messaggio: string
 ): Promise<RispostaPassoMfa> {
   const r = await pool.query(
-    `UPDATE public.mfa_challenge SET tentativi_falliti = tentativi_falliti + 1
-      WHERE token = $1 RETURNING tentativi_falliti`,
+    'SELECT tentativi_falliti FROM public.mfa_challenge WHERE token = $1',
     [ch.token]
   );
   const tentativi: number = r.rows[0]?.tentativi_falliti ?? MAX_TENTATIVI_FALLITI;
@@ -148,9 +197,26 @@ export async function mfaVerificaTotp(codiceInput: unknown): Promise<RispostaPas
     const secret: string | undefined = cred.rows[0]?.totp_secret;
     if (!secret) return { success: false, error: 'Configurazione TOTP mancante. Rifai il login.' };
 
-    if (!verificaTotp(secret, String(codiceInput || ''))) {
+    const negato = await prenotaTentativo(ch);
+    if (negato) return negato;
+    const passo = verificaTotpPasso(secret, String(codiceInput || ''));
+    // Lo step accettato deve essere successivo all'ultimo usato: lo stesso
+    // codice non vale due volte. L'UPDATE condizionato è atomico, quindi due
+    // richieste parallele con lo stesso codice non passano entrambe.
+    const nonUsato =
+      passo !== null &&
+      (
+        await pool.query(
+          `UPDATE public.mfa_credenziali SET totp_ultimo_passo = $2
+            WHERE identita_key = $1 AND (totp_ultimo_passo IS NULL OR totp_ultimo_passo < $2)
+            RETURNING identita_key`,
+          [ch.identita_key, passo]
+        )
+      ).rows.length > 0;
+    if (!nonUsato) {
       return await registraTentativoFallito(ch, 'Codice non valido o scaduto. Riprova.');
     }
+    await restituisciTentativo(ch);
     if (fase === 'TOTP_ENROLL') {
       await pool.query(
         'UPDATE public.mfa_credenziali SET totp_attivo = TRUE, updated_at = now() WHERE identita_key = $1',
@@ -174,17 +240,24 @@ export async function mfaInviaPin(pinInput: unknown): Promise<RispostaPassoMfa> 
       return { success: false, error: 'Passo non valido.' };
     }
     const pin = String(pinInput || '').trim();
-    if (!/^\d{4,6}$/.test(pin)) {
-      return { success: false, error: 'Il PIN deve essere di 4-6 cifre.' };
-    }
 
     if (fase === 'PIN_SETUP') {
+      // I PIN nuovi sono di 6 cifre; quelli già impostati a 4 o 5 restano
+      // validi finché l'utente non li cambia.
+      if (!/^\d{6}$/.test(pin)) {
+        return { success: false, error: 'Il PIN deve essere di 6 cifre.' };
+      }
       const hash = await bcrypt.hash(pin, 10);
       await pool.query(
         'UPDATE public.mfa_credenziali SET pin_hash = $2, updated_at = now() WHERE identita_key = $1',
         [ch.identita_key, hash]
       );
     } else {
+      if (!/^\d{4,6}$/.test(pin)) {
+        return { success: false, error: 'Il PIN è di 4-6 cifre.' };
+      }
+      const negato = await prenotaTentativo(ch);
+      if (negato) return negato;
       const cred = await pool.query(
         'SELECT pin_hash FROM public.mfa_credenziali WHERE identita_key = $1',
         [ch.identita_key]
@@ -193,6 +266,7 @@ export async function mfaInviaPin(pinInput: unknown): Promise<RispostaPassoMfa> 
       if (!hash || !(await bcrypt.compare(pin, hash))) {
         return await registraTentativoFallito(ch, 'PIN non corretto.');
       }
+      await restituisciTentativo(ch);
     }
     return await avanzaFattore(ch);
   } catch (error: unknown) {

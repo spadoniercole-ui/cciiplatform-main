@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { improntaContenuto, piedeDocumento } from './stampaTesto';
+import { improntaContenuto, logoSicuro, piedeDocumento } from './stampaTesto';
 import { APP_VERSION } from './appVersion';
 
 describe('piede dei documenti esportati', () => {
@@ -51,5 +51,15 @@ describe('finestre di stampa: niente HTML iniettato dai dati', () => {
     stampaTesto(maligno, maligno, null);
     await vi.waitFor(() => expect(testo).toHaveLength(1));
     expect(testo[0]).not.toContain('<img src=x');
+  });
+});
+
+describe('logoSicuro', () => {
+  it("accetta solo data URL d'immagine in base64 puro", () => {
+    expect(logoSicuro('data:image/png;base64,iVBORw0KGgo=')).toBe(true);
+    expect(logoSicuro('data:image/png;base64,AAA"><img src=x onerror=alert(1)>')).toBe(false);
+    expect(logoSicuro('javascript:alert(1)')).toBe(false);
+    expect(logoSicuro('data:text/html;base64,PGI+')).toBe(false);
+    expect(logoSicuro(null)).toBe(false);
   });
 });

@@ -103,10 +103,18 @@ function stilePagina(): string {
     .salto { page-break-before:always; break-before:page; height:0; margin:0; padding:0; }
   }`;
 }
+/**
+ * Il logo entra nell'HTML di stampa come attributo: si accetta solo un data URL
+ * d'immagine in base64 puro, così nessun carattere può chiudere l'attributo
+ * (difesa anche per i loghi salvati prima del controllo lato server).
+ */
+export function logoSicuro(u: string | null | undefined): boolean {
+  return !!u && /^data:image\/(png|jpeg|svg\+xml|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(u);
+}
 function testataEnte(): string {
   const p = parametriStampa;
-  if (!p.logoDataUrl && !p.intestazione) return '';
-  return `<div class="testata">${p.logoDataUrl ? `<img src="${p.logoDataUrl}" alt="Logo dell’ente">` : ''}${p.intestazione ? `<div class="ente">${escH(p.intestazione)}</div>` : ''}</div>`;
+  if (!logoSicuro(p.logoDataUrl) && !p.intestazione) return '';
+  return `<div class="testata">${logoSicuro(p.logoDataUrl) ? `<img src="${p.logoDataUrl}" alt="Logo dell’ente">` : ''}${p.intestazione ? `<div class="ente">${escH(p.intestazione)}</div>` : ''}</div>`;
 }
 function pieEnte(): string {
   return parametriStampa.piePagina

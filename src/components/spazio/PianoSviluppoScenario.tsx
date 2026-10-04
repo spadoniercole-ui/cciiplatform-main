@@ -354,11 +354,19 @@ export function PianoSviluppoScenario({
           : []
       )
     );
+    // Tutto il testo che entra nell'HTML di stampa passa da esc: anche i valori
+    // calcolati, perché le motivazioni e le note vengono da utente e AI.
+    const esc = (t: unknown) =>
+      String(t ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     const intest = `<tr><th>Voce</th>${storico.map((s) => `<th class="num">${s.anno}</th>`).join('')}${anniPiano.map((a) => `<th class="num">${a.anno}*</th>`).join('')}</tr>`;
     const rigaHtml = (etichetta: string, st: (number | null)[], pl: number[], forte = false) =>
-      `<tr${forte ? ' class="tot"' : ''}><td>${etichetta}</td>${st.map((v) => `<td class="num">${fmt(v)}</td>`).join('')}${pl.map((v) => `<td class="num">${fmt(v)}</td>`).join('')}</tr>`;
+      `<tr${forte ? ' class="tot"' : ''}><td>${esc(etichetta)}</td>${st.map((v) => `<td class="num">${fmt(v)}</td>`).join('')}${pl.map((v) => `<td class="num">${fmt(v)}</td>`).join('')}</tr>`;
     const corpo =
-      `<p class="note">Variante «${variante}» — orizzonte ${orizzonte} anni. Colonne con * = anni del piano; le righe di ipotesi sono compilate dall’utente, le altre sono calcolate. Personale compreso nei costi della produzione.</p>` +
+      `<p class="note">Variante «${esc(variante)}» — orizzonte ${esc(orizzonte)} anni. Colonne con * = anni del piano; le righe di ipotesi sono compilate dall’utente, le altre sono calcolate. Personale compreso nei costi della produzione.</p>` +
       `<table><thead>${intest}</thead><tbody>` +
       RIGHE_INPUT.filter((r) => !RIGHE_FLUSSO.has(r) || (ipotesi[r] ?? []).some(Boolean))
         .map((r) =>
@@ -378,15 +386,15 @@ export function PianoSviluppoScenario({
         )
       ).join('') +
       `</tbody></table>` +
-      `<h2 style="font-size:14px">Esito</h2><p style="white-space:pre-wrap;font-size:12px">${esito.sintesi}</p>` +
+      `<h2 style="font-size:14px">Esito</h2><p style="white-space:pre-wrap;font-size:12px">${esc(esito.sintesi)}</p>` +
       (esito.vincoli.length
-        ? `<ul>${esito.vincoli.map((v) => `<li>${v.testo}</li>`).join('')}</ul>`
+        ? `<ul>${esito.vincoli.map((v) => `<li>${esc(v.testo)}</li>`).join('')}</ul>`
         : '') +
       (motivazioniAi.length
-        ? `<h2 style="font-size:14px">Motivazioni delle ipotesi scritte dall’AI</h2><ul style="font-size:11px">${motivazioniAi.map((m) => `<li>${m.replace(/</g, '&lt;')}</li>`).join('')}</ul>`
+        ? `<h2 style="font-size:14px">Motivazioni delle ipotesi scritte dall’AI</h2><ul style="font-size:11px">${motivazioniAi.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>`
         : '') +
       (note
-        ? `<h2 style="font-size:14px">Note</h2><p style="white-space:pre-wrap;font-size:12px">${note.replace(/</g, '&lt;')}</p>`
+        ? `<h2 style="font-size:14px">Note</h2><p style="white-space:pre-wrap;font-size:12px">${esc(note)}</p>`
         : '');
     stampaHtml(
       'Piano di sviluppo',

@@ -13,7 +13,45 @@ const STANDALONE = process.env.NEXT_OUTPUT_STANDALONE === '1';
 // pacchetto portable restava senza server.js e il launcher non partiva.
 const RADICE_PROGETTO = path.dirname(fileURLToPath(import.meta.url));
 
+// Intestazioni di sicurezza su ogni risposta, in tutte e tre le edizioni
+// (cloud, server dell'ente, portable). La piattaforma non carica nulla da
+// altri domini nel browser: script, stili, font e chiamate restano su 'self'.
+// 'unsafe-inline' per gli script serve agli script di avvio che Next inserisce
+// nella pagina; 'unsafe-eval' solo in sviluppo (ricaricamento a caldo).
+// frame-ancestors 'none' impedisce di incorniciare la piattaforma in un'altra
+// pagina (clickjacking). HSTS conta solo su HTTPS: su http://127.0.0.1 della
+// portable il browser lo ignora.
+const SVILUPPO = process.env.NODE_ENV !== 'production';
+const CSP = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${SVILUPPO ? " 'unsafe-eval'" : ''}`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "frame-src 'self' blob:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+const INTESTAZIONI_SICUREZZA = [
+  { key: 'Content-Security-Policy', value: CSP },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Strict-Transport-Security', value: 'max-age=31536000' },
+];
+
 const nextConfig = {
+  // Niente «X-Powered-By: Next.js»: non serve dire a chi bussa che cosa gira.
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: '/:path*', headers: INTESTAZIONI_SICUREZZA }];
+  },
   // Edizione PORTABLE: build "standalone" (server.js autoconsistente da
   // avviare con Node imbarcato sulla chiavetta) e inclusione forzata degli
   // asset WASM/dati di PGlite nel tracing (non sono file JS, il tracing di

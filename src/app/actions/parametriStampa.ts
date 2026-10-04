@@ -69,7 +69,7 @@ export async function salvaParametriStampaAction(
       return { success: false, error: 'Operazione riservata all’Admin di Spazio.' };
     if (
       p.logoDataUrl &&
-      (!/^data:image\/(png|jpeg|svg\+xml|webp);base64,/.test(p.logoDataUrl) ||
+      (!/^data:image\/(png|jpeg|svg\+xml|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(p.logoDataUrl) ||
         p.logoDataUrl.length > LIMITE_LOGO)
     )
       return {

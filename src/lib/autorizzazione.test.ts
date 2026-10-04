@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { improntaToken } from './improntaToken';
 
 // Stato simulato: cookie del browser e righe del database.
 const cookieJar = new Map<string, string>();
@@ -118,7 +119,13 @@ const {
 } = await import('./autorizzazione');
 
 function login(token: string, ruolo: string, workspaceId: number | null, username: string) {
-  sessioni.push({ token, ruolo, workspace_id: workspaceId, username, email: null });
+  sessioni.push({
+    token: improntaToken(token),
+    ruolo,
+    workspace_id: workspaceId,
+    username,
+    email: null,
+  });
   cookieJar.set('session_token', token);
 }
 

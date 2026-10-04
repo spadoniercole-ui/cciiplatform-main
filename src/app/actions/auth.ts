@@ -23,6 +23,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { pool } from '@/lib/db';
 import { avviaChallengeMfa } from '@/lib/mfa/challenge';
+import { improntaToken } from '@/lib/improntaToken';
 
 /** Confronto a tempo costante, per non rivelare via timing quanti caratteri della password sono corretti. */
 function confrontoSicuro(a: string, b: string): boolean {
@@ -35,6 +36,41 @@ function confrontoSicuro(a: string, b: string): boolean {
     return false;
   }
   return crypto.timingSafeEqual(bufA, bufB);
+}
+
+// Hash bcrypt di una stringa casuale, calcolato una volta per processo: serve
+// al confronto fittizio per gli utenti inesistenti (stesso costo del vero).
+let hashFittizioPronto: Promise<string> | null = null;
+function hashFittizio(): Promise<string> {
+  if (!hashFittizioPronto) {
+    hashFittizioPronto = bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+  }
+  return hashFittizioPronto;
+}
+
+// Nomi utente cercati di recente in tutti gli schemi senza esito. La scansione
+// di riparazione dell'indice tocca ogni spazio: ripeterla a ogni tentativo con
+// un nome inventato darebbe a chi bussa un modo per far lavorare il database.
+// Per 10 minuti lo stesso nome non riscansiona. Su globalThis per la ragione
+// spiegata in tentativiAccesso.ts.
+const CHIAVE_ASSENTI = Symbol.for('cciiplatform.loginAssenti');
+const DURATA_ASSENTI_MS = 10 * 60 * 1000;
+function assentiRecenti(): Map<string, number> {
+  const g = globalThis as unknown as Record<symbol, Map<string, number> | undefined>;
+  if (!g[CHIAVE_ASSENTI]) g[CHIAVE_ASSENTI] = new Map();
+  return g[CHIAVE_ASSENTI] as Map<string, number>;
+}
+function assenteDiRecente(chiave: string): boolean {
+  const m = assentiRecenti();
+  const t = m.get(chiave);
+  if (t && Date.now() - t < DURATA_ASSENTI_MS) return true;
+  if (t) m.delete(chiave);
+  return false;
+}
+function segnaAssente(chiave: string): void {
+  const m = assentiRecenti();
+  if (m.size > 5000) m.clear();
+  m.set(chiave, Date.now());
 }
 
 interface SchemaAdminTrovato {
@@ -191,7 +227,7 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
           success: false,
           error: esito.bloccato
             ? `Troppi tentativi falliti. Accesso Superadmin bloccato per ${MINUTI_BLOCCO} minuti.`
-            : 'Parola chiave Superadmin errata.',
+            : 'Credenziali non valide.',
         };
       }
       await azzeraTentativiCondivisi(pool, chiaveTentativi);
@@ -240,7 +276,10 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
       if (controllo.bloccato) {
         return { success: false, error: messaggioBlocco(controllo.secondiRimanenti) };
       }
-      const credenzialiNonValide = async () => {
+      const credenzialiNonValide = async (confrontoFittizio = false) => {
+        // Utente inesistente: si esegue comunque un confronto bcrypt, così il
+        // tempo di risposta non rivela quali nomi utente esistono.
+        if (confrontoFittizio) await bcrypt.compare(password, await hashFittizio());
         const esito = await registraFallimentoCondiviso(pool, chiaveTentativi);
         return {
           success: false,
@@ -262,7 +301,10 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
               spazioId: indiceAdminRisultato.rows[0].spazio_id,
               codiceSpazio: indiceAdminRisultato.rows[0].codice_spazio,
             }
-          : await cercaERiparaIndiceAdmin(username);
+          : assenteDiRecente(`A:${username}`)
+            ? null
+            : await cercaERiparaIndiceAdmin(username);
+      if (!schemaAdmin) segnaAssente(`A:${username}`);
 
       if (schemaAdmin) {
         const { db } = await import('@/db/client');
@@ -311,10 +353,13 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
               spazioId: indiceUtenteRisultato.rows[0].spazio_id,
               codiceSpazio: indiceUtenteRisultato.rows[0].codice_spazio,
             }
-          : await cercaERiparaIndiceUtente(username);
+          : assenteDiRecente(`U:${username}`)
+            ? null
+            : await cercaERiparaIndiceUtente(username);
+      if (!schemaUtente) segnaAssente(`U:${username}`);
 
       if (!schemaUtente) {
-        return await credenzialiNonValide();
+        return await credenzialiNonValide(true);
       }
 
       const { db } = await import('@/db/client');
@@ -327,15 +372,17 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
         .limit(1);
 
       if (utenteDb.length === 0) {
+        return await credenzialiNonValide(true);
+      }
+
+      // Prima la password, poi lo stato: dire «disabilitato» a chi non ha la
+      // password confermerebbe che l'account esiste.
+      const passwordCorretta = await bcrypt.compare(password, utenteDb[0].passwordHash);
+      if (!passwordCorretta) {
         return await credenzialiNonValide();
       }
       if (!utenteDb[0].attivo) {
         return { success: false, error: 'Utente disabilitato: contatta il tuo Admin di Spazio.' };
-      }
-
-      const passwordCorretta = await bcrypt.compare(password, utenteDb[0].passwordHash);
-      if (!passwordCorretta) {
-        return await credenzialiNonValide();
       }
 
       await azzeraTentativiCondivisi(pool, chiaveTentativi);
@@ -354,14 +401,14 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
       console.error('Errore connessione database utenti:', dbError);
       return {
         success: false,
-        error: `Database non raggiungibile o non configurato: ${dbError.message || dbError}`,
+        error: 'Database non raggiungibile o non configurato. Il dettaglio è nel log del server.',
       };
     }
   } catch (erroreGenerale: any) {
     console.error('Crash critico nella Server Action:', erroreGenerale);
     return {
       success: false,
-      error: `Errore interno del server: ${erroreGenerale.message || erroreGenerale}`,
+      error: 'Errore interno del server. Il dettaglio è nel log del server.',
     };
   }
 }
@@ -373,7 +420,7 @@ export async function eseguiLogout() {
     const token = cookieStore.get('session_token')?.value;
 
     if (token) {
-      await pool.query('DELETE FROM sessioni WHERE token = $1', [token]);
+      await pool.query('DELETE FROM sessioni WHERE token = $1', [improntaToken(token)]);
     }
     cookieStore.delete('session_token');
 

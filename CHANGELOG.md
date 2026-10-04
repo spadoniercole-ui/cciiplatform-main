@@ -93,6 +93,49 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.126.0 — 2026-10-04 (Portable 1.2.11)
+
+Verifica di sicurezza di server e software, chiesta da Ercole prima di aprire
+un sito pubblico con il collegamento all'area riservata. Il modello di fondo
+regge (ogni server action verifica il chiamante, nomi di schema validati,
+nessun segreto nel repository); queste sono le correzioni.
+
+- **Intestazioni di sicurezza su ogni risposta**, nelle tre edizioni:
+  Content-Security-Policy restrittiva (tutto da `'self'`, nessun dominio
+  esterno, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `nosniff`,
+  `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, HSTS;
+  tolto `X-Powered-By`. Provato nel browser: login, istruttoria, piano,
+  stampa e caricamento senza alcuna violazione della policy.
+- **MFA: limite dei tentativi per identità**, non più solo per challenge.
+  Prima chi conosceva la password poteva aprire challenge nuove a volontà, e
+  richieste parallele sulla stessa challenge venivano confrontate tutte prima
+  che il contatore salisse. Ora ogni verifica prenota il tentativo in modo
+  atomico nel database, prima del confronto; dopo 5 errori l'identità è
+  bloccata 15 minuti, anche rifacendo il login.
+- **MFA: un codice dell'app authenticator vale una volta sola** (si registra
+  l'ultimo intervallo accettato).
+- **PIN nuovi di 6 cifre.** I PIN già impostati a 4 o 5 cifre restano validi.
+- **Sessioni: nel database solo l'impronta SHA-256 del token.** Una copia del
+  database o di un backup non contiene sessioni riutilizzabili. Effetto
+  dell'aggiornamento: le sessioni aperte si chiudono e serve un nuovo accesso.
+- **Logo di stampa**: accettato solo un data URL d'immagine in base64 puro,
+  verificato anche alla stampa (un valore costruito ad arte poteva eseguire
+  codice nella finestra di stampa).
+- **Lettura del piano aziendale da PDF**: il file passato dal browser deve
+  appartenere allo spazio del chiamante prima di essere letto o cancellato.
+- **Caricamenti**: sessione e dimensione dichiarata verificate prima di
+  leggere il corpo della richiesta; un PDF deve cominciare con `%PDF-`; limite
+  di 15MB sul file XBRL.
+- **Login**: stesso messaggio e stesso tempo di risposta per utenti esistenti
+  e non (confronto bcrypt anche per i nomi inesistenti); «utente disabilitato»
+  solo dopo la password corretta; la scansione degli spazi per un nome
+  sconosciuto non si ripete per 10 minuti; gli errori interni non mostrano più
+  il dettaglio tecnico (resta nel log del server).
+- Eliminando uno spazio si eliminano anche le credenziali MFA dei suoi utenti.
+- Stampa del piano di sviluppo: tutti i testi passano dall'escape HTML.
+
+Test: 915 (nuovi: impronta del token, step TOTP, logo di stampa).
+
 ## 0.125.0 — 2026-10-02 (Portable 1.2.10)
 
 Correttivi sul piano di sviluppo, dopo la prova di Ercole sulla demo

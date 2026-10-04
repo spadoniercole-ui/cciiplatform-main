@@ -11,6 +11,7 @@ import {
   richiediAccessoScenario,
   richiediAccessoSchema,
   richiediAccessoSpazio,
+  verificaFileDelloSpazio,
 } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
 import { del, get } from '@/lib/blobStore';
@@ -310,6 +311,8 @@ export async function estraiPianoAziendaleDaPdfAction(
     await richiediAccessoSpazio(codiceSpazio, { modulo: ['simulazione'], livello: 'SCRITTURA' });
     const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
     if (!contesto) return { success: false, error: 'Accesso non valido.' };
+    // Il file deve appartenere a questo spazio prima di leggerlo o cancellarlo.
+    verificaFileDelloSpazio(contesto, url);
     if (!anthropic) {
       await del(url).catch(() => undefined);
 
