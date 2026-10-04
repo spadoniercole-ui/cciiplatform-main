@@ -103,6 +103,10 @@ export function SimulazioneRiceventeScenario({
 }: Props) {
   const [fileScelti, setFileScelti] = useState<File[]>([]);
   const [documenti, setDocumenti] = useState<Documento[] | null>(null);
+  // Documenti su cui è stata fatta l'ultima valutazione: i file sono stati
+  // eliminati, nome e tipo restano da mostrare.
+  const [esaminati, setEsaminati] = useState<Documento[] | null>(null);
+  const [nuovoCaricamento, setNuovoCaricamento] = useState(false);
   const [primaLettura, setPrimaLettura] = useState<PrimaLettura | null>(null);
   const [posizioneLetta, setPosizioneLetta] = useState<LetturaPosizionePdf | null>(null);
   const [dataPosizione, setDataPosizione] = useState('');
@@ -163,6 +167,7 @@ export function SimulazioneRiceventeScenario({
     ]);
     if (docRis.success) {
       setDocumenti(docRis.documenti ?? null);
+      setEsaminati(docRis.documentiEsaminati ?? null);
       setPrimaLettura(docRis.primaLettura ?? null);
       setPosizioneLetta(docRis.posizioneLetta ?? null);
       setDataPosizione(docRis.posizioneLetta?.dataRiferimento ?? '');
@@ -315,7 +320,10 @@ export function SimulazioneRiceventeScenario({
         setDocumentiMancanti(risultato.documentiMancanti || []);
         setGenerataIl(risultato.generataIl || null);
         setTroncata(risultato.troncata || false);
-        // I documenti hanno finito il loro lavoro e sono stati eliminati.
+        // I documenti hanno finito il loro lavoro e sono stati eliminati:
+        // ne restano nome e tipo.
+        setEsaminati(documenti);
+        setNuovoCaricamento(false);
         setDocumenti(null);
         const giudizioRis = await calcolaGiudizioFinaleRicevente(nomeSchema, scenarioId);
         if (giudizioRis.success && giudizioRis.giudizio) setGiudizio(giudizioRis.giudizio);
@@ -454,6 +462,41 @@ export function SimulazioneRiceventeScenario({
               className="text-[10px] font-bold uppercase text-sky-700 hover:underline"
             >
               Sostituisci i documenti
+            </button>
+          </div>
+        ) : esaminati && !nuovoCaricamento ? (
+          <div className="space-y-3">
+            <p className="text-[11px] text-slate-500">
+              Documenti su cui è stata fatta la valutazione. I file sono stati eliminati dopo la
+              valutazione; restano il nome e il tipo riconosciuto.
+            </p>
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="text-[10px] uppercase text-slate-500 font-bold border-b border-slate-100">
+                  <th className="py-1.5">Documento</th>
+                  <th className="py-1.5">Riconosciuto come</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {esaminati.map((d) => (
+                  <tr key={d.nome}>
+                    <td className="py-1.5 text-slate-800">
+                      <FileText className="w-3.5 h-3.5 text-slate-400 inline mr-1" />
+                      {d.nome}
+                    </td>
+                    <td className="py-1.5 text-slate-600">
+                      {ETICHETTA_TIPO_DOCUMENTO[d.tipo] ?? d.tipo}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button
+              type="button"
+              onClick={() => setNuovoCaricamento(true)}
+              className="text-[10px] font-bold uppercase text-sky-700 hover:underline"
+            >
+              Carica nuovi documenti e rifai la valutazione
             </button>
           </div>
         ) : (
@@ -865,6 +908,10 @@ export function SimulazioneRiceventeScenario({
                   </span>
                 )}
               </summary>
+              <p className="text-[10px] text-slate-500 mt-2">
+                Non ha una stampa propria: confluisce, in sintesi, nella Relazione di chiusura, che
+                è l’unico documento dell’istruttoria.
+              </p>
               {nomiFileAnalizzati.length > 0 && (
                 <p className="text-[10px] text-slate-400 mt-2">
                   Basata su: {nomiFileAnalizzati.join(', ')}

@@ -1032,6 +1032,11 @@ export async function assicuraTabellaSimulazioneRicevente(nomeSchema: string): P
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS documenti_caricati JSONB`
   );
+  // Nome e tipo dei documenti su cui si è fatta la valutazione: i file si
+  // eliminano, l'elenco resta da mostrare nella fase 1.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS documenti_esaminati JSONB`
+  );
   // Base dell'art. 63 (0.121): capitale al netto di sanzioni, interessi e
   // somme aggiuntive, e percentuale offerta su quella base.
   await eseguiDdlTenant(
