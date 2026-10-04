@@ -174,10 +174,21 @@ export interface StatoDocumentiRicevente {
   posizioneLetta?: LetturaPosizionePdf | null;
   /** La prima lettura non è riuscita (i documenti però sono caricati). */
   erroreLettura?: string;
+  /** Documenti su cui è stata fatta l'ultima valutazione (i file non ci sono più). */
+  documentiEsaminati?: { nome: string; tipo: TipoDocumentoRicevuto }[] | null;
   error?: string;
 }
 
 const pubblici = (el: DocumentoRicevuto[]) => el.map((d) => ({ nome: d.nome, tipo: d.tipo }));
+
+/** Elenco salvato dei documenti valutati: solo nome e tipo (i file non ci sono più). */
+function elencoEsaminati(grezzo: unknown): { nome: string; tipo: TipoDocumentoRicevuto }[] | null {
+  if (!Array.isArray(grezzo)) return null;
+  const el = grezzo
+    .filter((d) => d && typeof d.nome === 'string')
+    .map((d) => ({ nome: String(d.nome), tipo: d.tipo as TipoDocumentoRicevuto }));
+  return el.length ? el : null;
+}
 
 /**
  * PASSI 1 e 2: un solo caricamento per TUTTI i documenti ricevuti, così come
@@ -363,7 +374,7 @@ export async function ottieniDocumentiRiceventeAction(
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaSimulazioneRicevente(nomeSchema);
     const r = await pool.query(
-      `SELECT documenti_caricati, prima_lettura, prima_lettura_il, posizione_letta FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
+      `SELECT documenti_caricati, documenti_esaminati, prima_lettura, prima_lettura_il, posizione_letta FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
       [scenarioId]
     );
     const x = r.rows[0];
@@ -371,6 +382,7 @@ export async function ottieniDocumentiRiceventeAction(
     return {
       success: true,
       documenti: elenco.length ? pubblici(elenco) : null,
+      documentiEsaminati: elencoEsaminati(x?.documenti_esaminati),
       primaLettura: x?.prima_lettura ? normalizzaPrimaLettura(x.prima_lettura) : null,
       primaLetturaIl: x?.prima_lettura_il ? new Date(x.prima_lettura_il).toISOString() : null,
       // Già normalizzata al salvataggio.
@@ -394,7 +406,8 @@ export async function analizzaDocumentiRiceventeAction(
   await assicuraTabellaSimulazioneRicevente(nomeSchema);
   // I documenti sono quelli CARICATI al primo passo (e già letti nella
   // prima lettura): la valutazione non li richiede di nuovo.
-  const ruoli = ruoliDaDocumenti(await leggiDocumentiCaricati(nomeSchema, scenarioId));
+  const caricati = await leggiDocumentiCaricati(nomeSchema, scenarioId);
+  const ruoli = ruoliDaDocumenti(caricati);
   const documentiNominati: TreDocumentiRicevente = {
     asseverazione: ruoli.attestazione,
     propostaCramDown: ruoli.proposta,
@@ -786,8 +799,10 @@ Rispondi SOLO con JSON valido, nessun testo prima o dopo, in questo formato esat
       try {
         await Promise.all(documenti.map((d) => del(d.url)));
         await pool.query(
-          `UPDATE "${nomeSchema}".simulazione_ricevente SET documenti_caricati = NULL WHERE scenario_id = $1`,
-          [scenarioId]
+          `UPDATE "${nomeSchema}".simulazione_ricevente
+              SET documenti_esaminati = $2, documenti_caricati = NULL
+            WHERE scenario_id = $1`,
+          [scenarioId, JSON.stringify(pubblici(caricati))]
         );
       } catch (erroreEliminazione) {
         console.error(

@@ -138,7 +138,9 @@ export default async function AziendaLayout({
     });
   }
   steps.push({
-    id: 'xbrl',
+    // Si apre sugli indici calcolati: è quello che si cerca entrando. La
+    // configurazione delle schede XBRL è la seconda sotto-scheda.
+    id: 'indici',
     label: 'Analisi Bilancio',
     stato: !anagraficaCompleta ? 'bloccato' : analisiBilancioCompleta ? 'completo' : 'attivo',
     motivo: "Completa prima l'Anagrafica azienda.",

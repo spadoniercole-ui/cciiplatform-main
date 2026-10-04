@@ -93,6 +93,22 @@ con il tipo di spazio.
 Verificato: type-check (entrambi i controlli), lint, 56 test, build
 completa.
 
+## 0.127.0 — 2026-10-04 (Portable 1.2.14)
+
+Prime correzioni dalla prova di Ercole sul percorso Ricevente.
+
+- **Analisi Bilancio si apre sugli indici.** Il passo della scheda azienda
+  porta direttamente agli indici calcolati dai bilanci caricati; la
+  configurazione delle schede XBRL diventa la seconda sotto-scheda.
+- **L'elenco dei documenti resta dopo la valutazione.** I file si eliminano
+  come prima, ma nome e tipo riconosciuto si conservano
+  (`simulazione_ricevente.documenti_esaminati`) e la fase 1 li mostra, con
+  «Carica nuovi documenti e rifai la valutazione». Prima la fase 1 tornava
+  vuota e dell'elenco restava solo una riga in fondo.
+- **Lettura critica dei documenti**: dichiara che non ha una stampa propria e
+  che confluisce, in sintesi, nella Relazione di chiusura, l'unico documento
+  dell'istruttoria.
+
 ## 0.126.2 — 2026-10-04 (Portable 1.2.13)
 
 Scheda **Soglie di segnalazione** dell'azienda: ora dice quale valore usa il

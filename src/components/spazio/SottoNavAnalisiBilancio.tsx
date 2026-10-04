@@ -12,8 +12,8 @@ interface Props {
 
 export function SottoNavAnalisiBilancio({ base, attivo }: Props) {
   const voci: { id: 'xbrl' | 'indici'; label: string; icon: typeof FileSpreadsheet }[] = [
-    { id: 'xbrl', label: 'Configurazione XBRL', icon: FileSpreadsheet },
     { id: 'indici', label: 'Indici', icon: TrendingUp },
+    { id: 'xbrl', label: 'Configurazione XBRL', icon: FileSpreadsheet },
   ];
   return (
     <div className="space-y-3">
