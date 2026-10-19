@@ -81,6 +81,7 @@ import {
   analizzaVera,
   estraiRigheVera,
   ritardoDaVera,
+  totaliVera,
   type RigaVera,
 } from '@/lib/debitiEnte/veraImport';
 import {
@@ -498,6 +499,20 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
           // collega giusto. Le sezioni non mappate restano senza categoria.
           const { righe } = estraiRigheVera(analisiVera.sezioni, mappaturaTitoli, {}, true);
           setRigheVera(righe);
+          // Le poste del V.E.R.A. non vanno tutte nella stessa base: dirlo qui
+          // evita che l'operatore si chieda perché la soglia INPS non usa il
+          // totale del file.
+          const totVera = totaliVera(righe);
+          if (totVera.creditiAgente > 0) {
+            note.push(
+              `V.E.R.A.: ${Math.round(totVera.creditiAgente).toLocaleString('it-IT')} € sono crediti già affidati all’Agente della Riscossione (cartelle, al netto delle partite sospese). Contano per la soglia dell’Agente (art. 25-novies, comma 1, lett. d), non per quella INPS.`
+            );
+          }
+          if (totVera.sanzioni > 0) {
+            note.push(
+              `V.E.R.A.: ${Math.round(totVera.sanzioni).toLocaleString('it-IT')} € sono sanzioni presunte. Restano fuori dalla soglia INPS, che riguarda i contributi: la base confrontata è ${Math.round(totVera.contributiInps).toLocaleString('it-IT')} €.`
+            );
+          }
           if (righe.length > 0) {
             const reg = await registraDocumentoOrigineAction(
               nomeSchema,

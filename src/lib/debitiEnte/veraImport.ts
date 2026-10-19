@@ -74,14 +74,60 @@ function indiceSospeso(intestazioni: string[]): number {
   return norm.findIndex((h) => h === 'sospeso');
 }
 
+function indiceContributi(intestazioni: string[]): number {
+  const norm = intestazioni.map(normalizzaEtichetta);
+  return norm.findIndex((h) => h === 'contributi');
+}
+
+function indiceSanzioni(intestazioni: string[]): number {
+  const norm = intestazioni.map(normalizzaEtichetta);
+  return norm.findIndex((h) => h === 'sanzioni');
+}
+
+/**
+ * AMBITO della sezione: contributi INPS oppure crediti già affidati all'Agente
+ * della Riscossione.
+ *
+ * La distinzione non è un dettaglio di presentazione: le due poste stanno su
+ * due lettere diverse dell'art. 25-novies (la a) per i contributi, la d) per i
+ * crediti affidati). Sommarle nella stessa base faceva superare la soglia INPS
+ * a un'impresa il cui debito INPS era sotto, e lasciava vuota la soglia
+ * dell'Agente pur avendo i numeri nel file.
+ *
+ * Si riconosce dalle INTESTAZIONI (il V.E.R.A. cambia titolo di sezione tra un
+ * export e l'altro) e, in seconda battuta, dal titolo.
+ */
+export type AmbitoVera = 'INPS' | 'AGENTE_RISCOSSIONE';
+
+export function eSezioneAgenteRiscossione(titolo: string, intestazioni: string[]): boolean {
+  const t = normalizzaEtichetta(titolo);
+  if (/agente della riscossione|crediti affidati|crediti presso adr|^adr\b/.test(t)) return true;
+  const h = intestazioni.map(normalizzaEtichetta);
+  // Le sezioni delle cartelle portano il riscosso e gli estremi della cartella;
+  // le sezioni contributive no.
+  if (h.includes('riscosso') || h.includes('estremi cartella avviso')) return true;
+  return h.includes('iscritto') && h.includes('sospeso');
+}
+
 export interface SezioneVera {
   titolo: string;
+  /** Contributi INPS oppure crediti dell'Agente della Riscossione. */
+  ambito: AmbitoVera;
   intestazioni: string[];
   idxImporto: number;
   idxVoce: number;
   numeroRighe: number;
   totale: number;
-  righe: { voce: string; importo: number; stato: string; periodo?: string }[];
+  righe: {
+    voce: string;
+    importo: number;
+    stato: string;
+    periodo?: string;
+    /** Quota contributi della riga; null se la sezione non la espone. */
+    contributi: number | null;
+    /** Quota sanzioni della riga; null se la sezione non la espone. */
+    sanzioni: number | null;
+  }[];
 }
 
 export interface AnalisiVera {
@@ -93,8 +139,16 @@ export interface AnalisiVera {
 }
 
 function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
+  const ambito: AmbitoVera = eSezioneAgenteRiscossione(s.titolo, s.intestazioni)
+    ? 'AGENTE_RISCOSSIONE'
+    : 'INPS';
   const idxImporto = indiceImporto(s.intestazioni);
   const idxVoce = indiceVoce(s.intestazioni);
+  // Il riparto contributi/sanzioni esiste solo nelle sezioni contributive: è
+  // quello che permette di tenere le sanzioni fuori dalla soglia (art.
+  // 25-novies, c. 1, lett. a: debito per contributi), come già fa il motore.
+  const idxContributi = ambito === 'INPS' ? indiceContributi(s.intestazioni) : -1;
+  const idxSanzioni = ambito === 'INPS' ? indiceSanzioni(s.intestazioni) : -1;
   // NETTING: se la sezione ha una colonna "Totale credito", l'importo utile è
   // debito − credito (posizione netta). Dove la colonna manca (es. ADR,
   // Gestione Separata) coincide col debito, e i totali combaciano al centesimo
@@ -123,6 +177,8 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
         // Solo «Sospeso»: la nota (es. estremi dell'opposizione) renderebbe
         // ogni combinazione natura/stato unica e da mappare una per una.
         stato: 'Sospeso',
+        contributi: null,
+        sanzioni: null,
       };
     }
     return {
@@ -133,11 +189,17 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
       importo: debito - credito,
       stato: idxStato >= 0 ? testoCella(r[idxStato]).trim() : '',
       ...(idxPeriodo >= 0 ? { periodo: testoCella(r[idxPeriodo]).trim() } : {}),
+      contributi: idxContributi >= 0 ? parseNumero(r[idxContributi]) : null,
+      sanzioni: idxSanzioni >= 0 ? parseNumero(r[idxSanzioni]) : null,
     };
   });
-  const totale = righe.reduce((a, r) => a + r.importo, 0);
+  // Il totale della sezione è l'esposizione della sezione: le partite
+  // sospese restano nelle righe (perché esistono) ma non nel totale, come
+  // fa il file stesso con il proprio «Totale gestione».
+  const totale = righe.reduce((a, r) => a + (r.stato === 'Sospeso' ? 0 : r.importo), 0);
   return {
     titolo: s.titolo,
+    ambito,
     intestazioni: s.intestazioni,
     idxImporto,
     idxVoce,
@@ -201,6 +263,8 @@ function suggerisciTrattamento(stato: string, importo: number): TrattamentoVera 
 
 export interface RigaVera {
   sezione: string;
+  /** Contributi INPS oppure crediti dell'Agente della Riscossione. */
+  ambito: AmbitoVera;
   voce: string;
   importo: number;
   categoria: string;
@@ -208,6 +272,62 @@ export interface RigaVera {
   stato: string;
   /** Trattamento derivato dalla combinazione Natura+Stato. */
   trattamento: TrattamentoVera;
+  /** Quota contributi dell'importo; null quando la sezione non la espone. */
+  contributi: number | null;
+  /** Quota sanzioni dell'importo; null quando la sezione non la espone. */
+  sanzioni: number | null;
+}
+
+/**
+ * TOTALI del V.E.R.A., separati per DESTINAZIONE: le due grandezze non sono
+ * intercambiabili e non vanno sommate nella stessa base.
+ *
+ * - `contributiInps`: contributi delle sezioni contributive, al netto delle
+ *   sanzioni — è la base della soglia INPS (art. 25-novies, c. 1, lett. a);
+ * - `sanzioni`: sanzioni presunte, mostrate ma mai nel test di soglia;
+ * - `creditiAgente`: residuo delle cartelle già affidate all'Agente della
+ *   Riscossione, netto delle partite sospese — base della lett. d);
+ * - `quantificato`: somma delle tre, per la riconciliazione con l'esposizione.
+ *
+ * Contano solo le righe contabilizzate o da contabilizzare: le potenziali
+ * hanno importo ignoto e le ignorate (sospese, fuori perimetro) restano fuori.
+ */
+export interface TotaliVera {
+  contributiInps: number;
+  sanzioni: number;
+  creditiAgente: number;
+  quantificato: number;
+  righeIgnorate: number;
+}
+
+export function totaliVera(righe: RigaVera[]): TotaliVera {
+  let contributiInps = 0;
+  let sanzioni = 0;
+  let creditiAgente = 0;
+  let righeIgnorate = 0;
+  for (const r of righe) {
+    if (r.trattamento !== 'contabilizzato' && r.trattamento !== 'da_contabilizzare') {
+      if (r.trattamento === 'ignora') righeIgnorate++;
+      continue;
+    }
+    if (r.ambito === 'AGENTE_RISCOSSIONE') {
+      creditiAgente += r.importo;
+      continue;
+    }
+    const sanz = r.sanzioni ?? 0;
+    // Senza riparto esplicito resta l'importo della riga: è il massimo che il
+    // file dichiari, e non si inventa una quota di sanzioni.
+    const contr = r.contributi ?? Math.max(0, r.importo - sanz);
+    contributiInps += contr;
+    sanzioni += sanz;
+  }
+  return {
+    contributiInps,
+    sanzioni,
+    creditiAgente,
+    quantificato: contributiInps + sanzioni + creditiAgente,
+    righeIgnorate,
+  };
 }
 
 export interface CombinazioneVera {
@@ -285,11 +405,17 @@ export function estraiRigheVera(
       }
       righe.push({
         sezione: s.titolo,
+        // Le fixture e i file letti prima di questa distinzione non portano
+        // l'ambito: l'assenza vale «contributi INPS», il caso di gran lunga
+        // più frequente.
+        ambito: s.ambito ?? 'INPS',
         voce: r.voce,
         importo: r.importo,
         categoria: categoria ?? '',
         stato: r.stato,
         trattamento,
+        contributi: r.contributi ?? null,
+        sanzioni: r.sanzioni ?? null,
       });
     }
   }

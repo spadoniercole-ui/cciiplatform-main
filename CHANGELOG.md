@@ -26,6 +26,29 @@ il terzo per correzioni.
 
 ---
 
+## 0.132.0 — 2026-10-19
+
+**V.E.R.A.: contributi, sanzioni e cartelle dell’Agente su basi distinte**
+
+- Collaudato il lettore sul file V.E.R.A. reale (export «DettaglioRichiesta»,
+  fogli «Esito Verifica» e «Dettaglio Verifica»): le sezioni vengono
+  riconosciute, la sezione F24 dei versamenti è esclusa, i totali di dettaglio
+  coincidono con i «Totale gestione» del file.
+- Le righe V.E.R.A. conservano ora il riparto **contributi / sanzioni** e
+  l’**ambito** della sezione. Con il solo importo complessivo un’impresa con
+  contributi sotto soglia ma cartelle già a ruolo risultava sopra la soglia
+  INPS per un debito che non è più dell’Istituto.
+- La soglia INPS (art. 25-novies, comma 1, lett. a) usa i contributi della
+  sezione, al netto delle sanzioni presunte; la soglia dell’Agente della
+  Riscossione (lett. d) usa i crediti delle cartelle, al netto delle partite
+  sospese. Le sanzioni restano visibili nella riconciliazione, mai nel test.
+- Il totale di sezione non comprende più le partite sospese, come il file
+  stesso dichiara nel proprio «Totale gestione».
+- Nell’esito del triage due note dichiarano le poste escluse dalla soglia
+  INPS e la base effettivamente confrontata.
+- Nuova `totaliVera` in `src/lib/debitiEnte/veraImport.ts`, con test sul file
+  reale conservato come fixture.
+
 ## 0.131.0 — 2026-10-19
 
 **Triage: V.E.R.A. obbligatorio e comunicazioni ai colleghi dalle lavorazioni**

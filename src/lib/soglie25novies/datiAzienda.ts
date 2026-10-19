@@ -30,7 +30,10 @@ export interface DatiSoglieAzienda {
   denunceNonPresentate: string | null;
   /** true se il triage ha conservato l'esito sulle denunce (anche «nessuna mancante»). */
   esitoDenunceConservato: boolean;
-  /** Esposizione verso l'ente: valore manuale, altrimenti somma del V.E.R.A. */
+  /**
+   * Esposizione contributiva verso l'ente: valore manuale, altrimenti i
+   * contributi del V.E.R.A. (al netto di sanzioni e crediti già a ruolo).
+   */
   esposizione: number | null;
   /** Valore effettivamente usato per ciascun importo e la sua fonte (vedi fonti.ts). */
   usati: ValoriUsati;
@@ -54,9 +57,22 @@ export async function leggiDatiSoglieAzienda(
   const a = az.rows[0];
 
   // Esposizione dal V.E.R.A., solo come ripiego (vedi attenzioneScreening).
+  //
+  // Le tre poste NON si sommano: i contributi alimentano la soglia INPS
+  // (lett. a), le sanzioni sono presunte e restano fuori dal test, i crediti
+  // già affidati all'Agente della Riscossione appartengono alla lett. d).
+  // Prima si sommava tutto e un'impresa con 23.600 € di cartelle ma 16.756 €
+  // di contributi risultava sopra la soglia INPS per un debito che non era
+  // più dell'Istituto.
   const espVera = await pool
     .query(
-      `SELECT COALESCE(SUM(v.importo), 0) AS totale
+      `SELECT
+         COALESCE(SUM(COALESCE(v.contributi, v.importo))
+           FILTER (WHERE v.ambito <> 'AGENTE_RISCOSSIONE'), 0) AS contributi,
+         COALESCE(SUM(COALESCE(v.sanzioni, 0))
+           FILTER (WHERE v.ambito <> 'AGENTE_RISCOSSIONE'), 0) AS sanzioni,
+         COALESCE(SUM(v.importo)
+           FILTER (WHERE v.ambito = 'AGENTE_RISCOSSIONE'), 0) AS agenti
          FROM "${nomeSchema}".debiti_vera v
          LEFT JOIN "${nomeSchema}".categorie_tipo_debito c ON c.codice = v.categoria
         WHERE v.azienda_id = $1
@@ -64,8 +80,10 @@ export async function leggiDatiSoglieAzienda(
           AND (c.contribuisce IS NULL OR c.contribuisce = TRUE)`,
       [aziendaId]
     )
-    .catch(() => ({ rows: [{ totale: 0 }] }));
-  const daVera = Number(espVera.rows[0]?.totale ?? 0);
+    .catch(() => ({ rows: [{ contributi: 0, sanzioni: 0, agenti: 0 }] }));
+  const daVera = Number(espVera.rows[0]?.contributi ?? 0);
+  const sanzioniVera = Number(espVera.rows[0]?.sanzioni ?? 0);
+  const daVeraAgente = Number(espVera.rows[0]?.agenti ?? 0);
   const esposizione = num(a.contributi_scaduti) ?? (daVera > 0 ? daVera : null);
 
   // Le posizioni della tabella del triage hanno la precedenza: sono i numeri
@@ -102,11 +120,15 @@ export async function leggiDatiSoglieAzienda(
       num(a.contributi_dovuti_anno_precedente)
     ),
     annoContributiDovuti: num(a.anno_contributi_dovuti),
-    sanzioniPresunte: num(a.sanzioni_presunte_vera),
+    // Le sanzioni del V.E.R.A. si mostrano nella riconciliazione; il valore
+    // manuale, se inserito, resta quello che vince.
+    sanzioniPresunte: num(a.sanzioni_presunte_vera) ?? (sanzioniVera > 0 ? sanzioniVera : null),
     premiInail: scegli('premiInail', daPosizioni.premiInail, num(a.premi_inail)),
     ivaScaduta: scegli('ivaScaduta', daPosizioni.ivaScaduta, num(a.iva_scaduta)),
     volumeAffari: scegli('volumeAffari', daPosizioni.volumeAffari, num(a.volume_affari)),
-    creditiAffidati: num(a.crediti_affidati_aer),
+    // I crediti dell'Agente della Riscossione arrivano dal file «Ruoli
+    // esattoriali» o, in mancanza, dalle cartelle dentro il V.E.R.A.
+    creditiAffidati: num(a.crediti_affidati_aer) ?? (daVeraAgente > 0 ? daVeraAgente : null),
     formaAER: formaAERdaAnagrafica(a.forma_giuridica),
     ritardoOltre90Giorni:
       a.ritardo_oltre_90_giorni === null || a.ritardo_oltre_90_giorni === undefined

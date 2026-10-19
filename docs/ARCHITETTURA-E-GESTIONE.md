@@ -1,6 +1,6 @@
 # CCIIplatform — Logica applicativa e guida alla gestione
 
-Documento unico di ricostruzione. Riferimento: versione **0.131.0**
+Documento unico di ricostruzione. Riferimento: versione **0.132.0**
 (Portable **1.2.16**), verificato sui sorgenti il 19/10/2026.
 
 Come è costruito: prima il prodotto e il modello concettuale, poi la sequenza logica
@@ -147,7 +147,10 @@ Drizzle è marginale.
    `categorie_tipo_debito`).
 3. **V.E.R.A. (obbligatorio nel triage)**: `debiti_vera`, `vera_titoli`,
    `vera_trattamenti`; le sanzioni sono una *presunzione* e restano fuori dai test di
-   soglia. Il file è un presupposto: senza un V.E.R.A. riconosciuto e leggibile la conferma
+   soglia. Ogni riga porta anche l'**ambito** — contributi INPS oppure crediti già affidati
+   all'Agente della Riscossione — e il riparto contributi/sanzioni: sono due lettere diverse
+   dell'art. 25-novies (a e d) e non si sommano nella stessa base. Il file è un presupposto:
+   senza un V.E.R.A. riconosciuto e leggibile la conferma
    del triage non parte. Dalle sue righe, con la tabella `lavorazioni_tipo_debito`
    (Parametri › Lavorazioni), il triage prepara una comunicazione per collega — solo testo
    da copiare e inviare personalmente, mai un invio automatico.
@@ -419,8 +422,8 @@ modifica.
 ## 9. Incoerenze e debito tecnico (trovati, non corretti)
 
 1. **`CHANGELOG.md` non è coerente con sé stesso.** L'intestazione dichiara "ultima release
-   cloud 0.105.0" mentre `package.json` e `APP_VERSION` sono a 0.131.0; inoltre dopo
-   l'intestazione compaiono `0.69.0` e `0.70.1` prima della serie discendente da 0.131.0. Il
+   cloud 0.105.0" mentre `package.json` e `APP_VERSION` sono a 0.132.0; inoltre dopo
+   l'intestazione compaiono `0.69.0` e `0.70.1` prima della serie discendente da 0.132.0. Il
    changelog va letto come diario, non come indice.
 2. **`CLAUDE.md` dice `tipo_spazio = ENTE | RED`**, il codice usa `ENTE | NON_ENTE`
    (default `NON_ENTE`). È la documentazione da correggere, non il codice: cambiare il
@@ -492,7 +495,7 @@ modifica.
 
 ## 11. Decisioni aperte
 
-1. **Versione corrente ufficiale**: 0.131.0 è la linea da dichiarare? Aggiornare
+1. **Versione corrente ufficiale**: 0.132.0 è la linea da dichiarare? Aggiornare
    l'intestazione del CHANGELOG e l'ordine delle voci.
 2. **`tipo_spazio`**: confermare `NON_ENTE` e correggere `CLAUDE.md` (consigliato), oppure
    introdurre un alias `RED` a livello di sola UI.

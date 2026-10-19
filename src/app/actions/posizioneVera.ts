@@ -17,6 +17,7 @@ import {
 import type { StatoMateria } from '@/lib/titoliEnte/materie';
 import {
   chiaveCombinazione,
+  type AmbitoVera,
   type RigaVera,
   type TrattamentoVera,
 } from '@/lib/debitiEnte/veraImport';
@@ -383,7 +384,8 @@ export async function ottieniDebitiVera(
       return { success: false, righe: [], error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
     const r = await pool.query(
-      `SELECT id, sezione, voce, importo, categoria, stato, trattamento FROM "${nomeSchema}".debiti_vera
+      `SELECT id, sezione, ambito, voce, importo, contributi, sanzioni, categoria, stato, trattamento
+         FROM "${nomeSchema}".debiti_vera
        WHERE azienda_id = $1 ORDER BY id ASC`,
       [aziendaId]
     );
@@ -438,8 +440,12 @@ export async function ottieniDebitiVera(
       righe: r.rows.map((x) => ({
         id: x.id,
         sezione: x.sezione,
+        ambito: (x.ambito ?? 'INPS') as AmbitoVera,
         voce: x.voce,
         importo: Number(x.importo),
+        contributi:
+          x.contributi === null || x.contributi === undefined ? null : Number(x.contributi),
+        sanzioni: x.sanzioni === null || x.sanzioni === undefined ? null : Number(x.sanzioni),
         categoria: x.categoria,
         stato: x.stato ?? '',
         trattamento: (x.trattamento ?? 'contabilizzato') as TrattamentoVera,
@@ -470,13 +476,17 @@ export async function sostituisciDebitiVeraAction(
     await pool.query(`DELETE FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1`, [aziendaId]);
     for (const r of righe) {
       await pool.query(
-        `INSERT INTO "${nomeSchema}".debiti_vera (azienda_id, sezione, voce, importo, categoria, stato, trattamento, combinazione, documento_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `INSERT INTO "${nomeSchema}".debiti_vera
+           (azienda_id, sezione, ambito, voce, importo, contributi, sanzioni, categoria, stato, trattamento, combinazione, documento_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           aziendaId,
           r.sezione,
+          r.ambito ?? 'INPS',
           r.voce,
           r.importo,
+          r.contributi ?? null,
+          r.sanzioni ?? null,
           r.categoria,
           r.stato ?? '',
           r.trattamento ?? 'contabilizzato',

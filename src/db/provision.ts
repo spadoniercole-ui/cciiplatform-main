@@ -1913,6 +1913,21 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS documento_id INTEGER`
   );
+  // AMBITO della riga: contributi INPS oppure crediti già affidati all'Agente
+  // della Riscossione. Alimentano due lettere diverse dell'art. 25-novies e
+  // non vanno sommati (vedi `TotaliVera` in debitiEnte/veraImport.ts).
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS ambito TEXT NOT NULL DEFAULT 'INPS'`
+  );
+  // Riparto della riga: le sanzioni sono presunte e restano fuori dal test di
+  // soglia, quindi l'importo da solo non basta più. NULL = il file non lo
+  // espone (righe salvate prima di questa colonna comprese).
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS contributi NUMERIC`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS sanzioni NUMERIC`
+  );
   // Mappatura (per spazio) della combinazione Natura+Stato → trattamento.
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.vera_trattamenti (

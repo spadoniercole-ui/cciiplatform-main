@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { estraiRigheVera, eSezioneVersamenti, ritardoDaVera } from './veraImport';
+import {
+  estraiRigheVera,
+  eSezioneVersamenti,
+  eSezioneAgenteRiscossione,
+  ritardoDaVera,
+  totaliVera,
+} from './veraImport';
 
 // In fase di triage non si chiede all'operatore di mappare titoli e
 // trattamenti: si carica il file per sapere se la posizione vada guardata.
@@ -64,6 +70,56 @@ describe('V.E.R.A.: versamenti e cartelle sospese', () => {
     );
     expect(righe[0].trattamento).toBe('ignora');
     expect(righe[0].importo).toBe(6990.45);
+  });
+});
+
+describe('V.E.R.A.: ambito della sezione e destinazione degli importi', () => {
+  it('riconosce le cartelle dell’Agente dalle intestazioni, non solo dal titolo', () => {
+    expect(
+      eSezioneAgenteRiscossione('SEZIONE SENZA NOME', ['Gestione', 'Estremi cartella / Avviso'])
+    ).toBe(true);
+    expect(
+      eSezioneAgenteRiscossione('CREDITI AFFIDATI PER IL RECUPERO', [
+        'Gestione',
+        'Residuo',
+        'Sospeso',
+      ])
+    ).toBe(true);
+    expect(
+      eSezioneAgenteRiscossione('GESTIONE LAVORATORI DIPENDENTI PRIVATI', [
+        'Natura omissione/Tipologia',
+        'Contributi',
+        'Sanzioni',
+        'Totale debito',
+      ])
+    ).toBe(false);
+  });
+
+  it('senza riparto esplicito la riga resta contributo, senza inventare sanzioni', () => {
+    const { righe } = estraiRigheVera(sezioni as never, {}, {}, true);
+    const t = totaliVera(righe);
+    expect(t.contributiInps).toBe(15_000);
+    expect(t.sanzioni).toBe(0);
+    expect(t.creditiAgente).toBe(0);
+  });
+
+  it('i crediti dell’Agente non finiscono nella base dei contributi', () => {
+    const { righe } = estraiRigheVera(
+      [
+        {
+          titolo: 'ADR',
+          ambito: 'AGENTE_RISCOSSIONE',
+          righe: [{ voce: 'Adr', stato: '', importo: 23_600.53 }],
+        },
+      ] as never,
+      {},
+      {},
+      true
+    );
+    const t = totaliVera(righe);
+    expect(t.creditiAgente).toBe(23_600.53);
+    expect(t.contributiInps).toBe(0);
+    expect(t.quantificato).toBe(23_600.53);
   });
 });
 
