@@ -26,6 +26,31 @@ il terzo per correzioni.
 
 ---
 
+## 0.133.0 — 2026-10-19
+
+**Titoli di credito: la procedura di recupero accanto al titolo**
+
+- Nei Parametri di Spazio › Titoli di credito dell’ente, ogni codice porta ora
+  le **attività necessarie e sufficienti per recuperare il credito**: un passo
+  per riga, nell’ordine in cui l’ufficio li esegue (verificare la notifica,
+  correggere il conto del lavoratore, controllare la proposta VIG su importo,
+  periodo e codice fiscale, contabilizzare). È un testo libero, non un elenco
+  chiuso di passi: le procedure degli enti non stanno in uno schema.
+- La procedura si salva da sola, con un’azione dedicata: non passa dal
+  riscontro sulle fonti ufficiali, che riguarda presupposto, atto e
+  riferimento interno, né chiede conferme quando un riscontro è ancora «da
+  riscontrare». Scrivere i passi operativi non tocca la parte giuridica.
+- L’editor mostra in anteprima l’elenco numerato che vedrà l’operatore, così
+  il testo si controlla mentre lo si scrive. La tabella indica per ogni codice
+  se la procedura c’è e da quanti passi è fatta.
+- Le nuove funzioni pure di `src/lib/titoliEnte/recupero.ts` leggono il testo
+  (righe, numerazione «1.»/«1)»/«-», CR di Windows, righe vuote) e sono
+  coperte da test, compresa la procedura della diffida indicata dall’ente:
+  è l’interfaccia che la fase successiva al triage userà per mostrare i passi
+  partita per partita.
+- Colonna `attivita_recupero` su `titoli_ente`, aggiunta in modo idempotente;
+  la configurazione di spazio la esporta e la ripristina come le altre.
+
 ## 0.132.0 — 2026-10-19
 
 **V.E.R.A.: contributi, sanzioni e cartelle dell’Agente su basi distinte**
@@ -48,6 +73,11 @@ il terzo per correzioni.
   INPS e la base effettivamente confrontata.
 - Nuova `totaliVera` in `src/lib/debitiEnte/veraImport.ts`, con test sul file
   reale conservato come fixture.
+- Le posizioni V.E.R.A. già salvate prima di questa versione vengono
+  riclassificate una volta sola al primo avvio: le sezioni riconoscibili come
+  cartelle dell’Agente (titolo o voce «ADR») escono dalla base INPS e passano
+  alla lett. d). Il riparto contributi/sanzioni di quelle righe resta ignoto
+  (si usa l’importo intero) finché il file non viene ricaricato.
 
 ## 0.131.0 — 2026-10-19
 

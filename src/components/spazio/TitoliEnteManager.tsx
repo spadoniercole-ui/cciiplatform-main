@@ -15,15 +15,22 @@ import {
   AlertTriangle,
   Check,
   Upload,
+  ClipboardList,
 } from 'lucide-react';
 import { leggiCodiciDaExcel } from '@/lib/titoliEnte/anagraficaExcel';
 import {
   eliminaTitoloEnteAction,
   ottieniTitoliEnteAction,
   importaAnagraficaCodiciAction,
+  salvaAttivitaRecuperoAction,
   salvaDominioEnteAction,
   salvaTitoloEnteAction,
 } from '@/app/actions/titoliEnte';
+import {
+  MASSIMO_CARATTERI_ATTIVITA_RECUPERO,
+  passiAttivitaRecupero,
+  riassuntoAttivitaRecupero,
+} from '@/lib/titoliEnte/recupero';
 import {
   AVVERTENZA_TITOLI_ENTE,
   ETICHETTA_ESITO,
@@ -105,6 +112,11 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
   const [inCorso, setInCorso] = useState(false);
   const [esitoProposto, setEsitoProposto] = useState<TitoloEnte | null>(null);
   const [esitoImport, setEsitoImport] = useState<string | null>(null);
+  // Procedura di recupero in scrittura: una riga alla volta, salvata a parte
+  // dal titolo (non passa dal riscontro sulle fonti).
+  const [procedura, setProcedura] = useState<{ id: number; codice: string; testo: string } | null>(
+    null
+  );
   const [materie, setMaterie] = useState<MateriaEnte[]>([]);
   const caricaMaterie = async () => {
     const r = await ottieniMaterieEnteAction(nomeSchema);
@@ -124,6 +136,19 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
     caricaMaterie();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema]);
+
+  const salvaProcedura = async () => {
+    if (!procedura) return;
+    setInCorso(true);
+    setErrore(null);
+    const r = await salvaAttivitaRecuperoAction(codice, procedura.id, procedura.testo);
+    setInCorso(false);
+    if (!r.success) setErrore(r.error ?? 'Salvataggio non riuscito.');
+    else {
+      setProcedura(null);
+      await carica();
+    }
+  };
 
   const salva = async (conferma = false) => {
     if (!inModifica) return;
@@ -165,6 +190,13 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
             le materie da riscontrare; la ricerca dell’AI in blocco, che propone per ogni materia
             presupposto giuridico e circolari; la conferma di una persona; i codici dell’anagrafica
             che cadono nella materia. Il titolo di una partita è quello della sua materia.
+          </p>
+          <p className="text-[11px] text-slate-600 mt-1">
+            Accanto al titolo, ogni codice porta la <strong>procedura di recupero</strong>: i passi
+            che l’ente segue per incassare quel credito (verificare la notifica, correggere il
+            conto, controllare la proposta VIG, contabilizzare). Si scrive una volta qui; nella fase
+            successiva al triage la piattaforma la mostra, partita per partita, all’operatore che la
+            deve lavorare, che potrà adattarla a quella posizione.
           </p>
           <p className="text-[11px] text-slate-500 italic mt-1">{AVVERTENZA_TITOLI_ENTE}</p>
         </div>
@@ -347,6 +379,7 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
               <th className="px-3 py-2 font-bold">Codice</th>
               <th className="px-3 py-2 font-bold">Atto o flusso</th>
               <th className="px-3 py-2 font-bold">Materia (titolo della partita)</th>
+              <th className="px-3 py-2 font-bold">Attività di recupero</th>
               <th className="px-3 py-2 font-bold"></th>
             </tr>
           </thead>
@@ -360,73 +393,169 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
               </tr>
             )}
             {titoli.map((t) => (
-              <tr key={t.id ?? t.codice} className="align-top">
-                <td className="px-3 py-2 font-bold text-slate-900">{t.codice}</td>
-                <td className="px-3 py-2 text-slate-800">
-                  {t.atto}
-                  {t.note && <span className="block text-[10px] text-slate-500">{t.note}</span>}
-                </td>
-                <td className="px-3 py-2">
-                  <select
-                    value={t.materiaId ?? ''}
-                    onChange={async (e) => {
-                      const v = e.target.value ? Number(e.target.value) : null;
-                      const r = await assegnaMateriaCodiceAction(codice, t.id!, v);
-                      if (!r.success) setErrore(r.error ?? 'Errore.');
-                      await carica();
-                    }}
-                    className={`${CLASSE_CAMPO} ${t.materiaId ? '' : 'border-amber-400'}`}
-                  >
-                    <option value="">— da assegnare —</option>
-                    {materie.map((m) => (
-                      <option key={m.id} value={m.id!}>
-                        {m.nome}
-                        {m.stato === 'CONFERMATA' ? ' ✓' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {(() => {
-                    const m = materie.find((x) => x.id === t.materiaId);
-                    return m?.presuppostoGiuridico ? (
-                      <span className="block text-[10px] text-slate-500 mt-0.5">
-                        {m.presuppostoGiuridico}
-                      </span>
-                    ) : null;
-                  })()}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInModifica(t);
-                      setEsitoProposto(null);
-                    }}
-                    className="text-[10px] font-bold uppercase text-blue-700 mr-2"
-                  >
-                    Modifica
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!t.id) return;
-                      if (
-                        !(await confermaApp(
-                          `Eliminare il codice ${t.codice}? Le partite con questo codice resteranno senza titolo presunto.`,
-                          { distruttiva: true, etichettaConferma: 'Elimina' }
-                        ))
-                      )
-                        return;
-                      const r = await eliminaTitoloEnteAction(codice, t.id);
-                      if (!r.success) setErrore(r.error ?? 'Errore.');
-                      await carica();
-                    }}
-                    className="text-slate-400 hover:text-red-600"
-                    title="Elimina"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 inline" />
-                  </button>
-                </td>
-              </tr>
+              <React.Fragment key={t.id ?? t.codice}>
+                <tr className="align-top">
+                  <td className="px-3 py-2 font-bold text-slate-900">{t.codice}</td>
+                  <td className="px-3 py-2 text-slate-800">
+                    {t.atto}
+                    {t.note && <span className="block text-[10px] text-slate-500">{t.note}</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={t.materiaId ?? ''}
+                      onChange={async (e) => {
+                        const v = e.target.value ? Number(e.target.value) : null;
+                        const r = await assegnaMateriaCodiceAction(codice, t.id!, v);
+                        if (!r.success) setErrore(r.error ?? 'Errore.');
+                        await carica();
+                      }}
+                      className={`${CLASSE_CAMPO} ${t.materiaId ? '' : 'border-amber-400'}`}
+                    >
+                      <option value="">— da assegnare —</option>
+                      {materie.map((m) => (
+                        <option key={m.id} value={m.id!}>
+                          {m.nome}
+                          {m.stato === 'CONFERMATA' ? ' ✓' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {(() => {
+                      const m = materie.find((x) => x.id === t.materiaId);
+                      return m?.presuppostoGiuridico ? (
+                        <span className="block text-[10px] text-slate-500 mt-0.5">
+                          {m.presuppostoGiuridico}
+                        </span>
+                      ) : null;
+                    })()}
+                  </td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {riassuntoAttivitaRecupero(t.attivitaRecupero) || (
+                      <span className="text-amber-700">da scrivere</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInModifica(t);
+                        setEsitoProposto(null);
+                      }}
+                      className="text-[10px] font-bold uppercase text-blue-700 mr-2"
+                    >
+                      Modifica
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!t.id) return;
+                        setProcedura((prev) =>
+                          prev?.id === t.id
+                            ? null
+                            : { id: t.id!, codice: t.codice, testo: t.attivitaRecupero ?? '' }
+                        );
+                        setErrore(null);
+                      }}
+                      className="text-[10px] font-bold uppercase text-slate-700 mr-2 inline-flex items-center gap-1"
+                      title="La procedura che gli operatori seguono per recuperare questo credito"
+                    >
+                      <ClipboardList className="w-3.5 h-3.5" /> Attività
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!t.id) return;
+                        if (
+                          !(await confermaApp(
+                            `Eliminare il codice ${t.codice}? Le partite con questo codice resteranno senza titolo presunto.`,
+                            { distruttiva: true, etichettaConferma: 'Elimina' }
+                          ))
+                        )
+                          return;
+                        const r = await eliminaTitoloEnteAction(codice, t.id);
+                        if (!r.success) setErrore(r.error ?? 'Errore.');
+                        await carica();
+                      }}
+                      className="text-slate-400 hover:text-red-600"
+                      title="Elimina"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 inline" />
+                    </button>
+                  </td>
+                </tr>
+                {procedura && t.id !== null && procedura.id === t.id && (
+                  <tr className="bg-slate-50">
+                    <td colSpan={5} className="px-3 py-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <ClipboardList className="w-3.5 h-3.5 text-slate-500" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
+                          Attività di recupero — codice {t.codice}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Un passo per riga, nell’ordine in cui l’ufficio li esegue. È il testo che la
+                        fase successiva al triage mostrerà all’operatore: qui si configura una
+                        volta, poi si adatta sulla singola posizione.
+                      </p>
+                      <textarea
+                        value={procedura.testo}
+                        onChange={(e) => setProcedura({ ...procedura, testo: e.target.value })}
+                        rows={8}
+                        placeholder={
+                          '1. Verificare la notifica del provvedimento; se correttamente notificato passare al punto 2, altrimenti procedere alle attività di notifica\n' +
+                          '2. Modificare il conto del lavoratore in base a quanto indicato in diffida\n' +
+                          '3. Verificare la proposta VIG nel quantum, nel periodo e nel codice fiscale del lavoratore\n' +
+                          '4. Confermare la proposta e contabilizzare il credito'
+                        }
+                        className={`${CLASSE_CAMPO} leading-relaxed`}
+                      />
+                      <div className="flex items-start gap-4 flex-wrap">
+                        <div className="flex-1 min-w-56">
+                          <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                            Come lo vedrà l’operatore
+                          </span>
+                          {passiAttivitaRecupero(procedura.testo).length === 0 ? (
+                            <span className="text-[11px] text-slate-400">
+                              Nessun passo: la posizione resterà senza procedura.
+                            </span>
+                          ) : (
+                            <ol className="list-decimal list-inside space-y-0.5 text-[11px] text-slate-700">
+                              {passiAttivitaRecupero(procedura.testo).map((p, i) => (
+                                <li key={i}>{p}</li>
+                              ))}
+                            </ol>
+                          )}
+                        </div>
+                        <span
+                          className={`text-[10px] ${
+                            procedura.testo.length > MASSIMO_CARATTERI_ATTIVITA_RECUPERO
+                              ? 'text-red-700 font-bold'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {procedura.testo.length} / {MASSIMO_CARATTERI_ATTIVITA_RECUPERO}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void salvaProcedura()}
+                            disabled={inCorso}
+                            className="flex items-center gap-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
+                          >
+                            <Save className="w-3.5 h-3.5" /> Salva procedura
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setProcedura(null)}
+                            className="px-3 py-2 text-[10px] font-bold uppercase text-slate-500"
+                          >
+                            Annulla
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>

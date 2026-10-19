@@ -28,6 +28,7 @@ import {
   type RiscontroFonte,
   type TitoloEnte,
 } from '@/lib/titoliEnte/titoli';
+import { normalizzaAttivitaRecupero, validaAttivitaRecupero } from '@/lib/titoliEnte/recupero';
 import {
   materiaSuggeritaPerDescrizione,
   normalizzaProposta,
@@ -52,6 +53,7 @@ function daRiga(r: Record<string, unknown>): TitoloEnte {
     riferimentoInterno: (r.riferimento_interno as string | null) ?? null,
     effettoCalcolo: (r.effetto_calcolo as TitoloEnte['effettoCalcolo']) ?? 'NESSUNO',
     note: (r.note as string | null) ?? null,
+    attivitaRecupero: (r.attivita_recupero as string | null) ?? null,
     riscontroNorma: (r.riscontro_norma as RiscontroFonte | null) ?? RISCONTRO_VUOTO,
     riscontroInterno: (r.riscontro_interno as RiscontroFonte | null) ?? RISCONTRO_VUOTO,
     materiaId: r.materia_id === null || r.materia_id === undefined ? null : Number(r.materia_id),
@@ -212,6 +214,8 @@ export async function salvaTitoloEnteAction(
     const nomeSchema = contesto.nomeSchema;
     const errore = validaTitolo(titolo);
     if (errore) return { success: false, error: errore };
+    const erroreAttivita = validaAttivitaRecupero(titolo.attivitaRecupero);
+    if (erroreAttivita) return { success: false, error: erroreAttivita };
     await assicuraTabelleParametriSpazio(nomeSchema);
 
     const cfg = await pool.query(
@@ -282,10 +286,13 @@ export async function salvaTitoloEnteAction(
     if (riscontroInterno.esito === 'CONFERMATO' && !riscontroInterno.confermatoDa)
       riscontroInterno.confermatoDa = chi;
 
+    // La procedura di recupero si salva con il titolo, ma non entra nel
+    // riscontro: è prassi dell'ente, non una fonte da verificare.
+    const attivitaRecupero = normalizzaAttivitaRecupero(titolo.attivitaRecupero);
     const r = await pool.query(
-      `INSERT INTO "${nomeSchema}".titoli_ente (codice, atto, presupposto_giuridico, riferimento_interno, effetto_calcolo, note, riscontro_norma, riscontro_interno, aggiornato_il)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
-       ON CONFLICT (codice) DO UPDATE SET atto = $2, presupposto_giuridico = $3, riferimento_interno = $4, effetto_calcolo = $5, note = $6, riscontro_norma = $7, riscontro_interno = $8, aggiornato_il = now()
+      `INSERT INTO "${nomeSchema}".titoli_ente (codice, atto, presupposto_giuridico, riferimento_interno, effetto_calcolo, note, riscontro_norma, riscontro_interno, attivita_recupero, aggiornato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+       ON CONFLICT (codice) DO UPDATE SET atto = $2, presupposto_giuridico = $3, riferimento_interno = $4, effetto_calcolo = $5, note = $6, riscontro_norma = $7, riscontro_interno = $8, attivita_recupero = $9, aggiornato_il = now()
        RETURNING *`,
       [
         titolo.codice.trim(),
@@ -296,11 +303,55 @@ export async function salvaTitoloEnteAction(
         titolo.note?.trim() || null,
         JSON.stringify(riscontroNorma),
         JSON.stringify(riscontroInterno),
+        attivitaRecupero,
       ]
     );
     return { success: true, titolo: daRiga(r.rows[0]) };
   } catch (error: unknown) {
     console.error('[salvaTitoloEnteAction]', error);
+    return {
+      success: false,
+      error: `Salvataggio non riuscito: ${(error as Error).message || error}`,
+    };
+  }
+}
+
+/**
+ * Salva SOLO la procedura di recupero di un codice. Azione separata dal
+ * salvataggio del titolo perché non deve passare dal riscontro sulle fonti
+ * (che riguarda presupposto, atto e riferimento interno) né dalla conferma
+ * richiesta quando un riscontro è ancora «da riscontrare»: scrivere i passi
+ * operativi non tocca la parte giuridica della riga.
+ */
+export async function salvaAttivitaRecuperoAction(
+  codiceSpazio: string,
+  titoloId: number,
+  testo: string | null
+): Promise<{ success: boolean; attivitaRecupero?: string | null; error?: string }> {
+  try {
+    const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
+    if (!contesto || contesto.modalita === 'OPERATORE')
+      return { success: false, error: 'Operazione riservata all’Admin di Spazio.' };
+    if (!Number.isInteger(titoloId) || titoloId <= 0)
+      return { success: false, error: 'Codice non valido.' };
+    const errore = validaAttivitaRecupero(testo);
+    if (errore) return { success: false, error: errore };
+    const normalizzato = normalizzaAttivitaRecupero(testo);
+    await assicuraTabelleParametriSpazio(contesto.nomeSchema);
+    const r = await pool.query(
+      `UPDATE "${contesto.nomeSchema}".titoli_ente
+          SET attivita_recupero = $2, aggiornato_il = now()
+        WHERE id = $1
+        RETURNING attivita_recupero`,
+      [titoloId, normalizzato]
+    );
+    if (r.rows.length === 0) return { success: false, error: 'Codice non trovato.' };
+    return {
+      success: true,
+      attivitaRecupero: (r.rows[0].attivita_recupero as string | null) ?? null,
+    };
+  } catch (error: unknown) {
+    console.error('[salvaAttivitaRecuperoAction]', error);
     return {
       success: false,
       error: `Salvataggio non riuscito: ${(error as Error).message || error}`,

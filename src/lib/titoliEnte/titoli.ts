@@ -41,6 +41,13 @@ export interface TitoloEnte {
    */
   effettoCalcolo: 'NESSUNO' | 'INTERROMPE_RITARDO' | 'ESCLUDE_DA_LETTERA_A';
   note: string | null;
+  /**
+   * La procedura che l'ente segue per recuperare questo credito (0.133.0):
+   * testo libero, un passo per riga. Non è un effetto sul calcolo — è il
+   * «come si incassa», che la fase successiva al triage mostra, partita per
+   * partita, all'operatore che la deve lavorare. null = non ancora scritta.
+   */
+  attivitaRecupero?: string | null;
   riscontroNorma: RiscontroFonte;
   riscontroInterno: RiscontroFonte;
   /** Materia in cui il codice cade (0.109.98); null = da assegnare. */

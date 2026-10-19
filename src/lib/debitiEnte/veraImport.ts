@@ -99,6 +99,9 @@ function indiceSanzioni(intestazioni: string[]): number {
  */
 export type AmbitoVera = 'INPS' | 'AGENTE_RISCOSSIONE';
 
+// ATTENZIONE: gli stessi criteri sul titolo sono ripetuti nell'UPDATE una
+// tantum di `assicuraTabelleVera` (src/db/provision.ts), che riclassifica le
+// righe salvate prima della 0.132.0. Se cambiano qui, vanno cambiati anche lì.
 export function eSezioneAgenteRiscossione(titolo: string, intestazioni: string[]): boolean {
   const t = normalizzaEtichetta(titolo);
   if (/agente della riscossione|crediti affidati|crediti presso adr|^adr\b/.test(t)) return true;

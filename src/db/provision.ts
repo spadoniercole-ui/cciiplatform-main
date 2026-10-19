@@ -869,6 +869,13 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS materia_id INTEGER`
   );
+  // Attività di recupero (0.133.0): la procedura che l'ente segue per
+  // incassare il credito di quel codice, scritta una volta nei Parametri e
+  // mostrata partita per partita nella fase successiva al triage. Testo
+  // libero: le procedure degli enti non stanno in un elenco chiuso di passi.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS attivita_recupero TEXT`
+  );
   // Esito dell'ultima ricerca (0.109.99): anche «nulla trovato» e' un esito, e va detto.
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.materie_ente ADD COLUMN IF NOT EXISTS esito_ricerca TEXT`
@@ -1916,9 +1923,32 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
   // AMBITO della riga: contributi INPS oppure crediti già affidati all'Agente
   // della Riscossione. Alimentano due lettere diverse dell'art. 25-novies e
   // non vanno sommati (vedi `TotaliVera` in debitiEnte/veraImport.ts).
+  //
+  // La colonna è nuova: le righe importate prima non la portano, e il DEFAULT
+  // 'INPS' metterebbe le cartelle nella base della lettera a). Al primo
+  // passaggio l'ambito si ricava dal titolo di sezione, con lo stesso
+  // criterio del parser; il riparto contributi/sanzioni invece non è
+  // ricostruibile senza il file, e resta NULL (si usa l'importo intero) fino
+  // al ricaricamento.
+  const ambitoPresente = await db.execute(sql`
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = ${nomeSchema}
+       AND table_name = 'debiti_vera'
+       AND column_name = 'ambito'`);
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS ambito TEXT NOT NULL DEFAULT 'INPS'`
   );
+  if (ambitoPresente.length === 0) {
+    await eseguiDdlTenant(sql`
+      UPDATE ${s}.debiti_vera
+         SET ambito = 'AGENTE_RISCOSSIONE'
+       WHERE ambito <> 'AGENTE_RISCOSSIONE'
+         AND (sezione ILIKE '%agente della riscossione%'
+           OR sezione ILIKE '%crediti affidati%'
+           OR sezione ILIKE '%crediti presso adr%'
+           OR sezione ~* '^adr($|[^[:alpha:]])'
+           OR voce ~* '^adr($|[^[:alpha:]])')`);
+  }
   // Riparto della riga: le sanzioni sono presunte e restano fuori dal test di
   // soglia, quindi l'importo da solo non basta più. NULL = il file non lo
   // espone (righe salvate prima di questa colonna comprese).
