@@ -1928,6 +1928,36 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
 }
 
 /**
+ * LAVORAZIONI per tipologia di debito — configurazione di spazio.
+ *
+ * Per ogni categoria di debito (le stesse `categorie_tipo_debito` con cui si
+ * classificano le posizioni) dice che cosa va fatto e a chi va chiesto. Non è
+ * una tabella di dati dell'azienda: è il ponte fra il file V.E.R.A. e le
+ * comunicazioni che l'operatore deve inviare ai colleghi.
+ *
+ * Idempotente. L'indice univoco evita che lo stesso binomio categoria +
+ * lavorazione venga configurato due volte (e quindi che la stessa posizione
+ * produca due richieste identiche).
+ */
+export async function assicuraTabellaLavorazioniTipoDebito(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.lavorazioni_tipo_debito (
+      id SERIAL PRIMARY KEY,
+      categoria TEXT NOT NULL,
+      lavorazione TEXT NOT NULL,
+      destinatario TEXT NOT NULL,
+      attivo BOOLEAN NOT NULL DEFAULT TRUE,
+      ordine INTEGER NOT NULL DEFAULT 0
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_lavorazioni_tipo_debito_unica
+        ON ${s}.lavorazioni_tipo_debito (categoria, lavorazione)`
+  );
+}
+
+/**
  * Cache dei dati ISTAT per settore (Dati di Settore) — GLOBALE (schema
  * public, non per tenant). Il dato è nazionale, identico per qualunque
  * azienda con lo stesso gruppo ATECO, di qualunque spazio: metterlo per

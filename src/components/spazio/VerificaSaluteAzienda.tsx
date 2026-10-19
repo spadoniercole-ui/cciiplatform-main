@@ -31,7 +31,17 @@ import {
 } from '@/lib/triage/riepilogoHtml';
 import { stampaHtml } from '@/lib/stampaTesto';
 import React, { useEffect, useState } from 'react';
-import { Stethoscope, Upload, Check, AlertTriangle, ArrowRight, Printer, Info } from 'lucide-react';
+import {
+  Stethoscope,
+  Upload,
+  Check,
+  AlertTriangle,
+  ArrowRight,
+  Printer,
+  Info,
+  Copy,
+  ClipboardList,
+} from 'lucide-react';
 import {
   estraiAnagraficaDaVisuraAction,
   type AnagraficaEstratta,
@@ -45,7 +55,7 @@ import {
   type RigaVerifica,
 } from '@/app/actions/aziendaInVerifica';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
-import { riconosciProspetto, leggiRuoli } from '@/lib/denunce/lettura';
+import { riconosciProspetto, leggiRuoli, type TipoProspetto } from '@/lib/denunce/lettura';
 import { accumulaFile, togliFile } from '@/lib/file/accumula';
 import type { RigaDebitoTriage } from '@/lib/debitiTriage/modello';
 import type { MappaturaProspetto } from '@/lib/debitiTriage/mappatura';
@@ -67,9 +77,25 @@ import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreen
 import { generaPreCompilazioneMinisterialeAction } from '@/app/actions/checklistMinisterialeAzienda';
 import { registraVisuraTriageAction } from '@/app/actions/visuraTriage';
 import { salvaAnalisiXbrlAziendaAction } from '@/app/actions/xbrlAzienda';
-import { analizzaVera, estraiRigheVera, ritardoDaVera } from '@/lib/debitiEnte/veraImport';
-import { sostituisciDebitiVeraAction } from '@/app/actions/posizioneVera';
-import { salvaValoriSoglieParzialeAction } from '@/app/actions/soglie25novies';
+import {
+  analizzaVera,
+  estraiRigheVera,
+  ritardoDaVera,
+  type RigaVera,
+} from '@/lib/debitiEnte/veraImport';
+import {
+  sostituisciDebitiVeraAction,
+  ottieniMappaturaTitoliVera,
+} from '@/app/actions/posizioneVera';
+import { ottieniCategorieTipoDebito } from '@/app/actions/categorieTipoDebito';
+import {
+  ottieniLavorazioniTipoDebito,
+  type LavorazioneTipoDebito,
+} from '@/app/actions/lavorazioniTipoDebito';
+import { componiComunicazioniVera, formattaImportoEuro } from '@/lib/lavorazioni/comunicazioni';
+import { salvaValoriSoglieParzialeAction, valutaSoglieAction } from '@/app/actions/soglie25novies';
+import { riepilogaSoglieTriage } from '@/lib/soglie25novies/triage';
+import type { EsitoSoglie } from '@/lib/soglie25novies/calcolo';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
 import { DebitiTriage } from '@/components/spazio/DebitiTriage';
 import type { Attenzione } from '@/lib/screening/indicatore';
@@ -162,6 +188,29 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
   const [documentiTriage, setDocumentiTriage] = useState<DocumentoTriage[]>([]);
   const [valoriTriage, setValoriTriage] = useState<ValoriTriage | null>(null);
   /**
+   * Esito delle soglie dell'art. 25-novies, calcolato a fine triage.
+   *
+   * È il secondo esito della verifica e vive prima del «Procedi»: un
+   * parametro oltre soglia non impedisce la presa in carico — la decisione
+   * resta all'operatore — ma non deve arrivare solo dentro una scheda che
+   * si apre se qualcuno la cerca.
+   */
+  const [esitoSoglie, setEsitoSoglie] = useState<EsitoSoglie | null>(null);
+  const [erroreSoglie, setErroreSoglie] = useState<string | null>(null);
+  /**
+   * Il V.E.R.A. è il presupposto del triage: senza, non si parte.
+   * `tipiProspetti` è il riconoscimento fatto da DebitiTriage sui file
+   * caricati; `haVera` guarda solo i file ancora presenti, così togliere il
+   * V.E.R.A. richiude il passaggio.
+   */
+  const [tipiProspetti, setTipiProspetti] = useState<Record<string, TipoProspetto>>({});
+  const [righeVera, setRigheVera] = useState<RigaVera[]>([]);
+  const [lavorazioni, setLavorazioni] = useState<LavorazioneTipoDebito[]>([]);
+  const [etichetteCategorie, setEtichetteCategorie] = useState<Record<string, string>>({});
+  const [erroreComunicazioni, setErroreComunicazioni] = useState<string | null>(null);
+  const [copiato, setCopiato] = useState<string | null>(null);
+  const [erroreCopia, setErroreCopia] = useState<string | null>(null);
+  /**
    * Data a cui la verifica è riferita.
    *
    * Non è un dettaglio di comodo: da questa data discendono TRE cose —
@@ -239,7 +288,36 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     if (!dati) return;
     setInCorso(true);
     setErrore(null);
+    setEsitoSoglie(null);
+    setErroreSoglie(null);
+    setRigheVera([]);
+    setLavorazioni([]);
+    setEtichetteCategorie({});
+    setErroreComunicazioni(null);
+    setCopiato(null);
+    setErroreCopia(null);
     try {
+      // ---- Presupposto: il V.E.R.A. --------------------------------------
+      // Non basta che il file sia nell'elenco: deve essere riconosciuto e
+      // leggibile. Il controllo si fa PRIMA di creare l'azienda, così un
+      // triage senza V.E.R.A. non lascia una pratica a metà.
+      const tipi = await Promise.all(fileProspetti.map((f) => riconosciProspetto(f)));
+      const indiceVera = tipi.indexOf('VERA');
+      if (indiceVera < 0) {
+        setErrore(
+          'Il file V.E.R.A. è obbligatorio: senza, il triage non parte. Caricalo tra i prospetti e attendi che compaia «Posizione V.E.R.A.».'
+        );
+        return;
+      }
+      setAvanzamento('Lettura del file V.E.R.A....');
+      let analisiVera: Awaited<ReturnType<typeof analizzaVera>>;
+      try {
+        analisiVera = await analizzaVera(fileProspetti[indiceVera]);
+      } catch (e) {
+        setErrore(`File V.E.R.A. non leggibile: ${String(e)}`);
+        return;
+      }
+
       const c = await creaAziendaInVerificaAction(nomeSchema, dati);
       if (!c.success || !c.aziendaId) {
         setErrore(c.error ?? 'Creazione non riuscita.');
@@ -273,6 +351,34 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       // elaborazione — invariata, e coperta dai test — riceve i file per
       // tipo come prima riceveva i campi fissi.
       const note: string[] = [];
+      // ---- Tipologie e lavorazioni per le comunicazioni -------------------
+      // Servono a dare un destinatario alle posizioni V.E.R.A. Se una delle
+      // letture fallisce il triage prosegue: le comunicazioni mancheranno,
+      // ma l'esito non si perde.
+      let mappaturaTitoli: Record<string, string> = {};
+      try {
+        const [mappa, lav, cat] = await Promise.all([
+          ottieniMappaturaTitoliVera(nomeSchema),
+          ottieniLavorazioniTipoDebito(nomeSchema),
+          ottieniCategorieTipoDebito(nomeSchema),
+        ]);
+        if (mappa.success) mappaturaTitoli = mappa.mappatura;
+        else
+          setErroreComunicazioni(
+            mappa.error ?? 'Mappatura delle sezioni V.E.R.A. non disponibile.'
+          );
+        if (lav.success) setLavorazioni(lav.lavorazioni);
+        else setErroreComunicazioni(lav.error ?? 'Lavorazioni non disponibili.');
+        if (cat.success) {
+          setEtichetteCategorie(
+            Object.fromEntries(cat.categorie.map((x) => [x.codice, x.etichetta]))
+          );
+        } else {
+          setErroreComunicazioni(cat.error ?? 'Categorie di debito non disponibili.');
+        }
+      } catch (e) {
+        setErroreComunicazioni(`Parametri delle comunicazioni non caricati: ${String(e)}.`);
+      }
       let fileVera: File | null = null;
       let fileDenunce: File | null = null;
       let fileDelegheDettaglio: File | null = null;
@@ -385,13 +491,13 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       if (fileVera) {
         setAvanzamento('Lettura della Posizione V.E.R.A....');
         try {
-          const analisi = await analizzaVera(fileVera);
-          ritardoVera = ritardoDaVera(analisi.sezioni, new Date(`${dataVerifica}T12:00:00Z`));
-          // Mappature vuote: in fase di triage non si chiede all'operatore di
-          // classificare titoli e trattamenti. Le righe non riconosciute
-          // restano tali e la classificazione fine si fa più avanti, nella
-          // scheda Posizione V.E.R.A., se la posizione viene presa in carico.
-          const { righe } = estraiRigheVera(analisi.sezioni, {}, {}, true);
+          ritardoVera = ritardoDaVera(analisiVera.sezioni, new Date(`${dataVerifica}T12:00:00Z`));
+          // In triage non si chiede di classificare i trattamenti, ma la
+          // mappatura delle sezioni già configurata si applica: è quella che
+          // dà una tipologia alle righe e permette di indirizzarle al
+          // collega giusto. Le sezioni non mappate restano senza categoria.
+          const { righe } = estraiRigheVera(analisiVera.sezioni, mappaturaTitoli, {}, true);
+          setRigheVera(righe);
           if (righe.length > 0) {
             const reg = await registraDocumentoOrigineAction(
               nomeSchema,
@@ -652,6 +758,20 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         // restava nel risultato scartato.
         setErrore(a.error ?? 'Indicatore non calcolato: causa non riportata dal server.');
       }
+
+      // ---- Soglie di segnalazione (art. 25-novies) ----------------------
+      // Stesso momento dell'indicatore, stesso oggetto: l'azienda appena
+      // confermata e i valori appena salvati. Un errore qui non annulla il
+      // triage — l'indicatore è già calcolato e registrato — ma non può
+      // restare muto, altrimenti l'assenza dell'esito sembrerebbe un esito.
+      setAvanzamento('Verifica delle soglie di segnalazione...');
+      try {
+        const s = await valutaSoglieAction(nomeSchema, c.aziendaId, tipoSpazio);
+        if (s.success && s.esito) setEsitoSoglie(s.esito);
+        else setErroreSoglie(s.error ?? 'Valutazione non riuscita per causa non riportata.');
+      } catch (e) {
+        setErroreSoglie(String(e));
+      }
       setFase('esito');
     } catch (e) {
       setErrore(String(e));
@@ -695,6 +815,15 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     setDati(null);
     setAttenzione(null);
     setAziendaId(null);
+    setEsitoSoglie(null);
+    setErroreSoglie(null);
+    setTipiProspetti({});
+    setRigheVera([]);
+    setLavorazioni([]);
+    setEtichetteCategorie({});
+    setErroreComunicazioni(null);
+    setCopiato(null);
+    setErroreCopia(null);
   };
 
   const stampaRiepilogo = () => {
@@ -828,6 +957,33 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     } finally {
       setInCorso(false);
       setAvanzamento(null);
+    }
+  };
+
+  const riepilogoSoglie = esitoSoglie ? riepilogaSoglieTriage(esitoSoglie) : null;
+
+  // Il V.E.R.A. è presente solo se il file che lo rappresenta è ancora
+  // nell'elenco: toglierlo richiude il passaggio alla conferma.
+  const haVera = fileProspetti.some((f) => tipiProspetti[f.name] === 'VERA');
+
+  const comunicazioni = componiComunicazioniVera({
+    azienda: dati?.ragioneSociale?.trim() || 'Azienda',
+    dataVerifica,
+    righe: righeVera,
+    lavorazioni,
+    etichette: etichetteCategorie,
+  });
+
+  const copiaTesto = async (chiave: string, testo: string) => {
+    setErroreCopia(null);
+    try {
+      await navigator.clipboard.writeText(testo);
+      setCopiato(chiave);
+      window.setTimeout(() => {
+        setCopiato((prev) => (prev === chiave ? null : prev));
+      }, 2000);
+    } catch {
+      setErroreCopia('Copia non riuscita: seleziona il testo e copialo a mano.');
     }
   };
 
@@ -1009,6 +1165,18 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               </p>
             </div>
 
+            {!haVera && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-1">
+                <p className="text-[11px] font-bold text-amber-900">
+                  Il file V.E.R.A. è obbligatorio
+                </p>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Senza il V.E.R.A. il triage non parte: caricalo tra i prospetti qui sotto e
+                  attendi che compaia «Posizione V.E.R.A.» accanto al nome del file.
+                </p>
+              </div>
+            )}
+
             <div className="border-t border-slate-100 pt-4">
               <DebitiTriage
                 nomeSchema={nomeSchema}
@@ -1018,6 +1186,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                 onProspetti={setFileProspetti}
                 onTogliProspetto={(f) => setFileProspetti((prev) => togliFile(prev, f))}
                 onRighe={setRigheDebiti}
+                onTipi={setTipiProspetti}
                 onConflitto={setConflittoAperto}
                 onScelte={setScelteFonti}
                 onStruttura={(st) => setStruttureDaSalvare((prev) => [...prev, st])}
@@ -1068,7 +1237,12 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             </button>
             <button
               onClick={() => void confermaEValuta()}
-              disabled={inCorso || !dati.ragioneSociale || conflittoAperto}
+              disabled={inCorso || !dati.ragioneSociale || conflittoAperto || !haVera}
+              title={
+                haVera
+                  ? undefined
+                  : 'Carica il file V.E.R.A.: è obbligatorio per eseguire il triage.'
+              }
               className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-800 disabled:bg-slate-300"
             >
               <Check className="w-3.5 h-3.5" />
@@ -1212,6 +1386,182 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             </p>
           )}
 
+          {riepilogoSoglie && (
+            <div
+              className={`rounded-xl border p-5 space-y-2 ${
+                riepilogoSoglie.stato === 'superate'
+                  ? 'border-amber-300 bg-amber-50'
+                  : 'border-slate-200 bg-white'
+              }`}
+            >
+              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                Soglie di segnalazione (art. 25-novies)
+              </h3>
+              <p
+                className={`text-xs font-bold ${
+                  riepilogoSoglie.stato === 'superate' ? 'text-amber-900' : 'text-slate-700'
+                }`}
+              >
+                {riepilogoSoglie.titolo}
+              </p>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                {riepilogoSoglie.dettaglio}
+              </p>
+              {riepilogoSoglie.superate.length > 0 && (
+                <ul className="space-y-1">
+                  {riepilogoSoglie.superate.map((r) => (
+                    <li
+                      key={`${r.ente}-${r.ambito}`}
+                      className="flex gap-2 text-[11px] leading-relaxed text-amber-900"
+                    >
+                      <span className="shrink-0 text-amber-500">—</span>
+                      <span>
+                        <span className="font-bold">{r.ambito}</span>: {r.valore}
+                        {r.esposizione !== null && (
+                          <>
+                            {' '}
+                            — importo confrontato{' '}
+                            {Math.round(r.esposizione).toLocaleString('it-IT')} €
+                          </>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {aziendaId && (
+                <a
+                  href={`/spazio/${codice}/aziende/${aziendaId}/posizione-ente?scheda=soglie`}
+                  className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
+                >
+                  Apri le soglie di segnalazione <ArrowRight className="w-3 h-3" />
+                </a>
+              )}
+            </div>
+          )}
+
+          {erroreSoglie && (
+            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+              {`Soglie di segnalazione non valutate: ${erroreSoglie} Il triage resta valido; le soglie si possono verificare dalla scheda dell’azienda.`}
+            </p>
+          )}
+
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-slate-500" />
+              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                Comunicazioni ai colleghi
+              </h3>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              Preparate dai dati del file V.E.R.A. e dalle lavorazioni configurate. Non vengono
+              inviate: copia il testo e invialo tu al collega che se ne occupa.
+            </p>
+
+            {erroreComunicazioni && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+                {`${erroreComunicazioni} Le comunicazioni non sono state preparate; il triage resta valido.`}
+              </p>
+            )}
+
+            {comunicazioni.comunicazioni.length === 0 ? (
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                {erroreComunicazioni
+                  ? 'Nessuna comunicazione preparata: mancano i parametri necessari.'
+                  : lavorazioni.length === 0
+                    ? 'Nessuna lavorazione configurata: aggiungila nei Parametri di Spazio per preparare le comunicazioni.'
+                    : 'Nessuna posizione V.E.R.A. riconducibile a una lavorazione attiva.'}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {comunicazioni.comunicazioni.map((c) => {
+                  const chiave = c.destinatario;
+                  return (
+                    <details key={chiave} className="border border-slate-200 rounded-lg">
+                      <summary className="cursor-pointer p-3 flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-slate-900">{c.destinatario}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {c.righe} {c.righe === 1 ? 'posizione' : 'posizioni'} ·{' '}
+                          {formattaImportoEuro(c.totale)}
+                        </span>
+                      </summary>
+                      <div className="border-t border-slate-100 p-3 space-y-2">
+                        <p className="text-[11px] text-slate-700">
+                          <span className="font-bold">Oggetto:</span> {c.oggetto}
+                        </p>
+                        <pre className="whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-200 p-3 text-[11px] leading-relaxed text-slate-800 font-sans">
+                          {c.corpo}
+                        </pre>
+                        <button
+                          type="button"
+                          onClick={() => void copiaTesto(chiave, c.corpo)}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50"
+                        >
+                          {copiato === chiave ? (
+                            <Check className="w-3.5 h-3.5" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                          {copiato === chiave ? 'Copiato' : 'Copia testo'}
+                        </button>
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            )}
+
+            {comunicazioni.categorieSenzaLavorazione.length > 0 && (
+              <div className="border-t border-slate-100 pt-3 space-y-1">
+                <p className="text-[11px] font-bold text-amber-800">Tipologie senza lavorazione</p>
+                <ul className="space-y-1">
+                  {comunicazioni.categorieSenzaLavorazione.map((c) => (
+                    <li
+                      key={c.categoria}
+                      className="flex gap-2 text-[11px] leading-relaxed text-amber-800"
+                    >
+                      <span className="shrink-0 text-amber-500">—</span>
+                      <span>
+                        {c.etichetta}: {c.righe} {c.righe === 1 ? 'posizione' : 'posizioni'},{' '}
+                        {formattaImportoEuro(c.totale)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  Restano fuori dalle comunicazioni finché non configuri la lavorazione.
+                </p>
+              </div>
+            )}
+
+            {comunicazioni.righeSenzaCategoria > 0 && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+                {`${comunicazioni.righeSenzaCategoria} ${
+                  comunicazioni.righeSenzaCategoria === 1
+                    ? 'posizione V.E.R.A. non ha'
+                    : 'posizioni V.E.R.A. non hanno'
+                } una categoria: le sezioni non sono mappate e restano fuori dalle comunicazioni.`}{' '}
+                {tipoSpazio === 'ENTE' && aziendaId && (
+                  <a
+                    href={`/spazio/${codice}/aziende/${aziendaId}/posizione-ente?scheda=vera`}
+                    className="font-bold text-sky-700 hover:underline"
+                  >
+                    Mappa le sezioni in Posizione V.E.R.A.
+                  </a>
+                )}
+              </p>
+            )}
+
+            {erroreCopia && <p className="text-[11px] text-red-700">{erroreCopia}</p>}
+
+            <a
+              href={`/spazio/${codice}/parametri/lavorazioni`}
+              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
+            >
+              Configura le lavorazioni <ArrowRight className="w-3 h-3" />
+            </a>
+          </div>
+
           <div className="flex justify-end">
             <button
               type="button"
@@ -1276,6 +1626,15 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                   setAttenzione(null);
                   setAziendaId(null);
                   setNonTrovati([]);
+                  setEsitoSoglie(null);
+                  setErroreSoglie(null);
+                  setTipiProspetti({});
+                  setRigheVera([]);
+                  setLavorazioni([]);
+                  setEtichetteCategorie({});
+                  setErroreComunicazioni(null);
+                  setCopiato(null);
+                  setErroreCopia(null);
                 }}
                 className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50"
               >

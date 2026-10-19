@@ -36,6 +36,12 @@ interface Props {
   aziendaId: number;
   nomeAzienda: string;
   tipoSpazio: 'ENTE' | 'NON_ENTE';
+  /**
+   * Scheda con cui aprire il pannello, quando si arriva da un collegamento
+   * diretto (es. l'esito del triage che rimanda alle soglie). Omessa = la
+   * prima scheda visibile per quel percorso.
+   */
+  schedaIniziale?: 'anagrafica' | 'vera' | 'soglie';
 }
 
 type Scheda = 'anagrafica' | 'vera' | 'soglie';
@@ -80,10 +86,22 @@ function anagraficaCompilata(dati: AnagraficaEnte): boolean {
   ].some((c) => c && c.trim());
 }
 
-export function PosizioneEnteScenario({ nomeSchema, aziendaId, nomeAzienda, tipoSpazio }: Props) {
+export function PosizioneEnteScenario({
+  nomeSchema,
+  aziendaId,
+  nomeAzienda,
+  tipoSpazio,
+  schedaIniziale,
+}: Props) {
   const eEnte = tipoSpazio === 'ENTE';
   const schedeVisibili = SCHEDE.filter((x) => !x.soloEnte || eEnte);
-  const [scheda, setScheda] = useState<Scheda>(eEnte ? 'anagrafica' : 'soglie');
+  const [scheda, setScheda] = useState<Scheda>(
+    schedaIniziale && schedeVisibili.some((x) => x.id === schedaIniziale)
+      ? schedaIniziale
+      : eEnte
+        ? 'anagrafica'
+        : 'soglie'
+  );
   const [etichette, setEtichette] = useState<
     { campo: number; etichetta: string; attivo: boolean }[]
   >([]);

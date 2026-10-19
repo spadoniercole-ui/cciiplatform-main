@@ -10,10 +10,15 @@ import { PosizioneEnteScenario } from '@/components/spazio/PosizioneEnteScenario
 // nascosto dietro il percorso di un singolo scenario.
 export default async function PosizioneEnteAziendaPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ codice: string; aziendaId: string }>;
+  searchParams: Promise<{ scheda?: string }>;
 }) {
   const { codice, aziendaId } = await params;
+  // Solo la scheda delle soglie si può aprire dall'esterno: è quella a cui
+  // rimanda l'esito del triage quando un parametro supera la soglia.
+  const { scheda } = await searchParams;
   const contesto = await ottieniContestoAccessoSpazio(codice);
   if (!contesto) redirect('/');
   if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
@@ -40,6 +45,7 @@ export default async function PosizioneEnteAziendaPage({
       aziendaId={Number(aziendaId)}
       nomeAzienda={risultato.azienda!.ragioneSociale}
       tipoSpazio={contesto.tipoSpazio}
+      schedaIniziale={scheda === 'soglie' ? 'soglie' : undefined}
     />
   );
 }

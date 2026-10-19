@@ -29,7 +29,9 @@ const DELEGA = /^\s*return (\w+)\(/;
 
 const errori = [];
 for (const nome of fs.readdirSync(CARTELLA).filter((f) => f.endsWith('.ts'))) {
-  const testo = fs.readFileSync(path.join(CARTELLA, nome), 'utf8');
+  // Su Windows i file possono essere in CRLF: senza normalizzare, la ricerca
+  // del corpo `{\n` non trova nulla e TUTTE le azioni risultano scoperte.
+  const testo = fs.readFileSync(path.join(CARTELLA, nome), 'utf8').replace(/\r\n/g, '\n');
   if (!/^'use server';/m.test(testo)) continue;
   const re = /^export async function (\w+)\(/gm;
   let m;

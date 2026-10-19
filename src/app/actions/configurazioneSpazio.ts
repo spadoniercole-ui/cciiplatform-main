@@ -11,6 +11,7 @@ import {
   assicuraTabellaCategorieTipoDebito,
   assicuraTabellaChecklistModelli,
   assicuraTabellaDebitiEnte,
+  assicuraTabellaLavorazioniTipoDebito,
   assicuraTabellaTipoDebitoConfig,
   assicuraTabellaTracciatiDebitiEnte,
   assicuraTabelleAnagraficaEnte,
@@ -36,6 +37,7 @@ async function assicuraTutte(nomeSchema: string) {
   await assicuraTabellaTipoDebitoConfig(nomeSchema);
   await assicuraTabelleAnagraficaEnte(nomeSchema);
   await assicuraTabellaCategorieTipoDebito(nomeSchema);
+  await assicuraTabellaLavorazioniTipoDebito(nomeSchema);
   await assicuraTabellaDebitiEnte(nomeSchema);
   await assicuraTabellaTracciatiDebitiEnte(nomeSchema);
   await assicuraTabelleVera(nomeSchema);

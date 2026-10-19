@@ -64,6 +64,11 @@ interface Props {
    * l'azienda esistesse restavano solo sullo schermo.
    */
   onRighe?: (righe: RigaDebitoTriage[]) => void;
+  /**
+   * Tipi riconosciuti dei file caricati. La pagina li usa per sapere se il
+   * V.E.R.A. è presente: senza quel file il triage non parte.
+   */
+  onTipi?: (tipi: Record<string, TipoProspetto>) => void;
   /** Strutture da ricordare, salvate dalla pagina quando l'azienda esiste. */
   onStruttura?: (s: {
     ente: string;
@@ -106,6 +111,7 @@ export function DebitiTriage({
   onConflitto,
   onScelte,
   onRighe,
+  onTipi,
   onStruttura,
 }: Props) {
   // Il prospetto in mappatura in questo momento, con il suo foglio già letto.
@@ -118,6 +124,13 @@ export function DebitiTriage({
   const [mappati, setMappati] = useState<FileMappato[]>([]);
   const [scelte, setScelte] = useState<Record<string, string>>({});
   const [tipi, setTipi] = useState<Record<string, TipoProspetto>>({});
+
+  // Il riconoscimento resta la fonte unica anche per la pagina: il V.E.R.A.
+  // è obbligatorio, e la pagina non deve rifare da sola la stessa lettura
+  // per sapere se c'è.
+  useEffect(() => {
+    onTipi?.(tipi);
+  }, [tipi, onTipi]);
   const anni = anniDelTriage(new Date(`${dataVerifica}T12:00:00Z`));
   const [haProspetti, setHaProspetti] = useState<boolean | null>(null);
   const [righe, setRighe] = useState<RigaDebitoTriage[]>([vuota()]);

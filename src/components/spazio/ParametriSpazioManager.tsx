@@ -21,6 +21,7 @@ import {
   History,
   Gauge,
   Printer,
+  ClipboardList,
 } from 'lucide-react';
 import { ConfigurazioneSpazioFile } from '@/components/spazio/ConfigurazioneSpazioFile';
 
@@ -91,6 +92,13 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
       titolo: 'Soglie di segnalazione (art. 25-novies)',
       descrizione:
         'Gli importi di legge oltre cui scatta la segnalazione. Modificabili perché una riforma non imponga un aggiornamento del programma; il valore di legge resta sempre a vista.',
+    },
+    {
+      href: `/spazio/${codice}/parametri/lavorazioni`,
+      icon: ClipboardList,
+      titolo: 'Lavorazioni per tipo di debito',
+      descrizione:
+        'Per ogni categoria di debito, la lavorazione da svolgere e il collega che la riceve. Alimenta le comunicazioni preparate dal triage sul file V.E.R.A.',
     },
     {
       href: `/spazio/${codice}/parametri/tab-xbrl`,

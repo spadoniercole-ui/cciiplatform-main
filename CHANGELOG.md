@@ -26,6 +26,51 @@ il terzo per correzioni.
 
 ---
 
+## 0.131.0 — 2026-10-19
+
+**Triage: V.E.R.A. obbligatorio e comunicazioni ai colleghi dalle lavorazioni**
+
+- Il file V.E.R.A. diventa presupposto del triage: senza un file riconosciuto e
+  leggibile «Conferma e valuta» non parte. Il controllo è ripetuto prima di
+  creare l'azienda, non solo disabilitando il pulsante, così un triage senza
+  V.E.R.A. non lascia una pratica a metà.
+- Nuova tabella di spazio «Lavorazioni per tipo di debito» (Parametri ›
+  Lavorazioni): per ogni categoria di debito, la lavorazione da svolgere e il
+  collega che la riceve.
+- Nell'esito del triage vengono preparate comunicazioni standard, una per
+  collega, con oggetto e testo pronti da copiare. Il testo è composto dai dati
+  V.E.R.A. (sezione, natura, periodo, importo, stato, trattamento) e dalla
+  lavorazione configurata; nessun invio automatico.
+- Le posizioni con tipologia senza lavorazione e le sezioni V.E.R.A. non
+  mappate sono dichiarate a parte, non attribuite d'ufficio.
+- La mappatura delle sezioni V.E.R.A. già configurata viene applicata anche in
+  triage, così le righe salvate hanno la categoria quando esiste.
+- Nuova logica pura componiComunicazioniVera (src/lib/lavorazioni/comunicazioni.ts)
+  con i suoi test; la tabella entra nella configurazione esportabile dello spazio.
+
+## 0.130.0 — 2026-10-19
+
+**Triage: le soglie di segnalazione entrano nell'esito, prima della presa in carico**
+
+- Alla fine della Verifica salute azienda, dopo l'indicatore di attenzione e
+  prima di «Procedi con questa azienda», si valutano le soglie dell'art.
+  25-novies sui valori appena salvati dal triage (`valutaSoglieAction`). Prima
+  quel controllo esisteva solo nella scheda «Soglie di segnalazione», che si
+  apre se qualcuno la cerca.
+- L'esito distingue quattro situazioni: almeno un parametro oltre soglia,
+  nessun superamento, soglie applicabili ma non determinabili per dati
+  mancanti, nessuna soglia applicabile (es. forma giuridica non riconosciuta).
+  Un superamento resta un fatto anche quando un'altra riga non è calcolabile.
+- Il testo non parla di «segnalazione dovuta»: il requisito del ritardo di
+  oltre 90 giorni va accertato a parte, e la decisione resta all'ente.
+- Il superamento **non** blocca «Procedi»: la decisione resta all'operatore.
+  Il collegamento nell'esito apre direttamente la scheda «Soglie di
+  segnalazione» (`?scheda=soglie`) invece di lasciarla da cercare.
+- Se la valutazione fallisce, il triage resta valido e il motivo è dichiarato
+  a schermo, non taciuto.
+- Nuova logica pura `riepilogaSoglieTriage` (`src/lib/soglie25novies/triage.ts`)
+  con i suoi test.
+
 ## 0.69.0 — 2026-08-05 (centoduesima consegna)
 
 **Screening dell'Azienda — release di prova, dal disegno discusso alla prima versione testabile**
