@@ -3,6 +3,7 @@ import {
   interpretaRiscontro,
   titoloPerCodice,
   validaTitolo,
+  vociGiuridicheCambiate,
   RISCONTRO_VUOTO,
   type TitoloEnte,
 } from './titoli';
@@ -31,6 +32,49 @@ const titoli: TitoloEnte[] = [
     riscontroInterno: RISCONTRO_VUOTO,
   },
 ];
+
+describe('riscontro: cosa lo fa ripartire', () => {
+  const salvato = {
+    atto: 'REGOLARIZZAZIONE SPONTANEA',
+    presupposto_giuridico: 'Art. 2, comma 18, legge 8 agosto 1995, n. 335',
+    riferimento_interno: 'messaggio 4973/2016',
+  };
+  const titolo = {
+    atto: 'REGOLARIZZAZIONE SPONTANEA',
+    presuppostoGiuridico: 'Art. 2, comma 18, legge 8 agosto 1995, n. 335',
+    riferimentoInterno: 'messaggio 4973/2016',
+  };
+
+  it('la sola procedura di recupero non richiede un nuovo riscontro', () => {
+    // La procedura non entra nel confronto: non è nemmeno un parametro.
+    expect(vociGiuridicheCambiate(salvato, titolo)).toBe(false);
+  });
+
+  it('cambiare atto, presupposto o riferimento lo richiede', () => {
+    expect(vociGiuridicheCambiate(salvato, { ...titolo, atto: 'ALTRO ATTO' })).toBe(true);
+    expect(
+      vociGiuridicheCambiate(salvato, { ...titolo, presuppostoGiuridico: 'Art. 2, comma 19' })
+    ).toBe(true);
+    expect(
+      vociGiuridicheCambiate(salvato, { ...titolo, riferimentoInterno: 'circolare 1/2026' })
+    ).toBe(true);
+  });
+
+  it('la prima volta c’è sempre da riscontrare', () => {
+    expect(vociGiuridicheCambiate(null, titolo)).toBe(true);
+    expect(vociGiuridicheCambiate(undefined, titolo)).toBe(true);
+  });
+
+  it('spazi ai bordi e riferimento vuoto non contano come modifiche', () => {
+    expect(
+      vociGiuridicheCambiate(
+        { ...salvato, riferimento_interno: null },
+        { ...titolo, riferimentoInterno: '  ' }
+      )
+    ).toBe(false);
+    expect(vociGiuridicheCambiate(salvato, { ...titolo, atto: `  ${titolo.atto}  ` })).toBe(false);
+  });
+});
 
 describe('titoli di credito dell’ente', () => {
   it('il codice dice il titolo e basta: nessun effetto sul calcolo', () => {

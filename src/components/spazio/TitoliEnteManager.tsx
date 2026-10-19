@@ -168,6 +168,21 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
     }
   };
 
+  // Solo la procedura (o le note) sono da salvare? Allora il riscontro sulle
+  // fonti non c'entra: si salva e basta. Il server fa lo stesso controllo sui
+  // dati, così la decisione non dipende da quello che manda il browser.
+  const soloTesto = (() => {
+    if (!inModifica?.id) return false;
+    const salvato = titoli.find((t) => t.id === inModifica.id);
+    if (!salvato) return false;
+    return (
+      salvato.codice === inModifica.codice &&
+      salvato.atto === inModifica.atto &&
+      salvato.presuppostoGiuridico === inModifica.presuppostoGiuridico &&
+      (salvato.riferimentoInterno ?? '') === (inModifica.riferimentoInterno ?? '')
+    );
+  })();
+
   const salva = async (conferma = false) => {
     if (!inModifica) return;
     setInCorso(true);
@@ -375,6 +390,9 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                   Come lo vedrà l’operatore
                 </span>
                 <AnteprimaPassi testo={inModifica.attivitaRecupero ?? ''} />
+                <span className="block text-[10px] text-slate-500 mt-1">
+                  La procedura non richiede riscontro normativo: si salva così com’è.
+                </span>
               </div>
               <span
                 className={`text-[10px] ${
@@ -401,7 +419,13 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
               className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
             >
               <Save className="w-3.5 h-3.5" />{' '}
-              {inCorso ? 'Riscontro sulle fonti ufficiali in corso…' : 'Salva e riscontra'}
+              {inCorso
+                ? soloTesto
+                  ? 'Salvataggio…'
+                  : 'Riscontro sulle fonti ufficiali in corso…'
+                : soloTesto
+                  ? 'Salva'
+                  : 'Salva e riscontra'}
             </button>
             <button
               type="button"
@@ -414,7 +438,7 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
             >
               Annulla
             </button>
-            {inCorso && (
+            {inCorso && !soloTesto && (
               <span className="text-[11px] text-slate-500">
                 Può richiedere fino a un minuto: la ricerca è limitata a Gazzetta Ufficiale,
                 Normattiva e al sito dell’ente.

@@ -80,6 +80,35 @@ export function validaTitolo(t: Partial<TitoloEnte>): string | null {
   return null;
 }
 
+/**
+ * Che cosa il riscontro sulle fonti riguarda davvero: atto o flusso, presupposto
+ * giuridico, riferimento interno. La procedura di recupero e le note dell'ente
+ * NON contano — sono prassi, non fonti da verificare — e questo è il motivo per
+ * cui salvare la sola procedura non deve rilanciare la ricerca né chiedere la
+ * conferma su un «da riscontrare» già archiviato.
+ *
+ * Prima volta (nessun precedente): sì, c'è qualcosa da riscontrare.
+ */
+export function vociGiuridicheCambiate(
+  precedente:
+    | {
+        atto?: string | null;
+        presupposto_giuridico?: string | null;
+        riferimento_interno?: string | null;
+      }
+    | null
+    | undefined,
+  titolo: Pick<TitoloEnte, 'atto' | 'presuppostoGiuridico' | 'riferimentoInterno'>
+): boolean {
+  if (!precedente) return true;
+  return (
+    String(precedente.atto ?? '') !== titolo.atto.trim() ||
+    String(precedente.presupposto_giuridico ?? '') !== titolo.presuppostoGiuridico.trim() ||
+    ((precedente.riferimento_interno as string | null) ?? null) !==
+      (titolo.riferimentoInterno?.trim() || null)
+  );
+}
+
 /** Trova il titolo di una partita dal suo codice (i tracciati portano codici anche con zeri o spazi). */
 export function titoloPerCodice(
   titoli: TitoloEnte[],

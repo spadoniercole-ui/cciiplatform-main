@@ -26,6 +26,24 @@ il terzo per correzioni.
 
 ---
 
+## 0.133.2 — 2026-10-19
+
+**Titoli di credito: salvare la procedura non riapre il riscontro**
+
+- Il campo «Attività di recupero» non ha bisogno di riscontro normativo. Il
+  salvataggio della scheda riesegue la ricerca sulle fonti solo quando cambia
+  davvero una delle voci che la riguardano — atto o flusso, presupposto
+  giuridico, riferimento interno. Se cambia soltanto la procedura (o le note)
+  si salva e basta: nessuna ricerca, nessuna richiesta di conferma.
+- Sparisce il fastidio segnalato: una riga con un riferimento «da
+  riscontrare» non chiede più il permesso a ogni salvataggio della procedura.
+  L’esito già archiviato resta com’è, e un contrasto già archiviato non
+  impedisce di correggere il testo.
+- Il pulsante dice quello che fa: «Salva» quando c’è solo testo da salvare,
+  «Salva e riscontra» quando cambia la parte giuridica; l’avviso sul minuto di
+  attesa compare solo nel secondo caso. La decisione non dipende dal browser:
+  il server confronta i dati salvati prima di qualunque chiamata all’AI.
+
 ## 0.133.1 — 2026-10-19
 
 **Titoli di credito: il campo della procedura anche nella scheda del codice**

@@ -25,6 +25,7 @@ import {
   promptRiscontroInterno,
   promptRiscontroNorma,
   validaTitolo,
+  vociGiuridicheCambiate,
   type RiscontroFonte,
   type TitoloEnte,
 } from '@/lib/titoliEnte/titoli';
@@ -228,31 +229,31 @@ export async function salvaTitoloEnteAction(
       : null;
     const chi = contesto.email ?? contesto.modalita;
 
-    // Riscontro solo su cio' che e' cambiato: un riscontro confermato resta.
+    // Che cosa è cambiato della parte che il riscontro riguarda: atto,
+    // presupposto e riferimento interno. La procedura di recupero e le note
+    // non ci sono — sono prassi dell'ente, non fonti da verificare — e il
+    // riscontro non si riesegue su una riga già riscontrata. Se il resto è
+    // identico, salvare basta: nessuna ricerca, nessuna conferma, e il
+    // «da riscontrare» già presente resta com'è invece di tornare a chiedere
+    // il permesso a ogni salvataggio della procedura.
+    const giuridicoCambiato = vociGiuridicheCambiate(precedente, titolo);
     let riscontroNorma: RiscontroFonte = precedente?.riscontro_norma ?? RISCONTRO_VUOTO;
+    let normaRicalcolata = false;
     if (titolo.presuppostoGiuridico.trim()) {
-      if (
-        !precedente ||
-        precedente.presupposto_giuridico !== titolo.presuppostoGiuridico ||
-        precedente.atto !== titolo.atto ||
-        riscontroNorma.esito === 'NON_ESEGUITO'
-      ) {
+      if (giuridicoCambiato) {
         riscontroNorma = await riscontraSuFonti(
           promptRiscontroNorma(titolo.presuppostoGiuridico, titolo.atto),
           DOMINI_NORMA
         );
+        normaRicalcolata = true;
       }
     } else {
       riscontroNorma = RISCONTRO_VUOTO;
     }
     let riscontroInterno: RiscontroFonte = precedente?.riscontro_interno ?? RISCONTRO_VUOTO;
+    let internoRicalcolato = false;
     if (titolo.riferimentoInterno?.trim() && dominioEnte) {
-      if (
-        !precedente ||
-        precedente.riferimento_interno !== titolo.riferimentoInterno ||
-        precedente.presupposto_giuridico !== titolo.presuppostoGiuridico ||
-        riscontroInterno.esito === 'NON_ESEGUITO'
-      ) {
+      if (giuridicoCambiato) {
         riscontroInterno = await riscontraSuFonti(
           promptRiscontroInterno(
             titolo.riferimentoInterno,
@@ -261,13 +262,19 @@ export async function salvaTitoloEnteAction(
           ),
           [dominioEnte]
         );
+        internoRicalcolato = true;
       }
     } else {
       riscontroInterno = RISCONTRO_VUOTO;
     }
 
     const proposto: TitoloEnte = { ...titolo, riscontroNorma, riscontroInterno };
-    if (riscontroNorma.esito === 'IN_CONTRASTO' || riscontroInterno.esito === 'IN_CONTRASTO') {
+    // Blocca solo un contrasto TROVATO ADESSO: un esito già archiviato non
+    // impedisce di correggere la procedura.
+    if (
+      (normaRicalcolata && riscontroNorma.esito === 'IN_CONTRASTO') ||
+      (internoRicalcolato && riscontroInterno.esito === 'IN_CONTRASTO')
+    ) {
       return {
         success: false,
         bloccato: true,
@@ -277,7 +284,8 @@ export async function salvaTitoloEnteAction(
       };
     }
     const daConfermare =
-      riscontroNorma.esito === 'NON_VERIFICABILE' || riscontroInterno.esito === 'NON_VERIFICABILE';
+      (normaRicalcolata && riscontroNorma.esito === 'NON_VERIFICABILE') ||
+      (internoRicalcolato && riscontroInterno.esito === 'NON_VERIFICABILE');
     if (daConfermare && !opzioni.confermaNonVerificabile) {
       return { success: false, richiedeConferma: true, titolo: proposto };
     }
