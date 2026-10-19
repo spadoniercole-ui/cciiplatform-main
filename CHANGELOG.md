@@ -26,6 +26,20 @@ il terzo per correzioni.
 
 ---
 
+## 0.133.1 — 2026-10-19
+
+**Titoli di credito: il campo della procedura anche nella scheda del codice**
+
+- La colonna «Attività di recupero» e il pulsante «Attività» c’erano, ma chi
+  apriva «Modifica» su un codice non trovava dove scrivere i passi: la scheda
+  mostrava solo codice, atto e note. Ora contiene la casella **Attività di
+  recupero — un passo per riga**, con l’anteprima numerata di come la vedrà
+  l’operatore e il contatore dei caratteri; si salva con «Salva e riscontra»
+  insieme al resto della riga.
+- L’editor rapido «Attività» in tabella resta, per completare più codici di
+  seguito senza aprire ogni scheda. Scheda ed editor condividono lo stesso
+  componente di anteprima, così la sequenza mostrata è identica.
+
 ## 0.133.0 — 2026-10-19
 
 **Titoli di credito: la procedura di recupero accanto al titolo**

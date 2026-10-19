@@ -89,6 +89,24 @@ function Esito({ r, etichetta }: { r: RiscontroFonte; etichetta: string }) {
   );
 }
 
+/** L'elenco numerato che vedrà l'operatore: lo stesso testo, letto una volta sola. */
+function AnteprimaPassi({ testo }: { testo: string }) {
+  const passi = passiAttivitaRecupero(testo);
+  if (passi.length === 0)
+    return (
+      <span className="text-[11px] text-slate-400">
+        Nessun passo: la posizione resterà senza procedura.
+      </span>
+    );
+  return (
+    <ol className="list-decimal list-inside space-y-0.5 text-[11px] text-slate-700">
+      {passi.map((p, i) => (
+        <li key={i}>{p}</li>
+      ))}
+    </ol>
+  );
+}
+
 const NUOVO: TitoloEnte = {
   id: null,
   codice: '',
@@ -335,6 +353,40 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
               />
             </div>
           </div>
+          <div>
+            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+              Attività di recupero — un passo per riga
+            </label>
+            <textarea
+              value={inModifica.attivitaRecupero ?? ''}
+              onChange={(e) => setInModifica({ ...inModifica, attivitaRecupero: e.target.value })}
+              rows={7}
+              placeholder={
+                '1. Verificare la notifica del provvedimento; se correttamente notificato passare al punto 2, altrimenti procedere alle attività di notifica\n' +
+                '2. Modificare il conto del lavoratore in base a quanto indicato in diffida\n' +
+                '3. Verificare la proposta VIG nel quantum, nel periodo e nel codice fiscale del lavoratore\n' +
+                '4. Confermare la proposta e contabilizzare il credito'
+              }
+              className={`${CLASSE_CAMPO} leading-relaxed`}
+            />
+            <div className="flex items-start gap-4 flex-wrap mt-2">
+              <div className="flex-1 min-w-56">
+                <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                  Come lo vedrà l’operatore
+                </span>
+                <AnteprimaPassi testo={inModifica.attivitaRecupero ?? ''} />
+              </div>
+              <span
+                className={`text-[10px] ${
+                  (inModifica.attivitaRecupero ?? '').length > MASSIMO_CARATTERI_ATTIVITA_RECUPERO
+                    ? 'text-red-700 font-bold'
+                    : 'text-slate-400'
+                }`}
+              >
+                {(inModifica.attivitaRecupero ?? '').length} / {MASSIMO_CARATTERI_ATTIVITA_RECUPERO}
+              </span>
+            </div>
+          </div>
           {esitoProposto && (
             <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-1">
               <Esito r={esitoProposto.riscontroNorma} etichetta="Norma" />
@@ -513,17 +565,7 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                           <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
                             Come lo vedrà l’operatore
                           </span>
-                          {passiAttivitaRecupero(procedura.testo).length === 0 ? (
-                            <span className="text-[11px] text-slate-400">
-                              Nessun passo: la posizione resterà senza procedura.
-                            </span>
-                          ) : (
-                            <ol className="list-decimal list-inside space-y-0.5 text-[11px] text-slate-700">
-                              {passiAttivitaRecupero(procedura.testo).map((p, i) => (
-                                <li key={i}>{p}</li>
-                              ))}
-                            </ol>
-                          )}
+                          <AnteprimaPassi testo={procedura.testo} />
                         </div>
                         <span
                           className={`text-[10px] ${

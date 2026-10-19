@@ -1,6 +1,6 @@
 # CCIIplatform — Logica applicativa e guida alla gestione
 
-Documento unico di ricostruzione. Riferimento: versione **0.133.0**
+Documento unico di ricostruzione. Riferimento: versione **0.133.1**
 (Portable **1.2.16**), verificato sui sorgenti il 19/10/2026.
 
 Come è costruito: prima il prodotto e il modello concettuale, poi la sequenza logica
