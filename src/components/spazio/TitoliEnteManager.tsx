@@ -56,6 +56,11 @@ const CLASSE_CAMPO =
   'w-full p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 disabled:text-slate-500';
 
 function Esito({ r, etichetta }: { r: RiscontroFonte; etichetta: string }) {
+  const verificatoIl = r.eseguitoIl ? new Date(r.eseguitoIl) : null;
+  const dataVerifica =
+    verificatoIl && !Number.isNaN(verificatoIl.getTime())
+      ? verificatoIl.toLocaleDateString('it-IT')
+      : null;
   const classe =
     r.esito === 'CONFERMATO'
       ? 'bg-emerald-100 text-emerald-800'
@@ -85,6 +90,7 @@ function Esito({ r, etichetta }: { r: RiscontroFonte; etichetta: string }) {
       {r.confermatoDa && (
         <span className="block text-slate-400">confermato da {r.confermatoDa}</span>
       )}
+      {dataVerifica && <span className="block text-slate-400">verificato il {dataVerifica}</span>}
     </div>
   );
 }
@@ -405,8 +411,37 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
               </span>
             </div>
           </div>
+          {/* Lo stato dei riscontri già archiviati, visibile prima di salvare:
+              un «da riscontrare» che si ritrova qui viene da un esito precedente,
+              non da un errore del salvataggio appena fatto. */}
+          {inModifica.id !== null && !esitoProposto && (
+            <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-1">
+              <span className="block text-[9px] font-bold text-slate-400 uppercase">
+                Riscontri archiviati
+              </span>
+              {inModifica.riscontroNorma.esito === 'NON_ESEGUITO' &&
+              inModifica.riscontroInterno.esito === 'NON_ESEGUITO' ? (
+                <span className="text-[10px] text-slate-500">
+                  Nessun riscontro ancora eseguito: la ricerca parte al primo salvataggio della
+                  parte giuridica.
+                </span>
+              ) : (
+                <>
+                  <Esito r={inModifica.riscontroNorma} etichetta="Norma" />
+                  <Esito r={inModifica.riscontroInterno} etichetta="Riferimento interno" />
+                </>
+              )}
+              <span className="block text-[10px] text-slate-400 pt-1">
+                Restano com’erano finché atto, presupposto giuridico e riferimento interno non
+                cambiano: correggere la sola procedura non li tocca.
+              </span>
+            </div>
+          )}
           {esitoProposto && (
             <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-1">
+              <span className="block text-[9px] font-bold text-slate-400 uppercase">
+                Esito del riscontro appena eseguito
+              </span>
               <Esito r={esitoProposto.riscontroNorma} etichetta="Norma" />
               <Esito r={esitoProposto.riscontroInterno} etichetta="Riferimento interno" />
             </div>

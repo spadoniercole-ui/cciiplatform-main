@@ -1,6 +1,6 @@
 # CCIIplatform — Logica applicativa e guida alla gestione
 
-Documento unico di ricostruzione. Riferimento: versione **0.133.2**
+Documento unico di ricostruzione. Riferimento: versione **0.133.3**
 (Portable **1.2.16**), verificato sui sorgenti il 19/10/2026.
 
 Come è costruito: prima il prodotto e il modello concettuale, poi la sequenza logica
@@ -424,8 +424,8 @@ modifica.
 ## 9. Incoerenze e debito tecnico (trovati, non corretti)
 
 1. **`CHANGELOG.md` non è coerente con sé stesso.** L'intestazione dichiara "ultima release
-   cloud 0.105.0" mentre `package.json` e `APP_VERSION` sono a 0.133.2; inoltre dopo
-   l'intestazione compaiono `0.69.0` e `0.70.1` prima della serie discendente da 0.133.2. Il
+   cloud 0.105.0" mentre `package.json` e `APP_VERSION` sono a 0.133.3; inoltre dopo
+   l'intestazione compaiono `0.69.0` e `0.70.1` prima della serie discendente da 0.133.3. Il
    changelog va letto come diario, non come indice.
 2. **`CLAUDE.md` dice `tipo_spazio = ENTE | RED`**, il codice usa `ENTE | NON_ENTE`
    (default `NON_ENTE`). È la documentazione da correggere, non il codice: cambiare il
@@ -497,7 +497,7 @@ modifica.
 
 ## 11. Decisioni aperte
 
-1. **Versione corrente ufficiale**: 0.133.2 è la linea da dichiarare? Aggiornare
+1. **Versione corrente ufficiale**: 0.133.3 è la linea da dichiarare? Aggiornare
    l'intestazione del CHANGELOG e l'ordine delle voci.
 2. **`tipo_spazio`**: confermare `NON_ENTE` e correggere `CLAUDE.md` (consigliato), oppure
    introdurre un alias `RED` a livello di sola UI.

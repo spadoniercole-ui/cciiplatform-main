@@ -26,6 +26,22 @@ il terzo per correzioni.
 
 ---
 
+## 0.133.3 — 2026-10-19
+
+**Titoli di credito: i riscontri archiviati si vedono prima di salvare**
+
+- La scheda del codice mostra lo stato dei due riscontri già archiviati —
+  norma e riferimento interno — con esito, motivo, passo trovato, fonte e data
+  della verifica. Un «da riscontrare» che si ritrova lì viene da una ricerca
+  precedente, non da un errore del salvataggio appena fatto.
+- Se non c’è ancora nulla, la scheda lo dice: la ricerca parte al primo
+  salvataggio della parte giuridica. La riga in fondo ricorda che quei
+  riscontri restano com’erano finché atto, presupposto e riferimento non
+  cambiano, così correggere la sola procedura non li tocca.
+- Quando un salvataggio ha appena eseguito una ricerca, l’esito mostrato è
+  quello nuovo ed è etichettato come tale, per non confonderlo con quello
+  archiviato.
+
 ## 0.133.2 — 2026-10-19
 
 **Titoli di credito: salvare la procedura non riapre il riscontro**
