@@ -26,6 +26,18 @@ il terzo per correzioni.
 
 ---
 
+## 0.133.7 — 2026-10-20
+
+**La CI rossa dice da sé quale passo è caduto**
+
+- Quando la CI del commit è rossa, `npm run consegna` legge i job della run e
+  indica per ognuno il passo in cui si è fermato («type-check», «npm run
+  build»…) con il link al job per il log: prima restava solo «CI: failure» e
+  bisognava aprire GitHub per capire cosa correggere.
+- Se il dettaglio non si legge — limite di richieste senza token, run che non
+  riporta job — lo script lo dice e il verdetto resta rosso (uscita 1):
+  l'assenza di spiegazione non diventa mai una consegna valida.
+
 ## 0.133.6 — 2026-10-20
 
 **La versione online si controlla da sé, non a occhio**

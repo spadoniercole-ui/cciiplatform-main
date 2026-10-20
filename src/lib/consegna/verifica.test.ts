@@ -5,6 +5,8 @@ import {
   estraiVersioneDaHtml,
   normalizzaAmbiente,
   parseRemoteGit,
+  passoFallito,
+  righeCiRossa,
   shaBreve,
   statoCi,
   statoDeployment,
@@ -13,6 +15,7 @@ import {
   versioneCoerente,
   versioneOnline,
   type DeploymentRemoto,
+  type JobCi,
   type RunCi,
   type StatoDeployment,
 } from './verifica';
@@ -258,6 +261,75 @@ describe('parseRemoteGit', () => {
   it('rifiuta un remote che non è GitHub', () => {
     expect(parseRemoteGit('https://gitlab.com/a/b.git')).toBeNull();
     expect(parseRemoteGit('/percorso/locale')).toBeNull();
+  });
+});
+
+function job(
+  nome: string,
+  conclusion: string | null,
+  steps: Array<[string, string | null]> = []
+): JobCi {
+  return {
+    id: 1,
+    name: nome,
+    conclusion,
+    url: `https://github.com/job/${nome}`,
+    steps: steps.map(([name, esito]) => ({ name, conclusion: esito })),
+  };
+}
+
+describe('passoFallito', () => {
+  it('trova il passo in cui il job si è fermato', () => {
+    const build = job('build', 'failure', [
+      ['Set up job', 'success'],
+      ['npm ci', 'success'],
+      ['npm run build', 'failure'],
+      ['npm test', 'skipped'],
+    ]);
+    expect(passoFallito(build)).toBe('npm run build');
+  });
+
+  it('senza un passo rosso dice che non c’è', () => {
+    expect(passoFallito(job('build', 'failure', [['npm ci', 'success']]))).toBeNull();
+    expect(passoFallito(job('build', 'failure'))).toBeNull();
+  });
+});
+
+describe('righeCiRossa', () => {
+  it('dice il passo caduto e il link al job', () => {
+    const righe = righeCiRossa([
+      job('verifica', 'failure', [
+        ['npm ci', 'success'],
+        ['type-check', 'failure'],
+      ]),
+      job('build', 'success', [['next build', 'success']]),
+    ]);
+    expect(righe).toHaveLength(1);
+    expect(righe[0]).toContain('verifica');
+    expect(righe[0]).toContain('«type-check»');
+    expect(righe[0]).toContain('https://github.com/job/verifica');
+  });
+
+  it('distingue annullato, tempo scaduto e caduto prima dei passi', () => {
+    const righe = righeCiRossa([
+      job('annullato', 'cancelled', [['npm test', 'cancelled']]),
+      job('lento', 'timed_out', []),
+      job('runner', 'startup_failure', []),
+    ]);
+    expect(righe[0]).toContain('annullato al passo «npm test»');
+    expect(righe[1]).toContain('tempo massimo superato senza un passo indicato');
+    expect(righe[2]).toContain('runner: fallito senza un passo indicato');
+  });
+
+  it('non stampa nulla se la CI è verde', () => {
+    expect(righeCiRossa([job('CI', 'success', [['npm test', 'success']])])).toEqual([]);
+  });
+
+  it('oltre il limite riassume, per non allagare il terminale', () => {
+    const rossi = Array.from({ length: 9 }, (_, i) => job(`job-${i}`, 'failure'));
+    const righe = righeCiRossa(rossi, 6);
+    expect(righe).toHaveLength(7);
+    expect(righe[6]).toContain('3 altri job');
   });
 });
 

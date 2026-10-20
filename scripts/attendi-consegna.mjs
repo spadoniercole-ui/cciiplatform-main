@@ -31,6 +31,10 @@
 // risponde 401 o non risponde, la consegna resta valida e lo si dice: una
 // pagina protetta non è la prova di una versione sbagliata.
 //
+// Se la CI è rossa, prima di uscire lo script legge i job della run e dice a
+// quale passo si è fermata, con il link al job: il «✖ CI: … failure» da solo
+// obbligava ad aprire GitHub per capire cosa fosse caduto.
+//
 // Senza GH_TOKEN (o GITHUB_TOKEN) si leggono le API pubbliche: si possono fare
 // 60 richieste l'ora, ma le risposte 304 (ETag) non si contano, quindi
 // l'attesa lunga resta possibile. Con il token si è più al sicuro e si vedono
@@ -56,6 +60,7 @@ import {
   ambientiAttesi,
   ambientiNonAttesi,
   parseRemoteGit,
+  righeCiRossa,
   shaBreve,
   valutaConsegna,
   versioneCoerente,
@@ -101,6 +106,7 @@ function argomenti(elenco) {
           '                      [--intervallo=SECONDI] [--una-volta]\n\n' +
           'Attende e verifica i deployment Vercel (anteprima sempre, produzione su main),\n' +
           'la CI del commit e — su main — la versione del login sul sito di produzione.\n' +
+          'Se la CI è rossa dice a quale passo si è fermata, col link al job.\n' +
           'Esce 0 se tutto è verde, 1 se qualcosa è rosso o scade il tempo.'
       );
       process.exit(0);
@@ -417,6 +423,42 @@ async function runDelCommit(repo, sha) {
   }));
 }
 
+async function jobDellaRun(repo, id) {
+  const dati = await api(`/repos/${repo}/actions/runs/${id}/jobs?per_page=100`);
+  return (dati?.jobs ?? []).map((j) => ({
+    id: j.id,
+    name: j.name,
+    conclusion: j.conclusion,
+    url: j.html_url ?? null,
+    steps: (j.steps ?? []).map((s) => ({ name: s.name, conclusion: s.conclusion })),
+  }));
+}
+
+/**
+ * Quando la CI è rossa dice a quale passo si è fermata, così non serve aprire
+ * GitHub per capire cosa è caduto. Il link resta lì per il log del passo.
+ * Un errore qui non cambia il verdetto: la consegna è già rossa.
+ */
+async function spiegaCiRossa(repo, run) {
+  const rosse = run.filter(
+    (r) => r.status === 'completed' && (r.conclusion || '').toLowerCase() !== 'success'
+  );
+  for (const r of rosse.slice(0, 3)) {
+    try {
+      const jobs = await jobDellaRun(repo, r.id);
+      const righe = righeCiRossa(jobs);
+      if (righe.length === 0) {
+        nota(`${r.name}: nessun job riportato da GitHub — ${r.url}`);
+        continue;
+      }
+      if (rosse.length > 1) nota(`run ${r.name}`);
+      stampaRighe(righe);
+    } catch (errore) {
+      nota(`dettaglio della CI non letto (${errore?.message || errore}): apri ${r.url}`);
+    }
+  }
+}
+
 /** Su un ramo di lavoro la CI parte solo con una pull request aperta. */
 async function pullRequestAperta(repo, proprietario, ramo) {
   if (ramo === RAMO_PRODUZIONE) return true;
@@ -713,6 +755,7 @@ async function main() {
       }
 
       if (verdetto.esito === 'FALLITO') {
+        await spiegaCiRossa(contesto.repo, raccolto.run);
         process.exit(chiudi('FALLITO', inizio, contesto.sha, ultimaRigaOnline));
       }
       if (verdetto.esito === 'OK') {

@@ -476,7 +476,8 @@ modifica.
    L'attesa dei deploy e della CI non si guarda a occhio: dopo il push si lancia
    `npm run consegna`, che esce 0 solo se ogni ambiente Vercel atteso è pronto, la CI del
    commit è verde e — su `main` — il login del sito di produzione dichiara la stessa versione
-   del commit.
+   del commit. Se la CI è rossa lo script dice anche a quale passo si è fermata, così
+   l'indicazione serve a correggere senza aprire GitHub.
 
 ### Cosa serve per lavorare bene
 

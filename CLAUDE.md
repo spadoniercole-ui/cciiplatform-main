@@ -59,7 +59,10 @@ consegna è verificata, **1** se qualcosa è rosso o se scade il tempo (20 minut
 **2** con `--una-volta` se è ancora in corso. Su un ramo di lavoro attende le sole anteprime e
 non pretende la CI, che parte solo con una pull request aperta; su `main` pretende anche le due
 produzioni. Se un deployment o una run è rosso si ferma subito invece di aspettare: è il caso
-in cui non si dichiara «fatto» nulla. Su `main`, quando tutto è verde, apre il sito di
+in cui non si dichiara «fatto» nulla. Una CI rossa non si lascia a metà: lo script legge i job
+della run e dice a quale passo si è fermata (con il link al job, per il log), così non serve
+aprire GitHub per sapere cosa è caduto; se quel dettaglio non si legge (limite di richieste,
+permessi) lo dichiara e il verdetto resta rosso. Su `main`, quando tutto è verde, apre il sito di
 produzione e confronta la versione del login con `APP_VERSION` del commit: se l'alias serve
 ancora la release precedente continua ad attendere (la propagazione richiede qualche secondo),
 se è protetto o irraggiungibile lo dichiara senza bocciare la consegna. La logica del verdetto

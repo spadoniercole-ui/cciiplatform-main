@@ -250,6 +250,69 @@ export function valutaConsegna(ingresso: IngressoVerifica): EsitoVerifica {
   };
 }
 
+export interface PassoCi {
+  name: string;
+  conclusion: string | null;
+}
+
+/**
+ * Un job della run (`/actions/runs/<id>/jobs`). `steps` è l'elenco ordinato dei
+ * passi con il loro esito: è lì che si legge quale comando è caduto.
+ */
+export interface JobCi {
+  id: number;
+  name: string;
+  conclusion: string | null;
+  url: string | null;
+  steps: PassoCi[];
+}
+
+const ESITI_ROSSI = new Set([
+  'failure',
+  'timed_out',
+  'cancelled',
+  'action_required',
+  'startup_failure',
+]);
+
+/**
+ * Il passo in cui un job si è fermato: il primo con esito rosso. `null` se il
+ * job è caduto prima dei passi (setup del runner, checkout, permessi).
+ */
+export function passoFallito(job: JobCi): string | null {
+  const trovato = (job.steps ?? []).find((p) =>
+    ESITI_ROSSI.has((p.conclusion || '').toLowerCase())
+  );
+  return trovato ? trovato.name : null;
+}
+
+/**
+ * Le righe che spiegano una CI rossa: per ogni job caduto, il passo in cui si è
+ * fermato e il link al job. Serve a non dover aprire GitHub dopo un fallimento.
+ * Oltre `limite` job si riassume, per non allagare il terminale.
+ */
+export function righeCiRossa(jobs: JobCi[], limite = 6): string[] {
+  const rossi = jobs.filter((j) => ESITI_ROSSI.has((j.conclusion || '').toLowerCase()));
+  const righe = rossi.slice(0, limite).map((job) => {
+    const esito = (job.conclusion || '').toLowerCase();
+    const verbo =
+      esito === 'cancelled'
+        ? 'annullato'
+        : esito === 'timed_out'
+          ? 'tempo massimo superato'
+          : 'fallito';
+    const link = job.url ? ` — ${job.url}` : '';
+    const passo = passoFallito(job);
+    return passo
+      ? `✖ ${job.name}: ${verbo} al passo «${passo}»${link}`
+      : `✖ ${job.name}: ${verbo} senza un passo indicato${link}`;
+  });
+  if (rossi.length > righe.length) {
+    righe.push(`· ${rossi.length - righe.length} altri job in errore: apri la run per l'elenco`);
+  }
+  return righe;
+}
+
 /** Le prime sette cifre, come si leggono su GitHub. */
 export function shaBreve(sha: string): string {
   return sha.slice(0, 7);
