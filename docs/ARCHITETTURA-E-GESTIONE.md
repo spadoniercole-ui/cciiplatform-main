@@ -447,7 +447,8 @@ modifica.
 8. **Rotte fantasma**: `scenari/[id]`, `brogliaccio`, `report` sono redirect. Sono
    compatibilità voluta, ma vanno ricordate quando si legge il routing.
 9. **Versioni a mano in tre punti**: `package.json`, `appVersion.ts`, `CHANGELOG.md`.
-   Nessun controllo automatico di allineamento.
+   `npm run consegna` confronta le tre fonti locali e lo dice, ma non corregge nulla: resta
+   un avviso, perché le modifiche di solo tooling non chiedono il bump.
 
 ---
 
@@ -472,6 +473,9 @@ modifica.
 8. **Chiudi**: version bump triad, voce di CHANGELOG, `type-check`, `lint`, `test`, `build`,
    poi commit e push su GitHub, deploy di anteprima atteso fino a Ready e stesso commit in
    produzione su `main` (vedi `CLAUDE.md`, «Consegna: GitHub, anteprima e produzione»).
+   L'attesa dei deploy e della CI non si guarda a occhio: dopo il push si lancia
+   `npm run consegna`, che esce 0 solo se ogni ambiente Vercel atteso è pronto e la CI del
+   commit è verde.
 
 ### Cosa serve per lavorare bene
 

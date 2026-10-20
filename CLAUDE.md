@@ -28,6 +28,7 @@ npm test             # vitest run (tutti i test)
 npx vitest run src/lib/xbrl/indici.test.ts   # un singolo file
 npm run build        # build cloud (non richiede segreti)
 npm run build:portable
+npm run consegna     # attende anteprima, produzione e CI del commit pushato (dopo il push)
 ```
 
 **Prima di ogni consegna**: `type-check`, `lint`, `test`, `build` devono passare (li esegue
@@ -50,6 +51,16 @@ quindi autorizzati come parte ordinaria del lavoro, senza chiederli di nuovo.
    deploy *Production*. Si verifica la versione in fondo alla pagina di login: deve coincidere
    con `APP_VERSION` e con l'ultima voce di `CHANGELOG.md`.
 
+I passi 2 e 3 non si guardano a occhio: dopo il push si lancia **`npm run consegna`**
+(`scripts/attendi-consegna.mjs`). Controlla il commit appena pushato — `HEAD`, o `--sha=` — e
+dice riga per riga se ogni ambiente Vercel è pronto e se la CI è verde: esce **0** quando la
+consegna è verificata, **1** se qualcosa è rosso o se scade il tempo (20 minuti, `--timeout=`),
+**2** con `--una-volta` se è ancora in corso. Su un ramo di lavoro attende le sole anteprime e
+non pretende la CI, che parte solo con una pull request aperta; su `main` pretende anche le due
+produzioni. Se un deployment o una run è rosso si ferma subito invece di aspettare: è il caso
+in cui non si dichiara «fatto» nulla. La logica del verdetto è in `src/lib/consegna/verifica.ts`,
+con i suoi test.
+
 Regole pratiche:
 
 - `main` è la produzione. Non si forza mai il push su `main` e non si salta la CI: su di essa
@@ -62,12 +73,15 @@ Regole pratiche:
 - Anche le modifiche di solo tooling/CI (che non chiedono il bump di versione) seguono lo
   stesso giro.
 - Lo stato dei due deploy si legge **da GitHub**, senza token Vercel: il repository è pubblico
-  e Vercel pubblica lì ogni deployment. Su `api.github.com/repos/spadoniercole-ui/cciiplatform-main`
-  → `commits/<sha>/status` (stato per commit) e `deployments?per_page=4`, che distingue
-  «Preview – cciiplatform-main», «Production – cciiplatform-main» e i due progetti gemelli
-  (`cciiweb-40`); `deployments/<id>/statuses` dice *success* e dà `environment_url`. Gli URL
-  `*.vercel.app` di deploy stanno dietro la protezione Vercel (401): la versione online si
-  controlla sul dominio vero della pagina di login, che va chiesto all'utente se non è noto.
+  e Vercel pubblica lì ogni deployment. Lo fa `npm run consegna`, che interroga
+  `deployments?sha=<sha>`, `deployments/<id>/statuses` (dice *success* e dà `environment_url`)
+  e `actions/runs?head_sha=<sha>`; gli ambienti si chiamano «Preview – cciiplatform-main»,
+  «Production – cciiplatform-main» e i due progetti gemelli (`cciiweb-40`), e i progetti attesi
+  si cambiano con `--progetti=`. Gli URL `*.vercel.app` di deploy stanno dietro la protezione
+  Vercel (401): la versione online si controlla sul dominio vero della pagina di login, che va
+  chiesto all'utente se non è noto, perché lo script non ci arriva. Senza `GH_TOKEN` si usano le
+  API pubbliche (60 richieste l'ora, le risposte 304 non si contano); col token si è più al
+  sicuro.
 - Restano soggetti ad autorizzazione esplicita soltanto gli atti distruttivi
   (`reset_database.sql`, `azzeraDatabase`, ripristini del database) e ogni altra azione
   irreversibile sui dati.

@@ -20,7 +20,8 @@
     "build:portable": "node portable/build-portable.mjs",
     "test": "vitest run",
     "check:autorizzazione": "node scripts/check-autorizzazione.mjs",
-    "check:archil": "node scripts/check-archil.mjs"
+    "check:archil": "node scripts/check-archil.mjs",
+    "consegna": "node scripts/attendi-consegna.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
