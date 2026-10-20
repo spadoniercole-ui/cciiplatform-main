@@ -49,7 +49,8 @@ quindi autorizzati come parte ordinaria del lavoro, senza chiederli di nuovo.
    ramo, non direttamente online.
 3. **Produzione** — lo stesso commit arriva su `main` (il ramo di produzione) e diventa il
    deploy *Production*. Si verifica la versione in fondo alla pagina di login: deve coincidere
-   con `APP_VERSION` e con l'ultima voce di `CHANGELOG.md`.
+   con `APP_VERSION` e con l'ultima voce di `CHANGELOG.md`. La legge lo script, dalla pagina
+   vera (attributo `data-versione` nel piè di pagina).
 
 I passi 2 e 3 non si guardano a occhio: dopo il push si lancia **`npm run consegna`**
 (`scripts/attendi-consegna.mjs`). Controlla il commit appena pushato — `HEAD`, o `--sha=` — e
@@ -58,8 +59,11 @@ consegna è verificata, **1** se qualcosa è rosso o se scade il tempo (20 minut
 **2** con `--una-volta` se è ancora in corso. Su un ramo di lavoro attende le sole anteprime e
 non pretende la CI, che parte solo con una pull request aperta; su `main` pretende anche le due
 produzioni. Se un deployment o una run è rosso si ferma subito invece di aspettare: è il caso
-in cui non si dichiara «fatto» nulla. La logica del verdetto è in `src/lib/consegna/verifica.ts`,
-con i suoi test.
+in cui non si dichiara «fatto» nulla. Su `main`, quando tutto è verde, apre il sito di
+produzione e confronta la versione del login con `APP_VERSION` del commit: se l'alias serve
+ancora la release precedente continua ad attendere (la propagazione richiede qualche secondo),
+se è protetto o irraggiungibile lo dichiara senza bocciare la consegna. La logica del verdetto
+è in `src/lib/consegna/verifica.ts`, con i suoi test.
 
 Regole pratiche:
 
@@ -77,11 +81,11 @@ Regole pratiche:
   `deployments?sha=<sha>`, `deployments/<id>/statuses` (dice *success* e dà `environment_url`)
   e `actions/runs?head_sha=<sha>`; gli ambienti si chiamano «Preview – cciiplatform-main»,
   «Production – cciiplatform-main» e i due progetti gemelli (`cciiweb-40`), e i progetti attesi
-  si cambiano con `--progetti=`. Gli URL `*.vercel.app` di deploy stanno dietro la protezione
-  Vercel (401): la versione online si controlla sul dominio vero della pagina di login, che va
-  chiesto all'utente se non è noto, perché lo script non ci arriva. Senza `GH_TOKEN` si usano le
-  API pubbliche (60 richieste l'ora, le risposte 304 non si contano); col token si è più al
-  sicuro.
+  si cambiano con `--progetti=`. Gli URL dei singoli deployment stanno dietro la protezione
+  Vercel (401), ma l'alias di produzione del progetto (`https://cciiplatform-main.vercel.app`)
+  serve il login in chiaro: è lì che lo script legge la versione, e `--dominio=` (o
+  `CONSEGNA_DOMINIO`) punta al dominio proprio quando c'è. Senza `GH_TOKEN` si usano le API
+  pubbliche (60 richieste l'ora, le risposte 304 non si contano); col token si è più al sicuro.
 - Restano soggetti ad autorizzazione esplicita soltanto gli atti distruttivi
   (`reset_database.sql`, `azzeraDatabase`, ripristini del database) e ogni altra azione
   irreversibile sui dati.

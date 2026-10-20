@@ -26,6 +26,7 @@ const DASHBOARD_VALUE = '__dashboard__';
 // package.json nel bundle client e (b) fa sì che il resolver di webpack
 // legga i package.json come "directory description file", rompendo la build
 // se ne trova uno malformato nell'albero (es. uno spurio in src/).
+const VALORE_VERSIONE = process.env.NEXT_PUBLIC_PORTABLE === '1' ? PORTABLE_VERSION : APP_VERSION;
 const ETICHETTA_VERSIONE =
   process.env.NEXT_PUBLIC_PORTABLE === '1' ? `Portable v${PORTABLE_VERSION}` : `v${APP_VERSION}`;
 
@@ -267,7 +268,12 @@ export default function LoginPage() {
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
             Architettura Postgres dinamica per schema attiva
           </span>
-          <span className="text-[9px] text-slate-300 font-mono block mt-1">
+          {/* data-versione rende la versione leggibile a `npm run consegna`:
+              la consegna si verifica confrontando questo valore con APP_VERSION. */}
+          <span
+            data-versione={VALORE_VERSIONE}
+            className="text-[9px] text-slate-300 font-mono block mt-1"
+          >
             {ETICHETTA_VERSIONE}
           </span>
           <span className="text-[9px] text-slate-400 block mt-1">{testoCopyright()}</span>

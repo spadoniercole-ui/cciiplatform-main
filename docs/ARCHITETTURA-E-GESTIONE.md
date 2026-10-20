@@ -474,8 +474,9 @@ modifica.
    poi commit e push su GitHub, deploy di anteprima atteso fino a Ready e stesso commit in
    produzione su `main` (vedi `CLAUDE.md`, «Consegna: GitHub, anteprima e produzione»).
    L'attesa dei deploy e della CI non si guarda a occhio: dopo il push si lancia
-   `npm run consegna`, che esce 0 solo se ogni ambiente Vercel atteso è pronto e la CI del
-   commit è verde.
+   `npm run consegna`, che esce 0 solo se ogni ambiente Vercel atteso è pronto, la CI del
+   commit è verde e — su `main` — il login del sito di produzione dichiara la stessa versione
+   del commit.
 
 ### Cosa serve per lavorare bene
 

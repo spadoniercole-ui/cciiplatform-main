@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ambientiAttesi,
   ambientiNonAttesi,
+  estraiVersioneDaHtml,
   normalizzaAmbiente,
   parseRemoteGit,
   shaBreve,
@@ -10,6 +11,7 @@ import {
   trovaDeployment,
   valutaConsegna,
   versioneCoerente,
+  versioneOnline,
   type DeploymentRemoto,
   type RunCi,
   type StatoDeployment,
@@ -262,6 +264,47 @@ describe('parseRemoteGit', () => {
 describe('shaBreve', () => {
   it('taglia a sette cifre', () => {
     expect(shaBreve(SHA)).toBe('d610f04');
+  });
+});
+
+describe('estraiVersioneDaHtml', () => {
+  it('preferisce l’attributo data-versione', () => {
+    const html = '<span data-versione="0.133.6">v0.133.5</span>';
+    expect(estraiVersioneDaHtml(html)).toEqual({
+      versione: '0.133.6',
+      fonte: 'attributo data-versione',
+    });
+  });
+
+  it('su una pagina vecchia legge il piè di pagina', () => {
+    const html = '<span class="font-mono">v0.133.5</span><span>Azienda di prova v1.2.3</span>';
+    expect(estraiVersioneDaHtml(html)).toEqual({
+      versione: '0.133.5',
+      fonte: 'piè di pagina del login',
+    });
+  });
+
+  it('senza versioni dice che non c’è', () => {
+    expect(estraiVersioneDaHtml('<html>login</html>').versione).toBeNull();
+  });
+});
+
+describe('versioneOnline', () => {
+  it('è OK quando il login mostra la versione del commit', () => {
+    const v = versioneOnline('0.133.6', '<span data-versione="0.133.6">v0.133.6</span>');
+    expect(v.esito).toBe('OK');
+    expect(v.dettaglio).toContain('0.133.6');
+  });
+
+  it('segnala la release precedente ancora online', () => {
+    const v = versioneOnline('0.133.6', '<span class="font-mono">v0.133.5</span>');
+    expect(v.esito).toBe('DIVERSA');
+    expect(v.dettaglio).toContain('0.133.5');
+    expect(v.dettaglio).toContain('0.133.6');
+  });
+
+  it('una pagina senza versione non è un verdetto', () => {
+    expect(versioneOnline('0.133.6', '<html></html>').esito).toBe('ASSENTE');
   });
 });
 

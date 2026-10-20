@@ -26,6 +26,28 @@ il terzo per correzioni.
 
 ---
 
+## 0.133.6 — 2026-10-20
+
+**La versione online si controlla da sé, non a occhio**
+
+- Il piè di pagina del login dichiara la versione anche in un attributo
+  (`data-versione`): è la stessa che si legge a schermo, ma ora è leggibile
+  senza aprire il browser.
+- Su `main`, quando i deployment e la CI sono verdi, `npm run consegna` apre il
+  sito di produzione, legge quella versione e la confronta con `APP_VERSION`
+  del commit appena pushato: un deployment «Ready» non garantisce che l’alias
+  serva già il commit giusto, quindi senza questo passo la verifica restava
+  incompleta.
+- Se l’alias mostra ancora la release precedente lo script lo dice e continua
+  ad attendere fino al limite (la propagazione può richiedere qualche
+  secondo); se il sito è protetto (401) o non risponde, la consegna resta
+  valida e il limite viene dichiarato invece di bloccare il lavoro.
+- Le tre versioni di riferimento (`package.json`, `APP_VERSION`, `CHANGELOG`)
+  si leggono dal commit consegnato, non dal worktree: così il confronto vale
+  anche per un commit che non è più `HEAD`.
+- Il dominio proprio si indica con `--dominio=` o `CONSEGNA_DOMINIO`; per
+  difetto si usa l’alias di produzione Vercel del primo progetto dichiarato.
+
 ## 0.133.5 — 2026-10-20
 
 **Titoli di credito: la dipendenza a cui indirizzare la comunicazione**

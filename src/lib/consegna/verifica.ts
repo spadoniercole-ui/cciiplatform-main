@@ -269,6 +269,52 @@ export function parseRemoteGit(url: string): string | null {
   return null;
 }
 
+/**
+ * La versione mostrata in fondo alla pagina di login, letta dall'HTML che il
+ * server manda al browser. Preferisce l'attributo `data-versione` (messo lì per
+ * questo); se la pagina è più vecchia dell'attributo, usa il testo «v0.133.5»
+ * del piè di pagina.
+ */
+export function estraiVersioneDaHtml(html: string): { versione: string | null; fonte: string } {
+  const attributo = /data-versione=["']([^"']+)["']/i.exec(html);
+  if (attributo && attributo[1].trim()) {
+    return { versione: attributo[1].trim(), fonte: 'attributo data-versione' };
+  }
+  const testo = /\bv(\d+\.\d+\.\d+)\b/.exec(html);
+  if (testo) return { versione: testo[1], fonte: 'piè di pagina del login' };
+  return { versione: null, fonte: 'nessuna versione riconoscibile' };
+}
+
+export interface EsitoVersioneOnline {
+  esito: 'OK' | 'DIVERSA' | 'ASSENTE';
+  versione: string | null;
+  dettaglio: string;
+}
+
+/**
+ * Confronta la versione online con quella attesa (APP_VERSION del commit
+ * pushato). È l'unico controllo che guarda il sito vero: i deployment possono
+ * essere «Ready» mentre un alias serve ancora la release precedente.
+ */
+export function versioneOnline(attesa: string, html: string): EsitoVersioneOnline {
+  const { versione, fonte } = estraiVersioneDaHtml(html);
+  if (!versione) {
+    return {
+      esito: 'ASSENTE',
+      versione: null,
+      dettaglio: 'nel login non c’è nessuna versione riconoscibile',
+    };
+  }
+  if (versione === attesa) {
+    return { esito: 'OK', versione, dettaglio: `${versione} (${fonte})` };
+  }
+  return {
+    esito: 'DIVERSA',
+    versione,
+    dettaglio: `il login mostra ${versione}, il commit consegnato è ${attesa}`,
+  };
+}
+
 /** Verifica che la versione del login coincida con APP_VERSION e CHANGELOG. */
 export function versioneCoerente(
   versioneApp: string,
