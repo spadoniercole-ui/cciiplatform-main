@@ -104,6 +104,7 @@ export async function ottieniFascicoloAction(
       effettoCalcolo: t.effetto_calcolo ?? 'NESSUNO',
       note: t.note ?? null,
       attivitaRecupero: t.attivita_recupero ?? null,
+      dipendenza: t.dipendenza ?? null,
       riscontroNorma: t.riscontro_norma ?? RISCONTRO_VUOTO,
       riscontroInterno: t.riscontro_interno ?? RISCONTRO_VUOTO,
       materiaId: t.materia_id === null || t.materia_id === undefined ? null : Number(t.materia_id),

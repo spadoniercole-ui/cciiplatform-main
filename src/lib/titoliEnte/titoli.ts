@@ -54,6 +54,13 @@ export interface TitoloEnte {
    * partita, all'operatore che la deve lavorare. null = non ancora scritta.
    */
   attivitaRecupero?: string | null;
+  /**
+   * L'ufficio (sede, dipendenza) a cui indirizzare la comunicazione con cui si
+   * chiede all'azienda il pagamento del debito (0.133.5). Testo libero su una
+   * riga: i nomi degli uffici non stanno in un elenco chiuso e cambiano da ente
+   * a ente. Non è una fonte da riscontrare — è un recapito. null = non indicata.
+   */
+  dipendenza?: string | null;
   riscontroNorma: RiscontroFonte;
   riscontroInterno: RiscontroFonte;
   /** Materia in cui il codice cade (0.109.98); null = da assegnare. */

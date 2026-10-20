@@ -36,7 +36,12 @@ import {
   type RiscontroFonte,
   type TitoloEnte,
 } from '@/lib/titoliEnte/titoli';
-import { normalizzaAttivitaRecupero, validaAttivitaRecupero } from '@/lib/titoliEnte/recupero';
+import {
+  normalizzaAttivitaRecupero,
+  normalizzaDipendenza,
+  validaAttivitaRecupero,
+  validaDipendenza,
+} from '@/lib/titoliEnte/recupero';
 import { consumaQuotaAi } from '@/lib/limiteAi';
 import {
   materiaSuggeritaPerDescrizione,
@@ -63,6 +68,7 @@ function daRiga(r: Record<string, unknown>): TitoloEnte {
     effettoCalcolo: (r.effetto_calcolo as TitoloEnte['effettoCalcolo']) ?? 'NESSUNO',
     note: (r.note as string | null) ?? null,
     attivitaRecupero: (r.attivita_recupero as string | null) ?? null,
+    dipendenza: (r.dipendenza as string | null) ?? null,
     riscontroNorma: (r.riscontro_norma as RiscontroFonte | null) ?? RISCONTRO_VUOTO,
     riscontroInterno: (r.riscontro_interno as RiscontroFonte | null) ?? RISCONTRO_VUOTO,
     materiaId: r.materia_id === null || r.materia_id === undefined ? null : Number(r.materia_id),
@@ -327,6 +333,8 @@ export async function salvaTitoloEnteAction(
     if (errore) return { success: false, error: errore };
     const erroreAttivita = validaAttivitaRecupero(titolo.attivitaRecupero);
     if (erroreAttivita) return { success: false, error: erroreAttivita };
+    const erroreDipendenza = validaDipendenza(titolo.dipendenza);
+    if (erroreDipendenza) return { success: false, error: erroreDipendenza };
     await assicuraTabelleParametriSpazio(nomeSchema);
 
     const cfg = await pool.query(
@@ -356,13 +364,15 @@ export async function salvaTitoloEnteAction(
           ? riscontroInCorso(partitoIl)
           : (precedente?.riscontro_interno ?? RISCONTRO_VUOTO);
 
-    // La procedura di recupero si salva con il titolo, ma non entra nel
-    // riscontro: è prassi dell'ente, non una fonte da verificare.
+    // La procedura di recupero e la dipendenza si salvano con il titolo, ma non
+    // entrano nel riscontro: sono prassi e recapiti dell'ente, non fonti da
+    // verificare.
     const attivitaRecupero = normalizzaAttivitaRecupero(titolo.attivitaRecupero);
+    const dipendenza = normalizzaDipendenza(titolo.dipendenza);
     const r = await pool.query(
-      `INSERT INTO "${nomeSchema}".titoli_ente (codice, atto, presupposto_giuridico, riferimento_interno, effetto_calcolo, note, riscontro_norma, riscontro_interno, attivita_recupero, aggiornato_il)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
-       ON CONFLICT (codice) DO UPDATE SET atto = $2, presupposto_giuridico = $3, riferimento_interno = $4, effetto_calcolo = $5, note = $6, riscontro_norma = $7, riscontro_interno = $8, attivita_recupero = $9, aggiornato_il = now()
+      `INSERT INTO "${nomeSchema}".titoli_ente (codice, atto, presupposto_giuridico, riferimento_interno, effetto_calcolo, note, riscontro_norma, riscontro_interno, attivita_recupero, dipendenza, aggiornato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+       ON CONFLICT (codice) DO UPDATE SET atto = $2, presupposto_giuridico = $3, riferimento_interno = $4, effetto_calcolo = $5, note = $6, riscontro_norma = $7, riscontro_interno = $8, attivita_recupero = $9, dipendenza = $10, aggiornato_il = now()
        RETURNING *`,
       [
         titolo.codice.trim(),
@@ -374,6 +384,7 @@ export async function salvaTitoloEnteAction(
         JSON.stringify(riscontroNorma),
         JSON.stringify(riscontroInterno),
         attivitaRecupero,
+        dipendenza,
       ]
     );
     const salvato = daRiga(r.rows[0]);
@@ -466,17 +477,28 @@ export async function riscontraTitoloAction(
 }
 
 /**
- * Salva SOLO la procedura di recupero di un codice. Azione separata dal
- * salvataggio del titolo perché non deve passare dal riscontro sulle fonti
+ * Salva SOLO la parte operativa di un codice: la procedura di recupero e la
+ * dipendenza (l'ufficio a cui indirizzare la comunicazione). Azione separata
+ * dal salvataggio del titolo perché non deve passare dal riscontro sulle fonti
  * (che riguarda presupposto, atto e riferimento interno) né dalla conferma
  * richiesta quando un riscontro è ancora «da riscontrare»: scrivere i passi
- * operativi non tocca la parte giuridica della riga.
+ * operativi e il destinatario non tocca la parte giuridica della riga.
+ *
+ * Le due voci stanno insieme perché sono le due metà della stessa domanda:
+ * come si incassa e a chi si scrive. Salvarle in momenti diversi lascerebbe
+ * righe con la procedura pronta e nessun destinatario.
  */
 export async function salvaAttivitaRecuperoAction(
   codiceSpazio: string,
   titoloId: number,
-  testo: string | null
-): Promise<{ success: boolean; attivitaRecupero?: string | null; error?: string }> {
+  testo: string | null,
+  dipendenza: string | null
+): Promise<{
+  success: boolean;
+  attivitaRecupero?: string | null;
+  dipendenza?: string | null;
+  error?: string;
+}> {
   try {
     const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
     if (!contesto || contesto.modalita === 'OPERATORE')
@@ -485,19 +507,23 @@ export async function salvaAttivitaRecuperoAction(
       return { success: false, error: 'Codice non valido.' };
     const errore = validaAttivitaRecupero(testo);
     if (errore) return { success: false, error: errore };
+    const erroreDipendenza = validaDipendenza(dipendenza);
+    if (erroreDipendenza) return { success: false, error: erroreDipendenza };
     const normalizzato = normalizzaAttivitaRecupero(testo);
+    const dipendenzaNormalizzata = normalizzaDipendenza(dipendenza);
     await assicuraTabelleParametriSpazio(contesto.nomeSchema);
     const r = await pool.query(
       `UPDATE "${contesto.nomeSchema}".titoli_ente
-          SET attivita_recupero = $2, aggiornato_il = now()
+          SET attivita_recupero = $2, dipendenza = $3, aggiornato_il = now()
         WHERE id = $1
-        RETURNING attivita_recupero`,
-      [titoloId, normalizzato]
+        RETURNING attivita_recupero, dipendenza`,
+      [titoloId, normalizzato, dipendenzaNormalizzata]
     );
     if (r.rows.length === 0) return { success: false, error: 'Codice non trovato.' };
     return {
       success: true,
       attivitaRecupero: (r.rows[0].attivita_recupero as string | null) ?? null,
+      dipendenza: (r.rows[0].dipendenza as string | null) ?? null,
     };
   } catch (error: unknown) {
     console.error('[salvaAttivitaRecuperoAction]', error);

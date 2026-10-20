@@ -22,9 +22,18 @@
 // scritta dall'ente: si limita a togliere l'involucro (spazi, CR di Windows,
 // numerazione e trattini) per poter disegnare un elenco. Un testo senza a capo
 // resta un passo solo: meglio un passo lungo che un testo spezzato a caso.
+//
+// LA DIPENDENZA (0.133.5). Accanto alla procedura sta l'ufficio che la esegue:
+// la comunicazione con cui si chiede all'azienda di pagare va indirizzata a
+// qualcuno, e quel qualcuno cambia da ente a ente (sede, ufficio recupero
+// crediti, ragioneria). È un'indicazione di recapito, non una fonte da
+// riscontrare: si salva com'è scritta.
 
 /** Oltre questa soglia la procedura non è più leggibile in un riquadro. */
 export const MASSIMO_CARATTERI_ATTIVITA_RECUPERO = 2000;
+
+/** Una dipendenza è un nome d'ufficio, non un testo lungo: sta in una riga. */
+export const MASSIMO_CARATTERI_DIPENDENZA = 200;
 
 /** Toglie l'involucro di un passo: numerazione «1.»/«1)», trattino, punto elenco. */
 function spogliaNumerazione(riga: string): string {
@@ -69,6 +78,26 @@ export function validaAttivitaRecupero(testo: string | null | undefined): string
   if (normalizzato === null) return null;
   if (normalizzato.length > MASSIMO_CARATTERI_ATTIVITA_RECUPERO)
     return `La procedura non può superare ${MASSIMO_CARATTERI_ATTIVITA_RECUPERO} caratteri.`;
+  return null;
+}
+
+/**
+ * L'ufficio a cui indirizzare la comunicazione, in una riga sola: spazi e a capo
+ * diventano uno spazio, i bordi si tolgono. `null` quando non c'è nulla, così
+ * «dipendenza non indicata» ha un solo valore possibile.
+ */
+export function normalizzaDipendenza(testo: string | null | undefined): string | null {
+  if (testo === null || testo === undefined) return null;
+  const pulito = testo.replace(/\s+/g, ' ').trim();
+  return pulito === '' ? null : pulito;
+}
+
+/** Errore da mostrare all'utente, oppure null. Il campo vuoto è ammesso. */
+export function validaDipendenza(testo: string | null | undefined): string | null {
+  const normalizzato = normalizzaDipendenza(testo);
+  if (normalizzato === null) return null;
+  if (normalizzato.length > MASSIMO_CARATTERI_DIPENDENZA)
+    return `La dipendenza non può superare ${MASSIMO_CARATTERI_DIPENDENZA} caratteri.`;
   return null;
 }
 

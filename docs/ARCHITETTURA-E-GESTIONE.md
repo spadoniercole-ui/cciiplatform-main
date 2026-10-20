@@ -389,9 +389,10 @@ la descrive.
 - ricevibilità: `limiti_ricevibilita`, `limiti_ricevibilita_rango`,
   `parametri_proposta_redigente`;
 - ente: `titoli_ente` (il titolo di un codice e, in `attivita_recupero`, la procedura che
-  l’ente segue per incassarlo — letta da `src/lib/titoliEnte/recupero.ts`), `titoli_ente_config`,
-  `materie_ente`. In `riscontro_norma` / `riscontro_interno` sta l’esito della ricerca sulle fonti
-  ufficiali: `IN_CORSO` significa che la ricerca è partita col salvataggio e sta ancora lavorando
+  l’ente segue per incassarlo; in `dipendenza`, l’ufficio a cui indirizzare la comunicazione di
+  pagamento all’azienda — entrambe lette da `src/lib/titoliEnte/recupero.ts`),
+  `titoli_ente_config`, `materie_ente`. In `riscontro_norma` / `riscontro_interno` sta l’esito
+  della ricerca sulle fonti ufficiali: `IN_CORSO` significa che la ricerca è partita col salvataggio e sta ancora lavorando
   (vedi `src/lib/titoliEnte/titoli.ts`), gli altri esiti sono il risultato.
 
 Lo schema effettivo è quello creato da `src/db/provision.ts` + `src/db/ensureTables.ts`;

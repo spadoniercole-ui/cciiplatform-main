@@ -876,6 +876,10 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS attivita_recupero TEXT`
   );
+  // Dipendenza (0.133.5): l'ufficio a cui indirizzare la comunicazione con cui
+  // si chiede all'azienda il pagamento del debito. Sta accanto alla procedura
+  // perché la procedura senza il destinatario non si può eseguire.
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS dipendenza TEXT`);
   // Esito dell'ultima ricerca (0.109.99): anche «nulla trovato» e' un esito, e va detto.
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.materie_ente ADD COLUMN IF NOT EXISTS esito_ricerca TEXT`

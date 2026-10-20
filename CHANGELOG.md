@@ -26,6 +26,27 @@ il terzo per correzioni.
 
 ---
 
+## 0.133.5 — 2026-10-20
+
+**Titoli di credito: la dipendenza a cui indirizzare la comunicazione**
+
+- Accanto alla procedura di recupero c’è il campo **Dipendenza**: l’ufficio
+  (sede, ufficio recupero crediti, ragioneria) a cui va indirizzata la
+  comunicazione con cui si chiede all’azienda il pagamento del debito. La
+  procedura dice come si incassa, la dipendenza a chi si scrive: senza il
+  secondo la prima non si può eseguire.
+- Il campo è nella scheda del codice — accanto all’attività di recupero — e
+  nell’editor della sola parte operativa, dove si salvano insieme. Come la
+  procedura, non passa dal riscontro sulle fonti: è un recapito, non una fonte
+  da verificare, e correggerlo non fa ripartire nessuna ricerca.
+- La tabella mostra per ogni codice la dipendenza sotto il numero di passi, e
+  segnala «dipendenza da indicare» dove manca: è il caso che rende la
+  comunicazione non spedibile, quindi va visto prima di lavorare la partita.
+- Colonna `dipendenza` su `titoli_ente`, aggiunta in modo idempotente ai tenant
+  esistenti; il testo è normalizzato su una riga (spazi e a capo compattati,
+  massimo 200 caratteri) e la configurazione di spazio la esporta e la
+  ripristina come le altre.
+
 ## 0.133.4 — 2026-10-20
 
 **Titoli di credito: il riscontro sulle fonti non blocca più il salvataggio**

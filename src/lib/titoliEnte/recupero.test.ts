@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   MASSIMO_CARATTERI_ATTIVITA_RECUPERO,
+  MASSIMO_CARATTERI_DIPENDENZA,
   normalizzaAttivitaRecupero,
+  normalizzaDipendenza,
   passiAttivitaRecupero,
   riassuntoAttivitaRecupero,
   validaAttivitaRecupero,
+  validaDipendenza,
 } from './recupero';
 
 // La procedura di esempio è quella indicata dall'ente per le diffide emesse e
@@ -58,5 +61,39 @@ describe('attività di recupero del credito', () => {
     expect(riassuntoAttivitaRecupero('Uno')).toBe('1 passo');
     expect(riassuntoAttivitaRecupero(DIFFIDA)).toBe('4 passi');
     expect(riassuntoAttivitaRecupero(null)).toBe('');
+  });
+});
+
+// La dipendenza è l'ufficio a cui si indirizza la comunicazione con cui si
+// chiede all'azienda il pagamento: è un recapito, e resta su una riga sola.
+describe('dipendenza a cui indirizzare la comunicazione', () => {
+  it('tiene il nome dell’ufficio così com’è scritto', () => {
+    expect(normalizzaDipendenza('Ufficio Recupero Crediti — Sede di Milano')).toBe(
+      'Ufficio Recupero Crediti — Sede di Milano'
+    );
+  });
+
+  it('spazi, a capo e bordi diventano un nome su una riga', () => {
+    expect(normalizzaDipendenza('  Ufficio   Recupero\r\nCrediti  ')).toBe(
+      'Ufficio Recupero Crediti'
+    );
+  });
+
+  it('vuoto, spazi e null sono «dipendenza non indicata»', () => {
+    for (const v of [null, undefined, '', '   ', '\r\n']) {
+      expect(normalizzaDipendenza(v)).toBeNull();
+      expect(validaDipendenza(v)).toBeNull();
+    }
+  });
+
+  it('rifiuta una dipendenza oltre il limite, accettandola al limite', () => {
+    const alLimite = 'a'.repeat(MASSIMO_CARATTERI_DIPENDENZA);
+    expect(validaDipendenza(alLimite)).toBeNull();
+    expect(validaDipendenza(`${alLimite}b`)).toContain('caratteri');
+  });
+
+  it('conta la lunghezza dopo aver normalizzato, non prima', () => {
+    const conSpazi = `  ${'a'.repeat(MASSIMO_CARATTERI_DIPENDENZA)}  `;
+    expect(validaDipendenza(conSpazi)).toBeNull();
   });
 });

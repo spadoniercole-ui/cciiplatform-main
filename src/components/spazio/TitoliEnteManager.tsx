@@ -4,6 +4,11 @@
 // partita: atto, presupposto giuridico, riferimento interno (circolare),
 // effetto sul calcolo. Al salvataggio la piattaforma riscontra norma e
 // riferimento sulle sole fonti ufficiali; l'esito resta sulla riga.
+//
+// Accanto alla parte giuridica stanno la procedura con cui l'ufficio recupera il
+// credito e la DIPENDENZA, cioè l'ufficio a cui indirizzare la comunicazione di
+// pagamento all'azienda: sono le due metà di «come si incassa e a chi si
+// scrive», e si salvano insieme senza passare dal riscontro sulle fonti.
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -30,6 +35,7 @@ import {
 } from '@/app/actions/titoliEnte';
 import {
   MASSIMO_CARATTERI_ATTIVITA_RECUPERO,
+  MASSIMO_CARATTERI_DIPENDENZA,
   passiAttivitaRecupero,
   riassuntoAttivitaRecupero,
 } from '@/lib/titoliEnte/recupero';
@@ -215,11 +221,14 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
   const [esitoImport, setEsitoImport] = useState<string | null>(null);
   /** Codice la cui verifica è stata ripresa a mano: gira dentro la richiesta. */
   const [riprendendo, setRiprendendo] = useState<number | null>(null);
-  // Procedura di recupero in scrittura: una riga alla volta, salvata a parte
-  // dal titolo (non passa dal riscontro sulle fonti).
-  const [procedura, setProcedura] = useState<{ id: number; codice: string; testo: string } | null>(
-    null
-  );
+  // Parte operativa in scrittura (procedura e dipendenza): una riga alla volta,
+  // salvata a parte dal titolo (non passa dal riscontro sulle fonti).
+  const [procedura, setProcedura] = useState<{
+    id: number;
+    codice: string;
+    testo: string;
+    dipendenza: string;
+  } | null>(null);
   const [materie, setMaterie] = useState<MateriaEnte[]>([]);
   const caricaMaterie = async () => {
     const r = await ottieniMaterieEnteAction(nomeSchema);
@@ -273,7 +282,12 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
     if (!procedura) return;
     setInCorso(true);
     setErrore(null);
-    const r = await salvaAttivitaRecuperoAction(codice, procedura.id, procedura.testo);
+    const r = await salvaAttivitaRecuperoAction(
+      codice,
+      procedura.id,
+      procedura.testo,
+      procedura.dipendenza
+    );
     setInCorso(false);
     if (!r.success) setErrore(r.error ?? 'Salvataggio non riuscito.');
     else {
@@ -493,22 +507,53 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
               />
             </div>
           </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="lg:col-span-2">
+              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                Attività di recupero — un passo per riga
+              </label>
+              <textarea
+                value={inModifica.attivitaRecupero ?? ''}
+                onChange={(e) => setInModifica({ ...inModifica, attivitaRecupero: e.target.value })}
+                rows={7}
+                placeholder={
+                  '1. Verificare la notifica del provvedimento; se correttamente notificato passare al punto 2, altrimenti procedere alle attività di notifica\n' +
+                  '2. Modificare il conto del lavoratore in base a quanto indicato in diffida\n' +
+                  '3. Verificare la proposta VIG nel quantum, nel periodo e nel codice fiscale del lavoratore\n' +
+                  '4. Confermare la proposta e contabilizzare il credito'
+                }
+                className={`${CLASSE_CAMPO} leading-relaxed`}
+              />
+            </div>
+            <div>
+              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                Dipendenza
+              </label>
+              <input
+                value={inModifica.dipendenza ?? ''}
+                onChange={(e) =>
+                  setInModifica({ ...inModifica, dipendenza: e.target.value || null })
+                }
+                className={CLASSE_CAMPO}
+                placeholder="es. Ufficio Recupero Crediti — Sede di …"
+              />
+              <span className="block text-[10px] text-slate-500 mt-1">
+                L’ufficio a cui indirizzare la comunicazione con cui si chiede all’azienda il
+                pagamento del debito: sede, ufficio recupero crediti, ragioneria. È il recapito
+                dell’operatore che lavora la partita.
+              </span>
+              <span
+                className={`block text-[10px] mt-1 ${
+                  (inModifica.dipendenza ?? '').length > MASSIMO_CARATTERI_DIPENDENZA
+                    ? 'text-red-700 font-bold'
+                    : 'text-slate-400'
+                }`}
+              >
+                {(inModifica.dipendenza ?? '').length} / {MASSIMO_CARATTERI_DIPENDENZA}
+              </span>
+            </div>
+          </div>
           <div>
-            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-              Attività di recupero — un passo per riga
-            </label>
-            <textarea
-              value={inModifica.attivitaRecupero ?? ''}
-              onChange={(e) => setInModifica({ ...inModifica, attivitaRecupero: e.target.value })}
-              rows={7}
-              placeholder={
-                '1. Verificare la notifica del provvedimento; se correttamente notificato passare al punto 2, altrimenti procedere alle attività di notifica\n' +
-                '2. Modificare il conto del lavoratore in base a quanto indicato in diffida\n' +
-                '3. Verificare la proposta VIG nel quantum, nel periodo e nel codice fiscale del lavoratore\n' +
-                '4. Confermare la proposta e contabilizzare il credito'
-              }
-              className={`${CLASSE_CAMPO} leading-relaxed`}
-            />
             <div className="flex items-start gap-4 flex-wrap mt-2">
               <div className="flex-1 min-w-56">
                 <span className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
@@ -614,7 +659,7 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
               <th className="px-3 py-2 font-bold">Codice</th>
               <th className="px-3 py-2 font-bold">Atto o flusso</th>
               <th className="px-3 py-2 font-bold">Materia (titolo della partita)</th>
-              <th className="px-3 py-2 font-bold">Attività di recupero</th>
+              <th className="px-3 py-2 font-bold">Attività di recupero e dipendenza</th>
               <th className="px-3 py-2 font-bold">Riscontro sulle fonti</th>
               <th className="px-3 py-2 font-bold"></th>
             </tr>
@@ -668,6 +713,13 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                     {riassuntoAttivitaRecupero(t.attivitaRecupero) || (
                       <span className="text-amber-700">da scrivere</span>
                     )}
+                    <span
+                      className={`block text-[10px] ${
+                        t.dipendenza ? 'text-slate-500' : 'text-amber-700'
+                      }`}
+                    >
+                      {t.dipendenza ? `→ ${t.dipendenza}` : 'dipendenza da indicare'}
+                    </span>
                   </td>
                   <td className="px-3 py-2">
                     <RiscontriRiga
@@ -693,7 +745,12 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                         setProcedura((prev) =>
                           prev?.id === t.id
                             ? null
-                            : { id: t.id!, codice: t.codice, testo: t.attivitaRecupero ?? '' }
+                            : {
+                                id: t.id!,
+                                codice: t.codice,
+                                testo: t.attivitaRecupero ?? '',
+                                dipendenza: t.dipendenza ?? '',
+                              }
                         );
                         setErrore(null);
                       }}
@@ -738,6 +795,23 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                         fase successiva al triage mostrerà all’operatore: qui si configura una
                         volta, poi si adatta sulla singola posizione.
                       </p>
+                      <div className="max-w-xl">
+                        <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                          Dipendenza — ufficio a cui indirizzare la comunicazione
+                        </label>
+                        <input
+                          value={procedura.dipendenza}
+                          onChange={(e) =>
+                            setProcedura({ ...procedura, dipendenza: e.target.value })
+                          }
+                          className={CLASSE_CAMPO}
+                          placeholder="es. Ufficio Recupero Crediti — Sede di …"
+                        />
+                        <span className="block text-[10px] text-slate-500 mt-1">
+                          Dove va indirizzata la comunicazione con cui si chiede all’azienda il
+                          pagamento del debito. Senza destinatario la procedura non si può eseguire.
+                        </span>
+                      </div>
                       <textarea
                         value={procedura.testo}
                         onChange={(e) => setProcedura({ ...procedura, testo: e.target.value })}
