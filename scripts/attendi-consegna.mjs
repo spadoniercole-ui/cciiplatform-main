@@ -42,6 +42,9 @@
 // Uscita: 0 consegna verificata, 1 non riescita o tempo scaduto, 2 ancora in
 // corso (solo con --una-volta), 130 interrotta.
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 process.on('SIGINT', () => {
   console.error('\n… interrotto: nessun verdetto su questa consegna');
@@ -246,16 +249,38 @@ function curlDisponibile() {
   }
 }
 
+/** Cartella per le risposte di curl: un file di intestazioni e uno di corpo. */
+const cartellaTemporanea = fs.mkdtempSync(path.join(os.tmpdir(), 'consegna-'));
+
+/** Intestazioni di una risposta: con i redirect conta l'ultimo blocco. */
+function intestazioniDa(testo) {
+  const blocchi = testo.split(/\r?\n\r?\n/).filter((b) => /^HTTP\//.test(b.trim()));
+  const blocco = blocchi.length ? blocchi[blocchi.length - 1] : testo;
+  const mappa = {};
+  for (const riga of blocco.split(/\r?\n/).slice(1)) {
+    const taglio = riga.indexOf(':');
+    if (taglio > 0) {
+      mappa[riga.slice(0, taglio).trim().toLowerCase()] = riga.slice(taglio + 1).trim();
+    }
+  }
+  return mappa;
+}
+
 /**
  * Chiamata via curl: serve sulle macchine con un proxy che filtra TLS, dove
  * `fetch` di Node non riesce a verificare la catena ma curl (schannel, con
- * `--ssl-no-revoke`) sì. Il corpo è JSON: lo stato HTTP arriva come coda.
+ * `--ssl-no-revoke`) sì. Intestazioni e corpo finiscono in due file, così si
+ * leggono anche ETag e limiti di richiesta — indispensabili per non consumare
+ * il tetto orario con le attese lunghe.
  */
-function leggiConCurl(url, headers) {
+function chiamataCurl(url, headers, segui = false) {
   if (!curlDisponibile()) {
-    esci('curl non disponibile e fetch non riesce a verificare il certificato di api.github.com');
+    esci('curl non disponibile e fetch non riesce a verificare il certificato');
   }
-  const base = ['-sS', '-w', '\n@@HTTP@@%{http_code}'];
+  const fileIntestazioni = path.join(cartellaTemporanea, 'intestazioni.txt');
+  const fileCorpo = path.join(cartellaTemporanea, 'corpo.txt');
+  const base = ['-sS', '-D', fileIntestazioni, '-o', fileCorpo, '-w', '%{http_code}'];
+  if (segui) base.push('-L');
   for (const [k, v] of Object.entries(headers)) base.push('-H', `${k}: ${v}`);
   const tentativi = curlConSslNoRevoke ? ['--ssl-no-revoke', null] : [null];
   let ultimo = '';
@@ -275,39 +300,49 @@ function leggiConCurl(url, headers) {
         curlConSslNoRevoke = false;
         continue;
       }
-      esci(`curl ha fallito su ${url}: ${ultimo.trim()}`);
+      return { stato: 0, corpo: '', intestazioni: {}, errore: ultimo.trim() };
     }
-    const taglio = uscita.lastIndexOf('@@HTTP@@');
-    const corpo = taglio >= 0 ? uscita.slice(0, taglio) : uscita;
-    const stato = taglio >= 0 ? Number(uscita.slice(taglio + 8).trim()) : 0;
-    let dati = null;
-    try {
-      dati = corpo.trim() ? JSON.parse(corpo) : null;
-    } catch {
-      dati = null;
-    }
-    return { stato, dati, etag: null };
+    return {
+      stato: Number(String(uscita).trim()) || 0,
+      corpo: fs.existsSync(fileCorpo) ? fs.readFileSync(fileCorpo, 'utf8') : '',
+      intestazioni: intestazioniDa(
+        fs.existsSync(fileIntestazioni) ? fs.readFileSync(fileIntestazioni, 'utf8') : ''
+      ),
+    };
   }
-  esci(`curl ha fallito su ${url}: ${ultimo.trim()}`);
+  return { stato: 0, corpo: '', intestazioni: {}, errore: ultimo.trim() };
 }
 
-async function leggiConFetch(url, headers) {
-  const risposta = await fetch(url, { headers });
-  if (risposta.status === 304) return { stato: 304, dati: null, etag: null };
-  const testo = await risposta.text();
-  let dati = null;
+/** Una risposta HTTP in forma unica, da `fetch` o da curl. */
+async function richiesta(url, headers, segui = false) {
   try {
-    dati = testo ? JSON.parse(testo) : null;
-  } catch {
-    dati = null;
+    const risposta = await fetch(url, { headers, redirect: segui ? 'follow' : 'manual' });
+    const corpo = risposta.status === 304 ? '' : await risposta.text();
+    const intestazioni = {};
+    for (const [k, v] of risposta.headers.entries()) intestazioni[k.toLowerCase()] = v;
+    return { stato: risposta.status, corpo, intestazioni };
+  } catch (errore) {
+    if (!erroreCertificato(errore)) {
+      return { stato: 0, corpo: '', intestazioni: {}, errore: errore?.message || String(errore) };
+    }
+    if (!usatoCurl) {
+      usatoCurl = true;
+      nota(
+        'Node non riesce a verificare il certificato delle API: uso curl. ' +
+          'Per tornare a Node imposta NODE_EXTRA_CA_CERTS sul certificato della rete aziendale ' +
+          '(oppure avvia Node con --use-system-ca).'
+      );
+    }
+    return chiamataCurl(url, headers, segui);
   }
-  return {
-    stato: risposta.status,
-    dati,
-    etag: risposta.headers.get('etag'),
-    restanti: risposta.headers.get('x-ratelimit-remaining'),
-    rinnovo: risposta.headers.get('x-ratelimit-reset'),
-  };
+}
+
+function jsonDa(corpo) {
+  try {
+    return corpo && corpo.trim() ? JSON.parse(corpo) : null;
+  } catch {
+    return null;
+  }
 }
 
 async function api(percorso) {
@@ -321,43 +356,36 @@ async function api(percorso) {
   const salvato = cache.get(url);
   if (salvato?.etag) headers['If-None-Match'] = salvato.etag;
 
-  let risposta;
-  try {
-    risposta = await leggiConFetch(url, headers);
-  } catch (errore) {
-    if (!erroreCertificato(errore)) {
-      esci(`rete non raggiungibile su ${url}: ${errore?.message || errore}`);
-    }
-    if (!usatoCurl) {
-      usatoCurl = true;
-      nota(
-        'Node non riesce a verificare il certificato di api.github.com: leggo le API con curl. ' +
-          'Per tornare a Node imposta NODE_EXTRA_CA_CERTS sul certificato della rete aziendale ' +
-          '(oppure avvia Node con --use-system-ca).'
-      );
-    }
-    risposta = leggiConCurl(url, headers);
+  const risposta = await richiesta(url, headers);
+  if (risposta.stato === 0) {
+    throw new ErroreApi(
+      `rete non raggiungibile su ${url}: ${risposta.errore || 'nessuna risposta'}`,
+      0
+    );
   }
+  const dati = jsonDa(risposta.corpo);
+  const restanti = risposta.intestazioni['x-ratelimit-remaining'];
+  const rinnovo = risposta.intestazioni['x-ratelimit-reset'];
 
-  if (risposta.stato === 304 && salvato) return salvato.dati;
-  if (risposta.stato === 404) {
-    throw new ErroreApi(`GitHub risponde 404 su ${url}`, 404);
-  }
+  if (risposta.stato === 304) return salvato ? salvato.dati : null;
   if (risposta.stato === 403 || risposta.stato === 429) {
-    const testo = risposta.dati?.message || '';
-    // Via curl non arrivano le intestazioni: il limite si riconosce dal messaggio.
-    const limite = risposta.restanti === '0' || risposta.stato === 429 || /rate limit/i.test(testo);
-    if (limite) throw new ErroreApi(messaggioLimite(risposta.rinnovo), 403);
+    const testo = dati?.message || '';
+    const limite = restanti === '0' || risposta.stato === 429 || /rate limit/i.test(testo);
+    if (limite) {
+      const errore = new ErroreApi(messaggioLimite(rinnovo), 403);
+      errore.rinnovo = rinnovo;
+      throw errore;
+    }
   }
   if (risposta.stato >= 400) {
     throw new ErroreApi(
-      `GitHub risponde ${risposta.stato} su ${url}` +
-        (risposta.dati?.message ? `: ${risposta.dati.message}` : ''),
+      `GitHub risponde ${risposta.stato} su ${url}` + (dati?.message ? `: ${dati.message}` : ''),
       risposta.stato
     );
   }
-  if (risposta.etag) cache.set(url, { etag: risposta.etag, dati: risposta.dati });
-  return risposta.dati;
+  const etag = risposta.intestazioni.etag;
+  if (etag) cache.set(url, { etag, dati });
+  return dati;
 }
 
 // --- raccolta stato -------------------------------------------------------
@@ -404,12 +432,25 @@ async function pullRequestAperta(repo, proprietario, ramo) {
   }
 }
 
-async function raccogli(repo, sha) {
+/** Uno stato definitivo non cambia più: interrogarlo di nuovo è solo spesa. */
+const STATI_DEFINITIVI = new Set(['success', 'ready', 'failure', 'error', 'inactive']);
+
+async function raccogli(repo, sha, memoria) {
   const deployments = await deploymentDelCommit(repo, sha);
   const run = await runDelCommit(repo, sha);
   const stati = {};
   for (const d of deployments) {
-    stati[d.id] = await statiDeployment(repo, d.id);
+    const noto = memoria.get(d.id);
+    if (noto) {
+      stati[d.id] = noto.stati;
+      continue;
+    }
+    const elenco = await statiDeployment(repo, d.id);
+    stati[d.id] = elenco;
+    const ultimo = elenco[elenco.length - 1];
+    if (ultimo && STATI_DEFINITIVI.has(String(ultimo.state).toLowerCase())) {
+      memoria.set(d.id, { stati: elenco });
+    }
   }
   return { deployments, run, stati };
 }
@@ -466,47 +507,8 @@ async function testoDa(url) {
     Accept: 'text/html,application/xhtml+xml',
     'User-Agent': 'cciiplatform-attendi-consegna',
   };
-  try {
-    const risposta = await fetch(url, { headers, redirect: 'follow' });
-    return { stato: risposta.status, testo: await risposta.text() };
-  } catch (errore) {
-    if (!erroreCertificato(errore)) {
-      return { stato: 0, testo: '', errore: errore?.message || String(errore) };
-    }
-    return leggiTestoConCurl(url, headers);
-  }
-}
-
-function leggiTestoConCurl(url, headers) {
-  if (!curlDisponibile())
-    return { stato: 0, testo: '', errore: 'né fetch né curl raggiungono il sito' };
-  const base = ['-sS', '-L', '-w', '\n@@HTTP@@%{http_code}'];
-  for (const [k, v] of Object.entries(headers)) base.push('-H', `${k}: ${v}`);
-  const tentativi = curlConSslNoRevoke ? ['--ssl-no-revoke', null] : [null];
-  for (const flag of tentativi) {
-    const args = flag ? [...base, flag, url] : [...base, url];
-    let uscita;
-    try {
-      uscita = execFileSync('curl', args, {
-        encoding: 'utf8',
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: 30000,
-      });
-    } catch (errore) {
-      const testo = String(errore?.stderr || errore?.message || errore);
-      if (/unknown option|not supported|option .*--ssl-no-revoke/i.test(testo)) {
-        curlConSslNoRevoke = false;
-        continue;
-      }
-      return { stato: 0, testo: '', errore: testo.trim() };
-    }
-    const taglio = uscita.lastIndexOf('@@HTTP@@');
-    return {
-      stato: taglio >= 0 ? Number(uscita.slice(taglio + 8).trim()) : 0,
-      testo: taglio >= 0 ? uscita.slice(0, taglio) : uscita,
-    };
-  }
-  return { stato: 0, testo: '', errore: 'curl non ha risposto' };
+  const risposta = await richiesta(url, headers, true);
+  return { stato: risposta.stato, testo: risposta.corpo, errore: risposta.errore };
 }
 
 /**
@@ -647,6 +649,7 @@ async function main() {
     ...ambientiAttesi(opzioni.progetti, true),
   ];
   const scadenza = inizio + opzioni.timeoutMinuti * 60 * 1000;
+  const memoriaStati = new Map();
   let ultimaImpronta = '';
   let ultimoVerdetto = null;
   let ultimaRigaOnline = null;
@@ -655,10 +658,24 @@ async function main() {
   for (;;) {
     let raccolto;
     try {
-      raccolto = await raccogli(contesto.repo, contesto.sha);
+      raccolto = await raccogli(contesto.repo, contesto.sha, memoriaStati);
     } catch (errore) {
       // Un repository sbagliato o un token senza permessi non si aggiustano
       // aspettando: si esce subito con il motivo.
+      if (errore instanceof ErroreApi && errore.stato === 403 && errore.rinnovo) {
+        // Senza token il tetto è 60 richieste l'ora: si aspetta il rinnovo
+        // invece di perdere il lavoro fatto, se il tempo lo consente.
+        const quando = Number(errore.rinnovo) * 1000;
+        const attesa = Math.max(0, quando - Date.now()) + 2000;
+        if (quando && Date.now() + attesa < scadenza) {
+          nota(
+            `limite GitHub raggiunto: riprendo alle ${new Date(quando).toLocaleTimeString('it-IT')}`
+          );
+          await new Promise((r) => setTimeout(r, attesa));
+          continue;
+        }
+        esci(errore.message, 1);
+      }
       if (errore instanceof ErroreApi && [403, 404, 422].includes(errore.stato)) {
         esci(errore.message, 1);
       }
