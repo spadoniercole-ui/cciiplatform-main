@@ -61,9 +61,13 @@ Regole pratiche:
   servirà a completarlo, senza dichiarare «fatto» ciò che è solo locale.
 - Anche le modifiche di solo tooling/CI (che non chiedono il bump di versione) seguono lo
   stesso giro.
-- Se dal terminale non si ha accesso a Vercel (niente `vercel` CLI né token), lo stato del
-  deploy si legge nel pannello dell'utente: si chiede conferma di *Preview* Ready e della
-  versione in produzione invece di darla per buona.
+- Lo stato dei due deploy si legge **da GitHub**, senza token Vercel: il repository è pubblico
+  e Vercel pubblica lì ogni deployment. Su `api.github.com/repos/spadoniercole-ui/cciiplatform-main`
+  → `commits/<sha>/status` (stato per commit) e `deployments?per_page=4`, che distingue
+  «Preview – cciiplatform-main», «Production – cciiplatform-main» e i due progetti gemelli
+  (`cciiweb-40`); `deployments/<id>/statuses` dice *success* e dà `environment_url`. Gli URL
+  `*.vercel.app` di deploy stanno dietro la protezione Vercel (401): la versione online si
+  controlla sul dominio vero della pagina di login, che va chiesto all'utente se non è noto.
 - Restano soggetti ad autorizzazione esplicita soltanto gli atti distruttivi
   (`reset_database.sql`, `azzeraDatabase`, ripristini del database) e ogni altra azione
   irreversibile sui dati.
