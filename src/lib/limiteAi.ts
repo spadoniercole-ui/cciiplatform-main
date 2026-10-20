@@ -20,7 +20,19 @@ export interface Esecutore {
   query(testo: string, parametri?: unknown[]): Promise<{ rows: any[] }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export type FunzioneAi = 'VISURA';
+export type FunzioneAi = 'VISURA' | 'RISCONTRO';
+
+/** Come si chiama, a schermo, ciò che si conta. */
+const CONTEGGIO: Record<FunzioneAi, string> = {
+  VISURA: 'estrazioni automatiche',
+  RISCONTRO: 'verifiche sulle fonti',
+};
+
+/** Cosa può fare chi ha esaurito il tetto. */
+const CONSIGLIO: Record<FunzioneAi, string> = {
+  VISURA: 'Riprova più tardi o compila i campi a mano.',
+  RISCONTRO: 'Riprova più tardi: la riga resta «da riscontrare».',
+};
 
 interface Limiti {
   perUtenteOra: number;
@@ -38,6 +50,14 @@ export function limitiAi(funzione: FunzioneAi, env: NodeJS.ProcessEnv = process.
       return {
         perUtenteOra: numeroDaEnv(env.AI_VISURE_PER_UTENTE_ORA, 30),
         perSpazioGiorno: numeroDaEnv(env.AI_VISURE_PER_SPAZIO_GIORNO, 300),
+      };
+    case 'RISCONTRO':
+      // Un riscontro accompagna ogni salvataggio della parte giuridica: il
+      // tetto serve a fermare un ciclo, non il lavoro ordinario di un Admin
+      // che sistema l'anagrafica dei codici.
+      return {
+        perUtenteOra: numeroDaEnv(env.AI_RISCONTRI_PER_UTENTE_ORA, 60),
+        perSpazioGiorno: numeroDaEnv(env.AI_RISCONTRI_PER_SPAZIO_GIORNO, 600),
       };
   }
 }
@@ -102,7 +122,7 @@ export async function consumaQuotaAi(
     if (perUtente > limiti.perUtenteOra) {
       return {
         consentito: false,
-        error: `Limite di ${limiti.perUtenteOra} estrazioni automatiche all'ora raggiunto. Riprova più tardi o compila i campi a mano.`,
+        error: `Limite di ${limiti.perUtenteOra} ${CONTEGGIO[funzione]} all'ora raggiunto. ${CONSIGLIO[funzione]}`,
       };
     }
     if (chi.spazioId !== null) {
@@ -110,7 +130,7 @@ export async function consumaQuotaAi(
       if (perSpazio > limiti.perSpazioGiorno) {
         return {
           consentito: false,
-          error: `Limite giornaliero di ${limiti.perSpazioGiorno} estrazioni automatiche per questo spazio raggiunto. Riprova domani o compila i campi a mano.`,
+          error: `Limite giornaliero di ${limiti.perSpazioGiorno} ${CONTEGGIO[funzione]} per questo spazio raggiunto. ${CONSIGLIO[funzione]}`,
         };
       }
     }

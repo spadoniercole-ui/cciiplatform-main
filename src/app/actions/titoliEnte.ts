@@ -4,13 +4,19 @@
 // ufficiali (Gazzetta Ufficiale e Normattiva per la norma; sito dell'ente per
 // il riferimento interno), precaricamento INPS.
 //
-// Regola del salvataggio concordata con Ercole (0.109.96):
-//   IN_CONTRASTO     -> la riga NON si salva; a schermo il passo trovato;
-//   CONFERMATO       -> si salva, e la fonte entra nel registro (prossima tappa);
-//   NON_VERIFICABILE -> si salva solo con conferma esplicita, etichetta «da
-//                       riscontrare» finche' un riscontro non la chiude.
+// Il riscontro non blocca più il salvataggio (0.133.4). La riga si scrive
+// subito con i riscontri «in verifica» e la ricerca sulle fonti continua dopo
+// la risposta, chiudendo la riga quando la fonte risponde. Gli esiti restano
+// quelli concordati con Ercole (0.109.96):
+//   CONFERMATO       -> la fonte conferma, e la fonte resta scritta sulla riga;
+//   IN_CONTRASTO     -> la fonte dice altro: la riga resta salvata e segnalata,
+//                       con il passo trovato, perché il lavoro non si perde;
+//   NON_VERIFICABILE -> etichetta «da riscontrare» finche' un riscontro non la
+//                       chiude. La conferma umana non serve più: nessuna riga
+//                       viene salvata in silenzio senza il suo esito.
 // Senza chiave AI (portable senza rete) il riscontro e' NON_VERIFICABILE.
 
+import { after } from 'next/server';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
 import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
@@ -24,12 +30,14 @@ import {
   interpretaRiscontro,
   promptRiscontroInterno,
   promptRiscontroNorma,
+  riscontroInCorso,
+  riscontriDaEseguire,
   validaTitolo,
-  vociGiuridicheCambiate,
   type RiscontroFonte,
   type TitoloEnte,
 } from '@/lib/titoliEnte/titoli';
 import { normalizzaAttivitaRecupero, validaAttivitaRecupero } from '@/lib/titoliEnte/recupero';
+import { consumaQuotaAi } from '@/lib/limiteAi';
 import {
   materiaSuggeritaPerDescrizione,
   normalizzaProposta,
@@ -195,18 +203,120 @@ async function riscontraSuFonti(prompt: string, domini: string[]): Promise<Risco
 
 export interface EsitoSalvataggioTitolo {
   success: boolean;
-  /** true = la riga non e' stata salvata perche' un riscontro e' IN_CONTRASTO. */
-  bloccato?: boolean;
-  /** true = serve la conferma esplicita: un riscontro e' NON_VERIFICABILE. */
-  richiedeConferma?: boolean;
   titolo?: TitoloEnte;
+  /**
+   * Le parti per cui la ricerca sulle fonti è partita DOPO il salvataggio: la
+   * riga è già scritta, l'esito arriverà da solo (0.133.4).
+   */
+  inVerifica?: { norma: boolean; interno: boolean };
   error?: string;
 }
 
+/** Ciò che serve alla ricerca in secondo piano, fissato al salvataggio. */
+interface LavoroRiscontro {
+  nomeSchema: string;
+  spazioId: number;
+  utente: string;
+  titoloId: number;
+  atto: string;
+  presupposto: string;
+  riferimentoInterno: string | null;
+  dominioEnte: string | null;
+  norma: boolean;
+  interno: boolean;
+}
+
+/**
+ * LA RICERCA SULLE FONTI IN SECONDO PIANO (0.133.4).
+ *
+ * Prima il salvataggio aspettava la risposta del modello — fino a un minuto di
+ * pulsante bloccato — e un errore o un timeout buttava via anche il lavoro
+ * appena scritto. Ora la riga si salva subito con i riscontri «in verifica» e
+ * questa funzione li chiude quando la fonte risponde, anche se chi ha salvato
+ * ha già chiuso la pagina.
+ *
+ * Tre regole, e sono tutte qui:
+ * 1. si riscrive solo se la riga è ancora quella che si stava verificando
+ *    (atto, presupposto e riferimento invariati): se nel frattempo qualcuno
+ *    l'ha corretta, quel riscontro è vecchio e non deve sovrascrivere il nuovo;
+ * 2. il tetto d'uso si consuma qui, una volta per riga: senza, un ciclo di
+ *    salvataggi in script sarebbe spesa illimitata;
+ * 3. un guasto non sparisce nel nulla: diventa un esito «da riscontrare» con
+ *    il motivo, così la riga dice perché non è stata verificata.
+ */
+async function eseguiRiscontroTitolo(lavoro: LavoroRiscontro): Promise<void> {
+  const adesso = new Date().toISOString();
+  const quota = await consumaQuotaAi(pool, 'RISCONTRO', {
+    utente: lavoro.utente,
+    spazioId: lavoro.spazioId,
+  });
+  const nonVerificabile = (motivo: string): RiscontroFonte => ({
+    ...RISCONTRO_VUOTO,
+    esito: 'NON_VERIFICABILE',
+    motivo,
+    eseguitoIl: adesso,
+  });
+  const senzaQuota =
+    quota.error ?? 'Limite di verifiche automatiche raggiunto: la riga resta da riscontrare.';
+
+  let riscontroNorma: RiscontroFonte | null = null;
+  if (lavoro.norma) {
+    riscontroNorma = quota.consentito
+      ? await riscontraSuFonti(promptRiscontroNorma(lavoro.presupposto, lavoro.atto), DOMINI_NORMA)
+      : nonVerificabile(senzaQuota);
+  }
+  let riscontroInterno: RiscontroFonte | null = null;
+  if (lavoro.interno && lavoro.dominioEnte) {
+    riscontroInterno = quota.consentito
+      ? await riscontraSuFonti(
+          promptRiscontroInterno(
+            lavoro.riferimentoInterno ?? '',
+            lavoro.presupposto,
+            lavoro.dominioEnte
+          ),
+          [lavoro.dominioEnte]
+        )
+      : nonVerificabile(senzaQuota);
+  }
+  if (riscontroNorma?.esito === 'CONFERMATO' && !riscontroNorma.confermatoDa)
+    riscontroNorma.confermatoDa = lavoro.utente;
+  if (riscontroInterno?.esito === 'CONFERMATO' && !riscontroInterno.confermatoDa)
+    riscontroInterno.confermatoDa = lavoro.utente;
+
+  // COALESCE: la colonna che non è stata ricercata resta com'era, invece di
+  // essere svuotata dal salvataggio di una sola delle due parti.
+  await pool.query(
+    `UPDATE "${lavoro.nomeSchema}".titoli_ente
+        SET riscontro_norma = COALESCE($2::jsonb, riscontro_norma),
+            riscontro_interno = COALESCE($3::jsonb, riscontro_interno),
+            aggiornato_il = now()
+      WHERE id = $1
+        AND atto = $4
+        AND presupposto_giuridico = $5
+        AND COALESCE(riferimento_interno, '') = $6`,
+    [
+      lavoro.titoloId,
+      riscontroNorma ? JSON.stringify(riscontroNorma) : null,
+      riscontroInterno ? JSON.stringify(riscontroInterno) : null,
+      lavoro.atto,
+      lavoro.presupposto,
+      lavoro.riferimentoInterno ?? '',
+    ]
+  );
+}
+
+/**
+ * Salva un codice dell'anagrafica. Il salvataggio non aspetta più le fonti.
+ *
+ * Che cosa è cambiato della parte giuridica (atto, presupposto, riferimento
+ * interno) lo decide `riscontriDaEseguire` in src/lib/titoliEnte/titoli.ts; la
+ * procedura di recupero e le note dell'ente non contano, perché sono prassi e
+ * non fonti da verificare. Se non c'è nulla da ricercare, la riga si salva e
+ * basta — nessuna chiamata all'AI, nessuna attesa.
+ */
 export async function salvaTitoloEnteAction(
   codiceSpazio: string,
-  titolo: TitoloEnte,
-  opzioni: { confermaNonVerificabile?: boolean } = {}
+  titolo: TitoloEnte
 ): Promise<EsitoSalvataggioTitolo> {
   try {
     const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
@@ -229,70 +339,22 @@ export async function salvaTitoloEnteAction(
       : null;
     const chi = contesto.email ?? contesto.modalita;
 
-    // Che cosa è cambiato della parte che il riscontro riguarda: atto,
-    // presupposto e riferimento interno. La procedura di recupero e le note
-    // non ci sono — sono prassi dell'ente, non fonti da verificare — e il
-    // riscontro non si riesegue su una riga già riscontrata. Se il resto è
-    // identico, salvare basta: nessuna ricerca, nessuna conferma, e il
-    // «da riscontrare» già presente resta com'è invece di tornare a chiedere
-    // il permesso a ogni salvataggio della procedura.
-    const giuridicoCambiato = vociGiuridicheCambiate(precedente, titolo);
-    let riscontroNorma: RiscontroFonte = precedente?.riscontro_norma ?? RISCONTRO_VUOTO;
-    let normaRicalcolata = false;
-    if (titolo.presuppostoGiuridico.trim()) {
-      if (giuridicoCambiato) {
-        riscontroNorma = await riscontraSuFonti(
-          promptRiscontroNorma(titolo.presuppostoGiuridico, titolo.atto),
-          DOMINI_NORMA
-        );
-        normaRicalcolata = true;
-      }
-    } else {
-      riscontroNorma = RISCONTRO_VUOTO;
-    }
-    let riscontroInterno: RiscontroFonte = precedente?.riscontro_interno ?? RISCONTRO_VUOTO;
-    let internoRicalcolato = false;
-    if (titolo.riferimentoInterno?.trim() && dominioEnte) {
-      if (giuridicoCambiato) {
-        riscontroInterno = await riscontraSuFonti(
-          promptRiscontroInterno(
-            titolo.riferimentoInterno,
-            titolo.presuppostoGiuridico,
-            dominioEnte
-          ),
-          [dominioEnte]
-        );
-        internoRicalcolato = true;
-      }
-    } else {
-      riscontroInterno = RISCONTRO_VUOTO;
-    }
-
-    const proposto: TitoloEnte = { ...titolo, riscontroNorma, riscontroInterno };
-    // Blocca solo un contrasto TROVATO ADESSO: un esito già archiviato non
-    // impedisce di correggere la procedura.
-    if (
-      (normaRicalcolata && riscontroNorma.esito === 'IN_CONTRASTO') ||
-      (internoRicalcolato && riscontroInterno.esito === 'IN_CONTRASTO')
-    ) {
-      return {
-        success: false,
-        bloccato: true,
-        titolo: proposto,
-        error:
-          'Il riscontro sulle fonti ufficiali è in contrasto con quanto scritto: la riga non è stata salvata.',
-      };
-    }
-    const daConfermare =
-      (normaRicalcolata && riscontroNorma.esito === 'NON_VERIFICABILE') ||
-      (internoRicalcolato && riscontroInterno.esito === 'NON_VERIFICABILE');
-    if (daConfermare && !opzioni.confermaNonVerificabile) {
-      return { success: false, richiedeConferma: true, titolo: proposto };
-    }
-    if (riscontroNorma.esito === 'CONFERMATO' && !riscontroNorma.confermatoDa)
-      riscontroNorma.confermatoDa = chi;
-    if (riscontroInterno.esito === 'CONFERMATO' && !riscontroInterno.confermatoDa)
-      riscontroInterno.confermatoDa = chi;
+    const daEseguire = riscontriDaEseguire(precedente, titolo, dominioEnte);
+    const partitoIl = new Date().toISOString();
+    // Le parti che si stanno verificando portano «in verifica» fin d'ora; le
+    // altre restano con l'esito che avevano.
+    const riscontroNorma: RiscontroFonte =
+      titolo.presuppostoGiuridico.trim() === ''
+        ? RISCONTRO_VUOTO
+        : daEseguire.norma
+          ? riscontroInCorso(partitoIl)
+          : (precedente?.riscontro_norma ?? RISCONTRO_VUOTO);
+    const riscontroInterno: RiscontroFonte =
+      !dominioEnte || (titolo.riferimentoInterno?.trim() || '') === ''
+        ? RISCONTRO_VUOTO
+        : daEseguire.interno
+          ? riscontroInCorso(partitoIl)
+          : (precedente?.riscontro_interno ?? RISCONTRO_VUOTO);
 
     // La procedura di recupero si salva con il titolo, ma non entra nel
     // riscontro: è prassi dell'ente, non una fonte da verificare.
@@ -314,12 +376,91 @@ export async function salvaTitoloEnteAction(
         attivitaRecupero,
       ]
     );
-    return { success: true, titolo: daRiga(r.rows[0]) };
+    const salvato = daRiga(r.rows[0]);
+    if (salvato.id && (daEseguire.norma || daEseguire.interno)) {
+      const lavoro: LavoroRiscontro = {
+        nomeSchema,
+        spazioId: contesto.spazioId,
+        utente: chi,
+        titoloId: salvato.id,
+        atto: titolo.atto.trim(),
+        presupposto: titolo.presuppostoGiuridico.trim(),
+        riferimentoInterno: titolo.riferimentoInterno?.trim() || null,
+        dominioEnte,
+        norma: daEseguire.norma,
+        interno: daEseguire.interno,
+      };
+      // after(): la risposta al browser parte subito, la ricerca continua nel
+      // server. Se l'ambiente la interrompe (timeout della funzione, processo
+      // chiuso) la riga resta «in verifica» e la scheda offre di riprenderla.
+      after(async () => {
+        try {
+          await eseguiRiscontroTitolo(lavoro);
+        } catch (e) {
+          console.error('[salvaTitoloEnteAction] riscontro in secondo piano', e);
+        }
+      });
+    }
+    return { success: true, titolo: salvato, inVerifica: daEseguire };
   } catch (error: unknown) {
     console.error('[salvaTitoloEnteAction]', error);
     return {
       success: false,
       error: `Salvataggio non riuscito: ${(error as Error).message || error}`,
+    };
+  }
+}
+
+/**
+ * Riprende a mano la verifica sulle fonti di una riga: serve quando la ricerca
+ * in secondo piano non è arrivata (server interrotto, tetto d'uso raggiunto,
+ * fonte muta) o quando si vuole rifarla subito dopo aver corretto un
+ * riferimento. Fa lo stesso lavoro di `eseguiRiscontroTitolo`, ma dentro la
+ * richiesta: qui l'esito si aspetta, e per questo è un'azione a sé — la scheda
+ * la chiama solo su richiesta di una persona, mai al salvataggio.
+ */
+export async function riscontraTitoloAction(
+  codiceSpazio: string,
+  titoloId: number
+): Promise<{ success: boolean; titolo?: TitoloEnte; error?: string }> {
+  try {
+    const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
+    if (!contesto || contesto.modalita === 'OPERATORE')
+      return { success: false, error: 'Operazione riservata all’Admin di Spazio.' };
+    if (!Number.isInteger(titoloId) || titoloId <= 0)
+      return { success: false, error: 'Codice non valido.' };
+    const nomeSchema = contesto.nomeSchema;
+    await assicuraTabelleParametriSpazio(nomeSchema);
+    const letto = await pool.query(`SELECT * FROM "${nomeSchema}".titoli_ente WHERE id = $1`, [
+      titoloId,
+    ]);
+    if (letto.rows.length === 0) return { success: false, error: 'Codice non trovato.' };
+    const titolo = daRiga(letto.rows[0]);
+    const cfg = await pool.query(
+      `SELECT dominio_ente FROM "${nomeSchema}".titoli_ente_config WHERE id = 1`
+    );
+    const dominioEnte: string | null = cfg.rows[0]?.dominio_ente ?? null;
+    await eseguiRiscontroTitolo({
+      nomeSchema,
+      spazioId: contesto.spazioId,
+      utente: contesto.email ?? contesto.modalita,
+      titoloId,
+      atto: titolo.atto,
+      presupposto: titolo.presuppostoGiuridico,
+      riferimentoInterno: titolo.riferimentoInterno,
+      dominioEnte,
+      norma: titolo.presuppostoGiuridico.trim() !== '',
+      interno: !!dominioEnte && (titolo.riferimentoInterno?.trim() || '') !== '',
+    });
+    const dopo = await pool.query(`SELECT * FROM "${nomeSchema}".titoli_ente WHERE id = $1`, [
+      titoloId,
+    ]);
+    return { success: true, titolo: daRiga(dopo.rows[0]) };
+  } catch (error: unknown) {
+    console.error('[riscontraTitoloAction]', error);
+    return {
+      success: false,
+      error: `Verifica non riuscita: ${(error as Error).message || error}`,
     };
   }
 }

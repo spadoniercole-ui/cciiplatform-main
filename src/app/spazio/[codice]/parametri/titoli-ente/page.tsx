@@ -4,6 +4,12 @@ import { ArrowLeft } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { TitoliEnteManager } from '@/components/spazio/TitoliEnteManager';
 
+// La ricerca sulle fonti ufficiali parte dopo il salvataggio (after()): le
+// serve il tempo della funzione, non quello della risposta. Senza questo
+// tetto la ricerca verrebbe interrotta a metà e la riga resterebbe «in
+// verifica» — con il pulsante «Riprendi», ma senza motivo di usarlo.
+export const maxDuration = 120;
+
 export default async function ParametriTitoliEntePage({
   params,
 }: {

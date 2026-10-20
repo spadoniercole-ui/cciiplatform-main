@@ -16,7 +16,13 @@
 //
 // Logica pura: validazione, precaricamento INPS, esiti del riscontro.
 
-export type EsitoRiscontro = 'CONFERMATO' | 'IN_CONTRASTO' | 'NON_VERIFICABILE' | 'NON_ESEGUITO';
+export type EsitoRiscontro =
+  | 'CONFERMATO'
+  | 'IN_CONTRASTO'
+  | 'NON_VERIFICABILE'
+  /** La ricerca sulle fonti è partita e non ha ancora risposto (0.133.4). */
+  | 'IN_CORSO'
+  | 'NON_ESEGUITO';
 
 export interface RiscontroFonte {
   esito: EsitoRiscontro;
@@ -67,6 +73,7 @@ export const ETICHETTA_ESITO: Record<EsitoRiscontro, string> = {
   CONFERMATO: 'Confermato',
   IN_CONTRASTO: 'In contrasto',
   NON_VERIFICABILE: 'Da riscontrare',
+  IN_CORSO: 'In verifica',
   NON_ESEGUITO: 'Non ancora riscontrato',
 };
 
@@ -80,6 +87,16 @@ export function validaTitolo(t: Partial<TitoloEnte>): string | null {
   return null;
 }
 
+/** Una riga di `titoli_ente` come arriva da Postgres (snake_case, JSONB). */
+export interface RigaTitoloSalvata {
+  id?: number | null;
+  atto?: string | null;
+  presupposto_giuridico?: string | null;
+  riferimento_interno?: string | null;
+  riscontro_norma?: RiscontroFonte | null;
+  riscontro_interno?: RiscontroFonte | null;
+}
+
 /**
  * Che cosa il riscontro sulle fonti riguarda davvero: atto o flusso, presupposto
  * giuridico, riferimento interno. La procedura di recupero e le note dell'ente
@@ -90,14 +107,7 @@ export function validaTitolo(t: Partial<TitoloEnte>): string | null {
  * Prima volta (nessun precedente): sì, c'è qualcosa da riscontrare.
  */
 export function vociGiuridicheCambiate(
-  precedente:
-    | {
-        atto?: string | null;
-        presupposto_giuridico?: string | null;
-        riferimento_interno?: string | null;
-      }
-    | null
-    | undefined,
+  precedente: RigaTitoloSalvata | null | undefined,
   titolo: Pick<TitoloEnte, 'atto' | 'presuppostoGiuridico' | 'riferimentoInterno'>
 ): boolean {
   if (!precedente) return true;
@@ -107,6 +117,77 @@ export function vociGiuridicheCambiate(
     ((precedente.riferimento_interno as string | null) ?? null) !==
       (titolo.riferimentoInterno?.trim() || null)
   );
+}
+
+/**
+ * RISCONTRO IN SECONDO PIANO (0.133.4). Il salvataggio non aspetta più l'AI:
+ * la riga si scrive subito e la ricerca sulle fonti parte dopo la risposta.
+ * Finché la fonte non risponde la riga porta questo stato, che non è un esito
+ * — è un lavoro in corso, e va detto così a schermo.
+ *
+ * `eseguitoIl` segna la PARTENZA: è quello che permette di riconoscere una
+ * ricerca rimasta appesa (vedi `riscontroFermo`).
+ */
+export function riscontroInCorso(partitoIl: string): RiscontroFonte {
+  return {
+    esito: 'IN_CORSO',
+    estratto: null,
+    url: null,
+    motivo: 'Verifica sulle fonti ufficiali in corso.',
+    eseguitoIl: partitoIl,
+    confermatoDa: null,
+  };
+}
+
+/** Dopo quanto una ricerca ancora «in verifica» si considera interrotta. */
+export const MINUTI_PRIMA_DI_RIPROVARE = 3;
+
+/**
+ * Una ricerca in corso non può durare per sempre: se la funzione che la esegue
+ * viene interrotta (timeout del server, chiusura del processo), la riga
+ * resterebbe «in verifica» senza che nessuno la chiuda. Oltre la soglia la si
+ * mostra come interrotta e si offre di riprenderla.
+ *
+ * Una ricerca in corso senza data di partenza è anch'essa da riprendere:
+ * meglio un pulsante in più che un'attesa senza fine.
+ */
+export function riscontroFermo(
+  r: RiscontroFonte,
+  adessoMs: number,
+  minuti = MINUTI_PRIMA_DI_RIPROVARE
+): boolean {
+  if (r.esito !== 'IN_CORSO') return false;
+  if (!r.eseguitoIl) return true;
+  const partito = new Date(r.eseguitoIl).getTime();
+  if (Number.isNaN(partito)) return true;
+  return adessoMs - partito > minuti * 60 * 1000;
+}
+
+/**
+ * Quali delle due ricerche servono, dati la riga salvata e quella che si sta
+ * salvando. È la regola che tiene il salvataggio leggero: si ricerca solo ciò
+ * che è cambiato davvero, e si ricerca quando non c'è ancora un esito.
+ *
+ * Un riscontro ancora «in verifica» si riprende: o è di un salvataggio
+ * precedente mai concluso, o è stato interrotto.
+ */
+export function riscontriDaEseguire(
+  precedente: RigaTitoloSalvata | null | undefined,
+  titolo: Pick<TitoloEnte, 'atto' | 'presuppostoGiuridico' | 'riferimentoInterno'>,
+  dominioEnte: string | null
+): { norma: boolean; interno: boolean } {
+  const cambiata = vociGiuridicheCambiate(precedente, titolo);
+  const daRifare = (r: RiscontroFonte | null | undefined) =>
+    !r || r.esito === 'NON_ESEGUITO' || r.esito === 'IN_CORSO';
+  return {
+    norma:
+      titolo.presuppostoGiuridico.trim() !== '' &&
+      (cambiata || daRifare(precedente?.riscontro_norma)),
+    interno:
+      !!dominioEnte &&
+      (titolo.riferimentoInterno?.trim() || '') !== '' &&
+      (cambiata || daRifare(precedente?.riscontro_interno)),
+  };
 }
 
 /** Trova il titolo di una partita dal suo codice (i tracciati portano codici anche con zeri o spazi). */

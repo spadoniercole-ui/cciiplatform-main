@@ -26,6 +26,35 @@ il terzo per correzioni.
 
 ---
 
+## 0.133.4 — 2026-10-20
+
+**Titoli di credito: il riscontro sulle fonti non blocca più il salvataggio**
+
+- Salvare un codice scrive la riga subito. La ricerca su Gazzetta Ufficiale,
+  Normattiva e sul sito dell’ente parte **dopo** la risposta e chiude la riga
+  quando la fonte risponde, anche se chi ha salvato ha già chiuso la pagina:
+  prima il pulsante restava fermo su «Riscontro sulle fonti ufficiali in
+  corso…» e un minuto di attesa — o un timeout — poteva far perdere il lavoro.
+- Finché la fonte non risponde la riga porta lo stato **In verifica**; poi
+  diventa Confermato, Da riscontrare o In contrasto. Se la ricerca viene
+  interrotta (tempo della funzione esaurito, processo chiuso) la riga lo dice e
+  si riprende con «Riprendi», che la esegue dentro la richiesta.
+- La tabella ha una colonna **Riscontro sulle fonti** con i due esiti per riga
+  e si aggiorna da sola ogni pochi secondi finché c’è qualcosa in verifica:
+  l’esito compare dove serve, senza ricaricare la pagina. Un avviso in testa
+  elenca i codici in contrasto, e la scheda mostra il passo trovato.
+- Cambia una regola, e va detta: un riscontro **in contrasto** non impedisce
+  più di salvare. Quando la risposta arriva dopo il salvataggio non c’è più un
+  momento in cui bloccare, e non serve: la riga resta salvata e segnalata, con
+  la fonte e il passo. Per la stessa ragione sparisce la conferma umana sul
+  «da riscontrare» — la riga si salva già con quell’etichetta, e nessun esito
+  viene nascosto.
+- Le verifiche automatiche sulle fonti hanno un tetto d’uso proprio
+  (`AI_RISCONTRI_PER_UTENTE_ORA`, predefinito 60, e
+  `AI_RISCONTRI_PER_SPAZIO_GIORNO`, predefinito 600): ferma i cicli, non il
+  lavoro di chi sistema l’anagrafica. Superato il tetto la riga resta «da
+  riscontrare» e ne dice il motivo.
+
 ## 0.133.3 — 2026-10-19
 
 **Titoli di credito: i riscontri archiviati si vedono prima di salvare**

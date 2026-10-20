@@ -75,7 +75,12 @@ anche la CI in `.github/workflows/ci.yml`).
   un'azione non ha la guardia.
 - **AI**: solo `@anthropic-ai/sdk` (`ANTHROPIC_API_KEY`), usato nelle server action
   (proposta, screening, visura, confronto liquidatorio, chatbot…) e in
-  `src/app/api/xbrl/report-ai`.
+  `src/app/api/xbrl/report-ai`. Un lavoro AI che non deve bloccare la risposta si
+  avvia con `after()` di `next/server` (esempio: il riscontro sulle fonti dei titoli
+  dell'ente in `src/app/actions/titoliEnte.ts`): la riga si salva subito con lo stato
+  «in corso» e l'esito la chiude quando arriva. In cloud serve un `maxDuration`
+  generoso nella pagina che ospita il pulsante, altrimenti la ricerca viene
+  interrotta; la scheda deve riconoscere il caso e offrire di riprenderla.
 - **File**: Vercel Blob tramite `src/lib/blobStore.ts` (filesystem locale in portable).
 
 ### Variabili d'ambiente
@@ -84,7 +89,8 @@ anche la CI in `.github/workflows/ci.yml`).
 `BLOB_READ_WRITE_TOKEN`, `NEXT_PUBLIC_COPYRIGHT`. Portable: `PORTABLE`, `NEXT_PUBLIC_PORTABLE`,
 `PORTABLE_*` (vedi `src/lib/portableDb.ts`, `src/lib/portableBootstrap.ts`). Edizione server:
 `EDIZIONE_SERVER`, `DATABASE_SSL`, `ARCHIVIO_FILE_DIR`, `BACKUP_DIR` (vedi `src/lib/edizioneServer.ts`).
-Limiti AI (facoltativi): `AI_VISURE_PER_UTENTE_ORA`, `AI_VISURE_PER_SPAZIO_GIORNO` (`src/lib/limiteAi.ts`).
+Limiti AI (facoltativi): `AI_VISURE_PER_UTENTE_ORA`, `AI_VISURE_PER_SPAZIO_GIORNO`,
+`AI_RISCONTRI_PER_UTENTE_ORA`, `AI_RISCONTRI_PER_SPAZIO_GIORNO` (`src/lib/limiteAi.ts`).
 
 ## Edizione portable
 

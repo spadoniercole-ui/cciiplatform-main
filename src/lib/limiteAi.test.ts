@@ -16,6 +16,11 @@ describe('limitiAi', () => {
     expect(limitiAi('VISURA', env({ AI_VISURE_PER_UTENTE_ORA: '0' })).perUtenteOra).toBe(30);
     expect(limitiAi('VISURA', env({ AI_VISURE_PER_UTENTE_ORA: 'abc' })).perUtenteOra).toBe(30);
   });
+
+  it('i riscontri sulle fonti hanno un tetto proprio', () => {
+    expect(limitiAi('RISCONTRO', env({}))).toEqual({ perUtenteOra: 60, perSpazioGiorno: 600 });
+    expect(limitiAi('RISCONTRO', env({ AI_RISCONTRI_PER_UTENTE_ORA: '3' })).perUtenteOra).toBe(3);
+  });
 });
 
 describe('consumaQuotaAi', () => {
@@ -54,6 +59,20 @@ describe('consumaQuotaAi', () => {
     expect((await consumaQuotaAi(db, 'VISURA', chi, e)).consentito).toBe(true);
     expect((await consumaQuotaAi(db, 'VISURA', chi, e)).consentito).toBe(true);
     expect((await consumaQuotaAi(db, 'VISURA', chi, e)).consentito).toBe(false);
+  });
+
+  it('il messaggio del tetto dice quale lavoro si è fermato', async () => {
+    const e = env({ AI_RISCONTRI_PER_UTENTE_ORA: '1', AI_RISCONTRI_PER_SPAZIO_GIORNO: '100' });
+    expect(
+      (await consumaQuotaAi(db, 'RISCONTRO', { utente: 'sara', spazioId: 4 }, e)).consentito
+    ).toBe(true);
+    const oltre = await consumaQuotaAi(db, 'RISCONTRO', { utente: 'sara', spazioId: 4 }, e);
+    expect(oltre.consentito).toBe(false);
+    expect(oltre.error).toMatch(/1 verifiche sulle fonti all'ora/);
+    // I contatori delle visure non ne risentono.
+    expect(
+      (await consumaQuotaAi(db, 'VISURA', { utente: 'sara', spazioId: 4 }, e)).consentito
+    ).toBe(true);
   });
 
   it('con il database irraggiungibile la chiamata è consentita', async () => {

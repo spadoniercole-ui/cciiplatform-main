@@ -16,12 +16,14 @@ import {
   Check,
   Upload,
   ClipboardList,
+  RefreshCw,
 } from 'lucide-react';
 import { leggiCodiciDaExcel } from '@/lib/titoliEnte/anagraficaExcel';
 import {
   eliminaTitoloEnteAction,
   ottieniTitoliEnteAction,
   importaAnagraficaCodiciAction,
+  riscontraTitoloAction,
   salvaAttivitaRecuperoAction,
   salvaDominioEnteAction,
   salvaTitoloEnteAction,
@@ -35,6 +37,7 @@ import {
   AVVERTENZA_TITOLI_ENTE,
   ETICHETTA_ESITO,
   RISCONTRO_VUOTO,
+  riscontroFermo,
   type RiscontroFonte,
   type TitoloEnte,
 } from '@/lib/titoliEnte/titoli';
@@ -55,27 +58,100 @@ interface Props {
 const CLASSE_CAMPO =
   'w-full p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 disabled:text-slate-500';
 
+function classeEsito(esito: RiscontroFonte['esito']): string {
+  switch (esito) {
+    case 'CONFERMATO':
+      return 'bg-emerald-100 text-emerald-800';
+    case 'IN_CONTRASTO':
+      return 'bg-red-100 text-red-800';
+    case 'NON_VERIFICABILE':
+      return 'bg-amber-100 text-amber-800';
+    case 'IN_CORSO':
+      return 'bg-sky-100 text-sky-800';
+    default:
+      return 'bg-slate-100 text-slate-500';
+  }
+}
+
+/** Un esito compatto, per la tabella. */
+function BadgeRiscontro({ r }: { r: RiscontroFonte }) {
+  return (
+    <span
+      className={`inline-block font-bold uppercase rounded px-1.5 py-0.5 text-[9px] ${classeEsito(
+        r.esito
+      )}`}
+    >
+      {ETICHETTA_ESITO[r.esito]}
+    </span>
+  );
+}
+
+/**
+ * Lo stato dei riscontri di una riga, in tabella: è qui che si vede arrivare
+ * l'esito della ricerca partita col salvataggio, senza riaprire la scheda.
+ * Una ricerca rimasta appesa si può riprendere; un contrasto resta in vista
+ * finché la riga non viene corretta.
+ */
+function RiscontriRiga({
+  titolo,
+  onRiprendi,
+  inCorso,
+}: {
+  titolo: TitoloEnte;
+  onRiprendi: () => void;
+  inCorso: boolean;
+}) {
+  const adesso = Date.now();
+  const visibile = (r: RiscontroFonte) => r.esito !== 'NON_ESEGUITO';
+  const daRiprendere =
+    riscontroFermo(titolo.riscontroNorma, adesso) ||
+    riscontroFermo(titolo.riscontroInterno, adesso);
+  return (
+    <div className="space-y-0.5">
+      {visibile(titolo.riscontroNorma) && (
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-slate-400 w-16 shrink-0">Norma</span>
+          <BadgeRiscontro r={titolo.riscontroNorma} />
+        </div>
+      )}
+      {visibile(titolo.riscontroInterno) && (
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-slate-400 w-16 shrink-0">Rif. interno</span>
+          <BadgeRiscontro r={titolo.riscontroInterno} />
+        </div>
+      )}
+      {!visibile(titolo.riscontroNorma) && !visibile(titolo.riscontroInterno) && (
+        <span className="text-[10px] text-slate-400">non ancora riscontrato</span>
+      )}
+      {daRiprendere && (
+        <button
+          type="button"
+          onClick={onRiprendi}
+          disabled={inCorso}
+          className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-sky-800 disabled:text-slate-400"
+          title="La ricerca non è arrivata: riprendila ora"
+        >
+          <RefreshCw className="w-3 h-3" /> Riprendi
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Esito({ r, etichetta }: { r: RiscontroFonte; etichetta: string }) {
   const verificatoIl = r.eseguitoIl ? new Date(r.eseguitoIl) : null;
   const dataVerifica =
     verificatoIl && !Number.isNaN(verificatoIl.getTime())
       ? verificatoIl.toLocaleDateString('it-IT')
       : null;
-  const classe =
-    r.esito === 'CONFERMATO'
-      ? 'bg-emerald-100 text-emerald-800'
-      : r.esito === 'IN_CONTRASTO'
-        ? 'bg-red-100 text-red-800'
-        : r.esito === 'NON_VERIFICABILE'
-          ? 'bg-amber-100 text-amber-800'
-          : 'bg-slate-100 text-slate-500';
+  const classe = classeEsito(r.esito);
   return (
     <div className="text-[10px] text-slate-600">
       <span className="text-slate-400 mr-1">{etichetta}:</span>
       <span className={`font-bold uppercase rounded px-1.5 py-0.5 ${classe}`}>
         {ETICHETTA_ESITO[r.esito]}
       </span>
-      {r.motivo && <span className="ml-1">{r.motivo}</span>}
+      {r.motivo && r.esito !== 'IN_CORSO' && <span className="ml-1">{r.motivo}</span>}
       {r.estratto && <span className="block italic text-slate-500 mt-0.5">«{r.estratto}»</span>}
       {r.url && (
         <a
@@ -90,7 +166,9 @@ function Esito({ r, etichetta }: { r: RiscontroFonte; etichetta: string }) {
       {r.confermatoDa && (
         <span className="block text-slate-400">confermato da {r.confermatoDa}</span>
       )}
-      {dataVerifica && <span className="block text-slate-400">verificato il {dataVerifica}</span>}
+      {dataVerifica && r.esito !== 'IN_CORSO' && (
+        <span className="block text-slate-400">verificato il {dataVerifica}</span>
+      )}
     </div>
   );
 }
@@ -134,8 +212,9 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
   const [inModifica, setInModifica] = useState<TitoloEnte | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
   const [inCorso, setInCorso] = useState(false);
-  const [esitoProposto, setEsitoProposto] = useState<TitoloEnte | null>(null);
   const [esitoImport, setEsitoImport] = useState<string | null>(null);
+  /** Codice la cui verifica è stata ripresa a mano: gira dentro la richiesta. */
+  const [riprendendo, setRiprendendo] = useState<number | null>(null);
   // Procedura di recupero in scrittura: una riga alla volta, salvata a parte
   // dal titolo (non passa dal riscontro sulle fonti).
   const [procedura, setProcedura] = useState<{ id: number; codice: string; testo: string } | null>(
@@ -160,6 +239,35 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
     caricaMaterie();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema]);
+
+  // LA RICERCA SULLE FONTI LAVORA DOPO IL SALVATAGGIO (0.133.4): finché una
+  // riga è «in verifica» la scheda si aggiorna da sola, così l'esito arriva
+  // sulla riga senza ricaricare la pagina. Il controllo si ferma quando non
+  // c'è più nulla in corso, o quando la ricerca risulta interrotta — che è il
+  // momento in cui si offre di riprenderla.
+  const verificaInCorso = titoli.some(
+    (t) =>
+      (t.riscontroNorma.esito === 'IN_CORSO' && !riscontroFermo(t.riscontroNorma, Date.now())) ||
+      (t.riscontroInterno.esito === 'IN_CORSO' && !riscontroFermo(t.riscontroInterno, Date.now()))
+  );
+  useEffect(() => {
+    if (!verificaInCorso) return;
+    const id = setInterval(() => {
+      void ottieniTitoliEnteAction(nomeSchema).then((r) => {
+        if (r.success) setTitoli(r.titoli);
+      });
+    }, 5000);
+    return () => clearInterval(id);
+  }, [verificaInCorso, nomeSchema]);
+
+  const riprendi = async (id: number) => {
+    setRiprendendo(id);
+    setErrore(null);
+    const r = await riscontraTitoloAction(codice, id);
+    setRiprendendo(null);
+    if (!r.success) setErrore(r.error ?? 'Verifica non riuscita.');
+    await carica();
+  };
 
   const salvaProcedura = async () => {
     if (!procedura) return;
@@ -189,31 +297,38 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
     );
   })();
 
-  const salva = async (conferma = false) => {
+  // Il riscontro da mostrare nella scheda è quello SALVATO, non la copia in
+  // modifica: se la ricerca in secondo piano arriva con la scheda aperta,
+  // l'esito deve comparire anche lì.
+  const archiviato =
+    inModifica && inModifica.id !== null
+      ? (titoli.find((t) => t.id === inModifica.id) ?? inModifica)
+      : inModifica;
+  const codiciInContrasto = titoli.filter(
+    (t) => t.riscontroNorma.esito === 'IN_CONTRASTO' || t.riscontroInterno.esito === 'IN_CONTRASTO'
+  );
+
+  // Il salvataggio non aspetta più le fonti: la riga si scrive subito, la
+  // ricerca parte dopo e chiude la riga quando la fonte risponde. Per questo
+  // qui non ci sono più né il blocco sul contrasto né la conferma sul «da
+  // riscontrare»: l'esito si legge sulla riga, non prima di salvarla.
+  const salva = async () => {
     if (!inModifica) return;
     setInCorso(true);
     setErrore(null);
-    setEsitoProposto(null);
-    const r = await salvaTitoloEnteAction(codice, inModifica, {
-      confermaNonVerificabile: conferma,
-    });
+    const r = await salvaTitoloEnteAction(codice, inModifica);
     setInCorso(false);
-    if (r.success) {
-      setInModifica(null);
-      await carica();
+    if (!r.success) {
+      setErrore(r.error ?? 'Salvataggio non riuscito.');
       return;
     }
-    if (r.richiedeConferma && r.titolo) {
-      setEsitoProposto(r.titolo);
-      const ok = await confermaApp(
-        'Il riscontro automatico non ha potuto verificare uno dei riferimenti sulle fonti ufficiali. La riga può essere salvata con l’etichetta «da riscontrare»: resterà segnalata finché un riscontro non la chiude. Salvare comunque?',
-        { titolo: 'Riferimento da riscontrare', etichettaConferma: 'Salva come da riscontrare' }
-      );
-      if (ok) await salva(true);
-      return;
-    }
-    if (r.bloccato && r.titolo) setEsitoProposto(r.titolo);
-    setErrore(r.error ?? 'Salvataggio non riuscito.');
+    setInModifica(null);
+    setEsitoImport(
+      r.inVerifica && (r.inVerifica.norma || r.inVerifica.interno)
+        ? 'Riga salvata. La verifica sulle fonti è partita in secondo piano: l’esito comparirà su questa riga, anche se chiudi la pagina.'
+        : null
+    );
+    await carica();
   };
 
   return (
@@ -229,6 +344,10 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
             le materie da riscontrare; la ricerca dell’AI in blocco, che propone per ogni materia
             presupposto giuridico e circolari; la conferma di una persona; i codici dell’anagrafica
             che cadono nella materia. Il titolo di una partita è quello della sua materia.
+          </p>
+          <p className="text-[11px] text-slate-600 mt-1">
+            La ricerca sulle fonti ufficiali non tiene fermo il salvataggio: la riga si scrive e
+            l’esito — confermato, da riscontrare o in contrasto — compare da solo sulla riga.
           </p>
           <p className="text-[11px] text-slate-600 mt-1">
             Accanto al titolo, ogni codice porta la <strong>procedura di recupero</strong>: i passi
@@ -411,76 +530,81 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
               </span>
             </div>
           </div>
-          {/* Lo stato dei riscontri già archiviati, visibile prima di salvare:
-              un «da riscontrare» che si ritrova qui viene da un esito precedente,
-              non da un errore del salvataggio appena fatto. */}
-          {inModifica.id !== null && !esitoProposto && (
+          {/* Lo stato dei riscontri SALVATI, mentre si modifica la riga: un
+              «da riscontrare» o un «in contrasto» che si ritrova qui viene da
+              una ricerca precedente, non dal salvataggio appena fatto. */}
+          {inModifica.id !== null && (
             <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-1">
               <span className="block text-[9px] font-bold text-slate-400 uppercase">
-                Riscontri archiviati
+                Riscontri sulle fonti
               </span>
-              {inModifica.riscontroNorma.esito === 'NON_ESEGUITO' &&
-              inModifica.riscontroInterno.esito === 'NON_ESEGUITO' ? (
-                <span className="text-[10px] text-slate-500">
-                  Nessun riscontro ancora eseguito: la ricerca parte al primo salvataggio della
-                  parte giuridica.
-                </span>
-              ) : (
-                <>
-                  <Esito r={inModifica.riscontroNorma} etichetta="Norma" />
-                  <Esito r={inModifica.riscontroInterno} etichetta="Riferimento interno" />
-                </>
-              )}
+              {(() => {
+                const r = archiviato ?? inModifica;
+                if (
+                  r.riscontroNorma.esito === 'NON_ESEGUITO' &&
+                  r.riscontroInterno.esito === 'NON_ESEGUITO'
+                )
+                  return (
+                    <span className="text-[10px] text-slate-500">
+                      Nessun riscontro ancora eseguito: la ricerca parte al salvataggio della parte
+                      giuridica e l’esito compare qui da solo.
+                    </span>
+                  );
+                return (
+                  <>
+                    <Esito r={r.riscontroNorma} etichetta="Norma" />
+                    <Esito r={r.riscontroInterno} etichetta="Riferimento interno" />
+                  </>
+                );
+              })()}
               <span className="block text-[10px] text-slate-400 pt-1">
                 Restano com’erano finché atto, presupposto giuridico e riferimento interno non
-                cambiano: correggere la sola procedura non li tocca.
+                cambiano: correggere la sola procedura non li tocca. Salvando una modifica giuridica
+                la verifica riparte, e questo riquadro si aggiorna da solo.
               </span>
-            </div>
-          )}
-          {esitoProposto && (
-            <div className="bg-white border border-slate-200 rounded-lg p-3 space-y-1">
-              <span className="block text-[9px] font-bold text-slate-400 uppercase">
-                Esito del riscontro appena eseguito
-              </span>
-              <Esito r={esitoProposto.riscontroNorma} etichetta="Norma" />
-              <Esito r={esitoProposto.riscontroInterno} etichetta="Riferimento interno" />
             </div>
           )}
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => salva(false)}
+              onClick={() => void salva()}
               disabled={inCorso}
               className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
             >
-              <Save className="w-3.5 h-3.5" />{' '}
-              {inCorso
-                ? soloTesto
-                  ? 'Salvataggio…'
-                  : 'Riscontro sulle fonti ufficiali in corso…'
-                : soloTesto
-                  ? 'Salva'
-                  : 'Salva e riscontra'}
+              <Save className="w-3.5 h-3.5" /> {inCorso ? 'Salvataggio…' : 'Salva'}
             </button>
             <button
               type="button"
               onClick={() => {
                 setInModifica(null);
-                setEsitoProposto(null);
                 setErrore(null);
               }}
               className="px-3 py-2 text-[10px] font-bold uppercase text-slate-500"
             >
               Annulla
             </button>
-            {inCorso && !soloTesto && (
+            {!inCorso && !soloTesto && (
               <span className="text-[11px] text-slate-500">
-                Può richiedere fino a un minuto: la ricerca è limitata a Gazzetta Ufficiale,
-                Normattiva e al sito dell’ente.
+                La verifica sulle fonti parte dopo il salvataggio e aggiorna la riga da sola: non
+                serve aspettare qui. La ricerca è limitata a Gazzetta Ufficiale, Normattiva e al
+                sito dell’ente.
               </span>
             )}
           </div>
         </div>
+      )}
+
+      {codiciInContrasto.length > 0 && (
+        <p className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg p-2 flex items-start gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>
+            {codiciInContrasto.length === 1
+              ? 'Un codice è in contrasto con le fonti ufficiali'
+              : `${codiciInContrasto.length} codici sono in contrasto con le fonti ufficiali`}
+            : il passo trovato è nella scheda. Correggere la parte giuridica (o il riferimento
+            interno) fa ripartire la verifica da sola.
+          </span>
+        </p>
       )}
 
       <div className="overflow-x-auto border border-slate-200 rounded-lg">
@@ -491,6 +615,7 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
               <th className="px-3 py-2 font-bold">Atto o flusso</th>
               <th className="px-3 py-2 font-bold">Materia (titolo della partita)</th>
               <th className="px-3 py-2 font-bold">Attività di recupero</th>
+              <th className="px-3 py-2 font-bold">Riscontro sulle fonti</th>
               <th className="px-3 py-2 font-bold"></th>
             </tr>
           </thead>
@@ -544,13 +669,19 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                       <span className="text-amber-700">da scrivere</span>
                     )}
                   </td>
+                  <td className="px-3 py-2">
+                    <RiscontriRiga
+                      titolo={t}
+                      inCorso={riprendendo === t.id}
+                      onRiprendi={() => {
+                        if (t.id) void riprendi(t.id);
+                      }}
+                    />
+                  </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <button
                       type="button"
-                      onClick={() => {
-                        setInModifica(t);
-                        setEsitoProposto(null);
-                      }}
+                      onClick={() => setInModifica(t)}
                       className="text-[10px] font-bold uppercase text-blue-700 mr-2"
                     >
                       Modifica
@@ -595,7 +726,7 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                 </tr>
                 {procedura && t.id !== null && procedura.id === t.id && (
                   <tr className="bg-slate-50">
-                    <td colSpan={5} className="px-3 py-4 space-y-3">
+                    <td colSpan={6} className="px-3 py-4 space-y-3">
                       <div className="flex items-center gap-2">
                         <ClipboardList className="w-3.5 h-3.5 text-slate-500" />
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
@@ -663,7 +794,8 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
       </div>
       <p className="text-[10px] text-slate-400 flex items-center gap-1">
         <Check className="w-3 h-3" /> Un riscontro confermato resta sulla riga finché norma o
-        riferimento non cambiano.
+        riferimento non cambiano. La verifica parte dopo il salvataggio: le righe «in verifica» si
+        aggiornano da sole, senza ricaricare la pagina.
       </p>
     </div>
   );
