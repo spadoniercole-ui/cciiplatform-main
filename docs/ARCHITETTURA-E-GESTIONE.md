@@ -469,7 +469,9 @@ modifica.
    tenant esistenti; aggiungi il test di migrazione se tocchi dati.
 7. **UI**: nessun handler nei Server Component; etichette e messaggi in italiano; mai un
    default silenzioso: se manca un dato, dillo.
-8. **Chiudi**: version bump triad, voce di CHANGELOG, `type-check`, `lint`, `test`, `build`.
+8. **Chiudi**: version bump triad, voce di CHANGELOG, `type-check`, `lint`, `test`, `build`,
+   poi commit e push su GitHub, deploy di anteprima atteso fino a Ready e stesso commit in
+   produzione su `main` (vedi `CLAUDE.md`, «Consegna: GitHub, anteprima e produzione»).
 
 ### Cosa serve per lavorare bene
 
@@ -482,7 +484,9 @@ modifica.
 
 ### Cosa non si fa senza autorizzazione
 
-- `reset_database.sql`, `azzeraDatabase`, ripristini, `git push`, deploy.
+- `reset_database.sql`, `azzeraDatabase`, ripristini del database, e ogni azione
+  irreversibile sui dati. (Commit, push e pubblicazione in anteprima e produzione non stanno
+  qui: sono parte ordinaria di ogni consegna, vedi `CLAUDE.md`.)
 - Cambi di formule/soglie normative senza aggiornare checklist e test.
 - Rinomina della chiave permesso `'report'` (è il modulo Proposta).
 - Modifiche che funzionano solo in cloud e rompono portable/server.

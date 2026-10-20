@@ -33,6 +33,44 @@ npm run build:portable
 **Prima di ogni consegna**: `type-check`, `lint`, `test`, `build` devono passare (li esegue
 anche la CI in `.github/workflows/ci.yml`).
 
+## Consegna: GitHub, anteprima e produzione (regola permanente)
+
+Ogni modifica va **consegnata**, non solo scritta. Una consegna che si ferma al worktree, o
+solo all'anteprima, è incompleta: alla fine del lavoro si aggiornano **GitHub, il deploy di
+anteprima e il deploy di produzione**, sempre tutti e tre. Il push e la pubblicazione sono
+quindi autorizzati come parte ordinaria del lavoro, senza chiederli di nuovo.
+
+1. **GitHub** — commit in italiano sul ramo di lavoro (messaggio che dice *perché*: cosa
+   cambia e per chi), poi `git push origin <ramo>`. Nessun lavoro resta non committato:
+   se un file è di troppo, lo si toglie dal commit, non lo si lascia fuori in silenzio.
+2. **Anteprima** — il push fa partire il deploy *Preview* su Vercel. Va atteso fino allo stato
+   **Ready** del commit appena pushato (non di uno precedente), e le correzioni si fanno nel
+   ramo, non direttamente online.
+3. **Produzione** — lo stesso commit arriva su `main` (il ramo di produzione) e diventa il
+   deploy *Production*. Si verifica la versione in fondo alla pagina di login: deve coincidere
+   con `APP_VERSION` e con l'ultima voce di `CHANGELOG.md`.
+
+Regole pratiche:
+
+- `main` è la produzione. Non si forza mai il push su `main` e non si salta la CI: su di essa
+  girano `type-check`, `lint`, `test`, `build` e la costruzione dell'immagine server.
+- Se un controllo fallisce **non si pusha**: prima si corregge la causa.
+- Se il deploy non arriva a Ready, o la versione online non è quella attesa, va detto: una
+  consegna è tale solo con anteprima e produzione verificate. Quando il push non è possibile
+  (credenziali assenti, ramo protetto, CI rossa) si riporta il blocco con il comando che
+  servirà a completarlo, senza dichiarare «fatto» ciò che è solo locale.
+- Anche le modifiche di solo tooling/CI (che non chiedono il bump di versione) seguono lo
+  stesso giro.
+- Se dal terminale non si ha accesso a Vercel (niente `vercel` CLI né token), lo stato del
+  deploy si legge nel pannello dell'utente: si chiede conferma di *Preview* Ready e della
+  versione in produzione invece di darla per buona.
+- Restano soggetti ad autorizzazione esplicita soltanto gli atti distruttivi
+  (`reset_database.sql`, `azzeraDatabase`, ripristini del database) e ogni altra azione
+  irreversibile sui dati.
+- Edizione portable e server non si pubblicano da qui: la portable si costruisce con
+  `npm run build:portable` e si consegna come pacchetto, il server on-premise si aggiorna
+  secondo `docs/INSTALLAZIONE-SERVER.md`.
+
 ## Architettura
 
 - `src/app/` — App Router. `page.tsx` = login; `superadmin/…`; `spazio/[codice]/…`.
