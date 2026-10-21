@@ -40,7 +40,11 @@ export function generaPdfReparto(d: DocumentoReparto): jsPDF {
   y += 5;
   doc.text(`Verifica riferita al ${data}`, 14, y);
   y += 5;
+  // La versione sta in chiaro sul foglio: è ciò che permette, quando arriva
+  // una posizione aggiornata, di dire al reparto «quel PDF è la versione X».
   doc.text(`Posizioni elencate: ${d.righe} — totale ${formattaImportoEuro(d.totale)}`, 14, y);
+  y += 5;
+  doc.text(`Versione del documento: ${d.versione}`, 14, y);
   y += 5;
   if (d.posizioniDaContabilizzare > 0) {
     doc.text(
@@ -151,7 +155,7 @@ export function generaPdfReparto(d: DocumentoReparto): jsPDF {
     doc.setPage(i);
     doc.setFontSize(7);
     doc.setTextColor(120);
-    doc.text(`${d.azienda} — ${d.reparto} — verifica al ${data}`, 14, 290);
+    doc.text(`${d.azienda} — ${d.reparto} — verifica al ${data} — versione ${d.versione}`, 14, 290);
     doc.text(`pagina ${i} di ${pagine}`, 196, 290, { align: 'right' });
   }
 

@@ -54,6 +54,7 @@ const documento = (over: Partial<DocumentoReparto> = {}): DocumentoReparto => ({
   posizioniDaContabilizzare: 1,
   importoDaContabilizzare: 3_000,
   nomeFile: 'comunica_reparti_alfa_srl_ufficio_contributi.pdf',
+  versione: '1-3f9a1c2b',
   ...over,
 });
 
@@ -67,6 +68,9 @@ describe('generaPdfReparto', () => {
     expect(sorgente).toContain('Alfa Srl');
     expect(sorgente).toContain('Ufficio contributi');
     expect(sorgente).toContain('Verificare e trasmettere le denunce');
+    // La versione è stampata sul foglio: è il modo per dire al reparto quale
+    // documento ha in mano quando arriva una posizione aggiornata.
+    expect(sorgente).toContain('1-3f9a1c2b');
     expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(1);
   });
 

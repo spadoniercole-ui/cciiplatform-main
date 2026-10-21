@@ -24,6 +24,11 @@
 // risultano dai documenti dell'ente alla data della verifica. Non è un
 // accertamento della singola partita — per questo il documento dichiara la
 // data e la fonte, e non promette che il numero sia definitivo.
+//
+// LA VERSIONE. Ogni documento porta un'impronta del proprio contenuto
+// (`versione`): è stampata sul PDF e finisce nel registro delle consegne, così
+// si può dire se il reparto ha in mano la versione che si sta guardando o una
+// precedente. Senza, «consegnato il 12 ottobre» non direbbe consegnato COSA.
 
 import { ETICHETTE_TRATTAMENTO } from '@/lib/debitiEnte/veraImport';
 import {
@@ -68,6 +73,11 @@ export interface DocumentoReparto {
   importoDaContabilizzare: number;
   /** Nome del file da scaricare, già sicuro per il filesystem. */
   nomeFile: string;
+  /**
+   * Impronta del contenuto, stampata sul PDF e nel registro delle consegne.
+   * Identifica IL documento consegnato: se le posizioni cambiano, cambia.
+   */
+  versione: string;
 }
 
 export interface EsitoDocumentiReparto {
@@ -79,6 +89,60 @@ export interface EsitoDocumentiReparto {
 }
 
 /** Nome file leggibile e senza caratteri che il browser o il sistema rifiutano. */
+/**
+ * Versione del formato del documento. Cambia quando cambia la struttura del
+ * PDF (sezioni, colonne): due documenti con la stessa impronta di contenuto ma
+ * impaginati in modo diverso non devono risultare la stessa versione.
+ */
+export const FORMATO_DOCUMENTO_REPARTI = '1';
+
+/**
+ * FNV-1a a 32 bit, in esadecimale: un'impronta corta del contenuto.
+ *
+ * Perché non SHA-256: questa versione si calcola nel BROWSER, insieme al
+ * documento, e deve essere disponibile in modo sincrono per stamparla sul PDF
+ * e registrarla nello stesso istante. `crypto.subtle` è asincrono e non
+ * esiste su ogni contesto; qui serve solo distinguere due contenuti, non
+ * resistere a un attacco.
+ */
+function improntaContenuto(testo: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < testo.length; i += 1) {
+    h ^= testo.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+
+/**
+ * Versione del documento: formato + impronta di ciò che il reparto legge.
+ *
+ * Conta tutto quello che compare nel PDF — intestazione, posizioni (anche
+ * l'ordine), attività, totali — e nient'altro: la data di generazione non
+ * entra, altrimenti lo stesso documento consegnato due volte risulterebbe
+ * cambiato. Serve a rispondere a una domanda sola: «il reparto ha in mano la
+ * versione che vedo adesso?».
+ */
+export function versioneDocumentoReparto(d: Omit<DocumentoReparto, 'versione'>): string {
+  const parti = [
+    FORMATO_DOCUMENTO_REPARTI,
+    d.azienda,
+    d.reparto,
+    d.oggetto,
+    d.dataVerifica,
+    ...d.posizioni.map((p) =>
+      [p.categoria, p.sezione, p.voce, p.periodo ?? '', p.trattamento, p.importo.toFixed(2)].join(
+        '|'
+      )
+    ),
+    ...d.attivita.map((a) => [a.lavorazione, a.categorie.join(',')].join('|')),
+    d.totale.toFixed(2),
+    String(d.posizioniDaContabilizzare),
+    d.importoDaContabilizzare.toFixed(2),
+  ];
+  return `${FORMATO_DOCUMENTO_REPARTI}-${improntaContenuto(parti.join('\n'))}`;
+}
+
 function slug(testo: string): string {
   return (testo || '')
     .normalize('NFD')
@@ -125,7 +189,7 @@ export function preparaDocumentiReparto(input: {
 
     const daContabilizzare = g.righe.filter((r) => r.trattamento === 'da_contabilizzare');
 
-    return {
+    const documento = {
       reparto: g.destinatario,
       oggetto: `Posizione debitoria ${input.azienda} — debiti da lavorare e attività di contabilizzazione`,
       azienda: input.azienda,
@@ -141,6 +205,8 @@ export function preparaDocumentiReparto(input: {
       importoDaContabilizzare: daContabilizzare.reduce((a, r) => a + r.importo, 0),
       nomeFile: nomeFileReparto(input.azienda, g.destinatario),
     };
+
+    return { ...documento, versione: versioneDocumentoReparto(documento) };
   });
 
   return {

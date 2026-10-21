@@ -26,6 +26,28 @@ il terzo per correzioni.
 
 ---
 
+## 0.135.0 — 2026-10-21
+
+**La consegna ai reparti lascia traccia: chi ha ricevuto quale documento, e in quale versione**
+
+- Ogni volta che si scarica un PDF da «Comunica ai reparti» resta una riga nel registro
+  `consegne_reparti`: reparto, data della verifica, versione del documento, numero di
+  posizioni, totale, quante restano da contabilizzare, chi lo ha scaricato e quando. Due
+  scaricamenti sono due righe: è un diario, non uno stato.
+- Accanto a ogni reparto la scheda mostra l'ultima consegna («Consegnato il 21/10/2026,
+  15:42 da mario.rossi@ente.it — versione 1-3f9a1c2b · 2 scaricamenti»), oppure che il
+  documento non è mai stato scaricato.
+- Il PDF porta stampata la sua **versione** (impronta del contenuto: cambia quando
+  cambiano posizioni, attività, totali o reparto, non quando cambia l'ora). Se dopo
+  l'ultima consegna il documento è cambiato, la scheda lo segnala in ambra e chiede di
+  riscaricarlo e reinviarlo: non si scambia per «già consegnato» un riepilogo vecchio.
+- La registrazione avviene **dopo** il salvataggio del file e non può impedirlo: se il
+  registro non risponde, il PDF è già scaricato e la pagina lo dichiara. La scrittura non
+  richiede il permesso di scrittura, perché è il diario di un'esportazione: chi può leggere
+  il triage di un'azienda deve poter scaricare il documento e lasciarne traccia.
+- La scheda elenca anche le consegne di reparti che oggi non ricevono più posizioni: se la
+  lavorazione è stata cambiata o spenta, lo storico resta leggibile.
+
 ## 0.134.0 — 2026-10-21
 
 **«Comunica ai reparti»: i debiti del triage arrivano al reparto che li deve contabilizzare**

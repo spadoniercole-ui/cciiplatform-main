@@ -97,6 +97,15 @@ import {
 } from '@/app/actions/lavorazioniTipoDebito';
 import { componiComunicazioniVera, formattaImportoEuro } from '@/lib/lavorazioni/comunicazioni';
 import { preparaDocumentiReparto, type DocumentoReparto } from '@/lib/lavorazioni/reparti';
+import {
+  riassumiConsegne,
+  statoConsegnaReparto,
+  type ConsegnaRegistrata,
+} from '@/lib/lavorazioni/consegne';
+import {
+  ottieniConsegneRepartiAction,
+  registraConsegnaRepartoAction,
+} from '@/app/actions/consegneReparti';
 import { salvaValoriSoglieParzialeAction, valutaSoglieAction } from '@/app/actions/soglie25novies';
 import { riepilogaSoglieTriage } from '@/lib/soglie25novies/triage';
 import type { EsitoSoglie } from '@/lib/soglie25novies/calcolo';
@@ -105,6 +114,13 @@ import { DebitiTriage } from '@/components/spazio/DebitiTriage';
 import type { Attenzione } from '@/lib/screening/indicatore';
 import { improntaFile } from '@/lib/fascicolo/impronta';
 import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
+
+/** «21/10/2026, 15:42» — data e ora locali della consegna. */
+function dataOraConsegna(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+}
 
 interface Props {
   nomeSchema: string;
@@ -219,6 +235,13 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
   // qualcosa va storto, perché il file non è arrivato.
   const [pdfInCorso, setPdfInCorso] = useState<string | null>(null);
   const [errorePdf, setErrorePdf] = useState<string | null>(null);
+  // Registro delle consegne: che cosa è già uscito da questa pagina, per
+  // quale reparto e in quale versione. Righe grezze; il riepilogo per reparto
+  // si calcola da qui (riassumiConsegne), così registrare un nuovo scaricamento
+  // non richiede una seconda lettura del database.
+  const [consegneReparti, setConsegneReparti] = useState<ConsegnaRegistrata[]>([]);
+  const [erroreConsegne, setErroreConsegne] = useState<string | null>(null);
+  const [avvisoConsegna, setAvvisoConsegna] = useState<string | null>(null);
   /**
    * Data a cui la verifica è riferita.
    *
@@ -246,6 +269,29 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       if (r.success && r.righe) setStorico(r.righe);
     });
   }, [nomeSchema, fase]);
+
+  // Il registro si legge quando c'è un'azienda su cui leggerlo, e si rilegge
+  // a ogni passaggio di fase: la scheda dei reparti compare nell'esito, ma il
+  // registro deve essere già lì quando compare, non un istante dopo.
+  useEffect(() => {
+    if (!aziendaId) {
+      setConsegneReparti([]);
+      return;
+    }
+    let annullato = false;
+    void ottieniConsegneRepartiAction(nomeSchema, aziendaId).then((r) => {
+      if (annullato) return;
+      if (!r.success) {
+        setErroreConsegne(r.error ?? 'Registro delle consegne non leggibile.');
+        return;
+      }
+      setErroreConsegne(null);
+      setConsegneReparti(r.consegne);
+    });
+    return () => {
+      annullato = true;
+    };
+  }, [nomeSchema, aziendaId, fase]);
 
   const caricaVisura = async (f: File | null) => {
     if (!f) return;
@@ -1010,6 +1056,19 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     etichette: etichetteCategorie,
   });
 
+  // Il registro per reparto: l'ultima consegna e quante volte il documento è
+  // uscito. Il confronto con `versione` dice se il reparto ha in mano il
+  // documento che si sta guardando o una versione precedente.
+  const consegnePerReparto = new Map(
+    riassumiConsegne(consegneReparti).map((c) => [c.reparto.toLocaleLowerCase('it-IT'), c])
+  );
+  const repartiConDocumento = new Set(
+    documentiReparti.documenti.map((d) => d.reparto.toLocaleLowerCase('it-IT'))
+  );
+  const consegneFuoriConfigurazione = Array.from(consegnePerReparto.values()).filter(
+    (c) => !repartiConDocumento.has(c.reparto.toLocaleLowerCase('it-IT'))
+  );
+
   /**
    * Il PDF si carica solo quando si scarica: jsPDF pesa quanto mezza pagina,
    * e la verifica si usa molto più spesso di quanto si scarichi il documento.
@@ -1018,15 +1077,44 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
    */
   const scaricaDocumentoReparto = async (documento: DocumentoReparto) => {
     setErrorePdf(null);
+    setAvvisoConsegna(null);
     setPdfInCorso(documento.reparto);
     try {
       const { scaricaPdfReparto } = await import('@/lib/lavorazioni/pdfReparto');
       scaricaPdfReparto(documento);
     } catch (e) {
       setErrorePdf(`PDF non generato: ${String(e)}`);
-    } finally {
       setPdfInCorso(null);
+      return;
     }
+
+    // Il file è già salvato: da qui in poi nulla può toglierlo. La
+    // registrazione viene dopo di proposito — un registro che non risponde
+    // non deve impedire di consegnare il documento al reparto — e se fallisce
+    // lo dice, perché allora la piattaforma non sa che quel foglio è uscito.
+    if (aziendaId) {
+      const r = await registraConsegnaRepartoAction(nomeSchema, aziendaId, {
+        reparto: documento.reparto,
+        dataVerifica: documento.dataVerifica,
+        versione: documento.versione,
+        nomeFile: documento.nomeFile,
+        righe: documento.righe,
+        totale: documento.totale,
+        posizioniDaContabilizzare: documento.posizioniDaContabilizzare,
+        importoDaContabilizzare: documento.importoDaContabilizzare,
+      });
+      const registrata = r.consegna;
+      if (r.success && registrata) {
+        setConsegneReparti((prev) => [registrata, ...prev]);
+      } else {
+        setAvvisoConsegna(
+          `Documento scaricato, ma la consegna non è stata registrata: ${
+            r.error ?? 'errore sconosciuto'
+          }`
+        );
+      }
+    }
+    setPdfInCorso(null);
   };
 
   const copiaTesto = async (chiave: string, testo: string) => {
@@ -1639,7 +1727,9 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             <p className="text-[11px] text-slate-600 leading-relaxed">
               Un PDF per reparto: i debiti da lavorare, le attività di contabilizzazione e i totali.
               Si scarica da qui e lo invii tu all&apos;ufficio — la piattaforma non manda nulla, e
-              questa funzione non sostituisce né impedisce la presa in carico.
+              questa funzione non sostituisce né impedisce la presa in carico. Ogni scaricamento
+              resta registrato con data, totali e versione del documento: «consegnato» qui vuol dire
+              scaricato, l&apos;invio è cosa tua.
             </p>
 
             {documentiReparti.documenti.length === 0 ? (
@@ -1650,36 +1740,93 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               </p>
             ) : (
               <ul className="space-y-2">
-                {documentiReparti.documenti.map((d) => (
-                  <li
-                    key={d.reparto}
-                    className="flex flex-wrap items-center justify-between gap-2 border border-slate-200 rounded-lg p-3"
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-xs font-bold text-slate-900">{d.reparto}</span>
-                      <span className="block text-[10px] text-slate-500 font-mono">
-                        {d.righe} {d.righe === 1 ? 'posizione' : 'posizioni'} ·{' '}
-                        {formattaImportoEuro(d.totale)} · {d.attivita.length} attività
-                        {d.posizioniDaContabilizzare > 0
-                          ? ` · ${d.posizioniDaContabilizzare} da contabilizzare`
-                          : ''}
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void scaricaDocumentoReparto(d)}
-                      disabled={pdfInCorso !== null}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                {' '}
+                {documentiReparti.documenti.map((d) => {
+                  const stato = statoConsegnaReparto(
+                    consegnePerReparto.get(d.reparto.toLocaleLowerCase('it-IT')),
+                    d.versione
+                  );
+                  return (
+                    <li
+                      key={d.reparto}
+                      className="border border-slate-200 rounded-lg p-3 space-y-2"
                     >
-                      <FileDown className="w-3.5 h-3.5" />{' '}
-                      {pdfInCorso === d.reparto ? 'Preparazione...' : 'Scarica il PDF'}
-                    </button>
-                  </li>
-                ))}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="min-w-0">
+                          <span className="block text-xs font-bold text-slate-900">
+                            {d.reparto}
+                          </span>
+                          <span className="block text-[10px] text-slate-500 font-mono">
+                            {d.righe} {d.righe === 1 ? 'posizione' : 'posizioni'} ·{' '}
+                            {formattaImportoEuro(d.totale)} · {d.attivita.length} attività
+                            {d.posizioniDaContabilizzare > 0
+                              ? ` · ${d.posizioniDaContabilizzare} da contabilizzare`
+                              : ''}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void scaricaDocumentoReparto(d)}
+                          disabled={pdfInCorso !== null}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          <FileDown className="w-3.5 h-3.5" />{' '}
+                          {pdfInCorso === d.reparto ? 'Preparazione...' : 'Scarica il PDF'}
+                        </button>
+                      </div>
+
+                      {stato.stato === 'mai' ? (
+                        <p className="text-[10px] text-slate-400 leading-relaxed">
+                          Mai scaricato: nessuna consegna registrata per questo reparto.
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 leading-relaxed">
+                          Consegnato il {dataOraConsegna(stato.consegna.ultima.consegnatoIl)}
+                          {stato.consegna.ultima.consegnatoDa
+                            ? ` da ${stato.consegna.ultima.consegnatoDa}`
+                            : ''}{' '}
+                          · versione{' '}
+                          <span className="font-mono">{stato.consegna.ultima.versione}</span> ·{' '}
+                          {stato.consegna.scaricamenti === 1
+                            ? '1 scaricamento'
+                            : `${stato.consegna.scaricamenti} scaricamenti`}
+                        </p>
+                      )}
+
+                      {stato.stato === 'superata' && (
+                        <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
+                          Il documento è cambiato dopo quella consegna (ora versione{' '}
+                          <span className="font-mono">{d.versione}</span>): il reparto ha in mano la
+                          precedente. Riscarica il PDF e invia la nuova versione.
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
             {errorePdf && <p className="text-[11px] text-red-700">{errorePdf}</p>}
+            {avvisoConsegna && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+                {avvisoConsegna}
+              </p>
+            )}
+            {erroreConsegne && <p className="text-[11px] text-amber-800">{erroreConsegne}</p>}
+
+            {consegneFuoriConfigurazione.length > 0 && (
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                {`${
+                  consegneFuoriConfigurazione.length === 1
+                    ? 'Un reparto ha già ricevuto un documento'
+                    : `${consegneFuoriConfigurazione.length} reparti hanno già ricevuto un documento`
+                } ma non compare più fra i destinatari: `}
+                {consegneFuoriConfigurazione
+                  .map((c) => `${c.reparto} (${dataOraConsegna(c.ultima.consegnatoIl)})`)
+                  .join(', ')}
+                . Se la lavorazione è stata cambiata o spenta, lo storico resta qui.
+              </p>
+            )}
 
             {documentiReparti.categorieSenzaLavorazione.length > 0 && (
               <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { RigaVeraComunicazione } from './comunicazioni';
-import { nomeFileReparto, preparaDocumentiReparto } from './reparti';
+import {
+  nomeFileReparto,
+  preparaDocumentiReparto,
+  versioneDocumentoReparto,
+  type DocumentoReparto,
+} from './reparti';
 
 const riga = (over: Partial<RigaVeraComunicazione> = {}): RigaVeraComunicazione => ({
   sezione: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
@@ -166,6 +171,76 @@ describe('preparaDocumentiReparto', () => {
     });
 
     expect(esito.documenti).toHaveLength(0);
+  });
+});
+
+describe('versioneDocumentoReparto', () => {
+  const documento = (over: Partial<DocumentoReparto> = {}): DocumentoReparto => ({
+    reparto: 'Ufficio contributi',
+    oggetto: 'Posizione debitoria Alfa Srl — debiti da lavorare',
+    azienda: 'Alfa Srl',
+    dataVerifica: '2026-10-19',
+    posizioni: [
+      {
+        categoria: 'Contributi INPS',
+        sezione: 'LAVORATORI',
+        voce: 'F24 non presentato',
+        periodo: '202506 - 202506',
+        stato: '',
+        trattamento: 'Contabilizzato',
+        importo: 12_000,
+      },
+    ],
+    attivita: [{ lavorazione: 'Verificare le denunce', categorie: ['Contributi INPS'] }],
+    righe: 1,
+    totale: 12_000,
+    posizioniDaContabilizzare: 0,
+    importoDaContabilizzare: 0,
+    nomeFile: 'comunica_reparti_alfa_srl_ufficio_contributi.pdf',
+    versione: '',
+    ...over,
+  });
+
+  it('ha la forma formato-impronta', () => {
+    expect(versioneDocumentoReparto(documento())).toMatch(/^1-[0-9a-f]{8}$/);
+  });
+
+  it('non cambia se il contenuto non cambia', () => {
+    expect(versioneDocumentoReparto(documento())).toBe(versioneDocumentoReparto(documento()));
+  });
+
+  it('cambia quando cambia un importo, un’attività, il reparto o la data', () => {
+    const base = versioneDocumentoReparto(documento());
+    expect(
+      versioneDocumentoReparto(
+        documento({ posizioni: [{ ...documento().posizioni[0], importo: 12_001 }] })
+      )
+    ).not.toBe(base);
+    expect(
+      versioneDocumentoReparto(
+        documento({ attivita: [{ lavorazione: 'Altra attività', categorie: ['Contributi INPS'] }] })
+      )
+    ).not.toBe(base);
+    expect(versioneDocumentoReparto(documento({ reparto: 'Ufficio riscossione' }))).not.toBe(base);
+    expect(versioneDocumentoReparto(documento({ dataVerifica: '2026-10-20' }))).not.toBe(base);
+  });
+
+  it('preparaDocumentiReparto assegna a ogni documento la propria versione', () => {
+    const esito = preparaDocumentiReparto({
+      ...base,
+      righe: [riga(), riga({ categoria: 'RUOLI', importo: 900, voce: 'Cartella' })],
+      lavorazioni: [
+        { categoria: 'CONTRIBUTI', lavorazione: 'Contabilizzare', destinatario: 'Ragioneria' },
+        { categoria: 'RUOLI', lavorazione: 'Verificare il ruolo', destinatario: 'Riscossione' },
+      ],
+    });
+
+    expect(esito.documenti).toHaveLength(2);
+    for (const d of esito.documenti) {
+      expect(d.versione).toBe(versioneDocumentoReparto(d));
+      expect(d.versione).toMatch(/^1-[0-9a-f]{8}$/);
+    }
+    expect(esito.documenti[0].versione).not.toBe(esito.documenti[1].versione);
   });
 });
 

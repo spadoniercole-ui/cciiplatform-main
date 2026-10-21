@@ -158,6 +158,14 @@ Drizzle è marginale.
    lavorare e le attività di contabilizzazione, si scarica e l'invio resta a cura
    dell'ufficio. La funzione vive accanto alla presa in carico, non la sostituisce e non
    la condiziona.
+   Ogni PDF porta una **versione** (impronta del contenuto, stampata sul foglio) e ogni
+   scaricamento lascia una riga in `consegne_reparti`: reparto, data della verifica,
+   versione, posizioni, totali, chi e quando. È un diario, non uno stato — due
+   scaricamenti sono due righe — e non registra nessun contenuto del documento. A schermo
+   l'ultima consegna dice se il reparto ha in mano la versione che si sta guardando: se
+   il documento è cambiato dopo la consegna, il triage lo segnala e chiede di riscaricare.
+   «Consegnato» qui significa *scaricato*: la piattaforma non sa se l'ufficio ha poi
+   spedito il file.
 4. **Visura**: estrazione AI → fatti strutturati (`src/lib/visura/fatti.ts`),
    conservazione e controllo dei documenti già presenti.
 5. **Soglie art. 25-novies**: dati a mano o da tracciati, calcolo puro
@@ -382,8 +390,8 @@ la descrive.
   `posizione_aggiornata`, `analisi_bilancio_step`;
 - debiti: `debiti_ente`, `debiti_ente_tracciati`, `debiti_ente_architrave`,
   `tipo_debito_config`, `categorie_tipo_debito`, `lavorazioni_tipo_debito`, `debiti_triage`,
-  `debiti_vera`, `vera_titoli`, `vera_trattamenti`, `strutture_prospetto`,
-  `prospetti_triage`, `tracciati_bilancino`;
+  `debiti_vera`, `vera_titoli`, `vera_trattamenti`, `consegne_reparti`,
+  `strutture_prospetto`, `prospetti_triage`, `tracciati_bilancino`;
 - scenario: `scenari`, `proposta_creditori`, `simulazione_ricevente`,
   `piano_aziendale`, `tracciati_piano_aziendale`, `parametri_confronto_piano`,
   `confronto_liquidatorio`, `documenti_origine`, `documenti_corredo`, `brogliaccio`,

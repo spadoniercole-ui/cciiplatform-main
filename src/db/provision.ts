@@ -2007,6 +2007,41 @@ export async function assicuraTabellaLavorazioniTipoDebito(nomeSchema: string): 
 }
 
 /**
+ * Registro delle consegne ai reparti: un evento per ogni PDF scaricato dal
+ * triage, con reparto, data della verifica, versione del documento, totali e
+ * chi lo ha scaricato.
+ *
+ * Diario e non stato: due scaricamenti sono due righe. Serve a rispondere a
+ * «il reparto ha in mano la versione che vedo adesso?», che una data sola non
+ * saprebbe dire. Nessun contenuto del documento viene copiato qui: la versione
+ * è un'impronta, e il PDF resta sul computer di chi lo ha scaricato.
+ */
+export async function assicuraTabellaConsegneReparti(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaAziende(nomeSchema); // FK aziende
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.consegne_reparti (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      reparto TEXT NOT NULL,
+      data_verifica DATE NOT NULL,
+      versione TEXT NOT NULL,
+      nome_file TEXT NOT NULL,
+      righe INTEGER NOT NULL DEFAULT 0,
+      totale NUMERIC(15,2) NOT NULL DEFAULT 0,
+      posizioni_da_contabilizzare INTEGER NOT NULL DEFAULT 0,
+      importo_da_contabilizzare NUMERIC(15,2) NOT NULL DEFAULT 0,
+      consegnato_il TIMESTAMPTZ NOT NULL DEFAULT now(),
+      consegnato_da TEXT
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_consegne_reparti_azienda
+        ON ${s}.consegne_reparti (azienda_id, consegnato_il DESC)`
+  );
+}
+
+/**
  * Cache dei dati ISTAT per settore (Dati di Settore) — GLOBALE (schema
  * public, non per tenant). Il dato è nazionale, identico per qualunque
  * azienda con lo stesso gruppo ATECO, di qualunque spazio: metterlo per
