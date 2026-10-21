@@ -153,7 +153,11 @@ Drizzle è marginale.
    senza un V.E.R.A. riconosciuto e leggibile la conferma
    del triage non parte. Dalle sue righe, con la tabella `lavorazioni_tipo_debito`
    (Parametri › Lavorazioni), il triage prepara una comunicazione per collega — solo testo
-   da copiare e inviare personalmente, mai un invio automatico.
+   da copiare e inviare personalmente, mai un invio automatico — e, con la stessa
+   configurazione, **un PDF per reparto** («Comunica ai reparti»): elenca i debiti da
+   lavorare e le attività di contabilizzazione, si scarica e l'invio resta a cura
+   dell'ufficio. La funzione vive accanto alla presa in carico, non la sostituisce e non
+   la condiziona.
 4. **Visura**: estrazione AI → fatti strutturati (`src/lib/visura/fatti.ts`),
    conservazione e controllo dei documenti già presenti.
 5. **Soglie art. 25-novies**: dati a mano o da tracciati, calcolo puro
@@ -340,6 +344,7 @@ domande che potrebbero non esistere più). Lo storico delle generazioni è conse
 | Piano | `src/lib/piano/ricevente.ts`, `src/lib/piano/piano.ts`, `src/lib/piano/confronto.ts` |
 | Screening | `src/lib/screening/indicatore.ts`, `src/lib/iai/indice.ts` |
 | Comunicazioni ai colleghi | `src/lib/lavorazioni/comunicazioni.ts` |
+| Documenti per i reparti (PDF, dal triage) | `src/lib/lavorazioni/reparti.ts`, `src/lib/lavorazioni/pdfReparto.ts` |
 | Relazione | `src/lib/relazione/contestoRicevente.ts`, `src/lib/revisore` |
 | Backup | `src/lib/backup` |
 | Edizioni | `src/lib/edizioneServer.ts`, `src/lib/portableDb.ts`, `src/lib/blobStore.ts` |
@@ -350,7 +355,7 @@ grande (~1.088 righe) e concentra acquisizione, verifica e relazione.
 
 ### Test
 
-91 file `*.test.ts` accanto al sorgente (Vitest, ambiente node, alias `@`). Sono la
+96 file `*.test.ts` accanto al sorgente (Vitest, ambiente node, alias `@`). Sono la
 specifica comportamentale più affidabile: prima di cambiare una regola, leggi il test che
 la descrive.
 

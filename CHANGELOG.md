@@ -26,6 +26,26 @@ il terzo per correzioni.
 
 ---
 
+## 0.134.0 — 2026-10-21
+
+**«Comunica ai reparti»: i debiti del triage arrivano al reparto che li deve contabilizzare**
+
+- Alla fine del triage, sopra la presa in carico, c'è un nuovo passo: un PDF per
+  **reparto** (il destinatario configurato per la tipologia di debito) con l'elenco dei
+  debiti da lavorare, le attività di contabilizzazione e i totali. Stessa
+  configurazione delle comunicazioni ai colleghi — sono la stessa verità su chi segue
+  cosa.
+- Il documento elenca, per ogni posizione, tipologia, sezione e voce V.E.R.A., periodo,
+  natura e importo; per ogni reparto le attività configurate per le sue tipologie, quante
+  posizioni non sono ancora contabilizzate e per quanto, e il totale dei debiti elencati,
+  riferito alla data della verifica.
+- I PDF si **scaricano** uno per reparto: la piattaforma non invia nulla, l'invio
+  all'ufficio è a cura di chi li scarica. La funzione sta accanto al «Procedi con questa
+  azienda», non lo sostituisce e non lo condiziona: anche chi decide di non procedere può
+  consegnare i debiti ai reparti.
+- Le posizioni senza categoria e le tipologie senza lavorazione configurata non finiscono
+  in nessun documento, e la scheda lo dice: senza un destinatario non esiste un reparto.
+
 ## 0.133.7 — 2026-10-20
 
 **La CI rossa dice da sé quale passo è caduto**

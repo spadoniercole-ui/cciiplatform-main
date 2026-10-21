@@ -1,0 +1,105 @@
+import { describe, expect, it, vi } from 'vitest';
+import type jsPDF from 'jspdf';
+import type { DocumentoReparto } from './reparti';
+
+// Il PDF viene generato davvero con jsPDF + jspdf-autotable; si sostituisce
+// solo il salvataggio, che nel browser scarica il file.
+const salvati: { doc: jsPDF; nome: string }[] = [];
+vi.mock('jspdf', async () => {
+  const reale = (await vi.importActual<{ default: typeof jsPDF }>('jspdf')).default;
+  class JsPdfDiProva extends reale {
+    constructor(...args: ConstructorParameters<typeof jsPDF>) {
+      super(...args);
+      this.save = ((nome: string) => {
+        salvati.push({ doc: this, nome });
+        return this;
+      }) as never;
+    }
+  }
+  return { default: JsPdfDiProva, jsPDF: JsPdfDiProva };
+});
+
+const { generaPdfReparto, scaricaPdfReparto } = await import('./pdfReparto');
+
+const documento = (over: Partial<DocumentoReparto> = {}): DocumentoReparto => ({
+  reparto: 'Ufficio contributi',
+  oggetto: 'Posizione debitoria Alfa Srl — debiti da lavorare e attività di contabilizzazione',
+  azienda: 'Alfa Srl',
+  dataVerifica: '2026-10-19',
+  posizioni: [
+    {
+      categoria: 'Contributi INPS',
+      sezione: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+      voce: 'F24 non presentato',
+      periodo: '202506 - 202506',
+      stato: '',
+      trattamento: 'Contabilizzato',
+      importo: 12_000,
+    },
+    {
+      categoria: 'Contributi INPS',
+      sezione: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+      voce: 'Denunce non trasmesse',
+      periodo: null,
+      stato: '',
+      trattamento: 'Da contabilizzare',
+      importo: 3_000,
+    },
+  ],
+  attivita: [
+    { lavorazione: 'Verificare e trasmettere le denunce', categorie: ['Contributi INPS'] },
+  ],
+  righe: 2,
+  totale: 15_000,
+  posizioniDaContabilizzare: 1,
+  importoDaContabilizzare: 3_000,
+  nomeFile: 'comunica_reparti_alfa_srl_ufficio_contributi.pdf',
+  ...over,
+});
+
+describe('generaPdfReparto', () => {
+  it('genera un PDF con debiti, attività e totali', () => {
+    const pdf = generaPdfReparto(documento());
+    const sorgente = pdf.output();
+
+    expect(sorgente.startsWith('%PDF-')).toBe(true);
+    expect(sorgente).toContain('Comunicazione ai reparti');
+    expect(sorgente).toContain('Alfa Srl');
+    expect(sorgente).toContain('Ufficio contributi');
+    expect(sorgente).toContain('Verificare e trasmettere le denunce');
+    expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('regge un reparto con molte posizioni senza perdere le attività', () => {
+    const posizioni = Array.from({ length: 60 }, (_, i) => ({
+      categoria: 'Contributi INPS',
+      sezione: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+      voce: `Voce ${i + 1}`,
+      periodo: '202506 - 202506',
+      stato: 'Aperto',
+      trattamento: 'Da contabilizzare',
+      importo: 1_000 + i,
+    }));
+    const pdf = generaPdfReparto(
+      documento({
+        posizioni,
+        righe: posizioni.length,
+        totale: posizioni.reduce((a, p) => a + p.importo, 0),
+        posizioniDaContabilizzare: posizioni.length,
+      })
+    );
+
+    expect(pdf.getNumberOfPages()).toBeGreaterThan(1);
+    expect(pdf.output().startsWith('%PDF-')).toBe(true);
+  });
+});
+
+describe('scaricaPdfReparto', () => {
+  it('salva il file con il nome preparato dal dominio', () => {
+    salvati.length = 0;
+    scaricaPdfReparto(documento());
+
+    expect(salvati).toHaveLength(1);
+    expect(salvati[0].nome).toBe('comunica_reparti_alfa_srl_ufficio_contributi.pdf');
+  });
+});

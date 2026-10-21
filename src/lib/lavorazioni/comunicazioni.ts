@@ -23,6 +23,12 @@
 // distinte, invece di tre messaggi parziali. Se la stessa tipologia è
 // assegnata a due colleghi, la posizione compare in entrambe le
 // comunicazioni — sono due competenze, non un doppione.
+//
+// IL RAGGRUPPAMENTO È UNO SOLO. `raggruppaPerReparto` è la definizione
+// condivisa da due uscite: il testo da copiare (questo modulo) e i PDF per
+// reparto (`reparti.ts`). Se ognuna avesse la propria copia, una riga senza
+// categoria o una tipologia senza lavorazione finirebbe fuori da un'uscita e
+// dentro l'altra, e nessuno saprebbe quale delle due dice il vero.
 
 import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 
@@ -94,15 +100,39 @@ interface GruppoDestinatario {
   lavorazioni: Map<string, Set<string>>;
 }
 
-export function componiComunicazioniVera(input: {
-  azienda: string;
-  /** Data della verifica in formato AAAA-MM-GG. */
-  dataVerifica: string;
+/** Un destinatario con le sue posizioni e le sue lavorazioni, già ordinate. */
+export interface GruppoReparto {
+  destinatario: string;
+  righe: RigaVeraComunicazione[];
+  lavorazioni: { lavorazione: string; categorie: string[] }[];
+  categorie: string[];
+  totale: number;
+}
+
+export interface RaggruppamentoPerReparto {
+  gruppi: GruppoReparto[];
+  categorieSenzaLavorazione: CategoriaSenzaLavorazione[];
+  righeSenzaCategoria: number;
+}
+
+export interface InputRaggruppamento {
   righe: RigaVeraComunicazione[];
   lavorazioni: LavorazioneConfig[];
   /** codice categoria → etichetta mostrata (fallback: il codice). */
   etichette: Record<string, string>;
-}): EsitoComunicazioniVera {
+}
+
+/**
+ * Righe del V.E.R.A. raggruppate per DESTINATARIO (il reparto o il collega che
+ * deve lavorare il debito).
+ *
+ * Le regole, in un posto solo: la lavorazione spenta, la categoria vuota e la
+ * tipologia senza lavorazione non producono un gruppo; una posizione senza
+ * categoria non viene attribuita a nessuno e viene contata; lo stesso debito
+ * che cade su due lavorazioni dello stesso destinatario compare una volta
+ * sola ma con entrambe le attività.
+ */
+export function raggruppaPerReparto(input: InputRaggruppamento): RaggruppamentoPerReparto {
   const etichetta = (codice: string) => input.etichette[codice]?.trim() || codice;
 
   const attive = input.lavorazioni.filter(
@@ -154,71 +184,37 @@ export function componiComunicazioniVera(input: {
     }
   }
 
-  const data = dataItaliana(input.dataVerifica);
-  const comunicazioni: ComunicazioneStandard[] = Array.from(gruppi.values())
-    .map((g) => {
-      const righe = Array.from(g.righe).sort(
-        (a, b) =>
-          a.sezione.localeCompare(b.sezione, 'it-IT') ||
-          a.voce.localeCompare(b.voce, 'it-IT') ||
-          (a.periodo ?? '').localeCompare(b.periodo ?? '', 'it-IT')
-      );
-      const lavorazioni = Array.from(g.lavorazioni.entries())
-        .map(([lavorazione, categorie]) => ({
-          lavorazione,
-          categorie: Array.from(categorie).sort((a, b) =>
-            etichetta(a).localeCompare(etichetta(b), 'it-IT')
-          ),
-        }))
-        .sort((a, b) => a.lavorazione.localeCompare(b.lavorazione, 'it-IT'));
+  const raggruppamento: RaggruppamentoPerReparto = {
+    gruppi: Array.from(gruppi.values())
+      .map((g) => {
+        const righe = Array.from(g.righe).sort(
+          (a, b) =>
+            a.sezione.localeCompare(b.sezione, 'it-IT') ||
+            a.voce.localeCompare(b.voce, 'it-IT') ||
+            (a.periodo ?? '').localeCompare(b.periodo ?? '', 'it-IT')
+        );
+        const lavorazioni = Array.from(g.lavorazioni.entries())
+          .map(([lavorazione, categorie]) => ({
+            lavorazione,
+            categorie: Array.from(categorie).sort((a, b) =>
+              etichetta(a).localeCompare(etichetta(b), 'it-IT')
+            ),
+          }))
+          .sort((a, b) => a.lavorazione.localeCompare(b.lavorazione, 'it-IT'));
 
-      const categorie = Array.from(new Set(lavorazioni.flatMap((l) => l.categorie))).sort((a, b) =>
-        etichetta(a).localeCompare(etichetta(b), 'it-IT')
-      );
+        const categorie = Array.from(new Set(lavorazioni.flatMap((l) => l.categorie))).sort(
+          (a, b) => etichetta(a).localeCompare(etichetta(b), 'it-IT')
+        );
 
-      const totale = righe.reduce((a, r) => a + r.importo, 0);
-
-      const elencoLavorazioni = lavorazioni
-        .map((l) => `- ${l.lavorazione} — ${l.categorie.map(etichetta).join(', ')}`)
-        .join('\n');
-
-      const elencoRighe = righe
-        .map((r) => {
-          const periodo = r.periodo ? ` (periodo ${r.periodo})` : '';
-          const stato = r.stato.trim() ? `; stato V.E.R.A.: ${r.stato.trim()}` : '';
-          return `- ${r.sezione} — ${r.voce}${periodo}: ${formattaImportoEuro(r.importo)}; ${
-            ETICHETTE_TRATTAMENTO[r.trattamento] ?? r.trattamento
-          }${stato}`;
-        })
-        .join('\n');
-
-      const corpo = [
-        'Buongiorno,',
-        `in esito alla verifica della posizione debitoria di ${input.azienda} al ${data}, per le posizioni di tua competenza risultano i dati seguenti.`,
-        `Lavorazioni richieste:\n${elencoLavorazioni}`,
-        `Posizioni:\n${elencoRighe}`,
-        `Totale delle posizioni elencate: ${formattaImportoEuro(totale)}.`,
-        "Ti chiedo di svolgere la lavorazione indicata e di confermarmi l'esito.",
-        'Grazie.',
-      ].join('\n\n');
-
-      return {
-        destinatario: g.destinatario,
-        oggetto:
-          lavorazioni.length === 1
-            ? `Posizione debitoria ${input.azienda} — richiesta di lavorazione`
-            : `Posizione debitoria ${input.azienda} — richieste di lavorazione`,
-        corpo,
-        categorie,
-        lavorazioni: lavorazioni.map((l) => l.lavorazione),
-        righe: righe.length,
-        totale,
-      };
-    })
-    .sort((a, b) => a.destinatario.localeCompare(b.destinatario, 'it-IT'));
-
-  return {
-    comunicazioni,
+        return {
+          destinatario: g.destinatario,
+          righe,
+          lavorazioni,
+          categorie,
+          totale: righe.reduce((a, r) => a + r.importo, 0),
+        };
+      })
+      .sort((a, b) => a.destinatario.localeCompare(b.destinatario, 'it-IT')),
     categorieSenzaLavorazione: Array.from(senzaLavorazione.entries())
       .map(([categoria, v]) => ({
         categoria,
@@ -229,4 +225,65 @@ export function componiComunicazioniVera(input: {
       .sort((a, b) => a.etichetta.localeCompare(b.etichetta, 'it-IT')),
     righeSenzaCategoria,
   };
+
+  return raggruppamento;
+}
+
+export function componiComunicazioniVera(input: {
+  azienda: string;
+  /** Data della verifica in formato AAAA-MM-GG. */
+  dataVerifica: string;
+  righe: RigaVeraComunicazione[];
+  lavorazioni: LavorazioneConfig[];
+  /** codice categoria → etichetta mostrata (fallback: il codice). */
+  etichette: Record<string, string>;
+}): EsitoComunicazioniVera {
+  const etichetta = (codice: string) => input.etichette[codice]?.trim() || codice;
+  const data = dataItaliana(input.dataVerifica);
+  const { gruppi: gruppiOrdinati, ...resto } = raggruppaPerReparto(input);
+  const comunicazioni: ComunicazioneStandard[] = gruppiOrdinati.map((g) => {
+    const righe = g.righe;
+    const lavorazioni = g.lavorazioni;
+    const categorie = g.categorie;
+    const totale = g.totale;
+
+    const elencoLavorazioni = lavorazioni
+      .map((l) => `- ${l.lavorazione} — ${l.categorie.map(etichetta).join(', ')}`)
+      .join('\n');
+
+    const elencoRighe = righe
+      .map((r) => {
+        const periodo = r.periodo ? ` (periodo ${r.periodo})` : '';
+        const stato = r.stato.trim() ? `; stato V.E.R.A.: ${r.stato.trim()}` : '';
+        return `- ${r.sezione} — ${r.voce}${periodo}: ${formattaImportoEuro(r.importo)}; ${
+          ETICHETTE_TRATTAMENTO[r.trattamento] ?? r.trattamento
+        }${stato}`;
+      })
+      .join('\n');
+
+    const corpo = [
+      'Buongiorno,',
+      `in esito alla verifica della posizione debitoria di ${input.azienda} al ${data}, per le posizioni di tua competenza risultano i dati seguenti.`,
+      `Lavorazioni richieste:\n${elencoLavorazioni}`,
+      `Posizioni:\n${elencoRighe}`,
+      `Totale delle posizioni elencate: ${formattaImportoEuro(totale)}.`,
+      "Ti chiedo di svolgere la lavorazione indicata e di confermarmi l'esito.",
+      'Grazie.',
+    ].join('\n\n');
+
+    return {
+      destinatario: g.destinatario,
+      oggetto:
+        lavorazioni.length === 1
+          ? `Posizione debitoria ${input.azienda} — richiesta di lavorazione`
+          : `Posizione debitoria ${input.azienda} — richieste di lavorazione`,
+      corpo,
+      categorie,
+      lavorazioni: lavorazioni.map((l) => l.lavorazione),
+      righe: righe.length,
+      totale,
+    };
+  });
+
+  return { comunicazioni, ...resto };
 }

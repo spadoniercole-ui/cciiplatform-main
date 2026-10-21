@@ -41,6 +41,8 @@ import {
   Info,
   Copy,
   ClipboardList,
+  Building2,
+  FileDown,
 } from 'lucide-react';
 import {
   estraiAnagraficaDaVisuraAction,
@@ -94,6 +96,7 @@ import {
   type LavorazioneTipoDebito,
 } from '@/app/actions/lavorazioniTipoDebito';
 import { componiComunicazioniVera, formattaImportoEuro } from '@/lib/lavorazioni/comunicazioni';
+import { preparaDocumentiReparto, type DocumentoReparto } from '@/lib/lavorazioni/reparti';
 import { salvaValoriSoglieParzialeAction, valutaSoglieAction } from '@/app/actions/soglie25novies';
 import { riepilogaSoglieTriage } from '@/lib/soglie25novies/triage';
 import type { EsitoSoglie } from '@/lib/soglie25novies/calcolo';
@@ -211,6 +214,11 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
   const [erroreComunicazioni, setErroreComunicazioni] = useState<string | null>(null);
   const [copiato, setCopiato] = useState<string | null>(null);
   const [erroreCopia, setErroreCopia] = useState<string | null>(null);
+  // Il reparto di cui si sta preparando il PDF (null = nessuno) e l'eventuale
+  // errore di generazione: il pulsante deve dire che sta lavorando e, se
+  // qualcosa va storto, perché il file non è arrivato.
+  const [pdfInCorso, setPdfInCorso] = useState<string | null>(null);
+  const [errorePdf, setErrorePdf] = useState<string | null>(null);
   /**
    * Data a cui la verifica è riferita.
    *
@@ -989,6 +997,38 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     etichette: etichetteCategorie,
   });
 
+  // Un documento per reparto: le posizioni da lavorare e le attività di
+  // contabilizzazione, da scaricare e inviare per conto proprio. Sta accanto
+  // alla presa in carico, non al posto suo: chi decide di non procedere ha
+  // comunque bisogno di sapere che cosa c'è da contabilizzare, e chi procede
+  // deve poter consegnare i debiti ai reparti prima che il resto parta.
+  const documentiReparti = preparaDocumentiReparto({
+    azienda: dati?.ragioneSociale?.trim() || 'Azienda',
+    dataVerifica,
+    righe: righeVera,
+    lavorazioni,
+    etichette: etichetteCategorie,
+  });
+
+  /**
+   * Il PDF si carica solo quando si scarica: jsPDF pesa quanto mezza pagina,
+   * e la verifica si usa molto più spesso di quanto si scarichi il documento.
+   * Un caricamento fallito non resta muto — la pagina è la stessa che deve
+   * produrre quel file.
+   */
+  const scaricaDocumentoReparto = async (documento: DocumentoReparto) => {
+    setErrorePdf(null);
+    setPdfInCorso(documento.reparto);
+    try {
+      const { scaricaPdfReparto } = await import('@/lib/lavorazioni/pdfReparto');
+      scaricaPdfReparto(documento);
+    } catch (e) {
+      setErrorePdf(`PDF non generato: ${String(e)}`);
+    } finally {
+      setPdfInCorso(null);
+    }
+  };
+
   const copiaTesto = async (chiave: string, testo: string) => {
     setErroreCopia(null);
     try {
@@ -1392,7 +1432,6 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               </p>
             </div>
           )}
-
           {attenzione ? (
             <SemaforoAttenzione attenzione={attenzione} />
           ) : (
@@ -1400,7 +1439,6 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               Indicatore non calcolabile con i dati inseriti.
             </p>
           )}
-
           {riepilogoSoglie && (
             <div
               className={`rounded-xl border p-5 space-y-2 ${
@@ -1454,13 +1492,11 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               )}
             </div>
           )}
-
           {erroreSoglie && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
               {`Soglie di segnalazione non valutate: ${erroreSoglie} Il triage resta valido; le soglie si possono verificare dalla scheda dell’azienda.`}
             </p>
           )}
-
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-slate-500" />
@@ -1576,7 +1612,6 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               Configura le lavorazioni <ArrowRight className="w-3 h-3" />
             </a>
           </div>
-
           <div className="flex justify-end">
             <button
               type="button"
@@ -1588,6 +1623,81 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             </button>
           </div>
 
+          {/*
+            COMUNICA AI REPARTI — l'ultimo passo del triage, prima della presa
+            in carico. Non è un'alternativa al «Procedi»: serve a entrambe le
+            strade, perché anche chi non procede deve poter portare a
+            contabilizzazione i debiti che ha in mano.
+          */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-slate-500" />
+              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                Comunica ai reparti
+              </h3>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              Un PDF per reparto: i debiti da lavorare, le attività di contabilizzazione e i totali.
+              Si scarica da qui e lo invii tu all&apos;ufficio — la piattaforma non manda nulla, e
+              questa funzione non sostituisce né impedisce la presa in carico.
+            </p>
+
+            {documentiReparti.documenti.length === 0 ? (
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                {lavorazioni.length === 0
+                  ? 'Nessuna lavorazione configurata: senza una lavorazione per tipologia non c’è un reparto a cui indirizzare i debiti. Aggiungila nei Parametri di Spazio.'
+                  : 'Nessuna posizione V.E.R.A. riconducibile a una lavorazione attiva: non c’è un reparto a cui indirizzare i debiti.'}
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {documentiReparti.documenti.map((d) => (
+                  <li
+                    key={d.reparto}
+                    className="flex flex-wrap items-center justify-between gap-2 border border-slate-200 rounded-lg p-3"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-xs font-bold text-slate-900">{d.reparto}</span>
+                      <span className="block text-[10px] text-slate-500 font-mono">
+                        {d.righe} {d.righe === 1 ? 'posizione' : 'posizioni'} ·{' '}
+                        {formattaImportoEuro(d.totale)} · {d.attivita.length} attività
+                        {d.posizioniDaContabilizzare > 0
+                          ? ` · ${d.posizioniDaContabilizzare} da contabilizzare`
+                          : ''}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void scaricaDocumentoReparto(d)}
+                      disabled={pdfInCorso !== null}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <FileDown className="w-3.5 h-3.5" />{' '}
+                      {pdfInCorso === d.reparto ? 'Preparazione...' : 'Scarica il PDF'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {errorePdf && <p className="text-[11px] text-red-700">{errorePdf}</p>}
+
+            {documentiReparti.categorieSenzaLavorazione.length > 0 && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+                {`${
+                  documentiReparti.categorieSenzaLavorazione.length === 1
+                    ? '1 tipologia resta fuori dai documenti'
+                    : `${documentiReparti.categorieSenzaLavorazione.length} tipologie restano fuori dai documenti`
+                }: senza una lavorazione configurata non si sa a quale reparto appartengono — sono elencate più sopra in «Tipologie senza lavorazione».`}
+              </p>
+            )}
+
+            <a
+              href={`/spazio/${codice}/parametri/lavorazioni`}
+              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
+            >
+              Configura le lavorazioni <ArrowRight className="w-3 h-3" />
+            </a>
+          </div>
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
             <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">E adesso?</h3>
             <p className="text-[11px] text-slate-500 leading-relaxed">
