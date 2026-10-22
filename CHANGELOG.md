@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.136.0**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.137.0**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,26 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.137.0 — 2026-10-22
+
+**Disco Archil: i file che devono sopravvivere al processo hanno un posto dove stare**
+
+- `disk` 1.8.0 fra le dipendenze e un modulo server (`src/lib/archil.ts`) che configura
+  l'SDK da `ARCHIL_API_KEY`/`ARCHIL_REGION`, prende il disco indicato da `ARCHIL_DISK_ID`,
+  esegue un comando, scrive e rilegge un file. È codice solo server: la chiave non può
+  finire nel bundle del browser.
+- `npm run check:archil` verifica la persistenza per davvero: scrive una riga univoca in
+  una sottocartella nuova con un exec e la rilegge con un secondo exec separato — due
+  container diversi — ed esce 0 solo se la riga torna; se non torna dice cosa ha scritto
+  e cosa ha letto. Senza `ARCHIL_DISK_ID` crea il disco e ne salva l'id in `.env.local`,
+  senza mai stampare il mount token; con una chiave assente, o che non inizia per `key-`,
+  si ferma subito spiegando cosa manca.
+- `engines.node` passa a 22.19: è il minimo dichiarato dall'SDK `disk` ed è anche la
+  versione da cui Node importa direttamente il modulo TypeScript condiviso. CI e
+  immagine del server usano già Node 22.
+- `.env.example` elenca anche le variabili della piattaforma (database, Anthropic,
+  superadmin, Blob), così un `.env.local` copiato da lì parte completo.
 
 ## 0.136.0 — 2026-10-22
 
