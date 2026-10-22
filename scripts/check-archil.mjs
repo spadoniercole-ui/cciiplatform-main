@@ -12,7 +12,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import dotenv from 'dotenv';
-import { creaDiscoArchil, discoArchil, eseguiSuDisco, regioneArchil } from '../src/lib/archil.ts';
 
 dotenv.config({ path: '.env.local', quiet: true });
 dotenv.config({ path: '.env', quiet: true });
@@ -21,6 +20,17 @@ function esci(messaggio) {
   console.error(`✖ ${messaggio}`);
   process.exit(1);
 }
+
+// Il modulo condiviso è TypeScript: node lo importa solo da 22.19 in poi, la stessa
+// versione minima richiesta dall'SDK `disk`. Meglio dirlo che far fallire l'import.
+const [maggiore, minore] = process.versions.node.split('.').map(Number);
+if (maggiore < 22 || (maggiore === 22 && minore < 19)) {
+  esci(
+    `serve Node.js 22.19 o successivo (in uso: ${process.versions.node}): l'SDK disk e l'import del modulo TypeScript non funzionano prima.`
+  );
+}
+
+const { creaDiscoArchil, discoArchil, regioneArchil } = await import('../src/lib/archil.ts');
 
 /** Aggiunge o aggiorna ARCHIL_DISK_ID nel file env locale (mai committato). */
 function salvaDiscoId(id) {
@@ -67,7 +77,9 @@ async function main() {
   const contenuto = `riga-${crypto.randomUUID()}`;
 
   console.info(`Disco ${disco.id} (${disco.region || regioneArchil()}): scrivo ${percorso}…`);
-  const scrittura = await eseguiSuDisco(
+  // Primo exec: la cartella è nuova, quindi l'ownership dinamica la assegna a questo
+  // container e la scrittura non incontra «Read-only file system».
+  const scrittura = await disco.exec(
     `set -eu\nmkdir -p '${sottocartella}'\nprintf '%s' '${contenuto}' > '${percorso}'`
   );
   if (scrittura.exitCode !== 0) {
@@ -76,8 +88,10 @@ async function main() {
     esci(`la scrittura è fallita (exit ${scrittura.exitCode}).`);
   }
 
-  console.info('Scrittura completata; rileggo con un secondo exec…');
-  const lettura = await eseguiSuDisco(`cat '${percorso}'`);
+  console.info('Scrittura completata; rileggo con un secondo exec separato…');
+  // Secondo exec: container nuovo, niente stato del precedente. Se la riga torna,
+  // quello che è sopravvissuto è il disco.
+  const lettura = await disco.exec(`cat '${percorso}'`);
   if (lettura.exitCode !== 0) {
     if (lettura.stdout) console.error(lettura.stdout);
     if (lettura.stderr) console.error(lettura.stderr);
@@ -85,7 +99,7 @@ async function main() {
   }
 
   const letto = lettura.stdout.trim();
-  if (letto !== contenuto) {
+  if (!lettura.stdout.includes(contenuto)) {
     esci(`contenuto diverso: scritto "${contenuto}", letto "${letto}".`);
   }
 

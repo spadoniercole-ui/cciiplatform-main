@@ -48,6 +48,15 @@ export function idDiscoArchil(env: NodeJS.ProcessEnv = process.env): string {
   return id;
 }
 
+/** Dischi dell'account: serve a trovare l'id da mettere in ARCHIL_DISK_ID. */
+export async function elencaDischiArchil(
+  env: NodeJS.ProcessEnv = process.env
+): Promise<{ id: string; nome: string; regione: string }[]> {
+  configuraArchil(env);
+  const dischi = await archil.listDisks();
+  return dischi.map((d) => ({ id: d.id, nome: d.name, regione: d.region }));
+}
+
 /** Disco indicato da ARCHIL_DISK_ID. */
 export async function discoArchil(env: NodeJS.ProcessEnv = process.env): Promise<Disk> {
   configuraArchil(env);
