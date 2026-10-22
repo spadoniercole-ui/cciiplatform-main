@@ -19,10 +19,18 @@
 // diario, non una tabella di stato: due scaricamenti sono due righe, perché
 // due sono le volte in cui quel foglio è uscito dalla piattaforma.
 //
-// COSA NON SI REGISTRA. Nessun contenuto del PDF, nessun indirizzo, nessuna
-// conferma d'invio: la piattaforma non sa (e non deve sapere) se l'ufficio ha
-// poi spedito davvero il file. «Consegnato» qui vuol dire «scaricato», ed è
-// scritto così anche a schermo.
+// COSA NON SI REGISTRA. Nessun contenuto del PDF, nessun indirizzo del
+// destinatario: il documento resta sul computer di chi lo scarica.
+//
+// LA CONFERMA D'INVIO. «Consegnato» vuol dire scaricato, e resta vero: la
+// piattaforma non spedisce nulla e non può sapere da sola se il file è
+// partito. Chi lo invia però può dichiararlo — data, mezzo e note — e allora
+// la riga del registro smette di essere solo un'uscita e diventa un verbale:
+// «spedito il 21/10 alle 15:42 via PEC». È una dichiarazione di chi la firma
+// (l'utente in sessione), scritta una volta sola: una conferma sovrascritta
+// non direbbe più chi ha detto cosa, e il registro servirebbe a poco. Senza
+// conferma la riga resta muta, e a schermo si legge «invio non confermato»,
+// non «non inviato»: l'una è un fatto registrato, l'altra una supposizione.
 
 export interface ConsegnaRepartoInput {
   /** Il reparto a cui il documento è destinato. */
@@ -38,12 +46,57 @@ export interface ConsegnaRepartoInput {
   importoDaContabilizzare: number;
 }
 
+/**
+ * I mezzi con cui il documento può lasciare l'ufficio.
+ *
+ * Un elenco chiuso e non testo libero: il registro deve poter dire «quanti
+ * sono partiti per PEC» senza interpretare come ognuno ha scritto «pec»,
+ * «posta elettronica» o «e-mail». `ALTRO` esiste per il mezzo che non si era
+ * previsto, e le note dicono quale fosse.
+ */
+export const MEZZI_INVIO = [
+  { valore: 'PEC', etichetta: 'PEC' },
+  { valore: 'EMAIL', etichetta: 'Email' },
+  { valore: 'PROTOCOLLO', etichetta: 'Protocollo interno' },
+  { valore: 'A_MANO', etichetta: 'Consegna a mano' },
+  { valore: 'POSTA', etichetta: 'Posta ordinaria' },
+  { valore: 'ALTRO', etichetta: 'Altro mezzo' },
+] as const;
+
+export type MezzoInvio = (typeof MEZZI_INVIO)[number]['valore'];
+
+/** L'etichetta da mostrare per un mezzo; un valore sconosciuto si legge com'è. */
+export function etichettaMezzo(mezzo: string): string {
+  return MEZZI_INVIO.find((m) => m.valore === mezzo)?.etichetta ?? mezzo;
+}
+
+/**
+ * La dichiarazione di invio: quando il documento è partito, come, con quali
+ * note, e chi lo ha dichiarato.
+ *
+ * `confermatoIl` e `confermatoDa` non li sceglie chi compila: sono l'istante
+ * della scrittura e la sessione che l'ha fatta. Senza quei due campi la
+ * dichiarazione non sarebbe attribuibile, e una dichiarazione non attribuita
+ * non vale come prova che il documento è uscito.
+ */
+export interface InvioConfermato {
+  /** Quando è stato spedito, AAAA-MM-GG — dichiarato da chi invia. */
+  inviataIl: string;
+  mezzo: MezzoInvio;
+  note: string | null;
+  /** Quando è stata registrata la conferma, ISO 8601. */
+  confermatoIl: string;
+  confermatoDa: string | null;
+}
+
 export interface ConsegnaRegistrata extends ConsegnaRepartoInput {
   id: number;
   /** Quando è stato scaricato, ISO 8601. */
   consegnatoIl: string;
   /** Chi lo ha scaricato, se la sessione lo dice. */
   consegnatoDa: string | null;
+  /** La dichiarazione d'invio, se qualcuno l'ha fatta. */
+  invio: InvioConfermato | null;
 }
 
 export interface RiepilogoConsegneReparto {
@@ -98,8 +151,33 @@ function giornoDaValore(valore: unknown): string {
 }
 
 function istanteDaValore(valore: unknown): string {
-  const d = valore instanceof Date ? valore : new Date(String(valore ?? ''));
+  if (valore == null || valore === '') return '';
+  const d = valore instanceof Date ? valore : new Date(String(valore));
   return Number.isNaN(d.getTime()) ? '' : d.toISOString();
+}
+
+/**
+ * La conferma d'invio di una riga, se c'è.
+ *
+ * Non basta che una colonna sia valorizzata: una riga con la data ma senza il
+ * mezzo (o senza chi l'ha confermata) non è una dichiarazione completa, e
+ * mezza dichiarazione è peggio di nessuna — direbbe «inviato» senza dire come.
+ * In quel caso si legge come non confermata.
+ */
+function invioDaRiga(r: Record<string, unknown>): InvioConfermato | null {
+  if (r.inviata_il == null || r.mezzo_invio == null) return null;
+  const inviataIl = giornoDaValore(r.inviata_il);
+  const mezzo = String(r.mezzo_invio);
+  const confermatoIl = istanteDaValore(r.invio_confermato_il);
+  if (!inviataIl || !mezzo || !confermatoIl) return null;
+  const note = r.note_invio == null ? '' : String(r.note_invio).trim();
+  return {
+    inviataIl,
+    mezzo: mezzo as MezzoInvio,
+    note: note === '' ? null : note,
+    confermatoIl,
+    confermatoDa: r.invio_confermato_da == null ? null : String(r.invio_confermato_da),
+  };
 }
 
 /**
@@ -122,6 +200,7 @@ export function consegnaDaRiga(r: Record<string, unknown>): ConsegnaRegistrata {
     importoDaContabilizzare: Number(r.importo_da_contabilizzare ?? 0),
     consegnatoIl: istanteDaValore(r.consegnato_il),
     consegnatoDa: r.consegnato_da == null ? null : String(r.consegnato_da),
+    invio: invioDaRiga(r),
   };
 }
 
@@ -216,6 +295,69 @@ export function validaConsegna(input: unknown): EsitoValidazioneConsegna {
       posizioniDaContabilizzare,
       importoDaContabilizzare,
     },
+  };
+}
+
+export type EsitoValidazioneInvio =
+  | { ok: true; dati: { inviataIl: string; mezzo: MezzoInvio; note: string | null } }
+  | { ok: false; errore: string };
+
+/** L'anno sotto il quale una data d'invio non è credibile: prima non c'era il registro. */
+const ANNO_MINIMO = 2000;
+const NOTE_MAX = 500;
+
+/**
+ * Valida la dichiarazione d'invio che arriva dal browser.
+ *
+ * Tre campi e una regola che conta: **la data non può essere nel futuro**.
+ * Dichiarare di avere spedito domani una cosa oggi non è un refuso innocuo —
+ * toglierebbe al registro l'unica cosa che sa dire, cioè quando. Si tollera un
+ * giorno oltre oggi perché il fuso del server non è quello di chi compila: con
+ * il fuso a ovest, un invio fatto stasera arriverebbe al server con la data di
+ * domani, e rifiutarlo sarebbe un errore nostro.
+ *
+ * Il mezzo deve essere uno di quelli previsti: l'elenco chiuso serve a contare,
+ * e un valore fuori elenco vorrebbe dire una tendina manomessa.
+ */
+export function validaConfermaInvio(
+  input: unknown,
+  oggi: Date = new Date()
+): EsitoValidazioneInvio {
+  if (!input || typeof input !== 'object') {
+    return { ok: false, errore: 'Dati della conferma mancanti.' };
+  }
+  const i = input as Record<string, unknown>;
+
+  const inviataIl = typeof i.inviataIl === 'string' ? i.inviataIl.trim() : '';
+  if (!dataValida(inviataIl)) {
+    return { ok: false, errore: 'La data di invio non è una data valida.' };
+  }
+  if (Number(inviataIl.slice(0, 4)) < ANNO_MINIMO) {
+    return { ok: false, errore: 'La data di invio è troppo indietro nel tempo.' };
+  }
+  const domani = new Date(oggi.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (inviataIl > domani) {
+    return { ok: false, errore: 'La data di invio non può essere nel futuro.' };
+  }
+
+  const mezzo = typeof i.mezzo === 'string' ? i.mezzo.trim() : '';
+  if (!MEZZI_INVIO.some((m) => m.valore === mezzo)) {
+    return { ok: false, errore: 'Indica con quale mezzo hai inviato il documento.' };
+  }
+
+  // Le note sono facoltative: vuote valgono «nessuna nota», non un errore.
+  const noteGrezze = i.note == null ? '' : i.note;
+  if (typeof noteGrezze !== 'string') {
+    return { ok: false, errore: 'Le note dell’invio non sono valide.' };
+  }
+  const note = noteGrezze.trim();
+  if (note.length > NOTE_MAX) {
+    return { ok: false, errore: `Le note non possono superare ${NOTE_MAX} caratteri.` };
+  }
+
+  return {
+    ok: true,
+    dati: { inviataIl, mezzo: mezzo as MezzoInvio, note: note === '' ? null : note },
   };
 }
 

@@ -164,8 +164,11 @@ Drizzle è marginale.
    scaricamenti sono due righe — e non registra nessun contenuto del documento. A schermo
    l'ultima consegna dice se il reparto ha in mano la versione che si sta guardando: se
    il documento è cambiato dopo la consegna, il triage lo segnala e chiede di riscaricare.
-   «Consegnato» qui significa *scaricato*: la piattaforma non sa se l'ufficio ha poi
-   spedito il file.
+   «Consegnato» qui significa *scaricato*: la piattaforma non spedisce e non sa da sola se
+   l'ufficio ha poi inviato il file. Chi lo spedisce lo **dichiara** (data, mezzo, note),
+   e la riga del registro conserva la dichiarazione con il nome di chi l'ha fatta e
+   l'istante in cui è stata scritta. Una dichiarazione per consegna, non sovrascrivibile:
+   senza conferma la scheda dice «invio non confermato», non «non inviato».
 4. **Visura**: estrazione AI → fatti strutturati (`src/lib/visura/fatti.ts`),
    conservazione e controllo dei documenti già presenti.
 5. **Soglie art. 25-novies**: dati a mano o da tracciati, calcolo puro

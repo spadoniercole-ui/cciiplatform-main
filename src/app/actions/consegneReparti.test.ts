@@ -35,12 +35,17 @@ vi.mock('@/db/provision', () => ({
       posizioni_da_contabilizzare INTEGER NOT NULL DEFAULT 0,
       importo_da_contabilizzare NUMERIC(15,2) NOT NULL DEFAULT 0,
       consegnato_il TIMESTAMPTZ NOT NULL DEFAULT now(),
-      consegnato_da TEXT
+      consegnato_da TEXT,
+      inviata_il DATE,
+      mezzo_invio TEXT,
+      note_invio TEXT,
+      invio_confermato_il TIMESTAMPTZ,
+      invio_confermato_da TEXT
     )`);
   },
 }));
 
-const { ottieniConsegneRepartiAction, registraConsegnaRepartoAction } =
+const { confermaInvioConsegnaAction, ottieniConsegneRepartiAction, registraConsegnaRepartoAction } =
   await import('./consegneReparti');
 
 const SCHEMA = 'tenant_alfa';
@@ -166,5 +171,135 @@ describe('ottieniConsegneRepartiAction', () => {
 
     const esito = await ottieniConsegneRepartiAction(SCHEMA, 5);
     expect(esito.consegne.map((c) => c.reparto)).toEqual(['Ragioneria']);
+  });
+});
+
+describe('confermaInvioConsegnaAction', () => {
+  const conferma = { inviataIl: '2026-10-19', mezzo: 'PEC', note: 'protocollo 77' };
+
+  /** La riga appena scaricata: la conferma si aggancia a quella. */
+  async function scarica(): Promise<number> {
+    const r = await registraConsegnaRepartoAction(SCHEMA, AZIENDA, consegna);
+    if (!r.consegna) throw new Error('consegna non registrata');
+    return r.consegna.id;
+  }
+
+  it('registra data, mezzo, note e chi ha dichiarato l’invio', async () => {
+    const id = await scarica();
+
+    const esito = await confermaInvioConsegnaAction(SCHEMA, AZIENDA, id, conferma);
+
+    expect(esito.success).toBe(true);
+    expect(richiediAccessoAzienda).toHaveBeenCalledWith(SCHEMA, AZIENDA);
+    expect(esito.consegna?.invio).toMatchObject({
+      inviataIl: '2026-10-19',
+      mezzo: 'PEC',
+      note: 'protocollo 77',
+      confermatoDa: 'anna@alfa.it',
+    });
+    expect(esito.consegna?.invio?.confermatoIl).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('la conferma si rilegge dal registro insieme alla consegna', async () => {
+    const id = await scarica();
+    await confermaInvioConsegnaAction(SCHEMA, AZIENDA, id, conferma);
+
+    const registro = await ottieniConsegneRepartiAction(SCHEMA, AZIENDA);
+    expect(registro.consegne).toHaveLength(1);
+    expect(registro.consegne[0].invio).toMatchObject({
+      inviataIl: '2026-10-19',
+      mezzo: 'PEC',
+      note: 'protocollo 77',
+      confermatoDa: 'anna@alfa.it',
+    });
+  });
+
+  it('non sovrascrive una conferma già scritta', async () => {
+    const id = await scarica();
+    await confermaInvioConsegnaAction(SCHEMA, AZIENDA, id, conferma);
+
+    const seconda = await confermaInvioConsegnaAction(SCHEMA, AZIENDA, id, {
+      inviataIl: '2026-10-20',
+      mezzo: 'EMAIL',
+      note: null,
+    });
+
+    expect(seconda.success).toBe(false);
+    expect(seconda.error).toContain('già stato confermato');
+    const registro = await ottieniConsegneRepartiAction(SCHEMA, AZIENDA);
+    expect(registro.consegne[0].invio).toMatchObject({
+      inviataIl: '2026-10-19',
+      mezzo: 'PEC',
+      note: 'protocollo 77',
+    });
+  });
+
+  it('rifiuta un invio che non può essere vero e non scrive nulla', async () => {
+    const id = await scarica();
+    const fraTreGiorni = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+
+    const esito = await confermaInvioConsegnaAction(SCHEMA, AZIENDA, id, {
+      ...conferma,
+      inviataIl: fraTreGiorni,
+    });
+
+    expect(esito.success).toBe(false);
+    expect(esito.error).toContain('futuro');
+    const registro = await ottieniConsegneRepartiAction(SCHEMA, AZIENDA);
+    expect(registro.consegne[0].invio).toBeNull();
+  });
+
+  it('rifiuta un mezzo fuori elenco', async () => {
+    const id = await scarica();
+    const esito = await confermaInvioConsegnaAction(SCHEMA, AZIENDA, id, {
+      ...conferma,
+      mezzo: 'TELEGRAMMA',
+    });
+
+    expect(esito.success).toBe(false);
+    expect(esito.error).toContain('mezzo');
+  });
+
+  it('non conferma la consegna di un’altra azienda', async () => {
+    await db.exec(`INSERT INTO ${SCHEMA}.aziende (id, ragione_sociale) VALUES (5, 'Beta Srl')`);
+    const id = await scarica();
+
+    const esito = await confermaInvioConsegnaAction(SCHEMA, 5, id, conferma);
+
+    expect(esito.success).toBe(false);
+    expect(esito.error).toContain('non trovata');
+    const registro = await ottieniConsegneRepartiAction(SCHEMA, AZIENDA);
+    expect(registro.consegne[0].invio).toBeNull();
+  });
+
+  it('non scrive se la guardia di accesso rifiuta', async () => {
+    const id = await scarica();
+    richiediAccessoAzienda.mockRejectedValueOnce(
+      new Error('Azienda non assegnata a questo utente.')
+    );
+
+    const esito = await confermaInvioConsegnaAction(SCHEMA, AZIENDA, id, conferma);
+
+    expect(esito.success).toBe(false);
+    const registro = await ottieniConsegneRepartiAction(SCHEMA, AZIENDA);
+    expect(registro.consegne[0].invio).toBeNull();
+  });
+
+  it('in ispezione del Superadmin firma la conferma come tale', async () => {
+    const id = await scarica();
+    richiediAccessoAzienda.mockResolvedValueOnce({
+      modalita: 'SALVAGENTE',
+      email: undefined,
+    } as never);
+
+    const esito = await confermaInvioConsegnaAction(SCHEMA, AZIENDA, id, conferma);
+    expect(esito.consegna?.invio?.confermatoDa).toBe('Superadmin (ispezione)');
+  });
+
+  it('rifiuta un id di consegna impossibile senza toccare il database', async () => {
+    const esito = await confermaInvioConsegnaAction(SCHEMA, AZIENDA, 0, conferma);
+    expect(esito.success).toBe(false);
+    expect(esito.error).toContain('Consegna non valida');
+    expect(await righeRegistrate()).toBe(0);
   });
 });

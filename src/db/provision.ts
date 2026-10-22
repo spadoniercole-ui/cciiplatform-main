@@ -2035,6 +2035,25 @@ export async function assicuraTabellaConsegneReparti(nomeSchema: string): Promis
       consegnato_da TEXT
     )`
   );
+  // LA CONFERMA D'INVIO, aggiunta dopo: la riga dice che il documento è
+  // uscito dalla piattaforma, non che è arrivato al reparto. Chi lo spedisce
+  // lo dichiara — data, mezzo, note — e la dichiarazione porta con sé chi
+  // l'ha fatta e quando. NULL sulle quattro colonne = nessuno l'ha dichiarato.
+  //
+  // `ADD COLUMN IF NOT EXISTS` una per chiamata: gli spazi già attivi hanno la
+  // tabella senza queste colonne, e il DDL gira a ogni avvio dell'azione. Le
+  // conferme già scritte non si toccano.
+  for (const colonna of [
+    'inviata_il DATE',
+    'mezzo_invio TEXT',
+    'note_invio TEXT',
+    'invio_confermato_il TIMESTAMPTZ',
+    'invio_confermato_da TEXT',
+  ]) {
+    await eseguiDdlTenant(
+      sql`ALTER TABLE ${s}.consegne_reparti ADD COLUMN IF NOT EXISTS ${sql.raw(colonna)}`
+    );
+  }
   await eseguiDdlTenant(
     sql`CREATE INDEX IF NOT EXISTS idx_consegne_reparti_azienda
         ON ${s}.consegne_reparti (azienda_id, consegnato_il DESC)`

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MEZZI_INVIO,
   consegnaDaRiga,
+  etichettaMezzo,
   riassumiConsegne,
   statoConsegnaReparto,
+  validaConfermaInvio,
   validaConsegna,
   type ConsegnaRegistrata,
   type ConsegnaRepartoInput,
@@ -24,6 +27,7 @@ const consegna = (id: number, over: Partial<ConsegnaRegistrata> = {}): ConsegnaR
   id,
   consegnatoIl: '2026-10-20T09:00:00.000Z',
   consegnatoDa: 'mario.rossi@ente.it',
+  invio: null,
   ...over,
 });
 
@@ -151,6 +155,7 @@ describe('consegnaDaRiga', () => {
       importoDaContabilizzare: 3_000,
       consegnatoIl: '2026-10-21T13:14:30.057Z',
       consegnatoDa: 'mario.rossi@ente.it',
+      invio: null,
     });
   });
 
@@ -174,6 +179,120 @@ describe('consegnaDaRiga', () => {
     expect(consegnaLetta.righe).toBe(0);
     expect(consegnaLetta.consegnatoDa).toBeNull();
     expect(consegnaLetta.dataVerifica).toBe('');
+    expect(consegnaLetta.invio).toBeNull();
+  });
+
+  it('legge la conferma d’invio quando c’è tutta', () => {
+    const consegnaLetta = consegnaDaRiga({
+      id: 7,
+      data_verifica: '2026-10-19',
+      consegnato_il: '2026-10-20T09:00:00.000Z',
+      inviata_il: '2026-10-21',
+      mezzo_invio: 'PEC',
+      note_invio: '  protocollo n. 1234 ',
+      invio_confermato_il: new Date('2026-10-21T13:14:30.057Z'),
+      invio_confermato_da: 'mario.rossi@ente.it',
+    });
+
+    expect(consegnaLetta.invio).toEqual({
+      inviataIl: '2026-10-21',
+      mezzo: 'PEC',
+      note: 'protocollo n. 1234',
+      confermatoIl: '2026-10-21T13:14:30.057Z',
+      confermatoDa: 'mario.rossi@ente.it',
+    });
+  });
+
+  it('una conferma senza il mezzo non è una conferma', () => {
+    // Una riga con la data ma senza il come direbbe «inviato» senza dire
+    // «come»: meglio leggerla come non confermata.
+    const consegnaLetta = consegnaDaRiga({
+      id: 7,
+      inviata_il: '2026-10-21',
+      invio_confermato_il: '2026-10-21T13:14:30.057Z',
+    });
+    expect(consegnaLetta.invio).toBeNull();
+  });
+
+  it('senza note non inventa testo, e una nota vuota vale come nessuna', () => {
+    const base = {
+      id: 7,
+      inviata_il: '2026-10-21',
+      mezzo_invio: 'EMAIL',
+      invio_confermato_il: '2026-10-21T13:14:30.057Z',
+      invio_confermato_da: 'anna@alfa.it',
+    };
+    expect(consegnaDaRiga(base).invio?.note).toBeNull();
+    expect(consegnaDaRiga({ ...base, note_invio: '   ' }).invio?.note).toBeNull();
+  });
+});
+
+describe('validaConfermaInvio', () => {
+  const oggi = new Date('2026-10-21T10:00:00.000Z');
+  const validaInvio = { inviataIl: '2026-10-21', mezzo: 'PEC', note: '' };
+
+  it('accetta un invio di oggi e normalizza le note', () => {
+    const esito = validaConfermaInvio({ ...validaInvio, note: '  protocollo 77 ' }, oggi);
+    expect(esito.ok).toBe(true);
+    if (esito.ok) {
+      expect(esito.dati.inviataIl).toBe('2026-10-21');
+      expect(esito.dati.mezzo).toBe('PEC');
+      expect(esito.dati.note).toBe('protocollo 77');
+    }
+  });
+
+  it('le note vuote non sono un errore: diventano «nessuna nota»', () => {
+    const esito = validaConfermaInvio({ ...validaInvio, note: '   ' }, oggi);
+    expect(esito.ok).toBe(true);
+    if (esito.ok) expect(esito.dati.note).toBeNull();
+    const senzaNote = validaConfermaInvio({ inviataIl: '2026-10-20', mezzo: 'EMAIL' }, oggi);
+    expect(senzaNote.ok).toBe(true);
+  });
+
+  it('rifiuta una data che non esiste o scritta male', () => {
+    expect(validaConfermaInvio({ ...validaInvio, inviataIl: '2026-02-31' }, oggi).ok).toBe(false);
+    expect(validaConfermaInvio({ ...validaInvio, inviataIl: '21/10/2026' }, oggi).ok).toBe(false);
+    expect(validaConfermaInvio({ ...validaInvio, inviataIl: '' }, oggi).ok).toBe(false);
+  });
+
+  it('rifiuta il futuro, ma tollera domani per il fuso del server', () => {
+    expect(validaConfermaInvio({ ...validaInvio, inviataIl: '2026-10-22' }, oggi).ok).toBe(true);
+    const esito = validaConfermaInvio({ ...validaInvio, inviataIl: '2026-10-23' }, oggi);
+    expect(esito.ok).toBe(false);
+    if (!esito.ok) expect(esito.errore).toContain('futuro');
+  });
+
+  it('rifiuta un anno troppo indietro', () => {
+    expect(validaConfermaInvio({ ...validaInvio, inviataIl: '1999-12-31' }, oggi).ok).toBe(false);
+    expect(validaConfermaInvio({ ...validaInvio, inviataIl: '2000-01-01' }, oggi).ok).toBe(true);
+  });
+
+  it('rifiuta un mezzo fuori elenco', () => {
+    expect(validaConfermaInvio({ ...validaInvio, mezzo: 'TELEGRAMMA' }, oggi).ok).toBe(false);
+    expect(validaConfermaInvio({ ...validaInvio, mezzo: '' }, oggi).ok).toBe(false);
+    expect(validaConfermaInvio({ ...validaInvio, mezzo: undefined }, oggi).ok).toBe(false);
+  });
+
+  it('rifiuta note troppo lunghe o di tipo sbagliato', () => {
+    expect(validaConfermaInvio({ ...validaInvio, note: 'x'.repeat(501) }, oggi).ok).toBe(false);
+    expect(validaConfermaInvio({ ...validaInvio, note: 'x'.repeat(500) }, oggi).ok).toBe(true);
+    expect(validaConfermaInvio({ ...validaInvio, note: 42 }, oggi).ok).toBe(false);
+  });
+
+  it('rifiuta un corpo che non è un oggetto', () => {
+    expect(validaConfermaInvio(null, oggi).ok).toBe(false);
+    expect(validaConfermaInvio('PEC', oggi).ok).toBe(false);
+    expect(validaConfermaInvio(undefined, oggi).ok).toBe(false);
+  });
+});
+
+describe('etichette dei mezzi', () => {
+  it('dà un nome leggibile a ogni mezzo previsto', () => {
+    for (const m of MEZZI_INVIO) expect(etichettaMezzo(m.valore)).toBe(m.etichetta);
+  });
+
+  it('un valore sconosciuto si legge com’è, senza inventare un’etichetta', () => {
+    expect(etichettaMezzo('TELEGRAMMA')).toBe('TELEGRAMMA');
   });
 });
 

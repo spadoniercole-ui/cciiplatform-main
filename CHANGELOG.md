@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.105.0**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.136.0**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,35 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.136.0 — 2026-10-22
+
+**Conferma d'invio: il registro delle consegne passa da «scaricato» a «spedito»**
+
+- Chi scarica il PDF di un reparto ora può **dichiarare l'invio**: data, mezzo (PEC,
+  email, protocollo interno, consegna a mano, posta, altro) e note facoltative. La riga
+  del registro smette di dire solo che il documento è uscito dalla piattaforma e dice
+  anche che è arrivato al reparto, quando e come.
+- La dichiarazione porta la firma: il registro conserva chi l'ha fatta e l'istante in cui
+  è stata scritta. Si scrive **una volta sola** — due clic, o due schede aperte, non
+  sovrascrivono la prima dichiarazione, e chi arriva dopo se la trova già lì invece di
+  correggerla a sua insaputa.
+- Il modulo si apre da solo sotto il reparto appena scaricato, con la data di oggi già
+  dentro: chi scarica per archiviare lo lascia chiuso, chi scarica per spedire ha un
+  passo in meno. La data non può essere nel futuro (si tollera domani, per il fuso del
+  server) e il mezzo deve essere uno di quelli previsti: un registro con dentro una data
+  impossibile non serve più a ricostruire niente.
+- Accanto al reparto la scheda mostra «Inviato il 21/10/2026 via PEC — dichiarato da
+  mario.rossi@ente.it, registrato il 21/10/2026, 15:42» e le eventuali note. Senza
+  conferma si legge **«invio non confermato»**, non «non inviato»: la prima è un fatto
+  registrato, la seconda sarebbe una supposizione — la piattaforma non manda nulla e non
+  può saperlo da sola.
+- La conferma resta legata alla consegna che la riceve, e non alla versione: se il
+  documento cambia dopo, l'avviso in ambra continua a chiedere di riscaricare e
+  reinviare, mentre la dichiarazione precedente resta nello storico con la sua data.
+- Le colonne nuove (`inviata_il`, `mezzo_invio`, `note_invio`, `invio_confermato_il`,
+  `invio_confermato_da`) si aggiungono da sole agli spazi già attivi, senza toccare le
+  righe esistenti.
 
 ## 0.135.0 — 2026-10-21
 

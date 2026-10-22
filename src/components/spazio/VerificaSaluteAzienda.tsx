@@ -43,6 +43,7 @@ import {
   ClipboardList,
   Building2,
   FileDown,
+  Send,
 } from 'lucide-react';
 import {
   estraiAnagraficaDaVisuraAction,
@@ -98,11 +99,15 @@ import {
 import { componiComunicazioniVera, formattaImportoEuro } from '@/lib/lavorazioni/comunicazioni';
 import { preparaDocumentiReparto, type DocumentoReparto } from '@/lib/lavorazioni/reparti';
 import {
+  MEZZI_INVIO,
+  etichettaMezzo,
   riassumiConsegne,
   statoConsegnaReparto,
   type ConsegnaRegistrata,
+  type MezzoInvio,
 } from '@/lib/lavorazioni/consegne';
 import {
+  confermaInvioConsegnaAction,
   ottieniConsegneRepartiAction,
   registraConsegnaRepartoAction,
 } from '@/app/actions/consegneReparti';
@@ -120,6 +125,18 @@ function dataOraConsegna(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+/**
+ * «21/10/2026» — un giorno dichiarato (AAAA-MM-GG), senza ora.
+ *
+ * Non passa da Date di proposito: la data d'invio è un giorno civile, e
+ * costruirla con `new Date(...)` la sposterebbe a seconda del fuso di chi
+ * guarda (un invio del 21 può diventare il 20 a ovest di Greenwich).
+ */
+function dataInvio(iso: string): string {
+  const [anno, mese, giorno] = iso.split('-');
+  return anno && mese && giorno ? `${giorno}/${mese}/${anno}` : iso;
 }
 
 interface Props {
@@ -242,6 +259,16 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
   const [consegneReparti, setConsegneReparti] = useState<ConsegnaRegistrata[]>([]);
   const [erroreConsegne, setErroreConsegne] = useState<string | null>(null);
   const [avvisoConsegna, setAvvisoConsegna] = useState<string | null>(null);
+  // La conferma d'invio: quale reparto ha il modulo aperto e i tre campi che
+  // si stanno compilando. Uno alla volta: è una dichiarazione su un documento,
+  // non un modulo da compilare in fila per tutti i reparti.
+  const [confermaAperta, setConfermaAperta] = useState<string | null>(null);
+  const [inviataIl, setInviataIl] = useState(() => new Date().toISOString().slice(0, 10));
+  const [mezzoInvio, setMezzoInvio] = useState<MezzoInvio>('PEC');
+  const [noteInvio, setNoteInvio] = useState('');
+  const [invioInCorso, setInvioInCorso] = useState(false);
+  const [erroreInvio, setErroreInvio] = useState<string | null>(null);
+  const [avvisoInvio, setAvvisoInvio] = useState<string | null>(null);
   /**
    * Data a cui la verifica è riferita.
    *
@@ -1106,6 +1133,15 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       const registrata = r.consegna;
       if (r.success && registrata) {
         setConsegneReparti((prev) => [registrata, ...prev]);
+        // Il passo successivo è dichiarare l'invio: il modulo si apre da solo
+        // sotto il reparto appena scaricato, con la data di oggi già dentro.
+        // È una proposta, non un obbligo — chi scarica per archiviare la
+        // lascia chiusa e la dichiara quando spedisce davvero.
+        setInviataIl(new Date().toISOString().slice(0, 10));
+        setNoteInvio('');
+        setErroreInvio(null);
+        setAvvisoInvio(null);
+        setConfermaAperta(documento.reparto);
       } else {
         setAvvisoConsegna(
           `Documento scaricato, ma la consegna non è stata registrata: ${
@@ -1115,6 +1151,40 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       }
     }
     setPdfInCorso(null);
+  };
+
+  /**
+   * Dichiara che il documento di un reparto è stato spedito.
+   *
+   * L'invio vero — la PEC, la mail, il protocollo — lo fa l'ufficio: qui se ne
+   * conserva la traccia, con il nome di chi la dichiara. Se la conferma c'è
+   * già, l'azione la rifiuta invece di sovrascriverla, e la pagina lo dice.
+   */
+  const confermaInvioReparto = async (documento: DocumentoReparto) => {
+    if (!aziendaId) return;
+    const riepilogo = consegnePerReparto.get(documento.reparto.toLocaleLowerCase('it-IT'));
+    if (!riepilogo) return;
+    setInvioInCorso(true);
+    setErroreInvio(null);
+    setAvvisoInvio(null);
+    try {
+      const r = await confermaInvioConsegnaAction(nomeSchema, aziendaId, riepilogo.ultima.id, {
+        inviataIl,
+        mezzo: mezzoInvio,
+        note: noteInvio,
+      });
+      const aggiornata = r.consegna;
+      if (r.success && aggiornata) {
+        setConsegneReparti((prev) => prev.map((c) => (c.id === aggiornata.id ? aggiornata : c)));
+        setConfermaAperta(null);
+        setNoteInvio('');
+        setAvvisoInvio(`Invio confermato per ${documento.reparto}.`);
+      } else {
+        setErroreInvio(r.error ?? 'Conferma non registrata.');
+      }
+    } finally {
+      setInvioInCorso(false);
+    }
   };
 
   const copiaTesto = async (chiave: string, testo: string) => {
@@ -1729,7 +1799,8 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               Si scarica da qui e lo invii tu all&apos;ufficio — la piattaforma non manda nulla, e
               questa funzione non sostituisce né impedisce la presa in carico. Ogni scaricamento
               resta registrato con data, totali e versione del documento: «consegnato» qui vuol dire
-              scaricato, l&apos;invio è cosa tua.
+              scaricato, l&apos;invio è cosa tua. Quando lo spedisci puoi dichiararlo — data, mezzo
+              e note — e il registro conserva la dichiarazione con il tuo nome.
             </p>
 
             {documentiReparti.documenti.length === 0 ? (
@@ -1746,6 +1817,11 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                     consegnePerReparto.get(d.reparto.toLocaleLowerCase('it-IT')),
                     d.versione
                   );
+                  // Estratto una volta: nella scheda si legge tre volte, e un
+                  // `?.` ripetuto su una catena lunga è dove nascono i «forse
+                  // nullo» che poi si aggiustano con un `!` di troppo.
+                  const invioConfermato =
+                    stato.stato === 'mai' ? null : stato.consegna.ultima.invio;
                   return (
                     <li
                       key={d.reparto}
@@ -1800,6 +1876,123 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                           precedente. Riscarica il PDF e invia la nuova versione.
                         </p>
                       )}
+
+                      {/*
+                        LA CONFERMA D'INVIO — la seconda metà della consegna.
+                        Il registro sa che il foglio è uscito dalla piattaforma;
+                        non sa se è arrivato al reparto. Chi lo spedisce lo
+                        dichiara qui, e la dichiarazione porta la sua firma.
+                        Senza, la riga resta muta: «invio non confermato» è un
+                        fatto, «non inviato» sarebbe una supposizione.
+                      */}
+                      {stato.stato !== 'mai' &&
+                        (invioConfermato ? (
+                          <div className="text-[10px] text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg p-2 leading-relaxed space-y-0.5">
+                            <p className="flex items-start gap-1.5">
+                              <Check className="w-3 h-3 shrink-0 mt-0.5" />
+                              <span>
+                                <span className="font-bold">
+                                  Inviato il {dataInvio(invioConfermato.inviataIl)} via{' '}
+                                  {etichettaMezzo(invioConfermato.mezzo)}
+                                </span>
+                                {invioConfermato.confermatoDa
+                                  ? ` — dichiarato da ${invioConfermato.confermatoDa}`
+                                  : ''}
+                                {`, registrato il ${dataOraConsegna(invioConfermato.confermatoIl)}`}
+                                .
+                              </span>
+                            </p>
+                            {invioConfermato.note && (
+                              <p className="pl-5 italic text-emerald-800">
+                                «{invioConfermato.note}»
+                              </p>
+                            )}
+                          </div>
+                        ) : confermaAperta === d.reparto ? (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                            <p className="text-[10px] text-slate-600 leading-relaxed">
+                              Dichiara l&apos;invio al reparto. La piattaforma non spedisce nulla:
+                              registra quello che hai fatto, così il registro sa che il documento è
+                              arrivato e non solo che è uscito.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                Data di invio
+                                <input
+                                  type="date"
+                                  value={inviataIl}
+                                  max={new Date().toISOString().slice(0, 10)}
+                                  onChange={(e) => setInviataIl(e.target.value)}
+                                  className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-slate-900 bg-white"
+                                />
+                              </label>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                Mezzo
+                                <select
+                                  value={mezzoInvio}
+                                  onChange={(e) => setMezzoInvio(e.target.value as MezzoInvio)}
+                                  className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-slate-900 bg-white"
+                                >
+                                  {MEZZI_INVIO.map((m) => (
+                                    <option key={m.valore} value={m.valore}>
+                                      {m.etichetta}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                              Note (facoltative)
+                              <textarea
+                                value={noteInvio}
+                                onChange={(e) => setNoteInvio(e.target.value)}
+                                rows={2}
+                                maxLength={500}
+                                placeholder="Es. protocollo n. 1234 del 21/10, consegnato all’ufficio contributi"
+                                className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-slate-900 bg-white"
+                              />
+                            </label>
+                            {erroreInvio && (
+                              <p className="text-[10px] text-red-700 leading-relaxed">
+                                {erroreInvio}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void confermaInvioReparto(d)}
+                                disabled={invioInCorso}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-emerald-700 disabled:opacity-50"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                {invioInCorso ? 'Registro...' : 'Registra l’invio'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfermaAperta(null);
+                                  setErroreInvio(null);
+                                }}
+                                disabled={invioInCorso}
+                                className="px-3 py-2 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-white disabled:opacity-50"
+                              >
+                                Annulla
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfermaAperta(d.reparto);
+                              setErroreInvio(null);
+                              setAvvisoInvio(null);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50"
+                          >
+                            <Send className="w-3 h-3" /> Confermo l&apos;invio
+                          </button>
+                        ))}
                     </li>
                   );
                 })}
@@ -1812,6 +2005,11 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                 {avvisoConsegna}
               </p>
             )}
+            {avvisoInvio && (
+              <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3 leading-relaxed">
+                {avvisoInvio}
+              </p>
+            )}
             {erroreConsegne && <p className="text-[11px] text-amber-800">{erroreConsegne}</p>}
 
             {consegneFuoriConfigurazione.length > 0 && (
@@ -1822,7 +2020,16 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                     : `${consegneFuoriConfigurazione.length} reparti hanno già ricevuto un documento`
                 } ma non compare più fra i destinatari: `}
                 {consegneFuoriConfigurazione
-                  .map((c) => `${c.reparto} (${dataOraConsegna(c.ultima.consegnatoIl)})`)
+                  .map(
+                    (c) =>
+                      `${c.reparto} (${dataOraConsegna(c.ultima.consegnatoIl)}${
+                        c.ultima.invio
+                          ? `, inviato il ${dataInvio(c.ultima.invio.inviataIl)} via ${etichettaMezzo(
+                              c.ultima.invio.mezzo
+                            )}`
+                          : ''
+                      })`
+                  )
                   .join(', ')}
                 . Se la lavorazione è stata cambiata o spenta, lo storico resta qui.
               </p>
@@ -1907,6 +2114,10 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                   setErroreComunicazioni(null);
                   setCopiato(null);
                   setErroreCopia(null);
+                  setConfermaAperta(null);
+                  setErroreInvio(null);
+                  setAvvisoInvio(null);
+                  setNoteInvio('');
                 }}
                 className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50"
               >
