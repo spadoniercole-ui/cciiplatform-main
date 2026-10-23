@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.137.0**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.138.0**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,44 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.138.0 — 2026-10-23
+
+**Lavorazioni delle materie: la dipendenza e la procedura si scrivono una volta, sulla materia**
+
+- La materia è la chiave dei titoli di credito («il titolo di una partita è
+  quello della sua materia»), ma dipendenza e procedura si scrivevano codice per
+  codice: lo stesso testo ripetuto su ogni riga, e una correzione da fare dieci
+  volte. Nei Parametri di Spazio c’è ora **Lavorazioni delle materie**: la
+  materia porta con sé la **dipendenza** (l’ufficio a cui indirizzare la
+  comunicazione di pagamento), la **procedura** (i passi, uno per riga) e
+  l’**esito** della lavorazione («diffida notificata», «procedura di recupero»).
+- Una materia può avere **più lavorazioni**, perché un processo ne prevede
+  diverse — verifica del messaggio, emissione della diffida, contabilizzazione —
+  che portano allo stesso esito. La prima dell’elenco è quella che il titolo
+  eredita. Può averne anche zero: in quel caso la pagina dice quali materie
+  restano senza dipendenza e senza procedura.
+- **Il riporto nei titoli di credito dell’ente è automatico**: ogni codice legge
+  dipendenza e procedura della sua materia, e la riga dice quando il valore
+  arriva da lì. Il valore scritto sul singolo codice ha la precedenza, così una
+  posizione particolare resta eccezione senza costringere a scollegarla dalla
+  materia. Nella scheda del codice, se la procedura è vuota, si vede che arriva
+  dalla materia e che scriverci sopra crea una versione solo per quel codice.
+- **Perché una tabella nuova e non le direttrici dello screening**: le direttrici
+  sono il questionario, questa è l’esecuzione. Aggiungere un campo di
+  qualificazione alla lavorazione non deve toccare né il questionario né i
+  titoli. Tabella `materie_lavorazione` con indice su materia e ordine, creata in
+  modo idempotente su ogni spazio; cancellare una materia porta via le sue
+  lavorazioni.
+- **La configurazione di spazio la esporta e la ripristina** come le altre
+  tabelle, dopo le materie e prima dei titoli: un file esportato prima di questa
+  release continua a caricarsi (la tabella mancante viene ignorata e dichiarata),
+  e uno esportato dopo riporta le associazioni senza lasciare riferimenti a
+  materie che non esistono più.
+- Le regole di ereditarietà sono una funzione pura con i suoi test
+  (`src/lib/titoliEnte/lavorazioniMateria.ts`): il codice vince sulla materia, la
+  prima lavorazione dell’ordine vince sulle altre, un codice senza materia non
+  eredita nulla.
 
 ## 0.137.0 — 2026-10-22
 

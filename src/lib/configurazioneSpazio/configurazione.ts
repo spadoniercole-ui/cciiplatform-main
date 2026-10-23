@@ -49,6 +49,12 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
   { nome: 'checklist_campi_extra', descrizione: 'Check List: campi aggiuntivi' },
   { nome: 'checklist_modelli', descrizione: 'Check List: modelli' },
   { nome: 'materie_ente', descrizione: 'Materie dell’ente' },
+  // 0.138.0: dipendenza e procedura scritte sulla materia. Va dopo le materie
+  // (gli id devono esistere) e prima dei titoli, che le leggono.
+  {
+    nome: 'materie_lavorazione',
+    descrizione: 'Lavorazioni delle materie (dipendenza e procedura)',
+  },
   { nome: 'titoli_ente', descrizione: 'Titoli di credito dell’ente' },
   {
     nome: 'titoli_ente_config',

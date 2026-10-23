@@ -11,6 +11,7 @@
 // scrive», e si salvano insieme senza passare dal riscontro sulle fonti.
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   Scale,
   Plus,
@@ -55,6 +56,12 @@ import {
   suggerisciMaterieCodiciAction,
 } from '@/app/actions/titoliEnte';
 import type { MateriaEnte } from '@/lib/titoliEnte/materie';
+import {
+  dipendenzaEffettiva,
+  proceduraEffettiva,
+  type LavorazioneMateria,
+} from '@/lib/titoliEnte/lavorazioniMateria';
+import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
 
 interface Props {
   nomeSchema: string;
@@ -180,7 +187,7 @@ function Esito({ r, etichetta }: { r: RiscontroFonte; etichetta: string }) {
 }
 
 /** L'elenco numerato che vedrà l'operatore: lo stesso testo, letto una volta sola. */
-function AnteprimaPassi({ testo }: { testo: string }) {
+export function AnteprimaPassi({ testo }: { testo: string }) {
   const passi = passiAttivitaRecupero(testo);
   if (passi.length === 0)
     return (
@@ -230,9 +237,17 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
     dipendenza: string;
   } | null>(null);
   const [materie, setMaterie] = useState<MateriaEnte[]>([]);
+  // Le lavorazioni della materia (0.138.0): dipendenza e procedura scritte una
+  // volta sulla materia. Il codice che ne ha una sua la tiene; gli altri la
+  // leggono da qui, senza che nessuno debba ricopiarla su ogni riga.
+  const [lavorazioni, setLavorazioni] = useState<LavorazioneMateria[]>([]);
   const caricaMaterie = async () => {
-    const r = await ottieniMaterieEnteAction(nomeSchema);
+    const [r, l] = await Promise.all([
+      ottieniMaterieEnteAction(nomeSchema),
+      ottieniLavorazioniMateria(nomeSchema),
+    ]);
     if (r.success) setMaterie(r.materie);
+    if (l.success) setLavorazioni(l.lavorazioni);
   };
 
   const carica = async () => {
@@ -369,6 +384,17 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
             conto, controllare la proposta VIG, contabilizzare). Si scrive una volta qui; nella fase
             successiva al triage la piattaforma la mostra, partita per partita, all’operatore che la
             deve lavorare, che potrà adattarla a quella posizione.
+          </p>
+          <p className="text-[11px] text-slate-600 mt-1">
+            Dipendenza e procedura si possono scrivere una volta sulla <strong>materia</strong> (
+            <Link
+              href={`/spazio/${codice}/parametri/materie-lavorazione`}
+              className="font-bold text-sky-700 hover: underline"
+            >
+              Lavorazioni delle materie
+            </Link>
+            ): ogni codice della materia le eredita, e quello scritto sul singolo codice ha la
+            precedenza. Dove il valore arriva dalla materia la riga lo dice.
           </p>
           <p className="text-[11px] text-slate-500 italic mt-1">{AVVERTENZA_TITOLI_ENTE}</p>
         </div>
@@ -563,6 +589,19 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                 <span className="block text-[10px] text-slate-500 mt-1">
                   La procedura non richiede riscontro normativo: si salva così com’è.
                 </span>
+                {(() => {
+                  if (!inModifica.attivitaRecupero) {
+                    const proc = proceduraEffettiva(inModifica, lavorazioni);
+                    if (proc.dallaMateria)
+                      return (
+                        <span className="block text-[10px] text-sky-700 mt-1">
+                          Vuota qui, viene dalla materia «{proc.tipologia}»: scrivendo in questa
+                          casella il codice avrà una sua procedura.
+                        </span>
+                      );
+                  }
+                  return null;
+                })()}
               </div>
               <span
                 className={`text-[10px] ${
@@ -710,16 +749,35 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                     })()}
                   </td>
                   <td className="px-3 py-2 text-slate-700">
-                    {riassuntoAttivitaRecupero(t.attivitaRecupero) || (
-                      <span className="text-amber-700">da scrivere</span>
-                    )}
-                    <span
-                      className={`block text-[10px] ${
-                        t.dipendenza ? 'text-slate-500' : 'text-amber-700'
-                      }`}
-                    >
-                      {t.dipendenza ? `→ ${t.dipendenza}` : 'dipendenza da indicare'}
-                    </span>
+                    {(() => {
+                      const proc = proceduraEffettiva(t, lavorazioni);
+                      const dip = dipendenzaEffettiva(t, lavorazioni);
+                      return (
+                        <>
+                          {riassuntoAttivitaRecupero(proc.valore) || (
+                            <span className="text-amber-700">da scrivere</span>
+                          )}
+                          {proc.dallaMateria && (
+                            <span className="block text-[9px] text-sky-700">
+                              dalla materia «{proc.tipologia}»
+                            </span>
+                          )}
+                          <span
+                            className={`block text-[10px] ${
+                              dip.valore
+                                ? dip.dallaMateria
+                                  ? 'text-sky-700'
+                                  : 'text-slate-500'
+                                : 'text-amber-700'
+                            }`}
+                          >
+                            {dip.valore
+                              ? `→ ${dip.valore}${dip.dallaMateria ? ' (dalla materia)' : ''}`
+                              : 'dipendenza da indicare'}
+                          </span>
+                        </>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-2">
                     <RiscontriRiga
@@ -748,8 +806,11 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                             : {
                                 id: t.id!,
                                 codice: t.codice,
-                                testo: t.attivitaRecupero ?? '',
-                                dipendenza: t.dipendenza ?? '',
+                                // Se il codice non ha una sua procedura si parte
+                                // da quella della materia: modificandola qui il
+                                // codice se ne scosta, e la materia resta com'è.
+                                testo: proceduraEffettiva(t, lavorazioni).valore ?? '',
+                                dipendenza: dipendenzaEffettiva(t, lavorazioni).valore ?? '',
                               }
                         );
                         setErrore(null);
@@ -795,6 +856,17 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
                         fase successiva al triage mostrerà all’operatore: qui si configura una
                         volta, poi si adatta sulla singola posizione.
                       </p>
+                      {(() => {
+                        const salvato = titoli.find((x) => x.id === procedura.id);
+                        const proc = salvato ? proceduraEffettiva(salvato, lavorazioni) : null;
+                        if (!proc?.dallaMateria) return null;
+                        return (
+                          <p className="text-[10px] text-sky-700">
+                            Il testo qui sotto è quello della materia «{proc.tipologia}»: salvandolo
+                            il codice avrà una sua procedura e la materia resta com’è.
+                          </p>
+                        );
+                      })()}
                       <div className="max-w-xl">
                         <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
                           Dipendenza — ufficio a cui indirizzare la comunicazione

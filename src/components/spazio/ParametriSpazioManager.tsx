@@ -78,6 +78,13 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
               'Per ogni codice di partita: atto, presupposto giuridico e circolare, riscontrati sulle fonti ufficiali.',
           },
           {
+            href: `/spazio/${codice}/parametri/materie-lavorazione`,
+            icon: ClipboardList,
+            titolo: 'Lavorazioni delle materie',
+            descrizione:
+              'Dipendenza e procedura che ogni materia porta con sé: si scrivono una volta e i titoli di credito dell’ente le ereditano per tutti i suoi codici.',
+          },
+          {
             href: `/spazio/${codice}/parametri/direttrici-ente`,
             icon: Sparkles,
             titolo: 'Direttrici Ente (Screening)',

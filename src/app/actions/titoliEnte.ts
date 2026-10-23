@@ -21,7 +21,7 @@ import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
 import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { pool } from '@/lib/db';
-import { assicuraTabelleParametriSpazio } from '@/db/provision';
+import { assicuraTabellaMaterieLavorazione, assicuraTabelleParametriSpazio } from '@/db/provision';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { estraiJson } from '@/lib/visura/fatti';
 import {
@@ -665,6 +665,13 @@ export async function eliminaMateriaEnteAction(
       return { success: false, error: 'Operazione riservata all’Admin di Spazio.' };
     await pool.query(
       `UPDATE "${contesto.nomeSchema}".titoli_ente SET materia_id = NULL WHERE materia_id = $1`,
+      [id]
+    );
+    // Le lavorazioni appartengono alla materia: via anche quelle, altrimenti
+    // restano righe che nessun titolo può più leggere (0.138.0).
+    await assicuraTabellaMaterieLavorazione(contesto.nomeSchema);
+    await pool.query(
+      `DELETE FROM "${contesto.nomeSchema}".materie_lavorazione WHERE materia_id = $1`,
       [id]
     );
     await pool.query(`DELETE FROM "${contesto.nomeSchema}".materie_ente WHERE id = $1`, [id]);

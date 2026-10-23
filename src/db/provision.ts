@@ -880,6 +880,12 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   // si chiede all'azienda il pagamento del debito. Sta accanto alla procedura
   // perché la procedura senza il destinatario non si può eseguire.
   await eseguiDdlTenant(sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS dipendenza TEXT`);
+  // Lavorazioni della materia (0.138.0): la materia porta con sé la dipendenza
+  // e la procedura con cui si lavora. Un processo ha spesso più lavorazioni
+  // (verifica, diffida, contabilizzazione) che finiscono nello stesso esito:
+  // una riga per lavorazione, e i titoli dell'ente le leggono da qui invece di
+  // ripetere lo stesso testo su ogni codice.
+  await assicuraTabellaMaterieLavorazione(nomeSchema);
   // Esito dell'ultima ricerca (0.109.99): anche «nulla trovato» e' un esito, e va detto.
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.materie_ente ADD COLUMN IF NOT EXISTS esito_ricerca TEXT`
@@ -2003,6 +2009,42 @@ export async function assicuraTabellaLavorazioniTipoDebito(nomeSchema: string): 
   await eseguiDdlTenant(
     sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_lavorazioni_tipo_debito_unica
         ON ${s}.lavorazioni_tipo_debito (categoria, lavorazione)`
+  );
+}
+
+/**
+ * Lavorazioni della materia: la dipendenza (l'ufficio che lavora) e la procedura
+ * (i passi) scritte una volta sulla MATERIA invece che su ogni codice.
+ *
+ * Perché una tabella nuova e non le direttrici dello screening: le direttrici
+ * sono il questionario, qui si configura l'esecuzione; tenerle separate
+ * significa che aggiungere un campo di qualificazione alla lavorazione non
+ * tocca né il questionario né i titoli. La materia è la chiave: ogni codice
+ * dell'anagrafica cade in una materia e ne eredita la lavorazione.
+ *
+ * Nessuna chiave esterna, come per `titoli_ente.materia_id`: la cancellazione
+ * della materia toglie le sue lavorazioni nell'azione che la elimina, così un
+ * ripristino della configurazione non dipende dall'ordine delle tabelle.
+ *
+ * Idempotente: ogni spazio già attivo la riceve al primo salvataggio.
+ */
+export async function assicuraTabellaMaterieLavorazione(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.materie_lavorazione (
+      id SERIAL PRIMARY KEY,
+      materia_id INTEGER NOT NULL,
+      tipologia TEXT NOT NULL DEFAULT '',
+      dipendenza TEXT,
+      procedura TEXT,
+      esito TEXT,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_materie_lavorazione_materia
+        ON ${s}.materie_lavorazione (materia_id, ordine)`
   );
 }
 
