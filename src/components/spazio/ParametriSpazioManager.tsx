@@ -24,6 +24,7 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { ConfigurazioneSpazioFile } from '@/components/spazio/ConfigurazioneSpazioFile';
+import { LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA } from '@/lib/lavorazioni/solaLettura';
 
 interface Props {
   nomeSchema: string;
@@ -105,7 +106,8 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
       icon: ClipboardList,
       titolo: 'Lavorazioni per tipo di debito',
       descrizione:
-        'Per ogni categoria di debito, la lavorazione da svolgere e il collega che la riceve. Alimenta le comunicazioni preparate dal triage sul file V.E.R.A.',
+        'Per ogni categoria di debito, la lavorazione da svolgere e il collega che la riceve. Alimenta le comunicazioni preparate dal triage sul file V.E.R.A.' +
+        (LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA ? ' Oggi è in sola lettura.' : ''),
     },
     {
       href: `/spazio/${codice}/parametri/tab-xbrl`,

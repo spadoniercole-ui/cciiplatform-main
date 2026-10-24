@@ -23,6 +23,10 @@ import {
   type LavorazioneTipoDebito,
 } from '@/app/actions/lavorazioniTipoDebito';
 import { TIPI_DEBITO_ENTE } from '@/lib/debitiEnte/tipoDebito';
+import {
+  AVVISO_LAVORAZIONI_SOLA_LETTURA,
+  LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA,
+} from '@/lib/lavorazioni/solaLettura';
 
 interface Props {
   nomeSchema: string;
@@ -150,6 +154,72 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice }: Props) {
   };
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
+
+  // SOLA LETTURA — la tabella continua a decidere i destinatari delle
+  // comunicazioni e dei documenti per reparto, quindi si legge per intero;
+  // sparirebbero i comandi, non le informazioni. Il blocco vero è nelle
+  // server action: qui il modulo non si mostra nemmeno, così nessuno compila
+  // una cosa che verrebbe rifiutata al salvataggio.
+  if (LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA) {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-start gap-2">
+          <ClipboardList className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+          <div>
+            <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+              Lavorazioni per tipologia di debito
+            </h2>
+            <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+              {AVVISO_LAVORAZIONI_SOLA_LETTURA}
+            </p>
+          </div>
+        </div>
+
+        {errore && (
+          <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            {errore}
+          </div>
+        )}
+
+        {lavorazioni.length === 0 ? (
+          <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded-xl p-5">
+            Nessuna lavorazione configurata. Con la tabella in sola lettura il triage non può
+            preparare comunicazioni ai colleghi né documenti per reparto: le posizioni V.E.R.A.
+            restano visibili, senza un destinatario a cui indirizzarle.
+          </p>
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            <div className="hidden lg:grid grid-cols-12 gap-3 px-4 py-2 bg-slate-50 border-b border-slate-200 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              <span className="col-span-3">Tipologia</span>
+              <span className="col-span-4">Lavorazione</span>
+              <span className="col-span-3">Collega / ufficio</span>
+              <span className="col-span-2">Stato</span>
+            </div>
+            {lavorazioni.map((l) => (
+              <div
+                key={l.id}
+                className="grid grid-cols-1 lg:grid-cols-12 gap-3 px-4 py-3 border-b border-slate-100 last:border-b-0"
+              >
+                <div className="lg:col-span-3">
+                  <p className="text-[11px] font-bold text-slate-900">{etichetta(l.categoria)}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">{l.categoria}</p>
+                </div>
+                <p className="lg:col-span-4 text-xs text-slate-700">{l.lavorazione}</p>
+                <p className="lg:col-span-3 text-xs text-slate-700">{l.destinatario}</p>
+                <p
+                  className={`lg:col-span-2 text-[10px] font-bold uppercase tracking-wider ${
+                    l.attivo ? 'text-emerald-700' : 'text-slate-400'
+                  }`}
+                >
+                  {l.attivo ? 'Attiva' : 'Disattivata'}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

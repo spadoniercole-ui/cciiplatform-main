@@ -98,6 +98,7 @@ import {
 } from '@/app/actions/lavorazioniTipoDebito';
 import { componiComunicazioniVera, formattaImportoEuro } from '@/lib/lavorazioni/comunicazioni';
 import { preparaDocumentiReparto, type DocumentoReparto } from '@/lib/lavorazioni/reparti';
+import { LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA } from '@/lib/lavorazioni/solaLettura';
 import {
   MEZZI_INVIO,
   etichettaMezzo,
@@ -1678,7 +1679,9 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                 {erroreComunicazioni
                   ? 'Nessuna comunicazione preparata: mancano i parametri necessari.'
                   : lavorazioni.length === 0
-                    ? 'Nessuna lavorazione configurata: aggiungila nei Parametri di Spazio per preparare le comunicazioni.'
+                    ? LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
+                      ? 'Nessuna lavorazione configurata: la tabella dei destinatari è in sola lettura e non ne esistono ancora, quindi non c’è nessuno a cui indirizzare la comunicazione.'
+                      : 'Nessuna lavorazione configurata: aggiungila nei Parametri di Spazio per preparare le comunicazioni.'
                     : 'Nessuna posizione V.E.R.A. riconducibile a una lavorazione attiva.'}
               </p>
             ) : (
@@ -1767,7 +1770,10 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               href={`/spazio/${codice}/parametri/lavorazioni`}
               className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
             >
-              Configura le lavorazioni <ArrowRight className="w-3 h-3" />
+              {LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
+                ? 'Vedi le lavorazioni'
+                : 'Configura le lavorazioni'}{' '}
+              <ArrowRight className="w-3 h-3" />
             </a>
           </div>
           <div className="flex justify-end">
@@ -1806,7 +1812,9 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             {documentiReparti.documenti.length === 0 ? (
               <p className="text-[11px] text-slate-500 leading-relaxed">
                 {lavorazioni.length === 0
-                  ? 'Nessuna lavorazione configurata: senza una lavorazione per tipologia non c’è un reparto a cui indirizzare i debiti. Aggiungila nei Parametri di Spazio.'
+                  ? LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
+                    ? 'Nessuna lavorazione configurata: senza una lavorazione per tipologia non c’è un reparto a cui indirizzare i debiti, e la tabella che la definisce è in sola lettura.'
+                    : 'Nessuna lavorazione configurata: senza una lavorazione per tipologia non c’è un reparto a cui indirizzare i debiti. Aggiungila nei Parametri di Spazio.'
                   : 'Nessuna posizione V.E.R.A. riconducibile a una lavorazione attiva: non c’è un reparto a cui indirizzare i debiti.'}
               </p>
             ) : (
@@ -2049,7 +2057,10 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               href={`/spazio/${codice}/parametri/lavorazioni`}
               className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
             >
-              Configura le lavorazioni <ArrowRight className="w-3 h-3" />
+              {LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
+                ? 'Vedi le lavorazioni'
+                : 'Configura le lavorazioni'}{' '}
+              <ArrowRight className="w-3 h-3" />
             </a>
           </div>
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">

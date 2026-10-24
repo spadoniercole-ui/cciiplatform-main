@@ -18,6 +18,10 @@ import {
   assicuraTabellaLavorazioniTipoDebito,
 } from '@/db/provision';
 import { TIPI_DEBITO_ENTE } from '@/lib/debitiEnte/tipoDebito';
+import {
+  LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA,
+  MESSAGGIO_LAVORAZIONI_SOLA_LETTURA,
+} from '@/lib/lavorazioni/solaLettura';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -106,6 +110,11 @@ export async function salvaLavorazioneTipoDebitoAction(
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    // La configurazione è congelata: il rifiuto sta qui e non solo nella
+    // schermata, perché questa funzione è raggiungibile dal browser.
+    if (LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA) {
+      return { success: false, error: MESSAGGIO_LAVORAZIONI_SOLA_LETTURA };
+    }
 
     const categoria = (input.categoria || '').trim();
     const lavorazione = (input.lavorazione || '').trim();
@@ -177,6 +186,9 @@ export async function eliminaLavorazioneTipoDebitoAction(
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA) {
+      return { success: false, error: MESSAGGIO_LAVORAZIONI_SOLA_LETTURA };
+    }
     if (!Number.isInteger(id) || id <= 0) {
       return { success: false, error: 'Lavorazione non valida.' };
     }

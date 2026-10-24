@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.138.0**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.138.1**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,30 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.138.1 — 2026-10-24
+
+**Lavorazioni per tipologia di debito in sola lettura: nessun dato perso, nessun destinatario cambiato**
+
+- La tabella che dice, per ogni categoria di debito, quale lavorazione svolgere
+  e a chi chiederla ora si consulta e non si modifica più. Non è una rimozione:
+  quelle righe restano l’unica fonte dei destinatari delle **comunicazioni ai
+  colleghi** e dei **documenti per reparto** del triage, quindi restano in vigore
+  esattamente come sono. Congelarle evita che una configurazione superata
+  continui a crescere, senza spegnere due funzioni che qualcuno sta usando.
+- La pagina mostra l’elenco completo (tipologia, lavorazione, collega,
+  attiva/disattivata) con l’avviso che la tabella è congelata; il modulo di
+  inserimento e i comandi di modifica ed eliminazione non compaiono.
+- Il blocco è anche nelle server action di salvataggio ed eliminazione: una
+  scrittura inviata dal browser viene rifiutata con un messaggio esplicito,
+  non soltanto nascosta dalla schermata.
+- Nel triage i due ingressi dicono ora «Vedi le lavorazioni», e le schede delle
+  comunicazioni e dei documenti per reparto spiegano che, senza una lavorazione
+  configurata, non c’è un destinatario a cui indirizzare — senza rimandare a una
+  modifica che non è più possibile.
+- Per riaprire la configurazione basta riportare a `false` l’interruttore in
+  `src/lib/lavorazioni/solaLettura.ts`: pagina e azioni tornano modificabili
+  insieme, senza toccare il database.
 
 ## 0.138.0 — 2026-10-23
 
