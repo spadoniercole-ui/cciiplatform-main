@@ -292,6 +292,11 @@ export async function ottieniVerificaDaRiprendereAction(
     if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
       return { success: false, error: 'Azienda non valida.' };
     }
+    // La colonna della data di riferimento è nuova: su uno spazio già attivo
+    // esiste solo dopo che il triage l'ha creata. Senza questa garanzia, aprire
+    // per link una verifica eseguita PRIMA di questa versione — cioè proprio
+    // quelle che si vogliono riaprire — darebbe «colonna inesistente».
+    await assicuraTabellaAziende(nomeSchema);
     const r = await pool.query(
       // to_char: la colonna è DATE e i due driver la rendono come Date con fusi
       // diversi (locale con `pg`, UTC con PGlite): passare da Date sposterebbe
