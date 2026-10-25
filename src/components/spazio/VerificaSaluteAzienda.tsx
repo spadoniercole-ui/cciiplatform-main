@@ -30,7 +30,7 @@ import {
   type ValoriTriage,
 } from '@/lib/triage/riepilogoHtml';
 import { stampaHtml } from '@/lib/stampaTesto';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Stethoscope,
   Upload,
@@ -44,6 +44,8 @@ import {
   Building2,
   FileDown,
   Send,
+  Layers,
+  RotateCcw,
 } from 'lucide-react';
 import {
   estraiAnagraficaDaVisuraAction,
@@ -54,8 +56,10 @@ import {
   promuoviAziendaAction,
   registraEsitoVerificaAction,
   ottieniStoricoVerificheAction,
+  ottieniVerificaDaRiprendereAction,
   archiviaVerificaAction,
   type RigaVerifica,
+  type VerificaDaRiprendere,
 } from '@/app/actions/aziendaInVerifica';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 import { riconosciProspetto, leggiRuoli, type TipoProspetto } from '@/lib/denunce/lettura';
@@ -90,7 +94,11 @@ import {
 import {
   sostituisciDebitiVeraAction,
   ottieniMappaturaTitoliVera,
+  ottieniDebitiVera,
 } from '@/app/actions/posizioneVera';
+import { ottieniTitoliEnteAction, ottieniMaterieEnteAction } from '@/app/actions/titoliEnte';
+import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
+import type { LavorazioneMateria } from '@/lib/titoliEnte/lavorazioniMateria';
 import { ottieniCategorieTipoDebito } from '@/app/actions/categorieTipoDebito';
 import {
   ottieniLavorazioniTipoDebito,
@@ -102,6 +110,7 @@ import {
   raggruppaPerReparto,
 } from '@/lib/lavorazioni/comunicazioni';
 import { preparaDocumentiReparto, type DocumentoReparto } from '@/lib/lavorazioni/reparti';
+import { componiReportUo, type DocumentoUo } from '@/lib/lavorazioni/reportUo';
 import { LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA } from '@/lib/lavorazioni/solaLettura';
 import {
   MEZZI_INVIO,
@@ -156,6 +165,15 @@ interface Props {
    * distinzione un Redigente si ritrovava lo screening dell'altro percorso.
    */
   tipoSpazio: 'ENTE' | 'NON_ENTE';
+  /**
+   * L'azienda di cui RIAPRIRE la verifica, dall'URL (`?azienda=`).
+   *
+   * Il triage viveva soltanto nella scheda del browser: un crash, una ricarica
+   * o uno sbalzo di tensione chiudevano la videata in cui si preparano le
+   * comunicazioni e si decide se procedere, e da lì non si tornava. I dati
+   * erano già nel database; qui c'è il modo di ricomporli.
+   */
+  aziendaDaRiprendere?: number | null;
 }
 
 type Fase = 'caricamento' | 'conferma' | 'esito' | 'presa_in_carico';
@@ -181,7 +199,12 @@ const CAMPI: { chiave: keyof AnagraficaEstratta; label: string; numerico?: boole
 const CLASSE_CAMPO =
   'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500';
 
-export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props) {
+export function VerificaSaluteAzienda({
+  nomeSchema,
+  codice,
+  tipoSpazio,
+  aziendaDaRiprendere = null,
+}: Props) {
   const [fase, setFase] = useState<Fase>('caricamento');
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
@@ -251,6 +274,20 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
   const [lavorazioni, setLavorazioni] = useState<LavorazioneTipoDebito[]>([]);
   const [etichetteCategorie, setEtichetteCategorie] = useState<Record<string, string>>({});
   const [erroreComunicazioni, setErroreComunicazioni] = useState<string | null>(null);
+  // ---- Report per unità operativa ---------------------------------------
+  // La seconda uscita del triage non parte dalla categoria di debito ma dal
+  // CODICE di partita: servono i titoli dell'ente (che dicono in quale materia
+  // cade un codice e a quale ufficio si scrive), le materie (il nome da
+  // stampare) e le lavorazioni delle materie (che cosa va fatto).
+  const [titoliUo, setTitoliUo] = useState<
+    { codice: string; materiaId: number | null; dipendenza: string | null }[]
+  >([]);
+  const [materieUo, setMaterieUo] = useState<{ id: number; nome: string }[]>([]);
+  const [lavorazioniUo, setLavorazioniUo] = useState<LavorazioneMateria[]>([]);
+  const [erroreUo, setErroreUo] = useState<string | null>(null);
+  // La verifica riaperta: dice se l'azienda è ancora in verifica (si può
+  // decidere) o è già stata presa in carico, e con quale data si è verificata.
+  const [ripresa, setRipresa] = useState<VerificaDaRiprendere | null>(null);
   const [copiato, setCopiato] = useState<string | null>(null);
   const [erroreCopia, setErroreCopia] = useState<string | null>(null);
   // Il reparto di cui si sta preparando il PDF (null = nessuno) e l'eventuale
@@ -372,6 +409,144 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     }
   };
 
+  /**
+   * Le configurazioni delle due uscite del triage, in un punto solo.
+   *
+   * Da una parte il destinatario per TIPOLOGIA di debito (comunicazioni e
+   * documento per reparto), dall'altra le lavorazioni delle MATERIE (report
+   * per unità operativa, raggruppato per codice). Servono a entrambe le strade
+   * — anche a una verifica RIAPERTA, dove non c'è un file appena letto da cui
+   * ricavarle — e una lettura fallita non deve azzerare l'altra.
+   */
+  const caricaConfigurazioni = async (): Promise<Record<string, string>> => {
+    let mappatura: Record<string, string> = {};
+    try {
+      const [mappa, lav, cat] = await Promise.all([
+        ottieniMappaturaTitoliVera(nomeSchema),
+        ottieniLavorazioniTipoDebito(nomeSchema),
+        ottieniCategorieTipoDebito(nomeSchema),
+      ]);
+      if (mappa.success) mappatura = mappa.mappatura;
+      else
+        setErroreComunicazioni(mappa.error ?? 'Mappatura delle sezioni V.E.R.A. non disponibile.');
+      if (lav.success) setLavorazioni(lav.lavorazioni);
+      else setErroreComunicazioni(lav.error ?? 'Lavorazioni non disponibili.');
+      if (cat.success) {
+        setEtichetteCategorie(
+          Object.fromEntries(cat.categorie.map((x) => [x.codice, x.etichetta]))
+        );
+      } else {
+        setErroreComunicazioni(cat.error ?? 'Categorie di debito non disponibili.');
+      }
+    } catch (e) {
+      setErroreComunicazioni(`Parametri delle comunicazioni non caricati: ${String(e)}.`);
+    }
+
+    try {
+      const [titoli, materie, perMateria] = await Promise.all([
+        ottieniTitoliEnteAction(nomeSchema),
+        ottieniMaterieEnteAction(nomeSchema),
+        ottieniLavorazioniMateria(nomeSchema),
+      ]);
+      if (titoli.success) {
+        setTitoliUo(
+          titoli.titoli.map((t) => ({
+            codice: t.codice,
+            materiaId: t.materiaId ?? null,
+            dipendenza: t.dipendenza ?? null,
+          }))
+        );
+      }
+      if (materie.success) {
+        setMaterieUo(
+          materie.materie
+            .filter((m): m is typeof m & { id: number } => m.id !== null)
+            .map((m) => ({ id: m.id, nome: m.nome }))
+        );
+      }
+      if (perMateria.success) setLavorazioniUo(perMateria.lavorazioni);
+      const problemi = [
+        !titoli.success && titoli.error,
+        !materie.success && materie.error,
+        !perMateria.success && perMateria.error,
+      ].filter((x): x is string => Boolean(x));
+      setErroreUo(
+        problemi.length > 0
+          ? `Report per unità operativa non disponibile: ${problemi.join(' ')}`
+          : null
+      );
+    } catch (e) {
+      setErroreUo(`Report per unità operativa non disponibile: ${String(e)}`);
+    }
+
+    return mappatura;
+  };
+
+  /**
+   * RIAPRE una verifica già eseguita, ricomponendo la videata dai dati salvati.
+   *
+   * Non è un «rifai la verifica»: quello riparte dalla visura e apre un ciclo
+   * nuovo, archiviando il lavoro precedente. Qui si torna esattamente dove si
+   * era — l'esito, le comunicazioni, i documenti per i reparti, la decisione —
+   * con l'unica differenza che i file caricati allora non ci sono più: sono
+   * stati letti e trasformati in righe di database, ed è da lì che si riparte.
+   *
+   * Indicatore e soglie si RICALCOLANO invece di essere letti: costano poco e
+   * riflettono i valori salvati, mentre un esito congelato in una sessione
+   * morta potrebbe non corrispondere più a ciò che la scheda mostra.
+   */
+  const riprendi = async (id: number) => {
+    setInCorso(true);
+    setErrore(null);
+    setAvanzamento('Riapertura della verifica...');
+    try {
+      const r = await ottieniVerificaDaRiprendereAction(nomeSchema, id);
+      if (!r.success || !r.verifica) {
+        setErrore(r.error ?? 'La verifica non è stata riaperta.');
+        return;
+      }
+      const v = r.verifica;
+      setRipresa(v);
+      setAziendaId(v.aziendaId);
+      setDati(v.anagrafica);
+      setDataVerifica(v.dataVerifica);
+      await caricaConfigurazioni();
+
+      setAvanzamento('Lettura delle posizioni V.E.R.A....');
+      const debiti = await ottieniDebitiVera(nomeSchema, id);
+      if (debiti.success) setRigheVera(debiti.righe);
+      else setErrore(debiti.error ?? 'Posizioni V.E.R.A. non leggibili.');
+
+      setAvanzamento('Ricalcolo dell’indicatore...');
+      const a = await ottieniAttenzioneScreeningAction(nomeSchema, id);
+      if (a.success && a.attenzione) setAttenzione(a.attenzione);
+      else setErrore(a.error ?? 'Indicatore non calcolato: causa non riportata dal server.');
+
+      try {
+        const s = await valutaSoglieAction(nomeSchema, id, tipoSpazio);
+        if (s.success && s.esito) setEsitoSoglie(s.esito);
+        else setErroreSoglie(s.error ?? 'Valutazione non riuscita per causa non riportata.');
+      } catch (e) {
+        setErroreSoglie(String(e));
+      }
+
+      setFase('esito');
+    } finally {
+      setInCorso(false);
+      setAvanzamento(null);
+    }
+  };
+
+  // La riapertura si tenta una volta sola, all'apertura della pagina: un
+  // secondo giro rileggerebbe tutto a ogni render.
+  const ripresaAvviata = useRef(false);
+  useEffect(() => {
+    if (!aziendaDaRiprendere || ripresaAvviata.current) return;
+    ripresaAvviata.current = true;
+    void riprendi(aziendaDaRiprendere);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aziendaDaRiprendere]);
+
   const confermaEValuta = async () => {
     if (!dati) return;
     setInCorso(true);
@@ -443,30 +618,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       // Servono a dare un destinatario alle posizioni V.E.R.A. Se una delle
       // letture fallisce il triage prosegue: le comunicazioni mancheranno,
       // ma l'esito non si perde.
-      let mappaturaTitoli: Record<string, string> = {};
-      try {
-        const [mappa, lav, cat] = await Promise.all([
-          ottieniMappaturaTitoliVera(nomeSchema),
-          ottieniLavorazioniTipoDebito(nomeSchema),
-          ottieniCategorieTipoDebito(nomeSchema),
-        ]);
-        if (mappa.success) mappaturaTitoli = mappa.mappatura;
-        else
-          setErroreComunicazioni(
-            mappa.error ?? 'Mappatura delle sezioni V.E.R.A. non disponibile.'
-          );
-        if (lav.success) setLavorazioni(lav.lavorazioni);
-        else setErroreComunicazioni(lav.error ?? 'Lavorazioni non disponibili.');
-        if (cat.success) {
-          setEtichetteCategorie(
-            Object.fromEntries(cat.categorie.map((x) => [x.codice, x.etichetta]))
-          );
-        } else {
-          setErroreComunicazioni(cat.error ?? 'Categorie di debito non disponibili.');
-        }
-      } catch (e) {
-        setErroreComunicazioni(`Parametri delle comunicazioni non caricati: ${String(e)}.`);
-      }
+      const mappaturaTitoli = await caricaConfigurazioni();
       let fileVera: File | null = null;
       let fileDenunce: File | null = null;
       let fileDelegheDettaglio: File | null = null;
@@ -852,7 +1004,15 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       const a = await ottieniAttenzioneScreeningAction(nomeSchema, c.aziendaId);
       if (a.success && a.attenzione) {
         setAttenzione(a.attenzione);
-        await registraEsitoVerificaAction(nomeSchema, c.aziendaId, a.attenzione.esito);
+        // Con l'esito si conserva la data a cui si riferiscono i conti: è
+        // l'unico dato del triage che il database non aveva, e senza di essa
+        // una verifica riaperta ricostruirebbe i documenti su un'altra data.
+        await registraEsitoVerificaAction(
+          nomeSchema,
+          c.aziendaId,
+          a.attenzione.esito,
+          dataVerifica
+        );
       } else {
         // PRIMA questo caso era muto: l'esito mostrava "Indicatore non
         // calcolabile con i dati inseriti" — una frase che accusa i dati
@@ -873,6 +1033,15 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         else setErroreSoglie(s.error ?? 'Valutazione non riuscita per causa non riportata.');
       } catch (e) {
         setErroreSoglie(String(e));
+      }
+      // L'azienda finisce nell'URL: da questo momento ricaricare la pagina —
+      // per un crash, uno sbalzo di tensione, un aggiornamento del browser —
+      // non riporta alla visura, riapre questa stessa videata. È il pezzo di
+      // ripresa che non dipende da un gesto dell'operatore.
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.set('azienda', String(c.aziendaId));
+        window.history.replaceState(null, '', url.toString());
       }
       setFase('esito');
     } catch (e) {
@@ -914,6 +1083,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     setMostraArchiviazione(false);
     setMotivoArchiviazione('');
     setFase('caricamento');
+    setRipresa(null);
     setDati(null);
     setAttenzione(null);
     setAziendaId(null);
@@ -1137,25 +1307,47 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     ]
   );
 
-  // Il registro per reparto: l'ultima consegna e quante volte il documento è
-  // uscito. Il confronto con `versione` dice se il reparto ha in mano il
-  // documento che si sta guardando o una versione precedente.
-  const consegnePerReparto = new Map(
-    riassumiConsegne(consegneReparti).map((c) => [c.reparto.toLocaleLowerCase('it-IT'), c])
+  // LA SECONDA USCITA: un report per unità operativa, raggruppato per codice
+  // di partita. Le lavorazioni sono quelle della materia in cui il codice
+  // cade, la dipendenza viene dal codice se c'è e dalla materia altrimenti.
+  const reportUo = useMemo(
+    () =>
+      componiReportUo({
+        azienda: aziendaMostrata,
+        dataVerifica,
+        righe: righeVera,
+        titoli: titoliUo,
+        materie: materieUo,
+        lavorazioni: lavorazioniUo,
+      }),
+    [aziendaMostrata, dataVerifica, righeVera, titoliUo, materieUo, lavorazioniUo]
+  );
+
+  // Il registro per destinatario: l'ultima consegna e quante volte il documento
+  // è uscito. La chiave porta il TIPO di documento: le due impronte di versione
+  // non sono confrontabili, e un ufficio che si chiama come un reparto non deve
+  // far risultare «superato» un foglio che nessuno ha mai ricevuto.
+  const chiaveConsegna = (tipo: 'reparto' | 'dipendenza', nome: string) =>
+    `${tipo}|${nome.toLocaleLowerCase('it-IT')}`;
+  const riepilogoConsegne = riassumiConsegne(consegneReparti);
+  const consegnePerDestinatario = new Map(
+    riepilogoConsegne.map((c) => [chiaveConsegna(c.tipo, c.reparto), c])
   );
   const repartiConDocumento = new Set(
     documentiReparti.documenti.map((d) => d.reparto.toLocaleLowerCase('it-IT'))
   );
-  const consegneFuoriConfigurazione = Array.from(consegnePerReparto.values()).filter(
-    (c) => !repartiConDocumento.has(c.reparto.toLocaleLowerCase('it-IT'))
+  const consegneFuoriConfigurazione = riepilogoConsegne.filter(
+    (c) => c.tipo === 'reparto' && !repartiConDocumento.has(c.reparto.toLocaleLowerCase('it-IT'))
   );
 
   // I reparti che hanno in mano una versione precedente: servono al conteggio
   // in testa all'elenco e al comando che li riscarica tutti insieme.
   const documentiSuperati = documentiReparti.documenti.filter(
     (d) =>
-      statoConsegnaReparto(consegnePerReparto.get(d.reparto.toLocaleLowerCase('it-IT')), d.versione)
-        .stato === 'superata'
+      statoConsegnaReparto(
+        consegnePerDestinatario.get(chiaveConsegna('reparto', d.reparto)),
+        d.versione
+      ).stato === 'superata'
   );
 
   /**
@@ -1203,7 +1395,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         setNoteInvio('');
         setErroreInvio(null);
         setAvvisoInvio(null);
-        setConfermaAperta(documento.reparto);
+        setConfermaAperta(chiaveConsegna('reparto', documento.reparto));
       } else {
         setAvvisoConsegna(
           `Documento scaricato, ma la consegna non è stata registrata: ${
@@ -1214,6 +1406,58 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     }
     setPdfInCorso(null);
     return true;
+  };
+
+  /**
+   * Scarica il report di un'unità operativa e ne lascia traccia nel registro.
+   *
+   * Stessa regola del documento per reparto: prima il file, poi la riga. Un
+   * registro muto non deve impedire di consegnare il foglio — ma se la
+   * scrittura fallisce lo si dice, perché allora la piattaforma non sa che
+   * quel documento è uscito.
+   */
+  const scaricaReportUo = async (documento: DocumentoUo): Promise<void> => {
+    setErrorePdf(null);
+    setAvvisoConsegna(null);
+    setPdfInCorso(documento.dipendenza);
+    try {
+      const { scaricaPdfReportUo } = await import('@/lib/lavorazioni/pdfReportUo');
+      scaricaPdfReportUo(documento);
+    } catch (e) {
+      setErrorePdf(`PDF non generato: ${String(e)}`);
+      setPdfInCorso(null);
+      return;
+    }
+
+    if (aziendaId) {
+      const r = await registraConsegnaRepartoAction(nomeSchema, aziendaId, {
+        reparto: documento.dipendenza,
+        tipo: 'dipendenza',
+        dataVerifica: documento.dataVerifica,
+        versione: documento.versione,
+        nomeFile: documento.nomeFile,
+        righe: documento.righe,
+        totale: documento.totale,
+        posizioniDaContabilizzare: documento.posizioniDaContabilizzare,
+        importoDaContabilizzare: documento.importoDaContabilizzare,
+      });
+      const registrata = r.consegna;
+      if (r.success && registrata) {
+        setConsegneReparti((prev) => [registrata, ...prev]);
+        setInviataIl(new Date().toISOString().slice(0, 10));
+        setNoteInvio('');
+        setErroreInvio(null);
+        setAvvisoInvio(null);
+        setConfermaAperta(chiaveConsegna('dipendenza', documento.dipendenza));
+      } else {
+        setAvvisoConsegna(
+          `Documento scaricato, ma la consegna non è stata registrata: ${
+            r.error ?? 'errore sconosciuto'
+          }`
+        );
+      }
+    }
+    setPdfInCorso(null);
   };
 
   /**
@@ -1240,9 +1484,9 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
    * conserva la traccia, con il nome di chi la dichiara. Se la conferma c'è
    * già, l'azione la rifiuta invece di sovrascriverla, e la pagina lo dice.
    */
-  const confermaInvioReparto = async (documento: DocumentoReparto) => {
+  const confermaInvioDestinatario = async (tipo: 'reparto' | 'dipendenza', nome: string) => {
     if (!aziendaId) return;
-    const riepilogo = consegnePerReparto.get(documento.reparto.toLocaleLowerCase('it-IT'));
+    const riepilogo = consegnePerDestinatario.get(chiaveConsegna(tipo, nome));
     if (!riepilogo) return;
     setInvioInCorso(true);
     setErroreInvio(null);
@@ -1258,7 +1502,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
         setConsegneReparti((prev) => prev.map((c) => (c.id === aggiornata.id ? aggiornata : c)));
         setConfermaAperta(null);
         setNoteInvio('');
-        setAvvisoInvio(`Invio confermato per ${documento.reparto}.`);
+        setAvvisoInvio(`Invio confermato per ${nome}.`);
       } else {
         setErroreInvio(r.error ?? 'Conferma non registrata.');
       }
@@ -1266,6 +1510,9 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       setInvioInCorso(false);
     }
   };
+
+  const confermaInvioReparto = (documento: DocumentoReparto) =>
+    confermaInvioDestinatario('reparto', documento.reparto);
 
   const copiaTesto = async (chiave: string, testo: string) => {
     setErroreCopia(null);
@@ -1556,7 +1803,14 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               // di sola lettura, non una traccia consultabile.
               <a
                 key={v.id}
-                href={`/spazio/${codice}/aziende/${v.id}`}
+                // Una verifica ancora in sospeso si RIAPRE nel triage — è lì che
+                // ci sono le comunicazioni e la decisione. Una già decisa porta
+                // alla scheda: lì non c'è più niente da decidere.
+                href={
+                  !v.presaInCarico && !v.archiviata
+                    ? `/spazio/${codice}/verifica-salute?azienda=${v.id}`
+                    : `/spazio/${codice}/aziende/${v.id}`
+                }
                 className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
               >
                 <span className="min-w-0">
@@ -1651,6 +1905,44 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
           <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 whitespace-pre-line mb-3">
             {dichiarazionePerimetro('TRIAGE')}
           </p>
+          {ripresa && (
+            <div className="flex items-start gap-2 text-xs text-sky-900 bg-sky-50 border border-sky-200 rounded-lg p-3 leading-relaxed">
+              <RotateCcw className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p>
+                  <span className="font-bold">Verifica riaperta</span> dai dati salvati
+                  {ripresa.eseguitaIl
+                    ? `: eseguita il ${new Date(ripresa.eseguitaIl).toLocaleDateString('it-IT')}`
+                    : ''}
+                  . Comunicazioni, documenti per i reparti e report per unità operativa si
+                  ricompongono dalle posizioni e dalle configurazioni attuali.
+                </p>
+                <p>
+                  I file caricati allora non ci sono più — sono stati letti e trasformati in righe
+                  di database — quindi il riepilogo dei documenti letti non è ristampabile da qui.
+                </p>
+                {ripresa.dataApprossimata && (
+                  <p>
+                    La data di riferimento della verifica non era stata registrata: si usa il giorno
+                    dell&apos;esecuzione, o quello di oggi se la verifica non è stata completata (
+                    {ripresa.dataVerifica}).
+                  </p>
+                )}
+                {!ripresa.inVerifica && (
+                  <p className="font-bold">
+                    L&apos;azienda è già stata presa in carico: la verifica si consulta e i
+                    documenti si ricostruiscono, ma la decisione è presa e non si ripete.
+                  </p>
+                )}
+                {ripresa.archiviata && (
+                  <p className="font-bold">
+                    La verifica è stata archiviata
+                    {ripresa.motivo ? `: ${ripresa.motivo}` : ''}.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           {esitoFogli.length > 0 && (
             <div className="bg-white border border-slate-200 rounded-xl p-5">
               <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider mb-2">
@@ -1869,16 +2161,22 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               <ArrowRight className="w-3 h-3" />
             </a>
           </div>
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={stampaRiepilogo}
-              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase rounded-lg"
-              title="Documenti caricati e letti, valori misurati, indicazione del triage e perimetro: da consegnare al responsabile"
-            >
-              <Printer className="w-3.5 h-3.5" /> Stampa il riepilogo del triage (PDF)
-            </button>
-          </div>
+          {/* Il riepilogo si stampa dai documenti appena letti, che in una
+              verifica riaperta non esistono più: offrirlo lì produrrebbe un
+              foglio con i valori dei fogli INPS mancanti, indistinguibile da
+              un triage senza documenti. */}
+          {!ripresa && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={stampaRiepilogo}
+                className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase rounded-lg"
+                title="Documenti caricati e letti, valori misurati, indicazione del triage e perimetro: da consegnare al responsabile"
+              >
+                <Printer className="w-3.5 h-3.5" /> Stampa il riepilogo del triage (PDF)
+              </button>
+            </div>
+          )}
 
           {/*
             COMUNICA AI REPARTI — l'ultimo passo del triage, prima della presa
@@ -1939,7 +2237,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                 {' '}
                 {documentiReparti.documenti.map((d) => {
                   const stato = statoConsegnaReparto(
-                    consegnePerReparto.get(d.reparto.toLocaleLowerCase('it-IT')),
+                    consegnePerDestinatario.get(chiaveConsegna('reparto', d.reparto)),
                     d.versione
                   );
                   // Estratto una volta: nella scheda si legge tre volte, e un
@@ -2035,7 +2333,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                               </p>
                             )}
                           </div>
-                        ) : confermaAperta === d.reparto ? (
+                        ) : confermaAperta === chiaveConsegna('reparto', d.reparto) ? (
                           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
                             <p className="text-[10px] text-slate-600 leading-relaxed">
                               Dichiara l&apos;invio al reparto. La piattaforma non spedisce nulla:
@@ -2111,7 +2409,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                           <button
                             type="button"
                             onClick={() => {
-                              setConfermaAperta(d.reparto);
+                              setConfermaAperta(chiaveConsegna('reparto', d.reparto));
                               setErroreInvio(null);
                               setAvvisoInvio(null);
                             }}
@@ -2202,6 +2500,278 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               <ArrowRight className="w-3 h-3" />
             </a>
           </div>
+          {/*
+            SECONDA USCITA — IL REPORT PER UNITÀ OPERATIVA.
+            Non sostituisce il documento per reparto: risponde a un'altra
+            domanda. Là si dice «questi sono i debiti di questo ufficio»; qui si
+            dice «questo codice, questa è la procedura, e queste sono le
+            inadempienze che lo compongono». Resta accanto alla presa in
+            carico, e resta raggiungibile anche dopo: è il motivo per cui la
+            pagina sa riaprire una verifica già eseguita.
+          */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-slate-500" />
+              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                Report per unità operativa
+              </h3>
+            </div>
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              Un PDF per ufficio, raggruppato per{' '}
+              <span className="font-bold">codice di partita</span>: per ogni codice la materia, le
+              lavorazioni da svolgere con i passi e l&apos;esito, e le inadempienze che lo
+              compongono — periodo, stato e importo. L&apos;ufficio è la dipendenza del codice, o
+              quella della sua materia quando il codice non ne ha una propria. Si scarica da qui e
+              lo invii tu: la piattaforma non manda nulla, e ogni scaricamento resta registrato.
+            </p>
+
+            {erroreUo && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+                {erroreUo}
+              </p>
+            )}
+
+            {reportUo.documenti.length === 0 ? (
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                {titoliUo.length === 0
+                  ? 'Nessun codice dell’ente configurato: senza il titolo del codice non si sa in quale materia cada, né quale ufficio lo lavori. I titoli si configurano nei Parametri di Spazio.'
+                  : 'Nessuna posizione V.E.R.A. porta un codice di partita riconducibile a una dipendenza: qui non c’è un ufficio a cui indirizzare il report.'}
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {reportUo.documenti.map((d) => {
+                  const stato = statoConsegnaReparto(
+                    consegnePerDestinatario.get(chiaveConsegna('dipendenza', d.dipendenza)),
+                    d.versione
+                  );
+                  const invioConfermato =
+                    stato.stato === 'mai' ? null : stato.consegna.ultima.invio;
+                  const chiave = chiaveConsegna('dipendenza', d.dipendenza);
+                  return (
+                    <li
+                      key={d.dipendenza}
+                      className="border border-slate-200 rounded-lg p-3 space-y-2"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="min-w-0">
+                          <span className="block text-xs font-bold text-slate-900">
+                            {d.dipendenza}
+                          </span>
+                          <span className="block text-[10px] text-slate-500 font-mono">
+                            {d.codici.length} {d.codici.length === 1 ? 'codice' : 'codici'} ·{' '}
+                            {d.righe} {d.righe === 1 ? 'posizione' : 'posizioni'} ·{' '}
+                            {formattaImportoEuro(d.totale)}
+                            {d.posizioniDaContabilizzare > 0
+                              ? ` · ${d.posizioniDaContabilizzare} da contabilizzare`
+                              : ''}
+                          </span>
+                          <span className="block text-[10px] text-slate-400">
+                            Codici: {d.codici.map((c) => c.codice).join(', ')}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void scaricaReportUo(d)}
+                          disabled={pdfInCorso !== null}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          <FileDown className="w-3.5 h-3.5" />{' '}
+                          {pdfInCorso === d.dipendenza ? 'Preparazione...' : 'Scarica il PDF'}
+                        </button>
+                      </div>
+
+                      {stato.stato === 'mai' ? (
+                        <p className="text-[10px] text-slate-400 leading-relaxed">
+                          Mai scaricato: nessuna consegna registrata per questo ufficio.
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 leading-relaxed">
+                          Scaricato il {dataOraConsegna(stato.consegna.ultima.consegnatoIl)}
+                          {stato.consegna.ultima.consegnatoDa
+                            ? ` da ${stato.consegna.ultima.consegnatoDa}`
+                            : ''}{' '}
+                          · versione{' '}
+                          <span className="font-mono">{stato.consegna.ultima.versione}</span> ·{' '}
+                          {stato.consegna.scaricamenti === 1
+                            ? '1 scaricamento'
+                            : `${stato.consegna.scaricamenti} scaricamenti`}
+                        </p>
+                      )}
+
+                      {stato.stato === 'superata' && (
+                        <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
+                          L&apos;ufficio ha in mano la versione{' '}
+                          <span className="font-mono">{stato.consegna.ultima.versione}</span>, non
+                          questa (ora <span className="font-mono">{d.versione}</span>):{' '}
+                          {causaSuperamento(stato.consegna.ultima, d)}. Riscarica il PDF e invia la
+                          nuova versione.
+                        </p>
+                      )}
+
+                      {stato.stato !== 'mai' &&
+                        (invioConfermato ? (
+                          <p className="text-[10px] text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg p-2 leading-relaxed">
+                            <span className="font-bold">
+                              Inviato il {dataInvio(invioConfermato.inviataIl)} via{' '}
+                              {etichettaMezzo(invioConfermato.mezzo)}
+                            </span>
+                            {invioConfermato.confermatoDa
+                              ? ` — dichiarato da ${invioConfermato.confermatoDa}`
+                              : ''}
+                          </p>
+                        ) : confermaAperta === chiave ? (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                Data di invio
+                                <input
+                                  type="date"
+                                  value={inviataIl}
+                                  max={new Date().toISOString().slice(0, 10)}
+                                  onChange={(e) => setInviataIl(e.target.value)}
+                                  className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-slate-900 bg-white"
+                                />
+                              </label>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                                Mezzo
+                                <select
+                                  value={mezzoInvio}
+                                  onChange={(e) => setMezzoInvio(e.target.value as MezzoInvio)}
+                                  className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-slate-900 bg-white"
+                                >
+                                  {MEZZI_INVIO.map((m) => (
+                                    <option key={m.valore} value={m.valore}>
+                                      {m.etichetta}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                              Note (facoltative)
+                              <textarea
+                                value={noteInvio}
+                                onChange={(e) => setNoteInvio(e.target.value)}
+                                rows={2}
+                                maxLength={500}
+                                className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-slate-900 bg-white"
+                              />
+                            </label>
+                            {erroreInvio && (
+                              <p className="text-[10px] text-red-700 leading-relaxed">
+                                {erroreInvio}
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void confermaInvioDestinatario('dipendenza', d.dipendenza)
+                                }
+                                disabled={invioInCorso}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-emerald-700 disabled:opacity-50"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                {invioInCorso ? 'Registro...' : 'Registra l’invio'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfermaAperta(null);
+                                  setErroreInvio(null);
+                                }}
+                                disabled={invioInCorso}
+                                className="px-3 py-2 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-white disabled:opacity-50"
+                              >
+                                Annulla
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfermaAperta(chiave);
+                              setErroreInvio(null);
+                              setAvvisoInvio(null);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50"
+                          >
+                            <Send className="w-3 h-3" /> Confermo l&apos;invio
+                          </button>
+                        ))}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {reportUo.senzaDipendenza.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1">
+                <p className="text-[11px] font-bold text-amber-900">
+                  {reportUo.senzaDipendenza.length === 1
+                    ? 'Un codice non ha una dipendenza a cui andare'
+                    : `${reportUo.senzaDipendenza.length} codici non hanno una dipendenza a cui andare`}
+                </p>
+                <ul className="space-y-0.5">
+                  {reportUo.senzaDipendenza.map((c) => (
+                    <li key={c.codice} className="text-[11px] text-amber-900 leading-relaxed">
+                      — Codice {c.codice}
+                      {c.materia ? ` (${c.materia})` : ' (nessuna materia)'}: {c.righe}{' '}
+                      {c.righe === 1 ? 'posizione' : 'posizioni'}, {formattaImportoEuro(c.totale)}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[10px] text-amber-800 leading-relaxed">
+                  Restano fuori dai report finché la dipendenza non è indicata sul codice, o sulla
+                  lavorazione della sua materia: senza un ufficio non si sa a chi mandare il foglio.
+                </p>
+              </div>
+            )}
+
+            {(reportUo.senzaCodice.righe > 0 || reportUo.codiciSenzaLavorazione > 0) && (
+              <div className="text-[10px] text-slate-500 leading-relaxed space-y-1">
+                {reportUo.senzaCodice.righe > 0 && (
+                  <p>
+                    {`${reportUo.senzaCodice.righe} ${
+                      reportUo.senzaCodice.righe === 1
+                        ? 'posizione non porta'
+                        : 'posizioni non portano'
+                    } un codice di partita nella voce: restano fuori dai report per codice (${formattaImportoEuro(
+                      reportUo.senzaCodice.totale
+                    )}).`}
+                  </p>
+                )}
+                {reportUo.codiciSenzaLavorazione > 0 && (
+                  <p>
+                    {`${reportUo.codiciSenzaLavorazione} ${
+                      reportUo.codiciSenzaLavorazione === 1
+                        ? 'codice è elencato'
+                        : 'codici sono elencati'
+                    } senza lavorazioni configurate sulla materia: il foglio lo dichiara, e la procedura va indicata nei Parametri di Spazio.`}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {reportUo.posizioniEscluse.righe > 0 && (
+              <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed">
+                {`${reportUo.posizioniEscluse.righe} ${
+                  reportUo.posizioniEscluse.righe === 1 ? 'posizione resta' : 'posizioni restano'
+                } fuori dai report per ${formattaImportoEuro(
+                  reportUo.posizioniEscluse.totale
+                )}: sono sospese o fuori perimetro (trattamento «Ignora») e non vanno contabilizzate. Non entrano nei totali.`}
+              </p>
+            )}
+
+            <a
+              href={`/spazio/${codice}/parametri/materie-lavorazione`}
+              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
+            >
+              Dipendenze e lavorazioni delle materie <ArrowRight className="w-3 h-3" />
+            </a>
+          </div>
+
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
             <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">E adesso?</h3>
             <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -2226,31 +2796,60 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
             )}
             {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}
             <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => void procedi()}
-                disabled={inCorso || !aziendaId}
-                className="flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700 disabled:bg-slate-300"
-              >
-                <ArrowRight className="w-3.5 h-3.5" />
-                {inCorso ? 'Preparazione in corso...' : 'Procedi con questa azienda'}
-              </button>
-              <button
-                onClick={() => {
-                  setFase('conferma');
-                }}
-                className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50"
-              >
-                ← Indietro
-              </button>
-              <button
-                onClick={() => setMostraArchiviazione(true)}
-                className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50"
-              >
-                Non procedo
-              </button>
+              {/* La decisione si ripropone solo se è ancora da prendere. Una
+                  verifica riaperta su un'azienda già presa in carico non deve
+                  offrire di nuovo «Procedi»: sarebbe un secondo ciclo. */}
+              {ripresa && (!ripresa.inVerifica || ripresa.archiviata) ? (
+                <a
+                  href={`/spazio/${codice}/aziende/${aziendaId}`}
+                  className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-800"
+                >
+                  <ArrowRight className="w-3.5 h-3.5" /> Vai alla scheda azienda
+                </a>
+              ) : (
+                <>
+                  <button
+                    onClick={() => void procedi()}
+                    disabled={inCorso || !aziendaId}
+                    className="flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700 disabled:bg-slate-300"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5" />
+                    {inCorso ? 'Preparazione in corso...' : 'Procedi con questa azienda'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMostraArchiviazione(true);
+                    }}
+                    className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50"
+                  >
+                    Non procedo
+                  </button>
+                </>
+              )}
+              {/* In una verifica riaperta non si torna alla conferma: i file
+                  caricati allora non esistono più, quindi il passo sarebbe un
+                  vicolo cieco (nessun V.E.R.A. da confermare). */}
+              {!ripresa && (
+                <button
+                  onClick={() => {
+                    setFase('conferma');
+                  }}
+                  className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50"
+                >
+                  ← Indietro
+                </button>
+              )}
               <button
                 onClick={() => {
                   setFase('caricamento');
+                  setRipresa(null);
+                  // L'azienda esce dall'URL: senza, ricaricare la pagina
+                  // riaprirebbe la verifica che si è appena lasciata.
+                  if (typeof window !== 'undefined') {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('azienda');
+                    window.history.replaceState(null, '', url.toString());
+                  }
                   setDati(null);
                   setAttenzione(null);
                   setAziendaId(null);

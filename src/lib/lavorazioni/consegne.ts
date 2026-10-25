@@ -34,9 +34,23 @@
 
 import { formattaImportoEuro } from './comunicazioni';
 
+/**
+ * QUALE DEI DUE DOCUMENTI È USCITO.
+ *
+ * Il registro serve a rispondere a «l'ufficio ha in mano la versione che vedo
+ * adesso?», e la risposta vale solo dentro lo stesso tipo di documento: le due
+ * impronte (documento per reparto, report per unità operativa) si calcolano su
+ * contenuti diversi e non sono confrontabili. Un destinatario che si chiama
+ * «Ufficio contributi» in entrambi i ruoli non deve far risultare superato un
+ * foglio che nessuno ha mai ricevuto.
+ */
+export type TipoDocumentoConsegnato = 'reparto' | 'dipendenza';
+
 export interface ConsegnaRepartoInput {
-  /** Il reparto a cui il documento è destinato. */
+  /** Il reparto o l'unità operativa a cui il documento è destinato. */
   reparto: string;
+  /** Quale documento: `reparto` (per tipologia) o `dipendenza` (per codice). */
+  tipo?: TipoDocumentoConsegnato;
   /** Data della verifica, AAAA-MM-GG. */
   dataVerifica: string;
   /** Impronta del contenuto, es. `1-3f9a1c2b`. */
@@ -93,6 +107,8 @@ export interface InvioConfermato {
 
 export interface ConsegnaRegistrata extends ConsegnaRepartoInput {
   id: number;
+  /** Sempre valorizzato: le righe scritte prima di questa colonna sono `reparto`. */
+  tipo: TipoDocumentoConsegnato;
   /** Quando è stato scaricato, ISO 8601. */
   consegnatoIl: string;
   /** Chi lo ha scaricato, se la sessione lo dice. */
@@ -118,6 +134,8 @@ export interface ConsegnaRegistrata extends ConsegnaRepartoInput {
 
 export interface RiepilogoConsegneReparto {
   reparto: string;
+  /** I due tipi di documento restano distinti anche a parità di nome. */
+  tipo: TipoDocumentoConsegnato;
   /** L'ultima consegna: quella che si presume in mano al reparto. */
   ultima: ConsegnaRegistrata;
   /** Quante volte il documento è uscito dalla piattaforma. */
@@ -243,6 +261,7 @@ export function consegnaDaRiga(r: Record<string, unknown>): ConsegnaRegistrata {
   return {
     id: Number(r.id),
     reparto: String(r.reparto ?? ''),
+    tipo: r.tipo === 'dipendenza' ? 'dipendenza' : 'reparto',
     dataVerifica: giornoDaValore(r.data_verifica),
     versione: String(r.versione ?? ''),
     nomeFile: String(r.nome_file ?? ''),
@@ -296,6 +315,13 @@ export function validaConsegna(input: unknown): EsitoValidazioneConsegna {
 
   const reparto = typeof i.reparto === 'string' ? i.reparto.trim().replace(/\s+/g, ' ') : '';
   if (!reparto) return { ok: false, errore: 'Indica il reparto della consegna.' };
+  // Il tipo è facoltativo (il documento per reparto è il caso storico) ma non
+  // libero: un valore fuori elenco confonderebbe i due registri.
+  const tipoGrezzo = i.tipo == null ? 'reparto' : i.tipo;
+  if (tipoGrezzo !== 'reparto' && tipoGrezzo !== 'dipendenza') {
+    return { ok: false, errore: 'Tipo di documento non riconosciuto.' };
+  }
+  const tipo: TipoDocumentoConsegnato = tipoGrezzo;
   if (reparto.length > 160) {
     return { ok: false, errore: 'Il reparto non può superare 160 caratteri.' };
   }
@@ -346,6 +372,7 @@ export function validaConsegna(input: unknown): EsitoValidazioneConsegna {
     ok: true,
     dati: {
       reparto,
+      tipo,
       dataVerifica,
       versione,
       nomeFile,
@@ -436,7 +463,10 @@ function istante(c: ConsegnaRegistrata): number {
  * precisione.
  */
 export function riassumiConsegne(righe: ConsegnaRegistrata[]): RiepilogoConsegneReparto[] {
-  const perReparto = new Map<string, { reparto: string; ultima: ConsegnaRegistrata }>();
+  const perReparto = new Map<
+    string,
+    { reparto: string; tipo: TipoDocumentoConsegnato; ultima: ConsegnaRegistrata }
+  >();
   // Due sorgenti di conteggio, che non vanno sommate due volte. `espliciti` è
   // il numero che il database ha già calcolato (lettura aggregata: una riga per
   // reparto). `locali` sono le righe senza conteggio: gli scaricamenti appena
@@ -447,8 +477,11 @@ export function riassumiConsegne(righe: ConsegnaRegistrata[]): RiepilogoConsegne
   const locali = new Map<string, number>();
 
   for (const c of righe) {
-    const chiave = c.reparto.trim().toLocaleLowerCase('it-IT');
-    if (!chiave) continue;
+    const nome = c.reparto.trim().toLocaleLowerCase('it-IT');
+    if (!nome) continue;
+    // La chiave porta il tipo: stesso nome, due documenti diversi.
+    const tipo: TipoDocumentoConsegnato = c.tipo ?? 'reparto';
+    const chiave = `${tipo}|${nome}`;
     if (c.scaricamenti === undefined) {
       locali.set(chiave, (locali.get(chiave) ?? 0) + 1);
     } else {
@@ -457,7 +490,7 @@ export function riassumiConsegne(righe: ConsegnaRegistrata[]): RiepilogoConsegne
 
     const esistente = perReparto.get(chiave);
     if (!esistente) {
-      perReparto.set(chiave, { reparto: c.reparto.trim(), ultima: c });
+      perReparto.set(chiave, { reparto: c.reparto.trim(), tipo, ultima: c });
       continue;
     }
     const piuRecente =
@@ -472,8 +505,9 @@ export function riassumiConsegne(righe: ConsegnaRegistrata[]): RiepilogoConsegne
   return Array.from(perReparto.entries())
     .map(([chiave, v]) => ({
       reparto: v.reparto,
+      tipo: v.tipo,
       ultima: v.ultima,
       scaricamenti: (espliciti.get(chiave) ?? 0) + (locali.get(chiave) ?? 0),
     }))
-    .sort((a, b) => a.reparto.localeCompare(b.reparto, 'it-IT'));
+    .sort((a, b) => a.tipo.localeCompare(b.tipo) || a.reparto.localeCompare(b.reparto, 'it-IT'));
 }

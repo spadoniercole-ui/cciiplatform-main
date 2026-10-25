@@ -26,6 +26,7 @@ const valida: ConsegnaRepartoInput = {
 const consegna = (id: number, over: Partial<ConsegnaRegistrata> = {}): ConsegnaRegistrata => ({
   ...valida,
   id,
+  tipo: 'reparto',
   consegnatoIl: '2026-10-20T09:00:00.000Z',
   consegnatoDa: 'mario.rossi@ente.it',
   ragioneSociale: 'Alfa Srl',
@@ -75,6 +76,17 @@ describe('validaConsegna', () => {
     expect(validaConsegna(null).ok).toBe(false);
     expect(validaConsegna('ciao').ok).toBe(false);
     expect(validaConsegna(undefined).ok).toBe(false);
+  });
+
+  it('il tipo del documento è facoltativo ma non libero', () => {
+    const senzaTipo = validaConsegna({ ...valida });
+    expect(senzaTipo.ok && senzaTipo.dati.tipo).toBe('reparto');
+
+    const dipendenza = validaConsegna({ ...valida, tipo: 'dipendenza' });
+    expect(dipendenza.ok && dipendenza.dati.tipo).toBe('dipendenza');
+
+    // Un valore fuori elenco confonderebbe i due registri: si rifiuta.
+    expect(validaConsegna({ ...valida, tipo: 'ufficio' }).ok).toBe(false);
   });
 });
 
@@ -141,6 +153,23 @@ describe('riassumiConsegne', () => {
     expect(riepilogo[0].ultima.id).toBe(6);
   });
 
+  it('non fonde i due documenti quando il destinatario ha lo stesso nome', () => {
+    // Le due impronte di versione non sono confrontabili: se il riepilogo
+    // fondesse reparto e unità operativa, un documento risulterebbe superato
+    // da un altro documento che quel destinatario non ha mai ricevuto.
+    const riepilogo = riassumiConsegne([
+      consegna(1, { reparto: 'Ufficio contributi' }),
+      consegna(2, { reparto: 'Ufficio contributi', tipo: 'dipendenza' }),
+    ]);
+
+    expect(riepilogo).toHaveLength(2);
+    expect(riepilogo.map((r) => `${r.tipo}:${r.reparto}`)).toEqual([
+      'dipendenza:Ufficio contributi',
+      'reparto:Ufficio contributi',
+    ]);
+    expect(riepilogo.every((r) => r.scaricamenti === 1)).toBe(true);
+  });
+
   it('ordina i reparti per nome e ignora le righe senza reparto', () => {
     const riepilogo = riassumiConsegne([
       consegna(1, { reparto: 'Ufficio riscossione' }),
@@ -171,6 +200,9 @@ describe('consegnaDaRiga', () => {
     expect(consegnaLetta).toEqual({
       id: 7,
       reparto: 'Ufficio contributi',
+      // Le righe scritte prima che la colonna esistesse sono documenti per
+      // reparto: il tipo non è un dato nuovo da compilare, è una distinzione.
+      tipo: 'reparto',
       dataVerifica: '2026-10-19',
       versione: '1-aaaaaaaa',
       nomeFile: 'comunica_reparti_alfa_srl_ufficio_contributi.pdf',

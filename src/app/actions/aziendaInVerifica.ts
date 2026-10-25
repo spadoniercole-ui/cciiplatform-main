@@ -11,7 +11,7 @@ import { apriNuovoCiclo, elencaCicli, type CicloArchiviato } from '@/lib/cicloAz
 import { pool } from '@/lib/db';
 import { assicuraTabellaAziende } from '@/db/provision';
 import type { AnagraficaEstratta } from '@/app/actions/visuraEstrazione';
-import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
 
 export interface RisultatoVerifica {
   success: boolean;
@@ -190,18 +190,35 @@ export async function archiviaVerificaAction(
   }
 }
 
-/** Registra l'esito della verifica, senza promuovere la posizione. */
+/**
+ * Registra l'esito della verifica, senza promuovere la posizione.
+ *
+ * Con l'esito si conserva la DATA DI RIFERIMENTO della verifica (il giorno a
+ * cui si riferiscono i conti). È l'unico dato del triage che il database non
+ * aveva: senza, riaprendo una verifica dopo un'interruzione i documenti per i
+ * reparti si ricostruirebbero su una data diversa da quella dichiarata, e la
+ * loro impronta di versione cambierebbe senza che nulla sia cambiato.
+ */
 export async function registraEsitoVerificaAction(
   nomeSchema: string,
   aziendaId: number,
-  esito: string
+  esito: string,
+  dataRiferimento?: string
 ): Promise<RisultatoVerifica> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    const giorno =
+      typeof dataRiferimento === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dataRiferimento.trim())
+        ? dataRiferimento.trim()
+        : null;
     await pool.query(
-      `UPDATE "${nomeSchema}".aziende SET verifica_esito = $2, verifica_eseguita_il = now() WHERE id = $1`,
-      [aziendaId, esito]
+      `UPDATE "${nomeSchema}".aziende
+          SET verifica_esito = $2,
+              verifica_eseguita_il = now(),
+              verifica_riferita_al = COALESCE($3::date, verifica_riferita_al)
+        WHERE id = $1`,
+      [aziendaId, esito, giorno]
     );
     return { success: true, aziendaId };
   } catch (error: unknown) {
@@ -231,6 +248,111 @@ export async function promuoviAziendaAction(
   } catch (error: unknown) {
     console.error('[promuoviAziendaAction] Errore:', error);
     return { success: false, error: `Promozione non riuscita: ${(error as Error).message}` };
+  }
+}
+
+/**
+ * La verifica già eseguita, come serve per RIAPRIRLA.
+ *
+ * Il triage viveva soltanto nella scheda del browser: chiusa quella — per una
+ * ricarica, un crash, uno sbalzo di tensione — le comunicazioni preparate e i
+ * documenti per i reparti non erano più raggiungibili, e la videata in cui si
+ * decide se procedere con l'azienda non esisteva più. I dati però c'erano già:
+ * l'azienda con l'esito, le posizioni del V.E.R.A., i valori delle soglie. Qui
+ * si restituisce quello che serve a ricomporre la videata, e nient'altro: le
+ * lavorazioni e i destinatari si rileggono dalle loro configurazioni, perché
+ * una verifica riaperta oggi deve usare le regole di oggi.
+ *
+ * La data di riferimento è quella dichiarata al momento della verifica. Per le
+ * verifiche eseguite prima che la colonna esistesse si usa il giorno in cui
+ * sono state eseguite: è un'approssimazione dichiarata, non una data scelta a
+ * caso — l'unica alternativa era rifiutare di riaprirle.
+ */
+export interface VerificaDaRiprendere {
+  aziendaId: number;
+  anagrafica: AnagraficaEstratta;
+  /** AAAA-MM-GG: il giorno a cui si riferiscono i conti. */
+  dataVerifica: string;
+  /** true quando la data viene da `verifica_eseguita_il` e non da una dichiarazione. */
+  dataApprossimata: boolean;
+  esito: string | null;
+  eseguitaIl: string | null;
+  inVerifica: boolean;
+  archiviata: boolean;
+  motivo: string | null;
+}
+
+export async function ottieniVerificaDaRiprendereAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<{ success: boolean; verifica?: VerificaDaRiprendere; error?: string }> {
+  try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
+      return { success: false, error: 'Azienda non valida.' };
+    }
+    const r = await pool.query(
+      // to_char: la colonna è DATE e i due driver la rendono come Date con fusi
+      // diversi (locale con `pg`, UTC con PGlite): passare da Date sposterebbe
+      // il giorno a seconda di chi guarda.
+      `SELECT ragione_sociale, forma_giuridica, codice_fiscale, partita_iva, codice_ateco,
+              numero_rea, capitale_sociale, indirizzo_sede_legale, citta, provincia, cap,
+              rappresentante_legale, ruolo_rappresentante_legale, pec, anno_costituzione,
+              verifica_esito, in_verifica, verifica_archiviata, verifica_motivo,
+              to_char(verifica_riferita_al, 'YYYY-MM-DD') AS verifica_riferita_al,
+              to_char(verifica_eseguita_il, 'YYYY-MM-DD') AS verifica_eseguita_giorno,
+              verifica_eseguita_il
+         FROM "${nomeSchema}".aziende
+        WHERE id = $1`,
+      [aziendaId]
+    );
+    const a = r.rows[0];
+    if (!a) return { success: false, error: 'Azienda non trovata.' };
+
+    const dichiarata = a.verifica_riferita_al ? String(a.verifica_riferita_al) : '';
+    const approssimata = a.verifica_eseguita_giorno ? String(a.verifica_eseguita_giorno) : '';
+    const oggi = new Date().toISOString().slice(0, 10);
+    const testo = (v: unknown) => (v === null || v === undefined || v === '' ? null : String(v));
+    const numero = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+
+    return {
+      success: true,
+      verifica: {
+        aziendaId,
+        anagrafica: {
+          ragioneSociale: testo(a.ragione_sociale),
+          formaGiuridica: testo(a.forma_giuridica),
+          codiceFiscale: testo(a.codice_fiscale),
+          partitaIva: testo(a.partita_iva),
+          codiceAteco: testo(a.codice_ateco),
+          numeroRea: testo(a.numero_rea),
+          capitaleSociale: numero(a.capitale_sociale),
+          indirizzoSedeLegale: testo(a.indirizzo_sede_legale),
+          citta: testo(a.citta),
+          provincia: testo(a.provincia),
+          cap: testo(a.cap),
+          rappresentanteLegale: testo(a.rappresentante_legale),
+          ruoloRappresentanteLegale: testo(a.ruolo_rappresentante_legale),
+          pec: testo(a.pec),
+          annoCostituzione: numero(a.anno_costituzione),
+        },
+        dataVerifica: dichiarata || approssimata || oggi,
+        // Vero ogni volta che la data non è stata DICHIARATA: anche quando c'è
+        // il giorno dell'esecuzione, è un'approssimazione, e la scheda lo dice.
+        dataApprossimata: !dichiarata,
+        esito: testo(a.verifica_esito),
+        eseguitaIl: a.verifica_eseguita_il
+          ? new Date(a.verifica_eseguita_il as string).toISOString()
+          : null,
+        inVerifica: Boolean(a.in_verifica),
+        archiviata: Boolean(a.verifica_archiviata),
+        motivo: testo(a.verifica_motivo),
+      },
+    };
+  } catch (error: unknown) {
+    console.error('[ottieniVerificaDaRiprendereAction] Errore:', error);
+    return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
   }
 }
 

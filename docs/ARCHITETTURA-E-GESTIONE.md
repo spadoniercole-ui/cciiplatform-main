@@ -158,6 +158,18 @@ Drizzle è marginale.
    lavorare e le attività di contabilizzazione, si scarica e l'invio resta a cura
    dell'ufficio. La funzione vive accanto alla presa in carico, non la sostituisce e non
    la condiziona.
+   Accanto c'è la seconda uscita, **un report per unità operativa**: i debiti raggruppati per
+   codice di partita e, dentro ogni codice, le lavorazioni della sua materia (con passi ed
+   esito) e le inadempienze che lo compongono. L'ufficio è la **dipendenza** del codice, o
+   quella della materia se il codice non ne ha una propria (`titoli_ente`,
+   `materie_lavorazione`).
+
+   **La verifica si riapre.** La videata di esito (comunicazioni, documenti, decisione) non
+   vive più solo nella scheda del browser: l'azienda sta nell'URL
+   (`/verifica-salute?azienda=<id>`) e una ricarica ricompone l'esito dai dati salvati —
+   posizioni del V.E.R.A. con il loro periodo, esito, soglie ricalcolate. Il ritorno è
+   offerto anche dalla scheda azienda e dalla dashboard. Una verifica già presa in carico,
+   o archiviata, si consulta ma non si decide di nuovo.
    Ogni PDF porta una **versione** (impronta del contenuto, stampata sul foglio) e ogni
    scaricamento lascia una riga in `consegne_reparti`: reparto, data della verifica,
    versione, posizioni, totali, chi e quando. È un diario, non uno stato — due
@@ -356,6 +368,7 @@ domande che potrebbero non esistere più). Lo storico delle generazioni è conse
 | Screening | `src/lib/screening/indicatore.ts`, `src/lib/iai/indice.ts` |
 | Comunicazioni ai colleghi | `src/lib/lavorazioni/comunicazioni.ts` |
 | Documenti per i reparti (PDF, dal triage) | `src/lib/lavorazioni/reparti.ts`, `src/lib/lavorazioni/pdfReparto.ts` |
+| Report per unità operativa (PDF per dipendenza, per codice) | `src/lib/lavorazioni/reportUo.ts`, `src/lib/lavorazioni/pdfReportUo.ts` |
 | Relazione | `src/lib/relazione/contestoRicevente.ts`, `src/lib/revisore` |
 | Backup | `src/lib/backup` |
 | Edizioni | `src/lib/edizioneServer.ts`, `src/lib/portableDb.ts`, `src/lib/blobStore.ts` |

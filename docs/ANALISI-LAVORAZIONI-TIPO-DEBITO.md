@@ -448,3 +448,53 @@ raggruppamento solo, condiviso dalle due uscite.
 Formattazione di 5.000 importi: **356 ms → 5,8 ms**. Con il `useMemo`, quando nulla cambia
 (il caso di un tasto digitato in una nota d'invio) il costo è **zero**. Le misure restano
 quelle di un V.E.R.A. sintetico in Node: non coprono il render React, jsPDF né PGlite.
+
+---
+
+## 10. Ripresa del triage e report per unità operativa (0.138.5)
+
+### 10.1 Il difetto: la videata di esito viveva solo nel browser
+
+Comunicazioni, documenti per i reparti, soglie e la decisione (procedere / non procedere)
+erano **stato React**. Una ricarica, un crash, uno sbalzo di tensione chiudevano la
+sessione e da lì non si tornava: la pagina ripartiva dalla visura, e la scheda azienda
+offriva solo «Rifai la verifica» — che passa da `creaAziendaInVerificaAction`, apre un
+ciclo nuovo e archivia il lavoro precedente. Due dati, inoltre, il database non li aveva:
+il **periodo** delle posizioni (in `RigaVera` ma non in `debiti_vera`) e la **data di
+riferimento della verifica** (diversa dall'istante di esecuzione).
+
+**Applicato.**
+
+| Intervento | Dove |
+|---|---|
+| `debiti_vera.periodo` (colonna idempotente, scritta e riletta) | `provision.ts`, `posizioneVera.ts` |
+| `aziende.verifica_riferita_al DATE`, salvata con l'esito | `provision.ts`, `aziendaInVerifica.ts` |
+| `ottieniVerificaDaRiprendereAction`: anagrafica, data (dichiarata o, per le verifiche precedenti, giorno dell'esecuzione), esito, stato della decisione | `aziendaInVerifica.ts` |
+| `?azienda=<id>` sulla pagina: ricarica = riapertura; l'id entra nell'URL appena l'esito è calcolato | `verifica-salute/page.tsx`, `VerificaSaluteAzienda.tsx` |
+| la riapertura ricalcola indicatore e soglie dai dati salvati e ricompone le tre uscite | `VerificaSaluteAzienda.tsx` |
+| vie di ritorno: scheda azienda («Riprendi la verifica») e dashboard per le verifiche in sospeso; lo storico del triage porta alla ripresa, non alla scheda | `CruscottoAzienda.tsx`, `DashboardPannelli.tsx`, `VerificaSaluteAzienda.tsx` |
+| una verifica già presa in carico o archiviata si consulta ma non si decide di nuovo | `VerificaSaluteAzienda.tsx` |
+
+**Limite dichiarato.** Il riepilogo dei documenti letti non è ristampabile da una verifica
+riaperta: i file caricati non ci sono più. La scheda lo dice e non offre il pulsante.
+La ripresa torna all'esito, non alla conferma anagrafica con i file: quella richiederebbe
+di caricare i documenti sul server a ogni passo, e non è stata fatta.
+
+### 10.2 La seconda uscita: `reportUo.ts`
+
+Un PDF per **dipendenza**, dentro il quale i debiti sono raggruppati per **codice di
+partita**. Per ogni codice: materia, totale, inadempienze (voce, periodo, stato, importo) e
+lavorazioni della materia con i passi e l'esito. Fonte dell'ufficio: `titoli_ente.dipendenza`
+se c'è, altrimenti la prima lavorazione della materia che ne ha una — la stessa regola della
+scheda dei titoli («il codice vince»). Fonte delle lavorazioni: `materie_lavorazione`.
+
+Questo chiude **P8** nella direzione scelta: la materia/dipendenza dice chi lavora il
+codice, la tipologia resta la chiave del documento per reparto. Le due uscite convivono e
+non si contraddicono perché rispondono a due domande diverse.
+
+Fuori perimetro, e dichiarato in ogni punto: posizioni «Ignora» (fuori dai totali), voci
+senza codice di partita (contate), codici senza dipendenza (elencati a parte), codici senza
+lavorazioni (il foglio lo scrive). Il registro delle consegne distingue i due documenti con
+`tipo` (`reparto` | `dipendenza`), perché le impronte di versione non sono confrontabili.
+
+Test aggiunti: 21 (dominio, PDF, registro su PGlite, riapertura su Postgres vero).

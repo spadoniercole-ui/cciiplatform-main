@@ -1,0 +1,196 @@
+import { describe, expect, it } from 'vitest';
+import { componiReportUo, nomeFileUo, versioneReportUo, type RigaVeraReportUo } from './reportUo';
+import type { LavorazioneMateria } from '@/lib/titoliEnte/lavorazioniMateria';
+import { RISCONTRO_VUOTO, type TitoloEnte } from '@/lib/titoliEnte/titoli';
+
+const riga = (over: Partial<RigaVeraReportUo> = {}): RigaVeraReportUo => ({
+  sezione: 'FLUSSI UNIEMENS',
+  voce: 'TS 27 flusso Uniemens non versato',
+  periodo: '202506 - 202506',
+  stato: 'Aperto',
+  trattamento: 'da_contabilizzare',
+  importo: 1_200,
+  ...over,
+});
+
+const lav = (over: Partial<LavorazioneMateria> = {}): LavorazioneMateria => ({
+  id: 1,
+  materiaId: 10,
+  tipologia: 'Verifica del flusso',
+  dipendenza: 'Ufficio contributi',
+  procedura: 'Estrarre il flusso\nConfrontare con il versato',
+  esito: 'Diffida',
+  ordine: 0,
+  ...over,
+});
+
+const titolo = (over: Partial<TitoloEnte> = {}): TitoloEnte => ({
+  id: 1,
+  codice: '27',
+  atto: 'Flusso Uniemens',
+  presuppostoGiuridico: '',
+  riferimentoInterno: null,
+  effettoCalcolo: 'NESSUNO',
+  note: null,
+  attivitaRecupero: null,
+  dipendenza: null,
+  riscontroNorma: RISCONTRO_VUOTO,
+  riscontroInterno: RISCONTRO_VUOTO,
+  materiaId: 10,
+  ...over,
+});
+
+const base = {
+  azienda: 'Alfa Srl',
+  dataVerifica: '2026-10-19',
+  titoli: [titolo()],
+  materie: [{ id: 10, nome: 'Flussi Uniemens' }],
+  lavorazioni: [lav()],
+};
+
+describe('componiReportUo', () => {
+  it('raggruppa per dipendenza e, dentro, per codice: lavorazioni e inadempienze', () => {
+    const esito = componiReportUo({
+      ...base,
+      righe: [
+        riga(),
+        riga({
+          voce: 'TS 27 flusso Uniemens non versato',
+          periodo: '202507 - 202507',
+          importo: 800,
+        }),
+        riga({ voce: 'TS 18 verbale di accertamento', importo: 500 }),
+      ],
+    });
+
+    expect(esito.documenti).toHaveLength(1);
+    const d = esito.documenti[0];
+    expect(d.dipendenza).toBe('Ufficio contributi');
+    // Il codice 18 non è fra i titoli dell'ente e non ha una materia: nessuna
+    // dipendenza lo reclama, quindi resta fuori dal documento e si dichiara.
+    expect(d.codici.map((c) => c.codice)).toEqual(['27']);
+    expect(d.righe).toBe(2);
+    expect(d.totale).toBe(2_000);
+    expect(d.posizioniDaContabilizzare).toBe(2);
+    expect(d.importoDaContabilizzare).toBe(2_000);
+    expect(esito.senzaDipendenza).toEqual([{ codice: '18', materia: null, righe: 1, totale: 500 }]);
+
+    const c27 = d.codici.find((c) => c.codice === '27')!;
+    expect(c27.materia).toBe('Flussi Uniemens');
+    expect(c27.righe).toBe(2);
+    expect(c27.importo).toBe(2_000);
+    expect(c27.inadempienze[0].periodo).toBe('202506 - 202506');
+    expect(c27.inadempienze.map((i) => i.trattamento)).toEqual([
+      'Da contabilizzare',
+      'Da contabilizzare',
+    ]);
+    expect(c27.lavorazioni).toEqual([
+      {
+        tipologia: 'Verifica del flusso',
+        procedura: 'Estrarre il flusso\nConfrontare con il versato',
+        esito: 'Diffida',
+      },
+    ]);
+  });
+
+  it('la dipendenza del codice vince su quella della materia', () => {
+    const esito = componiReportUo({
+      ...base,
+      titoli: [titolo({ dipendenza: 'Ufficio legale' })],
+      righe: [riga()],
+    });
+    expect(esito.documenti.map((d) => d.dipendenza)).toEqual(['Ufficio legale']);
+  });
+
+  it('un codice senza dipendenza si dichiara, non si attribuisce a un ufficio inventato', () => {
+    const esito = componiReportUo({
+      ...base,
+      titoli: [],
+      lavorazioni: [],
+      righe: [riga()],
+    });
+    expect(esito.documenti).toHaveLength(0);
+    expect(esito.senzaDipendenza).toEqual([
+      { codice: '27', materia: null, righe: 1, totale: 1_200 },
+    ]);
+  });
+
+  it('una voce senza codice di partita resta fuori e si conta', () => {
+    const esito = componiReportUo({
+      ...base,
+      righe: [riga(), riga({ voce: 'Interessi di mora', importo: 40 })],
+    });
+    expect(esito.senzaCodice).toEqual({ righe: 1, totale: 40 });
+    expect(esito.documenti[0].totale).toBe(1_200);
+  });
+
+  it('le posizioni sospese non entrano nei totali ma sono dichiarate', () => {
+    const esito = componiReportUo({
+      ...base,
+      righe: [riga(), riga({ stato: 'Sospeso', trattamento: 'ignora', importo: 9_000 })],
+    });
+    expect(esito.posizioniEscluse).toEqual({ righe: 1, totale: 9_000 });
+    expect(esito.documenti[0].totale).toBe(1_200);
+    expect(esito.documenti[0].posizioniEscluse).toEqual({ righe: 1, totale: 9_000 });
+  });
+
+  it('elenca le lavorazioni della materia in ordine e conta i codici senza', () => {
+    const esito = componiReportUo({
+      ...base,
+      // Il codice 18 ha dipendenza propria e una materia senza lavorazioni.
+      titoli: [
+        titolo(),
+        titolo({ id: 2, codice: '18', materiaId: 99, dipendenza: 'Ufficio contributi' }),
+      ],
+      lavorazioni: [
+        lav({ id: 2, tipologia: 'Contabilizzazione', ordine: 1, procedura: null, esito: null }),
+        lav({ id: 1, tipologia: 'Verifica del flusso', ordine: 0 }),
+      ],
+      righe: [riga(), riga({ voce: 'TS 18 verbale', importo: 100 })],
+    });
+    const d = esito.documenti[0];
+    expect(d.codici.find((c) => c.codice === '27')!.lavorazioni.map((l) => l.tipologia)).toEqual([
+      'Verifica del flusso',
+      'Contabilizzazione',
+    ]);
+    // Il codice 18 ha una materia (99) che non ha lavorazioni configurate.
+    expect(esito.codiciSenzaLavorazione).toBe(1);
+  });
+
+  it('due uffici diversi producono due documenti', () => {
+    const esito = componiReportUo({
+      ...base,
+      titoli: [titolo(), titolo({ id: 2, codice: '18', dipendenza: 'Ufficio legale' })],
+      righe: [riga(), riga({ voce: 'TS 18 verbale', importo: 100 })],
+    });
+    expect(esito.documenti.map((d) => d.dipendenza)).toEqual([
+      'Ufficio contributi',
+      'Ufficio legale',
+    ]);
+    expect(esito.documenti.every((d) => d.codici.length === 1)).toBe(true);
+  });
+
+  it('la versione cambia con il contenuto e non con il nome del file', () => {
+    const a = componiReportUo({ ...base, righe: [riga()] }).documenti[0];
+    const b = componiReportUo({ ...base, righe: [riga({ importo: 1_201 })] }).documenti[0];
+    const c = componiReportUo({ ...base, righe: [riga()] }).documenti[0];
+
+    expect(a.versione).toBe(c.versione);
+    expect(a.versione).not.toBe(b.versione);
+    expect(a.versione).toMatch(/^1-[0-9a-f]{8}$/);
+
+    const { versione, nomeFile: _nomeFile, ...contenuto } = a;
+    expect(versioneReportUo(contenuto)).toBe(versione);
+  });
+
+  it('il nome del file porta azienda, ufficio e versione', () => {
+    expect(nomeFileUo('Alfa Srl', 'Ufficio contributi', '1-3f9a1c2b')).toBe(
+      'report_uo_alfa_srl_ufficio_contributi_3f9a1c2b.pdf'
+    );
+    // Due uffici diversi non si sovrascrivono; due nomi uguali dopo la
+    // normalizzazione sì, ed è la versione a distinguerli.
+    expect(nomeFileUo('Alfa Srl', 'Città', '1-0000aaaa')).not.toBe(
+      nomeFileUo('Alfa Srl', 'Citta', '1-0000bbbb')
+    );
+  });
+});

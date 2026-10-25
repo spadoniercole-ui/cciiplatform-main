@@ -8,13 +8,22 @@ export const maxDuration = 180;
 
 export default async function VerificaSalutePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ codice: string }>;
+  searchParams: Promise<{ azienda?: string }>;
 }) {
   const { codice } = await params;
   const contesto = await ottieniContestoAccessoSpazio(codice);
   if (!contesto) redirect('/');
   if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
+
+  // `?azienda=<id>` RIAPRE una verifica già eseguita: è la via di ritorno a
+  // una videata che prima esisteva solo nella scheda del browser. Un id che non
+  // è un intero positivo non si interpreta: si torna alla verifica da zero.
+  const { azienda } = await searchParams;
+  const id = Number(azienda);
+  const aziendaDaRiprendere = Number.isInteger(id) && id > 0 ? id : null;
 
   return (
     <main className="p-6 max-w-5xl mx-auto">
@@ -22,6 +31,7 @@ export default async function VerificaSalutePage({
         nomeSchema={contesto.nomeSchema}
         codice={codice}
         tipoSpazio={contesto.tipoSpazio}
+        aziendaDaRiprendere={aziendaDaRiprendere}
       />
     </main>
   );

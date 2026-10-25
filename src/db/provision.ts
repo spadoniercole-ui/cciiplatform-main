@@ -223,6 +223,16 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS verifica_eseguita_il TIMESTAMP`
   );
+  // DATA DI RIFERIMENTO della verifica: il giorno a cui si riferiscono i conti
+  // (esigibilità dei periodi, anno precedente per il 30%, anzianità del
+  // ritardo). Non è la data in cui si è premuto «Conferma e valuta»:
+  // quest'ultima è un istante, quella è un giorno civile dichiarato
+  // dall'operatore, e i due possono non coincidere (si verifica oggi una
+  // posizione al 30 settembre). Senza, riaprendo una verifica dopo un crash i
+  // documenti per i reparti si ricostruirebbero su una data inventata.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS verifica_riferita_al DATE`
+  );
 
   // Archiviazione della verifica: decidere di NON procedere è una decisione
   // amministrativa quanto decidere di procedere, e va registrata con il suo
@@ -1961,6 +1971,14 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS trattamento TEXT NOT NULL DEFAULT 'contabilizzato'`
   );
+  // PERIODO DI COMPETENZA («202506 - 202506»). Fino a qui viveva solo nel file
+  // appena letto, quindi nella sessione del browser: riaperta la verifica, la
+  // colonna «Periodo» dei documenti per i reparti tornava vuota pur avendo il
+  // dato in mano. Vuoto quando la sezione non lo porta (cartelle dell'Agente
+  // della Riscossione).
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS periodo TEXT NOT NULL DEFAULT ''`
+  );
   // Chiave della combinazione Natura+Stato di questa riga (per ri-applicare le
   // correzioni del trattamento senza ricaricare il file).
   await eseguiDdlTenant(
@@ -2117,7 +2135,8 @@ export async function assicuraTabellaConsegneReparti(nomeSchema: string): Promis
       posizioni_da_contabilizzare INTEGER NOT NULL DEFAULT 0,
       importo_da_contabilizzare NUMERIC(15,2) NOT NULL DEFAULT 0,
       consegnato_il TIMESTAMPTZ NOT NULL DEFAULT now(),
-      consegnato_da TEXT
+      consegnato_da TEXT,
+      tipo TEXT NOT NULL DEFAULT 'reparto'
     )`
   );
   // LA CONFERMA D'INVIO, aggiunta dopo: la riga dice che il documento è
@@ -2137,6 +2156,12 @@ export async function assicuraTabellaConsegneReparti(nomeSchema: string): Promis
     // La ragione sociale della consegna è una fotografia: rende la riga
     // leggibile anche se l'anagrafica cambia nome o sparisce.
     'ragione_sociale TEXT',
+    // QUALE DOCUMENTO è uscito: il foglio per reparto (raggruppato per
+    // tipologia di debito) o il report per unità operativa (raggruppato per
+    // codice di partita). Le due impronte di versione non sono confrontabili:
+    // senza questa colonna un ufficio che si chiama come un reparto farebbe
+    // risultare «superato» un documento che nessuno ha mai ricevuto.
+    "tipo TEXT NOT NULL DEFAULT 'reparto'",
   ]) {
     await eseguiDdlTenant(
       sql`ALTER TABLE ${s}.consegne_reparti ADD COLUMN IF NOT EXISTS ${sql.raw(colonna)}`

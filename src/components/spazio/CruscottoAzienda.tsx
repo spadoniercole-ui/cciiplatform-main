@@ -26,6 +26,7 @@
 // rinfresca la memoria, la sovraccarica.
 
 import React, { useEffect, useState } from 'react';
+import { RotateCcw } from 'lucide-react';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
@@ -34,6 +35,8 @@ import type { Attenzione } from '@/lib/screening/indicatore';
 interface Props {
   nomeSchema: string;
   aziendaId: number;
+  /** Serve alla via di ritorno al triage (`?azienda=`). */
+  codice: string;
 }
 
 const STILE = {
@@ -42,9 +45,15 @@ const STILE = {
   ATTENZIONE_MINIMA: { pallino: 'bg-emerald-500', testo: 'text-emerald-800' },
 } as const;
 
-export function CruscottoAzienda({ nomeSchema, aziendaId }: Props) {
+export function CruscottoAzienda({ nomeSchema, aziendaId, codice }: Props) {
   const [attenzione, setAttenzione] = useState<Attenzione | null>(null);
   const [eseguitaIl, setEseguitaIl] = useState<string | null>(null);
+  // Una verifica ancora in sospeso si può RIAPRIRE nel triage: comunicazioni,
+  // documenti e decisione sono lì. Senza questa via, l'unica uscita dalla
+  // scheda era «rifai la verifica», che apre un ciclo nuovo e archivia il
+  // lavoro precedente — anche quando non c'era nulla da rifare, solo da
+  // finire.
+  const [daRiprendere, setDaRiprendere] = useState(false);
 
   useEffect(() => {
     void ottieniAttenzioneScreeningAction(nomeSchema, aziendaId).then((r) => {
@@ -53,6 +62,7 @@ export function CruscottoAzienda({ nomeSchema, aziendaId }: Props) {
     void ottieniStoricoVerificheAction(nomeSchema).then((r) => {
       const mia = r.righe?.find((v) => v.id === aziendaId);
       if (mia?.eseguitaIl) setEseguitaIl(mia.eseguitaIl);
+      setDaRiprendere(Boolean(mia && !mia.presaInCarico && !mia.archiviata));
     });
   }, [nomeSchema, aziendaId]);
 
@@ -98,6 +108,16 @@ export function CruscottoAzienda({ nomeSchema, aziendaId }: Props) {
             : 'Data della verifica non registrata'}
         </span>
       </div>
+
+      {daRiprendere && (
+        <a
+          href={`/spazio/${codice}/verifica-salute?azienda=${aziendaId}`}
+          className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
+        >
+          <RotateCcw className="w-3 h-3" /> Riprendi la verifica — comunicazioni e decisione sono
+          ancora lì
+        </a>
+      )}
 
       {scaduto && (
         <p className="mt-1.5 text-[10px] leading-relaxed text-amber-800">

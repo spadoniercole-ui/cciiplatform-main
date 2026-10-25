@@ -182,7 +182,15 @@ export function DashboardPannelli({
             {verifiche.slice(0, MAX).map((v) => (
               <a
                 key={v.id}
-                href={`/spazio/${codice}/aziende/${v.id}`}
+                // Una verifica in sospeso si riapre NEL TRIAGE: è lì che ci sono
+                // le comunicazioni già preparate e la decisione da prendere.
+                // Mandarla alla scheda azienda lasciava la sola via d'uscita
+                // «rifai la verifica», che archivia il lavoro precedente.
+                href={
+                  !v.presaInCarico && !v.archiviata
+                    ? `/spazio/${codice}/verifica-salute?azienda=${v.id}`
+                    : `/spazio/${codice}/aziende/${v.id}`
+                }
                 className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
               >
                 <span className="min-w-0">

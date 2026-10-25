@@ -384,7 +384,7 @@ export async function ottieniDebitiVera(
       return { success: false, righe: [], error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
     const r = await pool.query(
-      `SELECT id, sezione, ambito, voce, importo, contributi, sanzioni, categoria, stato, trattamento
+      `SELECT id, sezione, ambito, voce, importo, contributi, sanzioni, categoria, stato, trattamento, periodo
          FROM "${nomeSchema}".debiti_vera
        WHERE azienda_id = $1 ORDER BY id ASC`,
       [aziendaId]
@@ -448,6 +448,9 @@ export async function ottieniDebitiVera(
         sanzioni: x.sanzioni === null || x.sanzioni === undefined ? null : Number(x.sanzioni),
         categoria: x.categoria,
         stato: x.stato ?? '',
+        // Il periodo di competenza è la sola cosa che dice al reparto QUALE
+        // versamento regolarizzare: senza, la colonna del PDF resta vuota.
+        periodo: x.periodo ? String(x.periodo) : undefined,
         trattamento: (x.trattamento ?? 'contabilizzato') as TrattamentoVera,
         materia: materie.length ? materiaPerRigaVera(x.voce, x.sezione, titoli, materie) : null,
       })),
@@ -477,8 +480,8 @@ export async function sostituisciDebitiVeraAction(
     for (const r of righe) {
       await pool.query(
         `INSERT INTO "${nomeSchema}".debiti_vera
-           (azienda_id, sezione, ambito, voce, importo, contributi, sanzioni, categoria, stato, trattamento, combinazione, documento_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+           (azienda_id, sezione, ambito, voce, importo, contributi, sanzioni, categoria, stato, trattamento, combinazione, documento_id, periodo)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           aziendaId,
           r.sezione,
@@ -492,6 +495,7 @@ export async function sostituisciDebitiVeraAction(
           r.trattamento ?? 'contabilizzato',
           chiaveCombinazione(r.voce, r.stato ?? ''),
           documentoId,
+          r.periodo ?? '',
         ]
       );
     }

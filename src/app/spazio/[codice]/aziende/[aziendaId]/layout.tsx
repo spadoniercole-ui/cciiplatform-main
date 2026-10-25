@@ -227,7 +227,7 @@ export default async function AziendaLayout({
           posizione dopo settimane, o a chi ne lavora molte. Sta in testata e
           non nella sola Anagrafica perché chi torna non entra sempre da lì.
           Se non c'è mai stata una verifica non si mostra nulla. */}
-      <CruscottoAzienda nomeSchema={contesto.nomeSchema} aziendaId={aziendaNum} />
+      <CruscottoAzienda nomeSchema={contesto.nomeSchema} aziendaId={aziendaNum} codice={codice} />
 
       {/* Barra dei passi: sequenza logica dell'analisi a sinistra, Operatori a
           destra. Semaforo: grigio = bloccato, arancione = da fare, verde = fatto. */}

@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.138.4**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.138.5**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -23,6 +23,60 @@ situazioni):
 Versionamento libero (non segue semver in senso stretto): il primo numero
 sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
+
+---
+
+## 0.138.5 — 2026-10-25
+
+**Il triage sopravvive a un’interruzione, e i debiti arrivano alle unità operative raggruppati per codice**
+
+Due cose che mancavano, e che si vedevano solo quando qualcosa andava storto.
+
+**1. Le comunicazioni non si perdono più chiudendo la pagina.** La videata di esito —
+comunicazioni ai colleghi, documenti per i reparti, la decisione se procedere — viveva
+soltanto nella scheda del browser. Una ricarica, un crash, uno sbalzo di tensione la
+chiudevano, e da lì non si tornava: la pagina ripartiva dalla visura, e l’unica via
+d’uscita dalla scheda azienda era «rifai la verifica», che apre un ciclo nuovo e archivia il
+lavoro precedente. Ora l’azienda entra nell’URL (`/verifica-salute?azienda=<id>`), quindi
+ricaricare riapre la stessa videata; l’esito si ricompone dai dati salvati (posizioni
+V.E.R.A., esito, soglie ricalcolate, configurazioni attuali) e da lì si riscaricano i
+documenti e si prende la decisione. La via di ritorno c’è anche dalla scheda azienda
+(«Riprendi la verifica») e dalla dashboard per le verifiche ancora in sospeso. Se l’azienda
+è già stata presa in carico o la verifica è archiviata, la si consulta ma non si decide di
+nuovo: la decisione è presa e non si ripete.
+- Servivano due dati che il database non conservava: il **periodo di competenza** delle
+  posizioni (`debiti_vera.periodo`, colonna idempotente) e la **data di riferimento della
+  verifica** (`aziende.verifica_riferita_al`). Senza, una verifica riaperta avrebbe
+  stampato una colonna «Periodo» vuota e ricostruito i documenti su un’altra data,
+  cambiandone l’impronta di versione senza che nulla fosse cambiato. Per le verifiche
+  eseguite prima della colonna si usa il giorno dell’esecuzione, e la scheda lo dichiara.
+- Il riepilogo dei documenti letti non è ristampabile da una verifica riaperta: quei file
+  non ci sono più, sono diventati righe di database. La pagina lo dice invece di produrre
+  un foglio incompleto.
+
+**2. Report per unità operativa: i debiti raggruppati per CODICE, divisi per dipendenza.**
+Accanto al documento per reparto (che indirizza per tipologia di debito) c’è una seconda
+uscita, che risponde alla domanda di chi lavora la partita: *questo codice, che procedura
+segue, e quali inadempienze lo compongono?* Un PDF per ufficio, e dentro, per ogni codice
+di partita: la materia, il totale, le inadempienze (voce, periodo di competenza, stato,
+importo) e le lavorazioni configurate sulla materia, con i passi e l’esito.
+- L’ufficio è la **dipendenza**: quella del codice se c’è, altrimenti quella della sua
+  materia — la stessa regola della scheda dei titoli, «il codice vince». Le due uscite
+  restano distinte: il documento per reparto continua a indirizzare per categoria.
+- Nulla sparisce in silenzio: le posizioni sospese restano fuori dai totali e si
+dichiarano; le voci senza codice di partita si contano; i codici senza dipendenza si
+elencano a parte (configurazione mancante, non debito inesistente); i codici senza
+lavorazioni lo dicono sul foglio.
+- Il registro delle consegne tiene separati i due documenti (`tipo` = `reparto` |
+  `dipendenza`): le due impronte di versione non sono confrontabili, e un ufficio che si
+  chiama come un reparto non deve far risultare «superato» un foglio che nessuno ha mai
+  ricevuto. Scaricamento e conferma d’invio funzionano come per i reparti.
+
+**Nuovi test (21)**: raggruppamento per codice e dipendenza, precedenza del codice sulla
+materia, posizioni senza codice, codici senza dipendenza, sospese fuori dai totali,
+versione e nome file; PDF con periodo, lavorazioni e dichiarazione dei codici scoperti;
+lettura del registro per tipo; riapertura di una verifica su Postgres vero (PGlite),
+compresa la data approssimata per le verifiche già eseguite.
 
 ---
 

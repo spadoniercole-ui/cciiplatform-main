@@ -31,7 +31,8 @@ import {
 
 /** Le colonne che il registro legge: una sola lista, perché RETURNING e SELECT
  * non possano divergere sul nome di un alias. */
-const COLONNE_REGISTRO = `id, reparto, to_char(data_verifica, 'YYYY-MM-DD') AS data_verifica,
+const COLONNE_REGISTRO = `id, reparto, tipo,
+       to_char(data_verifica, 'YYYY-MM-DD') AS data_verifica,
        versione, nome_file, righe, totale, posizioni_da_contabilizzare,
        importo_da_contabilizzare, consegnato_il, consegnato_da, ragione_sociale,
        to_char(inviata_il, 'YYYY-MM-DD') AS inviata_il, mezzo_invio, note_invio,
@@ -88,10 +89,10 @@ export async function registraConsegnaRepartoAction(
       // fotografia dell'anagrafica al momento della consegna e deve dire
       // quello che dice la piattaforma, non quello che le è stato inviato.
       `INSERT INTO "${nomeSchema}".consegne_reparti
-         (azienda_id, ragione_sociale, reparto, data_verifica, versione, nome_file, righe,
+         (azienda_id, ragione_sociale, reparto, tipo, data_verifica, versione, nome_file, righe,
           totale, posizioni_da_contabilizzare, importo_da_contabilizzare, consegnato_da)
        VALUES ($1, (SELECT ragione_sociale FROM "${nomeSchema}".aziende WHERE id = $1),
-               $2, $3, $4, $5, $6, $7, $8, $9, $10)
+               $2, $11, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING ${COLONNE_REGISTRO}`,
       [
         aziendaId,
@@ -104,6 +105,7 @@ export async function registraConsegnaRepartoAction(
         dati.posizioniDaContabilizzare,
         dati.importoDaContabilizzare,
         contesto.modalita === 'SALVAGENTE' ? 'Superadmin (ispezione)' : (contesto.email ?? null),
+        dati.tipo ?? 'reparto',
       ]
     );
     return { success: true, consegna: consegnaDaRiga(r.rows[0]) };
@@ -157,14 +159,14 @@ export async function ottieniConsegneRepartiAction(
       // (locale con `pg`, UTC con PGlite in portable). Passare da Date sposterebbe
       // il giorno a seconda del fuso e del driver; come testo è sempre il giorno
       // scritto nel database. Vale per data_verifica e per inviata_il.
-      `SELECT DISTINCT ON (lower(reparto)) *
+      `SELECT DISTINCT ON (tipo, lower(reparto)) *
          FROM (
            SELECT ${COLONNE_REGISTRO},
-                  count(*) OVER (PARTITION BY lower(reparto)) AS scaricamenti
+                  count(*) OVER (PARTITION BY tipo, lower(reparto)) AS scaricamenti
              FROM "${nomeSchema}".consegne_reparti
             WHERE azienda_id = $1
          ) AS registro
-        ORDER BY lower(reparto), consegnato_il DESC, id DESC
+        ORDER BY tipo, lower(reparto), consegnato_il DESC, id DESC
         LIMIT ${MASSIMO_REPARTI}`,
       [aziendaId]
     );

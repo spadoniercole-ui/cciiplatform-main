@@ -37,6 +37,7 @@ vi.mock('@/db/provision', () => ({
       importo_da_contabilizzare NUMERIC(15,2) NOT NULL DEFAULT 0,
       consegnato_il TIMESTAMPTZ NOT NULL DEFAULT now(),
       consegnato_da TEXT,
+      tipo TEXT NOT NULL DEFAULT 'reparto',
       inviata_il DATE,
       mezzo_invio TEXT,
       note_invio TEXT,
@@ -186,6 +187,37 @@ describe('ottieniConsegneRepartiAction', () => {
     expect(esito.consegne[0].scaricamenti).toBe(2);
     // L'ultima è quella con la versione più recente.
     expect(esito.consegne[0].versione).toBe('1-bbbbbbbb');
+  });
+
+  it('tiene separati il documento per reparto e il report per unità operativa', async () => {
+    // Stesso nome nei due ruoli, versione di formato diversa: senza il tipo il
+    // secondo scaricamento farebbe risultare «superato» il primo documento,
+    // che il reparto non ha mai ricevuto.
+    await registraConsegnaRepartoAction(SCHEMA, AZIENDA, consegna);
+    await registraConsegnaRepartoAction(SCHEMA, AZIENDA, {
+      ...consegna,
+      tipo: 'dipendenza',
+      versione: '1-cccccccc',
+    });
+
+    const esito = await ottieniConsegneRepartiAction(SCHEMA, AZIENDA);
+
+    expect(esito.consegne).toHaveLength(2);
+    expect(esito.consegne.map((c) => c.tipo).sort()).toEqual(['dipendenza', 'reparto']);
+  });
+
+  it('senza tipo la riga è un documento per reparto', async () => {
+    const esito = await registraConsegnaRepartoAction(SCHEMA, AZIENDA, consegna);
+    expect(esito.consegna?.tipo).toBe('reparto');
+  });
+
+  it('rifiuta un tipo di documento inventato', async () => {
+    const esito = await registraConsegnaRepartoAction(SCHEMA, AZIENDA, {
+      ...consegna,
+      tipo: 'altro',
+    });
+    expect(esito.success).toBe(false);
+    expect(await righeRegistrate()).toBe(0);
   });
 
   it('non mostra le consegne di altre aziende', async () => {
