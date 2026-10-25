@@ -37,6 +37,15 @@ il terzo per correzioni.
   tutte le tipologie — il caso in cui il conteggio di ciò che resta fuori serve
   davvero. A configurazione vuota resta la sola spiegazione, che dice anche che
   la tabella dei destinatari è in sola lettura.
+- **Nota aperta — non è un difetto, è una decisione che spetta a chi usa la
+  piattaforma.** Riaprire la configurazione oggi richiede un intervento sul
+  codice: l’interruttore è la costante `LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA`
+  (`src/lib/lavorazioni/solaLettura.ts`), non un permesso di spazio. Chi ha
+  bisogno di indicare un nuovo destinatario non può farlo da solo. Resta da
+  decidere se l’apertura debba essere un permesso dell’Admin di spazio, come si
+  traccia chi modifica i destinatari, e come convivono questa tabella e le
+  lavorazioni della materia. L’analisi completa, con i punti di caduta trovati
+  nel percorso e le proposte, è in `docs/ANALISI-LAVORAZIONI-TIPO-DEBITO.md`.
 
 ## 0.138.2 — 2026-10-25
 
