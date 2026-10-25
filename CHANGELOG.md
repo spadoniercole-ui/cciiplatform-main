@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.138.1**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.138.2**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,23 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.138.2 — 2026-10-25
+
+**Configurazione vuota nel triage: i messaggi non promettono più una modifica impossibile**
+
+- Con la tabella dei destinatari in sola lettura, l’elenco «Tipologie senza
+  lavorazione» sotto le comunicazioni ai colleghi diceva ancora che quelle
+  posizioni sarebbero rimaste fuori «finché non configuri la lavorazione»:
+  un invito a un’azione che la pagina non consente. Ora dice il motivo vero —
+  nessuna riga della tabella riguarda quelle tipologie — e la frase di invito
+  resta solo finché la configurazione è modificabile.
+- Verificato il resto del percorso a configurazione vuota: senza lavorazioni
+  non si produce né una comunicazione muta né un documento per reparto, le
+  posizioni restano contate e visibili, e le due schede del triage spiegano già
+  che non c’è un destinatario a cui indirizzarle (in sola lettura dichiarano
+  anche perché). I test di `comunicazioni` e `reparti` coprono il caso: nessun
+  documento, nessuna comunicazione, tutte le tipologie elencate come scoperte.
 
 ## 0.138.1 — 2026-10-24
 

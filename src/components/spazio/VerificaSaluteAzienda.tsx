@@ -1741,7 +1741,9 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                   ))}
                 </ul>
                 <p className="text-[10px] text-slate-500 leading-relaxed">
-                  Restano fuori dalle comunicazioni finché non configuri la lavorazione.
+                  {LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
+                    ? 'Restano fuori dalle comunicazioni: la tabella dei destinatari è in sola lettura e nessuna delle sue righe riguarda queste tipologie.'
+                    : 'Restano fuori dalle comunicazioni finché non configuri la lavorazione.'}
                 </p>
               </div>
             )}
