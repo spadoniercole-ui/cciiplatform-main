@@ -11,6 +11,7 @@
 
 import { pool } from '@/lib/db';
 import { seedXbrlTagMappings } from '@/db/seedXbrlTagMappings';
+import { dimenticaTabelleGarantite } from '@/db/provision';
 import { richiediSuperadmin } from '@/lib/autorizzazione';
 
 const TABELLE_GLOBALI = [
@@ -44,6 +45,10 @@ export async function azzeraDatabaseCompletoAction(): Promise<RisultatoAzzeramen
     for (const { nspname } of schemiRis.rows) {
       await pool.query(`DROP SCHEMA IF EXISTS "${nspname.replace(/"/g, '""')}" CASCADE`);
     }
+    // Il DDL idempotente è già stato eseguito in questo processo: senza
+    // dimenticarlo, i nuovi schemi con lo stesso nome non lo riceverebbero
+    // più (le tabelle non verrebbero create).
+    dimenticaTabelleGarantite();
 
     let tabelleSvuotate = 0;
     for (const tabella of TABELLE_GLOBALI) {

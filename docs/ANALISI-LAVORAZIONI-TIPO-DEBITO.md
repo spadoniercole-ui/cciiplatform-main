@@ -7,6 +7,12 @@ registro delle consegne con la conferma d'invio.
 **Versione analizzata.** 0.138.3 (commit `306e3a4`), con la configurazione congelata
 dall'interruttore `LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA`.
 
+**Esito.** In **0.138.4** sono stati corretti C1, C2, A1 (resa visibile), A2 (linguaggio),
+A3, M1, M2, M3, M4, M5, M6, M7, M8 e B1, con i test che mancavano. Restano aperte — perché
+sono decisioni di prodotto, non difetti — la riapertura della configurazione (P4) e il
+rapporto fra destinatario per categoria e per materia (P8). Il §9 elenca cosa è stato
+applicato e le misure fatte dopo gli interventi.
+
 **Ruolo dell'analisi.** Sistemista (rotture, dati, integrità, concorrenza, ripristino) e
 analista funzionale (coerenza delle promesse fatte a schermo, percorso dell'utente,
 ridondanze, lacune).
@@ -15,8 +21,8 @@ ridondanze, lacune).
 veraImport.ts`), delle server action (`lavorazioniTipoDebito.ts`, `consegneReparti.ts`),
 del provisioning (`src/db/provision.ts`) e della scheda del triage
 (`VerificaSaluteAzienda.tsx`); misure eseguite con un test temporaneo (Node 22, Vitest,
-stessa macchina di sviluppo), poi rimosso. **Nessun difetto è stato corretto in questa
-sede**: le proposte sono nel §6 e §7, da approvare prima di toccare il codice.
+stessa macchina di sviluppo), poi rimosso. **Questa stesura descrive il difetto, non la
+correzione**: le proposte sono nel §6 e §7, il cui esito è nel §9.
 
 ---
 
@@ -397,3 +403,48 @@ con una misura dopo l'intervento.
   coperto dai test, non da un file reale.
 - I riferimenti normativi non sono stati toccati: questa analisi non cambia formule, soglie
   né importi di legge.
+
+---
+
+## 9. Esito: cosa è stato applicato in 0.138.4
+
+| ID | Intervento applicato | Dove |
+|---|---|---|
+| C1 | `ignora` escluso da raggruppamento, comunicazioni e documenti; posizioni escluse contate e dichiarate a schermo e nel PDF | `comunicazioni.ts`, `reparti.ts`, `pdfReparto.ts`, scheda del triage |
+| C2 | `periodo` portato in `RigaVera` e copiato nell'estrazione; stampato nel PDF e nel testo al collega | `veraImport.ts`, `reparti.ts` |
+| A1 | la pagina delle categorie dice che una tipologia creata ora non potrà avere un destinatario | `CategorieTipoDebitoManager.tsx` |
+| A2 | il registro si presenta come autodichiarazione di scaricamento (interfaccia e PDF) | scheda del triage, `pdfReparto.ts` |
+| A3 | `ragione_sociale` salvata sulla consegna (letta dal database) e chiave esterna `ON DELETE SET NULL` | `provision.ts`, `consegneReparti.ts`, `consegne.ts` |
+| M1 | un solo raggruppamento, condiviso, memorizzato con `useMemo` | `VerificaSaluteAzienda.tsx` |
+| M2 | `Intl.NumberFormat` riusato e `Intl.Collator` per gli ordinamenti | `comunicazioni.ts` |
+| M3 | ultima consegna per reparto con conteggio, limite di sicurezza, niente diario intero | `consegneReparti.ts` |
+| M4 | DDL eseguito una volta per processo e per schema, con dimenticanza esplicita su azzeramento, ripristino ed eliminazione dello spazio | `provision.ts`, `azzeraDatabase.ts`, `ripristinaDatabase.ts`, `spazi.ts` |
+| M5 | causa del superamento accanto a ogni reparto e comando «Riscarica tutti» | `consegne.ts`, `VerificaSaluteAzienda.tsx` |
+| M6 | test delle due guardie di sola lettura (con il database mai toccato) | `lavorazioniTipoDebito.test.ts` |
+| M7 | lavorazioni che puntano a una categoria cancellata segnalate come tali | `LavorazioniTipoDebitoManager.tsx` |
+| M8 | chiave della tipologia normalizzata anche in lettura | `comunicazioni.ts` |
+| B1 | nome del file chiuso dalla versione del documento | `reparti.ts` |
+| PF5 | `Intl.Collator` riusato | `comunicazioni.ts` |
+
+**Resta aperto (decisione, non difetto).** P4 — chi può riaprire la configurazione e con quale
+storia delle modifiche — e P8 — se il destinatario si configura per categoria o per materia.
+Fino ad allora la configurazione resta congelata e il triage non legge la materia: nessuna
+delle due scelte è stata fatta in silenzio.
+
+**Non applicato, e perché.** PF6 (comporre il testo solo all'apertura della scheda) è
+rimasto fuori: con PF1 il calcolo non si ripete quando nulla cambia, e rinviarlo
+introdurrebbe uno stato «testo non ancora pronto» in una scheda che oggi è sincrona.
+
+**Misure dopo gli interventi.** Stesso V.E.R.A. sintetico del §3, stessa macchina, mediana
+di 10 giri dopo 3 di scaldata. La colonna «dopo» è il costo del percorso nuovo: un
+raggruppamento solo, condiviso dalle due uscite.
+
+| righe | `raggruppa` | **prima** (entrambe le uscite, per render) | **dopo** (raggruppa + due uscite) |
+|---|---|---|---|
+| 300 | 0,8 ms | 77,3 ms | **2,6 ms** |
+| 1.500 | 6,0 ms | 446,6 ms | **9,7 ms** |
+| 5.000 | 12,3 ms | 1.406,7 ms | **29,7 ms** |
+
+Formattazione di 5.000 importi: **356 ms → 5,8 ms**. Con il `useMemo`, quando nulla cambia
+(il caso di un tasto digitato in una nota d'invio) il costo è **zero**. Le misure restano
+quelle di un V.E.R.A. sintetico in Node: non coprono il render React, jsPDF né PGlite.

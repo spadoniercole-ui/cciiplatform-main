@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MEZZI_INVIO,
+  causaSuperamento,
   consegnaDaRiga,
   etichettaMezzo,
   riassumiConsegne,
@@ -27,6 +28,7 @@ const consegna = (id: number, over: Partial<ConsegnaRegistrata> = {}): ConsegnaR
   id,
   consegnatoIl: '2026-10-20T09:00:00.000Z',
   consegnatoDa: 'mario.rossi@ente.it',
+  ragioneSociale: 'Alfa Srl',
   invio: null,
   ...over,
 });
@@ -116,6 +118,29 @@ describe('riassumiConsegne', () => {
     expect(riepilogo[0].scaricamenti).toBe(2);
   });
 
+  it('non somma 1 a un conteggio che il database ha già fatto', () => {
+    // La lettura aggregata restituisce una riga per reparto con il numero vero
+    // di scaricamenti: sommario di nuovo darebbe il doppio del vero.
+    const riepilogo = riassumiConsegne([consegna(5, { scaricamenti: 7 })]);
+    expect(riepilogo[0].scaricamenti).toBe(7);
+  });
+
+  it('aggiunge allo storico letto dal database lo scaricamento appena fatto', () => {
+    // La scheda riceve una riga aggregata (2 scaricamenti) e poi ne antepone
+    // una locale, senza ripetere la lettura: il totale mostrato deve essere 3,
+    // non 2 (il massimo) né 1 (il conteggio delle righe).
+    const riepilogo = riassumiConsegne([
+      consegna(6, {
+        consegnatoIl: '2026-10-22T09:00:00.000Z',
+        versione: '1-dddddddd',
+      }),
+      consegna(5, { consegnatoIl: '2026-10-21T09:00:00.000Z', scaricamenti: 2 }),
+    ]);
+
+    expect(riepilogo[0].scaricamenti).toBe(3);
+    expect(riepilogo[0].ultima.id).toBe(6);
+  });
+
   it('ordina i reparti per nome e ignora le righe senza reparto', () => {
     const riepilogo = riassumiConsegne([
       consegna(1, { reparto: 'Ufficio riscossione' }),
@@ -155,8 +180,25 @@ describe('consegnaDaRiga', () => {
       importoDaContabilizzare: 3_000,
       consegnatoIl: '2026-10-21T13:14:30.057Z',
       consegnatoDa: 'mario.rossi@ente.it',
+      ragioneSociale: null,
       invio: null,
     });
+  });
+
+  it('legge la ragione sociale fotografia e il conteggio aggregato', () => {
+    const consegnaLetta = consegnaDaRiga({
+      id: 7,
+      reparto: 'Ufficio contributi',
+      ragione_sociale: 'Alfa Srl',
+      scaricamenti: '4',
+      consegnato_il: '2026-10-21T13:14:30.057Z',
+    });
+    expect(consegnaLetta.ragioneSociale).toBe('Alfa Srl');
+    expect(consegnaLetta.scaricamenti).toBe(4);
+  });
+
+  it('una ragione sociale vuota vale come assente', () => {
+    expect(consegnaDaRiga({ id: 1, ragione_sociale: '   ' }).ragioneSociale).toBeNull();
   });
 
   it('legge la data come giorno locale quando arriva come Date', () => {
@@ -293,6 +335,39 @@ describe('etichette dei mezzi', () => {
 
   it('un valore sconosciuto si legge com’è, senza inventare un’etichetta', () => {
     expect(etichettaMezzo('TELEGRAMMA')).toBe('TELEGRAMMA');
+  });
+});
+
+describe('causaSuperamento', () => {
+  const documento = {
+    dataVerifica: '2026-10-19',
+    righe: 2,
+    totale: 15_000,
+  };
+
+  it('dice quando è cambiata la data della verifica', () => {
+    expect(causaSuperamento(consegna(1, { dataVerifica: '2026-10-18' }), documento)).toContain(
+      'data della verifica è cambiata'
+    );
+  });
+
+  it('dice quando è cambiato il numero di posizioni o il totale', () => {
+    expect(causaSuperamento(consegna(1), { ...documento, righe: 3 })).toContain('da 2 a 3');
+    expect(causaSuperamento(consegna(1, { righe: 1, totale: 12_000 }), documento)).toContain(
+      'da 1 a 2'
+    );
+    const totaleCambiato = causaSuperamento(consegna(1), {
+      ...documento,
+      totale: 15_500,
+    });
+    expect(totaleCambiato).toContain('15.000,00 €');
+    expect(totaleCambiato).toContain('15.500,00 €');
+  });
+
+  it('quando i numeri non cambiano, la causa sta nelle tipologie o nelle attività', () => {
+    expect(
+      causaSuperamento(consegna(1), { dataVerifica: '2026-10-19', righe: 2, totale: 15_000 })
+    ).toBe('sono cambiate le tipologie o le attività da svolgere');
   });
 });
 

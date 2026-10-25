@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.138.3**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.138.4**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -23,6 +23,73 @@ situazioni):
 Versionamento libero (non segue semver in senso stretto): il primo numero
 sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
+
+---
+
+## 0.138.4 — 2026-10-25
+
+**Triage: i documenti per reparto non contengono più ciò che non va lavorato, e il registro dice la verità su ciò che è**
+
+Correzioni nate dal fascicolo [docs/ANALISI-LAVORAZIONI-TIPO-DEBITO.md](docs/ANALISI-LAVORAZIONI-TIPO-DEBITO.md),
+applicate tutte tranne le due che chiedono una decisione (riaprire la configurazione,
+rapporto fra lavorazioni per categoria e per materia).
+
+- **Le posizioni sospese non finiscono più nei documenti né nei totali.** Il V.E.R.A.
+  assegna il trattamento «Ignora» alle partite sospese (tipicamente da un giudice), ma
+  l’estrazione in triage non scartava nulla: quelle righe entravano nell’elenco «debiti da
+  lavorare», con la colonna «Natura» che diceva «Ignora», e **il loro importo entrava nel
+  totale** — mentre il triage, per le soglie, lo escludeva già. La stessa azienda mostrava
+  due esposizioni diverse a seconda della scheda. Ora restano fuori da comunicazioni e
+  documenti, sono contate e dichiarate con il loro importo (a schermo e nel PDF), e il testo
+  al collega dice che non vanno contabilizzate.
+- **La colonna «Periodo» del PDF non è più vuota.** Il periodo di competenza veniva letto
+  dal file ma non copiato nella riga: il documento stampava «—» per costruzione, benché sia
+  l’informazione con cui il reparto decide quale versamento regolarizzare. Ora compare nel
+  PDF e nel testo al collega. **Conseguenza da conoscere:** la versione di ogni documento
+  cambia, quindi le consegne già registrate risultano «superate» e quei PDF vanno riscaricati
+  e reinviati una volta.
+- **Il registro delle consegne non si cancella con l’azienda.** La chiave esterna era
+  `ON DELETE CASCADE`: cancellare l’anagrafica — un’operazione ordinaria — azzerava anche le
+  dichiarazioni d’invio già firmate, e le righe non contenevano la ragione sociale, quindi
+  ciò che restava non sarebbe stato leggibile. Ora la riga conserva la ragione sociale al
+  momento della consegna (letta dal database, non dal browser) e la chiave è `SET NULL`: la
+  riga orfana resta, con il suo significato. Gli scaricamenti già leggibili dall’app restano
+  quelli delle aziende esistenti; il resto è conservato per l’audit.
+- **Il registro si chiama per quello che è.** La versione e i totali di una consegna sono
+  quelli che il browser ha usato per il PDF: la piattaforma scrive data e nome, non verifica
+  il contenuto del file. Interfaccia e PDF ora dicono «autodichiarazione di scaricamento»
+  invece di lasciar credere a un controllo.
+- **Quando un documento è «superato» si legge perché.** «Riscarica il PDF» identico per otto
+  reparti, senza la causa, sembra un guasto: ora accanto a ogni reparto si legge se è
+  cambiata la data della verifica, il numero di posizioni o il totale, e un comando riscarica
+  insieme tutti i documenti cambiati.
+- **Una tipologia creata ora non resta in silenzio senza destinatario.** La tabella dei
+  destinatari è congelata ma le categorie restano modificabili: la pagina «Categorie tipo
+  debito» lo dice, e nella pagina congelata le lavorazioni che puntano a una categoria
+  cancellata sono segnalate come «tipologia non più esistente» invece di restare indistinguibili.
+- **Meno lavoro a ogni render, senza cambiare i risultati.** Le due uscite del triage erano
+  due calcoli nel corpo del componente, ognuno con il proprio raggruppamento: ogni tasto
+  digitato in una nota d’invio ripassava tutto il V.E.R.A. due volte. Il raggruppamento ora è
+  uno, condiviso e memorizzato, e il formatter degli importi è riusato. Misurato sullo stesso
+  V.E.R.A. sintetico del fascicolo: da **77 a 2,6 ms** con 300 righe, da **447 a 9,7 ms** con
+  1.500, da **1,4 s a 30 ms** con 5.000; a parità di dati il calcolo non si ripete affatto.
+- **Il registro si legge in modo costante.** Veniva scaricato tutto il diario di un’azienda
+  per ridurlo nel browser a una riga per reparto: ora la query restituisce l’ultima consegna
+  per reparto con il numero vero di scaricamenti, e il DDL del registro non gira più a ogni
+  chiamata (una volta per processo e per schema, con l’accortezza di dimenticarlo quando lo
+  schema viene cancellato o ripristinato).
+- **I nomi dei PDF non si sovrascrivono.** Due destinatari con lo stesso slug («Città» e
+  «Citta») producevano lo stesso nome file e il secondo download sovrascriveva il primo: la
+  versione del documento ora chiude il nome.
+- **Test nuovi** sul filtro delle posizioni sospese, sul periodo, sul raggruppamento condiviso,
+  sulle cause di «superato», sulla chiave esterna eseguita davvero su PGlite e sulle guardie
+  di sola lettura delle due server action (che prima erano protette solo dalla lettura del
+  codice).
+
+**Ancora aperto, per scelta:** riaprire la configurazione resta un intervento sul codice
+(`LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA`) e non un permesso; e il destinatario continua a
+essere configurato per categoria, mentre le lavorazioni della materia lo configurano per
+materia. Entrambe sono decisioni di prodotto, non difetti: il fascicolo le tiene aperte.
 
 ---
 

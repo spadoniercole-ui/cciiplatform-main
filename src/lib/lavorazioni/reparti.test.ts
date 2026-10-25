@@ -72,7 +72,11 @@ describe('preparaDocumentiReparto', () => {
     expect(contributi?.attivita).toEqual([
       { lavorazione: 'Verificare e trasmettere le denunce', categorie: ['Contributi INPS'] },
     ]);
-    expect(contributi?.nomeFile).toBe('comunica_reparti_alfa_srl_ufficio_contributi.pdf');
+    // La versione in coda rende il nome unico: due reparti con lo stesso slug
+    // non si sovrascrivono nella cartella dei download.
+    expect(contributi?.nomeFile).toBe(
+      `comunica_reparti_alfa_srl_ufficio_contributi_${contributi?.versione.split('-')[1]}.pdf`
+    );
     expect(contributi?.posizioniDaContabilizzare).toBe(0);
 
     const riscossione = esito.documenti.find((d) => d.reparto === 'Ufficio riscossione');
@@ -141,6 +145,38 @@ describe('preparaDocumentiReparto', () => {
     expect(esito.documenti[0].totale).toBe(12_000);
   });
 
+  it('le posizioni sospese non entrano nelle posizioni né nel totale, ma il documento le dichiara', () => {
+    const esito = preparaDocumentiReparto({
+      ...base,
+      righe: [
+        riga(),
+        riga({ voce: 'F24 sospeso', importo: 4_000, stato: 'Sospeso', trattamento: 'ignora' }),
+      ],
+      lavorazioni: [
+        { categoria: 'CONTRIBUTI', lavorazione: 'Contabilizzare', destinatario: 'Ragioneria' },
+      ],
+    });
+
+    const documento = esito.documenti[0];
+    expect(documento.righe).toBe(1);
+    expect(documento.totale).toBe(12_000);
+    expect(documento.posizioni.map((p) => p.voce)).toEqual(['F24 non presentato']);
+    expect(documento.posizioniEscluse).toEqual({ righe: 1, totale: 4_000 });
+    expect(esito.posizioniEscluse).toEqual({ righe: 1, totale: 4_000 });
+  });
+
+  it('il periodo della posizione arriva al documento', () => {
+    const esito = preparaDocumentiReparto({
+      ...base,
+      righe: [riga({ periodo: '202503 - 202504' })],
+      lavorazioni: [
+        { categoria: 'CONTRIBUTI', lavorazione: 'Contabilizzare', destinatario: 'Ragioneria' },
+      ],
+    });
+
+    expect(esito.documenti[0].posizioni[0].periodo).toBe('202503 - 202504');
+  });
+
   it('una tipologia senza lavorazione non produce un documento muto', () => {
     const esito = preparaDocumentiReparto({
       ...base,
@@ -196,6 +232,7 @@ describe('versioneDocumentoReparto', () => {
     totale: 12_000,
     posizioniDaContabilizzare: 0,
     importoDaContabilizzare: 0,
+    posizioniEscluse: { righe: 0, totale: 0 },
     nomeFile: 'comunica_reparti_alfa_srl_ufficio_contributi.pdf',
     versione: '',
     ...over,
@@ -248,6 +285,16 @@ describe('nomeFileReparto', () => {
   it('toglie accenti e caratteri non utilizzabili', () => {
     expect(nomeFileReparto('Caffè & Società S.r.l.', 'Ufficio Contributi/INPS')).toBe(
       'comunica_reparti_caffe_societa_s_r_l_ufficio_contributi_inps.pdf'
+    );
+  });
+
+  it('aggiunge la versione quando c’è, così due documenti diversi non si sovrascrivono', () => {
+    expect(nomeFileReparto('Alfa Srl', 'Città', '1-3f9a1c2b')).toBe(
+      'comunica_reparti_alfa_srl_citta_3f9a1c2b.pdf'
+    );
+    // Una versione che non ha la forma attesa non diventa parte del nome.
+    expect(nomeFileReparto('Alfa Srl', 'Città', 'inventata')).toBe(
+      'comunica_reparti_alfa_srl_citta.pdf'
     );
   });
 

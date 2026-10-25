@@ -29,6 +29,15 @@
 // reparto (`reparti.ts`). Se ognuna avesse la propria copia, una riga senza
 // categoria o una tipologia senza lavorazione finirebbe fuori da un'uscita e
 // dentro l'altra, e nessuno saprebbe quale delle due dice il vero.
+//
+// FUORI PERIMETRO ≠ DIMENTICATE. Le posizioni con trattamento `ignora`
+// (tipicamente le partite sospese da un giudice) non si lavorano e non si
+// contabilizzano: entrare in un elenco intitolato «debiti da lavorare» e
+// soprattutto nel suo totale le renderebbe un debito da versare, e la stessa
+// azienda avrebbe due esposizioni diverse a seconda della scheda guardata (il
+// triage, per le soglie, le esclude già — vedi `totaliVera`). Restano però
+// contate e dichiarate, con il loro importo: un'esclusione silenziosa è
+// indistinguibile da una riga persa.
 
 import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 
@@ -67,24 +76,42 @@ export interface CategoriaSenzaLavorazione {
   totale: number;
 }
 
+export interface PosizioniEscluse {
+  righe: number;
+  /** Somma degli importi esclusi: si dichiara, non si conta nei totali. */
+  totale: number;
+}
+
 export interface EsitoComunicazioniVera {
   comunicazioni: ComunicazioneStandard[];
   /** Tipologie presenti nel V.E.R.A. per cui nessuna lavorazione è configurata. */
   categorieSenzaLavorazione: CategoriaSenzaLavorazione[];
   /** Posizioni V.E.R.A. senza categoria: sezioni non mappate. Restano fuori. */
   righeSenzaCategoria: number;
+  /** Posizioni fuori perimetro (trattamento `ignora`): dichiarate, non elencate. */
+  posizioniEscluse: PosizioniEscluse;
 }
+
+// Un formatter solo per tutti gli importi. `toLocaleString` ne costruisce uno
+// nuovo a ogni chiamata: su un V.E.R.A. grande la differenza è di un ordine di
+// grandezza, e questa funzione gira una volta per posizione in ogni
+// comunicazione e di nuovo nel PDF. Il formato è lo stesso.
+const FORMATTER_EURO = new Intl.NumberFormat('it-IT', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+  // `auto` (il default) in italiano NON raggruppa i numeri di quattro
+  // cifre: 1.200 diventerebbe «1200,00». In un documento che si invia a un
+  // collega la differenza si vede, e sembra un refuso.
+  useGrouping: true,
+});
+
+// Come per gli importi: un collatore riusato al posto di uno costruito a ogni
+// confronto (l'ordinamento è O(n log n), i confronti sono molti).
+const COLLATORE_IT = new Intl.Collator('it-IT');
 
 export function formattaImportoEuro(importo: number): string {
   if (!Number.isFinite(importo) || Math.abs(importo) < 0.005) return 'importo non determinato';
-  return `${importo.toLocaleString('it-IT', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-    // `auto` (il default) in italiano NON raggruppa i numeri di quattro
-    // cifre: 1.200 diventerebbe «1200,00». In un documento che si invia a un
-    // collega la differenza si vede, e sembra un refuso.
-    useGrouping: true,
-  })} €`;
+  return `${FORMATTER_EURO.format(importo)} €`;
 }
 
 function dataItaliana(dataIso: string): string {
@@ -113,6 +140,7 @@ export interface RaggruppamentoPerReparto {
   gruppi: GruppoReparto[];
   categorieSenzaLavorazione: CategoriaSenzaLavorazione[];
   righeSenzaCategoria: number;
+  posizioniEscluse: PosizioniEscluse;
 }
 
 export interface InputRaggruppamento {
@@ -143,18 +171,31 @@ export function raggruppaPerReparto(input: InputRaggruppamento): RaggruppamentoP
       l.destinatario.trim() !== ''
   );
 
+  // La chiave della tipologia è normalizzata anche in LETTURA, non solo in
+  // scrittura: una lavorazione salvata con uno spazio di troppo (import,
+  // ripristino, configurazione scritta a mano) incontrerebbe altrimenti zero
+  // posizioni, e la sua tipologia risulterebbe «senza lavorazione» pur
+  // essendo configurata — un'assenza che nessuno andrebbe a cercare.
   const perCategoria = new Map<string, LavorazioneConfig[]>();
   for (const l of attive) {
-    const lista = perCategoria.get(l.categoria) ?? [];
+    const chiave = l.categoria.trim();
+    const lista = perCategoria.get(chiave) ?? [];
     lista.push(l);
-    perCategoria.set(l.categoria, lista);
+    perCategoria.set(chiave, lista);
   }
 
   const gruppi = new Map<string, GruppoDestinatario>();
   const senzaLavorazione = new Map<string, { righe: number; totale: number }>();
   let righeSenzaCategoria = 0;
+  const posizioniEscluse: PosizioniEscluse = { righe: 0, totale: 0 };
 
   for (const r of input.righe) {
+    // Fuori perimetro: non si elenca e non si somma, ma si dichiara.
+    if (r.trattamento === 'ignora') {
+      posizioniEscluse.righe += 1;
+      posizioniEscluse.totale += r.importo;
+      continue;
+    }
     const categoria = r.categoria.trim();
     if (!categoria) {
       righeSenzaCategoria += 1;
@@ -189,21 +230,21 @@ export function raggruppaPerReparto(input: InputRaggruppamento): RaggruppamentoP
       .map((g) => {
         const righe = Array.from(g.righe).sort(
           (a, b) =>
-            a.sezione.localeCompare(b.sezione, 'it-IT') ||
-            a.voce.localeCompare(b.voce, 'it-IT') ||
-            (a.periodo ?? '').localeCompare(b.periodo ?? '', 'it-IT')
+            COLLATORE_IT.compare(a.sezione, b.sezione) ||
+            COLLATORE_IT.compare(a.voce, b.voce) ||
+            COLLATORE_IT.compare(a.periodo ?? '', b.periodo ?? '')
         );
         const lavorazioni = Array.from(g.lavorazioni.entries())
           .map(([lavorazione, categorie]) => ({
             lavorazione,
             categorie: Array.from(categorie).sort((a, b) =>
-              etichetta(a).localeCompare(etichetta(b), 'it-IT')
+              COLLATORE_IT.compare(etichetta(a), etichetta(b))
             ),
           }))
-          .sort((a, b) => a.lavorazione.localeCompare(b.lavorazione, 'it-IT'));
+          .sort((a, b) => COLLATORE_IT.compare(a.lavorazione, b.lavorazione));
 
         const categorie = Array.from(new Set(lavorazioni.flatMap((l) => l.categorie))).sort(
-          (a, b) => etichetta(a).localeCompare(etichetta(b), 'it-IT')
+          (a, b) => COLLATORE_IT.compare(etichetta(a), etichetta(b))
         );
 
         return {
@@ -214,7 +255,7 @@ export function raggruppaPerReparto(input: InputRaggruppamento): RaggruppamentoP
           totale: righe.reduce((a, r) => a + r.importo, 0),
         };
       })
-      .sort((a, b) => a.destinatario.localeCompare(b.destinatario, 'it-IT')),
+      .sort((a, b) => COLLATORE_IT.compare(a.destinatario, b.destinatario)),
     categorieSenzaLavorazione: Array.from(senzaLavorazione.entries())
       .map(([categoria, v]) => ({
         categoria,
@@ -222,25 +263,40 @@ export function raggruppaPerReparto(input: InputRaggruppamento): RaggruppamentoP
         righe: v.righe,
         totale: v.totale,
       }))
-      .sort((a, b) => a.etichetta.localeCompare(b.etichetta, 'it-IT')),
+      .sort((a, b) => COLLATORE_IT.compare(a.etichetta, b.etichetta)),
     righeSenzaCategoria,
+    posizioniEscluse,
   };
 
   return raggruppamento;
 }
 
-export function componiComunicazioniVera(input: {
-  azienda: string;
-  /** Data della verifica in formato AAAA-MM-GG. */
-  dataVerifica: string;
-  righe: RigaVeraComunicazione[];
-  lavorazioni: LavorazioneConfig[];
-  /** codice categoria → etichetta mostrata (fallback: il codice). */
-  etichette: Record<string, string>;
-}): EsitoComunicazioniVera {
+export function componiComunicazioniVera(
+  input: {
+    azienda: string;
+    /** Data della verifica in formato AAAA-MM-GG. */
+    dataVerifica: string;
+    righe: RigaVeraComunicazione[];
+    lavorazioni: LavorazioneConfig[];
+    /** codice categoria → etichetta mostrata (fallback: il codice). */
+    etichette: Record<string, string>;
+  },
+  /**
+   * Raggruppamento già calcolato. Le due uscite condividono lo stesso: senza,
+   * ogni chiamata rifà il lavoro dell'altra e i due documenti potrebbero
+   * partire da due letture diverse degli stessi dati.
+   */
+  raggruppamentoPronto?: RaggruppamentoPerReparto
+): EsitoComunicazioniVera {
   const etichetta = (codice: string) => input.etichette[codice]?.trim() || codice;
   const data = dataItaliana(input.dataVerifica);
-  const { gruppi: gruppiOrdinati, ...resto } = raggruppaPerReparto(input);
+  const { gruppi: gruppiOrdinati, ...resto } = raggruppamentoPronto ?? raggruppaPerReparto(input);
+  const notaEscluse =
+    resto.posizioniEscluse.righe > 0
+      ? `Non sono elencate ${resto.posizioniEscluse.righe} ${
+          resto.posizioniEscluse.righe === 1 ? 'posizione' : 'posizioni'
+        } per ${formattaImportoEuro(resto.posizioniEscluse.totale)}: sono sospese o fuori perimetro (trattamento «Ignora») e non vanno contabilizzate. Non entrano nel totale.`
+      : null;
   const comunicazioni: ComunicazioneStandard[] = gruppiOrdinati.map((g) => {
     const righe = g.righe;
     const lavorazioni = g.lavorazioni;
@@ -267,9 +323,12 @@ export function componiComunicazioniVera(input: {
       `Lavorazioni richieste:\n${elencoLavorazioni}`,
       `Posizioni:\n${elencoRighe}`,
       `Totale delle posizioni elencate: ${formattaImportoEuro(totale)}.`,
+      notaEscluse,
       "Ti chiedo di svolgere la lavorazione indicata e di confermarmi l'esito.",
       'Grazie.',
-    ].join('\n\n');
+    ]
+      .filter((parte): parte is string => Boolean(parte))
+      .join('\n\n');
 
     return {
       destinatario: g.destinatario,

@@ -2,6 +2,7 @@ import { db } from './client';
 import { sql } from 'drizzle-orm';
 import { deveRinominareInLegacy } from '@/lib/migrazioni/debitiEnteLegacy';
 import { sqlVincoloCheckIdempotente } from '@/lib/migrazioni/vincoloCheck';
+import { sqlChiaveEsternaIdempotente } from '@/lib/migrazioni/chiaveEsterna';
 import { eCorsaDdlBenigna } from '@/lib/migrazioni/corsaDdl';
 import { getTabelleTenant } from './schema';
 
@@ -15,6 +16,44 @@ import { getTabelleTenant } from './schema';
 // nello stesso istante: "already exists", o il duplicato sui cataloghi di
 // sistema di un CREATE … IF NOT EXISTS) viene ignorata, come già fa
 // src/db/ensureTables.ts; qualunque altro errore viene rilanciato.
+
+// DDL GIÀ GARANTITO IN QUESTO PROCESSO. Le funzioni `assicuraTabella…`
+// venivano chiamate a ogni azione: per il registro delle consegne sono un
+// CREATE TABLE, cinque ALTER TABLE e un CREATE INDEX per ogni registrazione,
+// lettura e conferma. Su Postgres ogni DDL idempotente prende comunque un lock
+// sulla tabella e produce un NOTICE: con più operatori sul triage, il registro
+// in scrittura si metteva in coda dietro le letture per un lavoro già fatto.
+//
+// Il DDL resta la garanzia di primo accesso (spazi creati prima di una
+// colonna nuova la ricevono così), ma si esegue una volta per processo e per
+// schema. Chi cancella o ripristina lo schema deve chiamare
+// `dimenticaTabelleGarantite`, altrimenti la garanzia resta valida per una
+// tabella che non esiste più.
+const tabelleGarantite = new Set<string>();
+
+function giaGarantita(nomeSchema: string, tabella: string): boolean {
+  return tabelleGarantite.has(`${nomeSchema}.${tabella}`);
+}
+
+function segnaGarantita(nomeSchema: string, tabella: string): void {
+  tabelleGarantite.add(`${nomeSchema}.${tabella}`);
+}
+
+/**
+ * Dimentica il DDL già eseguito: da chiamare quando lo schema viene
+ * cancellato o sostituito (azzeramento, ripristino, eliminazione dello
+ * spazio). Senza `nomeSchema` si dimentica tutto.
+ */
+export function dimenticaTabelleGarantite(nomeSchema?: string): void {
+  if (!nomeSchema) {
+    tabelleGarantite.clear();
+    return;
+  }
+  for (const chiave of tabelleGarantite) {
+    if (chiave.startsWith(`${nomeSchema}.`)) tabelleGarantite.delete(chiave);
+  }
+}
+
 async function eseguiDdlTenant(istruzione: ReturnType<typeof sql>) {
   try {
     await db.execute(istruzione);
@@ -1995,6 +2034,7 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
  * produca due richieste identiche).
  */
 export async function assicuraTabellaLavorazioniTipoDebito(nomeSchema: string): Promise<void> {
+  if (giaGarantita(nomeSchema, 'lavorazioni_tipo_debito')) return;
   const s = sql.identifier(nomeSchema);
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.lavorazioni_tipo_debito (
@@ -2010,6 +2050,7 @@ export async function assicuraTabellaLavorazioniTipoDebito(nomeSchema: string): 
     sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_lavorazioni_tipo_debito_unica
         ON ${s}.lavorazioni_tipo_debito (categoria, lavorazione)`
   );
+  segnaGarantita(nomeSchema, 'lavorazioni_tipo_debito');
 }
 
 /**
@@ -2059,12 +2100,14 @@ export async function assicuraTabellaMaterieLavorazione(nomeSchema: string): Pro
  * è un'impronta, e il PDF resta sul computer di chi lo ha scaricato.
  */
 export async function assicuraTabellaConsegneReparti(nomeSchema: string): Promise<void> {
+  if (giaGarantita(nomeSchema, 'consegne_reparti')) return;
   const s = sql.identifier(nomeSchema);
   await assicuraTabellaAziende(nomeSchema); // FK aziende
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.consegne_reparti (
       id SERIAL PRIMARY KEY,
-      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      azienda_id INTEGER REFERENCES ${s}.aziende(id) ON DELETE SET NULL,
+      ragione_sociale TEXT,
       reparto TEXT NOT NULL,
       data_verifica DATE NOT NULL,
       versione TEXT NOT NULL,
@@ -2091,15 +2134,39 @@ export async function assicuraTabellaConsegneReparti(nomeSchema: string): Promis
     'note_invio TEXT',
     'invio_confermato_il TIMESTAMPTZ',
     'invio_confermato_da TEXT',
+    // La ragione sociale della consegna è una fotografia: rende la riga
+    // leggibile anche se l'anagrafica cambia nome o sparisce.
+    'ragione_sociale TEXT',
   ]) {
     await eseguiDdlTenant(
       sql`ALTER TABLE ${s}.consegne_reparti ADD COLUMN IF NOT EXISTS ${sql.raw(colonna)}`
     );
   }
+  // Il diario non si cancella con l'oggetto a cui si riferisce: `ON DELETE
+  // CASCADE` azzerava le consegne — comprese le dichiarazioni d'invio già
+  // firmate — quando si cancellava l'azienda, che è un'operazione ordinaria.
+  // Con SET NULL la riga resta (con la sua ragione sociale) e smette solo di
+  // puntare a un'anagrafica che non c'è più. Il nome del file è del vincolo
+  // scelto da noi: quello automatico di Postgres non è stabile.
+  await eseguiDdlTenant(
+    sql.raw(
+      sqlChiaveEsternaIdempotente({
+        nomeSchema,
+        tabella: 'consegne_reparti',
+        colonne: ['azienda_id'],
+        schemaRiferito: nomeSchema,
+        tabellaRiferita: 'aziende',
+        colonneRiferite: ['id'],
+        azione: 'SET NULL',
+        nomeVincolo: 'consegne_reparti_azienda_fk',
+      })
+    )
+  );
   await eseguiDdlTenant(
     sql`CREATE INDEX IF NOT EXISTS idx_consegne_reparti_azienda
         ON ${s}.consegne_reparti (azienda_id, consegnato_il DESC)`
   );
+  segnaGarantita(nomeSchema, 'consegne_reparti');
 }
 
 /**

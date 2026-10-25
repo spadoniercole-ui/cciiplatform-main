@@ -53,6 +53,7 @@ const documento = (over: Partial<DocumentoReparto> = {}): DocumentoReparto => ({
   totale: 15_000,
   posizioniDaContabilizzare: 1,
   importoDaContabilizzare: 3_000,
+  posizioniEscluse: { righe: 0, totale: 0 },
   nomeFile: 'comunica_reparti_alfa_srl_ufficio_contributi.pdf',
   versione: '1-3f9a1c2b',
   ...over,
@@ -72,6 +73,15 @@ describe('generaPdfReparto', () => {
     // documento ha in mano quando arriva una posizione aggiornata.
     expect(sorgente).toContain('1-3f9a1c2b');
     expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('dichiara le posizioni fuori perimetro, senza elencarle', () => {
+    const pdf = generaPdfReparto(documento({ posizioniEscluse: { righe: 3, totale: 4_500 } }));
+    const sorgente = pdf.output();
+
+    expect(sorgente).toContain('Fuori perimetro');
+    expect(sorgente).toContain('4.500,00');
+    expect(sorgente).not.toContain('Sospeso');
   });
 
   it('regge un reparto con molte posizioni senza perdere le attività', () => {

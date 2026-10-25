@@ -128,6 +128,80 @@ describe('componiComunicazioniVera', () => {
     expect(esito.comunicazioni[0].corpo).not.toContain('0,00 €');
   });
 
+  it('le posizioni sospese restano fuori dal testo e dal totale, ma sono dichiarate', () => {
+    const esito = componiComunicazioniVera({
+      azienda: 'Iota Srl',
+      dataVerifica: '2026-10-19',
+      righe: [
+        riga(),
+        riga({ importo: 4_000, stato: 'Sospeso', trattamento: 'ignora', voce: 'F24 sospeso' }),
+      ],
+      lavorazioni: [{ categoria: 'DEBITO', lavorazione: 'X', destinatario: 'Y' }],
+      etichette,
+    });
+
+    const c = esito.comunicazioni[0];
+    expect(c.righe).toBe(1);
+    expect(c.totale).toBe(12_000);
+    expect(c.corpo).not.toContain('F24 sospeso');
+    expect(c.corpo).toContain('1 posizione per 4.000,00 €');
+    expect(c.corpo).toContain('Non entrano nel totale');
+    expect(esito.posizioniEscluse).toEqual({ righe: 1, totale: 4_000 });
+  });
+
+  it('una posizione sospesa non finisce fra le tipologie senza lavorazione', () => {
+    const esito = componiComunicazioniVera({
+      azienda: 'Kappa Srl',
+      dataVerifica: '2026-10-19',
+      righe: [riga({ categoria: 'SANZIONI', trattamento: 'ignora' })],
+      lavorazioni: [],
+      etichette,
+    });
+
+    expect(esito.comunicazioni).toHaveLength(0);
+    expect(esito.categorieSenzaLavorazione).toHaveLength(0);
+    expect(esito.posizioniEscluse.righe).toBe(1);
+  });
+
+  it('porta il periodo nel testo quando la riga ce l’ha', () => {
+    const esito = componiComunicazioniVera({
+      azienda: 'Lambda Srl',
+      dataVerifica: '2026-10-19',
+      righe: [riga(), riga({ voce: 'Denunce', periodo: '' })],
+      lavorazioni: [{ categoria: 'DEBITO', lavorazione: 'X', destinatario: 'Y' }],
+      etichette,
+    });
+
+    expect(esito.comunicazioni[0].corpo).toContain('(periodo 202506 - 202506)');
+    expect(esito.comunicazioni[0].corpo).not.toContain('(periodo )');
+  });
+
+  it('una lavorazione con la tipologia scritta con spazi in più trova lo stesso le sue posizioni', () => {
+    const esito = componiComunicazioniVera({
+      azienda: 'Mi Srl',
+      dataVerifica: '2026-10-19',
+      righe: [riga()],
+      lavorazioni: [{ categoria: ' DEBITO ', lavorazione: 'X', destinatario: 'Y' }],
+      etichette,
+    });
+
+    expect(esito.comunicazioni).toHaveLength(1);
+    expect(esito.categorieSenzaLavorazione).toHaveLength(0);
+  });
+
+  it('senza posizioni sospese non dichiara nulla di escluso', () => {
+    const esito = componiComunicazioniVera({
+      azienda: 'Nu Srl',
+      dataVerifica: '2026-10-19',
+      righe: [riga()],
+      lavorazioni: [{ categoria: 'DEBITO', lavorazione: 'X', destinatario: 'Y' }],
+      etichette,
+    });
+
+    expect(esito.posizioniEscluse).toEqual({ righe: 0, totale: 0 });
+    expect(esito.comunicazioni[0].corpo).not.toContain('fuori perimetro');
+  });
+
   it('separa i destinatari e li ordina', () => {
     const esito = componiComunicazioniVera({
       azienda: 'Eta Srl',

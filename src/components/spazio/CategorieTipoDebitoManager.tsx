@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Plus, Save, Eye, EyeOff, Scale } from 'lucide-react';
+import { LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA } from '@/lib/lavorazioni/solaLettura';
 import {
   ottieniCategorieTipoDebito,
   creaCategoriaTipoDebitoAction,
@@ -124,6 +125,23 @@ export function CategorieTipoDebitoManager({ nomeSchema }: Props) {
         Debito, AVA, Neutro. Puoi aggiungerne, rinominarle o disattivarle (una categoria disattivata
         non è più proponibile nei nuovi caricamenti, ma i dati già classificati restano).
       </p>
+
+      {/*
+        Il congelamento dei destinatari tocca anche questa pagina. Le categorie
+        restano modificabili, ma una categoria senza lavorazione non ha un
+        reparto a cui indirizzare i debiti: il triage la conteggia fra le
+        «tipologie senza lavorazione» e non produce il documento. Dirlo qui,
+        dove la categoria si crea, evita che la perdita si scopra mesi dopo
+        davanti a un PDF incompleto.
+      */}
+      {LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA && (
+        <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+          La tabella dei destinatari delle comunicazioni (Lavorazioni per tipologia di debito) è in
+          sola lettura: una categoria creata o riattivata ora non potrà essere associata a un
+          reparto, e le sue posizioni resteranno fuori dai documenti del triage. Le categorie già
+          configurate continuano a funzionare come prima.
+        </p>
+      )}
 
       {errore && (
         <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">

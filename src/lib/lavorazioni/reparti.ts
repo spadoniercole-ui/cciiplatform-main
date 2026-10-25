@@ -35,6 +35,8 @@ import {
   raggruppaPerReparto,
   type CategoriaSenzaLavorazione,
   type LavorazioneConfig,
+  type PosizioniEscluse,
+  type RaggruppamentoPerReparto,
   type RigaVeraComunicazione,
 } from './comunicazioni';
 
@@ -71,6 +73,12 @@ export interface DocumentoReparto {
   /** Quante posizioni non sono ancora contabilizzate, e per quanto. */
   posizioniDaContabilizzare: number;
   importoDaContabilizzare: number;
+  /**
+   * Posizioni fuori perimetro (sospese, trattamento «Ignora»): non sono
+   * elencate e non entrano nel totale. Si dichiarano perché chi riceve il
+   * documento sappia che il file ne conteneva altre, e per quanto.
+   */
+  posizioniEscluse: PosizioniEscluse;
   /** Nome del file da scaricare, già sicuro per il filesystem. */
   nomeFile: string;
   /**
@@ -86,6 +94,8 @@ export interface EsitoDocumentiReparto {
   categorieSenzaLavorazione: CategoriaSenzaLavorazione[];
   /** Posizioni senza categoria: non attribuibili, restano fuori. */
   righeSenzaCategoria: number;
+  /** Posizioni fuori perimetro: dichiarate, non elencate. */
+  posizioniEscluse: PosizioniEscluse;
 }
 
 /** Nome file leggibile e senza caratteri che il browser o il sistema rifiutano. */
@@ -118,12 +128,17 @@ function improntaContenuto(testo: string): string {
  * Versione del documento: formato + impronta di ciò che il reparto legge.
  *
  * Conta tutto quello che compare nel PDF — intestazione, posizioni (anche
- * l'ordine), attività, totali — e nient'altro: la data di generazione non
- * entra, altrimenti lo stesso documento consegnato due volte risulterebbe
- * cambiato. Serve a rispondere a una domanda sola: «il reparto ha in mano la
- * versione che vedo adesso?».
+ * l'ordine), attività, totali, posizioni dichiarate fuori perimetro — e
+ * nient'altro: la data di generazione non entra, altrimenti lo stesso
+ * documento consegnato due volte risulterebbe cambiato. Serve a rispondere a
+ * una domanda sola: «il reparto ha in mano la versione che vedo adesso?».
+ *
+ * Il nome del file resta fuori: è un'etichetta di scaricamento, non un
+ * contenuto, e cambiarlo non cambia ciò che il reparto legge.
  */
-export function versioneDocumentoReparto(d: Omit<DocumentoReparto, 'versione'>): string {
+export function versioneDocumentoReparto(
+  d: Omit<DocumentoReparto, 'versione' | 'nomeFile'>
+): string {
   const parti = [
     FORMATO_DOCUMENTO_REPARTI,
     d.azienda,
@@ -139,6 +154,8 @@ export function versioneDocumentoReparto(d: Omit<DocumentoReparto, 'versione'>):
     d.totale.toFixed(2),
     String(d.posizioniDaContabilizzare),
     d.importoDaContabilizzare.toFixed(2),
+    String(d.posizioniEscluse.righe),
+    d.posizioniEscluse.totale.toFixed(2),
   ];
   return `${FORMATO_DOCUMENTO_REPARTI}-${improntaContenuto(parti.join('\n'))}`;
 }
@@ -152,10 +169,20 @@ function slug(testo: string): string {
     .toLowerCase();
 }
 
-export function nomeFileReparto(azienda: string, reparto: string): string {
+/**
+ * Nome del file, con la versione in coda quando c'è.
+ *
+ * Due destinatari con slug uguale («Città» e «Citta») produrrebbero lo stesso
+ * nome, e il secondo scaricamento sovrascriverebbe il primo nella cartella dei
+ * download: la versione rende il nome unico proprio dove serve, cioè tra due
+ * documenti diversi.
+ */
+export function nomeFileReparto(azienda: string, reparto: string, versione?: string): string {
   const a = slug(azienda) || 'azienda';
   const r = slug(reparto) || 'reparto';
-  return `comunica_reparti_${a}_${r}.pdf`;
+  const impronta = versione?.split('-').pop()?.trim();
+  const coda = impronta && /^[0-9a-f]{8}$/.test(impronta) ? `_${impronta}` : '';
+  return `comunica_reparti_${a}_${r}${coda}.pdf`;
 }
 
 const trattamenti = ETICHETTE_TRATTAMENTO as Record<string, string>;
@@ -164,17 +191,21 @@ const trattamenti = ETICHETTE_TRATTAMENTO as Record<string, string>;
  * Un documento per reparto: le posizioni da lavorare, le attività di
  * contabilizzazione configurate per le loro tipologie, i totali.
  */
-export function preparaDocumentiReparto(input: {
-  azienda: string;
-  /** Data della verifica, AAAA-MM-GG. */
-  dataVerifica: string;
-  righe: RigaVeraComunicazione[];
-  lavorazioni: LavorazioneConfig[];
-  /** codice categoria → etichetta mostrata (fallback: il codice). */
-  etichette: Record<string, string>;
-}): EsitoDocumentiReparto {
+export function preparaDocumentiReparto(
+  input: {
+    azienda: string;
+    /** Data della verifica, AAAA-MM-GG. */
+    dataVerifica: string;
+    righe: RigaVeraComunicazione[];
+    lavorazioni: LavorazioneConfig[];
+    /** codice categoria → etichetta mostrata (fallback: il codice). */
+    etichette: Record<string, string>;
+  },
+  /** Raggruppamento già calcolato, condiviso con le comunicazioni. */
+  raggruppamentoPronto?: RaggruppamentoPerReparto
+): EsitoDocumentiReparto {
   const etichetta = (codice: string) => input.etichette[codice]?.trim() || codice;
-  const raggruppamento = raggruppaPerReparto(input);
+  const raggruppamento = raggruppamentoPronto ?? raggruppaPerReparto(input);
 
   const documenti = raggruppamento.gruppi.map((g) => {
     const posizioni: PosizioneReparto[] = g.righe.map((r) => ({
@@ -189,7 +220,7 @@ export function preparaDocumentiReparto(input: {
 
     const daContabilizzare = g.righe.filter((r) => r.trattamento === 'da_contabilizzare');
 
-    const documento = {
+    const contenuto = {
       reparto: g.destinatario,
       oggetto: `Posizione debitoria ${input.azienda} — debiti da lavorare e attività di contabilizzazione`,
       azienda: input.azienda,
@@ -203,15 +234,22 @@ export function preparaDocumentiReparto(input: {
       totale: g.totale,
       posizioniDaContabilizzare: daContabilizzare.length,
       importoDaContabilizzare: daContabilizzare.reduce((a, r) => a + r.importo, 0),
-      nomeFile: nomeFileReparto(input.azienda, g.destinatario),
+      posizioniEscluse: raggruppamento.posizioniEscluse,
     };
 
-    return { ...documento, versione: versioneDocumentoReparto(documento) };
+    const versione = versioneDocumentoReparto(contenuto);
+
+    return {
+      ...contenuto,
+      nomeFile: nomeFileReparto(input.azienda, g.destinatario, versione),
+      versione,
+    };
   });
 
   return {
     documenti,
     categorieSenzaLavorazione: raggruppamento.categorieSenzaLavorazione,
     righeSenzaCategoria: raggruppamento.righeSenzaCategoria,
+    posizioniEscluse: raggruppamento.posizioniEscluse,
   };
 }

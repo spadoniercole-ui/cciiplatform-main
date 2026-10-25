@@ -30,7 +30,7 @@ import {
   type ValoriTriage,
 } from '@/lib/triage/riepilogoHtml';
 import { stampaHtml } from '@/lib/stampaTesto';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Stethoscope,
   Upload,
@@ -96,11 +96,16 @@ import {
   ottieniLavorazioniTipoDebito,
   type LavorazioneTipoDebito,
 } from '@/app/actions/lavorazioniTipoDebito';
-import { componiComunicazioniVera, formattaImportoEuro } from '@/lib/lavorazioni/comunicazioni';
+import {
+  componiComunicazioniVera,
+  formattaImportoEuro,
+  raggruppaPerReparto,
+} from '@/lib/lavorazioni/comunicazioni';
 import { preparaDocumentiReparto, type DocumentoReparto } from '@/lib/lavorazioni/reparti';
 import { LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA } from '@/lib/lavorazioni/solaLettura';
 import {
   MEZZI_INVIO,
+  causaSuperamento,
   etichettaMezzo,
   riassumiConsegne,
   statoConsegnaReparto,
@@ -1063,26 +1068,74 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
   // nell'elenco: toglierlo richiude il passaggio alla conferma.
   const haVera = fileProspetti.some((f) => tipiProspetti[f.name] === 'VERA');
 
-  const comunicazioni = componiComunicazioniVera({
-    azienda: dati?.ragioneSociale?.trim() || 'Azienda',
-    dataVerifica,
-    righe: righeVera,
-    lavorazioni,
-    etichette: etichetteCategorie,
-  });
+  // UN CALCOLO SOLO, CONDIVISO FRA LE DUE USCITE.
+  //
+  // Prima erano due chiamate nel corpo del componente e ognuna rifaceva il
+  // proprio raggruppamento: ogni cambio di stato della scheda (la data della
+  // verifica, una nota digitata, il messaggio «copiato» che si spegne dopo due
+  // secondi) ripassava tutto il V.E.R.A. due volte. Con `useMemo` il lavoro si
+  // fa quando cambia qualcosa che conta davvero, e il raggruppamento è uno:
+  // le due uscite non possono partire da due letture diverse degli stessi dati.
+  const raggruppamentoReparti = useMemo(
+    () =>
+      raggruppaPerReparto({
+        righe: righeVera,
+        lavorazioni,
+        etichette: etichetteCategorie,
+      }),
+    [righeVera, lavorazioni, etichetteCategorie]
+  );
+
+  const aziendaMostrata = dati?.ragioneSociale?.trim() || 'Azienda';
+
+  const comunicazioni = useMemo(
+    () =>
+      componiComunicazioniVera(
+        {
+          azienda: aziendaMostrata,
+          dataVerifica,
+          righe: righeVera,
+          lavorazioni,
+          etichette: etichetteCategorie,
+        },
+        raggruppamentoReparti
+      ),
+    [
+      aziendaMostrata,
+      dataVerifica,
+      righeVera,
+      lavorazioni,
+      etichetteCategorie,
+      raggruppamentoReparti,
+    ]
+  );
 
   // Un documento per reparto: le posizioni da lavorare e le attività di
   // contabilizzazione, da scaricare e inviare per conto proprio. Sta accanto
   // alla presa in carico, non al posto suo: chi decide di non procedere ha
   // comunque bisogno di sapere che cosa c'è da contabilizzare, e chi procede
   // deve poter consegnare i debiti ai reparti prima che il resto parta.
-  const documentiReparti = preparaDocumentiReparto({
-    azienda: dati?.ragioneSociale?.trim() || 'Azienda',
-    dataVerifica,
-    righe: righeVera,
-    lavorazioni,
-    etichette: etichetteCategorie,
-  });
+  const documentiReparti = useMemo(
+    () =>
+      preparaDocumentiReparto(
+        {
+          azienda: aziendaMostrata,
+          dataVerifica,
+          righe: righeVera,
+          lavorazioni,
+          etichette: etichetteCategorie,
+        },
+        raggruppamentoReparti
+      ),
+    [
+      aziendaMostrata,
+      dataVerifica,
+      righeVera,
+      lavorazioni,
+      etichetteCategorie,
+      raggruppamentoReparti,
+    ]
+  );
 
   // Il registro per reparto: l'ultima consegna e quante volte il documento è
   // uscito. Il confronto con `versione` dice se il reparto ha in mano il
@@ -1097,13 +1150,21 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     (c) => !repartiConDocumento.has(c.reparto.toLocaleLowerCase('it-IT'))
   );
 
+  // I reparti che hanno in mano una versione precedente: servono al conteggio
+  // in testa all'elenco e al comando che li riscarica tutti insieme.
+  const documentiSuperati = documentiReparti.documenti.filter(
+    (d) =>
+      statoConsegnaReparto(consegnePerReparto.get(d.reparto.toLocaleLowerCase('it-IT')), d.versione)
+        .stato === 'superata'
+  );
+
   /**
    * Il PDF si carica solo quando si scarica: jsPDF pesa quanto mezza pagina,
    * e la verifica si usa molto più spesso di quanto si scarichi il documento.
    * Un caricamento fallito non resta muto — la pagina è la stessa che deve
    * produrre quel file.
    */
-  const scaricaDocumentoReparto = async (documento: DocumentoReparto) => {
+  const scaricaDocumentoReparto = async (documento: DocumentoReparto): Promise<boolean> => {
     setErrorePdf(null);
     setAvvisoConsegna(null);
     setPdfInCorso(documento.reparto);
@@ -1113,7 +1174,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
     } catch (e) {
       setErrorePdf(`PDF non generato: ${String(e)}`);
       setPdfInCorso(null);
-      return;
+      return false;
     }
 
     // Il file è già salvato: da qui in poi nulla può toglierlo. La
@@ -1152,6 +1213,24 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
       }
     }
     setPdfInCorso(null);
+    return true;
+  };
+
+  /**
+   * Riscarica i documenti cambiati, uno via l'altro.
+   *
+   * Quando cambia la data della verifica tutti i reparti passano a
+   * «superata»: ripetere lo stesso gesto otto volte è il modo in cui un
+   * aggiornamento si dimentica a metà. Il ciclo è sequenziale di proposito —
+   * i download partono nell'ordine in cui si legge l'elenco — e si ferma al
+   * primo errore, perché il messaggio dev'essere quello del reparto che non
+   * è riuscito.
+   */
+  const riscaricaDocumentiSuperati = async () => {
+    for (const documento of documentiSuperati) {
+      const riuscito = await scaricaDocumentoReparto(documento);
+      if (!riuscito) break;
+    }
   };
 
   /**
@@ -1766,6 +1845,18 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               </p>
             )}
 
+            {comunicazioni.posizioniEscluse.righe > 0 && (
+              <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed">
+                {`${comunicazioni.posizioniEscluse.righe} ${
+                  comunicazioni.posizioniEscluse.righe === 1
+                    ? 'posizione resta'
+                    : 'posizioni restano'
+                } fuori dalle comunicazioni per ${formattaImportoEuro(
+                  comunicazioni.posizioniEscluse.totale
+                )}: sono sospese o fuori perimetro (trattamento «Ignora») e non vanno contabilizzate. Il testo lo dichiara a chi lo riceve.`}
+              </p>
+            )}
+
             {erroreCopia && <p className="text-[11px] text-red-700">{erroreCopia}</p>}
 
             <a
@@ -1806,10 +1897,34 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               Un PDF per reparto: i debiti da lavorare, le attività di contabilizzazione e i totali.
               Si scarica da qui e lo invii tu all&apos;ufficio — la piattaforma non manda nulla, e
               questa funzione non sostituisce né impedisce la presa in carico. Ogni scaricamento
-              resta registrato con data, totali e versione del documento: «consegnato» qui vuol dire
-              scaricato, l&apos;invio è cosa tua. Quando lo spedisci puoi dichiararlo — data, mezzo
-              e note — e il registro conserva la dichiarazione con il tuo nome.
+              resta registrato: data e nome sono scritti dalla piattaforma, mentre versione e totali
+              sono quelli che il browser ha usato per comporre il PDF — è un&apos;autodichiarazione
+              di scaricamento, non un controllo del contenuto del file. Quando lo spedisci puoi
+              dichiararne l&apos;invio — data, mezzo e note — e il registro conserva la
+              dichiarazione con il tuo nome.
             </p>
+
+            {documentiSuperati.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-[11px] text-amber-900 leading-relaxed">
+                  {documentiSuperati.length === 1
+                    ? 'Un reparto ha in mano una versione precedente del suo documento.'
+                    : `${documentiSuperati.length} reparti hanno in mano una versione precedente del loro documento.`}{' '}
+                  Il motivo di ogni cambiamento è indicato accanto al reparto.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void riscaricaDocumentiSuperati()}
+                  disabled={pdfInCorso !== null}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <FileDown className="w-3.5 h-3.5" />
+                  {pdfInCorso !== null
+                    ? 'Preparazione...'
+                    : `Riscarica tutti (${documentiSuperati.length})`}
+                </button>
+              </div>
+            )}
 
             {documentiReparti.documenti.length === 0 ? (
               <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -1867,7 +1982,7 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                         </p>
                       ) : (
                         <p className="text-[10px] text-slate-500 leading-relaxed">
-                          Consegnato il {dataOraConsegna(stato.consegna.ultima.consegnatoIl)}
+                          Scaricato il {dataOraConsegna(stato.consegna.ultima.consegnatoIl)}
                           {stato.consegna.ultima.consegnatoDa
                             ? ` da ${stato.consegna.ultima.consegnatoDa}`
                             : ''}{' '}
@@ -1881,9 +1996,11 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
 
                       {stato.stato === 'superata' && (
                         <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
-                          Il documento è cambiato dopo quella consegna (ora versione{' '}
-                          <span className="font-mono">{d.versione}</span>): il reparto ha in mano la
-                          precedente. Riscarica il PDF e invia la nuova versione.
+                          Il reparto ha in mano la versione{' '}
+                          <span className="font-mono">{stato.consegna.ultima.versione}</span>, non
+                          questa (ora <span className="font-mono">{d.versione}</span>):{' '}
+                          {causaSuperamento(stato.consegna.ultima, d)}. Riscarica il PDF e invia la
+                          nuova versione.
                         </p>
                       )}
 
@@ -2007,6 +2124,18 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
                   );
                 })}
               </ul>
+            )}
+
+            {documentiReparti.posizioniEscluse.righe > 0 && (
+              <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed">
+                {`${documentiReparti.posizioniEscluse.righe} ${
+                  documentiReparti.posizioniEscluse.righe === 1
+                    ? 'posizione resta'
+                    : 'posizioni restano'
+                } fuori dai documenti per ${formattaImportoEuro(
+                  documentiReparti.posizioniEscluse.totale
+                )}: sono sospese o fuori perimetro (trattamento «Ignora») e non vanno contabilizzate. Non entrano nei totali.`}
+              </p>
             )}
 
             {errorePdf && <p className="text-[11px] text-red-700">{errorePdf}</p>}

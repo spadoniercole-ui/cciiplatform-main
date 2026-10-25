@@ -56,6 +56,20 @@ export function generaPdfReparto(d: DocumentoReparto): jsPDF {
     );
     y += 5;
   }
+  // Fuori perimetro: dichiarate, non elencate. Un documento che tace sulle
+  // posizioni sospese lascia credere che il V.E.R.A. ne contenesse solo
+  // quelle elencate, e chi confronta il PDF con la scheda trova una
+  // differenza che nessuno spiega.
+  if (d.posizioniEscluse.righe > 0) {
+    doc.text(
+      `Fuori perimetro: ${d.posizioniEscluse.righe} ${
+        d.posizioniEscluse.righe === 1 ? 'posizione' : 'posizioni'
+      } per ${formattaImportoEuro(d.posizioniEscluse.totale)} non elencate (sospese)`,
+      14,
+      y
+    );
+    y += 5;
+  }
   if (d.oggetto.trim()) {
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(8.5);
@@ -140,8 +154,10 @@ export function generaPdfReparto(d: DocumentoReparto): jsPDF {
   const nota = doc.splitTextToSize(
     'Il totale è la somma delle posizioni elencate: i debiti che risultano dai documenti ' +
       `dell’ente alla data della verifica (${data}). Non è l’accertamento della singola partita, ` +
-      'che resta in capo al reparto. Il documento non viene trasmesso dalla piattaforma: ' +
-      'l’invio al reparto è a cura dell’ufficio che lo scarica.',
+      'che resta in capo al reparto. Le posizioni sospese o fuori perimetro non sono elencate e ' +
+      'non entrano nel totale. Il documento non viene trasmesso dalla piattaforma: l’invio al ' +
+      'reparto è a cura dell’ufficio che lo scarica, e lo scaricamento registrato dalla ' +
+      'piattaforma è la dichiarazione di chi lo ha effettuato.',
     182
   ) as string[];
   doc.text(nota, 14, y);

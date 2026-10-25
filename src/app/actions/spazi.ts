@@ -14,7 +14,7 @@ import { revalidatePath } from 'next/cache';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { pool } from '@/lib/db';
-import { provisionaSchemaSpazio, creaAdminSpazio } from '@/db/provision';
+import { provisionaSchemaSpazio, creaAdminSpazio, dimenticaTabelleGarantite } from '@/db/provision';
 import { assicuraTabelleSpazi, assicuraIndiceAdminSpazio } from '@/db/ensureTables';
 import { contaSpaziPerLicenza, getLicenzaPerId } from '@/app/actions/licenze';
 import { RUOLI_ADMIN_SPAZIO, type RuoloAdminSpazio } from '@/lib/ruoliAdminSpazio';
@@ -513,6 +513,9 @@ export async function eliminaSpazioCompletoAction(spazioId: number): Promise<Act
 
     if (nomeSchema) {
       await pool.query(`DROP SCHEMA IF EXISTS "${nomeSchema.replace(/"/g, '""')}" CASCADE`);
+      // Lo schema non c'è più: se un altro spazio riusasse lo stesso nome, il
+      // DDL dato per «già eseguito» salterebbe la creazione delle tabelle.
+      dimenticaTabelleGarantite(nomeSchema);
     }
     await pool.query(`DELETE FROM public.sessioni WHERE workspace_id = $1`, [spazioId]);
     // Anche le credenziali MFA (segreto TOTP, hash del PIN) degli utenti dello

@@ -33,9 +33,19 @@ import {
  * non possano divergere sul nome di un alias. */
 const COLONNE_REGISTRO = `id, reparto, to_char(data_verifica, 'YYYY-MM-DD') AS data_verifica,
        versione, nome_file, righe, totale, posizioni_da_contabilizzare,
-       importo_da_contabilizzare, consegnato_il, consegnato_da,
+       importo_da_contabilizzare, consegnato_il, consegnato_da, ragione_sociale,
        to_char(inviata_il, 'YYYY-MM-DD') AS inviata_il, mezzo_invio, note_invio,
        invio_confermato_il, invio_confermato_da`;
+
+/**
+ * Tetto alla lettura del registro.
+ *
+ * La riga più recente per reparto sono dieci-venti righe; il tetto difende il
+ * caso in cui un archivio anomalo produca migliaia di destinatari diversi. È
+ * un limite di sicurezza, non un conteggio: i reparti oltre il tetto non si
+ * vedono, e non si finge di averli visti.
+ */
+const MASSIMO_REPARTI = 1000;
 
 function schemaValido(nomeSchema: string): boolean {
   return typeof nomeSchema === 'string' && /^[a-z0-9_]+$/.test(nomeSchema);
@@ -74,10 +84,14 @@ export async function registraConsegnaRepartoAction(
 
     await assicuraTabellaConsegneReparti(nomeSchema);
     const r = await pool.query(
+      // La ragione sociale è letta dal database, non dal browser: è una
+      // fotografia dell'anagrafica al momento della consegna e deve dire
+      // quello che dice la piattaforma, non quello che le è stato inviato.
       `INSERT INTO "${nomeSchema}".consegne_reparti
-         (azienda_id, reparto, data_verifica, versione, nome_file, righe,
+         (azienda_id, ragione_sociale, reparto, data_verifica, versione, nome_file, righe,
           totale, posizioni_da_contabilizzare, importo_da_contabilizzare, consegnato_da)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, (SELECT ragione_sociale FROM "${nomeSchema}".aziende WHERE id = $1),
+               $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING ${COLONNE_REGISTRO}`,
       [
         aziendaId,
@@ -130,14 +144,28 @@ export async function ottieniConsegneRepartiAction(
     }
     await assicuraTabellaConsegneReparti(nomeSchema);
     const r = await pool.query(
+      // L'ULTIMA CONSEGNA PER REPARTO, non tutto il diario. `riassumiConsegne`
+      // ne tiene una riga per reparto: scaricare ogni evento di un'azienda
+      // seguita per mesi significava trasferire migliaia di righe per mostrarne
+      // dieci, a ogni cambio di fase della scheda.
+      //
+      // `DISTINCT ON` prende la più recente di ogni reparto (nome senza
+      // maiuscole, come il raggruppamento nel client) e la finestra conta gli
+      // scaricamenti veri, così il numero mostrato non è «1» per costruzione.
+      //
       // to_char: la colonna è DATE, e il driver la rende come Date a mezzanotte
       // (locale con `pg`, UTC con PGlite in portable). Passare da Date sposterebbe
       // il giorno a seconda del fuso e del driver; come testo è sempre il giorno
       // scritto nel database. Vale per data_verifica e per inviata_il.
-      `SELECT ${COLONNE_REGISTRO}
-       FROM "${nomeSchema}".consegne_reparti
-       WHERE azienda_id = $1
-       ORDER BY consegnato_il DESC, id DESC`,
+      `SELECT DISTINCT ON (lower(reparto)) *
+         FROM (
+           SELECT ${COLONNE_REGISTRO},
+                  count(*) OVER (PARTITION BY lower(reparto)) AS scaricamenti
+             FROM "${nomeSchema}".consegne_reparti
+            WHERE azienda_id = $1
+         ) AS registro
+        ORDER BY lower(reparto), consegnato_il DESC, id DESC
+        LIMIT ${MASSIMO_REPARTI}`,
       [aziendaId]
     );
     return { success: true, consegne: r.rows.map(consegnaDaRiga) };

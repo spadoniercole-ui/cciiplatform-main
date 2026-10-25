@@ -273,6 +273,16 @@ export interface RigaVera {
   categoria: string;
   /** Dicitura della colonna Stato. */
   stato: string;
+  /**
+   * Periodo di competenza letto dalla sezione («202506 - 202506»).
+   *
+   * Serviva già a `ritardoDaVera` ed è l'unica informazione che dice al
+   * reparto QUALE versamento regolarizzare: senza, il documento per reparto
+   * stampava una colonna «Periodo» sempre vuota pur avendo il dato in mano.
+   * Vuoto quando la sezione non lo porta (cartelle dell'Agente della
+   * Riscossione, sezioni senza periodi).
+   */
+  periodo?: string;
   /** Trattamento derivato dalla combinazione Natura+Stato. */
   trattamento: TrattamentoVera;
   /** Quota contributi dell'importo; null quando la sezione non la espone. */
@@ -416,6 +426,7 @@ export function estraiRigheVera(
         importo: r.importo,
         categoria: categoria ?? '',
         stato: r.stato,
+        periodo: r.periodo ?? '',
         trattamento,
         contributi: r.contributi ?? null,
         sanzioni: r.sanzioni ?? null,

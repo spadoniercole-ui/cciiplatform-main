@@ -32,6 +32,8 @@
 // conferma la riga resta muta, e a schermo si legge «invio non confermato»,
 // non «non inviato»: l'una è un fatto registrato, l'altra una supposizione.
 
+import { formattaImportoEuro } from './comunicazioni';
+
 export interface ConsegnaRepartoInput {
   /** Il reparto a cui il documento è destinato. */
   reparto: string;
@@ -95,6 +97,21 @@ export interface ConsegnaRegistrata extends ConsegnaRepartoInput {
   consegnatoIl: string;
   /** Chi lo ha scaricato, se la sessione lo dice. */
   consegnatoDa: string | null;
+  /**
+   * La ragione sociale dell'azienda al momento della consegna.
+   *
+   * È una fotografia, non un riferimento: se l'anagrafica cambia nome — o
+   * sparisce — la riga del registro continua a dire a quale azienda si
+   * riferisce. Senza, un evento sopravvissuto all'azienda non sarebbe
+   * leggibile.
+   */
+  ragioneSociale: string | null;
+  /**
+   * Quanti scaricamenti ha quel reparto, quando il registro li conta sul
+   * database invece di restituire una riga per evento (vedi
+   * `ottieniConsegneRepartiAction`).
+   */
+  scaricamenti?: number;
   /** La dichiarazione d'invio, se qualcuno l'ha fatta. */
   invio: InvioConfermato | null;
 }
@@ -129,6 +146,40 @@ export function statoConsegnaReparto(
   return consegna.ultima.versione === versioneCorrente
     ? { stato: 'allineata', consegna }
     : { stato: 'superata', consegna };
+}
+
+/**
+ * Perché la versione consegnata non è più quella corrente.
+ *
+ * «Riscarica il PDF» detto uguale per ogni reparto, senza dire che cosa è
+ * cambiato, si legge come un errore della piattaforma: chi guarda la scheda
+ * dopo aver corretto la data della verifica non sa che la causa è quella, e
+ * rifà il giro otto volte pensando a un guasto. La causa si deduce dai pochi
+ * dati che il registro conserva (data, numero di posizioni, totale); quando
+ * nessuno di quei tre spiega il cambio, la differenza sta nelle tipologie o
+ * nelle attività, ed è quello che si dice.
+ */
+export function causaSuperamento(
+  consegna: ConsegnaRegistrata,
+  documento: { dataVerifica: string; righe: number; totale: number }
+): string {
+  const cause: string[] = [];
+  if (consegna.dataVerifica !== documento.dataVerifica) {
+    cause.push('la data della verifica è cambiata');
+  }
+  if (consegna.righe !== documento.righe) {
+    cause.push(`le posizioni elencate sono passate da ${consegna.righe} a ${documento.righe}`);
+  } else if (Math.abs(consegna.totale - documento.totale) >= 0.005) {
+    cause.push(
+      `il totale è passato da ${formattaImportoEuro(consegna.totale)} a ${formattaImportoEuro(
+        documento.totale
+      )}`
+    );
+  }
+  if (cause.length === 0) {
+    cause.push('sono cambiate le tipologie o le attività da svolgere');
+  }
+  return cause.join('; ');
 }
 
 /**
@@ -188,6 +239,7 @@ function invioDaRiga(r: Record<string, unknown>): InvioConfermato | null {
  * scheda devono conoscere i tipi del database.
  */
 export function consegnaDaRiga(r: Record<string, unknown>): ConsegnaRegistrata {
+  const scaricamenti = r.scaricamenti == null ? undefined : Number(r.scaricamenti);
   return {
     id: Number(r.id),
     reparto: String(r.reparto ?? ''),
@@ -200,6 +252,13 @@ export function consegnaDaRiga(r: Record<string, unknown>): ConsegnaRegistrata {
     importoDaContabilizzare: Number(r.importo_da_contabilizzare ?? 0),
     consegnatoIl: istanteDaValore(r.consegnato_il),
     consegnatoDa: r.consegnato_da == null ? null : String(r.consegnato_da),
+    ragioneSociale:
+      r.ragione_sociale == null || String(r.ragione_sociale).trim() === ''
+        ? null
+        : String(r.ragione_sociale),
+    ...(scaricamenti !== undefined && Number.isFinite(scaricamenti)
+      ? { scaricamenti: Number(scaricamenti) }
+      : {}),
     invio: invioDaRiga(r),
   };
 }
@@ -377,17 +436,30 @@ function istante(c: ConsegnaRegistrata): number {
  * precisione.
  */
 export function riassumiConsegne(righe: ConsegnaRegistrata[]): RiepilogoConsegneReparto[] {
-  const perReparto = new Map<string, RiepilogoConsegneReparto>();
+  const perReparto = new Map<string, { reparto: string; ultima: ConsegnaRegistrata }>();
+  // Due sorgenti di conteggio, che non vanno sommate due volte. `espliciti` è
+  // il numero che il database ha già calcolato (lettura aggregata: una riga per
+  // reparto). `locali` sono le righe senza conteggio: gli scaricamenti appena
+  // fatti, che il database non ha ancora visto perché la scheda non rilegge il
+  // registro. Il totale è la somma delle due, che nel caso normale (elenco di
+  // eventi, nessun conteggio esplicito) torna il numero di righe.
+  const espliciti = new Map<string, number>();
+  const locali = new Map<string, number>();
 
   for (const c of righe) {
     const chiave = c.reparto.trim().toLocaleLowerCase('it-IT');
     if (!chiave) continue;
+    if (c.scaricamenti === undefined) {
+      locali.set(chiave, (locali.get(chiave) ?? 0) + 1);
+    } else {
+      espliciti.set(chiave, Math.max(espliciti.get(chiave) ?? 0, c.scaricamenti));
+    }
+
     const esistente = perReparto.get(chiave);
     if (!esistente) {
-      perReparto.set(chiave, { reparto: c.reparto.trim(), ultima: c, scaricamenti: 1 });
+      perReparto.set(chiave, { reparto: c.reparto.trim(), ultima: c });
       continue;
     }
-    esistente.scaricamenti += 1;
     const piuRecente =
       istante(c) > istante(esistente.ultima) ||
       (istante(c) === istante(esistente.ultima) && c.id > esistente.ultima.id);
@@ -397,7 +469,11 @@ export function riassumiConsegne(righe: ConsegnaRegistrata[]): RiepilogoConsegne
     }
   }
 
-  return Array.from(perReparto.values()).sort((a, b) =>
-    a.reparto.localeCompare(b.reparto, 'it-IT')
-  );
+  return Array.from(perReparto.entries())
+    .map(([chiave, v]) => ({
+      reparto: v.reparto,
+      ultima: v.ultima,
+      scaricamenti: (espliciti.get(chiave) ?? 0) + (locali.get(chiave) ?? 0),
+    }))
+    .sort((a, b) => a.reparto.localeCompare(b.reparto, 'it-IT'));
 }

@@ -49,6 +49,7 @@ import {
 import { generaBackupCompletoAction } from '@/app/actions/backupDatabase';
 import { assemblaFrammenti, eliminaFrammenti } from '@/lib/backup/frammentiServer';
 import { richiediSuperadmin } from '@/lib/autorizzazione';
+import { dimenticaTabelleGarantite } from '@/db/provision';
 
 export interface RisultatoRipristino {
   success: boolean;
@@ -366,6 +367,9 @@ export async function ripristinaDatabaseAction(
       }
 
       await client.query('COMMIT');
+      // Gli schemi sono stati cancellati e riscritti dal backup: il DDL già
+      // eseguito in questo processo non vale più per loro.
+      dimenticaTabelleGarantite();
       await eliminaTemporaneo(contenutoFile);
       return {
         success: true,

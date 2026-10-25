@@ -121,6 +121,13 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice }: Props) {
   const etichetta = (codiceCategoria: string) =>
     opzioniCategorie.find((c) => c.codice === codiceCategoria)?.etichetta ?? codiceCategoria;
 
+  // Una lavorazione può puntare a una categoria cancellata: la riga resta in
+  // tabella e non produce nulla, e chi legge non sa se è un errore o una
+  // scelta. La si segnala invece di lasciarla indistinguibile.
+  const categoriaEsistente = (codiceCategoria: string) =>
+    opzioniCategorie.some((c) => c.codice === codiceCategoria);
+  const lavorazioniOrfane = lavorazioni.filter((l) => !categoriaEsistente(l.categoria));
+
   const salva = async (input: InputLavorazioneTipoDebito) => {
     setInCorso(true);
     setErrore(null);
@@ -181,6 +188,17 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice }: Props) {
           </div>
         )}
 
+        {lavorazioniOrfane.length > 0 && (
+          <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+            {`${lavorazioniOrfane.length} ${
+              lavorazioniOrfane.length === 1 ? 'lavorazione riguarda' : 'lavorazioni riguardano'
+            } una tipologia che non esiste più fra le categorie di debito (${lavorazioniOrfane
+              .map((l) => l.categoria)
+              .join(', ')}): resta in tabella ma non produce comunicazioni né documenti. Con la
+            configurazione in sola lettura non si può né correggerla né eliminarla.`}
+          </p>
+        )}
+
         {lavorazioni.length === 0 ? (
           <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded-xl p-5">
             Nessuna lavorazione configurata. Con la tabella in sola lettura il triage non può
@@ -203,6 +221,9 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice }: Props) {
                 <div className="lg:col-span-3">
                   <p className="text-[11px] font-bold text-slate-900">{etichetta(l.categoria)}</p>
                   <p className="text-[10px] text-slate-400 font-mono">{l.categoria}</p>
+                  {!categoriaEsistente(l.categoria) && (
+                    <p className="text-[10px] text-amber-700">Tipologia non più esistente</p>
+                  )}
                 </div>
                 <p className="lg:col-span-4 text-xs text-slate-700">{l.lavorazione}</p>
                 <p className="lg:col-span-3 text-xs text-slate-700">{l.destinatario}</p>

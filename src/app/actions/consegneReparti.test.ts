@@ -25,7 +25,8 @@ vi.mock('@/db/provision', () => ({
   assicuraTabellaConsegneReparti: async (nomeSchema: string) => {
     await db.exec(`CREATE TABLE IF NOT EXISTS "${nomeSchema}".consegne_reparti (
       id SERIAL PRIMARY KEY,
-      azienda_id INTEGER NOT NULL REFERENCES "${nomeSchema}".aziende(id) ON DELETE CASCADE,
+      azienda_id INTEGER REFERENCES "${nomeSchema}".aziende(id) ON DELETE SET NULL,
+      ragione_sociale TEXT,
       reparto TEXT NOT NULL,
       data_verifica DATE NOT NULL,
       versione TEXT NOT NULL,
@@ -99,6 +100,17 @@ describe('registraConsegnaRepartoAction', () => {
     expect(esito.consegna?.consegnatoIl).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  it('salva la ragione sociale letta dall’anagrafica, non quella inviata dal browser', async () => {
+    const esito = await registraConsegnaRepartoAction(SCHEMA, AZIENDA, {
+      ...consegna,
+      // Un browser manomesso non deve poter scrivere qui un'altra azienda.
+      ragioneSociale: 'Azienda Inventata Srl',
+    });
+
+    expect(esito.success).toBe(true);
+    expect(esito.consegna?.ragioneSociale).toBe('Alfa Srl');
+  });
+
   it('rifiuta un documento che non può essere vero e non scrive nulla', async () => {
     const esito = await registraConsegnaRepartoAction(SCHEMA, AZIENDA, {
       ...consegna,
@@ -162,6 +174,18 @@ describe('ottieniConsegneRepartiAction', () => {
     ]);
     expect(typeof esito.consegne[0].totale).toBe('number');
     expect(esito.consegne.every((c) => typeof c.dataVerifica === 'string')).toBe(true);
+  });
+
+  it('restituisce una riga per reparto con il numero vero di scaricamenti', async () => {
+    await registraConsegnaRepartoAction(SCHEMA, AZIENDA, consegna);
+    await registraConsegnaRepartoAction(SCHEMA, AZIENDA, { ...consegna, versione: '1-bbbbbbbb' });
+
+    const esito = await ottieniConsegneRepartiAction(SCHEMA, AZIENDA);
+
+    expect(esito.consegne).toHaveLength(1);
+    expect(esito.consegne[0].scaricamenti).toBe(2);
+    // L'ultima è quella con la versione più recente.
+    expect(esito.consegne[0].versione).toBe('1-bbbbbbbb');
   });
 
   it('non mostra le consegne di altre aziende', async () => {
