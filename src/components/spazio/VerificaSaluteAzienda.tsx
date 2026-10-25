@@ -2045,15 +2045,23 @@ export function VerificaSaluteAzienda({ nomeSchema, codice, tipoSpazio }: Props)
               </p>
             )}
 
-            {documentiReparti.categorieSenzaLavorazione.length > 0 && (
-              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
-                {`${
-                  documentiReparti.categorieSenzaLavorazione.length === 1
-                    ? '1 tipologia resta fuori dai documenti'
-                    : `${documentiReparti.categorieSenzaLavorazione.length} tipologie restano fuori dai documenti`
-                }: senza una lavorazione configurata non si sa a quale reparto appartengono — sono elencate più sopra in «Tipologie senza lavorazione».`}
-              </p>
-            )}
+            {/*
+              L'AVVISO SULLE TIPOLOGIE SCOPERTE NON SI RIPETE. A configurazione
+              vuota lo stato vuoto qui sopra dice già che non c'è un reparto a
+              cui indirizzare i debiti: il secondo avviso aggiungerebbe solo
+              numeri. Serve quando qualche lavorazione esiste ma non copre
+              tutto — lì è il conto di ciò che resta fuori.
+            */}
+            {documentiReparti.categorieSenzaLavorazione.length > 0 &&
+              lavorazioni.some((l) => l.attivo) && (
+                <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+                  {`${
+                    documentiReparti.categorieSenzaLavorazione.length === 1
+                      ? '1 tipologia resta fuori dai documenti'
+                      : `${documentiReparti.categorieSenzaLavorazione.length} tipologie restano fuori dai documenti`
+                  }: senza una lavorazione configurata non si sa a quale reparto appartengono — sono elencate più sopra in «Tipologie senza lavorazione».`}
+                </p>
+              )}
 
             <a
               href={`/spazio/${codice}/parametri/lavorazioni`}

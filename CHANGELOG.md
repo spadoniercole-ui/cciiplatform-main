@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.138.2**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.138.3**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,18 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.138.3 — 2026-10-25
+
+**Triage, scheda dei reparti: una spiegazione sola quando la configurazione è vuota**
+
+- Senza lavorazioni configurate la scheda «Comunica ai reparti» mostrava lo stato
+  vuoto e, subito sotto, l’avviso «N tipologie restano fuori dai documenti»: la
+  stessa cosa detta due volte, con un rimando a un elenco che diceva già tutto.
+  Ora l’avviso compare solo quando qualche lavorazione attiva esiste ma non copre
+  tutte le tipologie — il caso in cui il conteggio di ciò che resta fuori serve
+  davvero. A configurazione vuota resta la sola spiegazione, che dice anche che
+  la tabella dei destinatari è in sola lettura.
 
 ## 0.138.2 — 2026-10-25
 
