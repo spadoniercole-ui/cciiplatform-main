@@ -40,6 +40,9 @@
 // indistinguibile da una riga persa.
 
 import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
+// L'ufficio si riconosce dalla sua chiave, non dalla grafia: lo stesso
+// destinatario scritto con maiuscole, spazi o accenti diversi resta UNO.
+import { chiaveDipendenza, nomeDipendenza } from './dipendenze';
 
 export interface LavorazioneConfig {
   categoria: string;
@@ -210,8 +213,8 @@ export function raggruppaPerReparto(input: InputRaggruppamento): RaggruppamentoP
       continue;
     }
     for (const l of lavorazioni) {
-      const destinatario = l.destinatario.trim().replace(/\s+/g, ' ');
-      const chiave = destinatario.toLocaleLowerCase('it-IT');
+      const destinatario = nomeDipendenza(l.destinatario);
+      const chiave = chiaveDipendenza(destinatario);
       const gruppo = gruppi.get(chiave) ?? {
         destinatario,
         righe: new Set<RigaVeraComunicazione>(),

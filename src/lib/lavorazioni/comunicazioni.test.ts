@@ -236,4 +236,30 @@ describe('componiComunicazioniVera', () => {
     expect(esito.comunicazioni[0].righe).toBe(1);
     expect(esito.comunicazioni[0].lavorazioni).toEqual(['Prima', 'Seconda']);
   });
+
+  it('lo stesso ufficio scritto con maiuscole e spazi diversi resta una comunicazione sola', () => {
+    const esito = componiComunicazioniVera({
+      azienda: 'Iota Srl',
+      dataVerifica: '2026-10-19',
+      righe: [riga(), riga({ categoria: 'AVA', sezione: 'ADR', voce: 'Cartella', importo: 900 })],
+      lavorazioni: [
+        {
+          categoria: 'DEBITO',
+          lavorazione: 'Contabilizzare',
+          destinatario: 'Presidio  dei flussi informativi',
+        },
+        {
+          categoria: 'AVA',
+          lavorazione: 'Verificare il ruolo',
+          destinatario: 'PRESIDIO DEI FLUSSI INFORMATIVI',
+        },
+      ],
+      etichette,
+    });
+
+    expect(esito.comunicazioni).toHaveLength(1);
+    expect(esito.comunicazioni[0].destinatario).toBe('Presidio dei flussi informativi');
+    expect(esito.comunicazioni[0].righe).toBe(2);
+    expect(esito.comunicazioni[0].lavorazioni).toEqual(['Contabilizzare', 'Verificare il ruolo']);
+  });
 });

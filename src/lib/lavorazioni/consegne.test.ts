@@ -108,6 +108,20 @@ describe('riassumiConsegne', () => {
     expect(riepilogo[0].ultima.versione).toBe('1-bbbbbbbb');
   });
 
+  it('la stessa consegna vale per un ufficio solo, anche se la grafia cambia di più', () => {
+    const riepilogo = riassumiConsegne([
+      consegna(1, { reparto: 'Presidio dei flussi informativi' }),
+      consegna(2, {
+        reparto: 'PRESIDIO  DEI FLUSSI INFORMATIVI',
+        consegnatoIl: '2026-10-23T09:00:00.000Z',
+      }),
+    ]);
+
+    expect(riepilogo).toHaveLength(1);
+    expect(riepilogo[0].scaricamenti).toBe(2);
+    expect(riepilogo[0].ultima.id).toBe(2);
+  });
+
   it('raggruppa lo stesso reparto scritto con maiuscole diverse', () => {
     const riepilogo = riassumiConsegne([
       consegna(1, { reparto: 'Ufficio contributi' }),

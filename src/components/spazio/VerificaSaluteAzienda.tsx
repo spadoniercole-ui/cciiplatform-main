@@ -46,6 +46,7 @@ import {
   Send,
   Layers,
   RotateCcw,
+  X,
 } from 'lucide-react';
 import {
   estraiAnagraficaDaVisuraAction,
@@ -111,7 +112,10 @@ import {
 } from '@/lib/lavorazioni/comunicazioni';
 import { preparaDocumentiReparto, type DocumentoReparto } from '@/lib/lavorazioni/reparti';
 import { componiReportUo, type DocumentoUo } from '@/lib/lavorazioni/reportUo';
-import { instradaPerMateria } from '@/lib/lavorazioni/instradamentoMateria';
+import { instradaPerMateria, materiaDaChiave } from '@/lib/lavorazioni/instradamentoMateria';
+import { chiaveDipendenza, dipendenzeSosia } from '@/lib/lavorazioni/dipendenze';
+import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
+import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import type { StatoMateria } from '@/lib/titoliEnte/materie';
 import { LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA } from '@/lib/lavorazioni/solaLettura';
 import {
@@ -337,6 +341,22 @@ export function VerificaSaluteAzienda({
   >([]);
   const [motivoArchiviazione, setMotivoArchiviazione] = useState('');
   const [mostraArchiviazione, setMostraArchiviazione] = useState(false);
+  /**
+   * Le soglie dell'art. 25-novies, in una finestra che si chiude.
+   *
+   * Il triage è il momento in cui si decide: mandare l'operatore nella scheda
+   * dell'azienda per vedere i numeri significava farlo uscire dal lavoro, con
+   * il rischio di non tornare. La finestra mostra il confronto e gli
+   * identificativi con cui l'ente riconosce l'azienda — i valori che servono a
+   * una informativa — e si chiude. Per modificare si va nella scheda, ma solo
+   * se lo si sceglie.
+   */
+  const [mostraSoglie, setMostraSoglie] = useState(false);
+  const [identificativiSoglie, setIdentificativiSoglie] = useState<
+    { etichetta: string; valore: string }[]
+  >([]);
+  const [erroreIdentificativi, setErroreIdentificativi] = useState<string | null>(null);
+  const [identificativiInCorso, setIdentificativiInCorso] = useState(false);
 
   // Lo storico rende vera la promessa fatta a schermo — "la verifica resta
   // consultabile" — che finora non lo era: esito e data stavano nel
@@ -369,6 +389,35 @@ export function VerificaSaluteAzienda({
       annullato = true;
     };
   }, [nomeSchema, aziendaId, fase]);
+
+  // Gli identificativi si leggono quando la finestra si apre: sono quelli
+  // salvati per questa azienda (Anagrafica Ente), non valori tenuti in memoria.
+  useEffect(() => {
+    if (!mostraSoglie || !aziendaId) return;
+    let annullato = false;
+    setIdentificativiInCorso(true);
+    setErroreIdentificativi(null);
+    void Promise.all([
+      ottieniAnagraficaEnte(nomeSchema, aziendaId),
+      ottieniEtichetteAnagraficaEnte(nomeSchema),
+    ]).then(([a, et]) => {
+      if (annullato) return;
+      if (!a.success) setErroreIdentificativi(a.error ?? 'Identificativi non leggibili.');
+      const dati = a.dati as unknown as Record<string, string | null>;
+      const righe = et.success
+        ? et.etichette
+            .filter((e) => e.attivo)
+            .map((e) => ({ etichetta: e.etichetta, valore: dati[`campo${e.campo}`] ?? '' }))
+            .filter((e) => e.valore.trim() !== '')
+        : [];
+      if (a.dati.idEnte) righe.unshift({ etichetta: 'ID ente', valore: a.dati.idEnte });
+      setIdentificativiSoglie(righe);
+      setIdentificativiInCorso(false);
+    });
+    return () => {
+      annullato = true;
+    };
+  }, [mostraSoglie, aziendaId, nomeSchema]);
 
   const caricaVisura = async (f: File | null) => {
     if (!f) return;
@@ -1344,21 +1393,76 @@ export function VerificaSaluteAzienda({
     [aziendaMostrata, dataVerifica, righeVera, titoliUo, materieUo, lavorazioniUo]
   );
 
+  // ---- LE COMUNICAZIONI PER LE UNITÀ OPERATIVE -------------------------
+  // Il triage serviva a decidere; da quando produce documenti per gli uffici
+  // serve anche a dire se quei documenti ci sono e per quali uffici. Un «puoi
+  // procedere» senza numeri sarebbe una frase di cortesia: qui ci sono gli
+  // uffici, le posizioni e l'importo, oppure il motivo per cui mancano.
+  const ufficiConDocumenti = Array.from(
+    new Set([
+      ...documentiReparti.documenti.map((d) => d.reparto),
+      ...reportUo.documenti.map((d) => d.dipendenza),
+    ])
+  ).sort((a, b) => a.localeCompare(b, 'it-IT'));
+  const posizioniUo = documentiReparti.documenti.reduce((a, d) => a + d.righe, 0);
+  const totaleUo = documentiReparti.documenti.reduce((a, d) => a + d.totale, 0);
+  const avanzamentoUo = {
+    uffici: ufficiConDocumenti.length,
+    posizioni: posizioniUo,
+    totale: totaleUo,
+  };
+
+  // Gli uffici che si chiamano quasi uguale: lo stesso destinatario scritto in
+  // tre modi produce tre documenti. Non si uniscono d'ufficio — potrebbero
+  // essere sedi che rispondono a pratiche diverse — ma non si tace.
+  const ufficiSosia = dipendenzeSosia([
+    ...lavorazioni.map((l) => l.destinatario),
+    ...lavorazioniUo.map((l) => l.dipendenza),
+    ...titoliUo.map((t) => t.dipendenza),
+  ]);
+
+  // LE MATERIE DA COMPLETARE, dall'elenco di ciò che resta fuori: una
+  // lavorazione senza ufficio, o una tipologia senza lavorazione. I link ai
+  // Parametri devono portare LÌ, e dire il nome di cosa manca.
+  const materieDaCompletare = Array.from(
+    new Set<number>([
+      ...comunicazioni.categorieSenzaLavorazione
+        .map((c) => materiaDaChiave(c.categoria))
+        .filter((x): x is number => x !== null),
+      ...reportUo.senzaDipendenza.map((s) => s.materiaId).filter((x): x is number => x !== null),
+    ])
+  );
+  const nomiMaterieDaCompletare = materieDaCompletare.map(
+    (id) => materieUo.find((m) => m.id === id)?.nome ?? `Materia ${id}`
+  );
+  const linkLavorazioni =
+    materieDaCompletare.length > 0
+      ? `/spazio/${codice}/parametri/materie-lavorazione?materia=${materieDaCompletare[0]}`
+      : `/spazio/${codice}/parametri/lavorazioni`;
+  const etichettaLavorazioni =
+    materieDaCompletare.length > 0
+      ? `Configura la lavorazione di «${nomiMaterieDaCompletare.join('», «')}»`
+      : LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
+        ? 'Vedi le lavorazioni'
+        : 'Configura le lavorazioni';
+
   // Il registro per destinatario: l'ultima consegna e quante volte il documento
   // è uscito. La chiave porta il TIPO di documento: le due impronte di versione
   // non sono confrontabili, e un ufficio che si chiama come un reparto non deve
   // far risultare «superato» un foglio che nessuno ha mai ricevuto.
+  // La chiave dell'ufficio, non la sua grafia: le consegne dello stesso ufficio
+  // scritto in due modi sono le consegne di un ufficio solo.
   const chiaveConsegna = (tipo: 'reparto' | 'dipendenza', nome: string) =>
-    `${tipo}|${nome.toLocaleLowerCase('it-IT')}`;
+    `${tipo}|${chiaveDipendenza(nome)}`;
   const riepilogoConsegne = riassumiConsegne(consegneReparti);
   const consegnePerDestinatario = new Map(
     riepilogoConsegne.map((c) => [chiaveConsegna(c.tipo, c.reparto), c])
   );
   const repartiConDocumento = new Set(
-    documentiReparti.documenti.map((d) => d.reparto.toLocaleLowerCase('it-IT'))
+    documentiReparti.documenti.map((d) => chiaveDipendenza(d.reparto))
   );
   const consegneFuoriConfigurazione = riepilogoConsegne.filter(
-    (c) => c.tipo === 'reparto' && !repartiConDocumento.has(c.reparto.toLocaleLowerCase('it-IT'))
+    (c) => c.tipo === 'reparto' && !repartiConDocumento.has(chiaveDipendenza(c.reparto))
   );
 
   // I reparti che hanno in mano una versione precedente: servono al conteggio
@@ -1818,6 +1922,17 @@ export function VerificaSaluteAzienda({
           <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider mb-3">
             Verifiche già eseguite
           </h3>
+          {/* L'avviso che mancava in questa pagina: una verifica in sospeso non
+              è un elenco da consultare, è un lavoro da finire — e il punto in
+              cui si finisce sono le comunicazioni per le unità operative. */}
+          <p className="text-[11px] text-slate-500 leading-relaxed mb-2">
+            Una verifica in sospeso si riapre qui:{' '}
+            <span className="font-bold text-slate-700">
+              è da lì che si procede alle comunicazioni per le unità operative
+            </span>{' '}
+            — le comunicazioni ai colleghi, i documenti per i reparti e i report per ufficio si
+            ricompongono dai dati salvati e dalle lavorazioni configurate.
+          </p>
           <div className="divide-y divide-slate-100">
             {storico.slice(0, 15).map((v) => (
               // Cliccabile: una verifica che non si può riaprire è un elenco
@@ -2033,13 +2148,18 @@ export function VerificaSaluteAzienda({
                   ))}
                 </ul>
               )}
-              {aziendaId && (
-                <a
-                  href={`/spazio/${codice}/aziende/${aziendaId}/posizione-ente?scheda=soglie`}
+              {/* Il confronto si apre QUI. Portare l'operatore nella scheda
+                  dell'azienda, a metà triage, significava fargli perdere il
+                  punto in cui era — e la scheda parla di screening, non di una
+                  verifica appena fatta. */}
+              {esitoSoglie && (
+                <button
+                  type="button"
+                  onClick={() => setMostraSoglie(true)}
                   className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
                 >
                   Apri le soglie di segnalazione <ArrowRight className="w-3 h-3" />
-                </a>
+                </button>
               )}
             </div>
           )}
@@ -2047,6 +2167,156 @@ export function VerificaSaluteAzienda({
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
               {`Soglie di segnalazione non valutate: ${erroreSoglie} Il triage resta valido; le soglie si possono verificare dalla scheda dell’azienda.`}
             </p>
+          )}
+
+          {/*
+            LE SOGLIE, IN UNA FINESTRA.
+
+            Il pulsante portava nella scheda dell'azienda — cioè fuori dal
+            triage, verso lo screening. Ma qui non si sta navigando: si sta
+            chiedendo «con quali numeri, e riconosciuti come chi?». La finestra
+            risponde: il confronto riga per riga e gli identificativi salvati
+            per questa azienda, con la loro etichetta. Nessun valore vive solo
+            nella videata — quelli delle soglie stanno in anagrafica aziendale,
+            gli identificativi nell'Anagrafica Ente — e il posto dove si
+            cambiano è detto in fondo, come scelta e non come passaggio
+            obbligato.
+          */}
+          {mostraSoglie && esitoSoglie && (
+            <div
+              className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 p-4"
+              role="presentation"
+              onClick={() => setMostraSoglie(false)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="soglie-titolo"
+                onClick={(e) => e.stopPropagation()}
+                className="mx-auto my-8 w-full max-w-2xl bg-white rounded-xl border border-slate-200 shadow-xl p-5 space-y-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3
+                      id="soglie-titolo"
+                      className="font-bold text-slate-900 uppercase text-xs tracking-wider"
+                    >
+                      Soglie di segnalazione — i valori del confronto
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      Art. 25-novies. Il triage confronta le soglie con i dati già salvati per
+                      questa azienda: qui si vede che cosa è stato confrontato e con quali
+                      riferimenti.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMostraSoglie(false)}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                    aria-label="Chiudi"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    Riconosciuta dall’ente come
+                  </p>
+                  {identificativiInCorso ? (
+                    <p className="text-[11px] text-slate-500">Lettura degli identificativi…</p>
+                  ) : erroreIdentificativi ? (
+                    <p className="text-[11px] text-amber-800">{erroreIdentificativi}</p>
+                  ) : identificativiSoglie.length === 0 ? (
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Nessun identificativo salvato (matricola, posizione, codici CSC…). Si
+                      compilano in{' '}
+                      <span className="font-bold">Posizione Ente › Anagrafica Ente</span> e restano
+                      salvati: non sono valori tenuti in memoria dalla videata.
+                    </p>
+                  ) : (
+                    <ul className="space-y-0.5">
+                      {identificativiSoglie.map((x) => (
+                        <li key={x.etichetta} className="text-[11px] text-slate-700">
+                          <span className="text-slate-500">{x.etichetta}</span>{' '}
+                          <span className="font-bold font-mono">{x.valore}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    Identificativi dell’azienda presso l’ente, salvati in{' '}
+                    <span className="font-bold">Posizione Ente › Anagrafica Ente</span> — è lì che
+                    si caricano, prima del triage: senza, l’azienda si riconosce solo con la partita
+                    IVA.
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                        <th className="py-1.5 pr-2">Parametro</th>
+                        <th className="py-1.5 pr-2">Soglia</th>
+                        <th className="py-1.5 pr-2">Importo confrontato</th>
+                        <th className="py-1.5">Esito</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {esitoSoglie.righe
+                        .filter((r) => r.applicabile)
+                        .map((r) => (
+                          <tr key={`${r.ente}-${r.ambito}`}>
+                            <td className="py-1.5 pr-2 text-slate-900">{r.ambito}</td>
+                            <td className="py-1.5 pr-2 text-slate-700">{r.valore}</td>
+                            <td className="py-1.5 pr-2 text-slate-700">
+                              {r.esposizione === null ? '—' : formattaImportoEuro(r.esposizione)}
+                            </td>
+                            <td
+                              className={`py-1.5 font-bold ${
+                                r.esito === 'sopra' ? 'text-red-700' : 'text-slate-700'
+                              }`}
+                            >
+                              {r.esito === 'sopra'
+                                ? 'Superata'
+                                : r.esito === 'sotto'
+                                  ? 'Non superata'
+                                  : 'Non determinabile'}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  Gli importi vengono dai documenti letti nel triage (V.E.R.A., denunce, deleghe,
+                  ruoli) e dai valori salvati per l’azienda. Per cambiarli si apre la scheda
+                  dell’azienda, in «Soglie di segnalazione» — da qui non si esce e non si modifica
+                  nulla.
+                </p>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                  {aziendaId ? (
+                    <a
+                      href={`/spazio/${codice}/aziende/${aziendaId}/posizione-ente?scheda=soglie`}
+                      className="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700"
+                    >
+                      Apri nella scheda dell’azienda
+                    </a>
+                  ) : (
+                    <span />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setMostraSoglie(false)}
+                    className="px-3 py-2 rounded-lg bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800"
+                  >
+                    Chiudi
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
             <div className="flex items-center gap-2">
@@ -2128,6 +2398,19 @@ export function VerificaSaluteAzienda({
                       <span>
                         {c.etichetta}: {c.righe} {c.righe === 1 ? 'posizione' : 'posizioni'},{' '}
                         {formattaImportoEuro(c.totale)}
+                        {materiaDaChiave(c.categoria) !== null && (
+                          <>
+                            {' '}
+                            <a
+                              href={`/spazio/${codice}/parametri/materie-lavorazione?materia=${materiaDaChiave(
+                                c.categoria
+                              )}`}
+                              className="font-bold underline"
+                            >
+                              Aggiungi la lavorazione
+                            </a>
+                          </>
+                        )}
                       </span>
                     </li>
                   ))}
@@ -2172,14 +2455,15 @@ export function VerificaSaluteAzienda({
 
             {erroreCopia && <p className="text-[11px] text-red-700">{erroreCopia}</p>}
 
+            {/* Il link porta alla lavorazione che manca, non ai Parametri in
+                generale: «configura le lavorazioni» senza dire quale lasciava
+                l'operatore davanti a una pagina di cui doveva indovinare la
+                riga. */}
             <a
-              href={`/spazio/${codice}/parametri/lavorazioni`}
+              href={linkLavorazioni}
               className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
             >
-              {LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
-                ? 'Vedi le lavorazioni'
-                : 'Configura le lavorazioni'}{' '}
-              <ArrowRight className="w-3 h-3" />
+              {etichettaLavorazioni} <ArrowRight className="w-3 h-3" />
             </a>
           </div>
           {/* Il riepilogo si stampa dai documenti appena letti, che in una
@@ -2200,12 +2484,89 @@ export function VerificaSaluteAzienda({
           )}
 
           {/*
+            L'AVVISO CHE MANCAVA.
+
+            Il triage produce tre cose per gli uffici — le comunicazioni ai
+            colleghi, un documento per reparto e un report per unità operativa
+            — e finora non diceva mai «ci sono, puoi mandarli». Chi arrivava in
+            fondo doveva dedurlo da due riquadri che a configurazione vuota
+            sembrano uguali a quelli di una verifica senza debiti. Qui si dice
+            se si può procedere, con quante posizioni e per quali uffici; se
+            non si può, si dice che cosa manca e dove.
+          */}
+          {(() => {
+            const fuoriPerimetro = comunicazioni.posizioniEscluse.righe;
+            const pronte = avanzamentoUo.uffici > 0;
+            const motivo = !pronte
+              ? instradamento.lavorazioni.length === 0
+                ? 'non c’è ancora una lavorazione configurata con il suo ufficio'
+                : materieDaCompletare.length > 0
+                  ? 'manca l’ufficio o la lavorazione alle materie elencate qui sotto'
+                  : 'nessuna posizione V.E.R.A. di questa verifica arriva a un ufficio'
+              : null;
+            return (
+              <div
+                className={`rounded-xl border p-4 space-y-1 ${
+                  pronte ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'
+                }`}
+              >
+                <p
+                  className={`text-xs font-bold ${pronte ? 'text-emerald-900' : 'text-amber-900'}`}
+                >
+                  {pronte
+                    ? 'Puoi procedere alle comunicazioni per le unità operative'
+                    : 'Le comunicazioni per le unità operative non sono pronte'}
+                </p>
+                {pronte ? (
+                  <p
+                    className={`text-[11px] leading-relaxed ${
+                      pronte ? 'text-emerald-800' : 'text-amber-800'
+                    }`}
+                  >
+                    {`${avanzamentoUo.uffici} ${
+                      avanzamentoUo.uffici === 1 ? 'ufficio' : 'uffici'
+                    }, ${avanzamentoUo.posizioni} ${
+                      avanzamentoUo.posizioni === 1 ? 'posizione' : 'posizioni'
+                    }, ${formattaImportoEuro(avanzamentoUo.totale)}: per ognuno un documento per
+                    reparto e un report per unità operativa, qui sotto. Si scaricano e li invii
+                    tu — la piattaforma non manda nulla e registra ogni scaricamento.`}
+                    {fuoriPerimetro > 0
+                      ? ` ${fuoriPerimetro} ${
+                          fuoriPerimetro === 1 ? 'posizione resta' : 'posizioni restano'
+                        } fuori perimetro e non entra nei totali.`
+                      : ''}{' '}
+                    <a href="#comunica-reparti" className="font-bold underline">
+                      Vai ai documenti per reparto
+                    </a>
+                    {' · '}
+                    <a href="#report-uo" className="font-bold underline">
+                      Vai ai report per unità operativa
+                    </a>
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    {`Non si può ancora procedere: ${motivo}. Il triage resta valido — l’esito e
+                    la decisione non dipendono da questo — ma senza un ufficio non c’è a chi
+                    indirizzare i debiti.`}{' '}
+                    <a href={linkLavorazioni} className="font-bold underline">
+                      {etichettaLavorazioni}
+                    </a>
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+
+          {/*
             COMUNICA AI REPARTI — l'ultimo passo del triage, prima della presa
             in carico. Non è un'alternativa al «Procedi»: serve a entrambe le
             strade, perché anche chi non procede deve poter portare a
             contabilizzazione i debiti che ha in mano.
           */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+          <div
+            id="comunica-reparti"
+            className="bg-white border border-slate-200 rounded-xl p-5 space-y-3"
+          >
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-slate-500" />
               <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
@@ -2222,6 +2583,39 @@ export function VerificaSaluteAzienda({
               dichiararne l&apos;invio — data, mezzo e note — e il registro conserva la
               dichiarazione con il tuo nome.
             </p>
+
+            {/*
+              LO STESSO UFFICIO CON TRE NOMI. Le dipendenze si scrivono in tre
+              punti (lavorazioni delle materie, titoli, vecchia tabella) e due
+              grafie dello stesso ufficio producono due documenti, ognuno con
+              metà delle posizioni. Qui si vede e si dice dove si sistema; non
+              si unisce d'ufficio, perché due sedi possono chiamarsi così.
+            */}
+            {ufficiSosia.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1">
+                <p className="text-[11px] font-bold text-amber-900">
+                  {ufficiSosia.length === 1
+                    ? 'Un ufficio compare con nomi diversi'
+                    : `${ufficiSosia.length} uffici compaiono con nomi diversi`}
+                </p>
+                {ufficiSosia.map((gruppo) => (
+                  <p key={gruppo.join('|')} className="text-[11px] text-amber-900 leading-relaxed">
+                    — {gruppo.join(' / ')}
+                  </p>
+                ))}
+                <p className="text-[10px] text-amber-800 leading-relaxed">
+                  Se sono lo stesso ufficio, le sue posizioni sono divise fra due documenti. Scrivi
+                  la stessa dipendenza nelle lavorazioni delle materie: la piattaforma non unisce da
+                  sola — due sedi possono chiamarsi quasi uguale.{' '}
+                  <a
+                    href={`/spazio/${codice}/parametri/materie-lavorazione`}
+                    className="font-bold underline hover:text-amber-900"
+                  >
+                    Apri le lavorazioni delle materie
+                  </a>
+                </p>
+              </div>
+            )}
 
             {documentiSuperati.length > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -2512,13 +2906,10 @@ export function VerificaSaluteAzienda({
               )}
 
             <a
-              href={`/spazio/${codice}/parametri/lavorazioni`}
+              href={linkLavorazioni}
               className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
             >
-              {LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
-                ? 'Vedi le lavorazioni'
-                : 'Configura le lavorazioni'}{' '}
-              <ArrowRight className="w-3 h-3" />
+              {etichettaLavorazioni} <ArrowRight className="w-3 h-3" />
             </a>
           </div>
           {/*
@@ -2530,7 +2921,7 @@ export function VerificaSaluteAzienda({
             carico, e resta raggiungibile anche dopo: è il motivo per cui la
             pagina sa riaprire una verifica già eseguita.
           */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+          <div id="report-uo" className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-slate-500" />
               <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
@@ -2758,6 +3149,17 @@ export function VerificaSaluteAzienda({
                       — {c.codice ? `Codice ${c.codice}` : 'Posizioni senza codice'}
                       {c.materia ? ` (${c.materia})` : ' (nessuna materia)'}: {c.righe}{' '}
                       {c.righe === 1 ? 'posizione' : 'posizioni'}, {formattaImportoEuro(c.totale)}
+                      {c.materiaId !== null && (
+                        <>
+                          {' '}
+                          <a
+                            href={`/spazio/${codice}/parametri/materie-lavorazione?materia=${c.materiaId}`}
+                            className="font-bold underline"
+                          >
+                            Indica l’ufficio
+                          </a>
+                        </>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -2802,10 +3204,13 @@ export function VerificaSaluteAzienda({
             )}
 
             <a
-              href={`/spazio/${codice}/parametri/materie-lavorazione`}
+              href={linkLavorazioni}
               className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
             >
-              Dipendenze e lavorazioni delle materie <ArrowRight className="w-3 h-3" />
+              {materieDaCompletare.length > 0
+                ? etichettaLavorazioni
+                : 'Dipendenze e lavorazioni delle materie'}{' '}
+              <ArrowRight className="w-3 h-3" />
             </a>
           </div>
 

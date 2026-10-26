@@ -25,9 +25,59 @@ import {
   type InputLavorazioneMateria,
   type LavorazioneMateria,
 } from '@/lib/titoliEnte/lavorazioniMateria';
+import { grafiaGiaUsata, registroDipendenze } from '@/lib/lavorazioni/dipendenze';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
+}
+
+/**
+ * Le grafie degli uffici già configurati nello spazio, dalla più autorevole
+ * alla più vecchia: prima le lavorazioni delle materie (la configurazione di
+ * oggi), poi i titoli dei codici, infine la tabella per tipologia di debito
+ * (congelata, ma i suoi destinatari sono ancora quelli che ricevono i
+ * documenti).
+ *
+ * Serve a una cosa sola: chi scrive «ufficio contributi» dove esiste già
+ * «Ufficio Contributi» salva la grafia che c'è. Lo stesso ufficio smette così
+ * di dividersi in due documenti diversi.
+ */
+async function grafieDegliUffici(nomeSchema: string, escludiId: number | null): Promise<string[]> {
+  // Ogni lettura è indipendente: una tabella che in questo spazio non esiste
+  // (o non è ancora stata creata) non deve impedire il salvataggio.
+  const leggi = async (sql: string, parametri: unknown[], campo: string): Promise<string[]> => {
+    try {
+      const r = await pool.query(sql, parametri);
+      return r.rows.map((x) => String(x[campo] ?? ''));
+    } catch {
+      return [];
+    }
+  };
+
+  return [
+    ...(await leggi(
+      `SELECT DISTINCT dipendenza FROM "${nomeSchema}".materie_lavorazione
+        WHERE dipendenza IS NOT NULL AND btrim(dipendenza) <> ''
+          AND ($1::int IS NULL OR id <> $1::int)
+        ORDER BY dipendenza`,
+      [escludiId],
+      'dipendenza'
+    )),
+    ...(await leggi(
+      `SELECT DISTINCT dipendenza FROM "${nomeSchema}".titoli_ente
+        WHERE dipendenza IS NOT NULL AND btrim(dipendenza) <> ''
+        ORDER BY dipendenza`,
+      [],
+      'dipendenza'
+    )),
+    ...(await leggi(
+      `SELECT DISTINCT destinatario FROM "${nomeSchema}".lavorazioni_tipo_debito
+        WHERE btrim(destinatario) <> ''
+        ORDER BY destinatario`,
+      [],
+      'destinatario'
+    )),
+  ];
 }
 
 function daRiga(r: Record<string, unknown>): LavorazioneMateria {
@@ -84,6 +134,14 @@ export async function salvaLavorazioneMateriaAction(
     ]);
     if ((materia.rowCount ?? 0) === 0)
       return { success: false, error: 'Materia non riconosciuta.' };
+
+    // L'ufficio ha un nome solo: se la grafia scritta è già in uso altrove con
+    // maiuscole o spazi diversi, si salva quella. Non si uniscono uffici
+    // diversi — si evita solo che lo stesso si sdoppi.
+    if (dato.dipendenza) {
+      const registro = registroDipendenze(await grafieDegliUffici(nomeSchema, dato.id ?? null));
+      dato.dipendenza = grafiaGiaUsata(dato.dipendenza, registro) ?? dato.dipendenza;
+    }
 
     if (dato.id != null) {
       if (!Number.isInteger(dato.id) || dato.id <= 0)

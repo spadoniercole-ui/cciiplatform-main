@@ -541,3 +541,51 @@ materia; una materia senza ufficio finisce in `senzaDipendenza` con `codice: nul
 
 `FORMATO_REPORT_UO` passa a `2`: la struttura del documento è cambiata e la versione serve a
 distinguere due PDF con lo stesso contenuto ma impaginati diversamente.
+
+### 10.5 Il triage dice dove si configura, e l'ufficio ha un nome solo (0.138.8)
+
+Quattro cose emerse provando il percorso intero, tutte sullo stesso punto: il triage
+produceva documenti ma non diceva né se erano pronti, né dove si correggeva la
+configurazione, né con quale nome si sarebbe presentato l'ufficio.
+
+**L'avviso sulle unità operative.** In fondo al triage c'erano le tre uscite — comunicazioni
+ai colleghi, un PDF per reparto, un report per ufficio — e nessuna frase che dicesse «ci sono,
+puoi mandarli». Un riquadro vuoto per configurazione incompleta era indistinguibile da uno
+vuoto perché la verifica non aveva debiti. L'avviso ora dà i numeri (uffici, posizioni,
+importo), porta ai due riquadri con un'ancora, e quando non si può procedere dice che cosa
+manca — lavorazione assente, ufficio mancante, nessuna posizione riconducibile — con il link
+alla materia da completare. L'elenco delle verifiche eseguite spiega che una verifica in
+sospeso si riapre nel triage, che è da lì che si procede.
+
+**Le soglie in una finestra.** Il pulsante «Apri le soglie di segnalazione» portava nella
+scheda dell'azienda, cioè fuori dal triage e verso lo screening, senza che si capisse da dove
+arrivassero matricola e codici CSC: sembravano valori rimasti in memoria. Ora apre una finestra
+con il confronto riga per riga (parametro, soglia, importo confrontato, esito) e con gli
+identificativi **salvati per quell'azienda** — `Anagrafica Ente`, con le etichette configurate
+nello spazio, i soli campi attivi — e dice dove si caricano. La scheda resta raggiungibile in
+fondo, come scelta.
+
+**Il link che nomina la riga.** «Configura le lavorazioni» apriva i Parametri di Spazio e
+lasciava l'operatore davanti a una pagina di cui doveva indovinare la materia. Le materie
+scoperte si ricavano da ciò che resta fuori (`categorieSenzaLavorazione` con chiave
+`MATERIA:<id>` e `senzaDipendenza`, che ora porta `materiaId`): il link le nomina e apre
+`/parametri/materie-lavorazione?materia=<id>`, dove la materia arriva in evidenza — o, se non
+ha ancora una lavorazione, il modulo con la materia già scelta. Lo stesso per le tipologie
+senza lavorazione e per le voci senza ufficio del report.
+
+**Un ufficio, un nome.** La dipendenza si scriveva in tre posti — lavorazione della materia,
+titolo del codice, vecchia tabella per tipologia — e lo stesso ufficio finiva con tre nomi:
+tre documenti, ognuno con una parte delle posizioni, e nessuno che se ne accorgesse. Ora:
+
+- `src/lib/lavorazioni/dipendenze.ts` dà la chiave dell'ufficio (maiuscole, accenti,
+  apostrofi, punteggiatura e spazi non contano) e il registro delle grafie già in uso;
+- le due uscite raggruppano per chiave (`raggruppaPerReparto`, `componiReportUo`) e le
+  consegne si registrano per ufficio, non per grafia;
+- il salvataggio della lavorazione riusa la grafia già configurata, e il campo propone gli
+  uffici esistenti;
+- due nomi che restano diversi pur sembrando lo stesso ufficio (`dipendenzeSosia`, parole
+  significative senza articoli) vengono **segnalati** nel triage e nella pagina delle
+  lavorazioni, mai uniti d'ufficio: due sedi possono chiamarsi quasi uguale.
+
+Test aggiunti: 15 (dominio delle dipendenze, raggruppamento unico nelle due uscite, avviso e
+finestra delle soglie, link alla materia mancante nella riapertura dell'interfaccia).

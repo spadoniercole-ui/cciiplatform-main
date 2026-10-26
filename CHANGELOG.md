@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.138.7**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.138.8**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,32 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.138.8 — 2026-10-26
+
+**Il triage dice se si può procedere, dove si configura e con quale nome di ufficio**
+
+Quattro cose che facevano perdere il filo a chi lavora, tutte nei Parametri e nel triage.
+
+- **L'avviso sulle comunicazioni per le unità operative.** Il triage produceva le
+  comunicazioni ai colleghi, un documento per reparto e un report per ufficio senza mai dire
+  «ci sono, puoi mandarli». Ora un avviso lo dice, con i numeri (uffici, posizioni, importo),
+  e porta ai due riquadri; quando non si può, dice che cosa manca e dove si configura. Anche
+  l'elenco delle verifiche già eseguite spiega che una verifica in sospeso si riapre da lì.
+- **Le soglie si aprono in una finestra, non portano fuori dal triage.** Il pulsante mandava
+  nella scheda dell'azienda — cioè fuori, verso lo screening — e non si capiva da dove
+  arrivassero matricola e codici CSC. Ora apre il confronto riga per riga e gli identificativi
+  **salvati per quell'azienda** (Anagrafica Ente), con l'indicazione di dove si caricano.
+- **Il link alle lavorazioni dice quale.** «Configura le lavorazioni» apriva i Parametri senza
+  indicare la riga: ora il link nomina le materie scoperte e apre quella
+  (`/parametri/materie-lavorazione?materia=…`), con la materia in evidenza. Lo stesso vale per
+  le tipologie senza lavorazione e per le voci senza ufficio nel report per unità operativa.
+- **Un ufficio, un nome.** La dipendenza si scriveva in tre punti e lo stesso ufficio finiva
+  con tre nomi: tre documenti, ognuno con metà delle posizioni. Il confronto ora ignora
+  maiuscole, accenti, spazi e punteggiatura, e le consegne si registrano per ufficio e non per
+  grafia. Il salvataggio riusa la grafia già configurata, il campo propone gli uffici esistenti
+  e — se due nomi restano diversi pur sembrando lo stesso ufficio — il triage lo segnala senza
+  unirli da solo, perché due sedi possono chiamarsi quasi uguale.
 
 ## 0.138.7 — 2026-10-26
 

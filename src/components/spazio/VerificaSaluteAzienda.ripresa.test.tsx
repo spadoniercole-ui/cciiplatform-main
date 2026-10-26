@@ -99,6 +99,18 @@ vi.mock('@/app/actions/documentiOrigine', () => ({
   registraDocumentoOrigineAction: vi.fn(),
 }));
 
+// Gli identificativi dell'azienda presso l'ente: la finestra delle soglie li
+// legge quando si apre, e devono essere quelli dell'Anagrafica Ente.
+vi.mock('@/app/actions/anagraficaEnte', () => ({
+  ottieniAnagraficaEnte: vi.fn(),
+  salvaAnagraficaEnteAction: vi.fn(),
+}));
+
+vi.mock('@/app/actions/anagraficaEnteConfig', () => ({
+  ottieniEtichetteAnagraficaEnte: vi.fn(),
+  aggiornaEtichettaAnagraficaEnteAction: vi.fn(),
+}));
+
 import type { AnagraficaEstratta } from '@/app/actions/visuraEstrazione';
 import {
   creaAziendaInVerificaAction,
@@ -115,6 +127,8 @@ import { ottieniCategorieTipoDebito } from '@/app/actions/categorieTipoDebito';
 import { ottieniLavorazioniTipoDebito } from '@/app/actions/lavorazioniTipoDebito';
 import { ottieniConsegneRepartiAction } from '@/app/actions/consegneReparti';
 import { valutaSoglieAction } from '@/app/actions/soglie25novies';
+import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
+import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import { RISCONTRO_VUOTO } from '@/lib/titoliEnte/titoli';
 import { VerificaSaluteAzienda } from './VerificaSaluteAzienda';
 
@@ -288,6 +302,31 @@ beforeEach(() => {
     ],
   });
 
+  vi.mocked(ottieniAnagraficaEnte).mockResolvedValue({
+    success: true,
+    dati: {
+      idEnte: 'ENTE-77',
+      campo1: '0912345678',
+      campo2: null,
+      campo3: 'CSC-01',
+      campo4: null,
+      campo5: null,
+      campo6: null,
+      campo7: null,
+      campo8: null,
+      campo9: null,
+      campo10: null,
+    },
+  });
+  vi.mocked(ottieniEtichetteAnagraficaEnte).mockResolvedValue({
+    success: true,
+    etichette: [
+      { campo: 1, etichetta: 'Matricola INPS', attivo: true },
+      { campo: 3, etichetta: 'Codice CSC', attivo: true },
+      { campo: 4, etichetta: 'Campo disattivato', attivo: false },
+    ],
+  });
+
   vi.mocked(ottieniConsegneRepartiAction).mockResolvedValue({ success: true, consegne: [] });
   vi.mocked(creaAziendaInVerificaAction).mockResolvedValue({
     success: false,
@@ -355,5 +394,107 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     // creata, nessun ciclo nuovo che archivi il lavoro precedente.
     expect(estraiAnagraficaDaVisuraAction).not.toHaveBeenCalled();
     expect(creaAziendaInVerificaAction).not.toHaveBeenCalled();
+  });
+
+  it('dice che si può procedere alle comunicazioni per le unità operative, con i numeri', async () => {
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Puoi procedere alle comunicazioni per le unità operative')
+      ).toBeTruthy()
+    );
+    // I numeri dell'avviso sono quelli dei documenti, non una frase generica:
+    // un ufficio, una posizione, 1.200 €.
+    expect(screen.getByText(/1 ufficio, 1 posizione, 1\.200,00 €/)).toBeTruthy();
+    // E porta ai due riquadri, senza farli cercare.
+    expect(screen.getByRole('link', { name: /Vai ai documenti per reparto/i })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Vai ai report per unità operativa/i })).toBeTruthy();
+  });
+
+  it('le soglie si aprono in una finestra, con gli identificativi salvati per l’azienda', async () => {
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    const apri = await screen.findByRole('button', { name: /Apri le soglie di segnalazione/i });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    apri.click();
+
+    const finestra = await screen.findByRole('dialog');
+    // Gli identificativi sono quelli salvati (Anagrafica Ente), non valori
+    // rimasti nella videata: matricola, codice CSC e ID ente.
+    expect(within(finestra).getByText(/Riconosciuta dall.ente come/i)).toBeTruthy();
+    await waitFor(() => expect(within(finestra).getByText('Matricola INPS')).toBeTruthy());
+    expect(within(finestra).getByText('0912345678')).toBeTruthy();
+    expect(within(finestra).getByText('Codice CSC')).toBeTruthy();
+    expect(within(finestra).getByText('CSC-01')).toBeTruthy();
+    expect(within(finestra).getByText('ENTE-77')).toBeTruthy();
+    // Un campo disattivato non compare, anche se avesse un valore.
+    expect(within(finestra).queryByText('Campo disattivato')).toBeNull(); // Si chiude: la finestra è una lettura, non un passaggio obbligato.
+    within(finestra)
+      .getAllByRole('button', { name: /^Chiudi$/ })
+      .at(-1)!
+      .click();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('senza ufficio sulla materia, il link porta alla lavorazione che manca', async () => {
+    // Nessuna lavorazione, né della materia né della vecchia tabella: il codice
+    // 27 non ha una dipendenza propria e la sua materia non ne porta una.
+    vi.mocked(ottieniLavorazioniMateria).mockResolvedValue({ success: true, lavorazioni: [] });
+    vi.mocked(ottieniLavorazioniTipoDebito).mockResolvedValue({ success: true, lavorazioni: [] });
+    vi.mocked(ottieniTitoliEnteAction).mockResolvedValue({
+      success: true,
+      dominioEnte: null,
+      titoli: [
+        {
+          id: 1,
+          codice: '27',
+          atto: 'Flusso Uniemens',
+          presuppostoGiuridico: '',
+          riferimentoInterno: null,
+          effettoCalcolo: 'NESSUNO',
+          note: null,
+          materiaId: 1,
+          dipendenza: null,
+          riscontroNorma: RISCONTRO_VUOTO,
+          riscontroInterno: RISCONTRO_VUOTO,
+        },
+      ],
+    });
+
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Le comunicazioni per le unità operative non sono pronte')
+      ).toBeTruthy()
+    );
+
+    // Il link non manda «ai parametri»: dice quale materia e la apre.
+    const link = within(sezioneDi('Comunicazioni ai colleghi')).getByRole('link', {
+      name: /Configura la lavorazione di «Flussi Uniemens»/i,
+    });
+    expect(link.getAttribute('href')).toBe('/spazio/prova/parametri/materie-lavorazione?materia=1');
   });
 });

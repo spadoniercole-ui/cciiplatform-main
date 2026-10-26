@@ -33,6 +33,8 @@
 // non «non inviato»: l'una è un fatto registrato, l'altra una supposizione.
 
 import { formattaImportoEuro } from './comunicazioni';
+// Le consegne si contano per ufficio, non per come è stata scritta la sua dipendenza.
+import { chiaveDipendenza } from './dipendenze';
 
 /**
  * QUALE DEI DUE DOCUMENTI È USCITO.
@@ -477,7 +479,10 @@ export function riassumiConsegne(righe: ConsegnaRegistrata[]): RiepilogoConsegne
   const locali = new Map<string, number>();
 
   for (const c of righe) {
-    const nome = c.reparto.trim().toLocaleLowerCase('it-IT');
+    // La chiave dell'ufficio, non la sua grafia: la stessa consegna registrata
+    // quando il destinatario si chiamava «Presidio flussi» e la successiva
+    // quando si chiamava «PRESIDIO FLUSSI» sono consegne dello stesso ufficio.
+    const nome = chiaveDipendenza(c.reparto);
     if (!nome) continue;
     // La chiave porta il tipo: stesso nome, due documenti diversi.
     const tipo: TipoDocumentoConsegnato = c.tipo ?? 'reparto';

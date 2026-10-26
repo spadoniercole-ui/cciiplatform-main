@@ -12,7 +12,7 @@
 // flusso, poi la diffida, poi la contabilizzazione, e ciascuna ha il suo
 // ufficio e i suoi passi. La prima per ordine è quella che il titolo eredita.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ClipboardList, Plus, Save, Trash2, ArrowRight } from 'lucide-react';
 import { useDichiaraContestoAssistente } from '@/components/ContestoAssistenteContext';
@@ -36,10 +36,17 @@ import {
 } from '@/lib/titoliEnte/recupero';
 import type { MateriaEnte } from '@/lib/titoliEnte/materie';
 import { AnteprimaPassi } from '@/components/spazio/TitoliEnteManager';
+import { dipendenzeSosia, grafiaGiaUsata, registroDipendenze } from '@/lib/lavorazioni/dipendenze';
 
 interface Props {
   nomeSchema: string;
   codice: string;
+  /**
+   * La materia da cui si arriva (dal triage, `?materia=`): si apre in evidenza,
+   * così chi clicca «configura la lavorazione di …» trova quella e non un
+   * elenco da cercare.
+   */
+  apriMateriaId?: number | null;
 }
 
 const CLASSE =
@@ -65,7 +72,39 @@ function Contatore({ testo, massimo }: { testo: string; massimo: number }) {
   );
 }
 
-export function MaterieLavorazioneManager({ nomeSchema, codice }: Props) {
+/**
+ * «Questo ufficio esiste già con un'altra grafia».
+ *
+ * Non corregge da sola: chi scrive può avere una ragione per un nome nuovo.
+ * Offre la grafia in uso, e risparmia il caso che nessuno vede — lo stesso
+ * ufficio che si sdoppia perché una volta è stato scritto con una maiuscola.
+ */
+function VarianteGiaUsata({
+  nome,
+  registro,
+  onUsa,
+}: {
+  nome: string | null;
+  registro: { nome: string; chiave: string }[];
+  onUsa: (nome: string) => void;
+}) {
+  const grafia = grafiaGiaUsata(nome, registro);
+  if (!grafia || grafia === (nome ?? '').replace(/\s+/g, ' ').trim()) return null;
+  return (
+    <p className="mt-1 text-[10px] text-amber-800 leading-relaxed">
+      Lo stesso ufficio è già configurato come «{grafia}».{' '}
+      <button
+        type="button"
+        onClick={() => onUsa(grafia)}
+        className="font-bold underline hover:text-amber-900"
+      >
+        Usa quella grafia
+      </button>
+    </p>
+  );
+}
+
+export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = null }: Props) {
   useDichiaraContestoAssistente({
     pagina: 'parametri',
     nomeSchema,
@@ -79,6 +118,8 @@ export function MaterieLavorazioneManager({ nomeSchema, codice }: Props) {
   const [caricamento, setCaricamento] = useState(true);
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  const blocchiMateria = useRef(new Map<number, HTMLDivElement>());
+  const formNuovaLavorazione = useRef<HTMLDivElement>(null);
 
   const carica = async () => {
     setCaricamento(true);
@@ -120,6 +161,21 @@ export function MaterieLavorazioneManager({ nomeSchema, codice }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema]);
 
+  // La materia da cui si arriva si porta sotto il cursore: un elenco lungo, con
+  // trenta materie, non dice a nessuno quale delle trenta sia quella segnalata.
+  useEffect(() => {
+    if (!apriMateriaId || caricamento) return;
+    setNuova((prev) =>
+      prev.tipologia.trim() === '' && prev.materiaId !== apriMateriaId
+        ? { ...prev, materiaId: apriMateriaId }
+        : prev
+    );
+    // Una materia senza lavorazione non ha un blocco da mostrare: si arriva al
+    // modulo che la aggiunge, già puntato su quella materia.
+    const blocco = blocchiMateria.current.get(apriMateriaId) ?? formNuovaLavorazione.current;
+    if (blocco) blocco.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [apriMateriaId, caricamento]);
+
   const salva = async (input: InputLavorazioneMateria) => {
     setInCorso(true);
     setErrore(null);
@@ -149,6 +205,11 @@ export function MaterieLavorazioneManager({ nomeSchema, codice }: Props) {
   const nomeMateria = (id: number) => materie.find((m) => m.id === id)?.nome ?? `Materia ${id}`;
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
+
+  // Gli uffici già configurati: l'elenco che si propone quando si scrive una
+  // dipendenza, così lo stesso ufficio non prende tre nomi diversi.
+  const registro = registroDipendenze(lavorazioni.map((l) => l.dipendenza));
+  const sosia = dipendenzeSosia(lavorazioni.map((l) => l.dipendenza));
 
   const materieSenzaLavorazione = materie.filter(
     (m) => m.id != null && lavorazioniDellaMateria(lavorazioni, m.id).length === 0
@@ -195,6 +256,33 @@ export function MaterieLavorazioneManager({ nomeSchema, codice }: Props) {
         </div>
       )}
 
+      {sosia.length > 0 && (
+        <div className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
+          <p className="font-bold">
+            {sosia.length === 1
+              ? 'Due nomi diversi sembrano lo stesso ufficio'
+              : `${sosia.length} gruppi di nomi sembrano lo stesso ufficio`}
+          </p>
+          {sosia.map((gruppo) => (
+            <p key={gruppo.join('|')} className="leading-relaxed">
+              — {gruppo.join(' / ')}
+            </p>
+          ))}
+          <p className="leading-relaxed text-amber-800">
+            Finché i nomi restano diversi, le posizioni di quell’ufficio si dividono in due
+            documenti. La piattaforma non li unisce da sola — potrebbero essere due sedi che
+            rispondono a pratiche diverse: indica lo stesso nome nelle lavorazioni delle materie.
+          </p>
+        </div>
+      )}
+
+      {/* Gli uffici già configurati: si scelgono da qui invece di riscriverli. */}
+      <datalist id="uffici-configurati">
+        {registro.map((u) => (
+          <option key={u.chiave} value={u.nome} />
+        ))}
+      </datalist>
+
       {materie.length === 0 ? (
         <p className="text-xs text-slate-500">
           Nessuna materia configurata. Le materie si creano nei{' '}
@@ -207,7 +295,14 @@ export function MaterieLavorazioneManager({ nomeSchema, codice }: Props) {
           : una lavorazione senza materia non avrebbe a chi appartenere.
         </p>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+        <div
+          ref={formNuovaLavorazione}
+          className={`bg-white border rounded-xl p-5 space-y-4 ${
+            apriMateriaId !== null && !blocchiMateria.current.has(apriMateriaId)
+              ? 'border-amber-300 ring-2 ring-amber-200'
+              : 'border-slate-200'
+          }`}
+        >
           <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
             Nuova lavorazione
           </h3>
@@ -265,6 +360,7 @@ export function MaterieLavorazioneManager({ nomeSchema, codice }: Props) {
               Dipendenza
               <input
                 type="text"
+                list="uffici-configurati"
                 value={nuova.dipendenza ?? ''}
                 onChange={(e) =>
                   setNuova((prev) => ({ ...prev, dipendenza: e.target.value || null }))
@@ -273,6 +369,11 @@ export function MaterieLavorazioneManager({ nomeSchema, codice }: Props) {
                 className={`${CLASSE} mt-1`}
               />
               <Contatore testo={nuova.dipendenza ?? ''} massimo={MASSIMO_CARATTERI_DIPENDENZA} />
+              <VarianteGiaUsata
+                nome={nuova.dipendenza}
+                registro={registro}
+                onUsa={(nome) => setNuova((prev) => ({ ...prev, dipendenza: nome }))}
+              />
             </label>
             <label className="lg:col-span-7 text-[10px] font-bold uppercase tracking-wider text-slate-600">
               Procedura — un passo per riga
@@ -300,7 +401,17 @@ export function MaterieLavorazioneManager({ nomeSchema, codice }: Props) {
       )}
 
       {materieConLavorazione.map((m) => (
-        <div key={m.id} className="space-y-3">
+        <div
+          key={m.id}
+          id={`materia-${m.id}`}
+          ref={(el) => {
+            if (el) blocchiMateria.current.set(m.id!, el);
+            else blocchiMateria.current.delete(m.id!);
+          }}
+          className={`space-y-3 rounded-xl ${
+            apriMateriaId === m.id ? 'ring-2 ring-amber-300 ring-offset-2 p-1' : ''
+          }`}
+        >
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">{m.nome}</h3>
             {m.stato !== 'CONFERMATA' && (
@@ -361,11 +472,17 @@ export function MaterieLavorazioneManager({ nomeSchema, codice }: Props) {
                     Dipendenza
                     <input
                       type="text"
+                      list="uffici-configurati"
                       value={b.dipendenza ?? ''}
                       onChange={(e) => modificaBozza(l.id, { dipendenza: e.target.value || null })}
                       className={`${CLASSE} mt-1`}
                     />
                     <Contatore testo={b.dipendenza ?? ''} massimo={MASSIMO_CARATTERI_DIPENDENZA} />
+                    <VarianteGiaUsata
+                      nome={b.dipendenza}
+                      registro={registro}
+                      onUsa={(nome) => modificaBozza(l.id, { dipendenza: nome })}
+                    />
                   </label>
                   <label className="lg:col-span-3 text-[10px] font-bold uppercase tracking-wider text-slate-600">
                     Esito

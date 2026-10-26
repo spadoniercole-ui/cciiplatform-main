@@ -73,7 +73,9 @@ describe('componiReportUo', () => {
     expect(d.totale).toBe(2_000);
     expect(d.posizioniDaContabilizzare).toBe(2);
     expect(d.importoDaContabilizzare).toBe(2_000);
-    expect(esito.senzaDipendenza).toEqual([{ codice: '18', materia: null, righe: 1, totale: 500 }]);
+    expect(esito.senzaDipendenza).toEqual([
+      { codice: '18', materia: null, materiaId: null, righe: 1, totale: 500 },
+    ]);
 
     const c27 = d.codici.find((c) => c.codice === '27')!;
     expect(c27.materia).toBe('Flussi Uniemens');
@@ -111,7 +113,7 @@ describe('componiReportUo', () => {
     });
     expect(esito.documenti).toHaveLength(0);
     expect(esito.senzaDipendenza).toEqual([
-      { codice: '27', materia: null, righe: 1, totale: 1_200 },
+      { codice: '27', materia: null, materiaId: null, righe: 1, totale: 1_200 },
     ]);
   });
 
@@ -155,7 +157,7 @@ describe('componiReportUo', () => {
     });
     expect(esito.documenti).toHaveLength(0);
     expect(esito.senzaDipendenza).toEqual([
-      { codice: null, materia: 'Note di rettifica', righe: 1, totale: 300 },
+      { codice: null, materia: 'Note di rettifica', materiaId: 11, righe: 1, totale: 300 },
     ]);
   });
 
@@ -216,6 +218,33 @@ describe('componiReportUo', () => {
 
     const { versione, nomeFile: _nomeFile, ...contenuto } = a;
     expect(versioneReportUo(contenuto)).toBe(versione);
+  });
+
+  it('lo stesso ufficio scritto con maiuscole e spazi diversi resta un documento solo', () => {
+    const esito = componiReportUo({
+      ...base,
+      titoli: [titolo(), titolo({ id: 2, codice: '25', materiaId: 11 })],
+      materie: [
+        { id: 10, nome: 'Flussi Uniemens' },
+        { id: 11, nome: 'Gestione separata' },
+      ],
+      lavorazioni: [
+        lav(),
+        lav({
+          id: 2,
+          materiaId: 11,
+          tipologia: 'Verifica della posizione',
+          dipendenza: 'UFFICIO   CONTRIBUTI',
+        }),
+      ],
+      righe: [riga(), riga({ voce: 'TS 25 gestione separata', importo: 300 })],
+    });
+
+    expect(esito.documenti).toHaveLength(1);
+    expect(esito.documenti[0].dipendenza).toBe('Ufficio contributi');
+    expect(esito.documenti[0].codici.map((c) => c.codice)).toEqual(['25', '27']);
+    expect(esito.documenti[0].righe).toBe(2);
+    expect(esito.documenti[0].totale).toBe(1_500);
   });
 
   it('il nome del file porta azienda, ufficio e versione', () => {

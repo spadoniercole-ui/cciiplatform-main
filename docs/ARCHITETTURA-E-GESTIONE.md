@@ -369,6 +369,7 @@ domande che potrebbero non esistere più). Lo storico delle generazioni è conse
 | Comunicazioni ai colleghi | `src/lib/lavorazioni/comunicazioni.ts` |
 | Documenti per i reparti (PDF, dal triage) | `src/lib/lavorazioni/reparti.ts`, `src/lib/lavorazioni/pdfReparto.ts` |
 | Report per unità operativa (PDF per dipendenza, per codice o materia) | `src/lib/lavorazioni/reportUo.ts`, `src/lib/lavorazioni/pdfReportUo.ts` |
+| Nome unico degli uffici (dipendenza) | `src/lib/lavorazioni/dipendenze.ts` |
 | Relazione | `src/lib/relazione/contestoRicevente.ts`, `src/lib/revisore` |
 | Backup | `src/lib/backup` |
 | Edizioni | `src/lib/edizioneServer.ts`, `src/lib/portableDb.ts`, `src/lib/blobStore.ts` |

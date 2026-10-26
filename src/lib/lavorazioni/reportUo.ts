@@ -57,6 +57,8 @@ import {
 import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
 import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 import type { PosizioniEscluse } from './comunicazioni';
+// Lo stesso ufficio scritto due volte resta un documento solo (vedi dipendenze.ts).
+import { chiaveDipendenza } from './dipendenze';
 
 /** Una posizione del V.E.R.A. nella forma che serve al report. */
 export interface RigaVeraReportUo {
@@ -129,6 +131,11 @@ export interface CodiceSenzaDipendenza {
   /** Il codice di partita; null quando la voce è raggruppata per materia. */
   codice: string | null;
   materia: string | null;
+  /**
+   * La materia da cui viene l'ufficio mancante: è il punto da configurare, e
+   * senza questo id chi legge l'avviso non sa dove andare.
+   */
+  materiaId: number | null;
   righe: number;
   totale: number;
 }
@@ -289,7 +296,7 @@ export function componiReportUo(input: {
     righe: RigaVeraReportUo[];
   }
 
-  // dipendenza (chiave senza maiuscole) → voce → righe
+  // dipendenza (chiave dell'ufficio) → voce → righe
   const gruppi = new Map<string, { dipendenza: string; voci: Map<string, VoceUo> }>();
   const orfani = new Map<string, VoceUo>();
   let codiciSenzaLavorazione = 0;
@@ -318,8 +325,7 @@ export function componiReportUo(input: {
     const dipendenza = unaRiga(
       dipendenzaEffettiva({ dipendenza: titolo?.dipendenza ?? null, materiaId }, input.lavorazioni)
         .valore ?? ''
-    );
-    // La chiave della voce: il codice, oppure la materia quando il codice non c'è.
+    ); // La chiave della voce: il codice, oppure la materia quando il codice non c'è.
     const chiaveVoce = codice ? `C:${normalizzaCodice(codice)}` : `M:${materiaId}`;
 
     // Senza dipendenza non c'è un ufficio a cui andare: si dichiara.
@@ -330,7 +336,7 @@ export function componiReportUo(input: {
       continue;
     }
 
-    const chiaveGruppo = dipendenza.toLocaleLowerCase('it-IT');
+    const chiaveGruppo = chiaveDipendenza(dipendenza);
     const gruppo = gruppi.get(chiaveGruppo) ?? { dipendenza, voci: new Map() };
     const voce = gruppo.voci.get(chiaveVoce) ?? { codice, materiaId, materia, righe: [] };
     voce.righe.push(r);
@@ -411,6 +417,7 @@ export function componiReportUo(input: {
       .map((o) => ({
         codice: o.codice,
         materia: o.materia,
+        materiaId: o.materiaId,
         righe: o.righe.length,
         totale: o.righe.reduce((a, r) => a + r.importo, 0),
       }))
