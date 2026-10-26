@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { componiCatenaDirettrici, direttriceConfigurata, nomiDirettrici } from './direttrici';
+import {
+  componiCatenaDirettrici,
+  direttriceConfigurata,
+  nomiDirettrici,
+  pianificaRiallineamento,
+} from './direttrici';
 import type { LavorazioneMateria } from './lavorazioniMateria';
 
 const lav = (p: Partial<LavorazioneMateria> & { id: number }): LavorazioneMateria => ({
@@ -126,5 +131,77 @@ describe('catena direttrici → lavorazioni → titoli', () => {
     });
     expect(esito.voci).toEqual([]);
     expect(esito.fuoriElenco).toEqual([{ nome: 'Ufficio legale', lavorazioni: 1, codici: 1 }]);
+  });
+});
+
+describe('riportare un ufficio fuori elenco a una direttrice', () => {
+  const direttriciCatena = direttrici('Gestione del credito', 'Presidio dei flussi informativi');
+
+  const titoloRiga = (p: { id: number; dipendenza: string | null }) => ({
+    id: p.id,
+    dipendenza: p.dipendenza,
+  });
+
+  it('sposta lavorazioni e codici che nominano l’ufficio, in qualunque grafia', () => {
+    const esito = pianificaRiallineamento({
+      da: 'ufficio legale',
+      a: 'gestione del credito',
+      direttrici: direttriciCatena,
+      lavorazioni: [
+        lav({ id: 1, dipendenza: 'Ufficio Legale' }),
+        lav({ id: 2, dipendenza: 'Gestione del credito' }),
+      ],
+      titoli: [
+        titoloRiga({ id: 10, dipendenza: 'UFFICIO LEGALE' }),
+        titoloRiga({ id: 11, dipendenza: null }),
+      ],
+    });
+    expect(esito.ok).toBe(true);
+    if (!esito.ok) return;
+    // La grafia è quella scritta nelle direttrici: è quella che finisce nei documenti.
+    expect(esito.piano.destinazione).toBe('Gestione del credito');
+    expect(esito.piano.lavorazioni).toEqual([1]);
+    expect(esito.piano.codici).toEqual([10]);
+  });
+
+  it('non sposta un ufficio che è già una direttrice', () => {
+    const esito = pianificaRiallineamento({
+      da: 'presidio dei flussi informativi',
+      a: 'Gestione del credito',
+      direttrici: direttriciCatena,
+      lavorazioni: [lav({ id: 1, dipendenza: 'Presidio dei flussi informativi' })],
+      titoli: [],
+    });
+    expect(esito).toEqual({
+      ok: false,
+      error: '«presidio dei flussi informativi» è già una direttrice: non c’è nulla da riportare.',
+    });
+  });
+
+  it('pretende una direttrice come destinazione, e non un altro nome libero', () => {
+    const esito = pianificaRiallineamento({
+      da: 'Ufficio legale',
+      a: 'Ufficio contenzioso',
+      direttrici: direttriciCatena,
+      lavorazioni: [lav({ id: 1, dipendenza: 'Ufficio legale' })],
+      titoli: [],
+    });
+    expect(esito.ok).toBe(false);
+    if (esito.ok) return;
+    expect(esito.error).toMatch(/una delle direttrici configurate/);
+  });
+
+  it('se nessuna riga lo nomina più, lo dice invece di fingere di aver spostato', () => {
+    const esito = pianificaRiallineamento({
+      da: 'Ufficio legale',
+      a: 'Gestione del credito',
+      direttrici: direttriciCatena,
+      lavorazioni: [lav({ id: 1, dipendenza: 'Gestione del credito' })],
+      titoli: [],
+    });
+    expect(esito).toEqual({
+      ok: false,
+      error: 'Nessuna lavorazione o codice dichiara più «Ufficio legale».',
+    });
   });
 });

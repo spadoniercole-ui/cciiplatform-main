@@ -26,6 +26,26 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.1 — 2026-10-26
+
+**Riportare un ufficio fuori elenco a una direttrice, in un clic**
+
+La catena delle direttrici sapeva dire quali uffici restavano fuori elenco, ma per sistemarli
+bisognava andare nelle lavorazioni, una per una, e riscegliere il destinatario: con trenta
+materie è il modo in cui l'ufficio si risdoppia di nuovo. Ora la pagina delle direttrici, dove
+l'elenco è già scritto, offre il comando accanto a ogni ufficio: si sceglie la direttrice e si
+riporta lì — con la grafia scritta nei Parametri, maiuscole, accenti e punteggiatura compresi.
+
+- **Si sposta il nome, non si indovina il significato**: vengono riportate le lavorazioni delle
+  materie che nominano quell'ufficio e i titoli che lo dichiarano sul proprio codice, perché
+  finché ne resta uno solo il destinatario continua a sdoppiarsi nel documento.
+- **Le due scritture stanno in una transazione**: o si sposta tutto, o niente.
+- **Il comando rifiuta di fare danni**: una direttrice come origine (non c'è nulla da
+  riportare), un nome libero come destinazione, o nessuna riga che nomini più l'ufficio — in
+  tutti e tre i casi lo dice e non tocca la configurazione.
+- Alla fine il riquadro della catena si ricarica da solo e l'ufficio sparisce dall'elenco dei
+  fuori elenco: quel destinatario ha di nuovo un nome solo, in ogni documento.
+
 ## 0.139.0 — 2026-10-26
 
 **Un solo ingresso: le direttrici dell'ente, e da lì scende tutto il resto**

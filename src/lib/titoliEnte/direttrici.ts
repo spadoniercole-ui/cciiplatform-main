@@ -193,3 +193,69 @@ export function componiCatenaDirettrici(input: {
     codiciSenzaUfficio,
   };
 }
+
+/**
+ * Che cosa si sposta quando un ufficio fuori elenco viene riportato a una
+ * direttrice: le righe nominate, gli uffici vuoti, il nome canonico da
+ * scrivere.
+ */
+export interface PianoRiallineamento {
+  /** La grafia scritta nelle direttrici: è quella che finisce nei documenti. */
+  destinazione: string;
+  /** Gli id delle lavorazioni delle materie che dichiarano l'ufficio. */
+  lavorazioni: number[];
+  /** Gli id dei titoli che lo dichiarano sul proprio codice. */
+  codici: number[];
+}
+
+export type EsitoPianoRiallineamento =
+  { ok: true; piano: PianoRiallineamento } | { ok: false; error: string };
+
+/**
+ * RIPORTARE UN UFFICIO FUORI ELENCO A UNA DIRETTRICE (0.139.1).
+ *
+ * Il riallineamento tocca sia le lavorazioni delle materie (che lo scelgono)
+ * sia i titoli che lo dichiarano sul proprio codice — sono i due posti in cui
+ * un ufficio può essere scritto con un nome che non esiste più, e finché ne
+ * resta uno il destinatario continua a sdoppiarsi nel documento. Il confronto è
+ * per chiave, come ovunque: maiuscole, accenti e punteggiatura non contano.
+ *
+ * Non si indovina il significato: si sposta un nome su una direttrice che
+ * l'utente ha scelto. Se l'ufficio è già una direttrice, o se non c'è nulla da
+ * spostare, si dice e non si tocca niente.
+ */
+export function pianificaRiallineamento(input: {
+  da: string | null | undefined;
+  a: string | null | undefined;
+  direttrici: DirettriceNome[] | null | undefined;
+  lavorazioni: Pick<LavorazioneMateria, 'id' | 'dipendenza'>[];
+  titoli: Pick<TitoloEnte, 'id' | 'dipendenza'>[];
+}): EsitoPianoRiallineamento {
+  const da = nomeDipendenza(input.da);
+  const chiaveDa = chiaveDipendenza(da);
+  if (!chiaveDa) return { ok: false, error: 'Indica l’ufficio da riportare a una direttrice.' };
+
+  const nomi = nomiDirettrici(input.direttrici);
+  if (nomi.some((n) => chiaveDipendenza(n) === chiaveDa))
+    return { ok: false, error: `«${da}» è già una direttrice: non c’è nulla da riportare.` };
+
+  const destinazione = direttriceConfigurata(input.a, nomi);
+  if (!destinazione)
+    return {
+      ok: false,
+      error: 'Scegli come destinazione una delle direttrici configurate (e salva prima le nuove).',
+    };
+
+  const lavorazioni = input.lavorazioni
+    .filter((l) => chiaveDipendenza(l.dipendenza) === chiaveDa)
+    .map((l) => l.id);
+  const codici = input.titoli
+    .filter((t) => chiaveDipendenza(t.dipendenza) === chiaveDa)
+    .map((t) => t.id)
+    .filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0);
+
+  if (lavorazioni.length === 0 && codici.length === 0)
+    return { ok: false, error: `Nessuna lavorazione o codice dichiara più «${da}».` };
+
+  return { ok: true, piano: { destinazione, lavorazioni, codici } };
+}

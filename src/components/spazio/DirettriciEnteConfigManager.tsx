@@ -8,7 +8,10 @@ import {
   aggiornaDirettriciEnteAction,
   type DirettriceStrutturata,
 } from '@/app/actions/screeningAzienda';
-import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
+import {
+  ottieniLavorazioniMateria,
+  riallineaUfficioAllaDirettriceAction,
+} from '@/app/actions/materieLavorazione';
 import { ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
 import { componiCatenaDirettrici } from '@/lib/titoliEnte/direttrici';
 import type { LavorazioneMateria } from '@/lib/titoliEnte/lavorazioniMateria';
@@ -36,6 +39,11 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice }: Props) {
   const [salvataggio, setSalvataggio] = useState(false);
   const [salvato, setSalvato] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
+  // L'ufficio fuori elenco scelto per il riallineamento, e la direttrice di
+  // destinazione: due clic in tutto — la scelta e il comando.
+  const [destinazione, setDestinazione] = useState<Record<string, string>>({});
+  const [riallineamentoInCorso, setRiallineamentoInCorso] = useState<string | null>(null);
+  const [riallineato, setRiallineato] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -52,6 +60,44 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice }: Props) {
       setCaricamento(false);
     })();
   }, [nomeSchema]);
+
+  const ricaricaLavorazioniETitoli = async () => {
+    const [l, t] = await Promise.all([
+      ottieniLavorazioniMateria(nomeSchema),
+      ottieniTitoliEnteAction(nomeSchema),
+    ]);
+    if (l.success) setLavorazioni(l.lavorazioni);
+    if (t.success) setTitoli(t.titoli);
+  };
+
+  // Un ufficio fuori elenco non è un errore da correggere a mano, riga per
+  // riga: è un nome che va riportato su una direttrice. Il comando fa tutto —
+  // lavorazioni delle materie e titoli che lo dichiarano — e poi ricarica la
+  // catena, così il riquadro mostra subito che l'ufficio non c'è più.
+  const riallinea = async (ufficio: string) => {
+    const a = destinazione[ufficio];
+    if (!a) return;
+    setRiallineamentoInCorso(ufficio);
+    setErrore(null);
+    setRiallineato(null);
+    setSalvato(false);
+    const r = await riallineaUfficioAllaDirettriceAction(nomeSchema, ufficio, a);
+    if (!r.success) setErrore(r.error || 'Riallineamento non riuscito.');
+    else {
+      const n = r.lavorazioni ?? 0;
+      const c = r.codici ?? 0;
+      setRiallineato(
+        `«${ufficio}» ora è «${r.destinazione}»: ${n === 1 ? 'una lavorazione' : `${n} lavorazioni`} e ${c === 1 ? 'un codice' : `${c} codici`} riportati.`
+      );
+      setDestinazione((prev) => {
+        const copia = { ...prev };
+        delete copia[ufficio];
+        return copia;
+      });
+      await ricaricaLavorazioniETitoli();
+    }
+    setRiallineamentoInCorso(null);
+  };
 
   const handleSalva = async () => {
     setSalvataggio(true);
@@ -142,6 +188,11 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice }: Props) {
           Direttrici aggiornate.
         </div>
       )}
+      {riallineato && (
+        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+          {riallineato}
+        </div>
+      )}
 
       {catena.voci.length > 0 && (
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
@@ -189,14 +240,56 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice }: Props) {
             </tbody>
           </table>
           {catena.fuoriElenco.length > 0 && (
-            <p className="text-[10px] text-amber-800 leading-relaxed">
-              Uffici in uso che non sono direttrici:{' '}
-              {catena.fuoriElenco
-                .map((u) => `${u.nome} (${u.lavorazioni} lavorazioni, ${u.codici} codici)`)
-                .join(' · ')}
-              . O sono uffici da aggiungere qui, o sono nomi vecchi da riportare a una direttrice:
-              finché restano fuori, quel destinatario ha un nome che vale solo per sé.
-            </p>
+            <div className="border-t border-slate-200 pt-2 space-y-1.5">
+              <p className="text-[10px] text-amber-800 leading-relaxed">
+                Uffici in uso che non sono direttrici: o sono uffici da aggiungere qui, o sono nomi
+                vecchi da riportare a una direttrice — finché restano fuori, quel destinatario ha un
+                nome che vale solo per sé. Scegli la direttrice e riportacelo: vengono spostate
+                anche le lavorazioni delle materie che lo nominano.
+              </p>
+              {catena.fuoriElenco.map((u) => {
+                const scelta = destinazione[u.nome] ?? '';
+                const inCorso = riallineamentoInCorso === u.nome;
+                return (
+                  <div
+                    key={u.nome}
+                    className="flex flex-wrap items-center gap-2 bg-white border border-amber-200 rounded-lg px-2.5 py-1.5"
+                  >
+                    <span className="text-[11px] font-bold text-slate-800">{u.nome}</span>
+                    <span className="text-[10px] text-slate-500 tabular-nums">
+                      {u.lavorazioni === 1 ? '1 lavorazione' : `${u.lavorazioni} lavorazioni`} ·{' '}
+                      {u.codici === 1 ? '1 codice' : `${u.codici} codici`}
+                    </span>
+                    <select
+                      aria-label={`Direttrice a cui riportare ${u.nome}`}
+                      value={scelta}
+                      onChange={(e) =>
+                        setDestinazione({ ...destinazione, [u.nome]: e.target.value })
+                      }
+                      className="ml-auto p-1.5 text-[11px] border border-slate-200 rounded-lg text-slate-900 bg-white max-w-[16rem]"
+                    >
+                      <option value="">Riporta a…</option>
+                      {catena.voci
+                        .filter((v) => v.nome.trim() !== '')
+                        .map((v) => (
+                          <option key={v.nome} value={v.nome}>
+                            {v.nome}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void riallinea(u.nome)}
+                      disabled={!scelta || inCorso}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg transition-colors"
+                    >
+                      <ArrowRight className="w-3 h-3" />
+                      {inCorso ? 'Sposto…' : 'Riporta'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
           {catena.lavorazioniSenzaUfficio > 0 && (
             <p className="text-[10px] text-amber-800 leading-relaxed">

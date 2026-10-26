@@ -260,6 +260,13 @@ uffici fuori elenco; le lavorazioni e i codici senza ufficio). Da lì il nome ar
 comunicazioni ai reparti, al report per unità operativa e al registro delle consegne. I
 Parametri mostrano i tre passaggi nello stesso ordine, numerati.
 
+Un ufficio in uso che non è tra le direttrici si riporta su una direttrice scelta direttamente
+dalla pagina delle direttrici (`pianificaRiallineamento`, azione
+`riallineaUfficioAllaDirettriceAction`): si spostano le lavorazioni delle materie che lo
+nominano e i titoli che lo dichiarano sul proprio codice, in una transazione, con la grafia
+delle direttrici. È il comando che evita di riscegliere il destinatario materia per materia —
+cioè il modo in cui lo stesso ufficio torna a sdoppiarsi.
+
 ### Fase 7 — La proposta (il cuore)
 
 1. **Righe** (`proposta_creditori`): categoria, importo dovuto, percentuale offerta,

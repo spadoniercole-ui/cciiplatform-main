@@ -23,7 +23,7 @@
 
 import { pool } from '@/lib/db';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
-import { assicuraTabellaMaterieLavorazione } from '@/db/provision';
+import { assicuraTabellaMaterieLavorazione, assicuraTabelleParametriSpazio } from '@/db/provision';
 import {
   normalizzaLavorazione,
   validaLavorazioneMateria,
@@ -31,7 +31,11 @@ import {
   type LavorazioneMateria,
 } from '@/lib/titoliEnte/lavorazioniMateria';
 import { grafiaGiaUsata, registroDipendenze } from '@/lib/lavorazioni/dipendenze';
-import { direttriceConfigurata, nomiDirettrici } from '@/lib/titoliEnte/direttrici';
+import {
+  direttriceConfigurata,
+  nomiDirettrici,
+  pianificaRiallineamento,
+} from '@/lib/titoliEnte/direttrici';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -215,6 +219,99 @@ export async function salvaLavorazioneMateriaAction(
     return {
       success: false,
       error: `Salvataggio non riuscito: ${(error as Error).message || error}`,
+    };
+  }
+}
+
+/**
+ * RIPORTA UN UFFICIO FUORI ELENCO A UNA DIRETTRICE (0.139.1).
+ *
+ * Un ufficio che non è tra le direttrici ha un nome che vale solo per sé: le
+ * sue posizioni finiscono in un documento a parte, e nessuno se ne accorge
+ * finché non arriva in fondo alla catena. Qui si sposta il nome — nelle
+ * lavorazioni che lo scelgono e nei titoli che lo dichiarano — sulla direttrice
+ * indicata, con la grafia scritta nei Parametri. È un comando solo perché
+ * toccare trenta righe a mano è il modo in cui l'ufficio si risdoppia.
+ *
+ * Le due scritture stanno in una transazione: o si sposta tutto, o niente.
+ */
+export async function riallineaUfficioAllaDirettriceAction(
+  nomeSchema: string,
+  da: string,
+  a: string
+): Promise<{
+  success: boolean;
+  destinazione?: string;
+  lavorazioni?: number;
+  codici?: number;
+  error?: string;
+}> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabellaMaterieLavorazione(nomeSchema);
+    // I titoli vivono in una tabella che potrebbe non essere ancora nata in uno
+    // spazio nuovo: la crea la stessa funzione che usa la pagina dei titoli.
+    await assicuraTabelleParametriSpazio(nomeSchema);
+
+    const direttrici = await direttriciDelloSpazio(nomeSchema);
+    const lavorazioni = await pool.query(
+      `SELECT id, dipendenza FROM "${nomeSchema}".materie_lavorazione`
+    );
+    const titoli = await pool.query(`SELECT id, dipendenza FROM "${nomeSchema}".titoli_ente`);
+
+    const pianificato = pianificaRiallineamento({
+      da,
+      a,
+      direttrici,
+      lavorazioni: lavorazioni.rows.map((r) => ({
+        id: Number(r.id),
+        dipendenza: (r.dipendenza as string | null) ?? null,
+      })),
+      titoli: titoli.rows.map((r) => ({
+        id: Number(r.id),
+        dipendenza: (r.dipendenza as string | null) ?? null,
+      })),
+    });
+    if (!pianificato.ok) return { success: false, error: pianificato.error };
+    const { piano } = pianificato;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      if (piano.lavorazioni.length > 0)
+        await client.query(
+          `UPDATE "${nomeSchema}".materie_lavorazione
+              SET dipendenza = $2, aggiornato_il = now()
+            WHERE id = ANY($1::int[])`,
+          [piano.lavorazioni, piano.destinazione]
+        );
+      if (piano.codici.length > 0)
+        await client.query(
+          `UPDATE "${nomeSchema}".titoli_ente
+              SET dipendenza = $2, aggiornato_il = now()
+            WHERE id = ANY($1::int[])`,
+          [piano.codici, piano.destinazione]
+        );
+      await client.query('COMMIT');
+    } catch (errore) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw errore;
+    } finally {
+      client.release();
+    }
+
+    return {
+      success: true,
+      destinazione: piano.destinazione,
+      lavorazioni: piano.lavorazioni.length,
+      codici: piano.codici.length,
+    };
+  } catch (error: unknown) {
+    console.error('[riallineaUfficioAllaDirettriceAction]', error);
+    return {
+      success: false,
+      error: `Riallineamento non riuscito: ${(error as Error).message || error}`,
     };
   }
 }
