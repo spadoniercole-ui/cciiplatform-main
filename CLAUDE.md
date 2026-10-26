@@ -191,6 +191,8 @@ deve funzionare **in cloud, in portable e sul server**. La CI costruisce anche l
   (`onClick`, `onChange`…) ai Client Component. Anche questo è controllato dallo script: nelle
   rotte dinamiche l'errore apparirebbe solo in produzione.
 - **Test**: Vitest, file `*.test.ts` accanto al sorgente, ambiente node, alias `@` → `src`.
+  I test dei componenti sono `*.test.tsx` e dichiarano `// @vitest-environment jsdom` in
+  testa (jsdom e Testing Library sono dipendenze di sviluppo).
   La logica di dominio nuova va in `src/lib/…` con i suoi test.
 - **Stile**: Prettier (singoli apici, punto e virgola, 100 colonne, trailing comma es5).
 - **Versioni** — ad ogni consegna di prodotto aggiorna **insieme**:

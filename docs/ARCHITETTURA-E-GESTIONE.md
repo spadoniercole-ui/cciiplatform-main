@@ -379,7 +379,9 @@ grande (~1.088 righe) e concentra acquisizione, verifica e relazione.
 
 ### Test
 
-96 file `*.test.ts` accanto al sorgente (Vitest, ambiente node, alias `@`). Sono la
+105 file di test accanto al sorgente: `*.test.ts` (Vitest, ambiente node, alias `@`) e,
+per l'interfaccia, `*.test.tsx` con `// @vitest-environment jsdom` in testa — montano il
+componente vero con Testing Library e leggono ciò che l'operatore vede. Sono la
 specifica comportamentale più affidabile: prima di cambiare una regola, leggi il test che
 la descrive.
 
