@@ -239,6 +239,27 @@ permanente sull'azienda con lo stesso motore di punteggio della Check List. Rige
 screening azzera le risposte precedenti (un questionario nuovo non eredita risposte a
 domande che potrebbero non esistere più). Lo storico delle generazioni è conservato.
 
+### La catena dell'ente: direttrici → lavorazioni → titoli (0.139.0)
+
+Un solo ingresso per il nome degli uffici, tre passaggi:
+
+1. **Direttrici dell'ente** (`public.spazi.direttrici_ente_strutturate`, pagina
+   `/parametri/direttrici-ente`): le aree scritte una volta. Il loro nome è il nome
+   dell'ufficio.
+2. **Lavorazioni delle materie** (`materie_lavorazione`): la dipendenza si sceglie tra le
+   direttrici; se la configurazione è più vecchia, restano scegliibili gli uffici già in uso.
+   Il salvataggio riusa la grafia delle direttrici (per chiave: maiuscole, accenti, spazi e
+   punteggiatura non contano).
+3. **Titoli di credito** (`titoli_ente`): il codice eredita dipendenza e procedura dalla sua
+   materia (`dipendenzaEffettiva`, `proceduraEffettiva`); se il codice ne ha una propria,
+   quella vince e il campo del titolo si salva con la grafia delle direttrici.
+
+La logica della catena sta in `src/lib/titoliEnte/direttrici.ts` (nomi canonici e
+`componiCatenaDirettrici`: per ogni direttrice quante lavorazioni, materie e codici; gli
+uffici fuori elenco; le lavorazioni e i codici senza ufficio). Da lì il nome arriva alle
+comunicazioni ai reparti, al report per unità operativa e al registro delle consegne. I
+Parametri mostrano i tre passaggi nello stesso ordine, numerati.
+
 ### Fase 7 — La proposta (il cuore)
 
 1. **Righe** (`proposta_creditori`): categoria, importo dovuto, percentuale offerta,

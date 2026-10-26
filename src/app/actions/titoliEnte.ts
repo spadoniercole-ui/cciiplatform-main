@@ -43,6 +43,7 @@ import {
   validaDipendenza,
 } from '@/lib/titoliEnte/recupero';
 import { consumaQuotaAi } from '@/lib/limiteAi';
+import { direttriceConfigurata, nomiDirettrici } from '@/lib/titoliEnte/direttrici';
 import {
   materiaSuggeritaPerDescrizione,
   normalizzaProposta,
@@ -56,6 +57,32 @@ const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 60 * 1000, maxRetrie
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
+}
+
+/**
+ * L'ufficio si salva con il nome che ha nelle direttrici (0.139.0). Le
+ * direttrici sono l'unico punto in cui si scrive il nome di un ufficio: se il
+ * browser ne manda una variante (maiuscole, spazi, accenti) si salva la grafia
+ * configurata, così le posizioni di quell'ufficio non tornano a dividersi in due
+ * documenti. Un nome che non è una direttrice si salva com'è.
+ */
+async function dipendenzaConNomeDirettrice(
+  nomeSchema: string,
+  dipendenza: string | null
+): Promise<string | null> {
+  if (!dipendenza) return null;
+  try {
+    const r = await pool.query(
+      `SELECT direttrici_ente_strutturate FROM public.spazi WHERE nome_schema = $1`,
+      [nomeSchema]
+    );
+    const direttrici = nomiDirettrici(
+      (r.rows[0]?.direttrici_ente_strutturate as { nome: string }[] | null) ?? []
+    );
+    return direttriceConfigurata(dipendenza, direttrici) ?? dipendenza;
+  } catch {
+    return dipendenza;
+  }
 }
 
 function daRiga(r: Record<string, unknown>): TitoloEnte {
@@ -368,7 +395,10 @@ export async function salvaTitoloEnteAction(
     // entrano nel riscontro: sono prassi e recapiti dell'ente, non fonti da
     // verificare.
     const attivitaRecupero = normalizzaAttivitaRecupero(titolo.attivitaRecupero);
-    const dipendenza = normalizzaDipendenza(titolo.dipendenza);
+    const dipendenza = await dipendenzaConNomeDirettrice(
+      nomeSchema,
+      normalizzaDipendenza(titolo.dipendenza)
+    );
     const r = await pool.query(
       `INSERT INTO "${nomeSchema}".titoli_ente (codice, atto, presupposto_giuridico, riferimento_interno, effetto_calcolo, note, riscontro_norma, riscontro_interno, attivita_recupero, dipendenza, aggiornato_il)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
@@ -510,7 +540,10 @@ export async function salvaAttivitaRecuperoAction(
     const erroreDipendenza = validaDipendenza(dipendenza);
     if (erroreDipendenza) return { success: false, error: erroreDipendenza };
     const normalizzato = normalizzaAttivitaRecupero(testo);
-    const dipendenzaNormalizzata = normalizzaDipendenza(dipendenza);
+    const dipendenzaNormalizzata = await dipendenzaConNomeDirettrice(
+      contesto.nomeSchema,
+      normalizzaDipendenza(dipendenza)
+    );
     await assicuraTabelleParametriSpazio(contesto.nomeSchema);
     const r = await pool.query(
       `UPDATE "${contesto.nomeSchema}".titoli_ente

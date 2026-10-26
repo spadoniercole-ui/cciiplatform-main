@@ -23,7 +23,7 @@ export default async function ParametriDirettriciEntePage({
         <ArrowLeft className="w-3.5 h-3.5" /> Torna a Parametri di Spazio
       </Link>
       <div className="bg-white border border-slate-200 rounded-xl p-6">
-        <DirettriciEnteConfigManager nomeSchema={contesto.nomeSchema} />
+        <DirettriciEnteConfigManager nomeSchema={contesto.nomeSchema} codice={codice} />
       </div>
     </div>
   );

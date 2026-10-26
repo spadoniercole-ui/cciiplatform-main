@@ -12,6 +12,11 @@
 // questionario, questa è l'esecuzione. Aggiungere un campo di qualificazione
 // alla lavorazione non deve toccare il questionario né i titoli.
 //
+// Ma i NOMI DEGLI UFFICI sono delle direttrici (0.139.0): la dipendenza si
+// sceglie da lì, e questa azione salva la grafia scritta nei Parametri anche se
+// il browser ne manda una diversa per maiuscole o accenti. Un ufficio, un nome,
+// in ogni documento che lo nomina.
+//
 // Letture e scritture riservate all'Admin di spazio, come le altre voci dei
 // Parametri: la pagina che le usa è già riservata, la guardia non si fida della
 // pagina.
@@ -26,6 +31,7 @@ import {
   type LavorazioneMateria,
 } from '@/lib/titoliEnte/lavorazioniMateria';
 import { grafiaGiaUsata, registroDipendenze } from '@/lib/lavorazioni/dipendenze';
+import { direttriceConfigurata, nomiDirettrici } from '@/lib/titoliEnte/direttrici';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -78,6 +84,26 @@ async function grafieDegliUffici(nomeSchema: string, escludiId: number | null): 
       'destinatario'
     )),
   ];
+}
+
+/**
+ * Le direttrici dello spazio: sono loro a dare il nome all'ufficio. Se non si
+ * leggono (spazio senza direttrici, tabella globale assente) si prosegue con
+ * l'elenco vuoto — il salvataggio non deve dipendere da una configurazione che
+ * può ancora mancare.
+ */
+async function direttriciDelloSpazio(nomeSchema: string): Promise<string[]> {
+  try {
+    const r = await pool.query(
+      `SELECT direttrici_ente_strutturate FROM public.spazi WHERE nome_schema = $1`,
+      [nomeSchema]
+    );
+    return nomiDirettrici(
+      (r.rows[0]?.direttrici_ente_strutturate as { nome: string }[] | null) ?? []
+    );
+  } catch {
+    return [];
+  }
 }
 
 function daRiga(r: Record<string, unknown>): LavorazioneMateria {
@@ -135,12 +161,16 @@ export async function salvaLavorazioneMateriaAction(
     if ((materia.rowCount ?? 0) === 0)
       return { success: false, error: 'Materia non riconosciuta.' };
 
-    // L'ufficio ha un nome solo: se la grafia scritta è già in uso altrove con
-    // maiuscole o spazi diversi, si salva quella. Non si uniscono uffici
-    // diversi — si evita solo che lo stesso si sdoppi.
+    // L'ufficio ha un nome solo. Prima si cerca tra le direttrici (la fonte),
+    // poi tra le grafie già in uso: si evita che lo stesso ufficio si sdoppi.
+    // Non si uniscono uffici diversi, si sceglie la grafia che esiste.
     if (dato.dipendenza) {
+      const direttrici = await direttriciDelloSpazio(nomeSchema);
       const registro = registroDipendenze(await grafieDegliUffici(nomeSchema, dato.id ?? null));
-      dato.dipendenza = grafiaGiaUsata(dato.dipendenza, registro) ?? dato.dipendenza;
+      dato.dipendenza =
+        direttriceConfigurata(dato.dipendenza, direttrici) ??
+        grafiaGiaUsata(dato.dipendenza, registro) ??
+        dato.dipendenza;
     }
 
     if (dato.id != null) {

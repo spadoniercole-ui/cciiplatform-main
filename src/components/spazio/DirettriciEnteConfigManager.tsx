@@ -1,21 +1,36 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Sparkles, Save, Plus, X } from 'lucide-react';
+import Link from 'next/link';
+import { Sparkles, Save, Plus, X, Workflow, ArrowRight } from 'lucide-react';
 import {
   ottieniDirettriciEnte,
   aggiornaDirettriciEnteAction,
   type DirettriceStrutturata,
 } from '@/app/actions/screeningAzienda';
+import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
+import { ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
+import { componiCatenaDirettrici } from '@/lib/titoliEnte/direttrici';
+import type { LavorazioneMateria } from '@/lib/titoliEnte/lavorazioniMateria';
+import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
 
 interface Props {
   nomeSchema: string;
+  codice: string;
 }
 
 const DIRETTRICE_VUOTA: DirettriceStrutturata = { nome: '', prodotti: [] };
 
-export function DirettriciEnteConfigManager({ nomeSchema }: Props) {
+// Le direttrici sono il PRIMO anello della catena (0.139.0): il nome scritto qui
+// è l'ufficio che le lavorazioni delle materie scelgono come dipendenza, e che i
+// titoli di credito ereditano dalla materia fino ai documenti per reparto. Il
+// riquadro della catena dice quanto lontano è arrivato ogni nome e che cosa
+// manca, perché una catena che funziona e nessuno guarda è una catena che si
+// rompe in silenzio.
+export function DirettriciEnteConfigManager({ nomeSchema, codice }: Props) {
   const [direttrici, setDirettrici] = useState<DirettriceStrutturata[]>([]);
+  const [lavorazioni, setLavorazioni] = useState<LavorazioneMateria[]>([]);
+  const [titoli, setTitoli] = useState<TitoloEnte[]>([]);
   const [nuovoProdotto, setNuovoProdotto] = useState<Record<number, string>>({});
   const [caricamento, setCaricamento] = useState(true);
   const [salvataggio, setSalvataggio] = useState(false);
@@ -25,9 +40,15 @@ export function DirettriciEnteConfigManager({ nomeSchema }: Props) {
   useEffect(() => {
     (async () => {
       setCaricamento(true);
-      const risultato = await ottieniDirettriciEnte(nomeSchema);
-      if (risultato.success) setDirettrici(risultato.direttrici);
-      else setErrore(risultato.error || 'Impossibile caricare.');
+      const [d, l, t] = await Promise.all([
+        ottieniDirettriciEnte(nomeSchema),
+        ottieniLavorazioniMateria(nomeSchema),
+        ottieniTitoliEnteAction(nomeSchema),
+      ]);
+      if (d.success) setDirettrici(d.direttrici);
+      else setErrore(d.error || 'Impossibile caricare.');
+      if (l.success) setLavorazioni(l.lavorazioni);
+      if (t.success) setTitoli(t.titoli);
       setCaricamento(false);
     })();
   }, [nomeSchema]);
@@ -73,6 +94,10 @@ export function DirettriciEnteConfigManager({ nomeSchema }: Props) {
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
 
+  // La fotografia si ricalcola a ogni modifica: rinominare una direttrice si
+  // vede subito come un ufficio che smette di corrispondere.
+  const catena = componiCatenaDirettrici({ direttrici, lavorazioni, titoli });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -88,6 +113,24 @@ export function DirettriciEnteConfigManager({ nomeSchema }: Props) {
         domande ancorate a questi, non alla direttrice in astratto — è quello che tiene le domande
         pertinenti invece di generiche.
       </p>
+      <p className="text-[11px] text-slate-500">
+        Il nome di ogni direttrice è anche il <strong>nome dell&apos;ufficio</strong>: le{' '}
+        <Link
+          href={`/spazio/${codice}/parametri/materie-lavorazione`}
+          className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
+        >
+          lavorazioni delle materie <ArrowRight className="w-3 h-3" />
+        </Link>{' '}
+        lo scelgono come dipendenza, i{' '}
+        <Link
+          href={`/spazio/${codice}/parametri/titoli-ente`}
+          className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
+        >
+          titoli di credito <ArrowRight className="w-3 h-3" />
+        </Link>{' '}
+        lo ereditano dalla materia, e da lì arriva nelle comunicazioni ai reparti e nel report per
+        unità operativa. Si scrive una volta, qui.
+      </p>
 
       {errore && (
         <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
@@ -97,6 +140,80 @@ export function DirettriciEnteConfigManager({ nomeSchema }: Props) {
       {salvato && (
         <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
           Direttrici aggiornate.
+        </div>
+      )}
+
+      {catena.voci.length > 0 && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Workflow className="w-3.5 h-3.5 text-slate-500" />
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
+              La catena — direttrici, lavorazioni, titoli
+            </h3>
+          </div>
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            Che cosa arriva a ogni ufficio: le lavorazioni delle materie che lo hanno scelto, le
+            materie coinvolte e i codici di partita che ci finiscono — con la dipendenza del codice,
+            o quella ereditata dalla materia quando il codice non ne ha una.
+          </p>
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="text-[9px] uppercase tracking-wider text-slate-400 text-left">
+                <th className="py-1 font-bold">Direttrice</th>
+                <th className="py-1 font-bold text-right">Lavorazioni</th>
+                <th className="py-1 font-bold text-right">Materie</th>
+                <th className="py-1 font-bold text-right">Codici</th>
+              </tr>
+            </thead>
+            <tbody>
+              {catena.voci.map((v) => (
+                <tr key={v.nome} className="border-t border-slate-200">
+                  <td className="py-1.5 pr-2 text-slate-800">{v.nome}</td>
+                  <td
+                    className={`py-1.5 text-right tabular-nums ${
+                      v.lavorazioni === 0 ? 'text-amber-800 font-bold' : 'text-slate-700'
+                    }`}
+                  >
+                    {v.lavorazioni === 0 ? 'nessuna' : v.lavorazioni}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums text-slate-700">{v.materie}</td>
+                  <td
+                    className={`py-1.5 text-right tabular-nums ${
+                      v.codici === 0 ? 'text-amber-800' : 'text-slate-700'
+                    }`}
+                  >
+                    {v.codici}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {catena.fuoriElenco.length > 0 && (
+            <p className="text-[10px] text-amber-800 leading-relaxed">
+              Uffici in uso che non sono direttrici:{' '}
+              {catena.fuoriElenco
+                .map((u) => `${u.nome} (${u.lavorazioni} lavorazioni, ${u.codici} codici)`)
+                .join(' · ')}
+              . O sono uffici da aggiungere qui, o sono nomi vecchi da riportare a una direttrice:
+              finché restano fuori, quel destinatario ha un nome che vale solo per sé.
+            </p>
+          )}
+          {catena.lavorazioniSenzaUfficio > 0 && (
+            <p className="text-[10px] text-amber-800 leading-relaxed">
+              {catena.lavorazioniSenzaUfficio === 1
+                ? 'Una lavorazione delle materie non ha ancora un ufficio: le sue posizioni non sanno a chi andare.'
+                : `${catena.lavorazioniSenzaUfficio} lavorazioni delle materie non hanno ancora un ufficio: le loro posizioni non sanno a chi andare.`}
+            </p>
+          )}
+          {catena.codiciSenzaUfficio > 0 && (
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              {catena.codiciSenzaUfficio === 1
+                ? 'Un codice non arriva a nessun ufficio.'
+                : `${catena.codiciSenzaUfficio} codici non arrivano a nessun ufficio.`}{' '}
+              Succede quando il codice e la sua materia non hanno una dipendenza: si risolve nella
+              lavorazione della materia.
+            </p>
+          )}
         </div>
       )}
 
@@ -161,6 +278,13 @@ export function DirettriciEnteConfigManager({ nomeSchema }: Props) {
                 <Plus className="w-3 h-3" /> Aggiungi
               </button>
             </div>
+
+            {d.prodotti.length === 0 && (
+              <p className="text-[10px] text-amber-800 leading-relaxed">
+                Senza almeno un prodotto o una procedura questa direttrice non si salva: serve
+                all&apos;AI per generare domande ancorate a qualcosa di concreto.
+              </p>
+            )}
           </div>
         ))}
 

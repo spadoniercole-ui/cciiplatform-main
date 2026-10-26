@@ -589,3 +589,39 @@ tre documenti, ognuno con una parte delle posizioni, e nessuno che se ne accorge
 
 Test aggiunti: 15 (dominio delle dipendenze, raggruppamento unico nelle due uscite, avviso e
 finestra delle soglie, link alla materia mancante nella riapertura dell'interfaccia).
+
+### 10.6 Un solo ingresso: direttrici → lavorazioni → titoli (0.139.0)
+
+Le direttrici erano nate per lo screening — le aree lungo cui l'AI genera il questionario — e
+nella pratica erano già gli uffici dell'ente: «Presidio dei flussi informativi», «Gestione del
+credito». Ma il loro nome si riscriveva a mano nel campo dipendenza delle lavorazioni, con la
+grafia del momento, e lo stesso ufficio tornava a sdoppiarsi in tre documenti (§10.5).
+
+**La catena, adesso.** Il nome di un ufficio si scrive in un punto solo, nelle direttrici:
+
+1. le **direttrici** (`public.spazi.direttrici_ente_strutturate`) danno i nomi;
+2. le **lavorazioni delle materie** (`materie_lavorazione`) scelgono uno di quei nomi come
+   dipendenza — un elenco, non un testo libero, con gli uffici già in uso che non sono
+   direttrici ancora scegliibili e, se non ce ne sono, il campo che torna testo libero;
+3. i **titoli di credito** (`titoli_ente`) ereditano dipendenza e procedura dalla materia
+   quando il codice non ne ha una propria, e da lì il nome arriva alle comunicazioni ai
+   reparti, al report per unità operativa e al registro delle consegne.
+
+**Un nome solo, davvero.** Il salvataggio riusa la grafia delle direttrici (confronto per
+chiave: maiuscole, accenti, apostrofi, punteggiatura e spazi non contano), sia nelle
+lavorazioni sia nel campo del titolo: non nascono più varianti che la catena aveva appena
+unito. Se un nome non è una direttrice non viene inventato né corretto: resta com'è, e la
+videata delle direttrici lo elenca tra quelli fuori elenco.
+
+**La catena si guarda.** `componiCatenaDirettrici` (`src/lib/titoliEnte/direttrici.ts`) dice,
+per ogni direttrice, quante lavorazioni la usano, quante materie e quanti codici ci arrivano
+(con la dipendenza effettiva: quella del codice se c'è, altrimenti quella della materia) e che
+cosa manca — direttrici che nessuna lavorazione usa, uffici in uso fuori elenco, lavorazioni e
+codici senza destinatario. È il controllo che tiene in piedi il resto: senza, la catena funziona
+e nessuno sa se è completa.
+
+**L'ordine dei Parametri** segue la catena: direttrici (1), lavorazioni delle materie (2),
+titoli di credito (3), numerati e prima degli altri parametri.
+
+Test aggiunti: 14 (10 di dominio sulla catena e sui nomi, 2 sulla videata delle direttrici,
+2 sul campo dipendenza, compreso il ritorno a testo libero senza direttrici).

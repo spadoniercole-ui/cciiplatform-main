@@ -32,8 +32,51 @@ interface Props {
   tipoSpazio: 'ENTE' | 'NON_ENTE';
 }
 
+interface VoceParametro {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  titolo: string;
+  descrizione: string;
+  /**
+   * Posizione nella catena dell'ente: direttrici → lavorazioni → titoli. È
+   * l'ordine in cui si scrivono, perché ogni anello usa quello prima.
+   */
+  passo?: number;
+}
+
 export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props) {
-  const voci = [
+  const voci: VoceParametro[] = [
+    // La catena dell'ente, nell'ordine in cui si configura: le direttrici danno
+    // il nome agli uffici, le lavorazioni delle materie li scelgono, i titoli di
+    // credito li ereditano. Gli altri parametri vengono dopo.
+    ...(tipoSpazio === 'ENTE'
+      ? [
+          {
+            href: `/spazio/${codice}/parametri/direttrici-ente`,
+            icon: Sparkles,
+            passo: 1,
+            titolo: 'Direttrici Ente',
+            descrizione:
+              'Le aree dell’ente, scritte una volta sola: il loro nome è il nome dell’ufficio che le lavorazioni scelgono come dipendenza. Alimentano anche il questionario di screening.',
+          },
+          {
+            href: `/spazio/${codice}/parametri/materie-lavorazione`,
+            icon: ClipboardList,
+            passo: 2,
+            titolo: 'Lavorazioni delle materie',
+            descrizione:
+              'Per ogni materia, l’ufficio (una delle direttrici), i passi e l’esito: si scrivono una volta e i titoli dei suoi codici li ereditano.',
+          },
+          {
+            href: `/spazio/${codice}/parametri/titoli-ente`,
+            icon: Scale,
+            passo: 3,
+            titolo: 'Titoli di credito dell’ente',
+            descrizione:
+              'Per ogni codice di partita: atto, presupposto giuridico e circolare, riscontrati sulle fonti ufficiali; ufficio e procedura arrivano dalla materia.',
+          },
+        ]
+      : []),
     {
       href: `/spazio/${codice}/parametri/ricevibilita`,
       icon: ShieldCheck,
@@ -70,27 +113,6 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
             titolo: 'Indice di Attenzione Istruttoria',
             descrizione:
               'Pesi delle dimensioni e minimi dei vincoli, con la nota metodologica stampabile.',
-          },
-          {
-            href: `/spazio/${codice}/parametri/titoli-ente`,
-            icon: Scale,
-            titolo: 'Titoli di credito dell’ente',
-            descrizione:
-              'Per ogni codice di partita: atto, presupposto giuridico e circolare, riscontrati sulle fonti ufficiali.',
-          },
-          {
-            href: `/spazio/${codice}/parametri/materie-lavorazione`,
-            icon: ClipboardList,
-            titolo: 'Lavorazioni delle materie',
-            descrizione:
-              'Dipendenza e procedura che ogni materia porta con sé: si scrivono una volta e i titoli di credito dell’ente le ereditano per tutti i suoi codici.',
-          },
-          {
-            href: `/spazio/${codice}/parametri/direttrici-ente`,
-            icon: Sparkles,
-            titolo: 'Direttrici Ente (Screening)',
-            descrizione:
-              'Le aree lungo cui generare il questionario di screening (vigilanza documentale, gestione del credito, contenzioso...).',
           },
         ]
       : []),
@@ -175,7 +197,13 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
             className="bg-white border border-slate-200 rounded-xl p-5 hover:border-blue-300 hover:shadow-sm transition-all flex items-start justify-between gap-3"
           >
             <div className="flex items-start gap-2">
-              <v.icon className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              {v.passo ? (
+                <span className="w-5 h-5 shrink-0 mt-0.5 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center">
+                  {v.passo}
+                </span>
+              ) : (
+                <v.icon className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              )}
               <div>
                 <span className="font-bold text-slate-900 text-sm">{v.titolo}</span>
                 <p className="text-xs text-slate-500 mt-0.5">{v.descrizione}</p>

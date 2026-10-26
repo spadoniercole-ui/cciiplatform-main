@@ -26,6 +26,33 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.0 — 2026-10-26
+
+**Un solo ingresso: le direttrici dell'ente, e da lì scende tutto il resto**
+
+Le direttrici erano nate per lo screening e, nella pratica, erano già gli uffici dell'ente: ma
+il loro nome si riscriveva a mano nelle lavorazioni delle materie, con la grafia del momento.
+Un ufficio solo, tre nomi, tre documenti. Ora sono l'unico punto in cui un ufficio ha un nome:
+da lì il nome scende nella dipendenza delle lavorazioni, il titolo di credito lo eredita dalla
+materia, e arriva alle comunicazioni ai reparti e al report per unità operativa.
+
+- **La dipendenza si sceglie tra le direttrici**, nei campi della pagina delle lavorazioni: un
+  elenco, non un testo libero. Gli uffici già in uso che non sono direttrici restano
+  scegliibili, e senza direttrici il campo torna testo libero — nessuno resta fermo per una
+  configurazione che manca.
+- **Il nome si salva come è scritto nelle direttrici**, anche quando arriva dal browser con
+  altre maiuscole, spazi o accenti: la stessa regola vale per le lavorazioni delle materie e
+  per il campo del titolo. Non nascono più varianti dello stesso ufficio.
+- **La catena si guarda**: nella pagina delle direttrici, per ogni nome, quante lavorazioni la
+  usano, quante materie e quanti codici ci arrivano; più gli uffici rimasti fuori elenco, le
+  lavorazioni senza ufficio e i codici che non arrivano a nessuno. Una catena che funziona e
+  nessuno guarda è una catena che si rompe in silenzio.
+- **I Parametri seguono l'ordine della catena**: direttrici (1), lavorazioni delle materie (2),
+  titoli di credito (3), numerati e prima degli altri parametri.
+
+Test aggiunti: 14 (10 di dominio sulla catena, 2 sulla videata delle direttrici, 2 sul campo
+dipendenza).
+
 ## 0.138.8 — 2026-10-26
 
 **Il triage dice se si può procedere, dove si configura e con quale nome di ufficio**

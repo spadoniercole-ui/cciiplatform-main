@@ -11,6 +11,12 @@
 // Una materia può avere più lavorazioni: un processo prevede la verifica del
 // flusso, poi la diffida, poi la contabilizzazione, e ciascuna ha il suo
 // ufficio e i suoi passi. La prima per ordine è quella che il titolo eredita.
+//
+// L'UFFICIO SI SCEGLIE, NON SI RISCRIVE. La dipendenza non è più un testo
+// libero: è una delle direttrici dell'ente (0.139.0), scritte una volta nei
+// Parametri. Così lo stesso ufficio ha un nome solo e non si sdoppia in tre
+// documenti. Gli uffici già in uso che non sono direttrici restano scegliibili
+// finché qualcuno non decide di aggiungerli, e nessuno perde quello che aveva.
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -22,6 +28,8 @@ import {
   ottieniLavorazioniMateria,
   salvaLavorazioneMateriaAction,
 } from '@/app/actions/materieLavorazione';
+import { ottieniDirettriciEnte } from '@/app/actions/screeningAzienda';
+import { nomiDirettrici } from '@/lib/titoliEnte/direttrici';
 import {
   MASSIMO_CARATTERI_ESITO,
   MASSIMO_CARATTERI_TIPOLOGIA,
@@ -36,7 +44,13 @@ import {
 } from '@/lib/titoliEnte/recupero';
 import type { MateriaEnte } from '@/lib/titoliEnte/materie';
 import { AnteprimaPassi } from '@/components/spazio/TitoliEnteManager';
-import { dipendenzeSosia, grafiaGiaUsata, registroDipendenze } from '@/lib/lavorazioni/dipendenze';
+import {
+  chiaveDipendenza,
+  dipendenzeSosia,
+  grafiaGiaUsata,
+  nomeDipendenza,
+  registroDipendenze,
+} from '@/lib/lavorazioni/dipendenze';
 
 interface Props {
   nomeSchema: string;
@@ -104,6 +118,104 @@ function VarianteGiaUsata({
   );
 }
 
+/**
+ * L'ufficio di una lavorazione: una direttrice, oppure — se la configurazione è
+ * più vecchia delle direttrici — un nome già in uso. Senza direttrici il campo
+ * torna testo libero: la pagina non resta bloccata da una configurazione
+ * mancante.
+ */
+function CampoDipendenza({
+  valore,
+  direttrici,
+  registro,
+  codice,
+  onChange,
+}: {
+  valore: string | null;
+  direttrici: string[];
+  registro: { nome: string; chiave: string }[];
+  codice: string;
+  onChange: (nome: string | null) => void;
+}) {
+  const attuale = nomeDipendenza(valore) || null;
+  const chiaviDirettrici = direttrici.map((d) => chiaveDipendenza(d));
+  const fuoriElenco = registro.filter((u) => !chiaviDirettrici.includes(u.chiave));
+  const attualeInElenco =
+    attuale === null ||
+    chiaviDirettrici.includes(chiaveDipendenza(attuale)) ||
+    fuoriElenco.some((u) => u.chiave === chiaveDipendenza(attuale));
+
+  if (direttrici.length === 0) {
+    return (
+      <>
+        <input
+          type="text"
+          list="uffici-configurati"
+          value={valore ?? ''}
+          onChange={(e) => onChange(e.target.value || null)}
+          placeholder="Es. Ufficio Recupero Crediti — Sede di …"
+          className={`${CLASSE} mt-1`}
+        />
+        <Contatore testo={valore ?? ''} massimo={MASSIMO_CARATTERI_DIPENDENZA} />
+        <VarianteGiaUsata nome={valore} registro={registro} onUsa={onChange} />
+        <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">
+          Nessuna direttrice configurata: il nome dell’ufficio si scrive a mano.{' '}
+          <Link
+            href={`/spazio/${codice}/parametri/direttrici-ente`}
+            className="font-bold text-sky-700 hover:underline"
+          >
+            Aggiungi le direttrici
+          </Link>{' '}
+          e questo campo diventa un elenco.
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <select
+        value={attuale ?? ''}
+        onChange={(e) => onChange(e.target.value || null)}
+        className={`${CLASSE} mt-1`}
+      >
+        <option value="">Senza ufficio</option>
+        <optgroup label="Direttrici dell’ente">
+          {direttrici.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </optgroup>
+        {fuoriElenco.length > 0 && (
+          <optgroup label="Altri uffici già in uso">
+            {fuoriElenco.map((u) => (
+              <option key={u.chiave} value={u.nome}>
+                {u.nome}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        {attuale && !attualeInElenco && (
+          <optgroup label="Valore attuale, fuori elenco">
+            <option value={attuale}>{attuale}</option>
+          </optgroup>
+        )}
+      </select>
+      <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">
+        Un nome solo per ufficio: da qui scende nei titoli di credito, nelle comunicazioni ai
+        reparti e nel report per unità operativa.{' '}
+        <Link
+          href={`/spazio/${codice}/parametri/direttrici-ente`}
+          className="font-bold text-sky-700 hover:underline"
+        >
+          Gestisci le direttrici
+        </Link>
+      </p>
+    </>
+  );
+}
+
 export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = null }: Props) {
   useDichiaraContestoAssistente({
     pagina: 'parametri',
@@ -115,6 +227,7 @@ export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = 
   const [lavorazioni, setLavorazioni] = useState<LavorazioneMateria[]>([]);
   const [bozze, setBozze] = useState<Record<number, InputLavorazioneMateria>>({});
   const [nuova, setNuova] = useState<InputLavorazioneMateria>(vuota());
+  const [direttrici, setDirettrici] = useState<string[]>([]);
   const [caricamento, setCaricamento] = useState(true);
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
@@ -124,10 +237,14 @@ export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = 
   const carica = async () => {
     setCaricamento(true);
     setErrore(null);
-    const [m, l] = await Promise.all([
+    const [m, l, d] = await Promise.all([
       ottieniMaterieEnteAction(nomeSchema),
       ottieniLavorazioniMateria(nomeSchema),
+      ottieniDirettriciEnte(nomeSchema),
     ]);
+    // Le direttrici sono l'elenco degli uffici. Se non si leggono, il campo
+    // torna a testo libero invece di restare vuoto: la pagina resta usabile.
+    if (d.success) setDirettrici(nomiDirettrici(d.direttrici));
     if (m.success) {
       setMaterie(m.materie);
       setNuova((prev) => ({
@@ -206,8 +323,8 @@ export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = 
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
 
-  // Gli uffici già configurati: l'elenco che si propone quando si scrive una
-  // dipendenza, così lo stesso ufficio non prende tre nomi diversi.
+  // Gli uffici già configurati: restano scegliibili anche quando non sono
+  // direttrici, così una configurazione vecchia continua a funzionare.
   const registro = registroDipendenze(lavorazioni.map((l) => l.dipendenza));
   const sosia = dipendenzeSosia(lavorazioni.map((l) => l.dipendenza));
 
@@ -229,9 +346,15 @@ export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = 
           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
             Una materia raccoglie codici di partita che si lavorano allo stesso modo. Qui la materia
             porta con sé la <strong>dipendenza</strong> — l’ufficio a cui indirizzare la
-            comunicazione con cui si chiede all’azienda il pagamento — e la{' '}
-            <strong>procedura</strong>, i passi che l’ufficio esegue davvero. Si scrivono una volta
-            sola: nei{' '}
+            comunicazione con cui si chiede all’azienda il pagamento, scelto tra le{' '}
+            <Link
+              href={`/spazio/${codice}/parametri/direttrici-ente`}
+              className="font-bold text-sky-700 hover:underline"
+            >
+              direttrici dell’ente
+            </Link>{' '}
+            — e la <strong>procedura</strong>, i passi che l’ufficio esegue davvero. Si scrivono una
+            volta sola: nei{' '}
             <Link
               href={`/spazio/${codice}/parametri/titoli-ente`}
               className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
@@ -357,22 +480,13 @@ export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = 
               </button>
             </div>
             <label className="lg:col-span-4 text-[10px] font-bold uppercase tracking-wider text-slate-600">
-              Dipendenza
-              <input
-                type="text"
-                list="uffici-configurati"
-                value={nuova.dipendenza ?? ''}
-                onChange={(e) =>
-                  setNuova((prev) => ({ ...prev, dipendenza: e.target.value || null }))
-                }
-                placeholder="Es. Ufficio Recupero Crediti — Sede di …"
-                className={`${CLASSE} mt-1`}
-              />
-              <Contatore testo={nuova.dipendenza ?? ''} massimo={MASSIMO_CARATTERI_DIPENDENZA} />
-              <VarianteGiaUsata
-                nome={nuova.dipendenza}
+              Dipendenza — l’ufficio
+              <CampoDipendenza
+                valore={nuova.dipendenza}
+                direttrici={direttrici}
                 registro={registro}
-                onUsa={(nome) => setNuova((prev) => ({ ...prev, dipendenza: nome }))}
+                codice={codice}
+                onChange={(nome) => setNuova((prev) => ({ ...prev, dipendenza: nome }))}
               />
             </label>
             <label className="lg:col-span-7 text-[10px] font-bold uppercase tracking-wider text-slate-600">
@@ -469,19 +583,13 @@ export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = 
                     <Contatore testo={b.tipologia} massimo={MASSIMO_CARATTERI_TIPOLOGIA} />
                   </label>
                   <label className="lg:col-span-4 text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                    Dipendenza
-                    <input
-                      type="text"
-                      list="uffici-configurati"
-                      value={b.dipendenza ?? ''}
-                      onChange={(e) => modificaBozza(l.id, { dipendenza: e.target.value || null })}
-                      className={`${CLASSE} mt-1`}
-                    />
-                    <Contatore testo={b.dipendenza ?? ''} massimo={MASSIMO_CARATTERI_DIPENDENZA} />
-                    <VarianteGiaUsata
-                      nome={b.dipendenza}
+                    Dipendenza — l’ufficio
+                    <CampoDipendenza
+                      valore={b.dipendenza}
+                      direttrici={direttrici}
                       registro={registro}
-                      onUsa={(nome) => modificaBozza(l.id, { dipendenza: nome })}
+                      codice={codice}
+                      onChange={(nome) => modificaBozza(l.id, { dipendenza: nome })}
                     />
                   </label>
                   <label className="lg:col-span-3 text-[10px] font-bold uppercase tracking-wider text-slate-600">
