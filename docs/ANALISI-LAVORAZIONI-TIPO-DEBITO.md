@@ -483,7 +483,7 @@ di caricare i documenti sul server a ogni passo, e non è stata fatta.
 ### 10.2 La seconda uscita: `reportUo.ts`
 
 Un PDF per **dipendenza**, dentro il quale i debiti sono raggruppati per **codice di
-partita**. Per ogni codice: materia, totale, inadempienze (voce, periodo, stato, importo) e
+partita** (e, quando la voce non ne porta uno, per **materia** — §10.4). Per ogni codice: materia, totale, inadempienze (voce, periodo, stato, importo) e
 lavorazioni della materia con i passi e l'esito. Fonte dell'ufficio: `titoli_ente.dipendenza`
 se c'è, altrimenti la prima lavorazione della materia che ne ha una — la stessa regola della
 scheda dei titoli («il codice vince»). Fonte delle lavorazioni: `materie_lavorazione`.
@@ -521,5 +521,23 @@ esiste era una domanda senza risposta utile. Resta invece chiesto per le sezioni
 riconducono, e lì il selettore offre le materie accanto alle categorie.
 
 **Limite dichiarato.** Una posizione senza materia e senza categoria resta fuori dai
-documenti: si conta e si scrive a schermo, come prima. Il report per unità operativa continua
-a raggruppare per codice e non cambia.
+documenti: si conta e si scrive a schermo, come prima. Il report per unità operativa resta
+per codice; le voci senza codice vi entrano per materia (§10.4).
+
+### 10.4 Le voci senza codice nel report per unità operativa (0.138.7)
+
+`reportUo.ts` raggruppava solo per codice di partita: una voce senza codice (un accessorio
+della sezione, «interessi di mora», una riga che non porta «TS») restava fuori dal documento
+e finiva in `senzaCodice`, un conteggio a schermo. Il foglio arrivava all'ufficio incompleto e
+il totale non tornava con quello mostrato.
+
+**Come è risolto.** Per una voce senza codice la materia si ricava con `materiaPerRigaVera`
+— le stesse regole che `instradamentoMateria.ts` usa per le comunicazioni: materia del titolo,
+codici indicativi, descrizione unita alla sezione. La voce entra nel documento del suo ufficio
+(dipendenza effettiva della materia) sotto la materia stessa, senza codice inventato: `codice`
+è `null`, il foglio la intitola «Senza codice di partita» e l'intestazione separa i codici
+dalle voci senza codice. `senzaCodice` ora conta solo le voci prive sia di codice sia di
+materia; una materia senza ufficio finisce in `senzaDipendenza` con `codice: null`.
+
+`FORMATO_REPORT_UO` passa a `2`: la struttura del documento è cambiata e la versione serve a
+distinguere due PDF con lo stesso contenuto ma impaginati diversamente.

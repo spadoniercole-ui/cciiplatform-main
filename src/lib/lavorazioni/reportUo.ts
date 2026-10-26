@@ -10,9 +10,11 @@
 // seguire e con quale esito; le posizioni sono il dettaglio che lo dimostra.
 //
 // Qui si raggruppa per DIPENDENZA (l'ufficio a cui si scrive) e, dentro, per
-// CODICE di partita. Per ogni codice: la materia dell'ente, il totale, le
-// inadempienze che lo compongono (voce, periodo, stato, importo) e le
-// lavorazioni configurate sulla materia, nell'ordine in cui si eseguono.
+// CODICE di partita; una posizione che non porta un codice si raggruppa per la
+// sua MATERIA, cioè dallo stesso titolo di credito che le dà l'ufficio. Per
+// ogni voce: la materia dell'ente, il totale, le inadempienze che la
+// compongono (voce, periodo, stato, importo) e le lavorazioni configurate
+// sulla materia, nell'ordine in cui si eseguono.
 //
 // PERCHÉ NON SI RIUSA IL DESTINATARIO DI `lavorazioni_tipo_debito`. Quella
 // tabella indirizza per CATEGORIA di calcolo (Contributi INPS, crediti
@@ -23,15 +25,30 @@
 // Usare due modelli per dire «chi lavora cosa» significherebbe due risposte
 // diverse alla stessa domanda.
 //
+// UNA VOCE SENZA CODICE NON RESTA FUORI. Il codice di partita è la chiave più
+// precisa, ma non l'unica: la materia dell'ente — quella che la riga porta o
+// quella che si ricava dai codici indicativi e dalla descrizione, con le stesse
+// regole dell'instradamento delle comunicazioni — dice comunque quale ufficio
+// la lavora e con quale procedura. Queste posizioni entrano nel documento del
+// loro ufficio sotto la loro materia, senza un codice inventato: il foglio le
+// intitola «senza codice di partita», così chi lo legge sa che vanno
+// ricondotte. Prima restavano fuori in blocco, e con loro il loro importo: un
+// report che si diceva completo e taceva una parte del debito.
+//
 // COSA RESTA FUORI, E SI DICE. Una posizione con trattamento «Ignora»
-// (sospesa da un giudice) non si lavora e non entra nel totale. Una voce che
-// non porta un codice di partita non si attribuisce a nessuno: si conta. Un
-// codice senza dipendenza — né propria né della materia — non ha un ufficio a
-// cui andare: si elenca a parte, perché è configurazione mancante, non un
-// debito inesistente. Nessuna di queste assenze viene silenziata: il documento
-// e la scheda le dichiarano.
+// (sospesa da un giudice) non si lavora e non entra nel totale. Una voce senza
+// codice E senza materia riconoscibile non si attribuisce a nessuno: si conta.
+// Un codice — o una materia — senza dipendenza non ha un ufficio a cui andare:
+// si elenca a parte, perché è configurazione mancante, non un debito
+// inesistente. Nessuna di queste assenze viene silenziata: il documento e la
+// scheda le dichiarano.
 
-import { codiceDaVoceVera } from '@/lib/titoliEnte/materiaVera';
+import {
+  codiceDaVoceVera,
+  materiaPerRigaVera,
+  type MateriaMinima,
+} from '@/lib/titoliEnte/materiaVera';
+import type { StatoMateria } from '@/lib/titoliEnte/materie';
 import {
   dipendenzaEffettiva,
   lavorazioniDellaMateria,
@@ -55,6 +72,9 @@ export interface RigaVeraReportUo {
 export interface MateriaReportUo {
   id: number;
   nome: string;
+  /** I codici che la materia dichiara propri: servono alle voci senza codice. */
+  codiciIndicativi?: string | null;
+  stato?: StatoMateria;
 }
 
 /** Una singola inadempienza: la riga che il codice comprende. */
@@ -76,7 +96,8 @@ export interface LavorazioneUo {
 }
 
 export interface CodiceUo {
-  codice: string;
+  /** Il codice di partita; null quando la voce non ne porta uno. */
+  codice: string | null;
   /** La materia dell'ente in cui il codice cade; null se non ne ha una. */
   materia: string | null;
   importo: number;
@@ -105,7 +126,8 @@ export interface DocumentoUo {
 }
 
 export interface CodiceSenzaDipendenza {
-  codice: string;
+  /** Il codice di partita; null quando la voce è raggruppata per materia. */
+  codice: string | null;
   materia: string | null;
   righe: number;
   totale: number;
@@ -113,22 +135,26 @@ export interface CodiceSenzaDipendenza {
 
 export interface EsitoReportUo {
   documenti: DocumentoUo[];
-  /** Codici che nessuna dipendenza reclama: configurazione mancante. */
+  /** Voci che nessuna dipendenza reclama: configurazione mancante. */
   senzaDipendenza: CodiceSenzaDipendenza[];
-  /** Posizioni la cui voce non porta un codice di partita. */
+  /**
+   * Posizioni senza codice di partita E senza una materia riconoscibile:
+   * nessuna chiave con cui attribuirle a un ufficio.
+   */
   senzaCodice: { righe: number; totale: number };
   /** Fuori perimetro (trattamento «Ignora»): dichiarate, non elencate. */
   posizioniEscluse: PosizioniEscluse;
-  /** Codici elencati in un documento ma senza lavorazioni configurate. */
+  /** Voci elencate in un documento (codici o materie) senza lavorazioni configurate. */
   codiciSenzaLavorazione: number;
 }
 
 /**
  * Versione del formato del documento. Cambia quando cambia la struttura del
  * PDF (sezioni, colonne): due documenti con lo stesso contenuto ma impaginati
- * in modo diverso non devono risultare la stessa versione.
+ * in modo diverso non devono risultare la stessa versione. La 2 aggiunge le
+ * voci senza codice di partita, raggruppate per materia.
  */
-export const FORMATO_REPORT_UO = '1';
+export const FORMATO_REPORT_UO = '2';
 
 /**
  * FNV-1a a 32 bit, in esadecimale.
@@ -163,7 +189,7 @@ export function versioneReportUo(d: Omit<DocumentoUo, 'versione' | 'nomeFile'>):
     d.dataVerifica,
     ...d.codici.map((c) =>
       [
-        c.codice,
+        c.codice ?? '',
         c.materia ?? '',
         c.importo.toFixed(2),
         ...c.inadempienze.map((i) =>
@@ -214,13 +240,16 @@ function unaRiga(testo: string): string {
 }
 
 /**
- * I debiti raggruppati per dipendenza e, dentro, per codice di partita.
+ * I debiti raggruppati per dipendenza e, dentro, per codice di partita o —
+ * quando la voce non ne porta uno — per materia.
  *
  * `titoli` sono i codici dell'ente (con la loro materia e la loro dipendenza),
- * `materie` dà il nome da stampare, `lavorazioni` le procedure della materia.
- * Un codice che non compare in `titoli` non è un errore: la sua voce porta
- * comunque un codice, e senza materia non ha né dipendenza né lavorazioni —
- * finisce in `senzaDipendenza`, dove la configurazione mancante si vede.
+ * `materie` dà il nome da stampare e i codici indicativi, `lavorazioni` le
+ * procedure della materia. Un codice che non compare in `titoli` non è un
+ * errore: la sua voce porta comunque un codice, e senza materia non ha né
+ * dipendenza né lavorazioni — finisce in `senzaDipendenza`, dove la
+ * configurazione mancante si vede. Una voce senza codice viene ricondotta alla
+ * materia con le stesse regole dell'instradamento delle comunicazioni.
  */
 export function componiReportUo(input: {
   azienda: string;
@@ -244,18 +273,25 @@ export function componiReportUo(input: {
 
   const posizioniEscluse: PosizioniEscluse = { righe: 0, totale: 0 };
   const senzaCodice = { righe: 0, totale: 0 };
-  // dipendenza (chiave senza maiuscole) → codice → righe
-  const gruppi = new Map<
-    string,
-    {
-      dipendenza: string;
-      codici: Map<string, { codice: string; materia: string | null; righe: RigaVeraReportUo[] }>;
-    }
-  >();
-  const orfani = new Map<
-    string,
-    { codice: string; materia: string | null; righe: RigaVeraReportUo[] }
-  >();
+  // Le materie nella forma che serve alla deduzione dalla descrizione.
+  const materieMinime: MateriaMinima[] = input.materie.map((m) => ({
+    id: m.id,
+    nome: m.nome,
+    codiciIndicativi: m.codiciIndicativi ?? null,
+    stato: m.stato ?? 'PROPOSTA',
+  }));
+
+  /** Una voce del documento: un codice di partita, oppure una materia senza codice. */
+  interface VoceUo {
+    codice: string | null;
+    materiaId: number | null;
+    materia: string | null;
+    righe: RigaVeraReportUo[];
+  }
+
+  // dipendenza (chiave senza maiuscole) → voce → righe
+  const gruppi = new Map<string, { dipendenza: string; voci: Map<string, VoceUo> }>();
+  const orfani = new Map<string, VoceUo>();
   let codiciSenzaLavorazione = 0;
 
   for (const r of input.righe) {
@@ -265,45 +301,59 @@ export function componiReportUo(input: {
       continue;
     }
     const codice = codiceDaVoceVera(r.voce);
-    if (!codice) {
+    // La stessa materia che instrada le comunicazioni: per un codice quella del
+    // suo titolo, per una voce senza codice quella dedotta dalla voce e dalla
+    // sezione (o dai codici che la materia dichiara propri).
+    const materiaId = codice
+      ? (perCodiceTitolo.get(normalizzaCodice(codice))?.materiaId ?? null)
+      : (materiaPerRigaVera(r.voce, r.sezione, input.titoli, materieMinime)?.id ?? null);
+    // Senza codice e senza materia non resta nessuna chiave: si conta.
+    if (!codice && materiaId === null) {
       senzaCodice.righe += 1;
       senzaCodice.totale += r.importo;
       continue;
     }
-    const titolo = perCodiceTitolo.get(normalizzaCodice(codice));
-    const materiaId = titolo?.materiaId ?? null;
+    const titolo = codice ? perCodiceTitolo.get(normalizzaCodice(codice)) : undefined;
     const materia = nomeMateria(materiaId);
     const dipendenza = unaRiga(
       dipendenzaEffettiva({ dipendenza: titolo?.dipendenza ?? null, materiaId }, input.lavorazioni)
         .valore ?? ''
     );
+    // La chiave della voce: il codice, oppure la materia quando il codice non c'è.
+    const chiaveVoce = codice ? `C:${normalizzaCodice(codice)}` : `M:${materiaId}`;
 
-    // Senza dipendenza il codice non ha un ufficio a cui andare: si dichiara.
+    // Senza dipendenza non c'è un ufficio a cui andare: si dichiara.
     if (!dipendenza) {
-      const voce = orfani.get(codice) ?? { codice, materia, righe: [] };
+      const voce = orfani.get(chiaveVoce) ?? { codice, materiaId, materia, righe: [] };
       voce.righe.push(r);
-      orfani.set(codice, voce);
+      orfani.set(chiaveVoce, voce);
       continue;
     }
 
     const chiaveGruppo = dipendenza.toLocaleLowerCase('it-IT');
-    const gruppo = gruppi.get(chiaveGruppo) ?? { dipendenza, codici: new Map() };
-    const voce = gruppo.codici.get(codice) ?? { codice, materia, righe: [] };
+    const gruppo = gruppi.get(chiaveGruppo) ?? { dipendenza, voci: new Map() };
+    const voce = gruppo.voci.get(chiaveVoce) ?? { codice, materiaId, materia, righe: [] };
     voce.righe.push(r);
-    gruppo.codici.set(codice, voce);
+    gruppo.voci.set(chiaveVoce, voce);
     gruppi.set(chiaveGruppo, gruppo);
   }
 
-  const codiciOrdinati = (a: { codice: string }, b: { codice: string }) =>
-    COLLATORE_CODICI.compare(a.codice, b.codice);
+  // I codici in ordine numerico; le voci senza codice dopo, per materia.
+  const vociOrdinate = (
+    a: { codice: string | null; materia: string | null },
+    b: { codice: string | null; materia: string | null }
+  ) => {
+    if (a.codice && b.codice) return COLLATORE_CODICI.compare(a.codice, b.codice);
+    if (a.codice) return -1;
+    if (b.codice) return 1;
+    return COLLATORE_IT.compare(a.materia ?? '', b.materia ?? '');
+  };
 
   const documenti: DocumentoUo[] = Array.from(gruppi.values())
     .map((g) => {
-      const codici: CodiceUo[] = Array.from(g.codici.values())
+      const codici: CodiceUo[] = Array.from(g.voci.values())
         .map((c) => {
-          const titolo = perCodiceTitolo.get(normalizzaCodice(c.codice));
-          const materiaId = titolo?.materiaId ?? null;
-          const lavorazioni = lavorazioniDellaMateria(input.lavorazioni, materiaId)
+          const lavorazioni = lavorazioniDellaMateria(input.lavorazioni, c.materiaId)
             .filter((l) => l.tipologia.trim() !== '')
             .map((l) => ({ tipologia: l.tipologia, procedura: l.procedura, esito: l.esito }));
           if (lavorazioni.length === 0) codiciSenzaLavorazione += 1;
@@ -330,9 +380,9 @@ export function componiReportUo(input: {
             lavorazioni,
           };
         })
-        .sort(codiciOrdinati);
+        .sort(vociOrdinate);
 
-      const righeGruppo = Array.from(g.codici.values()).flatMap((c) => c.righe);
+      const righeGruppo = Array.from(g.voci.values()).flatMap((c) => c.righe);
       const daContabilizzare = righeGruppo.filter((r) => r.trattamento === 'da_contabilizzare');
       const contenuto = {
         dipendenza: g.dipendenza,
@@ -364,7 +414,7 @@ export function componiReportUo(input: {
         righe: o.righe.length,
         totale: o.righe.reduce((a, r) => a + r.importo, 0),
       }))
-      .sort(codiciOrdinati),
+      .sort(vociOrdinate),
     senzaCodice,
     posizioniEscluse,
     codiciSenzaLavorazione,

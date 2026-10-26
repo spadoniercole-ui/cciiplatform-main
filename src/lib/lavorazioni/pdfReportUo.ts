@@ -35,6 +35,11 @@ const LIMITE_PAGINA = 262;
 export function generaPdfReportUo(d: DocumentoUo): jsPDF {
   const doc = new jsPDF();
   const data = dataItaliana(d.dataVerifica);
+  // Le voci senza codice di partita (raggruppate per materia) sono elencate
+  // nello stesso foglio: contarli come codici farebbe credere all'ufficio che
+  // esistano codici che non ci sono.
+  const codiciNoti = d.codici.filter((c) => c.codice).length;
+  const vociSenzaCodice = d.codici.length - codiciNoti;
 
   doc.setFontSize(15);
   doc.setFont('helvetica', 'bold');
@@ -50,9 +55,9 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
   doc.text(`Verifica riferita al ${data}`, 14, y);
   y += 5;
   doc.text(
-    `Codici elencati: ${d.codici.length} — posizioni ${d.righe} — totale ${formattaImportoEuro(
-      d.totale
-    )}`,
+    `Codici elencati: ${codiciNoti}${
+      vociSenzaCodice > 0 ? ` — voci senza codice: ${vociSenzaCodice}` : ''
+    } — posizioni ${d.righe} — totale ${formattaImportoEuro(d.totale)}`,
     14,
     y
   );
@@ -90,7 +95,13 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
     }
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10.5);
-    doc.text(`${indice + 1}. Codice ${c.codice}${c.materia ? ` — ${c.materia}` : ''}`, 14, y);
+    doc.text(
+      `${indice + 1}. ${
+        c.codice ? `Codice ${c.codice}` : 'Senza codice di partita'
+      }${c.materia ? ` — ${c.materia}` : ''}`,
+      14,
+      y
+    );
     y += 5;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
@@ -145,7 +156,7 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(8);
       const nota = doc.splitTextToSize(
-        'Nessuna lavorazione configurata per questo codice: va indicata la procedura di recupero nei parametri dell’ente.',
+        'Nessuna lavorazione configurata per questa voce: va indicata la procedura di recupero nei parametri dell’ente.',
         182
       ) as string[];
       doc.text(nota, 14, y);
@@ -175,10 +186,11 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   const chiusura = doc.splitTextToSize(
-    'Il totale di ogni codice è la somma delle sue inadempienze: i debiti che risultano dai documenti ' +
+    'Il totale di ogni voce (codice di partita, o materia quando il codice non c’è) è la somma delle sue ' +
+      'inadempienze: i debiti che risultano dai documenti ' +
       `dell’ente alla data della verifica (${data}). Non è l’accertamento della singola partita, che resta ` +
       'in capo all’ufficio. Le posizioni sospese o fuori perimetro non sono elencate e non entrano nei ' +
-      'totali. Le lavorazioni sono quelle configurate per la materia del codice. Il documento non viene ' +
+      'totali. Le lavorazioni sono quelle configurate per la materia della voce. Il documento non viene ' +
       'trasmesso dalla piattaforma: l’invio all’ufficio è a cura di chi lo scarica, e lo scaricamento ' +
       'registrato è la dichiarazione di chi lo ha effettuato.',
     182

@@ -139,6 +139,43 @@ describe('generaPdfReportUo', () => {
     expect(pdf.output()).toContain('Nessuna lavorazione configurata');
   });
 
+  it('intitola le voci senza codice con la materia e non le conta come codici', () => {
+    const pdf = generaPdfReportUo(
+      documento({
+        codici: [
+          {
+            codice: null,
+            materia: 'Flussi Uniemens',
+            importo: 40,
+            righe: 1,
+            inadempienze: [
+              {
+                sezione: 'FLUSSI UNIEMENS',
+                voce: 'Interessi di mora',
+                periodo: null,
+                stato: '',
+                trattamento: 'Contabilizzato',
+                importo: 40,
+              },
+            ],
+            lavorazioni: [{ tipologia: 'Verifica del flusso', procedura: null, esito: 'Diffida' }],
+          },
+        ],
+        righe: 1,
+        totale: 40,
+        posizioniDaContabilizzare: 1,
+        importoDaContabilizzare: 40,
+        posizioniEscluse: { righe: 0, totale: 0 },
+      })
+    );
+    const sorgente = pdf.output();
+    // Il foglio dice che non c'è un codice, invece di stampare un numero vuoto.
+    expect(sorgente).toContain('Senza codice di partita');
+    expect(sorgente).toContain('Flussi Uniemens');
+    expect(sorgente).toContain('Codici elencati: 0');
+    expect(sorgente).toContain('voci senza codice: 1');
+  });
+
   it('regge molti codici senza perdere le lavorazioni', () => {
     const codici = Array.from({ length: 25 }, (_, i) => ({
       codice: String(i + 1),

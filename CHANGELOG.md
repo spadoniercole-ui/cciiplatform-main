@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.138.6**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.138.7**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,27 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.138.7 — 2026-10-26
+
+**Report per unità operativa: anche le posizioni senza codice arrivano all'ufficio giusto**
+
+Il report per unità operativa raggruppava solo per codice di partita. Una posizione che non
+ne porta uno — «interessi di mora», un accessorio della sezione, una voce senza «TS» — usciva
+dal documento e finiva in una riga di conteggio: l'ufficio riceveva un foglio incompleto e il
+totale non tornava con quello a schermo, benché la sezione dicesse a quale materia quella
+posizione appartiene e quindi quale ufficio la lavora.
+
+**Cosa cambia.** Una voce senza codice viene ricondotta alla materia con le stesse regole
+che instradano le comunicazioni (materia della riga, codici indicativi, descrizione e
+sezione) e finisce nel PDF del suo ufficio, sotto la materia, con le lavorazioni configurate.
+Il foglio la intitola «senza codice di partita» invece di inventare un codice: chi lo legge
+sa che va ricondotta. L'intestazione distingue i codici dalle voci senza codice, e il formato
+del documento passa alla versione 2 perché la struttura è cambiata.
+
+Resta fuori, dichiarato, solo ciò che nessuna chiave reclama: una voce senza codice e senza
+una materia riconoscibile si conta a parte; una materia senza ufficio si elenca fra le voci
+da configurare.
 
 ## 0.138.6 — 2026-10-26
 

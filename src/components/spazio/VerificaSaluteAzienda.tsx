@@ -2539,8 +2539,9 @@ export function VerificaSaluteAzienda({
             </div>
             <p className="text-[11px] text-slate-600 leading-relaxed">
               Un PDF per ufficio, raggruppato per{' '}
-              <span className="font-bold">codice di partita</span>: per ogni codice la materia, le
-              lavorazioni da svolgere con i passi e l&apos;esito, e le inadempienze che lo
+              <span className="font-bold">codice di partita</span> e, quando la voce non ne porta
+              uno, per <span className="font-bold">materia</span>: per ogni voce la materia, le
+              lavorazioni da svolgere con i passi e l&apos;esito, e le inadempienze che la
               compongono — periodo, stato e importo. L&apos;ufficio è la dipendenza del codice, o
               quella della sua materia quando il codice non ne ha una propria. Si scarica da qui e
               lo invii tu: la piattaforma non manda nulla, e ogni scaricamento resta registrato.
@@ -2556,7 +2557,7 @@ export function VerificaSaluteAzienda({
               <p className="text-[11px] text-slate-500 leading-relaxed">
                 {titoliUo.length === 0
                   ? 'Nessun codice dell’ente configurato: senza il titolo del codice non si sa in quale materia cada, né quale ufficio lo lavori. I titoli si configurano nei Parametri di Spazio.'
-                  : 'Nessuna posizione V.E.R.A. porta un codice di partita riconducibile a una dipendenza: qui non c’è un ufficio a cui indirizzare il report.'}
+                  : 'Nessuna posizione V.E.R.A. ha una materia con una dipendenza configurata: qui non c’è un ufficio a cui indirizzare il report.'}
               </p>
             ) : (
               <ul className="space-y-2">
@@ -2568,6 +2569,8 @@ export function VerificaSaluteAzienda({
                   const invioConfermato =
                     stato.stato === 'mai' ? null : stato.consegna.ultima.invio;
                   const chiave = chiaveConsegna('dipendenza', d.dipendenza);
+                  const codiciNoti = d.codici.filter((c) => c.codice).length;
+                  const vociSenzaCodice = d.codici.length - codiciNoti;
                   return (
                     <li
                       key={d.dipendenza}
@@ -2579,15 +2582,27 @@ export function VerificaSaluteAzienda({
                             {d.dipendenza}
                           </span>
                           <span className="block text-[10px] text-slate-500 font-mono">
-                            {d.codici.length} {d.codici.length === 1 ? 'codice' : 'codici'} ·{' '}
-                            {d.righe} {d.righe === 1 ? 'posizione' : 'posizioni'} ·{' '}
+                            {codiciNoti} {codiciNoti === 1 ? 'codice' : 'codici'}
+                            {vociSenzaCodice > 0
+                              ? ` + ${vociSenzaCodice} ${
+                                  vociSenzaCodice === 1 ? 'voce' : 'voci'
+                                } senza codice`
+                              : ''}{' '}
+                            · {d.righe} {d.righe === 1 ? 'posizione' : 'posizioni'} ·{' '}
                             {formattaImportoEuro(d.totale)}
                             {d.posizioniDaContabilizzare > 0
                               ? ` · ${d.posizioniDaContabilizzare} da contabilizzare`
                               : ''}
                           </span>
                           <span className="block text-[10px] text-slate-400">
-                            Codici: {d.codici.map((c) => c.codice).join(', ')}
+                            {codiciNoti > 0 ? 'Codici' : 'Voci'}:{' '}
+                            {d.codici
+                              .map(
+                                (c) =>
+                                  c.codice ??
+                                  `senza codice (${c.materia ?? 'materia non indicata'})`
+                              )
+                              .join(', ')}
                           </span>
                         </span>
                         <button
@@ -2731,13 +2746,16 @@ export function VerificaSaluteAzienda({
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1">
                 <p className="text-[11px] font-bold text-amber-900">
                   {reportUo.senzaDipendenza.length === 1
-                    ? 'Un codice non ha una dipendenza a cui andare'
-                    : `${reportUo.senzaDipendenza.length} codici non hanno una dipendenza a cui andare`}
+                    ? 'Una voce non ha una dipendenza a cui andare'
+                    : `${reportUo.senzaDipendenza.length} voci non hanno una dipendenza a cui andare`}
                 </p>
                 <ul className="space-y-0.5">
                   {reportUo.senzaDipendenza.map((c) => (
-                    <li key={c.codice} className="text-[11px] text-amber-900 leading-relaxed">
-                      — Codice {c.codice}
+                    <li
+                      key={c.codice ?? `materia:${c.materia}`}
+                      className="text-[11px] text-amber-900 leading-relaxed"
+                    >
+                      — {c.codice ? `Codice ${c.codice}` : 'Posizioni senza codice'}
                       {c.materia ? ` (${c.materia})` : ' (nessuna materia)'}: {c.righe}{' '}
                       {c.righe === 1 ? 'posizione' : 'posizioni'}, {formattaImportoEuro(c.totale)}
                     </li>
@@ -2756,19 +2774,17 @@ export function VerificaSaluteAzienda({
                   <p>
                     {`${reportUo.senzaCodice.righe} ${
                       reportUo.senzaCodice.righe === 1
-                        ? 'posizione non porta'
-                        : 'posizioni non portano'
-                    } un codice di partita nella voce: restano fuori dai report per codice (${formattaImportoEuro(
-                      reportUo.senzaCodice.totale
-                    )}).`}
+                        ? 'posizione non porta né un codice di partita né una materia riconoscibile: resta fuori dal report'
+                        : 'posizioni non portano né un codice di partita né una materia riconoscibile: restano fuori dal report'
+                    } (${formattaImportoEuro(reportUo.senzaCodice.totale)}).`}
                   </p>
                 )}
                 {reportUo.codiciSenzaLavorazione > 0 && (
                   <p>
                     {`${reportUo.codiciSenzaLavorazione} ${
                       reportUo.codiciSenzaLavorazione === 1
-                        ? 'codice è elencato'
-                        : 'codici sono elencati'
+                        ? 'voce è elencata'
+                        : 'voci sono elencate'
                     } senza lavorazioni configurate sulla materia: il foglio lo dichiara, e la procedura va indicata nei Parametri di Spazio.`}
                   </p>
                 )}

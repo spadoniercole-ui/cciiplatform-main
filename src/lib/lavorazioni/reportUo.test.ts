@@ -115,13 +115,48 @@ describe('componiReportUo', () => {
     ]);
   });
 
-  it('una voce senza codice di partita resta fuori e si conta', () => {
+  // Un importo accessorio («interessi di mora») non porta un codice di partita,
+  // ma la sezione e la descrizione dicono a quale materia appartiene: resta
+  // nello stesso foglio del suo ufficio, sotto la materia e con le sue
+  // lavorazioni. Prima spariva dal documento e finiva in un conteggio a parte.
+  it('una voce senza codice entra sotto la materia, con le sue lavorazioni', () => {
     const esito = componiReportUo({
       ...base,
       righe: [riga(), riga({ voce: 'Interessi di mora', importo: 40 })],
     });
+    const d = esito.documenti[0];
+    expect(esito.senzaCodice).toEqual({ righe: 0, totale: 0 });
+    expect(d.totale).toBe(1_240);
+    expect(d.codici.map((c) => c.codice)).toEqual(['27', null]);
+
+    const senzaCodice = d.codici.find((c) => c.codice === null)!;
+    expect(senzaCodice.materia).toBe('Flussi Uniemens');
+    expect(senzaCodice.importo).toBe(40);
+    expect(senzaCodice.righe).toBe(1);
+    expect(senzaCodice.inadempienze[0].voce).toBe('Interessi di mora');
+    expect(senzaCodice.lavorazioni.map((l) => l.tipologia)).toEqual(['Verifica del flusso']);
+  });
+
+  it('una voce senza codice e senza materia riconoscibile resta fuori e si conta', () => {
+    const esito = componiReportUo({
+      ...base,
+      righe: [riga({ sezione: 'DATI ACCESSORI', voce: 'Interessi di mora', importo: 40 }), riga()],
+    });
     expect(esito.senzaCodice).toEqual({ righe: 1, totale: 40 });
     expect(esito.documenti[0].totale).toBe(1_200);
+  });
+
+  it('una voce senza codice in una materia senza ufficio si dichiara, non si inventa', () => {
+    const esito = componiReportUo({
+      ...base,
+      materie: [{ id: 11, nome: 'Note di rettifica' }],
+      lavorazioni: [],
+      righe: [riga({ sezione: 'NOTE', voce: 'Note di rettifica non versate', importo: 300 })],
+    });
+    expect(esito.documenti).toHaveLength(0);
+    expect(esito.senzaDipendenza).toEqual([
+      { codice: null, materia: 'Note di rettifica', righe: 1, totale: 300 },
+    ]);
   });
 
   it('le posizioni sospese non entrano nei totali ma sono dichiarate', () => {
@@ -177,7 +212,7 @@ describe('componiReportUo', () => {
 
     expect(a.versione).toBe(c.versione);
     expect(a.versione).not.toBe(b.versione);
-    expect(a.versione).toMatch(/^1-[0-9a-f]{8}$/);
+    expect(a.versione).toMatch(/^2-[0-9a-f]{8}$/);
 
     const { versione, nomeFile: _nomeFile, ...contenuto } = a;
     expect(versioneReportUo(contenuto)).toBe(versione);
