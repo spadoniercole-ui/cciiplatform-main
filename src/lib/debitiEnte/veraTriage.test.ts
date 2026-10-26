@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  chiaveCombinazione,
   estraiRigheVera,
   eSezioneVersamenti,
   eSezioneAgenteRiscossione,
@@ -48,6 +49,40 @@ describe('import V.E.R.A. in modalità triage', () => {
   it('le mappature esistenti hanno comunque la precedenza', () => {
     const { righe } = estraiRigheVera(sezioni as never, { contributi: 'DEBITO' }, {}, true);
     for (const r of righe) expect(r.categoria).toBe('DEBITO');
+  });
+
+  it('una sezione riconducibile a una materia non è «da mappare»', () => {
+    // La vecchia categoria non c’è, ma la sezione ha righe con un codice di
+    // partita: la materia esiste già, e chiedere una mappatura sarebbe una
+    // domanda senza risposta utile (i documenti si compongono dalla materia).
+    const trattamenti = {
+      [chiaveCombinazione('Contributi correnti', 'Iscritto a ruolo')]: 'da_contabilizzare' as const,
+      [chiaveCombinazione('Contributi', '')]: 'contabilizzato' as const,
+    };
+    const { righe, titoliNonMappati } = estraiRigheVera(
+      sezioni as never,
+      {},
+      trattamenti,
+      false,
+      (_sezione, voce) => voce.toLowerCase().includes('contributi')
+    );
+    expect(titoliNonMappati).toEqual([]);
+    expect(righe).toHaveLength(2);
+    expect(righe.every((r) => r.categoria === '')).toBe(true);
+  });
+
+  it('una sezione senza materia e senza categoria resta da mappare', () => {
+    const { righe, titoliNonMappati } = estraiRigheVera(
+      [
+        { titolo: 'SEZIONE NUOVA', righe: [{ voce: 'Voce misteriosa', stato: '', importo: 10 }] },
+      ] as never,
+      {},
+      {},
+      false,
+      () => false
+    );
+    expect(titoliNonMappati).toEqual([{ norm: 'sezione nuova', label: 'SEZIONE NUOVA' }]);
+    expect(righe).toHaveLength(0);
   });
 });
 

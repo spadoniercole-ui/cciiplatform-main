@@ -330,14 +330,17 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
       screen.getByRole('heading', { name: 'Soglie di segnalazione (art. 25-novies)' })
     ).toBeTruthy();
 
-    // Le comunicazioni ai colleghi: il testo c'è, con il suo destinatario.
+    // Le comunicazioni ai colleghi: il testo c'è, con il destinatario della
+    // MATERIA (la configurazione viva), non con quello della vecchia tabella
+    // per categoria — che qui è configurato, ma non deve più instradare.
     const comunicazioni = sezioneDi('Comunicazioni ai colleghi');
-    expect(within(comunicazioni).getByText('Sportello Entrate')).toBeTruthy();
+    expect(within(comunicazioni).getByText('Ufficio Recupero Crediti')).toBeTruthy();
+    expect(within(comunicazioni).queryByText('Sportello Entrate')).toBeNull();
     expect(within(comunicazioni).getByRole('button', { name: /Copia testo/i })).toBeTruthy();
 
     // I due export, ciascuno nel proprio riquadro.
     const reparti = sezioneDi('Comunica ai reparti');
-    expect(within(reparti).getByText('Sportello Entrate')).toBeTruthy();
+    expect(within(reparti).getByText('Ufficio Recupero Crediti')).toBeTruthy();
     expect(within(reparti).getByRole('button', { name: /Scarica il PDF/i })).toBeTruthy();
 
     const unitaOperative = sezioneDi('Report per unità operativa');

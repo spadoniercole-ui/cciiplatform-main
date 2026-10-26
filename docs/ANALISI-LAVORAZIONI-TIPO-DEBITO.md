@@ -498,3 +498,28 @@ lavorazioni (il foglio lo scrive). Il registro delle consegne distingue i due do
 `tipo` (`reparto` | `dipendenza`), perché le impronte di versione non sono confrontabili.
 
 Test aggiunti: 21 (dominio, PDF, registro su PGlite, riapertura su Postgres vero).
+
+### 10.3 L'instradamento per materia (0.138.6) — P8 chiuso davvero
+
+La §10.2 aveva chiuso P8 per la *seconda* uscita (report per unità operativa), ma non per le
+prime due: comunicazioni ai colleghi e documenti per reparto continuavano a leggere la sola
+`categoria`, cioè il codice della vecchia tabella in sola lettura. Con le materie configurate
+— presupposti legali, codici indicativi, lavorazioni con l'ufficio e i passi — il triage
+dichiarava «sezioni non mappate» e non produceva PDF, mentre la posizione una materia ce
+l'aveva già (`ottieniDebitiVera` la risolve riga per riga).
+
+**Come è risolto.** Un modulo puro, `src/lib/lavorazioni/instradamentoMateria.ts`, dà a ogni
+riga la chiave della materia e costruisce le lavorazioni della materia come se fossero
+«categorie»: il raggruppamento resta uno solo (`raggruppaPerReparto`), e le due uscite non
+possono divergere. Precedenza: materia scelta a mano sulla sezione → materia già risolta
+sulla riga → materia dedotta dal codice/descrizione → categoria vecchia. La chiave
+`MATERIA:<id>` è interna; etichette e documenti mostrano il nome della materia.
+
+**Anche il momento dell'import cambia.** `estraiRigheVera` accetta una sezione non mappata se
+almeno una sua riga si riconduce a una materia: chiedere una categoria quando la materia
+esiste era una domanda senza risposta utile. Resta invece chiesto per le sezioni che non si
+riconducono, e lì il selettore offre le materie accanto alle categorie.
+
+**Limite dichiarato.** Una posizione senza materia e senza categoria resta fuori dai
+documenti: si conta e si scrive a schermo, come prima. Il report per unità operativa continua
+a raggruppare per codice e non cambia.

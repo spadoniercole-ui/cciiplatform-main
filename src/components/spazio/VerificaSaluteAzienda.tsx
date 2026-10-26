@@ -111,6 +111,8 @@ import {
 } from '@/lib/lavorazioni/comunicazioni';
 import { preparaDocumentiReparto, type DocumentoReparto } from '@/lib/lavorazioni/reparti';
 import { componiReportUo, type DocumentoUo } from '@/lib/lavorazioni/reportUo';
+import { instradaPerMateria } from '@/lib/lavorazioni/instradamentoMateria';
+import type { StatoMateria } from '@/lib/titoliEnte/materie';
 import { LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA } from '@/lib/lavorazioni/solaLettura';
 import {
   MEZZI_INVIO,
@@ -282,7 +284,12 @@ export function VerificaSaluteAzienda({
   const [titoliUo, setTitoliUo] = useState<
     { codice: string; materiaId: number | null; dipendenza: string | null }[]
   >([]);
-  const [materieUo, setMaterieUo] = useState<{ id: number; nome: string }[]>([]);
+  // La materia porta anche i codici indicativi e lo stato: senza, una posizione
+  // il cui codice non compare tra i titoli non si può ricondurre alla materia
+  // per i codici che la materia stessa dichiara.
+  const [materieUo, setMaterieUo] = useState<
+    { id: number; nome: string; codiciIndicativi: string | null; stato: StatoMateria }[]
+  >([]);
   const [lavorazioniUo, setLavorazioniUo] = useState<LavorazioneMateria[]>([]);
   const [erroreUo, setErroreUo] = useState<string | null>(null);
   // La verifica riaperta: dice se l'azienda è ancora in verifica (si può
@@ -461,7 +468,12 @@ export function VerificaSaluteAzienda({
         setMaterieUo(
           materie.materie
             .filter((m): m is typeof m & { id: number } => m.id !== null)
-            .map((m) => ({ id: m.id, nome: m.nome }))
+            .map((m) => ({
+              id: m.id,
+              nome: m.nome,
+              codiciIndicativi: m.codiciIndicativi,
+              stato: m.stato,
+            }))
         );
       }
       if (perMateria.success) setLavorazioniUo(perMateria.lavorazioni);
@@ -1246,14 +1258,37 @@ export function VerificaSaluteAzienda({
   // secondi) ripassava tutto il V.E.R.A. due volte. Con `useMemo` il lavoro si
   // fa quando cambia qualcosa che conta davvero, e il raggruppamento è uno:
   // le due uscite non possono partire da due letture diverse degli stessi dati.
+  // CHI LAVORA IL DEBITO: prima la MATERIA, poi la vecchia categoria.
+  //
+  // Le posizioni arrivano dal file V.E.R.A. con la categoria della sezione, se
+  // qualcuno l'ha mappata nella vecchia tabella. Ma la configurazione viva è
+  // quella delle materie: ognuna porta i presupposti legali e le lavorazioni,
+  // e ogni lavorazione dice l'ufficio che la esegue. Instradare solo per
+  // categoria lasciava fuori dalle comunicazioni — e quindi dai PDF per le
+  // dipendenze — le posizioni di un ente che aveva configurato le materie e
+  // non la vecchia tabella, dichiarando «sezioni non mappate» quando la
+  // materia c'era. Qui la materia diventa la chiave del raggruppamento; la
+  // categoria resta il ripiego per gli spazi configurati prima.
+  const instradamento = useMemo(
+    () =>
+      instradaPerMateria(righeVera, {
+        titoli: titoliUo,
+        materie: materieUo,
+        lavorazioni: lavorazioniUo,
+        lavorazioniCategoria: lavorazioni,
+        etichetteCategoria: etichetteCategorie,
+      }),
+    [righeVera, titoliUo, materieUo, lavorazioniUo, lavorazioni, etichetteCategorie]
+  );
+
   const raggruppamentoReparti = useMemo(
     () =>
       raggruppaPerReparto({
-        righe: righeVera,
-        lavorazioni,
-        etichette: etichetteCategorie,
+        righe: instradamento.righe,
+        lavorazioni: instradamento.lavorazioni,
+        etichette: instradamento.etichette,
       }),
-    [righeVera, lavorazioni, etichetteCategorie]
+    [instradamento]
   );
 
   const aziendaMostrata = dati?.ragioneSociale?.trim() || 'Azienda';
@@ -1264,20 +1299,13 @@ export function VerificaSaluteAzienda({
         {
           azienda: aziendaMostrata,
           dataVerifica,
-          righe: righeVera,
-          lavorazioni,
-          etichette: etichetteCategorie,
+          righe: instradamento.righe,
+          lavorazioni: instradamento.lavorazioni,
+          etichette: instradamento.etichette,
         },
         raggruppamentoReparti
       ),
-    [
-      aziendaMostrata,
-      dataVerifica,
-      righeVera,
-      lavorazioni,
-      etichetteCategorie,
-      raggruppamentoReparti,
-    ]
+    [aziendaMostrata, dataVerifica, instradamento, raggruppamentoReparti]
   );
 
   // Un documento per reparto: le posizioni da lavorare e le attività di
@@ -1291,20 +1319,13 @@ export function VerificaSaluteAzienda({
         {
           azienda: aziendaMostrata,
           dataVerifica,
-          righe: righeVera,
-          lavorazioni,
-          etichette: etichetteCategorie,
+          righe: instradamento.righe,
+          lavorazioni: instradamento.lavorazioni,
+          etichette: instradamento.etichette,
         },
         raggruppamentoReparti
       ),
-    [
-      aziendaMostrata,
-      dataVerifica,
-      righeVera,
-      lavorazioni,
-      etichetteCategorie,
-      raggruppamentoReparti,
-    ]
+    [aziendaMostrata, dataVerifica, instradamento, raggruppamentoReparti]
   );
 
   // LA SECONDA USCITA: un report per unità operativa, raggruppato per codice
@@ -2049,7 +2070,7 @@ export function VerificaSaluteAzienda({
               <p className="text-[11px] text-slate-500 leading-relaxed">
                 {erroreComunicazioni
                   ? 'Nessuna comunicazione preparata: mancano i parametri necessari.'
-                  : lavorazioni.length === 0
+                  : instradamento.lavorazioni.length === 0
                     ? LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
                       ? 'Nessuna lavorazione configurata: la tabella dei destinatari è in sola lettura e non ne esistono ancora, quindi non c’è nessuno a cui indirizzare la comunicazione.'
                       : 'Nessuna lavorazione configurata: aggiungila nei Parametri di Spazio per preparare le comunicazioni.'
@@ -2125,7 +2146,7 @@ export function VerificaSaluteAzienda({
                   comunicazioni.righeSenzaCategoria === 1
                     ? 'posizione V.E.R.A. non ha'
                     : 'posizioni V.E.R.A. non hanno'
-                } una categoria: le sezioni non sono mappate e restano fuori dalle comunicazioni.`}{' '}
+                } né una materia né una categoria: la sezione non è mappata e la posizione resta fuori dalle comunicazioni.`}{' '}
                 {tipoSpazio === 'ENTE' && aziendaId && (
                   <a
                     href={`/spazio/${codice}/aziende/${aziendaId}/posizione-ente?scheda=vera`}
@@ -2226,7 +2247,7 @@ export function VerificaSaluteAzienda({
 
             {documentiReparti.documenti.length === 0 ? (
               <p className="text-[11px] text-slate-500 leading-relaxed">
-                {lavorazioni.length === 0
+                {instradamento.lavorazioni.length === 0
                   ? LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
                     ? 'Nessuna lavorazione configurata: senza una lavorazione per tipologia non c’è un reparto a cui indirizzare i debiti, e la tabella che la definisce è in sola lettura.'
                     : 'Nessuna lavorazione configurata: senza una lavorazione per tipologia non c’è un reparto a cui indirizzare i debiti. Aggiungila nei Parametri di Spazio.'

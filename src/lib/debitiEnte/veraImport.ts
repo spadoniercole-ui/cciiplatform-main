@@ -377,7 +377,20 @@ export function estraiRigheVera(
    * inventata) e il trattamento è quello SUGGERITO dalla catena
    * natura/stato, lo stesso che l'interfaccia propone all'operatore.
    */
-  triage = false
+  triage = false,
+  /**
+   * La sezione ha una MATERIA, anche senza una categoria mappata?
+   *
+   * La configurazione viva dell'ente è fatta di materie — ognuna con i
+   * presupposti legali — e di lavorazioni che dicono a quale ufficio il debito
+   * va. Chiedere una categoria della vecchia tabella anche quando la sezione
+   * è già riconducibile a una materia era una domanda senza risposta utile:
+   * l'operatore mappava, e i documenti restavano vuoti perché il
+   * raggruppamento guardava altrove. Se la sezione ha una materia, non è
+   * «non mappata»: le righe entrano con la categoria vuota e la materia si
+   * ricava dalla voce, come già fa la posizione V.E.R.A. dell'azienda.
+   */
+  haMateria?: (sezione: string, voce: string) => boolean
 ): {
   righe: RigaVera[];
   titoliNonMappati: { norm: string; label: string }[];
@@ -391,7 +404,9 @@ export function estraiRigheVera(
   for (const s of sezioni) {
     const norm = normalizzaEtichetta(s.titolo);
     const categoria = mappaturaTitoli[norm];
-    if (!categoria) {
+    const conMateria =
+      !categoria && haMateria ? s.righe.some((r) => haMateria(s.titolo, r.voce)) : false;
+    if (!categoria && !conMateria) {
       if (!vistiNonMappati.has(norm)) {
         vistiNonMappati.add(norm);
         nonMappati.push({ norm, label: s.titolo });

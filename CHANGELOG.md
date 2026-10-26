@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.138.5**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.138.6**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,28 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.138.6 — 2026-10-26
+
+**Il V.E.R.A. instrada per materia: i documenti arrivano agli uffici davvero configurati**
+
+La mappatura delle sezioni V.E.R.A. e il raggruppamento dei documenti leggevano solo la
+vecchia tabella «Lavorazioni per tipo di debito». Con le materie configurate — che portano i
+presupposti legali e, con `materie_lavorazione`, le azioni da compiere e l'ufficio che le
+compie — il triage dichiarava «sezioni non mappate» e non produceva i PDF per le dipendenze,
+benché la posizione una materia ce l'avesse già.
+
+**Cosa cambia.** Le posizioni vengono instradate sulla **materia**: quella già risolta sulla
+riga, quella scelta a mano sulla sezione, altrimenti quella dedotta dal codice di partita o
+dalla descrizione. La materia vince, la categoria resta come ripiego per gli spazi
+configurati prima, così nessuno perde i documenti che già produceva. Le attività dei PDF sono
+le lavorazioni della materia, con i loro passi e il loro esito; l'ufficio è quello della
+lavorazione. Una sezione che si riconduce da sola a una materia non viene più mostrata come
+«da mappare», e il selettore delle sezioni nuove offre le materie accanto alle categorie.
+La chiave `MATERIA:<id>` è interna: a schermo e sui fogli si legge il nome della materia.
+
+Resta dichiarato, non nascosto: una posizione senza materia e senza categoria non viene
+attribuita a nessun ufficio — si conta e si dice.
 
 ## 0.138.5 — 2026-10-25
 

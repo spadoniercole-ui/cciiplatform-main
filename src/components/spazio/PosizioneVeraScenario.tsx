@@ -39,6 +39,10 @@ import {
   ottieniCategorieTipoDebito,
   type CategoriaTipoDebito,
 } from '@/app/actions/categorieTipoDebito';
+import { ottieniMaterieEnteAction, ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
+import type { MateriaEnte } from '@/lib/titoliEnte/materie';
+import { materiaPerRigaVera } from '@/lib/titoliEnte/materiaVera';
+import { chiaveMateria } from '@/lib/lavorazioni/instradamentoMateria';
 import { ottieniDebitiEnte, type RigaDebitoEnte } from '@/app/actions/debitiEnte';
 import { etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
 import { stampaHtml } from '@/lib/stampaTesto';
@@ -57,6 +61,12 @@ const euro = (n: number) =>
 export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   const router = useRouter();
   const [categorie, setCategorie] = useState<CategoriaTipoDebito[]>([]);
+  // Le materie dell'ente sono l'altra destinazione possibile di una sezione:
+  // portano i presupposti legali e le lavorazioni con l'ufficio che le compie.
+  // Una sezione che si riconduce da sola a una materia non va mappata; se non
+  // ci riesce, l'operatore può sceglierla qui.
+  const [materie, setMaterie] = useState<MateriaEnte[]>([]);
+  const [titoliEnte, setTitoliEnte] = useState<{ codice: string; materiaId: number | null }[]>([]);
   const [righeVera, setRigheVera] = useState<RigaVeraSalvata[]>([]);
   const [righeEnte, setRigheEnte] = useState<RigaDebitoEnte[]>([]);
   const [mappaturaTitoli, setMappaturaTitoli] = useState<Record<string, string>>({});
@@ -89,14 +99,26 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   } | null>(null);
 
   const categorieAttive = categorie.filter((c) => c.attivo);
-  const mappaEtichette: Record<string, string> = Object.fromEntries(
-    categorie.map((c) => [c.codice, c.etichetta])
-  );
+  const mappaEtichette: Record<string, string> = Object.fromEntries([
+    ...categorie.map((c) => [c.codice, c.etichetta] as const),
+    ...materie
+      .filter((m): m is MateriaEnte & { id: number } => m.id !== null)
+      .map((m) => [chiaveMateria(m.id), m.nome] as const),
+  ]);
+  const materieConId = materie.filter((m): m is MateriaEnte & { id: number } => m.id !== null);
+
+  /**
+   * La sezione si riconduce da sola a una materia? Allora non è «da mappare»:
+   * la posizione porta il codice di partita (o una descrizione riconoscibile),
+   * e la materia con le sue lavorazioni è già configurata.
+   */
+  const risolviMateria = (sezione: string, voce: string) =>
+    materiaPerRigaVera(voce, sezione, titoliEnte, materieConId) !== null;
 
   const carica = async () => {
     setCaricamento(true);
     try {
-      const [rCat, rVera, rEnte, rMap, rTit, rTrM, rTr] = await Promise.all([
+      const [rCat, rVera, rEnte, rMap, rTit, rTrM, rTr, rMat, rTitEnte] = await Promise.all([
         ottieniCategorieTipoDebito(nomeSchema),
         ottieniDebitiVera(nomeSchema, aziendaId),
         ottieniDebitiEnte(nomeSchema, aziendaId),
@@ -104,6 +126,8 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
         ottieniTitoliVera(nomeSchema),
         ottieniMappaturaTrattamentiVera(nomeSchema),
         ottieniTrattamentiVera(nomeSchema),
+        ottieniMaterieEnteAction(nomeSchema),
+        ottieniTitoliEnteAction(nomeSchema),
       ]);
       if (rCat.success) setCategorie(rCat.categorie);
       if (rVera.success) setRigheVera(rVera.righe);
@@ -112,6 +136,11 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       if (rTit.success) setTitoli(rTit.titoli);
       if (rTrM.success) setMappaturaTrattamenti(rTrM.mappatura);
       if (rTr.success) setTrattamenti(rTr.trattamenti);
+      if (rMat.success) setMaterie(rMat.materie);
+      if (rTitEnte.success)
+        setTitoliEnte(
+          rTitEnte.titoli.map((t) => ({ codice: t.codice, materiaId: t.materiaId ?? null }))
+        );
     } finally {
       setCaricamento(false);
     }
@@ -127,7 +156,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
     titoliMap: Record<string, string>,
     trattMap: Record<string, TrattamentoVera>
   ) => {
-    const { righe } = estraiRigheVera(sezioni, titoliMap, trattMap);
+    const { righe } = estraiRigheVera(sezioni, titoliMap, trattMap, false, risolviMateria);
     let documentoId: number | null = null;
     if (fileInImportazione) {
       const reg = await registraDocumentoOrigineAction(
@@ -165,7 +194,9 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
     const { titoliNonMappati, combinazioniNonMappate } = estraiRigheVera(
       sezioni,
       titoliMap,
-      trattMap
+      trattMap,
+      false,
+      risolviMateria
     );
     if (titoliNonMappati.length > 0) {
       setTitoliDaMappare({ sezioni, titoli: titoliNonMappati, scelte: {} });
@@ -531,11 +562,22 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
                     onChange={(e) => setCorrezione({ ...correzione, categoria: e.target.value })}
                     className="p-1.5 text-xs border border-slate-200 rounded text-slate-900 bg-white"
                   >
-                    {categorieAttive.map((c) => (
-                      <option key={c.codice} value={c.codice}>
-                        {c.etichetta}
-                      </option>
-                    ))}
+                    {materieConId.length > 0 && (
+                      <optgroup label="Materie dell'ente">
+                        {materieConId.map((m) => (
+                          <option key={`m-${m.id}`} value={chiaveMateria(m.id)}>
+                            {m.nome}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Categorie di debito">
+                      {categorieAttive.map((c) => (
+                        <option key={c.codice} value={c.codice}>
+                          {c.etichetta}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                   <button
                     type="button"
@@ -589,8 +631,9 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
             </h3>
           </div>
           <p className="text-[11px] text-slate-500">
-            Questo file contiene sezioni mai viste prima. Dì a quale categoria appartiene ciascuna:
-            la scelta viene ricordata per i prossimi caricamenti.
+            Questo file contiene sezioni che non si ricondiscono da sole a una materia. Dì a quale
+            materia — o, se il tuo spazio usa ancora la vecchia tabella, a quale categoria —
+            appartiene ciascuna: la scelta viene ricordata per i prossimi caricamenti.
           </p>
           <div className="space-y-1.5">
             {titoliDaMappare.titoli.map((t) => (
@@ -608,12 +651,23 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
                   }
                   className="p-1.5 text-xs border border-slate-200 rounded text-slate-900 bg-white"
                 >
-                  <option value="">— categoria —</option>
-                  {categorieAttive.map((c) => (
-                    <option key={c.codice} value={c.codice}>
-                      {c.etichetta}
-                    </option>
-                  ))}
+                  <option value="">— materia o categoria —</option>
+                  {materieConId.length > 0 && (
+                    <optgroup label="Materie dell'ente">
+                      {materieConId.map((m) => (
+                        <option key={`m-${m.id}`} value={chiaveMateria(m.id)}>
+                          {m.nome}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="Categorie di debito">
+                    {categorieAttive.map((c) => (
+                      <option key={c.codice} value={c.codice}>
+                        {c.etichetta}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
             ))}
