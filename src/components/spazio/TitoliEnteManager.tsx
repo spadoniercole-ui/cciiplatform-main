@@ -62,6 +62,11 @@ import {
   type LavorazioneMateria,
 } from '@/lib/titoliEnte/lavorazioniMateria';
 import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
+import {
+  riscontroEffettivo,
+  type MateriaPerRiscontro,
+  type RiscontroEffettivo,
+} from '@/lib/titoliEnte/riscontroMateria';
 import { conRitorno } from '@/lib/navigazione/ritorno';
 
 interface Props {
@@ -107,36 +112,46 @@ function BadgeRiscontro({ r }: { r: RiscontroFonte }) {
  * l'esito della ricerca partita col salvataggio, senza riaprire la scheda.
  * Una ricerca rimasta appesa si può riprendere; un contrasto resta in vista
  * finché la riga non viene corretta.
+ *
+ * Quello che si legge è il riscontro EFFETTIVO: dove il codice non ha un esito
+ * suo vale quello che la sua materia ha già ricevuto, e la riga lo dice. Una
+ * ricerca automatica andata a vuoto («da riscontrare») non torna a chiedere un
+ * lavoro che la materia ha già fatto e che una persona ha confermato.
  */
 function RiscontriRiga({
   titolo,
+  materie,
   onRiprendi,
   inCorso,
 }: {
   titolo: TitoloEnte;
+  materie: MateriaPerRiscontro[];
   onRiprendi: () => void;
   inCorso: boolean;
 }) {
   const adesso = Date.now();
+  const norma = riscontroEffettivo('norma', titolo, materie);
+  const interno = riscontroEffettivo('interno', titolo, materie);
   const visibile = (r: RiscontroFonte) => r.esito !== 'NON_ESEGUITO';
   const daRiprendere =
-    riscontroFermo(titolo.riscontroNorma, adesso) ||
-    riscontroFermo(titolo.riscontroInterno, adesso);
+    riscontroFermo(norma.riscontro, adesso) || riscontroFermo(interno.riscontro, adesso);
+  const riga = (etichetta: string, eff: RiscontroEffettivo) =>
+    visibile(eff.riscontro) && (
+      <div className="flex items-center gap-1">
+        <span className="text-[9px] text-slate-400 w-16 shrink-0">{etichetta}</span>
+        <BadgeRiscontro r={eff.riscontro} />
+        {eff.dallaMateria && (
+          <span className="text-[9px] text-sky-700" title={eff.riscontro.motivo ?? undefined}>
+            dalla materia «{eff.materia}»
+          </span>
+        )}
+      </div>
+    );
   return (
     <div className="space-y-0.5">
-      {visibile(titolo.riscontroNorma) && (
-        <div className="flex items-center gap-1">
-          <span className="text-[9px] text-slate-400 w-16 shrink-0">Norma</span>
-          <BadgeRiscontro r={titolo.riscontroNorma} />
-        </div>
-      )}
-      {visibile(titolo.riscontroInterno) && (
-        <div className="flex items-center gap-1">
-          <span className="text-[9px] text-slate-400 w-16 shrink-0">Rif. interno</span>
-          <BadgeRiscontro r={titolo.riscontroInterno} />
-        </div>
-      )}
-      {!visibile(titolo.riscontroNorma) && !visibile(titolo.riscontroInterno) && (
+      {riga('Norma', norma)}
+      {riga('Rif. interno', interno)}
+      {!visibile(norma.riscontro) && !visibile(interno.riscontro) && (
         <span className="text-[10px] text-slate-400">non ancora riscontrato</span>
       )}
       {daRiprendere && (
@@ -337,7 +352,9 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
       ? (titoli.find((t) => t.id === inModifica.id) ?? inModifica)
       : inModifica;
   const codiciInContrasto = titoli.filter(
-    (t) => t.riscontroNorma.esito === 'IN_CONTRASTO' || t.riscontroInterno.esito === 'IN_CONTRASTO'
+    (t) =>
+      riscontroEffettivo('norma', t, materie).riscontro.esito === 'IN_CONTRASTO' ||
+      riscontroEffettivo('interno', t, materie).riscontro.esito === 'IN_CONTRASTO'
   );
 
   // Il salvataggio non aspetta più le fonti: la riga si scrive subito, la
@@ -379,7 +396,10 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
           </p>
           <p className="text-[11px] text-slate-600 mt-1">
             La ricerca sulle fonti ufficiali non tiene fermo il salvataggio: la riga si scrive e
-            l’esito — confermato, da riscontrare o in contrasto — compare da solo sulla riga.
+            l’esito — confermato, da riscontrare o in contrasto — compare da solo sulla riga. Il
+            riscontro che una materia ha già ricevuto vale anche per i codici che vi cadono: la riga
+            lo dice, e nessun codice si vede chiedere una ricerca che è già stata fatta e
+            confermata.
           </p>
           <p className="text-[11px] text-slate-600 mt-1">
             Accanto al titolo, ogni codice porta la <strong>procedura di recupero</strong>: i passi
@@ -627,9 +647,11 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
               </span>
               {(() => {
                 const r = archiviato ?? inModifica;
+                const norma = riscontroEffettivo('norma', r, materie);
+                const interno = riscontroEffettivo('interno', r, materie);
                 if (
-                  r.riscontroNorma.esito === 'NON_ESEGUITO' &&
-                  r.riscontroInterno.esito === 'NON_ESEGUITO'
+                  norma.riscontro.esito === 'NON_ESEGUITO' &&
+                  interno.riscontro.esito === 'NON_ESEGUITO'
                 )
                   return (
                     <span className="text-[10px] text-slate-500">
@@ -639,8 +661,16 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
                   );
                 return (
                   <>
-                    <Esito r={r.riscontroNorma} etichetta="Norma" />
-                    <Esito r={r.riscontroInterno} etichetta="Riferimento interno" />
+                    <Esito r={norma.riscontro} etichetta="Norma" />
+                    <Esito r={interno.riscontro} etichetta="Riferimento interno" />
+                    {(norma.dallaMateria || interno.dallaMateria) && (
+                      <span className="block text-[10px] text-sky-700">
+                        L’esito qui sopra è quello eseguito una volta per la materia «
+                        {norma.materia ?? interno.materia}»: vale per tutti i codici che vi cadono,
+                        e il codice rifà la ricerca solo se ha un presupposto o un riferimento
+                        interno suoi.
+                      </span>
+                    )}
                   </>
                 );
               })()}
@@ -785,6 +815,7 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
                   <td className="px-3 py-2">
                     <RiscontriRiga
                       titolo={t}
+                      materie={materie}
                       inCorso={riprendendo === t.id}
                       onRiprendi={() => {
                         if (t.id) void riprendi(t.id);
@@ -943,7 +974,9 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
       </div>
       <p className="text-[10px] text-slate-400 flex items-center gap-1">
         <Check className="w-3 h-3" /> Un riscontro confermato resta sulla riga finché norma o
-        riferimento non cambiano. La verifica parte dopo il salvataggio: le righe «in verifica» si
+        riferimento non cambiano. Il riscontro che la materia ha già ricevuto vale per i codici che
+        vi cadono: la riga lo dice, e il codice rifà la ricerca solo se ha un presupposto o un
+        riferimento interno suoi. La verifica parte dopo il salvataggio: le righe «in verifica» si
         aggiornano da sole, senza ricaricare la pagina.
       </p>
     </div>

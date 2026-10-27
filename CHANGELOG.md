@@ -26,6 +26,36 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.9 — 2026-10-27
+
+**Il riscontro fatto una volta per la materia vale per tutti i codici che vi cadono**
+
+Nella pagina dei titoli di credito si leggeva una contraddizione: la materia in alto, verde,
+«Confermata» con il suo presupposto e le sue circolari, e sotto il codice di quella stessa
+materia con l'etichetta gialla «da riscontrare». Non è un errore di visualizzazione: sono due
+ricerche diverse. Il verde è la materia — l'AI ha cercato sul sito dell'ente, una persona ha
+confermato — e vale per ogni codice che vi cade; il giallo è la ricerca sulle fonti ufficiali del
+codice, che era partita per un presupposto o un riferimento interno suoi, o che non è arrivata
+(quota esaurita, fonte non raggiungibile). Chiedere al codice la ricerca che la materia ha già
+fatto e confermato è lavoro doppio, e a schermo diventa un allarme che non c'è.
+
+- **La riga del codice legge il riscontro effettivo** (`src/lib/titoliEnte/riscontroMateria.ts`):
+  dove il codice non ha un esito proprio vale quello della materia, verde, con la dicitura «dalla
+  materia» — la stessa lingua già usata per dipendenza e procedura. Nella scheda di modifica il
+  riquadro dei riscontri dice da quale materia arriva e che il codice rifà la ricerca solo se ha
+  un presupposto o un riferimento interno suoi.
+- **Il codice vince dove ha un esito suo che conta**: confermato, in contrasto, o in verifica in
+  questo momento. Un contrasto non si nasconde mai dietro una conferma d'insieme, e la segnalazione
+  dei codici in contrasto continua a contare gli stessi.
+- **Una materia non confermata, o che non porta il contenuto da verificare** (un riferimento
+  interno che nessuno ha scritto e che nessuna circolare proposta copre), non copre nulla: la riga
+  resta col suo esito, perché lì nessuno ha ancora verificato.
+
+Verifiche: 8 test nuovi sulla logica pura dell'eredità (materia confermata o solo proposta,
+presupposto e riferimenti, contrasto del codice che resta suo) e 4 d'interfaccia sulla tabella
+vera (riscontro ereditato e dichiarato, «da riscontrare» che non cancella la materia confermata,
+codice senza materia confermata che resta giallo, contrasto sempre in vista). Suite intera verde.
+
 ## 0.139.8 — 2026-10-27
 
 **La coppia F24 / denunce si può confermare o smentire a mano**

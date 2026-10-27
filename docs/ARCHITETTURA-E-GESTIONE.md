@@ -509,7 +509,11 @@ la descrive.
   scritti sulla materia: i codici li ereditano dove non ne hanno una versione propria — vedi
   `src/lib/titoliEnte/lavorazioniMateria.ts`). In `riscontro_norma` / `riscontro_interno` sta l’esito
   della ricerca sulle fonti ufficiali: `IN_CORSO` significa che la ricerca è partita col salvataggio e sta ancora lavorando
-  (vedi `src/lib/titoliEnte/titoli.ts`), gli altri esiti sono il risultato.
+  (vedi `src/lib/titoliEnte/titoli.ts`), gli altri esiti sono il risultato. Ma il riscontro che una
+  materia confermata ha già ricevuto vale anche per i codici che vi cadono: la riga legge il
+  riscontro effettivo — quello del codice se ha un esito suo (confermato, in contrasto, in verifica),
+  altrimenti quello della materia — da `src/lib/titoliEnte/riscontroMateria.ts`, e nessuna ricerca
+  torna a chiedere un lavoro già fatto e confermato.
 
 Lo schema effettivo è quello creato da `src/db/provision.ts` + `src/db/ensureTables.ts`;
 `src/db/schema.ts` (Drizzle) non è la fonte di verità. Alcune tabelle nascono però dentro il
