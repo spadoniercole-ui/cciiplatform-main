@@ -203,6 +203,67 @@ describe('direttrici: la catena fino ai titoli', () => {
     await waitFor(() => expect(screen.queryByText('Ufficio legale')).toBeNull());
   });
 
+  // Il riallineamento guidato: quando l'ufficio fuori elenco è solo un altro
+  // modo di scrivere una direttrice già configurata, la riga lo dice e la
+  // destinazione è già scelta — la scelta sbagliata non è a un clic, perché il
+  // pulsante resta quello che l'utente deve premere.
+  it('quando l’ufficio somiglia a una direttrice la propone, già selezionata', async () => {
+    vi.mocked(ottieniLavorazioniMateria).mockResolvedValue({
+      success: true,
+      lavorazioni: [
+        {
+          id: 1,
+          materiaId: 10,
+          tipologia: 'Emissione diffida',
+          dipendenza: 'Gestione del credito',
+          procedura: null,
+          esito: null,
+          ordine: 1,
+        },
+        {
+          id: 2,
+          materiaId: 11,
+          tipologia: 'Verifica del flusso',
+          dipendenza: 'Presidio qualità flussi informativi',
+          procedura: null,
+          esito: null,
+          ordine: 1,
+        },
+      ],
+    });
+
+    render(<DirettriciEnteConfigManager nomeSchema="tenant_prova" codice="prova" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Sembra lo stesso ufficio di «Presidio dei flussi informativi»/)
+      ).toBeTruthy()
+    );
+    const scelta = screen.getByLabelText(
+      'Direttrice a cui riportare Presidio qualità flussi informativi'
+    ) as HTMLSelectElement;
+    expect(scelta.value).toBe('Presidio dei flussi informativi');
+
+    // È già selezionata: il comando costa un clic solo. Il pulsante è quello
+    // della riga di questo ufficio, non delle altre righe fuori elenco.
+    vi.mocked(riallineaUfficioAllaDirettriceAction).mockResolvedValue({
+      success: true,
+      destinazione: 'Presidio dei flussi informativi',
+      lavorazioni: 1,
+      codici: 0,
+    });
+    const riga = scelta.closest('div') as HTMLElement;
+    fireEvent.click(within(riga).getByRole('button', { name: /Riporta/ }));
+
+    await waitFor(() =>
+      expect(vi.mocked(riallineaUfficioAllaDirettriceAction)).toHaveBeenCalledWith(
+        'tenant_prova',
+        'Presidio qualità flussi informativi',
+        'Presidio dei flussi informativi'
+      )
+    );
+  });
+
   it('mostra il rifiuto dell’azione senza togliere l’ufficio dall’elenco', async () => {
     vi.mocked(riallineaUfficioAllaDirettriceAction).mockResolvedValue({
       success: false,

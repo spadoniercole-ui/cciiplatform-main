@@ -62,10 +62,13 @@ import {
   type LavorazioneMateria,
 } from '@/lib/titoliEnte/lavorazioniMateria';
 import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
+import { conRitorno } from '@/lib/navigazione/ritorno';
 
 interface Props {
   nomeSchema: string;
   codice: string;
+  /** La pagina da cui si è arrivati: si riporta nei rimandi fra le gestioni. */
+  ritorno?: string;
 }
 
 const CLASSE_CAMPO =
@@ -216,7 +219,7 @@ const NUOVO: TitoloEnte = {
   riscontroInterno: RISCONTRO_VUOTO,
 };
 
-export function TitoliEnteManager({ nomeSchema, codice }: Props) {
+export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
   const [titoli, setTitoli] = useState<TitoloEnte[]>([]);
   const [dominio, setDominio] = useState('');
   const [lottoInCorso, setLottoInCorso] = useState<{ id: string; inviatoIl: string | null } | null>(
@@ -388,7 +391,7 @@ export function TitoliEnteManager({ nomeSchema, codice }: Props) {
           <p className="text-[11px] text-slate-600 mt-1">
             Dipendenza e procedura si possono scrivere una volta sulla <strong>materia</strong> (
             <Link
-              href={`/spazio/${codice}/parametri/materie-lavorazione`}
+              href={conRitorno(`/spazio/${codice}/parametri/materie-lavorazione`, ritorno)}
               className="font-bold text-sky-700 hover: underline"
             >
               Lavorazioni delle materie

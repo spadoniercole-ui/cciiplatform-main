@@ -153,6 +153,12 @@ export interface IngressoIndicatore {
   periodiInRitardo?: number | null;
 }
 
+export interface DimensioneScoperta {
+  nome: string;
+  /** Portante = senza di essa il perimetro non è circoscrivibile. */
+  portante: boolean;
+}
+
 export interface Attenzione {
   esito: EsitoAttenzione;
   /** Etichetta breve, da mostrare accanto al semaforo. */
@@ -163,6 +169,18 @@ export interface Attenzione {
   accertato: string[];
   /** Ciò che MANCA per circoscrivere il perimetro. */
   daAccertare: string[];
+  /**
+   * Le dimensioni che i dati NON coprono, nominate.
+   *
+   * Serve a non contraddirsi: «3 dimensioni su 4» accanto a «nulla da
+   * accertare» è una frase che si smentisce da sola. La lacuna accessoria non
+   * va elencata fra le cose da accertare — la Check List si compila dopo, e
+   * dirlo a chi ha appena caricato i documenti sarebbe rumore — ma chi legge
+   * ha diritto di sapere QUALE dimensione resta fuori e perché non cambia
+   * l'esito. Facoltativa sul filo: un indicatore salvato prima di questo campo
+   * resta leggibile.
+   */
+  dimensioniScoperte?: DimensioneScoperta[];
   /** Quante dimensioni erano determinabili, su quante previste. */
   copertura: { determinate: number; totali: number };
 }
@@ -186,6 +204,9 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   const daAccertare: string[] = [];
   // Solo le lacune PORTANTI impediscono di circoscrivere il perimetro.
   const lacunePortanti: string[] = [];
+  // Le dimensioni che restano fuori: si nominano, perché la copertura è
+  // dichiarata e un numero senza il suo perché è un numero che allarma.
+  const dimensioniScoperte: DimensioneScoperta[] = [];
   let determinate = 0;
 
   // ---- Livello 0: copertura informativa --------------------------------
@@ -206,6 +227,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   }
 
   if (!input.xbrlPresente) {
+    dimensioniScoperte.push({ nome: 'Equilibrio di bilancio (XBRL)', portante: true });
     if (input.annoCostituzione === null) {
       daAccertare.push('Bilancio XBRL non caricato.');
       lacunePortanti.push('Bilancio XBRL non caricato.');
@@ -234,6 +256,10 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   }
 
   if (input.sogliaSuperata === null) {
+    dimensioniScoperte.push({
+      nome: 'Soglie di segnalazione (art. 25-novies)',
+      portante: true,
+    });
     // Il messaggio deve distinguere due cose che si somigliano soltanto nel
     // nome: gli IMPORTI DI LEGGE stanno nei Parametri di Spazio, i VALORI
     // DELL'AZIENDA da confrontare con quegli importi stanno altrove. Scrivere
@@ -248,6 +274,10 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   }
 
   if (input.indiciViolati === null) {
+    dimensioniScoperte.push({
+      nome: 'Indici diagnostici di bilancio',
+      portante: false,
+    });
     if (input.xbrlPresente)
       daAccertare.push('Indici diagnostici di bilancio non calcolabili dal bilancio caricato.');
   } else {
@@ -255,6 +285,10 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   }
 
   if (input.coloreQualitativo === null || input.coloreQualitativo === 'grigio') {
+    dimensioniScoperte.push({
+      nome: 'Quadro qualitativo (Check List / Direttrici)',
+      portante: false,
+    });
     // NON si elenca fra le cose da accertare.
     //
     // È una dimensione accessoria: può solo peggiorare l'esito, mai
@@ -302,6 +336,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
       fattoreDeterminante: 'Soglia di segnalazione superata',
       accertato,
       daAccertare,
+      dimensioniScoperte,
       copertura,
     };
   }
@@ -314,6 +349,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
       fattoreDeterminante: 'Patrimonio netto negativo',
       accertato,
       daAccertare,
+      dimensioniScoperte,
       copertura,
     };
   }
@@ -329,6 +365,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
       fattoreDeterminante: 'Perimetro non circoscrivibile con i dati disponibili',
       accertato,
       daAccertare,
+      dimensioniScoperte,
       copertura,
     };
   }
@@ -344,6 +381,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
       fattoreDeterminante: 'Indici diagnostici di bilancio oltre la soglia di riferimento',
       accertato,
       daAccertare,
+      dimensioniScoperte,
       copertura,
     };
   }
@@ -382,6 +420,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
     fattoreDeterminante,
     accertato,
     daAccertare,
+    dimensioniScoperte,
     copertura,
   };
 }

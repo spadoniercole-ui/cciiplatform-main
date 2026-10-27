@@ -30,6 +30,7 @@ import {
 } from '@/app/actions/materieLavorazione';
 import { ottieniDirettriciEnte } from '@/app/actions/screeningAzienda';
 import { nomiDirettrici } from '@/lib/titoliEnte/direttrici';
+import { conRitorno } from '@/lib/navigazione/ritorno';
 import {
   MASSIMO_CARATTERI_ESITO,
   MASSIMO_CARATTERI_TIPOLOGIA,
@@ -61,6 +62,12 @@ interface Props {
    * elenco da cercare.
    */
   apriMateriaId?: number | null;
+  /**
+   * La pagina da cui si è arrivati, se non è la dashboard dei Parametri.
+   * Si porta dietro nei rimandi fra una gestione e l'altra: senza, il giro
+   * triage → materie → direttrici finiva in Parametri invece che nel triage.
+   */
+  ritorno?: string;
 }
 
 const CLASSE =
@@ -129,12 +136,15 @@ function CampoDipendenza({
   direttrici,
   registro,
   codice,
+  ritorno,
   onChange,
 }: {
   valore: string | null;
   direttrici: string[];
   registro: { nome: string; chiave: string }[];
   codice: string;
+  /** La pagina da cui si è arrivati: si riporta nel rimando alle direttrici. */
+  ritorno?: string;
   onChange: (nome: string | null) => void;
 }) {
   const attuale = nomeDipendenza(valore) || null;
@@ -161,7 +171,7 @@ function CampoDipendenza({
         <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">
           Nessuna direttrice configurata: il nome dell’ufficio si scrive a mano.{' '}
           <Link
-            href={`/spazio/${codice}/parametri/direttrici-ente`}
+            href={conRitorno(`/spazio/${codice}/parametri/direttrici-ente`, ritorno)}
             className="font-bold text-sky-700 hover:underline"
           >
             Aggiungi le direttrici
@@ -206,7 +216,7 @@ function CampoDipendenza({
         Un nome solo per ufficio: da qui scende nei titoli di credito, nelle comunicazioni ai
         reparti e nel report per unità operativa.{' '}
         <Link
-          href={`/spazio/${codice}/parametri/direttrici-ente`}
+          href={conRitorno(`/spazio/${codice}/parametri/direttrici-ente`, ritorno)}
           className="font-bold text-sky-700 hover:underline"
         >
           Gestisci le direttrici
@@ -216,7 +226,12 @@ function CampoDipendenza({
   );
 }
 
-export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = null }: Props) {
+export function MaterieLavorazioneManager({
+  nomeSchema,
+  codice,
+  apriMateriaId = null,
+  ritorno,
+}: Props) {
   useDichiaraContestoAssistente({
     pagina: 'parametri',
     nomeSchema,
@@ -348,7 +363,7 @@ export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = 
             porta con sé la <strong>dipendenza</strong> — l’ufficio a cui indirizzare la
             comunicazione con cui si chiede all’azienda il pagamento, scelto tra le{' '}
             <Link
-              href={`/spazio/${codice}/parametri/direttrici-ente`}
+              href={conRitorno(`/spazio/${codice}/parametri/direttrici-ente`, ritorno)}
               className="font-bold text-sky-700 hover:underline"
             >
               direttrici dell’ente
@@ -356,7 +371,7 @@ export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = 
             — e la <strong>procedura</strong>, i passi che l’ufficio esegue davvero. Si scrivono una
             volta sola: nei{' '}
             <Link
-              href={`/spazio/${codice}/parametri/titoli-ente`}
+              href={conRitorno(`/spazio/${codice}/parametri/titoli-ente`, ritorno)}
               className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
             >
               titoli di credito dell’ente <ArrowRight className="w-3 h-3" />
@@ -410,7 +425,7 @@ export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = 
         <p className="text-xs text-slate-500">
           Nessuna materia configurata. Le materie si creano nei{' '}
           <Link
-            href={`/spazio/${codice}/parametri/titoli-ente`}
+            href={conRitorno(`/spazio/${codice}/parametri/titoli-ente`, ritorno)}
             className="font-bold text-sky-700 hover:underline"
           >
             titoli di credito dell’ente
@@ -486,6 +501,7 @@ export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = 
                 direttrici={direttrici}
                 registro={registro}
                 codice={codice}
+                ritorno={ritorno}
                 onChange={(nome) => setNuova((prev) => ({ ...prev, dipendenza: nome }))}
               />
             </label>
@@ -589,6 +605,7 @@ export function MaterieLavorazioneManager({ nomeSchema, codice, apriMateriaId = 
                       direttrici={direttrici}
                       registro={registro}
                       codice={codice}
+                      ritorno={ritorno}
                       onChange={(nome) => modificaBozza(l.id, { dipendenza: nome })}
                     />
                   </label>

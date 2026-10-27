@@ -26,6 +26,51 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.3 — 2026-10-27
+
+**La verifica riaperta finisce dove deve: due comandi inerti tornano a funzionare, e i Parametri
+riportano alla verifica**
+
+Tre cose viste riaprendo una verifica. «Non procedo» apriva uno stato che nessuna parte della
+videata leggeva — la finestra del motivo era sparita in una rifattorizzazione — e «Verifica
+un'altra azienda» cambiava videata lasciando lo scorrimento dov'era, su uno spazio vuoto: due
+comandi visibili e muti sono peggio di due comandi assenti, perché chi li preme crede di aver
+deciso qualcosa. Il pannello dell'indicatore dichiarava «3 dimensioni su 4» e subito sotto
+«Nulla da integrare». E ogni rimando ai Parametri lasciava lì: si entrava nel triage per
+sistemare una materia e si usciva nella dashboard dei parametri, con la verifica persa.
+
+- **«Non procedo» chiede il motivo e archivia davvero.** La finestra è tornata, il motivo è
+  obbligatorio (almeno qualche parola: un'archiviazione senza spiegazione è indistinguibile da
+  una dimenticanza) e a conferma la videata torna al caricamento, in cima.
+- **«Verifica un'altra azienda» riporta in cima.** La videata cambiava, ma restando allo
+  scorrimento di prima si finiva sul vuoto e il comando sembrava non aver fatto nulla.
+- **La copertura non si smentisce.** Quando una dimensione resta fuori, l'elenco «Da accertare»
+  la nomina (quadro qualitativo, indici non calcolabili…) e dice perché non cambia l'esito: le
+  lacune portanti continuano a comparire come lacune, quelle accessorie restano fuori dai
+  dovuti approfondimenti ma non più nel silenzio.
+- **I rimandi ai Parametri portano con sé la via del ritorno** (`src/lib/navigazione/ritorno.ts`,
+  componente `LinkRitorno`): lavorazioni delle materie, direttrici, titoli, categorie e soglie
+  aggiungono `?ritorno=`, e la loro uscita riporta alla verifica (con la sua azienda) invece che
+  alla dashboard dei parametri. Il percorso si accetta solo dentro lo spazio di chi naviga, non
+  si seguono catene di ritorni, e il ritorno si propaga nei rimandi fra una gestione e l'altra.
+
+## 0.139.2 — 2026-10-26
+
+**Il riallineamento guidato: quando l'ufficio è solo un altro modo di scrivere una direttrice**
+
+L'elenco degli uffici fuori elenco diceva che cosa non tornava, ma non dove andava: chi
+configura doveva riconoscere a occhio, tra le direttrici, quella che l'ufficio voleva già
+essere. Ora la riga lo dice — sembra lo stesso ufficio di «Presidio dei flussi informativi»,
+scritto in un altro modo — e la destinazione è già scelta: riportarlo costa un clic.
+
+- **Il confronto è quello degli uffici sosia** (`dipendenzeSosia`): stesse parole, senza
+  articoli e preposizioni. Non una somiglianza di lettere, che proporrebbe l'ufficio sbagliato.
+- **Se a somigliare sono due direttrici non si sceglie per l'ente**: «Ufficio legale Napoli»
+  può somigliare sia a «Ufficio legale» sia a «Ufficio legale Milano», e potrebbero essere due
+  sedi diverse. La riga le nomina entrambe e lascia il selettore vuoto.
+- **Il pulsante sposta dove si vede**: agisce sulla destinazione mostrata dal selettore, scelta
+  o suggerita, così non esiste il caso in cui il comando parte per un'altra direttrice.
+
 ## 0.139.1 — 2026-10-26
 
 **Riportare un ufficio fuori elenco a una direttrice, in un clic**

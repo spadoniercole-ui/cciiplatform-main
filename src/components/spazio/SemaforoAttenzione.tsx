@@ -101,7 +101,31 @@ export function SemaforoAttenzione({ attenzione }: { attenzione: Attenzione }) {
               Da accertare
             </p>
             {attenzione.daAccertare.length === 0 ? (
-              <p className="text-[10px] text-slate-400">Nulla da integrare.</p>
+              /*
+                «Nulla da integrare» accanto a «3 dimensioni su 4» è una frase
+                che si smentisce da sola. Se la copertura non è piena, la
+                dimensione che manca si nomina: è quasi sempre quella
+                accessoria, e dire che non cambia l'esito è diverso dal non
+                dirla — chi legge vede il 3 su 4 e ha diritto di sapere di che
+                cosa è fatto il quarto.
+              */
+              (attenzione.dimensioniScoperte ?? []).length === 0 ? (
+                <p className="text-[10px] text-slate-400">Nulla da integrare.</p>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-[10px] text-slate-500">Nessuna lacuna da colmare.</p>
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Fuori dalla copertura:{' '}
+                    {(attenzione.dimensioniScoperte ?? []).map((d) => d.nome).join(', ')} —{' '}
+                    {(attenzione.dimensioniScoperte ?? []).every((d) => !d.portante)
+                      ? (attenzione.dimensioniScoperte ?? []).length === 1
+                        ? 'dimensione accessoria, che non cambia l’esito'
+                        : 'dimensioni accessorie, che non cambiano l’esito'
+                      : 'da colmare per chiudere il perimetro'}
+                    . È per questo che la copertura non è piena.
+                  </p>
+                </div>
+              )
             ) : (
               <ul className="space-y-1">
                 {attenzione.daAccertare.map((x, i) => (

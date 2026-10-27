@@ -111,7 +111,9 @@ describe('catena direttrici → lavorazioni → titoli', () => {
         lav({ id: 2, dipendenza: 'Ufficio legale' }),
       ],
     });
-    expect(esito.fuoriElenco).toEqual([{ nome: 'Ufficio legale', lavorazioni: 1, codici: 0 }]);
+    expect(esito.fuoriElenco).toEqual([
+      { nome: 'Ufficio legale', lavorazioni: 1, codici: 0, somigliaA: [] },
+    ]);
   });
 
   it('conta le lavorazioni rimaste senza ufficio', () => {
@@ -130,7 +132,43 @@ describe('catena direttrici → lavorazioni → titoli', () => {
       titoli: [{ materiaId: null, dipendenza: 'Ufficio legale' }],
     });
     expect(esito.voci).toEqual([]);
-    expect(esito.fuoriElenco).toEqual([{ nome: 'Ufficio legale', lavorazioni: 1, codici: 1 }]);
+    expect(esito.fuoriElenco).toEqual([
+      { nome: 'Ufficio legale', lavorazioni: 1, codici: 1, somigliaA: [] },
+    ]);
+  });
+
+  it('propone la direttrice di cui l’ufficio sembra un altro modo di scriverla', () => {
+    const esito = componiCatenaDirettrici({
+      direttrici: direttrici('Presidio dei flussi informativi', 'Gestione del credito'),
+      lavorazioni: [
+        lav({ id: 1, dipendenza: 'Presidio qualità flussi informativi' }),
+        lav({ id: 2, dipendenza: 'Ufficio legale' }),
+      ],
+      titoli: [],
+    });
+    // La prima è la stessa direttrice con una parola in più: si può riportare
+    // lì. La seconda non somiglia a niente, e nessuno la propone.
+    expect(esito.fuoriElenco).toEqual([
+      {
+        nome: 'Presidio qualità flussi informativi',
+        lavorazioni: 1,
+        codici: 0,
+        somigliaA: ['Presidio dei flussi informativi'],
+      },
+      { nome: 'Ufficio legale', lavorazioni: 1, codici: 0, somigliaA: [] },
+    ]);
+  });
+
+  it('se a somigliare sono due direttrici le propone entrambe, senza sceglierne una', () => {
+    const esito = componiCatenaDirettrici({
+      direttrici: direttrici('Ufficio legale', 'Ufficio legale Milano'),
+      lavorazioni: [lav({ id: 1, dipendenza: 'Ufficio legale Napoli' })],
+      titoli: [],
+    });
+    expect(esito.fuoriElenco[0].somigliaA.sort()).toEqual([
+      'Ufficio legale',
+      'Ufficio legale Milano',
+    ]);
   });
 });
 

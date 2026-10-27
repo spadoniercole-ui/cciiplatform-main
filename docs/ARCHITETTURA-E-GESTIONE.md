@@ -169,7 +169,17 @@ Drizzle è marginale.
    (`/verifica-salute?azienda=<id>`) e una ricarica ricompone l'esito dai dati salvati —
    posizioni del V.E.R.A. con il loro periodo, esito, soglie ricalcolate. Il ritorno è
    offerto anche dalla scheda azienda e dalla dashboard. Una verifica già presa in carico,
-   o archiviata, si consulta ma non si decide di nuovo.
+   o archiviata, si consulta ma non si decide di nuovo. I due comandi che restano —
+   **Non procedo** (archivia con il motivo, che è obbligatorio) e **Verifica un'altra
+   azienda** — riportano al caricamento in cima alla pagina.
+
+   **I rimandi ai Parametri portano con sé la via del ritorno.** Ogni link verso le
+   lavorazioni, le direttrici, i titoli o le soglie aggiunge `?ritorno=<pagina di partenza>`
+   (`src/lib/navigazione/ritorno.ts`): l'uscita di quelle pagine — un solo componente,
+   `LinkRitorno` — riporta alla verifica che si stava guardando invece che alla dashboard dei
+   parametri. Il percorso è accettato solo se resta dentro lo spazio di chi naviga, non
+   contiene a sua volta un `ritorno`, e non è la dashboard stessa; il `ritorno` si propaga
+   anche nei rimandi fra una gestione e l'altra (materie → direttrici → titoli).
    Ogni PDF porta una **versione** (impronta del contenuto, stampata sul foglio) e ogni
    scaricamento lascia una riga in `consegne_reparti`: reparto, data della verifica,
    versione, posizioni, totali, chi e quando. È un diario, non uno stato — due
@@ -239,6 +249,13 @@ permanente sull'azienda con lo stesso motore di punteggio della Check List. Rige
 screening azzera le risposte precedenti (un questionario nuovo non eredita risposte a
 domande che potrebbero non esistere più). Lo storico delle generazioni è conservato.
 
+L'indicatore di attenzione dichiara la copertura — quante dimensioni su quattro sono
+determinabili — e, quando non è piena, **nomina** la dimensione che resta fuori
+(`dimensioniScoperte` in `src/lib/screening/indicatore.ts`): quelle portanti finiscono fra le
+cose da accertare, quelle accessorie no, ma restano scritte perché un «nulla da integrare»
+accanto a «3 dimensioni su 4» è una frase che si smentisce da sola. Gli elenchi restano due e
+senza gerarchia: il semaforo dice la gravità, l'ordine delle azioni resta al valutatore.
+
 ### La catena dell'ente: direttrici → lavorazioni → titoli (0.139.0)
 
 Un solo ingresso per il nome degli uffici, tre passaggi:
@@ -266,6 +283,11 @@ dalla pagina delle direttrici (`pianificaRiallineamento`, azione
 nominano e i titoli che lo dichiarano sul proprio codice, in una transazione, con la grafia
 delle direttrici. È il comando che evita di riscegliere il destinatario materia per materia —
 cioè il modo in cui lo stesso ufficio torna a sdoppiarsi.
+
+La destinazione del riallineamento è guidata: ogni ufficio fuori elenco porta in `somigliaA` le
+direttrici di cui sembra un altro modo di scrivere il nome (confronto di `dipendenzeSosia`:
+stesse parole senza articoli e preposizioni). Una sola → è già selezionata e basta un clic;
+più d'una → si nominano tutte e la scelta resta all'ente, perché possono essere sedi diverse.
 
 ### Fase 7 — La proposta (il cuore)
 

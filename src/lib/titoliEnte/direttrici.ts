@@ -25,7 +25,7 @@
 //
 // Logica pura: nessun accesso al database, così si verifica con i test.
 
-import { chiaveDipendenza, nomeDipendenza } from '@/lib/lavorazioni/dipendenze';
+import { chiaveDipendenza, dipendenzeSosia, nomeDipendenza } from '@/lib/lavorazioni/dipendenze';
 import { dipendenzaEffettiva, type LavorazioneMateria } from './lavorazioniMateria';
 import type { TitoloEnte } from './titoli';
 
@@ -92,6 +92,13 @@ export interface UfficioFuoriElenco {
   nome: string;
   lavorazioni: number;
   codici: number;
+  /**
+   * Le direttrici che sembrano lo stesso ufficio scritto in un altro modo
+   * («Presidio qualità flussi informativi» e «Presidio dei flussi informativi»).
+   * Non è un'unione: è un'indicazione, perché il riallineamento lo decide chi
+   * configura — due sedi possono chiamarsi quasi uguale.
+   */
+  somigliaA: string[];
 }
 
 export interface CatenaDirettrici {
@@ -180,10 +187,33 @@ export function componiCatenaDirettrici(input: {
     };
   });
 
-  const fuoriElenco: UfficioFuoriElenco[] = Array.from(conteggi.entries())
+  // Gli uffici fuori elenco e le direttrici messi insieme: quelli che
+  // differiscono solo per una parola in più sono probabilmente lo stesso
+  // ufficio scritto in due modi, ed è la destinazione che il riallineamento
+  // propone. Il confronto è quello di `dipendenzeSosia` (stesse parole, senza
+  // articoli e preposizioni), non una somiglianza di lettere: «Ufficio legale»
+  // e «Ufficio legale Milano» restano due uffici finché non lo dice l'ente.
+  const ufficiFuori = Array.from(conteggi.entries())
     .filter(([chiave]) => !chiavi.has(chiave))
-    .map(([, c]) => ({ nome: c.nome, lavorazioni: c.lavorazioni, codici: c.codici }))
+    .map(([chiave, c]) => ({ chiave, nome: c.nome, lavorazioni: c.lavorazioni, codici: c.codici }))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+
+  const simili = new Map<string, string[]>();
+  for (const gruppo of dipendenzeSosia([...nomi, ...ufficiFuori.map((u) => u.nome)])) {
+    const delGruppo = gruppo.filter((n) => chiavi.has(chiaveDipendenza(n)));
+    for (const n of gruppo) {
+      const chiave = chiaveDipendenza(n);
+      if (chiavi.has(chiave)) continue;
+      simili.set(chiave, delGruppo);
+    }
+  }
+
+  const fuoriElenco: UfficioFuoriElenco[] = ufficiFuori.map((u) => ({
+    nome: u.nome,
+    lavorazioni: u.lavorazioni,
+    codici: u.codici,
+    somigliaA: simili.get(u.chiave) ?? [],
+  }));
 
   return {
     voci,

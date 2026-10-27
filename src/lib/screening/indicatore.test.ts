@@ -73,6 +73,16 @@ describe('l’assenza di dati è un segnale, non una neutralità', () => {
     // lacune che contano. Concorre solo alla copertura.
     expect(a.daAccertare.some((d) => d.includes('qualitativo'))).toBe(false);
     expect(a.copertura.determinate).toBeLessThan(a.copertura.totali);
+    // Però la dimensione scoperta si NOMINA: la copertura dichiarata (3 su 4)
+    // deve avere il suo perché, e quel perché non è una lacuna da accertare.
+    expect(a.dimensioniScoperte?.map((d) => d.nome)).toEqual([
+      'Quadro qualitativo (Check List / Direttrici)',
+    ]);
+    expect(a.dimensioniScoperte?.[0].portante).toBe(false);
+  });
+
+  it('con tutti i dati presenti non resta nessuna dimensione scoperta', () => {
+    expect(calcolaAttenzione(completo).dimensioniScoperte).toEqual([]);
   });
 
   it('le lacune PORTANTI invece bloccano: soglie o bilancio', () => {

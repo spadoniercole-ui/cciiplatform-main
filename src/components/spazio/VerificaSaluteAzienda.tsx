@@ -114,6 +114,7 @@ import { preparaDocumentiReparto, type DocumentoReparto } from '@/lib/lavorazion
 import { componiReportUo, type DocumentoUo } from '@/lib/lavorazioni/reportUo';
 import { instradaPerMateria, materiaDaChiave } from '@/lib/lavorazioni/instradamentoMateria';
 import { chiaveDipendenza, dipendenzeSosia } from '@/lib/lavorazioni/dipendenze';
+import { conRitorno } from '@/lib/navigazione/ritorno';
 import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import type { StatoMateria } from '@/lib/titoliEnte/materie';
@@ -1145,6 +1146,8 @@ export function VerificaSaluteAzienda({
     setMotivoArchiviazione('');
     setFase('caricamento');
     setRipresa(null);
+    // Come «Verifica un'altra azienda»: la videata di caricamento sta in cima.
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
     setDati(null);
     setAttenzione(null);
     setAziendaId(null);
@@ -1435,10 +1438,21 @@ export function VerificaSaluteAzienda({
   const nomiMaterieDaCompletare = materieDaCompletare.map(
     (id) => materieUo.find((m) => m.id === id)?.nome ?? `Materia ${id}`
   );
-  const linkLavorazioni =
+  // LA VIA DEL RITORNO.
+  //
+  // Ogni rimando ai Parametri porta con sé questa verifica — con la sua
+  // azienda — perché l'uscita di quelle pagine riporti qui e non alla
+  // dashboard dei parametri. È il punto da cui la gestione è stata richiamata,
+  // e quello che si stava guardando prima di andare a sistemare una materia.
+  const ritornoDaTriage = `/spazio/${codice}/verifica-salute${
+    aziendaId ? `?azienda=${aziendaId}` : ''
+  }`;
+  const linkLavorazioni = conRitorno(
     materieDaCompletare.length > 0
       ? `/spazio/${codice}/parametri/materie-lavorazione?materia=${materieDaCompletare[0]}`
-      : `/spazio/${codice}/parametri/lavorazioni`;
+      : `/spazio/${codice}/parametri/lavorazioni`,
+    ritornoDaTriage
+  );
   const etichettaLavorazioni =
     materieDaCompletare.length > 0
       ? `Configura la lavorazione di «${nomiMaterieDaCompletare.join('», «')}»`
@@ -2318,6 +2332,96 @@ export function VerificaSaluteAzienda({
               </div>
             </div>
           )}
+
+          {/*
+            «NON PROCEDO» — LA FINESTRA DEL MOTIVO.
+
+            Il pulsante esisteva, il motivo si raccoglieva in uno stato e poi
+            nessuno lo chiedeva: la finestra era sparita in una rifattorizzazione
+            e il comando era rimasto a schermo, inerte. Una decisione
+            amministrativa senza traccia è peggio di una decisione non presa,
+            perché nessuno può ricostruire chi ha guardato cosa. Il motivo è
+            obbligatorio per la stessa ragione: «archiviata» da sola è
+            indistinguibile da una dimenticanza.
+          */}
+          {mostraArchiviazione && (
+            <div
+              className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 p-4"
+              role="presentation"
+              onClick={() => setMostraArchiviazione(false)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="archivia-titolo"
+                onClick={(e) => e.stopPropagation()}
+                className="mx-auto my-8 w-full max-w-lg bg-white rounded-xl border border-slate-200 shadow-xl p-5 space-y-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3
+                      id="archivia-titolo"
+                      className="font-bold text-slate-900 uppercase text-xs tracking-wider"
+                    >
+                      Non procedo — archivia la verifica
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      La verifica resta consultabile nello storico con il suo esito e con il motivo
+                      che scrivi qui. L&apos;azienda non entra fra quelle in lavorazione.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMostraArchiviazione(false)}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                    aria-label="Chiudi"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <label
+                    htmlFor="motivo-archiviazione"
+                    className="block text-[10px] font-bold uppercase tracking-wider text-slate-600"
+                  >
+                    Motivo della decisione
+                  </label>
+                  <textarea
+                    id="motivo-archiviazione"
+                    value={motivoArchiviazione}
+                    onChange={(e) => setMotivoArchiviazione(e.target.value)}
+                    rows={3}
+                    placeholder="es. Debito sotto soglia e già in rateizzazione: nessun seguito da dare."
+                    className="w-full p-2 text-xs border border-slate-200 rounded-lg text-slate-900"
+                  />
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Almeno qualche parola: è ciò che vedrà chi riapre questa posizione.
+                  </p>
+                </div>
+
+                {errore && <p className="text-[11px] text-red-700">{errore}</p>}
+
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setMostraArchiviazione(false)}
+                    className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void archivia()}
+                    disabled={inCorso || motivoArchiviazione.trim().length < 3}
+                    className="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold uppercase tracking-wider hover:bg-slate-800 disabled:bg-slate-300"
+                  >
+                    {inCorso ? 'Archivio…' : 'Archivia la verifica'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-slate-500" />
@@ -2402,9 +2506,12 @@ export function VerificaSaluteAzienda({
                           <>
                             {' '}
                             <a
-                              href={`/spazio/${codice}/parametri/materie-lavorazione?materia=${materiaDaChiave(
-                                c.categoria
-                              )}`}
+                              href={conRitorno(
+                                `/spazio/${codice}/parametri/materie-lavorazione?materia=${materiaDaChiave(
+                                  c.categoria
+                                )}`,
+                                ritornoDaTriage
+                              )}
                               className="font-bold underline"
                             >
                               Aggiungi la lavorazione
@@ -2608,7 +2715,10 @@ export function VerificaSaluteAzienda({
                   la stessa dipendenza nelle lavorazioni delle materie: la piattaforma non unisce da
                   sola — due sedi possono chiamarsi quasi uguale.{' '}
                   <a
-                    href={`/spazio/${codice}/parametri/materie-lavorazione`}
+                    href={conRitorno(
+                      `/spazio/${codice}/parametri/materie-lavorazione`,
+                      ritornoDaTriage
+                    )}
                     className="font-bold underline hover:text-amber-900"
                   >
                     Apri le lavorazioni delle materie
@@ -3153,7 +3263,10 @@ export function VerificaSaluteAzienda({
                         <>
                           {' '}
                           <a
-                            href={`/spazio/${codice}/parametri/materie-lavorazione?materia=${c.materiaId}`}
+                            href={conRitorno(
+                              `/spazio/${codice}/parametri/materie-lavorazione?materia=${c.materiaId}`,
+                              ritornoDaTriage
+                            )}
                             className="font-bold underline"
                           >
                             Indica l’ufficio
@@ -3291,6 +3404,10 @@ export function VerificaSaluteAzienda({
                     const url = new URL(window.location.href);
                     url.searchParams.delete('azienda');
                     window.history.replaceState(null, '', url.toString());
+                    // La videata nuova sta in cima: restando allo scorrimento di
+                    // prima si finiva su uno spazio vuoto, e il comando sembrava
+                    // non aver fatto nulla.
+                    window.scrollTo({ top: 0 });
                   }
                   setDati(null);
                   setAttenzione(null);

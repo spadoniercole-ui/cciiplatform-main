@@ -21,7 +21,7 @@
 // non la forma scritta a mano in un `as`.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 vi.mock('@/app/actions/visuraEstrazione', () => ({
   estraiAnagraficaDaVisuraAction: vi.fn(),
@@ -113,6 +113,7 @@ vi.mock('@/app/actions/anagraficaEnteConfig', () => ({
 
 import type { AnagraficaEstratta } from '@/app/actions/visuraEstrazione';
 import {
+  archiviaVerificaAction,
   creaAziendaInVerificaAction,
   ottieniStoricoVerificheAction,
   ottieniVerificaDaRiprendereAction,
@@ -332,6 +333,7 @@ beforeEach(() => {
     success: false,
     error: 'Non deve essere chiamata: la verifica si riapre, non si rifà.',
   });
+  vi.mocked(archiviaVerificaAction).mockResolvedValue({ success: true, aziendaId: AZIENDA_ID });
 });
 
 afterEach(() => {
@@ -495,6 +497,75 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     const link = within(sezioneDi('Comunicazioni ai colleghi')).getByRole('link', {
       name: /Configura la lavorazione di «Flussi Uniemens»/i,
     });
-    expect(link.getAttribute('href')).toBe('/spazio/prova/parametri/materie-lavorazione?materia=1');
+    // E porta con sé la via del ritorno: chi esce dai Parametri deve tornare
+    // a QUESTA verifica, non alla dashboard dei parametri.
+    expect(link.getAttribute('href')).toBe(
+      '/spazio/prova/parametri/materie-lavorazione?materia=1&ritorno=%2Fspazio%2Fprova%2Fverifica-salute%3Fazienda%3D42'
+    );
+  });
+
+  //
+  // I DUE TASTI CHE NON FACEVANO NULLA.
+  //
+  // In una verifica riaperta «Non procedo» apriva uno stato che nessuna parte
+  // della videata leggeva — la finestra del motivo non c'era più — e «Verifica
+  // un'altra azienda» non riportava al caricamento. Due comandi visibili e
+  // inerti sono peggio di due comandi assenti: chi li preme crede di aver
+  // deciso qualcosa.
+  //
+  it('«Non procedo» chiede il motivo e archivia la verifica', async () => {
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    await waitFor(() => expect(screen.getByText('Verifica riaperta')).toBeTruthy());
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    screen.getByRole('button', { name: 'Non procedo' }).click();
+    const finestra = await screen.findByRole('dialog');
+    expect(within(finestra).getByText(/Non procedo/i)).toBeTruthy();
+
+    // Il motivo è obbligatorio: senza, l'archiviazione è indistinguibile da
+    // una dimenticanza, e l'azione lo rifiuta.
+    const motivo = within(finestra).getByLabelText(/Motivo/i);
+    const conferma = within(finestra).getByRole('button', { name: /Archivia la verifica/i });
+    expect((conferma as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(motivo, { target: { value: 'Debito sotto soglia, nessun seguito.' } });
+    await waitFor(() => expect((conferma as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(conferma);
+
+    await waitFor(() =>
+      expect(archiviaVerificaAction).toHaveBeenCalledWith(
+        SCHEMA,
+        AZIENDA_ID,
+        'Debito sotto soglia, nessun seguito.'
+      )
+    );
+    // Chiusa la pratica si torna al caricamento: la verifica archiviata non è
+    // più quella da guardare.
+    await waitFor(() => expect(screen.getByText('Visura camerale (PDF)')).toBeTruthy());
+  });
+
+  it('«Verifica un’altra azienda» riporta al caricamento, senza restare sull’esito', async () => {
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    await waitFor(() => expect(screen.getByText('Verifica riaperta')).toBeTruthy());
+    screen.getByRole('button', { name: /Verifica un.altra azienda/i }).click();
+
+    await waitFor(() => expect(screen.queryByText('Verifica riaperta')).toBeNull());
+    expect(screen.getByText('Visura camerale (PDF)')).toBeTruthy();
   });
 });

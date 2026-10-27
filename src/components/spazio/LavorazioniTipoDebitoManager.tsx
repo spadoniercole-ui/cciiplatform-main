@@ -23,6 +23,7 @@ import {
   type LavorazioneTipoDebito,
 } from '@/app/actions/lavorazioniTipoDebito';
 import { TIPI_DEBITO_ENTE } from '@/lib/debitiEnte/tipoDebito';
+import { conRitorno } from '@/lib/navigazione/ritorno';
 import {
   AVVISO_LAVORAZIONI_SOLA_LETTURA,
   LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA,
@@ -31,6 +32,8 @@ import {
 interface Props {
   nomeSchema: string;
   codice: string;
+  /** La pagina da cui si è arrivati: si riporta nei rimandi fra le gestioni. */
+  ritorno?: string;
 }
 
 const CLASSE =
@@ -43,7 +46,7 @@ const vuota = (categoria = ''): InputLavorazioneTipoDebito => ({
   attivo: true,
 });
 
-export function LavorazioniTipoDebitoManager({ nomeSchema, codice }: Props) {
+export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Props) {
   useDichiaraContestoAssistente({
     pagina: 'parametri',
     nomeSchema,
@@ -259,7 +262,7 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice }: Props) {
           <p className="text-[11px] text-slate-500 mt-1">
             Le categorie sono quelle di{' '}
             <a
-              href={`/spazio/${codice}/parametri/categorie-debito`}
+              href={conRitorno(`/spazio/${codice}/parametri/categorie-debito`, ritorno)}
               className="font-bold text-sky-700 hover:underline"
             >
               Categorie tipo debito

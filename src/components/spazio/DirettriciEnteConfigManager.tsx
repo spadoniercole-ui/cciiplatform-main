@@ -14,12 +14,15 @@ import {
 } from '@/app/actions/materieLavorazione';
 import { ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
 import { componiCatenaDirettrici } from '@/lib/titoliEnte/direttrici';
+import { conRitorno } from '@/lib/navigazione/ritorno';
 import type { LavorazioneMateria } from '@/lib/titoliEnte/lavorazioniMateria';
 import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
 
 interface Props {
   nomeSchema: string;
   codice: string;
+  /** La pagina da cui si è arrivati: si riporta nei rimandi fra le gestioni. */
+  ritorno?: string;
 }
 
 const DIRETTRICE_VUOTA: DirettriceStrutturata = { nome: '', prodotti: [] };
@@ -30,7 +33,7 @@ const DIRETTRICE_VUOTA: DirettriceStrutturata = { nome: '', prodotti: [] };
 // riquadro della catena dice quanto lontano è arrivato ogni nome e che cosa
 // manca, perché una catena che funziona e nessuno guarda è una catena che si
 // rompe in silenzio.
-export function DirettriciEnteConfigManager({ nomeSchema, codice }: Props) {
+export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Props) {
   const [direttrici, setDirettrici] = useState<DirettriceStrutturata[]>([]);
   const [lavorazioni, setLavorazioni] = useState<LavorazioneMateria[]>([]);
   const [titoli, setTitoli] = useState<TitoloEnte[]>([]);
@@ -74,8 +77,9 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice }: Props) {
   // riga: è un nome che va riportato su una direttrice. Il comando fa tutto —
   // lavorazioni delle materie e titoli che lo dichiarano — e poi ricarica la
   // catena, così il riquadro mostra subito che l'ufficio non c'è più.
-  const riallinea = async (ufficio: string) => {
-    const a = destinazione[ufficio];
+  const riallinea = async (ufficio: string, a: string) => {
+    // `a` è ciò che il selettore mostra: la scelta dell'utente o, se non c'è,
+    // la direttrice suggerita. Così il pulsante sposta sempre dove si vede.
     if (!a) return;
     setRiallineamentoInCorso(ufficio);
     setErrore(null);
@@ -162,14 +166,14 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice }: Props) {
       <p className="text-[11px] text-slate-500">
         Il nome di ogni direttrice è anche il <strong>nome dell&apos;ufficio</strong>: le{' '}
         <Link
-          href={`/spazio/${codice}/parametri/materie-lavorazione`}
+          href={conRitorno(`/spazio/${codice}/parametri/materie-lavorazione`, ritorno)}
           className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
         >
           lavorazioni delle materie <ArrowRight className="w-3 h-3" />
         </Link>{' '}
         lo scelgono come dipendenza, i{' '}
         <Link
-          href={`/spazio/${codice}/parametri/titoli-ente`}
+          href={conRitorno(`/spazio/${codice}/parametri/titoli-ente`, ritorno)}
           className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
         >
           titoli di credito <ArrowRight className="w-3 h-3" />
@@ -248,7 +252,13 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice }: Props) {
                 anche le lavorazioni delle materie che lo nominano.
               </p>
               {catena.fuoriElenco.map((u) => {
-                const scelta = destinazione[u.nome] ?? '';
+                // Il suggerimento è la direttrice che sembra lo stesso ufficio
+                // scritto in un altro modo: se è una sola si preseleziona, e il
+                // riallineamento costa un clic. Se sono più d'una non si sceglie
+                // per l'ente — due sedi possono chiamarsi quasi uguale — e resta
+                // il selettore vuoto, con l'avviso di quali sono.
+                const suggerita = u.somigliaA.length === 1 ? u.somigliaA[0] : '';
+                const scelta = destinazione[u.nome] ?? suggerita;
                 const inCorso = riallineamentoInCorso === u.nome;
                 return (
                   <div
@@ -260,6 +270,15 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice }: Props) {
                       {u.lavorazioni === 1 ? '1 lavorazione' : `${u.lavorazioni} lavorazioni`} ·{' '}
                       {u.codici === 1 ? '1 codice' : `${u.codici} codici`}
                     </span>
+                    {u.somigliaA.length > 0 && (
+                      <span className="text-[10px] text-amber-900 w-full leading-relaxed">
+                        {u.somigliaA.length === 1
+                          ? `Sembra lo stesso ufficio di «${u.somigliaA[0]}», scritto in un altro modo: la direzione è già indicata.`
+                          : `Sembra lo stesso ufficio di ${u.somigliaA
+                              .map((n) => `«${n}»`)
+                              .join(' e ')}: scegli tu quale — potrebbero essere due sedi diverse.`}
+                      </span>
+                    )}
                     <select
                       aria-label={`Direttrice a cui riportare ${u.nome}`}
                       value={scelta}
@@ -279,7 +298,7 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice }: Props) {
                     </select>
                     <button
                       type="button"
-                      onClick={() => void riallinea(u.nome)}
+                      onClick={() => void riallinea(u.nome, scelta)}
                       disabled={!scelta || inCorso}
                       className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg transition-colors"
                     >
