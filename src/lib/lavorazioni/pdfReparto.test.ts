@@ -54,8 +54,11 @@ const documento = (over: Partial<DocumentoReparto> = {}): DocumentoReparto => ({
   posizioniDaContabilizzare: 1,
   importoDaContabilizzare: 3_000,
   posizioniEscluse: { righe: 0, totale: 0 },
+  contabilizzate: { righe: 2, totale: 4_400 },
+  contabilizzateAdr: { righe: 1, totale: 1_400 },
+  codiciAdr: ['27'],
   nomeFile: 'comunica_reparti_alfa_srl_ufficio_contributi.pdf',
-  versione: '1-3f9a1c2b',
+  versione: '2-3f9a1c2b',
   ...over,
 });
 
@@ -71,8 +74,18 @@ describe('generaPdfReparto', () => {
     expect(sorgente).toContain('Verificare e trasmettere le denunce');
     // La versione è stampata sul foglio: è il modo per dire al reparto quale
     // documento ha in mano quando arriva una posizione aggiornata.
-    expect(sorgente).toContain('1-3f9a1c2b');
+    expect(sorgente).toContain('2-3f9a1c2b');
     expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+  });
+
+  // Il totale del foglio non è il totale del V.E.R.A.: la differenza ha una
+  // spiegazione scritta, con l'importo e la quota che riguarda l'AdR.
+  it('dichiara le posizioni già contabilizzate, con la quota della sola decisione AdR', () => {
+    const sorgente = generaPdfReparto(documento()).output();
+
+    expect(sorgente).toContain('Già contabilizzate e non elencate');
+    expect(sorgente).toContain('TS 27');
+    expect(sorgente).toContain('AdR');
   });
 
   it('dichiara le posizioni fuori perimetro, senza elencarle', () => {

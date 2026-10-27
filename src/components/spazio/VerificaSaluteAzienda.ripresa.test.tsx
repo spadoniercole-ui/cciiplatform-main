@@ -176,8 +176,10 @@ beforeEach(() => {
   });
   vi.mocked(ottieniStoricoVerificheAction).mockResolvedValue({ success: true, righe: [] });
 
-  // Posizioni: una sola, con un codice di partita («TS 27») e una categoria
-  // che ha una lavorazione configurata. Da qui nascono TUTTE e tre le uscite.
+  // Posizioni: una da lavorare, con un codice di partita («TS 27») e una
+  // categoria che ha una lavorazione configurata — da qui nascono TUTTE e tre
+  // le uscite — e una già contabilizzata, che i documenti devono dichiarare
+  // senza elencarla.
   vi.mocked(ottieniDebitiVera).mockResolvedValue({
     success: true,
     righe: [
@@ -192,6 +194,19 @@ beforeEach(() => {
         periodo: '202506 - 202506',
         trattamento: 'da_contabilizzare',
         contributi: 1200,
+        sanzioni: 0,
+      },
+      {
+        id: 2,
+        sezione: 'Sezione A',
+        ambito: 'INPS',
+        voce: 'TS 25 - nota di rettifica',
+        importo: 400,
+        categoria: 'CONTRIBUTI',
+        stato: '',
+        periodo: '202508 - 202508',
+        trattamento: 'contabilizzato',
+        contributi: 400,
         sanzioni: 0,
       },
     ],
@@ -378,6 +393,15 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     expect(within(comunicazioni).getByText('Ufficio Recupero Crediti')).toBeTruthy();
     expect(within(comunicazioni).queryByText('Sportello Entrate')).toBeNull();
     expect(within(comunicazioni).getByRole('button', { name: /Copia testo/i })).toBeTruthy();
+    // Il testo elenca solo ciò che manca: la posizione già contabilizzata non
+    // è una riga dell'elenco, ma una dichiarazione con il suo importo.
+    const testo = within(comunicazioni).getByText(
+      /Già contabilizzate, e per questo non elencate: 1 posizione/,
+      { selector: 'pre' }
+    );
+    // La posizione non è fra quelle elencate, ma il suo importo è dichiarato.
+    expect(testo.textContent).not.toContain('TS 25 - nota di rettifica');
+    expect(testo.textContent).toContain('TS 25');
 
     // I due export, ciascuno nel proprio riquadro.
     const reparti = sezioneDi('Comunica ai reparti');
@@ -419,6 +443,17 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     // E porta ai due riquadri, senza farli cercare.
     expect(screen.getByRole('link', { name: /Vai ai documenti per reparto/i })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Vai ai report per unità operativa/i })).toBeTruthy();
+
+    // E dice che cosa i documenti NON elencano: il loro totale non è quello del
+    // V.E.R.A., e la differenza ha una spiegazione, con la quota AdR.
+    const avviso = screen.getByText('Puoi procedere alle comunicazioni per le unità operative')
+      .parentElement!.parentElement!;
+    const dichiarazione = within(avviso).getByText(
+      /Già contabilizzate, e per questo non elencate/,
+      { selector: 'p' }
+    );
+    expect(dichiarazione.textContent).toContain('TS 25');
+    expect(dichiarazione.textContent).toContain('Agente della Riscossione');
   });
 
   it('le soglie si aprono in una finestra, con gli identificativi salvati per l’azienda', async () => {

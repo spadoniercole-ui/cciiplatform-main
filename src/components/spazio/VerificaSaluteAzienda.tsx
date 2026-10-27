@@ -112,6 +112,7 @@ import {
 } from '@/lib/lavorazioni/comunicazioni';
 import { preparaDocumentiReparto, type DocumentoReparto } from '@/lib/lavorazioni/reparti';
 import { componiReportUo, type DocumentoUo } from '@/lib/lavorazioni/reportUo';
+import { testiContabilizzate } from '@/lib/lavorazioni/daLavorare';
 import { instradaPerMateria, materiaDaChiave } from '@/lib/lavorazioni/instradamentoMateria';
 import { chiaveDipendenza, dipendenzeSosia } from '@/lib/lavorazioni/dipendenze';
 import { conRitorno } from '@/lib/navigazione/ritorno';
@@ -1413,7 +1414,14 @@ export function VerificaSaluteAzienda({
     uffici: ufficiConDocumenti.length,
     posizioni: posizioniUo,
     totale: totaleUo,
+    // Ciò che i documenti non elencano — perché è già in contabilità — si dice
+    // nello stesso avviso che annuncia i documenti: altrimenti il loro totale
+    // sembra più basso del debito e nessuno sa dove sia finita la differenza.
+    contabilizzate: documentiReparti.contabilizzate,
+    contabilizzateAdr: documentiReparti.contabilizzateAdr,
+    codiciAdr: documentiReparti.codiciAdr,
   };
+  const notaContabilizzate = testiContabilizzate(avanzamentoUo, formattaImportoEuro).collegiale;
 
   // Gli uffici che si chiamano quasi uguale: lo stesso destinatario scritto in
   // tre modi produce tre documenti. Non si uniscono d'ufficio — potrebbero
@@ -2659,6 +2667,9 @@ export function VerificaSaluteAzienda({
                       {etichettaLavorazioni}
                     </a>
                   </p>
+                )}
+                {notaContabilizzate && (
+                  <p className="text-[11px] text-slate-600 leading-relaxed">{notaContabilizzate}</p>
                 )}
               </div>
             );

@@ -38,8 +38,16 @@
 // triage, per le soglie, le esclude già — vedi `totaliVera`). Restano però
 // contate e dichiarate, con il loro importo: un'esclusione silenziosa è
 // indistinguibile da una riga persa.
+//
+// CIÒ CHE È GIÀ IN CONTABILITÀ NON SI CHIEDE. Il testo che parte è una
+// richiesta di lavorare delle partite, non un estratto del V.E.R.A.: le
+// posizioni già contabilizzate non si elencano (e le TS 25/27/81 si dichiarano
+// a parte, perché lì resta solo la decisione sull'invio ad AdR). La regola sta
+// in `daLavorare.ts`, perché la usano anche i documenti per reparto e per
+// unità operativa.
 
 import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
+import { ripartisciRigheVera, testiContabilizzate, type RiepilogoRighe } from './daLavorare';
 // L'ufficio si riconosce dalla sua chiave, non dalla grafia: lo stesso
 // destinatario scritto con maiuscole, spazi o accenti diversi resta UNO.
 import { chiaveDipendenza, nomeDipendenza } from './dipendenze';
@@ -93,6 +101,12 @@ export interface EsitoComunicazioniVera {
   righeSenzaCategoria: number;
   /** Posizioni fuori perimetro (trattamento `ignora`): dichiarate, non elencate. */
   posizioniEscluse: PosizioniEscluse;
+  /** Già contabilizzate: non si elencano, si dichiara quanto valgono. */
+  contabilizzate: RiepilogoRighe;
+  /** Già contabilizzate con la sola decisione AdR aperta (TS 25, 27 e 81). */
+  contabilizzateAdr: RiepilogoRighe;
+  /** I codici TS presenti fra le posizioni di cui sopra. */
+  codiciAdr: string[];
 }
 
 // Un formatter solo per tutti gli importi. `toLocaleString` ne costruisce uno
@@ -144,6 +158,11 @@ export interface RaggruppamentoPerReparto {
   categorieSenzaLavorazione: CategoriaSenzaLavorazione[];
   righeSenzaCategoria: number;
   posizioniEscluse: PosizioniEscluse;
+  /** Già contabilizzate: non entrano nei gruppi, si dichiarano. */
+  contabilizzate: RiepilogoRighe;
+  /** Già contabilizzate con la sola decisione AdR aperta (TS 25, 27 e 81). */
+  contabilizzateAdr: RiepilogoRighe;
+  codiciAdr: string[];
 }
 
 export interface InputRaggruppamento {
@@ -159,9 +178,10 @@ export interface InputRaggruppamento {
  *
  * Le regole, in un posto solo: la lavorazione spenta, la categoria vuota e la
  * tipologia senza lavorazione non producono un gruppo; una posizione senza
- * categoria non viene attribuita a nessuno e viene contata; lo stesso debito
- * che cade su due lavorazioni dello stesso destinatario compare una volta
- * sola ma con entrambe le attività.
+ * categoria non viene attribuita a nessuno e viene contata; una posizione già
+ * contabilizzata non si elenca (si dichiara a parte, con il suo importo); lo
+ * stesso debito che cade su due lavorazioni dello stesso destinatario compare
+ * una volta sola ma con entrambe le attività.
  */
 export function raggruppaPerReparto(input: InputRaggruppamento): RaggruppamentoPerReparto {
   const etichetta = (codice: string) => input.etichette[codice]?.trim() || codice;
@@ -190,15 +210,13 @@ export function raggruppaPerReparto(input: InputRaggruppamento): RaggruppamentoP
   const gruppi = new Map<string, GruppoDestinatario>();
   const senzaLavorazione = new Map<string, { righe: number; totale: number }>();
   let righeSenzaCategoria = 0;
-  const posizioniEscluse: PosizioniEscluse = { righe: 0, totale: 0 };
+  // Fuori perimetro, già contabilizzate, e le TS con la sola decisione AdR:
+  // la classificazione è una sola, condivisa con il report per unità
+  // operativa (vedi `daLavorare.ts`).
+  const ripartizione = ripartisciRigheVera(input.righe);
+  const posizioniEscluse: PosizioniEscluse = ripartizione.fuoriPerimetro;
 
-  for (const r of input.righe) {
-    // Fuori perimetro: non si elenca e non si somma, ma si dichiara.
-    if (r.trattamento === 'ignora') {
-      posizioniEscluse.righe += 1;
-      posizioniEscluse.totale += r.importo;
-      continue;
-    }
+  for (const r of ripartizione.daLavorare) {
     const categoria = r.categoria.trim();
     if (!categoria) {
       righeSenzaCategoria += 1;
@@ -269,6 +287,9 @@ export function raggruppaPerReparto(input: InputRaggruppamento): RaggruppamentoP
       .sort((a, b) => COLLATORE_IT.compare(a.etichetta, b.etichetta)),
     righeSenzaCategoria,
     posizioniEscluse,
+    contabilizzate: ripartizione.contabilizzate,
+    contabilizzateAdr: ripartizione.contabilizzateAdr,
+    codiciAdr: ripartizione.codiciAdr,
   };
 
   return raggruppamento;
@@ -300,6 +321,10 @@ export function componiComunicazioniVera(
           resto.posizioniEscluse.righe === 1 ? 'posizione' : 'posizioni'
         } per ${formattaImportoEuro(resto.posizioniEscluse.totale)}: sono sospese o fuori perimetro (trattamento «Ignora») e non vanno contabilizzate. Non entrano nel totale.`
       : null;
+  // Ciò che è già in contabilità non si chiede a nessuno: si dichiara, perché
+  // il totale del documento non è il totale del V.E.R.A. e chi confronta i due
+  // numeri deve trovare la spiegazione lì, non doverla dedurre.
+  const notaContabilizzate = testiContabilizzate(resto, formattaImportoEuro).collegiale;
   const comunicazioni: ComunicazioneStandard[] = gruppiOrdinati.map((g) => {
     const righe = g.righe;
     const lavorazioni = g.lavorazioni;
@@ -326,6 +351,7 @@ export function componiComunicazioniVera(
       `Lavorazioni richieste:\n${elencoLavorazioni}`,
       `Posizioni:\n${elencoRighe}`,
       `Totale delle posizioni elencate: ${formattaImportoEuro(totale)}.`,
+      notaContabilizzate,
       notaEscluse,
       "Ti chiedo di svolgere la lavorazione indicata e di confermarmi l'esito.",
       'Grazie.',

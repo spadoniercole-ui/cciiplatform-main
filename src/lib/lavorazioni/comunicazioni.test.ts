@@ -5,13 +5,15 @@ import {
   type RigaVeraComunicazione,
 } from './comunicazioni';
 
+// La riga tipo è una posizione DA LAVORARE: le comunicazioni elencano solo
+// quelle (le già contabilizzate si dichiarano, non si elencano).
 const riga = (over: Partial<RigaVeraComunicazione> = {}): RigaVeraComunicazione => ({
   sezione: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
   voce: 'F24 non presentato',
   importo: 12_000,
   categoria: 'DEBITO',
-  stato: '',
-  trattamento: 'contabilizzato',
+  stato: 'Da Verificare',
+  trattamento: 'da_contabilizzare',
   periodo: '202506 - 202506',
   ...over,
 });
@@ -200,6 +202,88 @@ describe('componiComunicazioniVera', () => {
 
     expect(esito.posizioniEscluse).toEqual({ righe: 0, totale: 0 });
     expect(esito.comunicazioni[0].corpo).not.toContain('fuori perimetro');
+    expect(esito.comunicazioni[0].corpo).not.toContain('Già contabilizzate');
+  });
+
+  // Ciò che il V.E.R.A. porta già in contabilità non è un debito da lavorare:
+  // elencarlo nella richiesta al collega fa sembrare lavoro da fare qualcosa
+  // che è già fatto, e diluisce le posizioni su cui si deve intervenire.
+  it('le posizioni già contabilizzate non si elencano, ma il testo ne dichiara il totale', () => {
+    const esito = componiComunicazioniVera({
+      azienda: 'Omicron Srl',
+      dataVerifica: '2026-10-19',
+      righe: [
+        riga(),
+        riga({
+          voce: 'F24 non presentato',
+          stato: '',
+          trattamento: 'contabilizzato',
+          importo: 5_000,
+        }),
+      ],
+      lavorazioni: [{ categoria: 'DEBITO', lavorazione: 'Contabilizzare', destinatario: 'Y' }],
+      etichette,
+    });
+
+    const c = esito.comunicazioni[0];
+    expect(c.righe).toBe(1);
+    expect(c.totale).toBe(12_000);
+    expect(c.corpo).not.toContain('5.000,00 €; Da contabilizzare');
+    expect(c.corpo).toContain(
+      'Già contabilizzate, e per questo non elencate: 1 posizione per 5.000,00 €'
+    );
+    expect(esito.contabilizzate).toEqual({ righe: 1, totale: 5_000 });
+  });
+
+  // Le TS 25, 27 e 81 sono già in contabilità per natura: l'unica decisione
+  // aperta è l'invio ad AdR, che sposta la stessa partita e non cambia lo stato
+  // complessivo. Va detto, altrimenti l'importo sembra sparito dal totale.
+  it('le TS 25, 27 e 81 si dichiarano a parte, con la sola decisione dell’invio ad AdR', () => {
+    const esito = componiComunicazioniVera({
+      azienda: 'Pi Srl',
+      dataVerifica: '2026-10-19',
+      righe: [
+        riga(),
+        riga({
+          voce: 'TS 27 flusso Uniemens non versato',
+          stato: '',
+          trattamento: 'contabilizzato',
+          importo: 2_000,
+        }),
+        riga({
+          voce: 'TS 25 nota di rettifica',
+          stato: '',
+          trattamento: 'contabilizzato',
+          importo: 500,
+        }),
+      ],
+      lavorazioni: [{ categoria: 'DEBITO', lavorazione: 'Contabilizzare', destinatario: 'Y' }],
+      etichette,
+    });
+
+    const c = esito.comunicazioni[0];
+    expect(c.righe).toBe(1);
+    expect(esito.contabilizzate).toEqual({ righe: 2, totale: 2_500 });
+    expect(esito.contabilizzateAdr).toEqual({ righe: 2, totale: 2_500 });
+    expect(esito.codiciAdr).toEqual(['25', '27']);
+    expect(c.corpo).toContain('sono TS 25 e 27');
+    expect(c.corpo).toContain('Agente della Riscossione');
+    expect(c.corpo).toContain('non cambia lo stato complessivo');
+  });
+
+  // Il codice della natura non contraddice il file: se il V.E.R.A. segna
+  // ancora da contabilizzare una TS 27, quella posizione si lavora.
+  it('una TS 27 che il file segna da contabilizzare resta fra quelle da lavorare', () => {
+    const esito = componiComunicazioniVera({
+      azienda: 'Rho Srl',
+      dataVerifica: '2026-10-19',
+      righe: [riga({ voce: 'TS 27 flusso Uniemens non versato', importo: 700 })],
+      lavorazioni: [{ categoria: 'DEBITO', lavorazione: 'Contabilizzare', destinatario: 'Y' }],
+      etichette,
+    });
+
+    expect(esito.comunicazioni[0].righe).toBe(1);
+    expect(esito.contabilizzate).toEqual({ righe: 0, totale: 0 });
   });
 
   it('separa i destinatari e li ordina', () => {

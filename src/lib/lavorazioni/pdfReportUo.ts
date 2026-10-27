@@ -21,6 +21,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formattaImportoEuro } from './comunicazioni';
+import { testiContabilizzate } from './daLavorare';
 import type { DocumentoUo } from './reportUo';
 
 function dataItaliana(dataIso: string): string {
@@ -75,6 +76,17 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
       y
     );
     y += 5;
+  }
+  // Le posizioni già contabilizzate non sono lavoro da fare: si dichiarano,
+  // perché il totale delle voci non è il totale del V.E.R.A. e chi confronta i
+  // due numeri deve trovare la spiegazione sul foglio.
+  const notaContabilizzate = testiContabilizzate(d, formattaImportoEuro).documento;
+  if (notaContabilizzate) {
+    const righeNota = doc.splitTextToSize(notaContabilizzate, 182) as string[];
+    doc.setFontSize(8.5);
+    doc.text(righeNota, 14, y);
+    y += righeNota.length * 4;
+    doc.setFontSize(9);
   }
   if (d.posizioniEscluse.righe > 0) {
     doc.text(
@@ -187,9 +199,10 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
   doc.setFontSize(8);
   const chiusura = doc.splitTextToSize(
     'Il totale di ogni voce (codice di partita, o materia quando il codice non c’è) è la somma delle sue ' +
-      'inadempienze: i debiti che risultano dai documenti ' +
+      'inadempienze: i debiti da contabilizzare che risultano dai documenti ' +
       `dell’ente alla data della verifica (${data}). Non è l’accertamento della singola partita, che resta ` +
-      'in capo all’ufficio. Le posizioni sospese o fuori perimetro non sono elencate e non entrano nei ' +
+      'in capo all’ufficio. Le posizioni già contabilizzate sono dichiarate in testa e non elencate; quelle ' +
+      'sospese o fuori perimetro non sono elencate e non entrano nei ' +
       'totali. Le lavorazioni sono quelle configurate per la materia della voce. Il documento non viene ' +
       'trasmesso dalla piattaforma: l’invio all’ufficio è a cura di chi lo scarica, e lo scaricamento ' +
       'registrato è la dichiarazione di chi lo ha effettuato.',

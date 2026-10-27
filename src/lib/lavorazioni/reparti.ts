@@ -23,7 +23,12 @@
 // QUANTO VALE IL TOTALE. È la somma delle posizioni elencate: i debiti che
 // risultano dai documenti dell'ente alla data della verifica. Non è un
 // accertamento della singola partita — per questo il documento dichiara la
-// data e la fonte, e non promette che il numero sia definitivo.
+// data e la fonte, e non promette che il numero sia definitivo. E non è il
+// totale del V.E.R.A.: le posizioni già contabilizzate non si elencano (non
+// c'è nulla da fare) e il documento ne dichiara numero e importo, con la
+// quota di TS 25/27/81 dove resta solo la decisione dell'invio ad AdR.
+// La regola sta in `daLavorare.ts`, condivisa con la comunicazione al
+// collega e con il report per unità operativa.
 //
 // LA VERSIONE. Ogni documento porta un'impronta del proprio contenuto
 // (`versione`): è stampata sul PDF e finisce nel registro delle consegne, così
@@ -39,6 +44,7 @@ import {
   type RaggruppamentoPerReparto,
   type RigaVeraComunicazione,
 } from './comunicazioni';
+import type { RiepilogoRighe } from './daLavorare';
 
 export interface PosizioneReparto {
   /** Tipologia di debito, con l'etichetta dello spazio. */
@@ -79,6 +85,16 @@ export interface DocumentoReparto {
    * documento sappia che il file ne conteneva altre, e per quanto.
    */
   posizioniEscluse: PosizioniEscluse;
+  /**
+   * Posizioni già contabilizzate: non si elencano, perché non c'è nulla da
+   * fare. Si dichiarano — con la quota di TS 25/27/81, dove resta la sola
+   * decisione dell'invio ad AdR — perché il totale del documento non è il
+   * totale del V.E.R.A. e chi confronta i due numeri deve trovare la
+   * spiegazione sul foglio, non doverla dedurre.
+   */
+  contabilizzate: RiepilogoRighe;
+  contabilizzateAdr: RiepilogoRighe;
+  codiciAdr: string[];
   /** Nome del file da scaricare, già sicuro per il filesystem. */
   nomeFile: string;
   /**
@@ -96,6 +112,10 @@ export interface EsitoDocumentiReparto {
   righeSenzaCategoria: number;
   /** Posizioni fuori perimetro: dichiarate, non elencate. */
   posizioniEscluse: PosizioniEscluse;
+  /** Posizioni già contabilizzate: dichiarate, non elencate. */
+  contabilizzate: RiepilogoRighe;
+  contabilizzateAdr: RiepilogoRighe;
+  codiciAdr: string[];
 }
 
 /** Nome file leggibile e senza caratteri che il browser o il sistema rifiutano. */
@@ -104,7 +124,7 @@ export interface EsitoDocumentiReparto {
  * PDF (sezioni, colonne): due documenti con la stessa impronta di contenuto ma
  * impaginati in modo diverso non devono risultare la stessa versione.
  */
-export const FORMATO_DOCUMENTO_REPARTI = '1';
+export const FORMATO_DOCUMENTO_REPARTI = '2';
 
 /**
  * FNV-1a a 32 bit, in esadecimale: un'impronta corta del contenuto.
@@ -156,6 +176,11 @@ export function versioneDocumentoReparto(
     d.importoDaContabilizzare.toFixed(2),
     String(d.posizioniEscluse.righe),
     d.posizioniEscluse.totale.toFixed(2),
+    String(d.contabilizzate.righe),
+    d.contabilizzate.totale.toFixed(2),
+    String(d.contabilizzateAdr.righe),
+    d.contabilizzateAdr.totale.toFixed(2),
+    d.codiciAdr.join(','),
   ];
   return `${FORMATO_DOCUMENTO_REPARTI}-${improntaContenuto(parti.join('\n'))}`;
 }
@@ -235,6 +260,9 @@ export function preparaDocumentiReparto(
       posizioniDaContabilizzare: daContabilizzare.length,
       importoDaContabilizzare: daContabilizzare.reduce((a, r) => a + r.importo, 0),
       posizioniEscluse: raggruppamento.posizioniEscluse,
+      contabilizzate: raggruppamento.contabilizzate,
+      contabilizzateAdr: raggruppamento.contabilizzateAdr,
+      codiciAdr: raggruppamento.codiciAdr,
     };
 
     const versione = versioneDocumentoReparto(contenuto);
@@ -251,5 +279,8 @@ export function preparaDocumentiReparto(
     categorieSenzaLavorazione: raggruppamento.categorieSenzaLavorazione,
     righeSenzaCategoria: raggruppamento.righeSenzaCategoria,
     posizioniEscluse: raggruppamento.posizioniEscluse,
+    contabilizzate: raggruppamento.contabilizzate,
+    contabilizzateAdr: raggruppamento.contabilizzateAdr,
+    codiciAdr: raggruppamento.codiciAdr,
   };
 }

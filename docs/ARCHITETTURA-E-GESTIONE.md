@@ -164,6 +164,16 @@ Drizzle è marginale.
    quella della materia se il codice non ne ha una propria (`titoli_ente`,
    `materie_lavorazione`).
 
+   **I documenti chiedono solo ciò che manca.** Le tre uscite elencano le posizioni ancora da
+   contabilizzare — quelle che nel V.E.R.A. hanno uno stato nella colonna «Stato»
+   («Calcolati», «Da Verificare», «Verificata») — più le voci di importo ignoto, che vanno
+   accertate. Le righe già contabilizzate (stato vuoto) non si elencano: il documento ne
+   dichiara numero e importo, e a parte la quota delle tipologie TS 25, 27 e 81, dove resta
+   solo la decisione dell'invio all'Agente della Riscossione — un passaggio che sposta la
+   stessa partita e non cambia lo stato complessivo. Un ufficio con sole posizioni già
+   contabilizzate non riceve un documento. La regola è una sola, in
+   `src/lib/lavorazioni/daLavorare.ts`.
+
    **La verifica si riapre.** La videata di esito (comunicazioni, documenti, decisione) non
    vive più solo nella scheda del browser: l'azienda sta nell'URL
    (`/verifica-salute?azienda=<id>`) e una ricarica ricompone l'esito dai dati salvati —
@@ -417,6 +427,7 @@ più d'una → si nominano tutte e la scelta resta all'ente, perché possono ess
 | Piano | `src/lib/piano/ricevente.ts`, `src/lib/piano/piano.ts`, `src/lib/piano/confronto.ts` |
 | Screening | `src/lib/screening/indicatore.ts`, `src/lib/iai/indice.ts` |
 | Comunicazioni ai colleghi | `src/lib/lavorazioni/comunicazioni.ts` |
+| Ciò che i documenti elencano e ciò che si dichiara | `src/lib/lavorazioni/daLavorare.ts` |
 | Documenti per i reparti (PDF, dal triage) | `src/lib/lavorazioni/reparti.ts`, `src/lib/lavorazioni/pdfReparto.ts` |
 | Report per unità operativa (PDF per dipendenza, per codice o materia) | `src/lib/lavorazioni/reportUo.ts`, `src/lib/lavorazioni/pdfReportUo.ts` |
 | Nome unico degli uffici (dipendenza) | `src/lib/lavorazioni/dipendenze.ts` |

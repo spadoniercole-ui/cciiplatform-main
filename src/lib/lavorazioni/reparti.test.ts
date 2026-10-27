@@ -7,13 +7,15 @@ import {
   type DocumentoReparto,
 } from './reparti';
 
+// La riga tipo è una posizione DA LAVORARE: i documenti elencano solo quelle
+// (le già contabilizzate si dichiarano, non si elencano).
 const riga = (over: Partial<RigaVeraComunicazione> = {}): RigaVeraComunicazione => ({
   sezione: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
   voce: 'F24 non presentato',
   importo: 12_000,
   categoria: 'CONTRIBUTI',
-  stato: '',
-  trattamento: 'contabilizzato',
+  stato: 'Da Verificare',
+  trattamento: 'da_contabilizzare',
   periodo: '202506 - 202506',
   ...over,
 });
@@ -77,7 +79,8 @@ describe('preparaDocumentiReparto', () => {
     expect(contributi?.nomeFile).toBe(
       `comunica_reparti_alfa_srl_ufficio_contributi_${contributi?.versione.split('-')[1]}.pdf`
     );
-    expect(contributi?.posizioniDaContabilizzare).toBe(0);
+    expect(contributi?.posizioniDaContabilizzare).toBe(2);
+    expect(contributi?.importoDaContabilizzare).toBe(15_000);
 
     const riscossione = esito.documenti.find((d) => d.reparto === 'Ufficio riscossione');
     expect(riscossione?.totale).toBe(900);
@@ -165,6 +168,57 @@ describe('preparaDocumentiReparto', () => {
     expect(esito.posizioniEscluse).toEqual({ righe: 1, totale: 4_000 });
   });
 
+  // Un reparto che ha solo posizioni già in contabilità non riceve un
+  // documento: non ha nulla da fare. L'importo però non sparisce, si dichiara.
+  it('un reparto con sole posizioni già contabilizzate non riceve un documento', () => {
+    const esito = preparaDocumentiReparto({
+      ...base,
+      righe: [
+        riga({ stato: '', trattamento: 'contabilizzato', importo: 8_000 }),
+        riga({
+          voce: 'TS 27 flusso Uniemens non versato',
+          stato: '',
+          trattamento: 'contabilizzato',
+          importo: 1_200,
+        }),
+      ],
+      lavorazioni: [
+        { categoria: 'CONTRIBUTI', lavorazione: 'Contabilizzare', destinatario: 'Ragioneria' },
+      ],
+    });
+
+    expect(esito.documenti).toHaveLength(0);
+    expect(esito.contabilizzate).toEqual({ righe: 2, totale: 9_200 });
+    expect(esito.contabilizzateAdr).toEqual({ righe: 1, totale: 1_200 });
+    expect(esito.codiciAdr).toEqual(['27']);
+  });
+
+  it('il documento dichiara ciò che non elenca: già contabilizzate e quota AdR', () => {
+    const esito = preparaDocumentiReparto({
+      ...base,
+      righe: [
+        riga(),
+        riga({ stato: '', trattamento: 'contabilizzato', importo: 3_000 }),
+        riga({
+          voce: 'TS 25 nota di rettifica',
+          stato: '',
+          trattamento: 'contabilizzato',
+          importo: 400,
+        }),
+      ],
+      lavorazioni: [
+        { categoria: 'CONTRIBUTI', lavorazione: 'Contabilizzare', destinatario: 'Ragioneria' },
+      ],
+    });
+
+    const documento = esito.documenti[0];
+    expect(documento.righe).toBe(1);
+    expect(documento.totale).toBe(12_000);
+    expect(documento.contabilizzate).toEqual({ righe: 2, totale: 3_400 });
+    expect(documento.contabilizzateAdr).toEqual({ righe: 1, totale: 400 });
+    expect(documento.codiciAdr).toEqual(['25']);
+  });
+
   it('il periodo della posizione arriva al documento', () => {
     const esito = preparaDocumentiReparto({
       ...base,
@@ -233,13 +287,25 @@ describe('versioneDocumentoReparto', () => {
     posizioniDaContabilizzare: 0,
     importoDaContabilizzare: 0,
     posizioniEscluse: { righe: 0, totale: 0 },
+    contabilizzate: { righe: 1, totale: 4_000 },
+    contabilizzateAdr: { righe: 1, totale: 4_000 },
+    codiciAdr: ['27'],
     nomeFile: 'comunica_reparti_alfa_srl_ufficio_contributi.pdf',
     versione: '',
     ...over,
   });
 
   it('ha la forma formato-impronta', () => {
-    expect(versioneDocumentoReparto(documento())).toMatch(/^1-[0-9a-f]{8}$/);
+    expect(versioneDocumentoReparto(documento())).toMatch(/^2-[0-9a-f]{8}$/);
+  });
+
+  // La dichiarazione è stampata sul foglio: se cambia l'importo dichiarato, il
+  // documento che il reparto ha in mano non è più quello che si sta guardando.
+  it('cambia quando cambia ciò che il documento dichiara di non elencare', () => {
+    const base = versioneDocumentoReparto(documento());
+    expect(
+      versioneDocumentoReparto(documento({ contabilizzate: { righe: 1, totale: 4_001 } }))
+    ).not.toBe(base);
   });
 
   it('non cambia se il contenuto non cambia', () => {
@@ -275,7 +341,7 @@ describe('versioneDocumentoReparto', () => {
     expect(esito.documenti).toHaveLength(2);
     for (const d of esito.documenti) {
       expect(d.versione).toBe(versioneDocumentoReparto(d));
-      expect(d.versione).toMatch(/^1-[0-9a-f]{8}$/);
+      expect(d.versione).toMatch(/^2-[0-9a-f]{8}$/);
     }
     expect(esito.documenti[0].versione).not.toBe(esito.documenti[1].versione);
   });

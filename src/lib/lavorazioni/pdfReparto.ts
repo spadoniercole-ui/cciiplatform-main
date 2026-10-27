@@ -15,6 +15,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formattaImportoEuro } from './comunicazioni';
+import { testiContabilizzate } from './daLavorare';
 import type { DocumentoReparto } from './reparti';
 
 function dataItaliana(dataIso: string): string {
@@ -60,6 +61,17 @@ export function generaPdfReparto(d: DocumentoReparto): jsPDF {
   // posizioni sospese lascia credere che il V.E.R.A. ne contenesse solo
   // quelle elencate, e chi confronta il PDF con la scheda trova una
   // differenza che nessuno spiega.
+  // Ciò che è già in contabilità non è un debito da lavorare: si dichiara
+  // perché il totale del foglio non è il totale del V.E.R.A. Chi confronta i
+  // due numeri trova la spiegazione qui, invece di concludere che manchi roba.
+  const notaContabilizzate = testiContabilizzate(d, formattaImportoEuro).documento;
+  if (notaContabilizzate) {
+    doc.setFontSize(8.5);
+    const righeNota = doc.splitTextToSize(notaContabilizzate, 182) as string[];
+    doc.text(righeNota, 14, y);
+    y += righeNota.length * 4;
+    doc.setFontSize(9);
+  }
   if (d.posizioniEscluse.righe > 0) {
     doc.text(
       `Fuori perimetro: ${d.posizioniEscluse.righe} ${
@@ -152,10 +164,11 @@ export function generaPdfReparto(d: DocumentoReparto): jsPDF {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   const nota = doc.splitTextToSize(
-    'Il totale è la somma delle posizioni elencate: i debiti che risultano dai documenti ' +
-      `dell’ente alla data della verifica (${data}). Non è l’accertamento della singola partita, ` +
-      'che resta in capo al reparto. Le posizioni sospese o fuori perimetro non sono elencate e ' +
-      'non entrano nel totale. Il documento non viene trasmesso dalla piattaforma: l’invio al ' +
+    'Il totale è la somma delle posizioni elencate: i debiti da contabilizzare che risultano dai ' +
+      `documenti dell’ente alla data della verifica (${data}). Non è l’accertamento della singola ` +
+      'partita, che resta in capo al reparto. Le posizioni già contabilizzate sono dichiarate qui ' +
+      'sopra e non elencate; quelle sospese o fuori perimetro non sono elencate e non entrano nel ' +
+      'totale. Il documento non viene trasmesso dalla piattaforma: l’invio al ' +
       'reparto è a cura dell’ufficio che lo scarica, e lo scaricamento registrato dalla ' +
       'piattaforma è la dichiarazione di chi lo ha effettuato.',
     182

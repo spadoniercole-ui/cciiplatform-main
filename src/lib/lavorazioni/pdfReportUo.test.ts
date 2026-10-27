@@ -81,8 +81,11 @@ const documento = (over: Partial<DocumentoUo> = {}): DocumentoUo => ({
   posizioniDaContabilizzare: 2,
   importoDaContabilizzare: 2_000,
   posizioniEscluse: { righe: 1, totale: 9_000 },
+  contabilizzate: { righe: 2, totale: 3_400 },
+  contabilizzateAdr: { righe: 1, totale: 400 },
+  codiciAdr: ['25'],
   nomeFile: 'report_uo_alfa_srl_ufficio_contributi_3f9a1c2b.pdf',
-  versione: '1-3f9a1c2b',
+  versione: '3-3f9a1c2b',
   ...over,
 });
 
@@ -103,8 +106,18 @@ describe('generaPdfReportUo', () => {
     expect(sorgente).toContain('Diffida');
     // La versione è stampata sul foglio: serve a dire all'ufficio quale
     // documento ha in mano quando arriva una posizione aggiornata.
-    expect(sorgente).toContain('1-3f9a1c2b');
+    expect(sorgente).toContain('3-3f9a1c2b');
     expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+  });
+
+  // Il totale delle voci non è il totale del V.E.R.A.: la differenza ha una
+  // spiegazione sul foglio, con la quota AdR.
+  it('dichiara le posizioni già contabilizzate, con la quota della sola decisione AdR', () => {
+    const sorgente = generaPdfReportUo(documento()).output();
+
+    expect(sorgente).toContain('Già contabilizzate e non elencate');
+    expect(sorgente).toContain('TS 25');
+    expect(sorgente).toContain('AdR');
   });
 
   it('dichiara il codice senza lavorazioni configurate invece di lasciare il vuoto', () => {

@@ -35,13 +35,16 @@
 // ricondotte. Prima restavano fuori in blocco, e con loro il loro importo: un
 // report che si diceva completo e taceva una parte del debito.
 //
-// COSA RESTA FUORI, E SI DICE. Una posizione con trattamento «Ignora»
-// (sospesa da un giudice) non si lavora e non entra nel totale. Una voce senza
-// codice E senza materia riconoscibile non si attribuisce a nessuno: si conta.
-// Un codice — o una materia — senza dipendenza non ha un ufficio a cui andare:
-// si elenca a parte, perché è configurazione mancante, non un debito
-// inesistente. Nessuna di queste assenze viene silenziata: il documento e la
-// scheda le dichiarano.
+// COSA RESTA FUORI, E SI DICE. Le posizioni già contabilizzate non si elencano
+// (non c'è nulla da fare) e il foglio ne dichiara numero e importo, a parte le
+// TS 25/27/81 dove resta la sola decisione dell'invio ad AdR: la regola è in
+// `daLavorare.ts`, la stessa della comunicazione al collega. Una posizione con
+// trattamento «Ignora» (sospesa da un giudice) non si lavora e non entra nel
+// totale. Una voce senza codice E senza materia riconoscibile non si
+// attribuisce a nessuno: si conta. Un codice — o una materia — senza
+// dipendenza non ha un ufficio a cui andare: si elenca a parte, perché è
+// configurazione mancante, non un debito inesistente. Nessuna di queste
+// assenze viene silenziata: il documento e la scheda le dichiarano.
 
 import {
   codiceDaVoceVera,
@@ -57,6 +60,7 @@ import {
 import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
 import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 import type { PosizioniEscluse } from './comunicazioni';
+import { ripartisciRigheVera, type RiepilogoRighe } from './daLavorare';
 // Lo stesso ufficio scritto due volte resta un documento solo (vedi dipendenze.ts).
 import { chiaveDipendenza } from './dipendenze';
 
@@ -123,6 +127,15 @@ export interface DocumentoUo {
   posizioniDaContabilizzare: number;
   importoDaContabilizzare: number;
   posizioniEscluse: PosizioniEscluse;
+  /**
+   * Già contabilizzate: fuori dall'elenco perché non c'è nulla da fare. Si
+   * dichiarano — con la quota di TS 25/27/81, dove resta la sola decisione
+   * dell'invio ad AdR — perché il totale delle voci non è il totale del
+   * V.E.R.A. e l'ufficio non deve chiedersi dove sia finito l'importo.
+   */
+  contabilizzate: RiepilogoRighe;
+  contabilizzateAdr: RiepilogoRighe;
+  codiciAdr: string[];
   nomeFile: string;
   versione: string;
 }
@@ -151,6 +164,10 @@ export interface EsitoReportUo {
   senzaCodice: { righe: number; totale: number };
   /** Fuori perimetro (trattamento «Ignora»): dichiarate, non elencate. */
   posizioniEscluse: PosizioniEscluse;
+  /** Già contabilizzate: dichiarate, non elencate. */
+  contabilizzate: RiepilogoRighe;
+  contabilizzateAdr: RiepilogoRighe;
+  codiciAdr: string[];
   /** Voci elencate in un documento (codici o materie) senza lavorazioni configurate. */
   codiciSenzaLavorazione: number;
 }
@@ -161,7 +178,7 @@ export interface EsitoReportUo {
  * in modo diverso non devono risultare la stessa versione. La 2 aggiunge le
  * voci senza codice di partita, raggruppate per materia.
  */
-export const FORMATO_REPORT_UO = '2';
+export const FORMATO_REPORT_UO = '3';
 
 /**
  * FNV-1a a 32 bit, in esadecimale.
@@ -210,6 +227,11 @@ export function versioneReportUo(d: Omit<DocumentoUo, 'versione' | 'nomeFile'>):
     d.totale.toFixed(2),
     String(d.posizioniEscluse.righe),
     d.posizioniEscluse.totale.toFixed(2),
+    String(d.contabilizzate.righe),
+    d.contabilizzate.totale.toFixed(2),
+    String(d.contabilizzateAdr.righe),
+    d.contabilizzateAdr.totale.toFixed(2),
+    d.codiciAdr.join(','),
   ];
   return `${FORMATO_REPORT_UO}-${improntaContenuto(parti.join('\n'))}`;
 }
@@ -278,7 +300,11 @@ export function componiReportUo(input: {
   const nomeMateria = (id: number | null | undefined) =>
     id === null || id === undefined ? null : (input.materie.find((m) => m.id === id)?.nome ?? null);
 
-  const posizioniEscluse: PosizioniEscluse = { righe: 0, totale: 0 };
+  // Una classificazione sola per tutte e tre le uscite: le posizioni già
+  // contabilizzate non si elencano, si dichiarano; le sospese nemmeno si
+  // dichiarano in elenco (hanno il loro riepilogo).
+  const ripartizione = ripartisciRigheVera(input.righe);
+  const posizioniEscluse: PosizioniEscluse = ripartizione.fuoriPerimetro;
   const senzaCodice = { righe: 0, totale: 0 };
   // Le materie nella forma che serve alla deduzione dalla descrizione.
   const materieMinime: MateriaMinima[] = input.materie.map((m) => ({
@@ -301,12 +327,7 @@ export function componiReportUo(input: {
   const orfani = new Map<string, VoceUo>();
   let codiciSenzaLavorazione = 0;
 
-  for (const r of input.righe) {
-    if (r.trattamento === 'ignora') {
-      posizioniEscluse.righe += 1;
-      posizioniEscluse.totale += r.importo;
-      continue;
-    }
+  for (const r of ripartizione.daLavorare) {
     const codice = codiceDaVoceVera(r.voce);
     // La stessa materia che instrada le comunicazioni: per un codice quella del
     // suo titolo, per una voce senza codice quella dedotta dalla voce e dalla
@@ -401,6 +422,9 @@ export function componiReportUo(input: {
         posizioniDaContabilizzare: daContabilizzare.length,
         importoDaContabilizzare: daContabilizzare.reduce((a, r) => a + r.importo, 0),
         posizioniEscluse,
+        contabilizzate: ripartizione.contabilizzate,
+        contabilizzateAdr: ripartizione.contabilizzateAdr,
+        codiciAdr: ripartizione.codiciAdr,
       };
       const versione = versioneReportUo(contenuto);
       return {
@@ -424,6 +448,9 @@ export function componiReportUo(input: {
       .sort(vociOrdinate),
     senzaCodice,
     posizioniEscluse,
+    contabilizzate: ripartizione.contabilizzate,
+    contabilizzateAdr: ripartizione.contabilizzateAdr,
+    codiciAdr: ripartizione.codiciAdr,
     codiciSenzaLavorazione,
   };
 }

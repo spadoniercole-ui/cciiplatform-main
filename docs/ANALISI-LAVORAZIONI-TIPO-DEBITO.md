@@ -625,3 +625,41 @@ titoli di credito (3), numerati e prima degli altri parametri.
 
 Test aggiunti: 14 (10 di dominio sulla catena e sui nomi, 2 sulla videata delle direttrici,
 2 sul campo dipendenza, compreso il ritorno a testo libero senza direttrici).
+
+### 10.7 Ciò che è già contabilizzato non si chiede (0.139.4)
+
+I tre documenti elencavano tutte le righe del V.E.R.A. non sospese, contabilizzate comprese. Ma
+il V.E.R.A. distingue già, nella colonna «Stato»: cella vuota = debito già in contabilità,
+cella valorizzata («Calcolati», «Da Verificare», «Verificata») = certo ma non ancora esigibile,
+da lavorare (`suggerisciTrattamento`, §10.1). La distinzione c'era nel dato e non arrivava ai
+documenti: il reparto riceveva un foglio con 27 posizioni già contabilizzate e 11 da lavorare,
+senza modo di distinguerle se non leggendo la colonna «Natura», e con un totale che non era né
+l'esposizione né il lavoro da fare.
+
+**Come è risolto.** `src/lib/lavorazioni/daLavorare.ts` — `ripartisciRigheVera`, usata da
+`raggruppaPerReparto` (quindi da comunicazioni e documenti per reparto) e da `componiReportUo`:
+
+- `da_contabilizzare` → si elenca;
+- `potenziale` (natura senza importo) → si elenca, perché va accertata;
+- `contabilizzato` → si dichiara, non si elenca;
+- `ignora` (sospesa) → resta fuori da entrambi, con il suo riepilogo (§10.1).
+
+Le **TS 25, 27 e 81** contabilizzate formano un riepilogo a parte, perché lì resta la sola
+decisione dell'invio all'Agente della Riscossione: un passaggio che sposta la stessa partita e
+non cambia lo stato complessivo, e che quindi non è un intervento da chiedere all'ufficio.
+L'eccezione non contraddice il file: se il V.E.R.A. segna una di quelle voci come ancora da
+contabilizzare, la posizione si lavora.
+
+Il numero e l'importo di ciò che non è elencato compaiono nel testo al collega, sul PDF (in
+testa, sotto la versione) e nell'avviso che annuncia i documenti: il totale del foglio non è il
+totale del V.E.R.A., e la differenza ha una spiegazione scritta. Un ufficio con sole posizioni
+già contabilizzate non riceve alcun documento — non ha nulla da fare — e l'impronta di versione
+include la dichiarazione, così un PDF che non ne tiene conto non può passare per aggiornato.
+Il caso rimasto aperto è l'importo: nelle righe «F24 Non presentato» del file di prova il
+«Totale debito» è vuoto e la cifra sta nella colonna «Contributi», che `indiceImporto` non
+legge; quelle righe restano «da accertare» con importo non determinato, invece di essere
+contabilizzate con un importo preso da una colonna che il tracciato non considera (la scelta
+tocca `ritardoDaVera` e quindi la soglia dell'art. 25-novies: non si cambia di sfuggita).
+
+Test aggiunti: 14 (classificazione e testi del nuovo modulo, esclusione e dichiarazione nelle
+tre uscite, quota AdR sul PDF, impronta di versione).

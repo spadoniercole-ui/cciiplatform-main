@@ -171,6 +171,58 @@ describe('componiReportUo', () => {
     expect(esito.documenti[0].posizioniEscluse).toEqual({ righe: 1, totale: 9_000 });
   });
 
+  // Il report chiede all'ufficio di lavorare delle partite: quelle già in
+  // contabilità non sono lavoro, e il foglio ne dichiara solo l'importo.
+  it('le posizioni già contabilizzate restano fuori dall’elenco e sono dichiarate', () => {
+    const esito = componiReportUo({
+      ...base,
+      righe: [
+        riga(),
+        riga({
+          voce: 'F24 non presentato',
+          stato: '',
+          trattamento: 'contabilizzato',
+          importo: 4_000,
+        }),
+        riga({
+          voce: 'TS 25 nota di rettifica',
+          stato: '',
+          trattamento: 'contabilizzato',
+          importo: 600,
+        }),
+      ],
+    });
+
+    const d = esito.documenti[0];
+    expect(d.righe).toBe(1);
+    expect(d.totale).toBe(1_200);
+    expect(d.codici.map((c) => c.codice)).toEqual(['27']);
+    expect(d.codici[0].inadempienze).toHaveLength(1);
+    expect(d.contabilizzate).toEqual({ righe: 2, totale: 4_600 });
+    expect(d.contabilizzateAdr).toEqual({ righe: 1, totale: 600 });
+    expect(d.codiciAdr).toEqual(['25']);
+    expect(esito.contabilizzate).toEqual({ righe: 2, totale: 4_600 });
+  });
+
+  it('un ufficio che ha solo posizioni già contabilizzate non riceve un report', () => {
+    const esito = componiReportUo({
+      ...base,
+      righe: [riga({ stato: '', trattamento: 'contabilizzato', importo: 4_000 })],
+    });
+    expect(esito.documenti).toHaveLength(0);
+    expect(esito.senzaDipendenza).toHaveLength(0);
+    expect(esito.contabilizzate).toEqual({ righe: 1, totale: 4_000 });
+  });
+
+  // Il codice della natura non contraddice il file: una TS 27 che il V.E.R.A.
+  // segna ancora da contabilizzare si lavora.
+  it('una TS 27 da contabilizzare resta nel report', () => {
+    const esito = componiReportUo({ ...base, righe: [riga()] });
+    expect(esito.documenti[0].righe).toBe(1);
+    expect(esito.contabilizzate).toEqual({ righe: 0, totale: 0 });
+    expect(esito.contabilizzateAdr.righe).toBe(0);
+  });
+
   it('elenca le lavorazioni della materia in ordine e conta i codici senza', () => {
     const esito = componiReportUo({
       ...base,
@@ -214,7 +266,7 @@ describe('componiReportUo', () => {
 
     expect(a.versione).toBe(c.versione);
     expect(a.versione).not.toBe(b.versione);
-    expect(a.versione).toMatch(/^2-[0-9a-f]{8}$/);
+    expect(a.versione).toMatch(/^3-[0-9a-f]{8}$/);
 
     const { versione, nomeFile: _nomeFile, ...contenuto } = a;
     expect(versioneReportUo(contenuto)).toBe(versione);

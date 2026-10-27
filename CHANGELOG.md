@@ -26,6 +26,41 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.4 — 2026-10-27
+
+**Le comunicazioni per le unità operative chiedono solo ciò che manca**
+
+Il V.E.R.A. porta due tipi di riga, e i documenti li trattavano allo stesso modo: le posizioni
+ancora da contabilizzare — quelle che nella colonna «Stato» hanno un riferimento, «Calcolati»,
+«Da Verificare», «Verificata» — e quelle già in contabilità, che non hanno stato. Elencarle
+insieme faceva sembrare lavoro da fare ciò che è già fatto, allungava i fogli e diluiva le
+posizioni su cui si deve davvero intervenire; e il totale del documento sembrava più basso del
+debito senza che nessuno dicesse perché. Sul V.E.R.A. di prova: 11 posizioni da lavorare contro
+27 già contabilizzate.
+
+- **Si elenca ciò che manca** (`src/lib/lavorazioni/daLavorare.ts`, una sola classificazione per
+tre uscite): stato valorizzato → da lavorare; importo ignoto (natura senza importo, «Denunce
+non trasmesse») → da accertare; stato vuoto → già contabilizzata. Comunicazione al collega,
+documento per reparto e report per unità operativa condividono la stessa regola, quindi non
+possono elencare posizioni diverse partendo dagli stessi dati.
+- **Ciò che è già in contabilità si dichiara**: numero e importo, in una frase nel testo e sul
+PDF, così chi confronta il documento con il V.E.R.A. trova la differenza spiegata invece di
+concludere che manchi roba.
+- **Le TS 25, 27 e 81 a parte**: sono contabilizzate; l’unica decisione ancora aperta è se
+affidarle all’Agente della Riscossione, un passaggio che sposta la stessa partita e non cambia
+lo stato complessivo. Non è quindi un intervento da chiedere all’ufficio, ma non si tace:
+l’avviso che annuncia i documenti dice quante sono e per quanto. Se il V.E.R.A. segna una di
+queste voci come ancora da contabilizzare, vince il file e la posizione si lavora.
+- **Un ufficio che ha solo posizioni già contabilizzate non riceve un documento**: non ha nulla
+da fare, e un foglio vuoto sarebbe solo una perdita di tempo. L’importo resta dichiarato.
+- **Il foglio non è più scambiato per un documento nuovo**: l’impronta di versione include ciò
+che il documento dichiara di non elencare (formato 2 per i reparti, 3 per le unità operative),
+quindi una variazione dell’importo contabilizzato non lascia in giro un PDF che sembra
+aggiornato.
+
+Test aggiunti: 14 (dominio della classificazione e dei testi, esclusione e dichiarazione nelle
+tre uscite, quota AdR sul PDF).
+
 ## 0.139.3 — 2026-10-27
 
 **La verifica riaperta finisce dove deve: due comandi inerti tornano a funzionare, e i Parametri
