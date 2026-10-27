@@ -47,6 +47,7 @@
 // unità operativa.
 
 import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
+import type { StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
 import { ripartisciRigheVera, testiContabilizzate, type RiepilogoRighe } from './daLavorare';
 // L'ufficio si riconosce dalla sua chiave, non dalla grafia: lo stesso
 // destinatario scritto con maiuscole, spazi o accenti diversi resta UNO.
@@ -68,6 +69,13 @@ export interface RigaVeraComunicazione {
   stato: string;
   trattamento: TrattamentoVera;
   periodo?: string;
+  /**
+   * La scelta dell'operatore sulla doppia scrittura del file (vedi
+   * `duplicatiVera.ts`): vuoto = vale il riconoscimento automatico. Arriva
+   * dalla riga salvata, perché la decisione presa nella verifica valga anche
+   * nei documenti per gli uffici.
+   */
+  duplicatoStato?: StatoDuplicatoVera | '';
 }
 
 export interface ComunicazioneStandard {

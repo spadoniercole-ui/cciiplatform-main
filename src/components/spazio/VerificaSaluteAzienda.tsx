@@ -92,12 +92,13 @@ import {
   totaliVera,
   type RigaVera,
 } from '@/lib/debitiEnte/veraImport';
-import { denunceDuplicateVera } from '@/lib/debitiEnte/duplicatiVera';
 import {
   sostituisciDebitiVeraAction,
   ottieniMappaturaTitoliVera,
   ottieniDebitiVera,
+  impostaDuplicatoVeraAction,
 } from '@/app/actions/posizioneVera';
+import { denunceDuplicateVera, type StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
 import { ottieniTitoliEnteAction, ottieniMaterieEnteAction } from '@/app/actions/titoliEnte';
 import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
 import type { LavorazioneMateria } from '@/lib/titoliEnte/lavorazioniMateria';
@@ -259,6 +260,11 @@ export function VerificaSaluteAzienda({
   // dice che il documento non c'è e va escluso dalle verifiche, invece di
   // lasciare l'indicatore in attesa di qualcosa che non arriverà.
   const [esitoFogli, setEsitoFogli] = useState<string[]>([]);
+  // La scelta sulla doppia scrittura del V.E.R.A. (F24 e denunce dello stesso
+  // periodo): si registra sulla riga denunce, insieme alla posizione. L'id
+  // della riga in corso di salvataggio serve solo a spegnere il pulsante.
+  const [rigaInSalvataggio, setRigaInSalvataggio] = useState<number | null>(null);
+  const [erroreCoppia, setErroreCoppia] = useState<string | null>(null);
   // Per il riepilogo stampabile: documenti letti e valori misurati.
   const [documentiTriage, setDocumentiTriage] = useState<DocumentoTriage[]>([]);
   const [valoriTriage, setValoriTriage] = useState<ValoriTriage | null>(null);
@@ -842,6 +848,12 @@ export function VerificaSaluteAzienda({
               righe,
               reg.success && reg.documentoId ? reg.documentoId : null
             );
+            // Le righe appena salvate si rileggono dal database: sono loro ad
+            // avere l'id con cui si registra la scelta sulla coppia
+            // F24/denunce. I valori sono quelli appena scritti — è la stessa
+            // estrazione — e la verifica riaperta farà lo stesso giro.
+            const salvate = await ottieniDebitiVera(nomeSchema, c.aziendaId);
+            if (salvate.success) setRigheVera(salvate.righe);
           }
         } catch (e) {
           setErrore(`File V.E.R.A. non leggibile: ${String(e)}`);
@@ -1437,6 +1449,38 @@ export function VerificaSaluteAzienda({
     duplicati: documentiReparti.duplicati,
   };
   const notaContabilizzate = testiContabilizzate(avanzamentoUo, formattaImportoEuro).collegiale;
+
+  // ---- LA STESSA CIFRA SCRITTA DUE VOLTE ---------------------------------
+  // Il riconoscimento è un criterio, non una verità: due righe con lo stesso
+  // periodo e lo stesso importo possono descrivere due obbligazioni diverse.
+  // Chi vede la posizione decide, e la decisione si registra sulla riga
+  // denunce: da lì la rileggono l'esposizione, i documenti per gli uffici e la
+  // verifica riaperta. Il conteggio qui sotto è lo stesso che usano le soglie,
+  // l'esposizione e il fascicolo: se cambia la scelta, cambiano tutti insieme.
+  const coppieVera = denunceDuplicateVera(righeVera).coppie;
+
+  const decidiCoppia = async (rigaVeraId: number, stato: StatoDuplicatoVera | '') => {
+    if (!aziendaId) {
+      setErroreCoppia('Azienda non ancora determinata: la scelta non è stata registrata.');
+      return;
+    }
+    setRigaInSalvataggio(rigaVeraId);
+    setErroreCoppia(null);
+    try {
+      const r = await impostaDuplicatoVeraAction(nomeSchema, aziendaId, rigaVeraId, stato);
+      if (!r.success) {
+        setErroreCoppia(r.error ?? 'Scelta non registrata.');
+        return;
+      }
+      setRigheVera((precedenti) =>
+        precedenti.map((x) => (x.id === rigaVeraId ? { ...x, duplicatoStato: stato } : x))
+      );
+    } catch (e) {
+      setErroreCoppia(`Scelta non registrata: ${String(e)}`);
+    } finally {
+      setRigaInSalvataggio(null);
+    }
+  };
 
   // Gli uffici che si chiamano quasi uguale: lo stesso destinatario scritto in
   // tre modi produce tre documenti. Non si uniscono d'ufficio — potrebbero
@@ -2132,6 +2176,96 @@ export function VerificaSaluteAzienda({
               <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
                 Tutti dati dell&apos;istituto, aggregati riga per riga dai fogli caricati: il conto
                 è rifacibile sul file di partenza.
+              </p>
+            </div>
+          )}
+          {coppieVera.length > 0 && (
+            <div className="bg-white border border-amber-200 rounded-xl p-5">
+              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                La stessa cifra scritta due volte nel V.E.R.A.
+              </h3>
+              <p className="text-[11px] text-slate-600 leading-relaxed mt-2">
+                Il file descrive la stessa obbligazione due volte — il versamento non eseguito («F24
+                non presentato») e la denuncia non trasmessa, stesso periodo e stesso importo — e la
+                cifra è contata una volta sola: l&apos;esposizione, i documenti per gli uffici e il
+                fascicolo di evidenza leggono tutti questo conteggio. Se per questa posizione sono
+                due debiti distinti, dillo qui.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {coppieVera.map((c) => {
+                  const rigaF24 = righeVera[c.f24];
+                  const rigaDenunce = righeVera[c.denunce];
+                  const id = rigaDenunce?.id;
+                  const stato = rigaDenunce?.duplicatoStato ?? '';
+                  const inCorso = id !== undefined && rigaInSalvataggio === id;
+                  const etichetta =
+                    stato === 'NEGATO'
+                      ? 'Dichiarati due debiti distinti: le due cifre contano entrambe.'
+                      : stato === 'CONFERMATO'
+                        ? 'Confermato a mano: è lo stesso debito, contato una volta sola.'
+                        : 'Riconosciuto automaticamente: contato una volta sola.';
+                  return (
+                    <li
+                      key={`${c.f24}-${c.denunce}`}
+                      className="border border-slate-200 rounded-lg p-3"
+                    >
+                      <div className="text-[11px] text-slate-800">
+                        <span className="font-bold">{formattaImportoEuro(c.importo)}</span> —
+                        periodo {c.periodo}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                        {rigaF24?.sezione ?? 'V.E.R.A.'}: {rigaF24?.voce ?? 'riga F24'}
+                        {rigaF24?.periodo ? ` (${rigaF24.periodo})` : ''} ↔{' '}
+                        {rigaDenunce?.sezione ?? 'V.E.R.A.'}:{' '}
+                        {rigaDenunce?.voce ?? 'riga della denuncia'}
+                        {rigaDenunce?.periodo ? ` (${rigaDenunce.periodo})` : ''}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                          {etichetta}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={id === undefined || inCorso || stato === 'CONFERMATO'}
+                          onClick={() => id !== undefined && void decidiCoppia(id, 'CONFERMATO')}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-transparent"
+                        >
+                          Sì, è lo stesso debito
+                        </button>
+                        <button
+                          type="button"
+                          disabled={id === undefined || inCorso || stato === 'NEGATO'}
+                          onClick={() => id !== undefined && void decidiCoppia(id, 'NEGATO')}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-transparent"
+                        >
+                          No, sono due debiti
+                        </button>
+                        {stato !== '' && (
+                          <button
+                            type="button"
+                            disabled={id === undefined || inCorso}
+                            onClick={() => id !== undefined && void decidiCoppia(id, '')}
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-transparent text-slate-500 hover:text-slate-800"
+                          >
+                            Torna all&apos;automatico
+                          </button>
+                        )}
+                      </div>
+                      {id === undefined && (
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          La scelta si registra dopo il salvataggio della posizione.
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              {erroreCoppia && <p className="text-[11px] text-red-700 mt-2">{erroreCoppia}</p>}
+              <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                La scelta vale da subito nei totali e nei documenti; il conteggio letto dai fogli
+                resta quello del momento della lettura del file. Le due righe restano entrambe in
+                elenco: la denuncia non trasmessa è comunque lavoro da fare. Un nuovo import del
+                V.E.R.A. ricostruisce la posizione e riparte dal riconoscimento automatico.
               </p>
             </div>
           )}

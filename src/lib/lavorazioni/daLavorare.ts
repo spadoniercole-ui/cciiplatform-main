@@ -42,7 +42,11 @@
 // numeri non avrebbe modo di capire perché.
 
 import { codiceDaVoceVera } from '@/lib/titoliEnte/materiaVera';
-import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
+import {
+  denunceDuplicateVera,
+  insiemeEsclusi,
+  type StatoDuplicatoVera,
+} from '@/lib/debitiEnte/duplicatiVera';
 import type { TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 
 /** I codici «TS» che il V.E.R.A. porta già in contabilità. */
@@ -56,6 +60,8 @@ export interface RigaConStatoVera {
   trattamento: TrattamentoVera;
   /** Periodo di competenza: serve a riconoscere la doppia scrittura del file. */
   periodo?: string;
+  /** La scelta dell'operatore sulla doppia scrittura; vuoto = automatico. */
+  duplicatoStato?: StatoDuplicatoVera | '';
 }
 
 export interface RiepilogoRighe {

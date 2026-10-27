@@ -15,7 +15,11 @@
 // Logica pura: niente database, niente React.
 
 import { saldoRigaDebitoEnte } from '@/lib/debitiEnte/tipoDebito';
-import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
+import {
+  denunceDuplicateVera,
+  insiemeEsclusi,
+  type StatoDuplicatoVera,
+} from '@/lib/debitiEnte/duplicatiVera';
 
 export type OrigineEvidenza = 'PROPOSTA' | 'POSIZIONE_ENTE' | 'VERA' | 'BILANCIO' | 'CALCOLO';
 
@@ -164,6 +168,12 @@ export interface RigaVera {
    * senza periodo non si accoppia nulla e le cifre restano due.
    */
   periodo?: string;
+  /**
+   * La scelta dell'operatore sulla coppia (vedi `duplicatiVera.ts`): vuoto =
+   * vale il riconoscimento automatico. Arriva dalla riga salvata, perché il
+   * totale del fascicolo dica la stessa cosa dell'esposizione della verifica.
+   */
+  duplicatoStato?: StatoDuplicatoVera | '';
 }
 
 const arrotonda = (n: number) => Math.round(n * 100) / 100;

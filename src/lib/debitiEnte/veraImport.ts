@@ -17,6 +17,9 @@ import {
 } from './tracciatoCore';
 import { leggiFoglioAoa, elencoFogli } from './tracciatoExcel';
 import { parseNumero } from './tracciatoImport';
+// Solo il tipo: `duplicatiVera` importa `periodoDaVera` da qui, e il tipo non
+// crea alcuna dipendenza a runtime.
+import type { StatoDuplicatoVera } from './duplicatiVera';
 
 const FOGLIO_VERA_DEFAULT = 'Dettaglio Verifica';
 
@@ -281,6 +284,13 @@ function suggerisciTrattamento(stato: string, importo: number): TrattamentoVera 
 }
 
 export interface RigaVera {
+  /**
+   * Id della riga salvata. C'è quando la riga viene dal database (verifica
+   * riaperta, o riletta subito dopo il salvataggio), manca quando è appena
+   * stata letta dal file: senza id non c'è nulla su cui registrare la scelta
+   * sulla doppia scrittura.
+   */
+  id?: number;
   sezione: string;
   /** Contributi INPS oppure crediti dell'Agente della Riscossione. */
   ambito: AmbitoVera;
@@ -305,6 +315,12 @@ export interface RigaVera {
   contributi: number | null;
   /** Quota sanzioni dell'importo; null quando la sezione non la espone. */
   sanzioni: number | null;
+  /**
+   * Deciso dall'operatore sulla doppia scrittura del file (F24 / denunce dello
+   * stesso periodo): `''` = vale il riconoscimento automatico. Sopravvive al
+   * salvataggio, così la verifica riaperta rifà i conti con la scelta già presa.
+   */
+  duplicatoStato?: StatoDuplicatoVera | '';
 }
 
 /**

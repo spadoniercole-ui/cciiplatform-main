@@ -21,6 +21,7 @@ import {
   type RigaVera,
   type TrattamentoVera,
 } from '@/lib/debitiEnte/veraImport';
+import type { StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -384,7 +385,7 @@ export async function ottieniDebitiVera(
       return { success: false, righe: [], error: 'Nome schema non valido.' };
     await assicuraTabelleVera(nomeSchema);
     const r = await pool.query(
-      `SELECT id, sezione, ambito, voce, importo, contributi, sanzioni, categoria, stato, trattamento, periodo
+      `SELECT id, sezione, ambito, voce, importo, contributi, sanzioni, categoria, stato, trattamento, periodo, duplicato_stato
          FROM "${nomeSchema}".debiti_vera
        WHERE azienda_id = $1 ORDER BY id ASC`,
       [aziendaId]
@@ -451,6 +452,9 @@ export async function ottieniDebitiVera(
         // Il periodo di competenza è la sola cosa che dice al reparto QUALE
         // versamento regolarizzare: senza, la colonna del PDF resta vuota.
         periodo: x.periodo ? String(x.periodo) : undefined,
+        // La scelta sulla doppia scrittura del file viaggia con la riga: è ciò
+        // che permette alla verifica riaperta di rifare i conti uguali.
+        duplicatoStato: (x.duplicato_stato ?? '') as StatoDuplicatoVera | '',
         trattamento: (x.trattamento ?? 'contabilizzato') as TrattamentoVera,
         materia: materie.length ? materiaPerRigaVera(x.voce, x.sezione, titoli, materie) : null,
       })),
@@ -461,6 +465,50 @@ export async function ottieniDebitiVera(
       success: false,
       righe: [],
       error: `Impossibile caricare la posizione VERA: ${error.message || error}`,
+    };
+  }
+}
+
+/**
+ * LA SCELTA DELL'OPERATORE su una coppia F24 / denunce riconosciuta.
+ *
+ * Il riconoscimento automatico è un criterio, non una verità: due righe con lo
+ * stesso periodo e lo stesso importo possono descrivere due obbligazioni
+ * diverse. La decisione si registra sulla riga denunce, insieme alla posizione,
+ * e da lì la rileggono l'esposizione, i documenti e la verifica riaperta.
+ * `''` riporta la riga al riconoscimento automatico.
+ */
+export async function impostaDuplicatoVeraAction(
+  nomeSchema: string,
+  aziendaId: number,
+  rigaVeraId: number,
+  stato: StatoDuplicatoVera | ''
+): Promise<RisultatoOperazioneVera> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (!Number.isInteger(aziendaId) || aziendaId <= 0)
+      return { success: false, error: 'Azienda non valida.' };
+    if (!Number.isInteger(rigaVeraId) || rigaVeraId <= 0)
+      return { success: false, error: 'Riga non valida.' };
+    if (stato !== '' && stato !== 'CONFERMATO' && stato !== 'NEGATO')
+      return { success: false, error: 'Scelta non riconosciuta.' };
+    await assicuraTabelleVera(nomeSchema);
+    // L'azienda nella condizione, non solo nella chiamata: la riga deve
+    // appartenere a questa posizione, non a un'altra azienda dello spazio.
+    const ris = await pool.query(
+      `UPDATE "${nomeSchema}".debiti_vera SET duplicato_stato = $3
+        WHERE id = $1 AND azienda_id = $2 RETURNING id`,
+      [rigaVeraId, aziendaId, stato]
+    );
+    if (ris.rows.length === 0)
+      return { success: false, error: 'Riga non trovata in questa posizione.' };
+    return { success: true };
+  } catch (error: any) {
+    console.error('[impostaDuplicatoVeraAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile registrare la scelta: ${error.message || error}`,
     };
   }
 }

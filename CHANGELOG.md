@@ -26,6 +26,34 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.8 — 2026-10-27
+
+**La coppia F24 / denunce si può confermare o smentire a mano**
+
+Il riconoscimento della doppia scrittura è un criterio, non una verità: due righe con lo stesso
+periodo e lo stesso importo possono descrivere due obbligazioni diverse, e chi lavora la
+posizione lo sa meglio del criterio. Fino a qui l'unica possibilità era subire la scelta del
+programma — un'esposizione scontata che nessuno poteva correggere.
+
+- **Nella verifica, un riquadro per ogni coppia riconosciuta** («La stessa cifra scritta due
+  volte nel V.E.R.A.»): le due righe, il periodo, la cifra in gioco e lo stato della decisione,
+  con i comandi **Sì, è lo stesso debito**, **No, sono due debiti** e **Torna all'automatico**.
+- **La scelta si registra sulla riga** (`debiti_vera.duplicato_stato`: «CONFERMATO», «NEGATO»,
+  vuoto = automatico) insieme alla posizione, e da lì la rileggono l'esposizione, il
+  certo-per-certo, i documenti per gli uffici, il totale del fascicolo di evidenza e la verifica
+  riaperta: dichiarata «distinta», la cifra torna a contare due volte in tutti, e il riquadro lo
+  dice. La riga resta in elenco anche quando è scontata: la denuncia va comunque trasmessa.
+- **Una denuncia dichiarata distinta non consuma la cifra di un'altra**: le due passate del
+  riconoscimento sono separate, così le righe restano indipendenti.
+- Un nuovo import del V.E.R.A. ricostruisce le righe e riparte dal riconoscimento automatico: la
+  scelta è una lettura della posizione, e la posizione è quella del file.
+
+Verifiche: 8 test nuovi (riconoscimento con le decisioni, esclusione reciproca fra denunce,
+indicazione della riga F24 giusta, dichiarazione che torna a contare due volte), 4 su Postgres
+reale (PGlite: scrittura, rilettura con la riga, rifiuto di una riga di un'altra azienda, valori
+non ammessi) e 1 d'interfaccia (il riquadro, i due comandi e i totali che cambiano). Suite
+intera verde.
+
 ## 0.139.7 — 2026-10-27
 
 **Anche il fascicolo di evidenza conta una volta sola la doppia scrittura del V.E.R.A.**

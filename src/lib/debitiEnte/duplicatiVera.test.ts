@@ -120,6 +120,83 @@ describe('denunceDuplicateVera', () => {
   });
 });
 
+// LA SCELTA DELL'OPERATORE. Il riconoscimento automatico è un criterio, non
+// una verità: due righe identiche per periodo e importo possono descrivere due
+// obbligazioni diverse. Chi lavora la posizione decide, e la decisione
+// (registrata sulla riga denunce) vale più del criterio.
+describe('la scelta dell’operatore sulla coppia', () => {
+  const conScelta = (stato: 'CONFERMATO' | 'NEGATO' | '') => [
+    riga(F24, '06/2026', 9_590),
+    { ...riga(DENUNCE, '2026-06-01', 9_590), duplicatoStato: stato },
+  ];
+
+  it('«distinti»: le due cifre tornano a contare entrambe, ma la coppia resta in elenco', () => {
+    const esito = denunceDuplicateVera(conScelta('NEGATO'));
+    expect(esito.indiciDaNonSommare).toEqual([]);
+    expect(esito.righe).toBe(0);
+    expect(esito.totale).toBe(0);
+    // Resta in elenco: la scelta si deve poter cambiare.
+    expect(esito.coppie).toEqual([
+      {
+        f24: 0,
+        denunce: 1,
+        periodo: '2026-06',
+        importo: 9_590,
+        decisione: 'NEGATO',
+        scontata: false,
+      },
+    ]);
+  });
+
+  it('«confermato»: contata una volta sola, con la decisione registrata', () => {
+    const esito = denunceDuplicateVera(conScelta('CONFERMATO'));
+    expect(esito.indiciDaNonSommare).toEqual([1]);
+    expect(esito.totale).toBe(9_590);
+    expect(esito.coppie[0]).toEqual({
+      f24: 0,
+      denunce: 1,
+      periodo: '2026-06',
+      importo: 9_590,
+      decisione: 'CONFERMATO',
+      scontata: true,
+    });
+  });
+
+  it('senza scelta vale il criterio, e la coppia si dichiara automatica', () => {
+    const esito = denunceDuplicateVera(conScelta(''));
+    expect(esito.indiciDaNonSommare).toEqual([1]);
+    expect(esito.coppie[0].decisione).toBe('');
+    expect(esito.coppie[0].scontata).toBe(true);
+  });
+
+  it('una denuncia dichiarata distinta non toglie la cifra a quella che è una ripetizione', () => {
+    // La riga 1 è stata dichiarata «due debiti»: non deve consumare la cifra
+    // F24 che appartiene alla riga 2, che invece è una ripetizione.
+    const esito = denunceDuplicateVera([
+      riga(F24, '06/2026', 9_590),
+      { ...riga(DENUNCE, '2026-06-01', 9_590), duplicatoStato: 'NEGATO' as const },
+      riga(DENUNCE, '2026-06-01', 9_590),
+    ]);
+    expect(esito.indiciDaNonSommare).toEqual([2]);
+    expect(esito.totale).toBe(9_590);
+    expect(esito.coppie.map((c) => [c.denunce, c.scontata])).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+  });
+
+  it('la coppia indica la riga F24 giusta anche con più F24 dello stesso periodo', () => {
+    const esito = denunceDuplicateVera([
+      riga(F24, '06/2026', 1_000),
+      riga(F24, '06/2026', 9_590),
+      riga(DENUNCE, '2026-06-01', 9_590),
+    ]);
+    expect(esito.coppie).toHaveLength(1);
+    expect(esito.coppie[0].f24).toBe(1);
+    expect(esito.coppie[0].denunce).toBe(2);
+  });
+});
+
 // Il foglio ha la forma di quello dell'ente (colonne intestate a righe alterne,
 // riga di totale in coda): il test attraversa la lettura vera e non una sua
 // imitazione, e prova che i due formati di periodo finiscono nella stessa chiave.
@@ -222,6 +299,18 @@ describe('la doppia scrittura nei documenti per gli uffici', () => {
     expect(testi.collegiale).toContain('sono lo stesso debito scritto due volte nel file');
     expect(testi.collegiale).toContain('9590.00 €');
     expect(testi.documento).toContain('contato una volta sola');
+  });
+
+  it('dichiarata distinta, la cifra entra due volte nella dichiarazione', () => {
+    const ripartizione = ripartisciRigheVera([
+      contabilizzata(F24, '06/2026', 9_590),
+      { ...contabilizzata(DENUNCE, '2026-06-01', 9_590), duplicatoStato: 'NEGATO' as const },
+    ]);
+    expect(ripartizione.duplicati).toEqual({ righe: 0, totale: 0 });
+    expect(ripartizione.contabilizzate).toEqual({ righe: 2, totale: 19_180 });
+    const testi = testiContabilizzate(ripartizione, (n) => `${n.toFixed(2)} €`);
+    expect(testi.collegiale).toContain('2 posizioni per 19180.00 €');
+    expect(testi.collegiale).not.toContain('due volte');
   });
 
   it('una riga da lavorare resta in elenco anche se la cifra è ripetuta', () => {

@@ -167,7 +167,11 @@ Drizzle è marginale.
    base della soglia è fatta dai contributi del F24) e l'ambiguità si dichiara: nel triage,
    nel contesto della relazione, nella scheda Posizione V.E.R.A. e in coda alla dichiarazione
    delle già contabilizzate nei documenti. La riga resta in elenco, perché la denuncia va
-   comunque trasmessa: si sconta la cifra, non la posizione.
+   comunque trasmessa: si sconta la cifra, non la posizione. Il criterio non è però una verità:
+   nella verifica ogni coppia riconosciuta si può confermare o dichiarare distinta a mano, e la
+   scelta si registra sulla riga denunce (`debiti_vera.duplicato_stato`) insieme alla posizione —
+   la rileggono l'esposizione, i documenti e il fascicolo di evidenza, e la verifica riaperta
+   rifà i conti con la decisione già presa.
    Dalle sue righe, con la tabella `lavorazioni_tipo_debito`
    (Parametri › Lavorazioni), il triage prepara una comunicazione per collega — solo testo
    da copiare e inviare personalmente, mai un invio automatico — e, con la stessa

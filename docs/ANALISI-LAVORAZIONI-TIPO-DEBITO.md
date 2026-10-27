@@ -719,6 +719,19 @@ contabilizzate nei documenti per reparto e nel report per unità operativa (`dup
 `ripartisciRigheVera`, letto da `testiContabilizzate`). La riga resta in elenco: la denuncia va
 comunque trasmessa, quindi si sconta la cifra, non la posizione.
 
+**La scelta dell'operatore (0.139.8).** Il criterio non è una verità: due righe identiche per
+periodo e importo possono descrivere due obbligazioni diverse. Nella verifica ogni coppia
+riconosciuta si presenta in un riquadro con la cifra in gioco e tre comandi — «Sì, è lo stesso
+debito», «No, sono due debiti», «Torna all'automatico» — e la decisione si registra sulla riga
+denuce (`debiti_vera.duplicato_stato`: `CONFERMATO`, `NEGATO`, vuoto = automatico) insieme alla
+posizione. Da lì la rileggono `denunceDuplicateVera` (esposizione e certo-per-certo del triage e
+dello scenario), `ripartisciRigheVera` (dichiarazione dei documenti per reparto e per unità
+operativa) e `componiFascicolo` (totale delle evidenze): dichiarata «distinta», la cifra conta
+ancora due volte dappertutto. Una denuncia dichiarata distinta non consuma la cifra F24 di
+un'altra: le due passate del riconoscimento sono separate. Un nuovo import del V.E.R.A.
+ricostruisce le righe e riparte dall'automatico — la scelta è una lettura della posizione, e la
+posizione è quella del file.
+
 **Anche il fascicolo di evidenza (0.139.7).** `componiFascicolo` somma le righe del V.E.R.A. in
 un'evidenza `DERIVATO` «V.E.R.A. — totale», e senza lo sconto dichiarava un debito che non
 esisteva: contraddiceva l'esposizione della verifica. Ora il totale conta la cifra una volta

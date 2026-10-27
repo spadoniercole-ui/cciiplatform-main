@@ -65,6 +65,7 @@ vi.mock('@/app/actions/posizioneVera', () => ({
   sostituisciDebitiVeraAction: vi.fn(),
   ottieniMappaturaTitoliVera: vi.fn(),
   ottieniDebitiVera: vi.fn(),
+  impostaDuplicatoVeraAction: vi.fn(),
 }));
 
 vi.mock('@/app/actions/titoliEnte', () => ({
@@ -121,7 +122,11 @@ import {
 } from '@/app/actions/aziendaInVerifica';
 import { estraiAnagraficaDaVisuraAction } from '@/app/actions/visuraEstrazione';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
-import { ottieniDebitiVera, ottieniMappaturaTitoliVera } from '@/app/actions/posizioneVera';
+import {
+  impostaDuplicatoVeraAction,
+  ottieniDebitiVera,
+  ottieniMappaturaTitoliVera,
+} from '@/app/actions/posizioneVera';
 import { ottieniMaterieEnteAction, ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
 import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
 import { ottieniCategorieTipoDebito } from '@/app/actions/categorieTipoDebito';
@@ -585,6 +590,110 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     // Chiusa la pratica si torna al caricamento: la verifica archiviata non è
     // più quella da guardare.
     await waitFor(() => expect(screen.getByText('Visura camerale (PDF)')).toBeTruthy());
+  });
+
+  //
+  // LA SCELTA SULLA COPPIA F24 / DENUNCE.
+  //
+  // Lo stesso debito compare due volte nel file, come versamento non eseguito
+  // e come denuncia non trasmessa: la cifra si conta una volta sola. Ma il
+  // criterio può sbagliare, e chi vede la posizione lo sa meglio del criterio:
+  // il comando deve registrare la scelta SULLA RIGA e cambiare i numeri della
+  // verifica, non solo il colore di un pulsante.
+  //
+  it('la coppia si può dichiarare distinta, e la scelta cambia i totali', async () => {
+    vi.mocked(ottieniDebitiVera).mockResolvedValue({
+      success: true,
+      righe: [
+        {
+          id: 11,
+          sezione: 'Gestione',
+          ambito: 'INPS',
+          voce: 'TS 27 - flusso Uniemens non versato',
+          importo: 1200,
+          categoria: 'CONTRIBUTI',
+          stato: 'Non versato',
+          periodo: '202506 - 202506',
+          trattamento: 'da_contabilizzare',
+          contributi: 1200,
+          sanzioni: 0,
+        },
+        {
+          id: 12,
+          sezione: 'Gestione',
+          ambito: 'INPS',
+          voce: 'F24 Non presentato',
+          importo: 9590,
+          categoria: 'CONTRIBUTI',
+          stato: '',
+          periodo: '06/2026',
+          trattamento: 'contabilizzato',
+          contributi: 9590,
+          sanzioni: 0,
+        },
+        {
+          id: 13,
+          sezione: 'Gestione',
+          ambito: 'INPS',
+          voce: 'Denunce non trasmesse',
+          importo: 9590,
+          categoria: 'CONTRIBUTI',
+          stato: '',
+          periodo: '2026-06-01',
+          trattamento: 'contabilizzato',
+          contributi: 0,
+          sanzioni: 0,
+        },
+      ],
+    });
+    vi.mocked(impostaDuplicatoVeraAction).mockResolvedValue({ success: true });
+
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    const riquadro = await waitFor(() =>
+      sezioneDi('La stessa cifra scritta due volte nel V.E.R.A.')
+    );
+    // La coppia si vede con le due righe e la cifra in gioco.
+    expect(within(riquadro).getAllByText(/F24 Non presentato/).length).toBeGreaterThan(0);
+    expect(within(riquadro).getAllByText(/Denunce non trasmesse/).length).toBeGreaterThan(0);
+    expect(
+      within(riquadro).getAllByText(/Riconosciuto automaticamente: contato una volta sola/i).length
+    ).toBeGreaterThan(0);
+
+    // La dichiarazione delle già contabilizzate la conta UNA volta: 9.590 €.
+    await waitFor(() =>
+      expect(screen.getAllByText(/1 posizione per 9\.590,00 €/).length).toBeGreaterThan(0)
+    );
+
+    fireEvent.click(within(riquadro).getAllByRole('button', { name: /No, sono due debiti/i })[0]);
+
+    // La scelta va sulla riga denunce, con l'azienda di questa posizione.
+    await waitFor(() =>
+      expect(impostaDuplicatoVeraAction).toHaveBeenCalledWith(SCHEMA, AZIENDA_ID, 13, 'NEGATO')
+    );
+    // E i numeri seguono: adesso la cifra conta due volte.
+    await waitFor(() =>
+      expect(screen.getAllByText(/2 posizioni per 19\.180,00 €/).length).toBeGreaterThan(0)
+    );
+    expect(
+      within(riquadro).getAllByText(/Due debiti distinti: le due cifre contano entrambe/i).length
+    ).toBeGreaterThan(0);
+
+    // E si può tornare indietro: la coppia è ancora in elenco.
+    fireEvent.click(within(riquadro).getAllByRole('button', { name: /Torna all.automatico/i })[0]);
+    await waitFor(() =>
+      expect(impostaDuplicatoVeraAction).toHaveBeenCalledWith(SCHEMA, AZIENDA_ID, 13, '')
+    );
+    await waitFor(() =>
+      expect(screen.getAllByText(/1 posizione per 9\.590,00 €/).length).toBeGreaterThan(0)
+    );
   });
 
   it('«Verifica un’altra azienda» riporta al caricamento, senza restare sull’esito', async () => {

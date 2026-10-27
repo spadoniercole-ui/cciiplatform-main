@@ -1984,6 +1984,16 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS combinazione TEXT NOT NULL DEFAULT ''`
   );
+  // SCELTA DELL'OPERATORE sulla doppia scrittura del file («F24 non presentato»
+  // e «Denunce non trasmesse» dello stesso periodo e importo): '' = vale il
+  // riconoscimento automatico, 'CONFERMATO' = è lo stesso debito, 'NEGATO' =
+  // sono due debiti distinti e le due cifre restano distinte. Sta sulla riga
+  // denunce, insieme alla posizione: la verifica riaperta rifà i conti con la
+  // scelta già presa. Un nuovo import del V.E.R.A. ricostruisce le righe e
+  // riparte dall'automatico.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS duplicato_stato TEXT NOT NULL DEFAULT ''`
+  );
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS documento_id INTEGER`
   );

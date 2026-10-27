@@ -59,6 +59,7 @@ import {
 } from '@/lib/titoliEnte/lavorazioniMateria';
 import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
 import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
+import type { StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
 import type { PosizioniEscluse } from './comunicazioni';
 import { ripartisciRigheVera, type RiepilogoRighe } from './daLavorare';
 // Lo stesso ufficio scritto due volte resta un documento solo (vedi dipendenze.ts).
@@ -73,6 +74,11 @@ export interface RigaVeraReportUo {
   stato: string;
   trattamento: TrattamentoVera;
   importo: number;
+  /**
+   * La scelta dell'operatore sulla doppia scrittura del file
+   * (`duplicatiVera.ts`): vuoto = vale il riconoscimento automatico.
+   */
+  duplicatoStato?: StatoDuplicatoVera | '';
 }
 
 export interface MateriaReportUo {
