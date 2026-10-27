@@ -15,6 +15,7 @@
 // Logica pura: niente database, niente React.
 
 import { saldoRigaDebitoEnte } from '@/lib/debitiEnte/tipoDebito';
+import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
 
 export type OrigineEvidenza = 'PROPOSTA' | 'POSIZIONE_ENTE' | 'VERA' | 'BILANCIO' | 'CALCOLO';
 
@@ -157,6 +158,12 @@ export interface RigaVera {
   categoria: string;
   /** 'contabilizzato' | 'da_contabilizzare' | 'potenziale' | 'ignora' */
   trattamento: string;
+  /**
+   * Periodo di competenza. Serve a riconoscere la doppia scrittura del file
+   * («F24 non presentato» e «Denunce non trasmesse» dello stesso periodo):
+   * senza periodo non si accoppia nulla e le cifre restano due.
+   */
+  periodo?: string;
 }
 
 const arrotonda = (n: number) => Math.round(n * 100) / 100;
@@ -290,19 +297,35 @@ export function componiFascicolo(input: {
     });
   }
   const veraConImporto = veraUtili.filter((r) => r.trattamento !== 'potenziale');
-  if (veraConImporto.length > 1) {
+  // LA STESSA CIFRA UNA VOLTA SOLA. Il file scrive lo stesso debito due volte —
+  // «F24 non presentato» e «Denunce non trasmesse» dello stesso periodo — e un
+  // totale che le sommasse contraddirebbe l'esposizione della verifica, che
+  // quella riga la sconta (vedi `duplicatiVera.ts`). Le due evidenze di riga
+  // restano: sono due righe del file, e la denuncia va comunque trasmessa.
+  const duplicati = denunceDuplicateVera(veraUtili);
+  const indiciEsclusi = insiemeEsclusi(duplicati);
+  const escluseDalTotale = new Set(veraUtili.filter((_, i) => indiciEsclusi.has(i)));
+  const conteggiate = veraConImporto.filter((r) => !escluseDalTotale.has(r));
+  if (conteggiate.length > 1 || duplicati.righe > 0) {
+    const clausole: string[] = [];
+    const senzaImporto = veraUtili.length - veraConImporto.length;
+    if (senzaImporto > 0) clausole.push(`MINIMO: ${senzaImporto} voci hanno importo non noto`);
+    if (duplicati.righe > 0) {
+      clausole.push(
+        `${duplicati.righe === 1 ? 'un importo è ripetuto' : `${duplicati.righe} importi sono ripetuti`} nel file come «F24 non presentato» e come «Denunce non trasmesse», stesso periodo (${duplicati.periodi.join(', ')}): contati una volta sola`
+      );
+    }
     evidenze.push({
       ...base,
       id: idEvidenza('CALCOLO', 'vera-totale'),
       origine: 'CALCOLO',
-      descrizione:
-        veraUtili.length > veraConImporto.length
-          ? `V.E.R.A. — totale delle voci a importo noto (MINIMO: ${veraUtili.length - veraConImporto.length} voci hanno importo non noto)`
-          : 'V.E.R.A. — totale',
-      importo: arrotonda(veraConImporto.reduce((s, r) => s + r.importo, 0)),
+      descrizione: clausole.length
+        ? `V.E.R.A. — totale delle voci a importo noto (${clausole.join('; ')})`
+        : 'V.E.R.A. — totale',
+      importo: arrotonda(conteggiate.reduce((s, r) => s + r.importo, 0)),
       ente: 'INPS',
       stato: 'DERIVATO',
-      derivatoDa: { ids: veraConImporto.map((r) => idEvidenza('VERA', r.id)), operazione: 'somma' },
+      derivatoDa: { ids: conteggiate.map((r) => idEvidenza('VERA', r.id)), operazione: 'somma' },
     });
   }
   // Bilancio: una evidenza per voce e per anno. Il dato di bilancio serve al

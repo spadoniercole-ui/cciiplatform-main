@@ -719,6 +719,15 @@ contabilizzate nei documenti per reparto e nel report per unità operativa (`dup
 `ripartisciRigheVera`, letto da `testiContabilizzate`). La riga resta in elenco: la denuncia va
 comunque trasmessa, quindi si sconta la cifra, non la posizione.
 
+**Anche il fascicolo di evidenza (0.139.7).** `componiFascicolo` somma le righe del V.E.R.A. in
+un'evidenza `DERIVATO` «V.E.R.A. — totale», e senza lo sconto dichiarava un debito che non
+esisteva: contraddiceva l'esposizione della verifica. Ora il totale conta la cifra una volta
+sola e lo dice (`un importo è ripetuto nel file come «F24 non presentato» e come «Denunce non
+trasmesse», stesso periodo (…): contati una volta sola`), e `derivatoDa.ids` elenca le sole
+evidenze sommate. Le due evidenze di riga restano entrambe: sono due righe del file, e la
+denuncia è comunque lavoro da fare. La riga V.E.R.A. del fascicolo porta anche il periodo
+(`v.periodo`): senza, l'accoppiamento non sarebbe possibile e le due cifre resterebbero due.
+
 Test aggiunti: 12 (`duplicatiVera.test.ts`: le quattro coppie del file reale, l'accoppiamento
 uno a uno, periodo o importo diversi, riga senza periodo, lettura attraverso il file xlsx, e
 l'effetto su dichiarazione e documenti).

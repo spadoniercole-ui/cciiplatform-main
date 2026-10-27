@@ -131,6 +131,90 @@ describe('bilancio nel fascicolo', () => {
   });
 });
 
+describe('lo stesso debito scritto due volte nel V.E.R.A.', () => {
+  // Il file dell'ente scrive la stessa obbligazione come «F24 non presentato» e
+  // come «Denunce non trasmesse», stesso periodo e stesso importo. Il totale del
+  // fascicolo non può sommarle: contraddirebbe l'esposizione della verifica.
+  const conCoppia = componiFascicolo({
+    proposta: [],
+    posizioneEnte: [],
+    vera: [
+      {
+        id: 11,
+        sezione: 'Gestione',
+        voce: 'F24 Non presentato',
+        importo: 9_590,
+        categoria: 'Contributi',
+        trattamento: 'contabilizzato',
+        periodo: '06/2026',
+        documento: null,
+      },
+      {
+        id: 12,
+        sezione: 'Gestione',
+        voce: 'Denunce non trasmesse',
+        importo: 9_590,
+        categoria: 'Contributi',
+        trattamento: 'contabilizzato',
+        periodo: '2026-06-01',
+        documento: null,
+      },
+      {
+        id: 13,
+        sezione: 'Gestione',
+        voce: 'TS 27 flusso Uniemens non versato',
+        importo: 3_404.02,
+        categoria: 'Contributi',
+        trattamento: 'contabilizzato',
+        periodo: '202506 - 202506',
+        documento: null,
+      },
+    ],
+  });
+
+  it('il totale conta la cifra una volta sola e dichiara la ripetizione', () => {
+    const totale = conCoppia.find((e) => e.id === 'EV-CAL-vera-totale')!;
+    expect(totale.importo).toBeCloseTo(9_590 + 3_404.02, 2);
+    expect(totale.descrizione).toContain('un importo è ripetuto');
+    expect(totale.descrizione).toContain('contati una volta sola');
+    // Le due righe restano nel fascicolo: sono due righe del file.
+    expect(conCoppia.some((e) => e.id === 'EV-VER-11')).toBe(true);
+    expect(conCoppia.some((e) => e.id === 'EV-VER-12')).toBe(true);
+    // …ma il totale dichiara da quale riga viene la cifra che conta.
+    expect(totale.derivatoDa?.ids).toEqual(['EV-VER-11', 'EV-VER-13']);
+  });
+
+  it('senza periodo le due cifre restano due, come le scrive il file', () => {
+    const senzaPeriodo = componiFascicolo({
+      proposta: [],
+      posizioneEnte: [],
+      vera: [
+        {
+          id: 21,
+          sezione: 'Gestione',
+          voce: 'F24 Non presentato',
+          importo: 9_590,
+          categoria: 'Contributi',
+          trattamento: 'contabilizzato',
+          documento: null,
+        },
+        {
+          id: 22,
+          sezione: 'Gestione',
+          voce: 'Denunce non trasmesse',
+          importo: 9_590,
+          categoria: 'Contributi',
+          trattamento: 'contabilizzato',
+          documento: null,
+        },
+      ],
+    });
+    const totale = senzaPeriodo.find((e) => e.id === 'EV-CAL-vera-totale')!;
+    expect(totale.importo).toBe(19_180);
+    expect(totale.descrizione).toBe('V.E.R.A. — totale');
+  });
+});
+
 describe('riconciliazione di un testo con il fascicolo', () => {
   it('legge gli importi scritti all’italiana', () => {
     expect(

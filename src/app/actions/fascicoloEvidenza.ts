@@ -125,7 +125,7 @@ export async function ottieniFascicoloAction(
       };
     };
     const vera = await pool.query(
-      `SELECT v.id, v.sezione, v.voce, v.importo, v.categoria, v.trattamento, o.nome_file, o.impronta
+      `SELECT v.id, v.sezione, v.voce, v.importo, v.categoria, v.trattamento, v.periodo, o.nome_file, o.impronta
          FROM "${nomeSchema}".debiti_vera v
          LEFT JOIN "${nomeSchema}".documenti_origine o ON o.id = v.documento_id
         WHERE v.azienda_id = $1 ORDER BY v.id`,
@@ -201,6 +201,9 @@ export async function ottieniFascicoloAction(
           importo: Number(r.importo),
           categoria: r.categoria,
           trattamento: r.trattamento,
+          // Il periodo serve al totale del fascicolo per non contare due volte
+          // lo stesso debito scritto come F24 e come denuncia non trasmessa.
+          periodo: String(r.periodo ?? '').trim() || undefined,
           documento: r.impronta ? { nomeFile: r.nome_file, impronta: r.impronta } : null,
         })),
       }),

@@ -26,6 +26,28 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.7 — 2026-10-27
+
+**Anche il fascicolo di evidenza conta una volta sola la doppia scrittura del V.E.R.A.**
+
+La 0.139.6 ha scontato la ripetizione «F24 non presentato» / «Denunce non trasmesse»
+dall'esposizione, dai documenti e dal triage, ma il fascicolo di evidenza è rimasto indietro: la
+sua evidenza derivata «V.E.R.A. — totale» somma le righe come sono nel file, e sul file di prova
+dichiarava 31.236,35 € in più dell'esposizione della verifica — due numeri diversi per lo stesso
+debito, nella stessa pratica.
+
+- La riga V.E.R.A. del fascicolo porta anche il **periodo** (`v.periodo`): senza, non c'è prova
+  che le due righe siano lo stesso debito e l'accoppiamento non si fa.
+- Il totale usa `denunceDuplicateVera`: conta una volta sola la riga denunce e **lo dichiara**
+  nella descrizione («un importo è ripetuto nel file come «F24 non presentato» e come «Denunce
+  non trasmesse», stesso periodo (…): contati una volta sola»), mentre `derivatoDa.ids` elenca
+  le sole evidenze sommate.
+- Le due evidenze di riga restano entrambe: sono due righe del file, e la denuncia è comunque
+  lavoro da fare.
+
+Verifiche: 2 test nuovi nel fascicolo (totale scontato con la ripetizione dichiarata e
+`derivatoDa` allineato; senza periodo le due cifre restano due). Suite intera verde.
+
 ## 0.139.6 — 2026-10-27
 
 **Lo stesso debito scritto due volte nel V.E.R.A. non si somma più due volte**
