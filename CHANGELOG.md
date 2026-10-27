@@ -26,6 +26,39 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.5 — 2026-10-27
+
+**Il debito che nel V.E.R.A. c'è anche quando il «Totale debito» è vuoto**
+
+Nelle gestioni contributive le righe «F24 Non presentato» portano la cifra nelle colonne
+«Contributi» e «Sanzioni» e lasciano vuoto il «Totale debito». Il lettore guardava solo il
+totale: importo zero, posizione dichiarata «a importo ignoto» con il numero scritto due
+colonne prima, e ritardo di oltre 90 giorni — che è un requisito dell'art. 25-novies — mai
+misurato su quei debiti. Sul V.E.R.A. di prova erano quattro righe per 31.236,35 €.
+
+- **L'importo si legge dove c'è.** Se il totale è vuoto, l'importo è `contributi + sanzioni`;
+  se il totale c'è, è lui (le colonne di dettaglio ne sono la composizione, e sommarle
+  conterebbe due volte). «0» nel totale resta un valore, non un'assenza.
+- **Quelle righe sono contabilizzate**, non «da accertare»: entrano nell'esposizione V.E.R.A.
+  e nei documenti per gli uffici fra le posizioni già contabilizzate, dichiarate e non
+  elencate.
+- **Il ritardo si allinea ai formati del file** (`periodoDaVera`): «202506 - 202506»,
+  «06/2026» e la data vera che xlsx legge come AAAA-MM-GG. Prima solo il primo formato era
+  riconosciuto, e le righe F24 restavano senza periodo.
+- **Il ritardo conta le stesse partite della soglia**: solo quelle con una quota di
+  contributi, cioè quelle che formano la base INPS. Una riga a soli importi (note di
+  rettifica, «Denunce non trasmesse» che ripetono il debito del F24) non entra nella base e
+  non deve entrare nel ritardo: importo e ritardo devono riguardare lo stesso debito, come
+  già per le partite della Lista Inadempienze.
+
+Sul file di prova il ritardo passa da 13 partite per 18.392,80 € a 17 partite per 49.629,15 €
+(le tredici TS più le quattro F24), periodi da 2025/06 a 2026/06. La base della soglia non
+cambia: la query somma già la colonna dei contributi.
+
+Test aggiunti: 7 (foglio costruito nel test con le righe del caso reale: importo, assenza di
+doppio conteggio, trattamenti, ritardo sui tre formati di periodo e sulle sole partite della
+base).
+
 ## 0.139.4 — 2026-10-27
 
 **Le comunicazioni per le unità operative chiedono solo ciò che manca**

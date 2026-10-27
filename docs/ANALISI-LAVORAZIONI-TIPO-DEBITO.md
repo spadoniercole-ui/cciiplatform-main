@@ -655,11 +655,42 @@ testa, sotto la versione) e nell'avviso che annuncia i documenti: il totale del 
 totale del V.E.R.A., e la differenza ha una spiegazione scritta. Un ufficio con sole posizioni
 già contabilizzate non riceve alcun documento — non ha nulla da fare — e l'impronta di versione
 include la dichiarazione, così un PDF che non ne tiene conto non può passare per aggiornato.
-Il caso rimasto aperto è l'importo: nelle righe «F24 Non presentato» del file di prova il
-«Totale debito» è vuoto e la cifra sta nella colonna «Contributi», che `indiceImporto` non
-legge; quelle righe restano «da accertare» con importo non determinato, invece di essere
-contabilizzate con un importo preso da una colonna che il tracciato non considera (la scelta
-tocca `ritardoDaVera` e quindi la soglia dell'art. 25-novies: non si cambia di sfuggita).
+Il caso rimasto aperto in questa consegna — l'importo delle righe con il «Totale debito»
+vuoto — è chiuso nella §10.8, con l'allineamento del ritardo.
 
 Test aggiunti: 14 (classificazione e testi del nuovo modulo, esclusione e dichiarazione nelle
 tre uscite, quota AdR sul PDF, impronta di versione).
+
+### 10.8 Il debito che c'è anche se il «Totale debito» è vuoto (0.139.5)
+
+Nelle gestioni contributive le righe «F24 Non presentato» portano la cifra nelle colonne
+«Contributi» e «Sanzioni» e lasciano vuoto il «Totale debito». `sezioneVeraDa` leggeva solo la
+colonna del totale: importo zero, trattamento suggerito `potenziale`, posizione dichiarata «a
+importo ignoto» con il numero scritto due colonne prima. Sul V.E.R.A. di prova erano quattro
+righe per 31.236,35 € — e il ritardo di oltre 90 giorni, che è requisito dell'art. 25-novies,
+non le vedeva affatto.
+
+**Come è risolto.** L'importo è `contributi + sanzioni` quando il totale è *vuoto*; se il
+totale c'è è lui l'importo (le colonne di dettaglio ne sono la composizione, e sommarle
+conterebbe due volte). «0» nel totale è un valore, non un'assenza. Con l'importo letto, quelle
+righe sono contabilizzate: entrano nell'esposizione V.E.R.A. e nei documenti fra le posizioni
+già contabilizzate (§10.7), non più fra quelle da accertare.
+
+**Il ritardo, allineato.** `ritardoDaVera` riconosceva il solo periodo «202506 - 202506»:
+le righe F24 scrivono «06/2026» o portano una data vera (letta da xlsx come AAAA-MM-GG) e
+restavano senza periodo. `periodoDaVera` legge le tre forme; dal periodo viene la scadenza (il
+16 del mese successivo) e quindi il ritardo. In più il ritardo conta solo le partite che
+formano la base della soglia INPS — quelle con una quota di contributi: una riga a soli
+importi (le note di rettifica, le «Denunce non trasmesse» che ripetono il debito del F24) non
+entra in quella base e non deve entrare nel ritardo, altrimenti il requisito temporale
+riguarderebbe un debito diverso da quello confrontato con la soglia. È la stessa regola già
+applicata alle partite della Lista Inadempienze.
+
+Sul file di prova: ritardo da 13 partite per 18.392,80 € a **17 partite per 49.629,15 €**
+(le tredici TS più le quattro F24), con i periodi da 2025/06 a 2026/06. La base della soglia
+non cambia: la query somma già la colonna «Contributi» (`COALESCE(contributi, importo)`), che
+quelle cifre le aveva sempre.
+
+Test aggiunti: 7 (un foglio costruito nel test con le righe reali del caso: lettura
+dell'importo, nessun doppio conteggio quando il totale c'è, trattamenti, ritardo sui nuovi
+formati di periodo e sulle sole partite della base).

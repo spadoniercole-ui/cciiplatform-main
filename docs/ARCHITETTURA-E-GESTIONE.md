@@ -151,7 +151,14 @@ Drizzle è marginale.
    all'Agente della Riscossione — e il riparto contributi/sanzioni: sono due lettere diverse
    dell'art. 25-novies (a e d) e non si sommano nella stessa base. Il file è un presupposto:
    senza un V.E.R.A. riconosciuto e leggibile la conferma
-   del triage non parte. Dalle sue righe, con la tabella `lavorazioni_tipo_debito`
+   del triage non parte. L'importo di una riga è il suo «Totale debito»; quando il totale è
+   vuoto e le colonne «Contributi»/«Sanzioni» portano la cifra — le righe «F24 non
+   presentato» — l'importo è la somma di quelle: letto come sola colonna del totale, il
+   debito diventava zero e la posizione «a importo ignoto» pur avendo il numero nel file.
+   Il ritardo di oltre 90 giorni si misura sui periodi delle partite contabilizzate, nelle
+   forme in cui il file li scrive («202506 - 202506», «06/2026», una data) e solo su quelle
+   con una quota di contributi, cioè le stesse che formano la base della soglia INPS.
+   Dalle sue righe, con la tabella `lavorazioni_tipo_debito`
    (Parametri › Lavorazioni), il triage prepara una comunicazione per collega — solo testo
    da copiare e inviare personalmente, mai un invio automatico — e, con la stessa
    configurazione, **un PDF per reparto** («Comunica ai reparti»): elenca i debiti da

@@ -9,6 +9,7 @@
 // ciò che l'operatore mappa è solo il titolo di sezione → categoria.
 
 import {
+  cellaVuota,
   estraiTutteLeSezioni,
   normalizzaEtichetta,
   testoCella,
@@ -165,12 +166,27 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
   const righe = s.righe.map((r, n) => {
     const debito = idxImporto >= 0 ? parseNumero(r[idxImporto]) : 0;
     const credito = idxCredito >= 0 ? parseNumero(r[idxCredito]) : 0;
+    const contributi = idxContributi >= 0 ? parseNumero(r[idxContributi]) : null;
+    const sanzioni = idxSanzioni >= 0 ? parseNumero(r[idxSanzioni]) : null;
+    // IL «TOTALE DEBITO» PUÒ MANCARE MENTRE IL DEBITO C'È. Nelle gestioni
+    // contributive le righe «F24 non presentato» portano la cifra nelle colonne
+    // «Contributi» e «Sanzioni» e lasciano vuoto il totale: letto così, il
+    // debito diventava zero — e la posizione finiva fra quelle «a importo
+    // ignoto», con il file che l'importo ce l'aveva scritto due colonne prima.
+    //
+    // Il ripiego vale SOLO quando il totale è vuoto. Se il totale c'è, è lui
+    // l'importo della riga (le colonne di dettaglio ne sono la composizione, e
+    // sommarle conterebbe due volte). «0» nel totale è un valore, non
+    // un'assenza: una riga a debito zero resta a zero.
+    const totaleVuoto = idxImporto < 0 || cellaVuota(r[idxImporto]);
+    const dettaglio = (contributi ?? 0) + (sanzioni ?? 0);
+    const debitoEffettivo = totaleVuoto && dettaglio > 0.005 ? dettaglio : debito;
     // Cartella SOSPESA (Agente della Riscossione): il «Totale debito» è zero
     // perché l'importo è congelato da un provvedimento, non perché sia
     // ignoto. L'importo è quello della colonna Sospeso, e la riga si marca
     // come sospesa: non entra nell'esposizione esigibile.
     const sospeso = idxSospeso >= 0 ? parseNumero(r[idxSospeso]) : 0;
-    if (Math.abs(debito - credito) < 0.005 && sospeso > 0.005) {
+    if (Math.abs(debitoEffettivo - credito) < 0.005 && sospeso > 0.005) {
       return {
         voce:
           idxVoce >= 0 && testoCella(r[idxVoce]).trim() !== ''
@@ -189,11 +205,11 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
         idxVoce >= 0 && testoCella(r[idxVoce]).trim() !== ''
           ? testoCella(r[idxVoce])
           : `Riga ${n + 1}`,
-      importo: debito - credito,
+      importo: debitoEffettivo - credito,
       stato: idxStato >= 0 ? testoCella(r[idxStato]).trim() : '',
       ...(idxPeriodo >= 0 ? { periodo: testoCella(r[idxPeriodo]).trim() } : {}),
-      contributi: idxContributi >= 0 ? parseNumero(r[idxContributi]) : null,
-      sanzioni: idxSanzioni >= 0 ? parseNumero(r[idxSanzioni]) : null,
+      contributi,
+      sanzioni,
     };
   });
   // Il totale della sezione è l'esposizione della sezione: le partite
@@ -459,10 +475,12 @@ export function estraiRigheVera(
  * contributo di un periodo scade il 16 del mese successivo: se alla data di
  * riferimento sono passati più di 90 giorni, la partita è in ritardo.
  *
- * Contano solo le partite contabilizzate (stato vuoto) e con importo: le
- * cartelle dell'Agente della Riscossione non hanno periodo e restano fuori,
- * come vuole la regola sulle partite passate a ruolo. null = il file non
- * porta periodi, quindi il ritardo da qui non si misura.
+ * Contano solo le partite contabilizzate (stato vuoto), con importo e con una
+ * quota di contributi: le cartelle dell'Agente della Riscossione non hanno
+ * periodo e restano fuori, come vuole la regola sulle partite passate a ruolo,
+ * e le righe che non formano la base della soglia restano fuori dal ritardo
+ * (vedi il commento nel corpo). null = il file non porta periodi, quindi il
+ * ritardo da qui non si misura.
  */
 export function ritardoDaVera(
   sezioni: SezioneVera[],
@@ -475,21 +493,61 @@ export function ritardoDaVera(
   for (const s of sezioni) {
     for (const r of s.righe) {
       if (r.periodo === undefined) continue;
-      const m = r.periodo.match(/(\d{4})\s*\/?\s*(\d{2})\s*$/);
-      if (!m) continue;
+      const periodo = periodoDaVera(r.periodo);
+      if (!periodo) continue;
       conPeriodo = true;
       if (r.stato.trim() !== '' || r.importo <= 0.005) continue;
-      const anno = Number(m[1]);
-      const mese = Number(m[2]); // 1..12, periodo di competenza (fine)
-      const scadenza = Date.UTC(anno, mese, 16); // 16 del mese successivo
+      // STESSO DEBBITO: il ritardo si misura sulle partite che formano la base
+      // della soglia INPS, cioè quelle con una quota di contributi. Una riga a
+      // soli importi — «Note di rettifica non definite», «Denunce non
+      // trasmesse» che ripetono il debito del F24 — non entra in quella base
+      // (la query somma `contributi`) e non deve entrare nel ritardo: sarebbe
+      // un requisito temporale riferito a un debito diverso da quello
+      // confrontato con la soglia. È la stessa regola già applicata alle
+      // partite della Lista Inadempienze.
+      if (r.contributi !== null && r.contributi <= 0.005) continue;
+      const scadenza = Date.UTC(periodo.anno, periodo.mese, 16); // 16 del mese successivo
       const giorni = (riferimento.getTime() - scadenza) / 86_400_000;
       if (giorni > 90) {
         partite++;
         importo += r.importo;
-        const p = `${m[1]}/${m[2]}`;
+        const p = `${periodo.anno}/${String(periodo.mese).padStart(2, '0')}`;
         if (!periodi.includes(p)) periodi.push(p);
       }
     }
   }
   return conPeriodo ? { partite, importo, periodi } : null;
+}
+
+/**
+ * PERIODO DI COMPETENZA di una riga, nelle forme in cui il V.E.R.A. lo scrive.
+ *
+ * Non è un dettaglio di formato: dal periodo dipende la scadenza (il 16 del
+ * mese successivo) e quindi il ritardo di oltre 90 giorni, che è un requisito
+ * dell'art. 25-novies. Prima si riconosceva il solo «202506 - 202506» delle
+ * gestioni contributive: le righe «F24 non presentato», che scrivono «06/2026»
+ * o portano una data vera (letta da xlsx come AAAA-MM-GG), restavano senza
+ * periodo — quindi fuori dal conteggio del ritardo pur essendo scadute.
+ *
+ * Un valore che non è un periodo (un numero seriale di Excel, una descrizione)
+ * restituisce null, e la riga resta fuori dal conteggio come prima.
+ */
+export function periodoDaVera(testo: string): { anno: number; mese: number } | null {
+  const t = (testo ?? '').trim();
+  if (!t) return null;
+  const valido = (anno: number, mese: number) =>
+    Number.isFinite(anno) && anno >= 1990 && anno <= 2200 && mese >= 1 && mese <= 12
+      ? { anno, mese }
+      : null;
+  // «2026-05-01»: la cella è una data (xlsx con cellDates); il mese di
+  // competenza è quello della data.
+  const iso = /^(\d{4})-(\d{2})-\d{2}/.exec(t);
+  if (iso) return valido(Number(iso[1]), Number(iso[2]));
+  // «06/2026»: mese e anno, come li scrivono le righe F24.
+  const meseAnno = /^(\d{1,2})\/(\d{4})$/.exec(t);
+  if (meseAnno) return valido(Number(meseAnno[2]), Number(meseAnno[1]));
+  // «202506 - 202506»: anno e mese in coda, formato delle gestioni.
+  const annoMese = /(\d{4})\s*\/?\s*(\d{2})\s*$/.exec(t);
+  if (annoMese) return valido(Number(annoMese[1]), Number(annoMese[2]));
+  return null;
 }
