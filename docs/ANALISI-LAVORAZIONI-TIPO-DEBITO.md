@@ -694,3 +694,31 @@ quelle cifre le aveva sempre.
 Test aggiunti: 7 (un foglio costruito nel test con le righe reali del caso: lettura
 dell'importo, nessun doppio conteggio quando il totale c'è, trattamenti, ritardo sui nuovi
 formati di periodo e sulle sole partite della base).
+
+### 10.9 Lo stesso debito scritto due volte (0.139.6)
+
+Con l'importo letto dalle colonne di dettaglio (§10.8) sono rientrate nelle somme le quattro
+righe «F24 Non presentato» — ma quelle cifre il file le scrive **due volte**, perché le ripete
+sotto «Denunce non trasmesse», nello stesso periodo e per lo stesso importo. È un'unica
+obbligazione descritta da due lati: il versamento non eseguito e la denuncia non trasmessa.
+Sommando entrambe, l'esposizione V.E.R.A. dichiarava 133.920,67 € con 31.236,35 € contati due
+volte; il debito reale è 102.684,32 €.
+
+**Come è risolto.** `src/lib/debitiEnte/duplicatiVera.ts` — `denunceDuplicateVera` accoppia una
+riga «F24» a una riga «denunce» con lo stesso periodo di competenza (le tre forme di
+`periodoDaVera`) e lo stesso importo al centesimo, uno a uno. Senza periodo non accoppia: senza
+il periodo non c'è prova che sia lo stesso debito, e scontarne una a caso toglierebbe
+dall'esposizione un debito che esiste. Si sconta la riga **denunce**, non quella F24: la base
+della soglia dell'art. 25-novies è fatta dai contributi, e quelli stanno nella riga F24.
+
+**L'ambiguità si dichiara.** Scontare in silenzio avrebbe reso il totale inspiegabile a chi
+somma le righe del file. L'avviso compare nel triage (numero, periodi, importo scontato), nel
+contesto della relazione — dove il numero non va presentato come debito aggiuntivo —, sotto
+l'esposizione della scheda Posizione V.E.R.A., e in coda alla dichiarazione delle già
+contabilizzate nei documenti per reparto e nel report per unità operativa (`duplicati` in
+`ripartisciRigheVera`, letto da `testiContabilizzate`). La riga resta in elenco: la denuncia va
+comunque trasmessa, quindi si sconta la cifra, non la posizione.
+
+Test aggiunti: 12 (`duplicatiVera.test.ts`: le quattro coppie del file reale, l'accoppiamento
+uno a uno, periodo o importo diversi, riga senza periodo, lettura attraverso il file xlsx, e
+l'effetto su dichiarazione e documenti).

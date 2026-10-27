@@ -92,6 +92,7 @@ import {
   totaliVera,
   type RigaVera,
 } from '@/lib/debitiEnte/veraImport';
+import { denunceDuplicateVera } from '@/lib/debitiEnte/duplicatiVera';
 import {
   sostituisciDebitiVeraAction,
   ottieniMappaturaTitoliVera,
@@ -805,6 +806,19 @@ export function VerificaSaluteAzienda({
           // evita che l'operatore si chieda perché la soglia INPS non usa il
           // totale del file.
           const totVera = totaliVera(righe);
+          // LO STESSO DEBITO SCRITTO DUE VOLTE. Il file può descrivere la
+          // stessa obbligazione come «F24 non presentato» e come «Denunce non
+          // trasmesse», stesso periodo e stesso importo. L'esposizione la conta
+          // una volta sola: se il conto non tornasse con la somma delle righe,
+          // chi legge penserebbe a un errore invece che al file.
+          const doppie = denunceDuplicateVera(righe);
+          if (doppie.righe > 0) {
+            const importi =
+              doppie.righe === 1 ? 'un importo compare' : `${doppie.righe} importi compaiono`;
+            note.push(
+              `V.E.R.A.: ${importi} due volte — come «F24 non presentato» e come «Denunce non trasmesse», nello stesso periodo (${doppie.periodi.join(', ')}) e per lo stesso importo (${Math.round(doppie.totale).toLocaleString('it-IT')} €). È la stessa obbligazione descritta due volte: l’esposizione la conta una volta sola. La riga «Denunce non trasmesse» resta in elenco perché dice una cosa che l’altra non dice — la denuncia va trasmessa — ma la sua cifra non si somma a quella del F24.`
+            );
+          }
           if (totVera.creditiAgente > 0) {
             note.push(
               `V.E.R.A.: ${Math.round(totVera.creditiAgente).toLocaleString('it-IT')} € sono crediti già affidati all’Agente della Riscossione (cartelle, al netto delle partite sospese). Contano per la soglia dell’Agente (art. 25-novies, comma 1, lett. d), non per quella INPS.`
@@ -1420,6 +1434,7 @@ export function VerificaSaluteAzienda({
     contabilizzate: documentiReparti.contabilizzate,
     contabilizzateAdr: documentiReparti.contabilizzateAdr,
     codiciAdr: documentiReparti.codiciAdr,
+    duplicati: documentiReparti.duplicati,
   };
   const notaContabilizzate = testiContabilizzate(avanzamentoUo, formattaImportoEuro).collegiale;
 

@@ -107,6 +107,11 @@ export interface EsitoComunicazioniVera {
   contabilizzateAdr: RiepilogoRighe;
   /** I codici TS presenti fra le posizioni di cui sopra. */
   codiciAdr: string[];
+  /**
+   * Lo stesso debito scritto due volte nel file (F24 e denunce dello stesso
+   * periodo): scontato dalla dichiarazione delle già contabilizzate.
+   */
+  duplicati: RiepilogoRighe;
 }
 
 // Un formatter solo per tutti gli importi. `toLocaleString` ne costruisce uno
@@ -163,6 +168,8 @@ export interface RaggruppamentoPerReparto {
   /** Già contabilizzate con la sola decisione AdR aperta (TS 25, 27 e 81). */
   contabilizzateAdr: RiepilogoRighe;
   codiciAdr: string[];
+  /** Lo stesso debito scritto due volte nel file: contato una volta sola. */
+  duplicati: RiepilogoRighe;
 }
 
 export interface InputRaggruppamento {
@@ -290,6 +297,7 @@ export function raggruppaPerReparto(input: InputRaggruppamento): RaggruppamentoP
     contabilizzate: ripartizione.contabilizzate,
     contabilizzateAdr: ripartizione.contabilizzateAdr,
     codiciAdr: ripartizione.codiciAdr,
+    duplicati: ripartizione.duplicati,
   };
 
   return raggruppamento;

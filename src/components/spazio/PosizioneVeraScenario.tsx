@@ -42,6 +42,7 @@ import {
 import { ottieniMaterieEnteAction, ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
 import type { MateriaEnte } from '@/lib/titoliEnte/materie';
 import { materiaPerRigaVera } from '@/lib/titoliEnte/materiaVera';
+import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
 import { chiaveMateria } from '@/lib/lavorazioni/instradamentoMateria';
 import { ottieniDebitiEnte, type RigaDebitoEnte } from '@/app/actions/debitiEnte';
 import { etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
@@ -374,9 +375,15 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   // Il TRATTAMENTO (dalla catena Natura+Stato) decide se una riga vale come
   // importo. Solo contabilizzato e da_contabilizzare hanno un importo noto;
   // potenziale = importo ignoto (evidenza, fuori dai totali); ignora = escluso.
-  const righeImporto = righeVera.filter(
-    (r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare'
-  );
+  //
+  // LA STESSA CIFRA UNA VOLTA SOLA: se il file descrive lo stesso debito come
+  // «F24 non presentato» e come «Denunce non trasmesse» (stesso periodo e
+  // stesso importo), le somme lo contano una volta — vedi `duplicatiVera.ts`.
+  const doppieVera = denunceDuplicateVera(righeVera);
+  const escluseDoppie = insiemeEsclusi(doppieVera);
+  const righeImporto = righeVera
+    .filter((_, i) => !escluseDoppie.has(i))
+    .filter((r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare');
   const righePotenziali = righeVera.filter((r) => r.trattamento === 'potenziale');
 
   // Confronto certo-per-certo per categoria (solo importi noti).
@@ -419,7 +426,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   const espTotale = espContab + espDaContab;
 
   // Da contabilizzare (trattamento da_contabilizzare), raggruppato per dicitura di Stato.
-  const righeNonContab = righeVera.filter((r) => r.trattamento === 'da_contabilizzare');
+  const righeNonContab = righeImporto.filter((r) => r.trattamento === 'da_contabilizzare');
   const totContabVera = espContab;
   const totNonContabVera = righeNonContab.reduce((a, r) => a + r.importo, 0);
   const perDicitura = Array.from(
@@ -862,6 +869,17 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
             contabilizzati sia quelli ancora da contabilizzare (Stato valorizzato). Le categorie
             neutre non sono incluse.
           </p>
+          {doppieVera.righe > 0 && (
+            <p className="text-[10px] text-amber-300 mt-2">
+              {doppieVera.righe === 1
+                ? 'Un importo compare'
+                : `${doppieVera.righe} importi compaiono`}{' '}
+              due volte nel file — come «F24 non presentato» e come «Denunce non trasmesse», nello
+              stesso periodo ({doppieVera.periodi.join(', ')}) — per {euro(doppieVera.totale)}: è lo
+              stesso debito, contato una volta sola. La denuncia resta in elenco perché va comunque
+              trasmessa.
+            </p>
+          )}
         </div>
       )}
 

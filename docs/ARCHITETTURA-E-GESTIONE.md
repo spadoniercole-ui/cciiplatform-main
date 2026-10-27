@@ -158,6 +158,16 @@ Drizzle è marginale.
    Il ritardo di oltre 90 giorni si misura sui periodi delle partite contabilizzate, nelle
    forme in cui il file li scrive («202506 - 202506», «06/2026», una data) e solo su quelle
    con una quota di contributi, cioè le stesse che formano la base della soglia INPS.
+   **Lo stesso debito può essere scritto due volte**: come «F24 non presentato» e come
+   «Denunce non trasmesse», nello stesso periodo e per lo stesso importo — il versamento non
+   eseguito e la denuncia non trasmessa sono due lati di un'unica obbligazione. Il
+   riconoscimento (`src/lib/debitiEnte/duplicatiVera.ts`) è stretto — natura contrapposta,
+   stesso periodo, stesso importo al centesimo, in accoppiamento uno a uno — e senza periodo
+   non accoppia nulla. La cifra si conta una volta sola (si sconta la riga denunce, perché la
+   base della soglia è fatta dai contributi del F24) e l'ambiguità si dichiara: nel triage,
+   nel contesto della relazione, nella scheda Posizione V.E.R.A. e in coda alla dichiarazione
+   delle già contabilizzate nei documenti. La riga resta in elenco, perché la denuncia va
+   comunque trasmessa: si sconta la cifra, non la posizione.
    Dalle sue righe, con la tabella `lavorazioni_tipo_debito`
    (Parametri › Lavorazioni), il triage prepara una comunicazione per collega — solo testo
    da copiare e inviare personalmente, mai un invio automatico — e, con la stessa

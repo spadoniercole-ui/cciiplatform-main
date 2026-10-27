@@ -26,6 +26,39 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.6 — 2026-10-27
+
+**Lo stesso debito scritto due volte nel V.E.R.A. non si somma più due volte**
+
+Con la lettura dell'importo dalle colonne di dettaglio (0.139.5) sono rientrate nelle somme
+le righe «F24 Non presentato». Ma quelle cifre il file le scrive **due volte**: le ripete
+sotto «Denunce non trasmesse», nello stesso periodo e per lo stesso importo. È la stessa
+obbligazione descritta da due lati — il versamento non eseguito e la denuncia non
+trasmessa — e sommarle dichiarava un'esposizione più alta del debito vero: sul file di prova
+133.920,67 € con 31.236,35 € contati due volte. Scontata la ripetizione, l'esposizione torna a
+102.684,32 €, che è il debito reale verso l'ente.
+
+- **Il riconoscimento è stretto** (`src/lib/debitiEnte/duplicatiVera.ts`): stessa natura
+  contrapposta («F24» e «denunce»), stesso periodo di competenza (i tre formati del file) e
+  stesso importo al centesimo, in accoppiamento uno a uno. Senza periodo non si accoppia:
+  senza il periodo non c'è prova che sia lo stesso debito, e scontarne una a caso toglierebbe
+  dall'esposizione un debito che esiste.
+- **Si sconta la riga «Denunce non trasmesse», non quella F24.** La cifra che resta è quella
+  del F24, la riga che porta la quota di contributi e che quindi entra nella base della
+  soglia dell'art. 25-novies.
+- **L'ambiguità si dichiara, non si corregge in silenzio.** Il triage aggiunge un avviso con
+  numero, periodi e importo scontato; la stessa riga entra nel contesto della relazione, così
+  il numero non viene presentato come debito aggiuntivo; la scheda Posizione V.E.R.A. lo dice
+  sotto l'esposizione; i documenti per gli uffici e il report per unità operativa aggiungono
+  in coda alla dichiarazione delle già contabilizzate che N posizioni sono lo stesso debito
+  scritto due volte e sono contate una volta sola.
+- **La riga resta in elenco**, perché dice qualcosa che l'altra non dice: la denuncia va
+  comunque trasmessa. Si sconta la cifra dalle somme, non la posizione dal lavoro.
+
+Verifiche: 12 test nuovi (`duplicatiVera.test.ts`, con le quattro coppie del file reale e un
+foglio costruito nel test che attraversa il lettore V.E.R.A.), più i test dei documenti su
+dichiarazione e conteggio. Suite intera verde.
+
 ## 0.139.5 — 2026-10-27
 
 **Il debito che nel V.E.R.A. c'è anche quando il «Totale debito» è vuoto**

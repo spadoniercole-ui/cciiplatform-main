@@ -136,6 +136,8 @@ export interface DocumentoUo {
   contabilizzate: RiepilogoRighe;
   contabilizzateAdr: RiepilogoRighe;
   codiciAdr: string[];
+  /** Lo stesso debito scritto due volte nel file: contato una volta sola. */
+  duplicati?: RiepilogoRighe;
   nomeFile: string;
   versione: string;
 }
@@ -168,6 +170,7 @@ export interface EsitoReportUo {
   contabilizzate: RiepilogoRighe;
   contabilizzateAdr: RiepilogoRighe;
   codiciAdr: string[];
+  duplicati: RiepilogoRighe;
   /** Voci elencate in un documento (codici o materie) senza lavorazioni configurate. */
   codiciSenzaLavorazione: number;
 }
@@ -425,6 +428,7 @@ export function componiReportUo(input: {
         contabilizzate: ripartizione.contabilizzate,
         contabilizzateAdr: ripartizione.contabilizzateAdr,
         codiciAdr: ripartizione.codiciAdr,
+        duplicati: ripartizione.duplicati,
       };
       const versione = versioneReportUo(contenuto);
       return {
@@ -451,6 +455,7 @@ export function componiReportUo(input: {
     contabilizzate: ripartizione.contabilizzate,
     contabilizzateAdr: ripartizione.contabilizzateAdr,
     codiciAdr: ripartizione.codiciAdr,
+    duplicati: ripartizione.duplicati,
     codiciSenzaLavorazione,
   };
 }

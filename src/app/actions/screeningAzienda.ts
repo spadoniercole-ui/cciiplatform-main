@@ -35,6 +35,7 @@ import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
 import { ottieniCategorieTipoDebito } from '@/app/actions/categorieTipoDebito';
 import { raggruppaPerTipoDebito, saldoRigaDebitoEnte } from '@/lib/debitiEnte/tipoDebito';
+import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
 import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
 import { ottieniEtichetteTipoDebito } from '@/app/actions/tipoDebitoConfig';
 import { calcolaQuadroDirettrici, type QuadroDirettrici } from '@/lib/checklist/scoringDirettrici';
@@ -412,9 +413,17 @@ export async function calcolaRiscontriNormativiAzienda(
     }
 
     // Esposizione VERA: contabilizzato + da_contabilizzare (esclude potenziale).
+    //
+    // La stessa obbligazione può comparire due volte nel file — «F24 non
+    // presentato» e «Denunce non trasmesse», stesso periodo e stesso importo —
+    // e sommarle entrambe dichiarerebbe un debito che non esiste (vedi
+    // `duplicatiVera.ts`). Si sconta la riga denunce: la cifra resta quella del
+    // F24, che è la riga che entra nella base della soglia INPS.
     let esposizioneVera: number | null = null;
     if (veraRis.success && veraRis.righe.length > 0) {
+      const doppie = insiemeEsclusi(denunceDuplicateVera(veraRis.righe));
       esposizioneVera = veraRis.righe
+        .filter((_, i) => !doppie.has(i))
         .filter((r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare')
         .reduce((acc, r) => acc + r.importo, 0);
     }
@@ -641,9 +650,14 @@ export async function generaScreeningAziendaAction(
       );
       // Solo i trattamenti con importo noto (contabilizzato, da_contabilizzare)
       // alimentano gli importi; "potenziale" ha importo ignoto, "ignora" è escluso.
-      const righeImporto = veraRis.righe.filter(
-        (r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare'
-      );
+      // Un importo scritto due volte nel file (F24 e denunce dello stesso
+      // periodo) è lo stesso debito: entra nelle somme una volta sola, così il
+      // certo-per-certo e l'esposizione non raccontano due storie diverse.
+      const duplicati = denunceDuplicateVera(veraRis.righe);
+      const doppie = insiemeEsclusi(duplicati);
+      const righeImporto = veraRis.righe
+        .filter((_, i) => !doppie.has(i))
+        .filter((r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare');
       const perCat = codici.map((cod) => {
         const contab = (debitiRis.success ? debitiRis.righe : [])
           .filter((r) => r.tipo === cod)
@@ -687,9 +701,19 @@ export async function generaScreeningAziendaAction(
       blocchiContesto.push(
         `Esposizione totale dell'azienda verso l'ente (dal file di verifica): ${formatta(espContab + espDaContab)} — comprensiva sia del già contabilizzato (${formatta(espContab)}) sia del da contabilizzare (${formatta(espDaContab)}). È il debito complessivo, non solo la quota già a ruolo.`
       );
+      // L'ambiguità va dichiarata, non solo corretta: chi confronta questo
+      // numero con la somma delle righe del file deve sapere qual è la
+      // differenza e perché.
+      if (duplicati.righe > 0) {
+        blocchiContesto.push(
+          `Attenzione, doppia scrittura nel file: ${duplicati.righe} ${
+            duplicati.righe === 1 ? 'importo compare' : 'importi compaiono'
+          } due volte — come «F24 non presentato» e come «Denunce non trasmesse», nello stesso periodo (${duplicati.periodi.join(', ')}) e per lo stesso importo (${formatta(duplicati.totale)}). È la stessa obbligazione descritta due volte: nell'esposizione è contata una volta sola. Non presentarla come debito aggiuntivo.`
+        );
+      }
 
       // Da contabilizzare (trattamento da_contabilizzare), per stato di lavorazione.
-      const nonContab = veraRis.righe.filter((r) => r.trattamento === 'da_contabilizzare');
+      const nonContab = righeImporto.filter((r) => r.trattamento === 'da_contabilizzare');
       if (nonContab.length > 0) {
         const perDicitura = Array.from(
           nonContab.reduce((m, r) => {

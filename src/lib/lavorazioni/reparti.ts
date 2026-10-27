@@ -95,6 +95,12 @@ export interface DocumentoReparto {
   contabilizzate: RiepilogoRighe;
   contabilizzateAdr: RiepilogoRighe;
   codiciAdr: string[];
+  /**
+   * Lo stesso debito scritto due volte nel file («F24 non presentato» e
+   * «Denunce non trasmesse»): scontato dalla dichiarazione qui sopra, e detto
+   * sul foglio perché il conto torni a chi somma le righe del V.E.R.A.
+   */
+  duplicati?: RiepilogoRighe;
   /** Nome del file da scaricare, già sicuro per il filesystem. */
   nomeFile: string;
   /**
@@ -116,6 +122,7 @@ export interface EsitoDocumentiReparto {
   contabilizzate: RiepilogoRighe;
   contabilizzateAdr: RiepilogoRighe;
   codiciAdr: string[];
+  duplicati: RiepilogoRighe;
 }
 
 /** Nome file leggibile e senza caratteri che il browser o il sistema rifiutano. */
@@ -263,6 +270,7 @@ export function preparaDocumentiReparto(
       contabilizzate: raggruppamento.contabilizzate,
       contabilizzateAdr: raggruppamento.contabilizzateAdr,
       codiciAdr: raggruppamento.codiciAdr,
+      duplicati: raggruppamento.duplicati,
     };
 
     const versione = versioneDocumentoReparto(contenuto);
@@ -282,5 +290,6 @@ export function preparaDocumentiReparto(
     contabilizzate: raggruppamento.contabilizzate,
     contabilizzateAdr: raggruppamento.contabilizzateAdr,
     codiciAdr: raggruppamento.codiciAdr,
+    duplicati: raggruppamento.duplicati,
   };
 }
