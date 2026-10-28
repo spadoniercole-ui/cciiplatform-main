@@ -26,6 +26,29 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.16 — 2026-10-28
+
+**Nel triage si vede da dove viene ogni posizione di un ufficio, e perché.** Accanto a ogni
+report per unità operativa c'è ora l'elenco delle voci del V.E.R.A. che quel foglio contiene —
+sezione, denominazione, quante posizioni, importo — con la via per cui ci sono arrivate: dal
+codice di partita, dalla voce che si riconduce da sé alla materia, dal titolo della sezione
+quando la voce non basta, oppure da una mappatura della sezione.
+
+**E si vede subito una mappatura che non sposta niente.** La mappatura di sezione è un ripiego:
+vale per le voci che nessuna materia riconosce. Quando le voci si riconducono già da sole, la
+scelta salvata resta ma non cambia il documento — e prima lo si poteva solo dedurre da un
+report che non si era mosso. Ora un riquadro dichiara sezione, destinazione scelta, posizioni e
+importo che la mappatura non ha spostato, e dice dove si cambia davvero la destinazione (la
+materia della voce). Nel modello, la provenienza di una riga è un dato del report
+(`MotivoInstradamento`, `ProvenienzaVoce`, `MappatureSenzaEffetto`), non una frase della
+scheda: la stessa informazione resta disponibile a chi legge il report da un'altra parte.
+
+I documenti non cambiano: la provenienza non entra nella versione del PDF, quindi i fogli già
+scaricati dagli uffici restano validi e non vanno riscaricati.
+
+Test aggiunti: 3 (la voce che si riconduce da sé contro la mappatura scavalcata; codice di
+partita e titolo di sezione distinti; nessuna mappatura inerte da dichiarare).
+
 ## 0.139.15 — 2026-10-28
 
 **La vigilanza torna a ricevere i suoi verbali.** Nel V.E.R.A. vero i verbali di evasione

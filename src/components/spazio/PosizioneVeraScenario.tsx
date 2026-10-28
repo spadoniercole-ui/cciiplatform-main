@@ -1114,11 +1114,13 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
                           title={
                             r.materia.via === 'codice'
                               ? `Dal codice di partita${r.materia.confermata ? ' — materia confermata' : ' — materia non ancora confermata'}`
-                              : 'Proposta dalla descrizione: nessun codice di partita nella riga'
+                              : r.materia.via === 'voce'
+                                ? 'Ricavata dalla voce della posizione: nessun codice di partita nella riga'
+                                : 'Ricavata dal solo titolo della sezione: la voce non basta e manca il codice di partita'
                           }
                         >
                           {r.materia.nome}
-                          {r.materia.via === 'descrizione' ? ' ?' : ''}
+                          {r.materia.via !== 'codice' ? ' ?' : ''}
                         </span>
                       ) : (
                         <span className="text-[10px] text-slate-400">—</span>

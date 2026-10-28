@@ -27,8 +27,13 @@ export interface MateriaRigaVera {
   id: number;
   nome: string;
   confermata: boolean;
-  /** Come è stata trovata: per codice (certo) o per descrizione (proposta). */
-  via: 'codice' | 'descrizione';
+  /**
+   * Come è stata trovata: per codice (certo), dalla voce della posizione, o
+   * dal solo titolo della sezione (l'ultimo ripiego, quando la voce non dice
+   * niente). Le tre vie si distinguono perché non valgono lo stesso: il codice
+   * è un fatto, la voce è una lettura, il titolo di sezione è un contenitore.
+   */
+  via: 'codice' | 'voce' | 'sezione';
 }
 
 /** Codice di partita nella voce: «TS 27 flusso…» → 27; «18 - Verbale…» → 18. */
@@ -86,7 +91,7 @@ export function materiaPerRigaVera(
   if (perVoce !== null) {
     return out(
       materie.find((m) => m.id === perVoce),
-      'descrizione'
+      'voce'
     );
   }
   const id = materiaSuggeritaPerDescrizione(`${voce} ${sezione}`, materie);
@@ -94,6 +99,6 @@ export function materiaPerRigaVera(
     ? null
     : out(
         materie.find((m) => m.id === id),
-        'descrizione'
+        'sezione'
       );
 }

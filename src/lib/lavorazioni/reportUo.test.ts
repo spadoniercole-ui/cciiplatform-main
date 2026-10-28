@@ -362,6 +362,11 @@ describe('report UO: le sospese e la mappatura delle sezioni', () => {
     expect(d.codici[0].codice).toBeNull();
     expect(d.codici[0].materia).toBe('Contributi INPS');
     expect(d.totale).toBe(830);
+    // La via è la categoria, non la materia: la scheda lo dice con questa parola.
+    expect(d.codici[0].origini[0]).toMatchObject({
+      voce: 'Compensi non versati',
+      motivo: 'categoria',
+    });
     expect(esito.senzaCodice).toEqual({ righe: 0, totale: 0 });
   });
 
@@ -487,5 +492,113 @@ describe('report UO: le sospese e la mappatura delle sezioni', () => {
     expect(vigilanza.codici[0].materia).toBe('Verbali ispettivi');
     // La mappatura resta utile dove la voce non basta.
     expect(perUfficio.get('Presidio dei flussi informativi')!.totale).toBeCloseTo(191.47, 2);
+  });
+});
+
+describe('report UO: le voci assegnate a ogni ufficio, e perché', () => {
+  const materie = [
+    { id: 10, nome: 'Flussi Uniemens' },
+    { id: 11, nome: 'Verbali ispettivi' },
+  ];
+  const lavorazioni = [
+    lav({ id: 1, materiaId: 10, dipendenza: 'Presidio dei flussi informativi' }),
+    lav({
+      id: 2,
+      materiaId: 11,
+      dipendenza: 'Vigilanza documentale',
+      tipologia: 'Acquisizione del verbale',
+    }),
+  ];
+
+  // IL CASO CHE SI DEVE VEDERE A COLPO D'OCCHIO. La sezione dei verbali è
+  // mappata sui flussi; la voce però si riconduce da sé, quindi il verbale va
+  // alla vigilanza e la mappatura non sposta niente. Senza questa traccia la
+  // scheda mostrerebbe solo i due documenti giusti, e chi ha mappato non
+  // saprebbe che la sua scelta è stata scavalcata.
+  it('dice da quale voce arriva ogni posizione, e quale mappatura non ha spostato nulla', () => {
+    const esito = componiReportUo({
+      azienda: 'Aretusea Detergenti S.r.l.',
+      dataVerifica: '2026-10-28',
+      titoli: [],
+      materie,
+      lavorazioni,
+      righe: [
+        riga({
+          sezione: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+          voce: 'Verbale Evasione',
+          importo: 4_959.16,
+          categoria: 'MATERIA:10',
+        }),
+        riga({
+          sezione: 'Gestione artisti',
+          voce: 'Compensi non versati',
+          importo: 830,
+          categoria: 'MATERIA:10',
+        }),
+      ],
+    });
+
+    const vigilanza = esito.documenti.find((d) => d.dipendenza === 'Vigilanza documentale')!;
+    expect(vigilanza.codici[0].origini).toEqual([
+      {
+        sezione: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+        voce: 'Verbale Evasione',
+        motivo: 'voce',
+        righe: 1,
+        importo: 4_959.16,
+      },
+    ]);
+
+    const presidio = esito.documenti.find(
+      (d) => d.dipendenza === 'Presidio dei flussi informativi'
+    )!;
+    expect(presidio.codici[0].origini).toEqual([
+      {
+        sezione: 'Gestione artisti',
+        voce: 'Compensi non versati',
+        motivo: 'mappatura',
+        righe: 1,
+        importo: 830,
+      },
+    ]);
+
+    // Solo la mappatura scavalcata si dichiara inerte: quella che ha deciso i
+    // «Compensi non versati» ha fatto il suo lavoro.
+    expect(esito.mappatureSenzaEffetto).toEqual([
+      {
+        sezione: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+        destinazione: 'Flussi Uniemens',
+        righe: 1,
+        totale: 4_959.16,
+      },
+    ]);
+  });
+
+  it('distingue il codice di partita dal titolo della sezione', () => {
+    const esito = componiReportUo({
+      ...base,
+      righe: [riga(), riga({ voce: 'Interessi di mora', importo: 40 })],
+    });
+    const d = esito.documenti[0];
+    expect(d.codici.find((c) => c.codice === '27')!.origini).toEqual([
+      {
+        sezione: 'FLUSSI UNIEMENS',
+        voce: 'TS 27 flusso Uniemens non versato',
+        motivo: 'codice',
+        righe: 1,
+        importo: 1_200,
+      },
+    ]);
+    // «Interessi di mora» da sola non dice niente: la materia arriva dal
+    // titolo della sezione, e la scheda lo dichiara diversamente dal codice.
+    expect(d.codici.find((c) => c.codice === null)!.origini[0]).toMatchObject({
+      voce: 'Interessi di mora',
+      motivo: 'sezione',
+    });
+    expect(esito.mappatureSenzaEffetto).toEqual([]);
+  });
+
+  it('senza mappature salvate non c’è nessuna mappatura inerte da dichiarare', () => {
+    expect(componiReportUo({ ...base, righe: [riga()] }).mappatureSenzaEffetto).toEqual([]);
   });
 });

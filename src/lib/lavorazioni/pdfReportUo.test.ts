@@ -32,6 +32,7 @@ const documento = (over: Partial<DocumentoUo> = {}): DocumentoUo => ({
       materia: 'Flussi Uniemens',
       importo: 2_000,
       righe: 2,
+      origini: [],
       inadempienze: [
         {
           sezione: 'FLUSSI UNIEMENS',
@@ -63,6 +64,7 @@ const documento = (over: Partial<DocumentoUo> = {}): DocumentoUo => ({
       materia: null,
       importo: 500,
       righe: 1,
+      origini: [],
       inadempienze: [
         {
           sezione: 'VERBALI',
@@ -130,6 +132,7 @@ describe('generaPdfReportUo', () => {
             materia: null,
             importo: 500,
             righe: 1,
+            origini: [],
             inadempienze: [
               {
                 sezione: 'VERBALI',
@@ -162,6 +165,7 @@ describe('generaPdfReportUo', () => {
             materia: 'Flussi Uniemens',
             importo: 40,
             righe: 1,
+            origini: [],
             inadempienze: [
               {
                 sezione: 'FLUSSI UNIEMENS',
@@ -196,6 +200,7 @@ describe('generaPdfReportUo', () => {
       materia: `Materia ${i + 1}`,
       importo: 1_000 + i,
       righe: 2,
+      origini: [],
       inadempienze: [
         {
           sezione: 'FLUSSI UNIEMENS',

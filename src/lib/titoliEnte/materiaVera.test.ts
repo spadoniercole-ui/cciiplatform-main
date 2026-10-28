@@ -41,7 +41,8 @@ describe('materia di una riga V.E.R.A.', () => {
       materie
     );
     expect(adr?.nome).toBe('Avvisi di addebito');
-    expect(adr?.via).toBe('descrizione');
+    // La voce («Adr …») basta da sola: la sezione non ha deciso niente.
+    expect(adr?.via).toBe('voce');
     expect(materiaPerRigaVera('Voce misteriosa', 'X', [], materie)).toBeNull();
   });
 
@@ -49,12 +50,13 @@ describe('materia di una riga V.E.R.A.', () => {
   // decidere è il titolo di sezione, ogni posizione senza codice diventa
   // «flussi» — e l'ufficio di vigilanza non riceve più il suo verbale.
   it('la voce vince sul titolo della sezione', () => {
-    expect(materiaPerRigaVera('Verbale Evasione', 'FLUSSI UNIEMENS', [], materie)?.nome).toBe(
-      'VERBALI ISPETTIVI'
-    );
-    // La sezione resta la via di ripiego quando la voce da sola non dice nulla.
-    expect(materiaPerRigaVera('Interessi di mora', 'FLUSSI UNIEMENS', [], materie)?.nome).toBe(
-      'FLUSSI UNIEMENS'
-    );
+    const verbale = materiaPerRigaVera('Verbale Evasione', 'FLUSSI UNIEMENS', [], materie);
+    expect(verbale?.nome).toBe('VERBALI ISPETTIVI');
+    expect(verbale?.via).toBe('voce');
+    // La sezione resta la via di ripiego quando la voce da sola non dice nulla,
+    // e le due vie si distinguono: non valgono lo stesso.
+    const interessi = materiaPerRigaVera('Interessi di mora', 'FLUSSI UNIEMENS', [], materie);
+    expect(interessi?.nome).toBe('FLUSSI UNIEMENS');
+    expect(interessi?.via).toBe('sezione');
   });
 });

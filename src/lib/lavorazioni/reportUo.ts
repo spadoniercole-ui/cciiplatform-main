@@ -115,6 +115,37 @@ export interface LavorazioneUo {
   esito: string | null;
 }
 
+/**
+ * PERCHÉ UNA POSIZIONE È ARRIVATA AL SUO UFFICIO.
+ *
+ * È la differenza fra un report che si scarica e un report che si può
+ * controllare: guardando le voci di un ufficio si deve capire se ci sono
+ * arrivate per il loro codice, perché la voce stessa dice che cos'è quel
+ * debito, o soltanto perché una sezione è stata mappata. La quarta e la quinta
+ * via sono le mappature; le prime tre no. Senza questa distinzione una
+ * mappatura senza effetto — la voce si riconduceva già da sé — è
+ * indistinguibile da una mappatura applicata.
+ */
+export type MotivoInstradamento = 'codice' | 'voce' | 'sezione' | 'mappatura' | 'categoria';
+
+/** Una voce del V.E.R.A. dentro un documento, e come ci è arrivata. */
+export interface ProvenienzaVoce {
+  sezione: string;
+  voce: string;
+  motivo: MotivoInstradamento;
+  righe: number;
+  importo: number;
+}
+
+/** Le etichette con cui la scheda del triage dice perché una voce è lì. */
+export const ETICHETTE_MOTIVO: Record<MotivoInstradamento, string> = {
+  codice: 'dal codice di partita',
+  voce: 'la voce si riconduce da sé alla materia',
+  sezione: 'dal titolo della sezione, perché la voce non basta',
+  mappatura: 'dalla mappatura della sezione',
+  categoria: 'dalla mappatura della sezione, su una categoria di debito',
+};
+
 export interface CodiceUo {
   /** Il codice di partita; null quando la voce non ne porta uno. */
   codice: string | null;
@@ -125,6 +156,13 @@ export interface CodiceUo {
   inadempienze: InadempienzaUo[];
   /** Le lavorazioni della materia, in ordine; vuoto se non ne ha. */
   lavorazioni: LavorazioneUo[];
+  /**
+   * Le voci del V.E.R.A. che compongono questa voce del documento, con il
+   * motivo per cui sono arrivate qui. Una voce del file può comparire più di
+   * una volta, con motivi diversi: due righe della stessa sezione possono
+   * arrivare qui una per la loro descrizione e l'altra per la mappatura.
+   */
+  origini: ProvenienzaVoce[];
 }
 
 /**
@@ -183,10 +221,26 @@ export interface CodiceSenzaDipendenza {
   totale: number;
 }
 
+/**
+ * Una mappatura di sezione che non sposta nessuna posizione: le voci si
+ * riconducono già da sole alla loro materia. Resta salvata — vale per le voci
+ * che non si riconducono — ma chi l'ha fatta deve saperlo, invece di dedurlo
+ * da un documento che non si è mosso.
+ */
+export interface MappaturaInerte {
+  sezione: string;
+  /** La destinazione scelta per la sezione: materia, o etichetta della categoria. */
+  destinazione: string;
+  righe: number;
+  totale: number;
+}
+
 export interface EsitoReportUo {
   documenti: DocumentoUo[];
   /** Voci che nessuna dipendenza reclama: configurazione mancante. */
   senzaDipendenza: CodiceSenzaDipendenza[];
+  /** Mappature di sezione che non hanno spostato nulla (vedi `MappaturaInerte`). */
+  mappatureSenzaEffetto: MappaturaInerte[];
   /**
    * Posizioni senza codice di partita E senza una materia riconoscibile:
    * nessuna chiave con cui attribuirle a un ufficio.
@@ -375,6 +429,8 @@ export function componiReportUo(input: {
     materiaId: number | null;
     materia: string | null;
     righe: RigaVeraReportUo[];
+    /** sezione + voce + motivo → quante posizioni, e per quanto. */
+    origini: Map<string, ProvenienzaVoce>;
   }
 
   // dipendenza (chiave dell'ufficio) → voce → righe
@@ -382,7 +438,65 @@ export function componiReportUo(input: {
   const orfani = new Map<string, VoceUo>();
   // Ufficio → posizioni sospese che gli appartengono.
   const sospesePerUfficio = new Map<string, { dipendenza: string; voci: SospesaUo[] }>();
+  // Le mappature di sezione che non hanno deciso nessuna posizione.
+  const mappatureInerti = new Map<string, MappaturaInerte>();
   let codiciSenzaLavorazione = 0;
+
+  /** L'ufficio che lavora un codice o una materia: il codice vince, la materia è la predefinita. */
+  const ufficioDi = (dipendenza: string | null, materiaId: number | null) =>
+    unaRiga(dipendenzaEffettiva({ dipendenza, materiaId }, input.lavorazioni).valore ?? '');
+
+  /** Nuova voce del documento, senza righe: la riga che la apre si annota dopo. */
+  const nuovaVoce = (posto: {
+    codice: string | null;
+    materiaId: number | null;
+    materia: string | null;
+  }): VoceUo => ({
+    codice: posto.codice,
+    materiaId: posto.materiaId,
+    materia: posto.materia,
+    righe: [],
+    origini: new Map(),
+  });
+
+  /** Annota da quale voce del file arriva questa riga, e per quale via. */
+  const annotaOrigine = (voce: VoceUo, r: RigaVeraReportUo, motivo: MotivoInstradamento) => {
+    const sezione = unaRiga(r.sezione);
+    const denominazione = unaRiga(r.voce);
+    const chiave = `${sezione.toLowerCase()}|${denominazione.toLowerCase()}|${motivo}`;
+    const origine = voce.origini.get(chiave) ?? {
+      sezione,
+      voce: denominazione,
+      motivo,
+      righe: 0,
+      importo: 0,
+    };
+    origine.righe += 1;
+    origine.importo += r.importo;
+    voce.origini.set(chiave, origine);
+  };
+
+  /**
+   * Una destinazione scelta sulla sezione che non ha deciso questa riga. Si
+   * annota sezione e destinazione: la mappatura resta salvata, ma su queste
+   * posizioni non ha spostato niente, e dirlo è l'unico modo per non far
+   * credere che sia stata applicata.
+   */
+  const annotaMappaturaInerte = (r: RigaVeraReportUo) => {
+    const chiave = unaRiga(r.categoria ?? '').toUpperCase();
+    if (!chiave) return;
+    const materia = materiaDaChiave(chiave);
+    const destinazione =
+      materia !== null
+        ? (nomeMateria(materia) ?? `Materia ${materia}`)
+        : (categoriaUfficio.get(chiave)?.etichetta ?? chiave);
+    const sezione = unaRiga(r.sezione) || '(sezione senza titolo)';
+    const k = `${sezione.toLowerCase()}|${destinazione.toLowerCase()}`;
+    const voce = mappatureInerti.get(k) ?? { sezione, destinazione, righe: 0, totale: 0 };
+    voce.righe += 1;
+    voce.totale += r.importo;
+    mappatureInerti.set(k, voce);
+  };
 
   /**
    * Dove va una riga, e sotto quale chiave.
@@ -396,37 +510,69 @@ export function componiReportUo(input: {
    * l'ufficio di vigilanza senza documento. Se nemmeno la mappatura risponde, la
    * posizione resta senza chiave: si conta e si dichiara.
    */
-  const colloca = (r: RigaVeraReportUo) => {
+  interface Posto {
+    codice: string | null;
+    materiaId: number | null;
+    materia: string | null;
+    dipendenza: string;
+    chiaveVoce: string;
+    motivo: MotivoInstradamento;
+  }
+
+  /**
+   * Dove va una riga, sotto quale chiave, e perché. L'ordine delle vie è la
+   * regola: il codice, poi la materia che la voce dichiara, poi la mappatura
+   * della sezione — che resta il ripiego per ciò che il file non identifica.
+   */
+  const colloca = (r: RigaVeraReportUo): Posto | null => {
     const codice = codiceDaVoceVera(r.voce);
-    const materiaId = codice
-      ? (perCodiceTitolo.get(normalizzaCodice(codice))?.materiaId ?? null)
-      : (materiaPerRigaVera(r.voce, r.sezione, input.titoli, materieMinime)?.id ??
-        materiaDaChiave(r.categoria) ??
-        null);
-    const titolo = codice ? perCodiceTitolo.get(normalizzaCodice(codice)) : undefined;
-    if (!codice && materiaId === null) {
-      const cat = unaRiga(r.categoria ?? '').toUpperCase();
-      const perCategoria = cat ? categoriaUfficio.get(cat) : undefined;
-      if (!perCategoria) return null;
+    if (codice) {
+      const titolo = perCodiceTitolo.get(normalizzaCodice(codice));
+      const materiaId = titolo?.materiaId ?? null;
       return {
-        codice: null,
-        materiaId: null,
-        materia: perCategoria.etichetta,
-        dipendenza: perCategoria.dipendenza,
-        chiaveVoce: `CAT:${cat}`,
+        codice,
+        materiaId,
+        materia: nomeMateria(materiaId),
+        dipendenza: ufficioDi(titolo?.dipendenza ?? null, materiaId),
+        chiaveVoce: `C:${normalizzaCodice(codice)}`,
+        motivo: 'codice',
       };
     }
+
+    const perMateria = materiaPerRigaVera(r.voce, r.sezione, input.titoli, materieMinime);
+    if (perMateria) {
+      return {
+        codice: null,
+        materiaId: perMateria.id,
+        materia: nomeMateria(perMateria.id),
+        dipendenza: ufficioDi(null, perMateria.id),
+        chiaveVoce: `M:${perMateria.id}`,
+        motivo: perMateria.via === 'codice' ? 'codice' : perMateria.via,
+      };
+    }
+
+    const mappata = materiaDaChiave(r.categoria);
+    if (mappata !== null) {
+      return {
+        codice: null,
+        materiaId: mappata,
+        materia: nomeMateria(mappata),
+        dipendenza: ufficioDi(null, mappata),
+        chiaveVoce: `M:${mappata}`,
+        motivo: 'mappatura',
+      };
+    }
+
+    const cat = unaRiga(r.categoria ?? '').toUpperCase();
+    const perCategoria = cat ? categoriaUfficio.get(cat) : undefined;
+    if (!perCategoria) return null;
     return {
-      codice,
-      materiaId,
-      materia: nomeMateria(materiaId),
-      dipendenza: unaRiga(
-        dipendenzaEffettiva(
-          { dipendenza: titolo?.dipendenza ?? null, materiaId },
-          input.lavorazioni
-        ).valore ?? ''
-      ),
-      chiaveVoce: codice ? `C:${normalizzaCodice(codice)}` : `M:${materiaId}`,
+      codice: null,
+      materiaId: null,
+      materia: perCategoria.etichetta,
+      dipendenza: perCategoria.dipendenza,
+      chiaveVoce: `CAT:${cat}`,
+      motivo: 'categoria',
     };
   };
 
@@ -439,28 +585,25 @@ export function componiReportUo(input: {
       continue;
     }
 
+    // La destinazione scelta sulla sezione che questa riga non ha deciso: si
+    // annota, perché una mappatura senza effetto è altrimenti indistinguibile
+    // da una mappatura applicata.
+    if (posto.motivo !== 'mappatura' && posto.motivo !== 'categoria') annotaMappaturaInerte(r);
+
     // Senza dipendenza non c'è un ufficio a cui andare: si dichiara.
     if (!posto.dipendenza) {
-      const voce = orfani.get(posto.chiaveVoce) ?? {
-        codice: posto.codice,
-        materiaId: posto.materiaId,
-        materia: posto.materia,
-        righe: [],
-      };
+      const voce = orfani.get(posto.chiaveVoce) ?? nuovaVoce(posto);
       voce.righe.push(r);
+      annotaOrigine(voce, r, posto.motivo);
       orfani.set(posto.chiaveVoce, voce);
       continue;
     }
 
     const chiaveGruppo = chiaveDipendenza(posto.dipendenza);
     const gruppo = gruppi.get(chiaveGruppo) ?? { dipendenza: posto.dipendenza, voci: new Map() };
-    const voce = gruppo.voci.get(posto.chiaveVoce) ?? {
-      codice: posto.codice,
-      materiaId: posto.materiaId,
-      materia: posto.materia,
-      righe: [],
-    };
+    const voce = gruppo.voci.get(posto.chiaveVoce) ?? nuovaVoce(posto);
     voce.righe.push(r);
+    annotaOrigine(voce, r, posto.motivo);
     gruppo.voci.set(posto.chiaveVoce, voce);
     gruppi.set(chiaveGruppo, gruppo);
   }
@@ -530,6 +673,12 @@ export function componiReportUo(input: {
                   COLLATORE_IT.compare(a.periodo ?? '', b.periodo ?? '')
               ),
             lavorazioni,
+            origini: Array.from(c.origini.values()).sort(
+              (a, b) =>
+                COLLATORE_IT.compare(a.sezione, b.sezione) ||
+                COLLATORE_IT.compare(a.voce, b.voce) ||
+                COLLATORE_IT.compare(a.motivo, b.motivo)
+            ),
           };
         })
         .sort(vociOrdinate);
@@ -579,6 +728,11 @@ export function componiReportUo(input: {
       }))
       .sort(vociOrdinate),
     senzaCodice,
+    mappatureSenzaEffetto: Array.from(mappatureInerti.values()).sort(
+      (a, b) =>
+        COLLATORE_IT.compare(a.sezione, b.sezione) ||
+        COLLATORE_IT.compare(a.destinazione, b.destinazione)
+    ),
     posizioniEscluse,
     sospese: ripartizione.sospese,
     contabilizzate: ripartizione.contabilizzate,

@@ -111,7 +111,7 @@ import {
   formattaImportoEuro,
   raggruppaPerReparto,
 } from '@/lib/lavorazioni/comunicazioni';
-import { componiReportUo, type DocumentoUo } from '@/lib/lavorazioni/reportUo';
+import { componiReportUo, ETICHETTE_MOTIVO, type DocumentoUo } from '@/lib/lavorazioni/reportUo';
 import { testiContabilizzate } from '@/lib/lavorazioni/daLavorare';
 import { instradaPerMateria, materiaDaChiave } from '@/lib/lavorazioni/instradamentoMateria';
 import { chiaveDipendenza } from '@/lib/lavorazioni/dipendenze';
@@ -2829,6 +2829,12 @@ export function VerificaSaluteAzienda({
                   const chiave = chiaveConsegna('dipendenza', d.dipendenza);
                   const codiciNoti = d.codici.filter((c) => c.codice).length;
                   const vociSenzaCodice = d.codici.length - codiciNoti;
+                  // LE VOCI DEL V.E.R.A. DI QUESTO UFFICIO, e la via per cui ci
+                  // sono arrivate: il codice, la voce stessa, il titolo della
+                  // sezione, o una mappatura. È ciò che rende il report
+                  // controllabile prima di scaricarlo, e distingue una
+                  // mappatura che ha deciso da una che non è servita a niente.
+                  const origini = d.codici.flatMap((c) => c.origini);
                   return (
                     <li
                       key={d.dipendenza}
@@ -2873,6 +2879,30 @@ export function VerificaSaluteAzienda({
                           {pdfInCorso === d.dipendenza ? 'Preparazione...' : 'Scarica il PDF'}
                         </button>
                       </div>
+
+                      {origini.length > 0 && (
+                        <div className="rounded-lg bg-slate-50 border border-slate-200 px-2 py-1.5 space-y-0.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                            Voci del V.E.R.A. assegnate, e perché
+                          </p>
+                          {origini.map((o) => (
+                            <p
+                              key={`${o.sezione}|${o.voce}|${o.motivo}`}
+                              className="text-[10px] text-slate-600 leading-relaxed"
+                            >
+                              <span className="font-bold text-slate-800">
+                                {o.voce || 'voce senza denominazione'}
+                              </span>{' '}
+                              · {o.righe} {o.righe === 1 ? 'posizione' : 'posizioni'} ·{' '}
+                              {formattaImportoEuro(o.importo)} ·{' '}
+                              <span className="italic">{ETICHETTE_MOTIVO[o.motivo]}</span>
+                              {o.sezione ? (
+                                <span className="text-slate-400"> — sezione «{o.sezione}»</span>
+                              ) : null}
+                            </p>
+                          ))}
+                        </div>
+                      )}
 
                       {stato.stato === 'mai' ? (
                         <p className="text-[10px] text-slate-400 leading-relaxed">
@@ -2998,6 +3028,38 @@ export function VerificaSaluteAzienda({
                   );
                 })}
               </ul>
+            )}
+
+            {/* UNA MAPPATURA CHE NON SPOSTA NULLA. La mappatura di sezione è
+                un ripiego: quando le voci si riconducono già da sole alla loro
+                materia, la scelta salvata non cambia il documento. Dirlo qui
+                evita di cercare perché «la mappatura non ha funzionato». */}
+            {reportUo.mappatureSenzaEffetto.length > 0 && (
+              <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 space-y-1">
+                <p className="text-[11px] font-bold text-sky-900">
+                  {reportUo.mappatureSenzaEffetto.length === 1
+                    ? 'Una mappatura di sezione non sposta nessuna posizione'
+                    : `${reportUo.mappatureSenzaEffetto.length} mappature di sezione non spostano nessuna posizione`}
+                </p>
+                <ul className="space-y-0.5">
+                  {reportUo.mappatureSenzaEffetto.map((m) => (
+                    <li
+                      key={`${m.sezione}|${m.destinazione}`}
+                      className="text-[11px] text-sky-900 leading-relaxed"
+                    >
+                      — Sezione «{m.sezione}» → «{m.destinazione}»: {m.righe}{' '}
+                      {m.righe === 1 ? 'posizione' : 'posizioni'} per{' '}
+                      {formattaImportoEuro(m.totale)}. Le voci si riconducono già da sole alla loro
+                      materia, quindi la mappatura non le ha spostate.
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[10px] text-sky-800 leading-relaxed">
+                  La mappatura resta salvata e vale per le voci che nessuna materia riconosce. Se
+                  queste posizioni devono andare altrove, il posto da cambiare è la materia della
+                  voce, non la mappatura della sezione.
+                </p>
+              </div>
             )}
 
             {reportUo.senzaDipendenza.length > 0 && (
