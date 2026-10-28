@@ -26,6 +26,24 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.13 — 2026-10-28
+
+**Le sospensioni giudiziarie hanno un posto loro, e la mappatura non porta via i report**
+
+- Una posizione che il V.E.R.A. segna «Sospeso» non è più una colonna da ignorare: ha
+  il trattamento **«Sospesa (provvedimento giudiziario)»**. Non si contabilizza e non
+  entra nei totali, ma **arriva al foglio del suo ufficio** — periodo, stato, importo —
+  così quando il ricorso si chiude la posizione è già assegnata a chi deve riprenderla.
+  Il report la dichiara in un blocco suo, la comunicazione al collega con il suo importo.
+- La mappatura di una sezione vale ora **per entrambi i documenti**: anche quando punta
+  a una categoria di debito, il report per unità operativa la legge. Prima la scelta
+  spostava le posizioni solo nelle comunicazioni, e l'ufficio restava senza foglio. Un
+  test con tre uffici lo fissa: mappata la sezione che ne aveva bisogno, i documenti
+  degli altri due restano, con le loro posizioni e i loro totali.
+- Meno ripetizioni nel triage: ciò che resta fuori dai documenti si dichiara una volta
+  sola, nel riquadro che lo esclude, e non più anche nella comunicazione e nel riquadro
+  di esito. La frase «1 posizione resta fuori perimetro» compariva tre volte.
+
 ## 0.139.12 — 2026-10-28
 
 **La mappatura V.E.R.A. si apre anche dal report per unità operativa**

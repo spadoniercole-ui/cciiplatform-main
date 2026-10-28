@@ -109,6 +109,8 @@ export interface EsitoComunicazioniVera {
   righeSenzaCategoria: number;
   /** Posizioni fuori perimetro (trattamento `ignora`): dichiarate, non elencate. */
   posizioniEscluse: PosizioniEscluse;
+  /** Sospese da un provvedimento: non contabilizzate, dichiarate a parte. */
+  sospese: RiepilogoRighe;
   /** Già contabilizzate: non si elencano, si dichiara quanto valgono. */
   contabilizzate: RiepilogoRighe;
   /** Già contabilizzate con la sola decisione AdR aperta (TS 25, 27 e 81). */
@@ -171,6 +173,8 @@ export interface RaggruppamentoPerReparto {
   categorieSenzaLavorazione: CategoriaSenzaLavorazione[];
   righeSenzaCategoria: number;
   posizioniEscluse: PosizioniEscluse;
+  /** Sospese da un provvedimento: fuori dai totali, dichiarate. */
+  sospese: RiepilogoRighe;
   /** Già contabilizzate: non entrano nei gruppi, si dichiarano. */
   contabilizzate: RiepilogoRighe;
   /** Già contabilizzate con la sola decisione AdR aperta (TS 25, 27 e 81). */
@@ -302,6 +306,7 @@ export function raggruppaPerReparto(input: InputRaggruppamento): RaggruppamentoP
       .sort((a, b) => COLLATORE_IT.compare(a.etichetta, b.etichetta)),
     righeSenzaCategoria,
     posizioniEscluse,
+    sospese: ripartizione.sospese,
     contabilizzate: ripartizione.contabilizzate,
     contabilizzateAdr: ripartizione.contabilizzateAdr,
     codiciAdr: ripartizione.codiciAdr,
@@ -337,6 +342,17 @@ export function componiComunicazioniVera(
           resto.posizioniEscluse.righe === 1 ? 'posizione' : 'posizioni'
         } per ${formattaImportoEuro(resto.posizioniEscluse.totale)}: sono sospese o fuori perimetro (trattamento «Ignora») e non vanno contabilizzate. Non entrano nel totale.`
       : null;
+  // Le sospese non chiedono nulla e non entrano nel totale, ma il loro importo
+  // esiste: chi legge deve sapere che è lì e che è fermo in attesa di un
+  // provvedimento, altrimenti lo cerca nel totale e non lo trova.
+  const notaSospese =
+    resto.sospese.righe > 0
+      ? `Restano sospese da un provvedimento giudiziario ${resto.sospese.righe} ${
+          resto.sospese.righe === 1 ? 'posizione' : 'posizioni'
+        } per ${formattaImportoEuro(
+          resto.sospese.totale
+        )}: non si contabilizzano finché la sospensione è in essere e non entrano nel totale. Non richiedono un intervento ora; sono dichiarate perché il loro importo va ritrovato quando la sospensione cade.`
+      : null;
   // Ciò che è già in contabilità non si chiede a nessuno: si dichiara, perché
   // il totale del documento non è il totale del V.E.R.A. e chi confronta i due
   // numeri deve trovare la spiegazione lì, non doverla dedurre.
@@ -368,6 +384,7 @@ export function componiComunicazioniVera(
       `Posizioni:\n${elencoRighe}`,
       `Totale delle posizioni elencate: ${formattaImportoEuro(totale)}.`,
       notaContabilizzate,
+      notaSospese,
       notaEscluse,
       "Ti chiedo di svolgere la lavorazione indicata e di confermarmi l'esito.",
       'Grazie.',

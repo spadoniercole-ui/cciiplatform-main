@@ -70,7 +70,7 @@ export interface RiepilogoRighe {
 }
 
 export type SortaRigaVera =
-  'DA_LAVORARE' | 'CONTABILIZZATA_ADR' | 'CONTABILIZZATA' | 'FUORI_PERIMETRO';
+  'DA_LAVORARE' | 'CONTABILIZZATA_ADR' | 'CONTABILIZZATA' | 'SOSPESA' | 'FUORI_PERIMETRO';
 
 /**
  * Che cosa è questa riga per i documenti che chiedono di intervenire.
@@ -82,6 +82,7 @@ export type SortaRigaVera =
  */
 export function sortaRigaVera(r: RigaConStatoVera): SortaRigaVera {
   if (r.trattamento === 'ignora') return 'FUORI_PERIMETRO';
+  if (r.trattamento === 'sospeso') return 'SOSPESA';
   if (r.trattamento === 'contabilizzato') {
     const codice = codiceDaVoceVera(r.voce);
     return codice !== null && (CODICI_TS_CONTABILIZZATI_ADR as readonly string[]).includes(codice)
@@ -104,6 +105,15 @@ export interface RipartizioneRighe<R extends RigaConStatoVera> {
   codiciAdr: string[];
   /** Fuori perimetro: dichiarate a parte, non contabilizzate. */
   fuoriPerimetro: RiepilogoRighe;
+  /**
+   * Sospese da un provvedimento: non contabilizzate, fuori dai totali, ma con
+   * un ufficio che le segue. Si dichiarano e — a differenza delle fuori
+   * perimetro — si intestano al loro ufficio, perché una sospensione che cade
+   * va ripresa da qualcuno, e quel qualcuno deve sapere di averla.
+   */
+  sospese: RiepilogoRighe;
+  /** Le stesse righe, per intestarle all'ufficio che le segue. */
+  righeSospese: R[];
   /**
    * Le posizioni scontate perché il file le scrive due volte (F24 e denunce
    * dello stesso periodo): la cifra è quella della riga F24, già dichiarata.
@@ -130,6 +140,8 @@ export function ripartisciRigheVera<R extends RigaConStatoVera>(righe: R[]): Rip
     contabilizzateAdr: { righe: 0, totale: 0 },
     codiciAdr: [],
     fuoriPerimetro: { righe: 0, totale: 0 },
+    sospese: { righe: 0, totale: 0 },
+    righeSospese: [],
     duplicati: { righe: 0, totale: 0 },
   };
   // La doppia scrittura si sconta solo dove è una dichiarazione di importo:
@@ -146,6 +158,10 @@ export function ripartisciRigheVera<R extends RigaConStatoVera>(righe: R[]): Rip
     switch (sorta) {
       case 'FUORI_PERIMETRO':
         aggiungi(ripartizione.fuoriPerimetro, r.importo);
+        break;
+      case 'SOSPESA':
+        aggiungi(ripartizione.sospese, r.importo);
+        ripartizione.righeSospese.push(r);
         break;
       case 'CONTABILIZZATA':
         aggiungi(ripartizione.contabilizzate, r.importo);

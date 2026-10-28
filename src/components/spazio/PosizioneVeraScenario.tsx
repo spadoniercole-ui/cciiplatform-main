@@ -1080,17 +1080,21 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
                     ? 'bg-orange-50/50'
                     : r.trattamento === 'da_contabilizzare'
                       ? 'bg-amber-50/40'
-                      : r.trattamento === 'ignora'
-                        ? 'text-slate-400'
-                        : '';
+                      : r.trattamento === 'sospeso'
+                        ? 'bg-indigo-50/40'
+                        : r.trattamento === 'ignora'
+                          ? 'text-slate-400'
+                          : '';
                 const trattClasse =
                   r.trattamento === 'potenziale'
                     ? 'bg-orange-100 text-orange-800'
                     : r.trattamento === 'da_contabilizzare'
                       ? 'bg-amber-100 text-amber-800'
-                      : r.trattamento === 'ignora'
-                        ? 'bg-slate-100 text-slate-500'
-                        : 'bg-emerald-100 text-emerald-700';
+                      : r.trattamento === 'sospeso'
+                        ? 'bg-indigo-100 text-indigo-800'
+                        : r.trattamento === 'ignora'
+                          ? 'bg-slate-100 text-slate-500'
+                          : 'bg-emerald-100 text-emerald-700';
                 return (
                   <tr key={r.id} className={rigaClasse}>
                     <td className="p-3 text-slate-500 text-[10px]">{r.sezione}</td>

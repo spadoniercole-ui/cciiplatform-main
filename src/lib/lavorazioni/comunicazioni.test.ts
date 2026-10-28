@@ -347,3 +347,34 @@ describe('componiComunicazioniVera', () => {
     expect(esito.comunicazioni[0].lavorazioni).toEqual(['Contabilizzare', 'Verificare il ruolo']);
   });
 });
+
+describe('le sospese nelle comunicazioni', () => {
+  it('non si elencano, si dichiarano: importo noto, fuori dal totale', () => {
+    const esito = componiComunicazioniVera({
+      azienda: 'Alfa Srl',
+      dataVerifica: '2026-10-19',
+      righe: [
+        riga(),
+        riga({
+          voce: 'Cartella sospesa',
+          importo: 6_990.45,
+          stato: 'Sospeso',
+          trattamento: 'sospeso',
+        }),
+      ],
+      lavorazioni: [
+        { categoria: 'DEBITO', lavorazione: 'Verificare', destinatario: 'Mario Rossi' },
+      ],
+      etichette,
+    });
+
+    const c = esito.comunicazioni[0];
+    expect(c.righe).toBe(1);
+    expect(c.totale).toBe(12_000);
+    expect(c.corpo).toContain(
+      'Restano sospese da un provvedimento giudiziario 1 posizione per 6.990,45 €'
+    );
+    expect(c.corpo).not.toContain('Cartella sospesa');
+    expect(esito.sospese).toEqual({ righe: 1, totale: 6_990.45 });
+  });
+});

@@ -81,6 +81,7 @@ const documento = (over: Partial<DocumentoUo> = {}): DocumentoUo => ({
   posizioniDaContabilizzare: 2,
   importoDaContabilizzare: 2_000,
   posizioniEscluse: { righe: 1, totale: 9_000 },
+  sospese: [],
   contabilizzate: { righe: 2, totale: 3_400 },
   contabilizzateAdr: { righe: 1, totale: 400 },
   codiciAdr: ['25'],

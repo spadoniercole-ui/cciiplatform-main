@@ -92,11 +92,48 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
     doc.text(
       `Fuori perimetro: ${d.posizioniEscluse.righe} ${
         d.posizioniEscluse.righe === 1 ? 'posizione' : 'posizioni'
-      } per ${formattaImportoEuro(d.posizioniEscluse.totale)} non elencate (sospese)`,
+      } per ${formattaImportoEuro(d.posizioniEscluse.totale)} non elencate (trattamento «Ignora»)`,
       14,
       y
     );
     y += 5;
+  }
+  // Le sospese hanno un blocco loro: non si contabilizzano, ma il loro importo
+  // esiste e va ritrovato quando il provvedimento cade. Metterle fra le voci
+  // farebbe credere che ci sia qualcosa da fare ora; tacerle le farebbe sparire
+  // dal foglio di chi dovrà riprenderle.
+  if (d.sospese.length > 0) {
+    const totaleSospese = d.sospese.reduce((a, x) => a + x.importo, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.text(
+      `Sospese da un provvedimento: ${d.sospese.length} ${
+        d.sospese.length === 1 ? 'posizione' : 'posizioni'
+      } per ${formattaImportoEuro(totaleSospese)} — non contabilizzate, fuori dai totali`,
+      14,
+      y
+    );
+    y += 5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    for (const x of d.sospese) {
+      if (y > LIMITE_PAGINA - 15) {
+        doc.addPage();
+        y = 22;
+      }
+      const periodo = x.periodo ? ` (periodo ${x.periodo})` : '';
+      const stato = x.stato ? `; stato V.E.R.A.: ${x.stato}` : '';
+      doc.text(
+        doc.splitTextToSize(
+          `- ${x.sezione} — ${x.voce}${periodo}: ${formattaImportoEuro(x.importo)}${stato}`,
+          182
+        ) as string[],
+        14,
+        y
+      );
+      y += 4;
+    }
+    doc.setFontSize(9);
+    y += 1;
   }
   y += 2;
 

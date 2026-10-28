@@ -288,7 +288,9 @@ export function componiFascicolo(input: {
     });
   }
 
-  const veraUtili = input.vera.filter((r) => r.trattamento !== 'ignora');
+  const veraUtili = input.vera.filter(
+    (r) => r.trattamento !== 'ignora' && r.trattamento !== 'sospeso'
+  );
   for (const r of veraUtili) {
     const potenziale = r.trattamento === 'potenziale';
     evidenze.push({

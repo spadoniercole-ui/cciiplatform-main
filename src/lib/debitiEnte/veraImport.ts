@@ -261,12 +261,20 @@ export async function analizzaVera(file: File, foglio?: string): Promise<Analisi
 // stato): il debito è già a ruolo, ancora da mettere a ruolo, oppure una
 // posizione potenziale di cui non si conosce ancora l'importo (es. "Denunce
 // non trasmesse": natura presente, nessuno stato, nessun importo).
-export type TrattamentoVera = 'contabilizzato' | 'da_contabilizzare' | 'potenziale' | 'ignora';
+//
+// `sospeso` è la posizione che un provvedimento (tipicamente un ricorso
+// giudiziario) rende non esigibile: l'importo è noto, non si contabilizza, ma
+// la posizione esiste e ha un ufficio che la segue. Prima finiva in `ignora`,
+// insieme alle colonne da buttare via: non contabilizzata e senza destinatario,
+// quindi invisibile a chi dovrà riprenderla quando la sospensione cade.
+export type TrattamentoVera =
+  'contabilizzato' | 'da_contabilizzare' | 'potenziale' | 'sospeso' | 'ignora';
 
 export const ETICHETTE_TRATTAMENTO: Record<TrattamentoVera, string> = {
   contabilizzato: 'Contabilizzato',
   da_contabilizzare: 'Da contabilizzare',
   potenziale: 'Potenziale (importo ignoto)',
+  sospeso: 'Sospesa (provvedimento giudiziario)',
   ignora: 'Ignora',
 };
 
@@ -277,8 +285,10 @@ export function chiaveCombinazione(natura: string, stato: string): string {
 
 /** Trattamento suggerito per una combinazione mai vista, da confermare dall'operatore. */
 function suggerisciTrattamento(stato: string, importo: number): TrattamentoVera {
-  // Sospeso da un giudice: importo noto ma non esigibile, fuori dalle somme.
-  if (/^sospes/i.test(stato.trim())) return 'ignora';
+  // Sospeso da un giudice: importo noto ma non esigibile, fuori dalle somme —
+  // non però fuori dal mondo. Ha un trattamento suo, che la tiene distinta da
+  // una colonna da ignorare: resta attribuibile a un ufficio e si dichiara.
+  if (/^sospes/i.test(stato.trim())) return 'sospeso';
   if (Math.abs(importo) < 0.005) return 'potenziale'; // natura presente ma importo ignoto
   return stato.trim() === '' ? 'contabilizzato' : 'da_contabilizzare';
 }
@@ -343,6 +353,8 @@ export interface TotaliVera {
   creditiAgente: number;
   quantificato: number;
   righeIgnorate: number;
+  /** Posizioni sospese da un provvedimento: importo noto, fuori dalle somme. */
+  righeSospese: number;
 }
 
 export function totaliVera(righe: RigaVera[]): TotaliVera {
@@ -350,9 +362,11 @@ export function totaliVera(righe: RigaVera[]): TotaliVera {
   let sanzioni = 0;
   let creditiAgente = 0;
   let righeIgnorate = 0;
+  let righeSospese = 0;
   for (const r of righe) {
     if (r.trattamento !== 'contabilizzato' && r.trattamento !== 'da_contabilizzare') {
       if (r.trattamento === 'ignora') righeIgnorate++;
+      if (r.trattamento === 'sospeso') righeSospese++;
       continue;
     }
     if (r.ambito === 'AGENTE_RISCOSSIONE') {
@@ -372,6 +386,7 @@ export function totaliVera(righe: RigaVera[]): TotaliVera {
     creditiAgente,
     quantificato: contributiInps + sanzioni + creditiAgente,
     righeIgnorate,
+    righeSospese,
   };
 }
 

@@ -127,6 +127,18 @@ export interface CodiceUo {
   lavorazioni: LavorazioneUo[];
 }
 
+/**
+ * Una posizione sospesa da un provvedimento: si dichiara sul foglio dell'ufficio
+ * che la segue, senza entrare nei totali né fra le voci da contabilizzare.
+ */
+export interface SospesaUo {
+  sezione: string;
+  voce: string;
+  periodo: string | null;
+  stato: string;
+  importo: number;
+}
+
 export interface DocumentoUo {
   /** L'ufficio a cui il documento è destinato. */
   dipendenza: string;
@@ -135,6 +147,8 @@ export interface DocumentoUo {
   /** Data della verifica, AAAA-MM-GG. */
   dataVerifica: string;
   codici: CodiceUo[];
+  /** Sospese da un provvedimento, intestate a questo ufficio: fuori dai totali. */
+  sospese: SospesaUo[];
   righe: number;
   totale: number;
   /** Quante posizioni elencate non sono ancora contabilizzate, e per quanto. */
@@ -180,6 +194,8 @@ export interface EsitoReportUo {
   senzaCodice: { righe: number; totale: number };
   /** Fuori perimetro (trattamento «Ignora»): dichiarate, non elencate. */
   posizioniEscluse: PosizioniEscluse;
+  /** Sospese da un provvedimento: dichiarate, non contabilizzate. */
+  sospese: RiepilogoRighe;
   /** Già contabilizzate: dichiarate, non elencate. */
   contabilizzate: RiepilogoRighe;
   contabilizzateAdr: RiepilogoRighe;
@@ -240,6 +256,9 @@ export function versioneReportUo(d: Omit<DocumentoUo, 'versione' | 'nomeFile'>):
         ),
         ...c.lavorazioni.map((l) => [l.tipologia, l.procedura ?? '', l.esito ?? ''].join('|')),
       ].join('~')
+    ),
+    ...d.sospese.map((x) =>
+      [x.sezione, x.voce, x.periodo ?? '', x.stato, x.importo.toFixed(2)].join('|')
     ),
     d.totale.toFixed(2),
     String(d.posizioniEscluse.righe),
@@ -305,6 +324,14 @@ export function componiReportUo(input: {
   titoli: Pick<TitoloEnte, 'codice' | 'materiaId' | 'dipendenza'>[];
   materie: MateriaReportUo[];
   lavorazioni: LavorazioneMateria[];
+  /**
+   * Le categorie di debito con il loro ufficio. La mappatura di una sezione può
+   * puntare a una categoria invece che a una materia: se il report non la
+   * leggesse, la scelta appena salvata sposterebbe le posizioni nelle
+   * comunicazioni e non nel documento per gli uffici — due documenti diversi
+   * dagli stessi dati, che è il difetto che questa via doveva chiudere.
+   */
+  categorie?: { codice: string; dipendenza: string; etichetta?: string }[];
 }): EsitoReportUo {
   const perCodiceTitolo = new Map<
     string,
@@ -316,6 +343,17 @@ export function componiReportUo(input: {
   }
   const nomeMateria = (id: number | null | undefined) =>
     id === null || id === undefined ? null : (input.materie.find((m) => m.id === id)?.nome ?? null);
+
+  const categoriaUfficio = new Map<string, { dipendenza: string; etichetta: string }>();
+  for (const c of input.categorie ?? []) {
+    const codice = unaRiga(c.codice ?? '').toUpperCase();
+    const dipendenza = unaRiga(c.dipendenza ?? '');
+    if (!codice || !dipendenza) continue;
+    categoriaUfficio.set(codice, {
+      dipendenza,
+      etichetta: unaRiga(c.etichetta ?? '') || codice,
+    });
+  }
 
   // Una classificazione sola per tutte e tre le uscite: le posizioni già
   // contabilizzate non si elencano, si dichiarano; le sospese nemmeno si
@@ -342,46 +380,111 @@ export function componiReportUo(input: {
   // dipendenza (chiave dell'ufficio) → voce → righe
   const gruppi = new Map<string, { dipendenza: string; voci: Map<string, VoceUo> }>();
   const orfani = new Map<string, VoceUo>();
+  // Ufficio → posizioni sospese che gli appartengono.
+  const sospesePerUfficio = new Map<string, { dipendenza: string; voci: SospesaUo[] }>();
   let codiciSenzaLavorazione = 0;
 
-  for (const r of ripartizione.daLavorare) {
+  /**
+   * Dove va una riga, e sotto quale chiave.
+   *
+   * Il codice di partita quando c'è; altrimenti la materia — quella scelta a
+   * mano sulla sezione, quella dedotta dai codici indicativi o dalla
+   * descrizione — e, se nessuna materia risponde, la categoria di debito della
+   * mappatura con il suo ufficio. `null` significa che non c'è nessuna chiave:
+   * la posizione non si attribuisce a nessuno e si conta.
+   */
+  const colloca = (r: RigaVeraReportUo) => {
     const codice = codiceDaVoceVera(r.voce);
-    // La stessa materia che instrada le comunicazioni: per un codice quella del
-    // suo titolo, per una voce senza codice quella dedotta dalla voce e dalla
-    // sezione (o dai codici che la materia dichiara propri).
     const materiaId = codice
       ? (perCodiceTitolo.get(normalizzaCodice(codice))?.materiaId ?? null)
       : (materiaDaChiave(r.categoria) ??
         materiaPerRigaVera(r.voce, r.sezione, input.titoli, materieMinime)?.id ??
         null);
-    // Senza codice e senza materia non resta nessuna chiave: si conta.
+    const titolo = codice ? perCodiceTitolo.get(normalizzaCodice(codice)) : undefined;
     if (!codice && materiaId === null) {
+      const cat = unaRiga(r.categoria ?? '').toUpperCase();
+      const perCategoria = cat ? categoriaUfficio.get(cat) : undefined;
+      if (!perCategoria) return null;
+      return {
+        codice: null,
+        materiaId: null,
+        materia: perCategoria.etichetta,
+        dipendenza: perCategoria.dipendenza,
+        chiaveVoce: `CAT:${cat}`,
+      };
+    }
+    return {
+      codice,
+      materiaId,
+      materia: nomeMateria(materiaId),
+      dipendenza: unaRiga(
+        dipendenzaEffettiva(
+          { dipendenza: titolo?.dipendenza ?? null, materiaId },
+          input.lavorazioni
+        ).valore ?? ''
+      ),
+      chiaveVoce: codice ? `C:${normalizzaCodice(codice)}` : `M:${materiaId}`,
+    };
+  };
+
+  for (const r of ripartizione.daLavorare) {
+    const posto = colloca(r);
+    // Senza nessuna chiave la posizione non si attribuisce: si conta.
+    if (!posto) {
       senzaCodice.righe += 1;
       senzaCodice.totale += r.importo;
       continue;
     }
-    const titolo = codice ? perCodiceTitolo.get(normalizzaCodice(codice)) : undefined;
-    const materia = nomeMateria(materiaId);
-    const dipendenza = unaRiga(
-      dipendenzaEffettiva({ dipendenza: titolo?.dipendenza ?? null, materiaId }, input.lavorazioni)
-        .valore ?? ''
-    ); // La chiave della voce: il codice, oppure la materia quando il codice non c'è.
-    const chiaveVoce = codice ? `C:${normalizzaCodice(codice)}` : `M:${materiaId}`;
 
     // Senza dipendenza non c'è un ufficio a cui andare: si dichiara.
-    if (!dipendenza) {
-      const voce = orfani.get(chiaveVoce) ?? { codice, materiaId, materia, righe: [] };
+    if (!posto.dipendenza) {
+      const voce = orfani.get(posto.chiaveVoce) ?? {
+        codice: posto.codice,
+        materiaId: posto.materiaId,
+        materia: posto.materia,
+        righe: [],
+      };
       voce.righe.push(r);
-      orfani.set(chiaveVoce, voce);
+      orfani.set(posto.chiaveVoce, voce);
       continue;
     }
 
-    const chiaveGruppo = chiaveDipendenza(dipendenza);
-    const gruppo = gruppi.get(chiaveGruppo) ?? { dipendenza, voci: new Map() };
-    const voce = gruppo.voci.get(chiaveVoce) ?? { codice, materiaId, materia, righe: [] };
+    const chiaveGruppo = chiaveDipendenza(posto.dipendenza);
+    const gruppo = gruppi.get(chiaveGruppo) ?? { dipendenza: posto.dipendenza, voci: new Map() };
+    const voce = gruppo.voci.get(posto.chiaveVoce) ?? {
+      codice: posto.codice,
+      materiaId: posto.materiaId,
+      materia: posto.materia,
+      righe: [],
+    };
     voce.righe.push(r);
-    gruppo.voci.set(chiaveVoce, voce);
+    gruppo.voci.set(posto.chiaveVoce, voce);
     gruppi.set(chiaveGruppo, gruppo);
+  }
+
+  // LE SOSPESE: fuori dai totali, dentro il foglio del loro ufficio.
+  //
+  // Non si contabilizzano finché il provvedimento è in essere, quindi non sono
+  // voci da lavorare. Ma la posizione esiste, il suo importo è noto e qualcuno
+  // dovrà riprenderla quando la sospensione cade: se non arrivasse a nessun
+  // ufficio, l'unica traccia sarebbe un numero in fondo al foglio. Qui prende
+  // l'ufficio che le compete — lo stesso che avrebbe se fosse da lavorare.
+  for (const r of ripartizione.righeSospese) {
+    const posto = colloca(r);
+    if (!posto || !posto.dipendenza) continue;
+    const chiaveGruppo = chiaveDipendenza(posto.dipendenza);
+    const gruppo = sospesePerUfficio.get(chiaveGruppo) ?? {
+      dipendenza: posto.dipendenza,
+      voci: [],
+    };
+    gruppo.voci.push({
+      sezione: r.sezione,
+      voce: r.voce,
+      periodo: r.periodo?.trim() ? r.periodo.trim() : null,
+      stato: r.stato.trim(),
+      importo: r.importo,
+    });
+    sospesePerUfficio.set(chiaveGruppo, gruppo);
   }
 
   // I codici in ordine numerico; le voci senza codice dopo, per materia.
@@ -395,8 +498,8 @@ export function componiReportUo(input: {
     return COLLATORE_IT.compare(a.materia ?? '', b.materia ?? '');
   };
 
-  const documenti: DocumentoUo[] = Array.from(gruppi.values())
-    .map((g) => {
+  const documenti: DocumentoUo[] = Array.from(gruppi.entries())
+    .map(([chiaveGruppo, g]) => {
       const codici: CodiceUo[] = Array.from(g.voci.values())
         .map((c) => {
           const lavorazioni = lavorazioniDellaMateria(input.lavorazioni, c.materiaId)
@@ -436,6 +539,12 @@ export function componiReportUo(input: {
         azienda: input.azienda,
         dataVerifica: input.dataVerifica,
         codici,
+        sospese: (sospesePerUfficio.get(chiaveGruppo)?.voci ?? []).sort(
+          (a, b) =>
+            COLLATORE_IT.compare(a.sezione, b.sezione) ||
+            COLLATORE_IT.compare(a.voce, b.voce) ||
+            COLLATORE_IT.compare(a.periodo ?? '', b.periodo ?? '')
+        ),
         righe: codici.reduce((a, c) => a + c.righe, 0),
         totale: codici.reduce((a, c) => a + c.importo, 0),
         posizioniDaContabilizzare: daContabilizzare.length,
@@ -468,6 +577,7 @@ export function componiReportUo(input: {
       .sort(vociOrdinate),
     senzaCodice,
     posizioniEscluse,
+    sospese: ripartizione.sospese,
     contabilizzate: ripartizione.contabilizzate,
     contabilizzateAdr: ripartizione.contabilizzateAdr,
     codiciAdr: ripartizione.codiciAdr,

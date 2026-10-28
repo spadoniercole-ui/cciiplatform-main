@@ -72,7 +72,8 @@ describe('V.E.R.A. reale: destinazione degli importi', () => {
     const a = await analizzaVera(fileVera());
     const { righe } = estraiRigheVera(a.sezioni, {}, {}, true);
     const t = totaliVera(righe);
-    expect(t.righeIgnorate).toBe(1);
+    expect(t.righeSospese).toBe(1);
+    expect(t.righeIgnorate).toBe(0);
     expect(t.creditiAgente).not.toBeCloseTo(30_590.98, 2);
   });
 

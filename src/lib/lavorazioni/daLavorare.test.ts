@@ -135,3 +135,21 @@ describe('elencoCodiciTs', () => {
     expect(elencoCodiciTs(['25', '27', '81'])).toBe('TS 25, 27 e 81');
   });
 });
+
+describe('la sospensione da un provvedimento', () => {
+  it('non si lavora e non si butta: si dichiara, e resta intestabile a un ufficio', () => {
+    expect(sortaRigaVera(riga({ stato: 'Sospeso', trattamento: 'sospeso' }))).toBe('SOSPESA');
+
+    const r = ripartisciRigheVera([
+      riga({ stato: 'Sospeso', trattamento: 'sospeso', importo: 6_990.45 }),
+      riga({ stato: 'Da Verificare', importo: 1_000 }),
+    ]);
+
+    expect(r.daLavorare).toHaveLength(1);
+    expect(r.sospese).toEqual({ righe: 1, totale: 6_990.45 });
+    expect(r.righeSospese).toHaveLength(1);
+    // Non è più «fuori perimetro»: quella è la colonna da ignorare, questa ha
+    // un ufficio che la riprenderà quando il provvedimento cade.
+    expect(r.fuoriPerimetro).toEqual({ righe: 0, totale: 0 });
+  });
+});

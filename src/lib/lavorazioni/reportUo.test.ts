@@ -310,3 +310,119 @@ describe('componiReportUo', () => {
     );
   });
 });
+
+describe('report UO: le sospese e la mappatura delle sezioni', () => {
+  it('una posizione sospesa resta fuori dai totali ma va sul foglio del suo ufficio', () => {
+    const esito = componiReportUo({
+      ...base,
+      righe: [
+        riga(),
+        riga({
+          stato: 'Sospeso',
+          trattamento: 'sospeso',
+          importo: 6_990.45,
+          periodo: '202601 - 202601',
+        }),
+      ],
+    });
+
+    const d = esito.documenti[0];
+    expect(d.righe).toBe(1);
+    expect(d.totale).toBe(1_200);
+    expect(d.sospese).toHaveLength(1);
+    expect(d.sospese[0].importo).toBe(6_990.45);
+    expect(d.sospese[0].stato).toBe('Sospeso');
+    expect(d.sospese[0].periodo).toBe('202601 - 202601');
+    expect(esito.sospese).toEqual({ righe: 1, totale: 6_990.45 });
+  });
+
+  it('la mappatura su una categoria di debito manda la voce all’ufficio di quella categoria', () => {
+    const esito = componiReportUo({
+      azienda: 'Alfa Srl',
+      dataVerifica: '2026-10-19',
+      titoli: [],
+      materie: [],
+      lavorazioni: [],
+      categorie: [
+        { codice: 'CONTRIBUTI', dipendenza: 'Ufficio contributi', etichetta: 'Contributi INPS' },
+      ],
+      righe: [
+        riga({
+          sezione: 'Gestione artisti',
+          voce: 'Compensi non versati',
+          categoria: 'CONTRIBUTI',
+          importo: 830,
+        }),
+      ],
+    });
+
+    expect(esito.documenti).toHaveLength(1);
+    const d = esito.documenti[0];
+    expect(d.dipendenza).toBe('Ufficio contributi');
+    expect(d.codici[0].codice).toBeNull();
+    expect(d.codici[0].materia).toBe('Contributi INPS');
+    expect(d.totale).toBe(830);
+    expect(esito.senzaCodice).toEqual({ righe: 0, totale: 0 });
+  });
+
+  it('mappare una sezione non porta via i documenti degli uffici che non ne avevano bisogno', () => {
+    const titoli = [
+      titolo({ id: 1, codice: '27', materiaId: 10 }),
+      titolo({ id: 2, codice: '18', materiaId: 11 }),
+    ];
+    const materie = [
+      { id: 10, nome: 'Flussi Uniemens' },
+      { id: 11, nome: 'Verbali ispettivi' },
+      { id: 12, nome: 'Vidimazione contratti' },
+    ];
+    const lavorazioni = [
+      lav({ id: 1, materiaId: 10, dipendenza: 'Ufficio contributi' }),
+      lav({ id: 2, materiaId: 11, dipendenza: 'Ufficio vigilanza', tipologia: 'Verbale' }),
+      lav({ id: 3, materiaId: 12, dipendenza: 'Ufficio contratti', tipologia: 'Vidimazione' }),
+    ];
+    const righe: RigaVeraReportUo[] = [
+      riga(),
+      riga({ sezione: 'VERBALI', voce: 'TS 18 verbale di accertamento', importo: 500 }),
+      riga({
+        sezione: 'Gestione artisti',
+        voce: 'Compensi non versati',
+        categoria: '',
+        importo: 830,
+      }),
+    ];
+
+    // Prima della mappatura la sezione non ha né un codice né una materia: la
+    // sua posizione non arriva a nessun ufficio, e i due uffici che la materia
+    // ce l'hanno producono i loro documenti.
+    const prima = componiReportUo({ ...base, titoli, materie, lavorazioni, righe });
+    expect(prima.documenti.map((d) => d.dipendenza)).toEqual([
+      'Ufficio contributi',
+      'Ufficio vigilanza',
+    ]);
+    expect(prima.senzaCodice).toEqual({ righe: 1, totale: 830 });
+
+    // Dopo la mappatura si aggiunge il terzo documento: i due che c'erano
+    // restano, con le loro posizioni e il loro totale.
+    const dopo = componiReportUo({
+      ...base,
+      titoli,
+      materie,
+      lavorazioni,
+      righe: righe.map((r) =>
+        r.sezione === 'Gestione artisti' ? { ...r, categoria: 'MATERIA:12' } : r
+      ),
+    });
+    expect(dopo.documenti.map((d) => d.dipendenza)).toEqual([
+      'Ufficio contratti',
+      'Ufficio contributi',
+      'Ufficio vigilanza',
+    ]);
+    const contributi = dopo.documenti.find((d) => d.dipendenza === 'Ufficio contributi');
+    expect(contributi?.righe).toBe(1);
+    expect(contributi?.totale).toBe(1_200);
+    const vigilanza = dopo.documenti.find((d) => d.dipendenza === 'Ufficio vigilanza');
+    expect(vigilanza?.righe).toBe(1);
+    expect(vigilanza?.totale).toBe(500);
+    expect(dopo.senzaCodice).toEqual({ righe: 0, totale: 0 });
+  });
+});

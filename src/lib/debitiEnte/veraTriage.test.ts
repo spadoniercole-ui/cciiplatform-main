@@ -96,14 +96,16 @@ describe('V.E.R.A.: versamenti e cartelle sospese', () => {
     );
   });
 
-  it('una cartella sospesa ha importo noto ed è esclusa dalle somme, non «importo ignoto»', () => {
+  it('una cartella sospesa ha un trattamento suo: importo noto, esclusa dalle somme, non «ignoto»', () => {
     const { righe } = estraiRigheVera(
       [{ titolo: 'ADR', righe: [{ voce: 'Adr', stato: 'Sospeso', importo: 6990.45 }] }] as never,
       {},
       {},
       true
     );
-    expect(righe[0].trattamento).toBe('ignora');
+    // Non è una colonna da buttare: è una posizione sospesa da un
+    // provvedimento, che resta attribuibile a un ufficio.
+    expect(righe[0].trattamento).toBe('sospeso');
     expect(righe[0].importo).toBe(6990.45);
   });
 });

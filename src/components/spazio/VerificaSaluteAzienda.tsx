@@ -1410,8 +1410,28 @@ export function VerificaSaluteAzienda({
         titoli: titoliUo,
         materie: materieUo,
         lavorazioni: lavorazioniUo,
+        // LA MAPPATURA VALE PER ENTRAMBI I DOCUMENTI. Una sezione si mappa su
+        // una materia o su una categoria di debito: senza questa seconda via,
+        // la scelta appena salvata sposterebbe le posizioni nelle comunicazioni
+        // e non nel report, e l'ufficio resterebbe senza foglio.
+        categorie: lavorazioni
+          .filter((l) => l.attivo !== false && l.categoria.trim() && l.destinatario.trim())
+          .map((l) => ({
+            codice: l.categoria.trim(),
+            dipendenza: l.destinatario.trim(),
+            etichetta: etichetteCategorie[l.categoria.trim()],
+          })),
       }),
-    [aziendaMostrata, dataVerifica, righeVera, titoliUo, materieUo, lavorazioniUo]
+    [
+      aziendaMostrata,
+      dataVerifica,
+      righeVera,
+      titoliUo,
+      materieUo,
+      lavorazioniUo,
+      lavorazioni,
+      etichetteCategorie,
+    ]
   );
 
   // LE SEZIONI CHE NON SANNO DOVE ANDARE, e la mappatura che si può fare qui.
@@ -2642,18 +2662,6 @@ export function VerificaSaluteAzienda({
               </p>
             )}
 
-            {comunicazioni.posizioniEscluse.righe > 0 && (
-              <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed">
-                {`${comunicazioni.posizioniEscluse.righe} ${
-                  comunicazioni.posizioniEscluse.righe === 1
-                    ? 'posizione resta'
-                    : 'posizioni restano'
-                } fuori dalle comunicazioni per ${formattaImportoEuro(
-                  comunicazioni.posizioniEscluse.totale
-                )}: sono sospese o fuori perimetro (trattamento «Ignora») e non vanno contabilizzate. Il testo lo dichiara a chi lo riceve.`}
-              </p>
-            )}
-
             {erroreCopia && <p className="text-[11px] text-red-700">{erroreCopia}</p>}
 
             {/* Il link porta alla lavorazione che manca, non ai Parametri in
@@ -2698,7 +2706,6 @@ export function VerificaSaluteAzienda({
             non si può, si dice che cosa manca e dove.
           */}
           {(() => {
-            const fuoriPerimetro = comunicazioni.posizioniEscluse.righe;
             const pronte = avanzamentoUo.uffici > 0;
             const motivo = !pronte
               ? instradamento.lavorazioni.length === 0
@@ -2733,11 +2740,10 @@ export function VerificaSaluteAzienda({
                     }, ${formattaImportoEuro(avanzamentoUo.totale)}: per ognuno un report per
                     unità operativa, qui sotto. Si scarica e lo invii tu — la piattaforma non
                     manda nulla e registra ogni scaricamento.`}
-                    {fuoriPerimetro > 0
-                      ? ` ${fuoriPerimetro} ${
-                          fuoriPerimetro === 1 ? 'posizione resta' : 'posizioni restano'
-                        } fuori perimetro e non entra nei totali.`
-                      : ''}{' '}
+                    {/* Ciò che resta fuori si dichiara una volta sola, nel
+                        riquadro del report che lo esclude: ripeterlo qui era
+                        la terza copia della stessa frase nella stessa
+                        schermata. */}
                     <a href="#report-uo" className="font-bold underline">
                       Vai ai report per unità operativa
                     </a>
@@ -3072,13 +3078,26 @@ export function VerificaSaluteAzienda({
               </div>
             )}
 
+            {/* LE SOSPESE DA UN PROVVEDIMENTO. Non si contabilizzano, ma non
+                spariscono: il foglio dell'ufficio che le segue le dichiara con
+                il loro importo, così quando il ricorso si chiude non si
+                riparte da zero. */}
+            {reportUo.sospese.righe > 0 && (
+              <p className="text-[11px] text-indigo-900 bg-indigo-50 border border-indigo-200 rounded-lg p-3 leading-relaxed">
+                {`${reportUo.sospese.righe} ${
+                  reportUo.sospese.righe === 1 ? 'posizione sospesa' : 'posizioni sospese'
+                } da un provvedimento giudiziario per ${formattaImportoEuro(
+                  reportUo.sospese.totale
+                )}: non si contabilizzano finché la sospensione è in essere e non entrano nei totali. Restano sul foglio dell'ufficio che le segue, con il loro stato, così quando la sospensione cade la posizione è già assegnata.`}
+              </p>
+            )}
             {reportUo.posizioniEscluse.righe > 0 && (
               <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed">
                 {`${reportUo.posizioniEscluse.righe} ${
                   reportUo.posizioniEscluse.righe === 1 ? 'posizione resta' : 'posizioni restano'
                 } fuori dai report per ${formattaImportoEuro(
                   reportUo.posizioniEscluse.totale
-                )}: sono sospese o fuori perimetro (trattamento «Ignora») e non vanno contabilizzate. Non entrano nei totali.`}
+                )}: sono fuori perimetro (trattamento «Ignora») e non vanno contabilizzate. Non entrano nei totali.`}
               </p>
             )}
 
