@@ -1967,7 +1967,8 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
     sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS stato TEXT NOT NULL DEFAULT ''`
   );
   // Trattamento derivato dalla CATENA Natura+Stato: contabilizzato /
-  // da_contabilizzare / potenziale (importo ignoto) / ignora.
+  // da_contabilizzare / potenziale (importo ignoto) / sospeso (provvedimento
+  // giudiziario) / ignora.
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS trattamento TEXT NOT NULL DEFAULT 'contabilizzato'`
   );
@@ -2044,6 +2045,36 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
       trattamento TEXT NOT NULL
     )`
   );
+  // LE SOSPENSIONI GIÀ SALVATE.
+  //
+  // La classificazione del V.E.R.A. metteva le posizioni con stato «Sospeso»
+  // nel trattamento «Ignora»: fuori dai totali, ma anche fuori da ogni ufficio
+  // — invisibili a chi dovrà riprenderle quando il ricorso si chiude. Ora
+  // l'automatico le riconosce da sole («sospeso»); le righe già salvate però
+  // non si riscrivono da sole, e chiedere allo spazio di correggerle a mano
+  // una per una significherebbe lasciarle invisibili finché qualcuno se ne
+  // ricorda. Qui si riallineano da sé, quando lo spazio rilegge il suo
+  // V.E.R.A.: solo dove il trattamento è ancora «Ignora» — una scelta diversa
+  // fatta a mano resta com'è — e solo per le posizioni sospese.
+  //
+  // È idempotente: dopo il primo passaggio non c'è più nessuna riga da
+  // spostare, e la seconda volta non cambia nulla.
+  if (!giaGarantita(nomeSchema, 'vera_sospensioni')) {
+    await eseguiDdlTenant(sql`
+      UPDATE ${s}.debiti_vera
+         SET trattamento = 'sospeso'
+       WHERE trattamento = 'ignora'
+         AND (stato ILIKE '%sospes%'
+           OR combinazione IN (
+             SELECT chiave FROM ${s}.vera_trattamenti WHERE stato ILIKE '%sospes%'
+           ))`);
+    await eseguiDdlTenant(sql`
+      UPDATE ${s}.vera_trattamenti
+         SET trattamento = 'sospeso'
+       WHERE trattamento = 'ignora'
+         AND stato ILIKE '%sospes%'`);
+    segnaGarantita(nomeSchema, 'vera_sospensioni');
+  }
   await eseguiDdlTenant(
     sql`CREATE INDEX IF NOT EXISTS idx_debiti_vera_azienda ON ${s}.debiti_vera (azienda_id)`
   );

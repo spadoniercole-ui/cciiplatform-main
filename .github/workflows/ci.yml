@@ -45,7 +45,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Diagnostica: se un passo cade, il log dice su cosa (Docker, spazio,
+      # memoria) invece di lasciarlo dedurre.
+      - name: Contesto del runner
+        run: |
+          docker version
+          df -h /
+          free -m || true
+
+      # DOCKER HUB LIMITA I PULL ANONIMI. Il Dockerfile ha tre stadi e ognuno
+      # dichiara `FROM node:22-alpine`: senza l'immagine già in locale il
+      # registro viene interrogato più volte nella stessa build, e un 429
+      # («toomanyrequests») fa cadere il passo prima ancora di compilare.
+      # Si scarica una volta sola, con ritentativi; le tre stage la trovano in
+      # cache e non chiedono più nulla.
+      - name: Immagine di base (con ritentativi)
+        run: |
+          for tentativo in 1 2 3; do
+            if docker pull node:22-alpine; then
+              exit 0
+            fi
+            echo "::warning::Pull di node:22-alpine fallito (tentativo $tentativo)."
+            sleep 20
+          done
+          echo "::error::Docker Hub non ha servito node:22-alpine dopo tre tentativi."
+          exit 1
+
       # Solo costruzione (nessuna pubblicazione): verifica che server/Dockerfile
       # resti allineato al codice.
+      #
+      # `--progress=plain` fa vedere nel log quale comando è caduto; il secondo
+      # tentativo copre le cadute di rete dentro la build (npm ci), non un
+      # errore di codice — che resta rosso dopo il secondo tentativo.
       - name: Build immagine
-        run: docker build -f server/Dockerfile -t ccii-platform:ci .
+        run: |
+          for tentativo in 1 2; do
+            if docker build --progress=plain -f server/Dockerfile -t ccii-platform:ci .; then
+              echo "Immagine costruita (tentativo $tentativo)."
+              exit 0
+            fi
+            echo "::warning::Build dell'immagine fallita (tentativo $tentativo)."
+            sleep 10
+          done
+          echo "::error::La build dell'immagine server è caduta due volte."
+          exit 1

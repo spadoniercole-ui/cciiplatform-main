@@ -26,6 +26,23 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.14 — 2026-10-28
+
+**Le sospensioni già salvate si riallineano da sole, e l'immagine server non cade più per un pull**
+
+- Le verifiche salvate prima del trattamento «Sospesa (provvedimento giudiziario)»
+  tenevano quelle posizioni in «Ignora»: fuori dai totali e fuori da ogni ufficio. Ora
+  vengono riallineate da sole la prima volta che lo spazio rilegge il suo V.E.R.A. —
+  solo dove il trattamento è ancora «Ignora» (una scelta diversa fatta a mano resta
+  com'è) e solo per le posizioni sospese. È idempotente: dal secondo passaggio non
+  cambia nulla, e non serve correggerle a mano spazio per spazio.
+- CI: il job dell'immagine server scarica `node:22-alpine` una volta sola, con
+  ritentativi, prima della build. Il Dockerfile ha tre stadi che la dichiarano: senza
+  l'immagine in cache il registro viene interrogato più volte nella stessa build, e un
+  limite di Docker Hub faceva cadere il passo prima di compilare. La build ora usa
+  `--progress=plain` (si vede quale comando cade), ha un secondo tentativo per le
+  cadute di rete e un passo che registra Docker, spazio e memoria del runner.
+
 ## 0.139.13 — 2026-10-28
 
 **Le sospensioni giudiziarie hanno un posto loro, e la mappatura non porta via i report**
