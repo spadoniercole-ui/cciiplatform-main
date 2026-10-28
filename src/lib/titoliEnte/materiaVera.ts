@@ -73,6 +73,22 @@ export function materiaPerRigaVera(
     );
     if (perIndicativi) return out(perIndicativi, 'codice');
   }
+  // LA VOCE CONTA PIÙ DELLA SEZIONE.
+  //
+  // Le due cose si leggevano insieme ("voce sezione") e la sezione poteva
+  // decidere per tutte le sue righe: in un file il cui titolo è «FLUSSI
+  // UNIEMENS» ogni posizione senza codice diventava «flussi», compresi i
+  // verbali di evasione, che hanno una materia e un ufficio propri. La voce è
+  // il fatto più preciso — «Verbale Evasione» dice che cos'è quel debito, il
+  // titolo dice solo in che parte del file sta — quindi si prova prima da
+  // sola; il titolo entra solo se la voce non basta.
+  const perVoce = materiaSuggeritaPerDescrizione(voce, materie);
+  if (perVoce !== null) {
+    return out(
+      materie.find((m) => m.id === perVoce),
+      'descrizione'
+    );
+  }
   const id = materiaSuggeritaPerDescrizione(`${voce} ${sezione}`, materie);
   return id === null
     ? null

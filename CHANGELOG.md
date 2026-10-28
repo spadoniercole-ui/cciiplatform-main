@@ -26,6 +26,38 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.15 — 2026-10-28
+
+**La vigilanza torna a ricevere i suoi verbali.** Nel V.E.R.A. vero i verbali di evasione
+stanno dentro la sezione dei flussi contributivi («Gestione lavoratori dipendenti privati»).
+Da quando la sezione si può mappare dal triage, mapparla sui flussi — la scelta che il titolo
+suggerisce — trascinava con sé anche i verbali: un solo documento, quello del presidio dei
+flussi informativi, e l'ufficio di vigilanza senza il suo foglio (prima ne aveva uno con 5
+posizioni per 26.226,79 €).
+
+La materia di una posizione senza codice si legge ora prima dalla VOCE («Verbale Evasione»,
+«Note di rettifica», «Adr …») e solo in seconda battuta dal titolo della sezione: la voce dice
+che cos'è quel debito, il titolo dice soltanto in che parte del file sta. La mappatura della
+sezione resta il ripiego per ciò che il file non identifica, e continua a valere: le voci che
+nessuna materia riconosce vanno dove sono state mappate. La stessa precedenza vale per il
+report per unità operativa e per le comunicazioni, che leggono la stessa funzione.
+
+**Il registro delle consegne non si arrende a una tabella sparita.** La scheda mostrava
+«Registro non leggibile: relation … does not exist»: il DDL dei tenant si ricorda di essere
+già stato eseguito (`src/db/provision.ts`), e quella memoria può essere più vecchia della
+tabella. Ora la lettura riconosce l'assenza (`tabellaMancante`), dimentica la garanzia,
+ricrea la tabella e riprova una volta — per la lettura e per la registrazione, che è la prova
+che un documento è uscito.
+
+Le posizioni di sola manifestazione finanziaria («F24 non presentato») non hanno un ufficio
+che le lavori: restano fuori dai documenti, e ciò che resta fuori si dichiara — in testa al
+foglio se è già contabilizzato, nei riquadri di esclusione se è sospeso o fuori perimetro.
+Nessuna riga sparisce in silenzio.
+
+Test aggiunti: 6 (materia dalla voce prima che dalla sezione, instradamento con la mappatura
+come ripiego, il caso del file vero con vigilanza e presidio, tabella mancante e registro
+ricreato).
+
 ## 0.139.14 — 2026-10-28
 
 **Le sospensioni già salvate si riallineano da sole, e l'immagine server non cade più per un pull**

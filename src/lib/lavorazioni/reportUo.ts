@@ -387,18 +387,21 @@ export function componiReportUo(input: {
   /**
    * Dove va una riga, e sotto quale chiave.
    *
-   * Il codice di partita quando c'è; altrimenti la materia — quella scelta a
-   * mano sulla sezione, quella dedotta dai codici indicativi o dalla
-   * descrizione — e, se nessuna materia risponde, la categoria di debito della
-   * mappatura con il suo ufficio. `null` significa che non c'è nessuna chiave:
-   * la posizione non si attribuisce a nessuno e si conta.
+   * Il codice di partita quando c'è; altrimenti la materia che la voce dichiara
+   * (dai codici indicativi o dalla descrizione, prima della sola voce e poi con
+   * il titolo di sezione). La mappatura scelta per la sezione viene DOPO: è il
+   * ripiego per le sezioni che il file non riconduce a niente, e metterla prima
+   * faceva sì che una sezione mappata trascinasse via le posizioni che una
+   * materia ce l'avevano già — i verbali di evasione sul foglio dei flussi, e
+   * l'ufficio di vigilanza senza documento. Se nemmeno la mappatura risponde, la
+   * posizione resta senza chiave: si conta e si dichiara.
    */
   const colloca = (r: RigaVeraReportUo) => {
     const codice = codiceDaVoceVera(r.voce);
     const materiaId = codice
       ? (perCodiceTitolo.get(normalizzaCodice(codice))?.materiaId ?? null)
-      : (materiaDaChiave(r.categoria) ??
-        materiaPerRigaVera(r.voce, r.sezione, input.titoli, materieMinime)?.id ??
+      : (materiaPerRigaVera(r.voce, r.sezione, input.titoli, materieMinime)?.id ??
+        materiaDaChiave(r.categoria) ??
         null);
     const titolo = codice ? perCodiceTitolo.get(normalizzaCodice(codice)) : undefined;
     if (!codice && materiaId === null) {

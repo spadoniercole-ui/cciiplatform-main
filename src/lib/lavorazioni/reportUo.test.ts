@@ -425,4 +425,67 @@ describe('report UO: le sospese e la mappatura delle sezioni', () => {
     expect(vigilanza?.totale).toBe(500);
     expect(dopo.senzaCodice).toEqual({ righe: 0, totale: 0 });
   });
+
+  // IL CASO DEL FILE VERO. La gestione contributiva contiene anche i verbali
+  // («Verbale Evasione»): mappando la sezione sui flussi — la scelta che sembra
+  // ovvia, il titolo parla di Uniemens — i verbali finivano sul foglio del
+  // presidio e l'ufficio di vigilanza non riceveva più il suo documento. La
+  // mappatura è un ripiego: vale per ciò che la voce non identifica.
+  it('la sezione mappata non si porta via le posizioni che la voce identifica', () => {
+    const esito = componiReportUo({
+      azienda: 'Aretusea Detergenti S.r.l.',
+      dataVerifica: '2026-10-28',
+      titoli: [],
+      materie: [
+        { id: 10, nome: 'Flussi Uniemens' },
+        { id: 11, nome: 'Verbali ispettivi' },
+      ],
+      lavorazioni: [
+        lav({ id: 1, materiaId: 10, dipendenza: 'Presidio dei flussi informativi' }),
+        lav({
+          id: 2,
+          materiaId: 11,
+          dipendenza: 'Vigilanza documentale',
+          tipologia: 'Acquisizione del verbale',
+        }),
+      ],
+      righe: [
+        ...[
+          ['202005 - 202005', 4_959.16],
+          ['202006 - 202006', 6_694.63],
+          ['202006 - 202006', 4_230.24],
+          ['202007 - 202007', 5_859.87],
+          ['202007 - 202007', 4_482.89],
+        ].map(([periodo, importo]) =>
+          riga({
+            sezione: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+            voce: 'Verbale Evasione',
+            periodo: periodo as string,
+            stato: 'Verificata',
+            importo: importo as number,
+            categoria: 'MATERIA:10',
+          })
+        ),
+        riga({
+          sezione: 'FLUSSI UNIEMENS',
+          voce: 'Denunce non trasmesse',
+          stato: 'Da Verificare',
+          importo: 191.47,
+          categoria: 'MATERIA:10',
+        }),
+      ],
+    });
+
+    const perUfficio = new Map(esito.documenti.map((d) => [d.dipendenza, d]));
+    expect(Array.from(perUfficio.keys()).sort()).toEqual([
+      'Presidio dei flussi informativi',
+      'Vigilanza documentale',
+    ]);
+    const vigilanza = perUfficio.get('Vigilanza documentale')!;
+    expect(vigilanza.righe).toBe(5);
+    expect(vigilanza.totale).toBeCloseTo(26_226.79, 2);
+    expect(vigilanza.codici[0].materia).toBe('Verbali ispettivi');
+    // La mappatura resta utile dove la voce non basta.
+    expect(perUfficio.get('Presidio dei flussi informativi')!.totale).toBeCloseTo(191.47, 2);
+  });
 });

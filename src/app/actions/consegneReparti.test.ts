@@ -7,6 +7,10 @@ import { PGlite } from '@electric-sql/pglite';
 // alias sbagliato in RETURNING o un importo letto come stringa si vedrebbero
 // solo qui.
 const db = await PGlite.create();
+// La garanzia in memoria di src/db/provision.ts: il DDL si fa una volta per
+// processo e per schema, ed è proprio quella memoria a poter essere più vecchia
+// della tabella. Il finto DDL qui la riproduce.
+const garantite = new Set<string>();
 
 vi.mock('@/lib/db', () => ({
   pool: { query: (testo: string, parametri?: unknown[]) => db.query(testo, parametri) },
@@ -23,6 +27,7 @@ vi.mock('@/lib/autorizzazione', () => ({ richiediAccessoAzienda }));
 // configurato, non con il PGlite del test.
 vi.mock('@/db/provision', () => ({
   assicuraTabellaConsegneReparti: async (nomeSchema: string) => {
+    if (garantite.has(nomeSchema)) return;
     await db.exec(`CREATE TABLE IF NOT EXISTS "${nomeSchema}".consegne_reparti (
       id SERIAL PRIMARY KEY,
       azienda_id INTEGER REFERENCES "${nomeSchema}".aziende(id) ON DELETE SET NULL,
@@ -44,6 +49,11 @@ vi.mock('@/db/provision', () => ({
       invio_confermato_il TIMESTAMPTZ,
       invio_confermato_da TEXT
     )`);
+    garantite.add(nomeSchema);
+  },
+  dimenticaTabelleGarantite: (nomeSchema?: string) => {
+    if (!nomeSchema) garantite.clear();
+    else garantite.delete(nomeSchema);
   },
 }));
 
@@ -74,6 +84,7 @@ async function righeRegistrate(): Promise<number> {
 
 beforeEach(async () => {
   richiediAccessoAzienda.mockClear();
+  garantite.clear();
   await db.exec(`
     DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE;
     CREATE SCHEMA ${SCHEMA};
@@ -357,5 +368,26 @@ describe('confermaInvioConsegnaAction', () => {
     expect(esito.success).toBe(false);
     expect(esito.error).toContain('Consegna non valida');
     expect(await righeRegistrate()).toBe(0);
+  });
+});
+
+describe('registro: la tabella ricreata', () => {
+  // Il DDL dei tenant si ricorda di essere già stato eseguito: se la tabella
+  // sparisce sotto, senza questa riparazione la scheda mostrava «relation …
+  // does not exist» al posto del registro.
+  it('se la tabella sparisce sotto, si ricrea e la lettura non va in errore', async () => {
+    await registraConsegnaRepartoAction(SCHEMA, AZIENDA, consegna);
+    expect(await righeRegistrate()).toBe(1);
+
+    await db.exec(`DROP TABLE ${SCHEMA}.consegne_reparti`);
+
+    const registro = await ottieniConsegneRepartiAction(SCHEMA, AZIENDA);
+    expect(registro.success).toBe(true);
+    expect(registro.error).toBeUndefined();
+    expect(registro.consegne).toEqual([]);
+    // La tabella è tornata: la registrazione successiva funziona.
+    const dopo = await registraConsegnaRepartoAction(SCHEMA, AZIENDA, consegna);
+    expect(dopo.success).toBe(true);
+    expect(await righeRegistrate()).toBe(1);
   });
 });

@@ -1,5 +1,26 @@
 import { describe, it, expect } from 'vitest';
-import { eCorsaDdlBenigna } from './corsaDdl';
+import { eCorsaDdlBenigna, tabellaMancante } from './corsaDdl';
+
+describe('tabellaMancante', () => {
+  it('riconosce undefined_table, anche avvolto da Drizzle', () => {
+    expect(tabellaMancante({ code: '42P01' })).toBe(true);
+    const avvolto = new Error('Failed query');
+    (avvolto as any).cause = { code: '42P01' };
+    expect(tabellaMancante(avvolto)).toBe(true);
+  });
+
+  it('riconosce il messaggio quando il driver non espone il codice (portable)', () => {
+    expect(
+      tabellaMancante(new Error('relation "tenant_alfa.consegne_reparti" does not exist'))
+    ).toBe(true);
+  });
+
+  it('un errore vero non passa per tabella assente', () => {
+    expect(tabellaMancante({ code: '23514' })).toBe(false);
+    expect(tabellaMancante(new Error('boom'))).toBe(false);
+    expect(tabellaMancante(null)).toBe(false);
+  });
+});
 
 describe('eCorsaDdlBenigna', () => {
   it('"già esistente" (tabella, colonna, vincolo) è benigno', () => {

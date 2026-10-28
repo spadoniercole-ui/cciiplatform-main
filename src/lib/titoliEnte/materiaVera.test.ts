@@ -5,6 +5,7 @@ const materie: MateriaMinima[] = [
   { id: 1, nome: 'FLUSSI UNIEMENS', codiciIndicativi: '27', stato: 'CONFERMATA' },
   { id: 2, nome: 'NOTE DI RETTIFICA', codiciIndicativi: '25', stato: 'CONFERMATA' },
   { id: 3, nome: 'Avvisi di addebito', codiciIndicativi: null, stato: 'PROPOSTA' },
+  { id: 4, nome: 'VERBALI ISPETTIVI', codiciIndicativi: null, stato: 'CONFERMATA' },
 ];
 
 describe('materia di una riga V.E.R.A.', () => {
@@ -42,5 +43,18 @@ describe('materia di una riga V.E.R.A.', () => {
     expect(adr?.nome).toBe('Avvisi di addebito');
     expect(adr?.via).toBe('descrizione');
     expect(materiaPerRigaVera('Voce misteriosa', 'X', [], materie)).toBeNull();
+  });
+
+  // Il file mette i verbali nella stessa sezione dei flussi contributivi. Se a
+  // decidere è il titolo di sezione, ogni posizione senza codice diventa
+  // «flussi» — e l'ufficio di vigilanza non riceve più il suo verbale.
+  it('la voce vince sul titolo della sezione', () => {
+    expect(materiaPerRigaVera('Verbale Evasione', 'FLUSSI UNIEMENS', [], materie)?.nome).toBe(
+      'VERBALI ISPETTIVI'
+    );
+    // La sezione resta la via di ripiego quando la voce da sola non dice nulla.
+    expect(materiaPerRigaVera('Interessi di mora', 'FLUSSI UNIEMENS', [], materie)?.nome).toBe(
+      'FLUSSI UNIEMENS'
+    );
   });
 });

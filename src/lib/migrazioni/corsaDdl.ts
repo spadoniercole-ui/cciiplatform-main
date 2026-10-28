@@ -35,6 +35,32 @@ function erroreDriver(error: unknown): ErrorePostgres | null {
   return null;
 }
 
+/**
+ * L'oggetto su cui si sta scrivendo NON esiste (`undefined_table`).
+ *
+ * È l'opposto della corsa benigna: lì l'oggetto c'è già e il DDL non serve,
+ * qui manca e il DDL idempotente lo ricrea. Serve a chi si ricorda di aver già
+ * garantito una tabella (`src/db/provision.ts`): se la tabella è sparita sotto
+ * — schema ricreato da un ripristino, garanzia ereditata da un altro stato —
+ * l'errore va riconosciuto per dimenticare la garanzia e rifare il DDL, invece
+ * di mostrarlo a chi stava solo leggendo un diario.
+ *
+ * Si guarda anche il messaggio: PGlite (portable) non sempre espone `code`.
+ */
+export function tabellaMancante(error: unknown): boolean {
+  const e = erroreDriver(error);
+  if (e && e.code === '42P01') return true;
+  let corrente: unknown = error;
+  for (let i = 0; i < 4 && corrente && typeof corrente === 'object'; i++) {
+    const messaggio = (corrente as { message?: unknown }).message;
+    if (typeof messaggio === 'string' && /relation .* does not exist/i.test(messaggio)) {
+      return true;
+    }
+    corrente = (corrente as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 export function eCorsaDdlBenigna(error: unknown): boolean {
   const e = erroreDriver(error);
   if (!e) return false;

@@ -21,7 +21,8 @@
 
 import { pool } from '@/lib/db';
 import { richiediAccessoAzienda } from '@/lib/autorizzazione';
-import { assicuraTabellaConsegneReparti } from '@/db/provision';
+import { assicuraTabellaConsegneReparti, dimenticaTabelleGarantite } from '@/db/provision';
+import { tabellaMancante } from '@/lib/migrazioni/corsaDdl';
 import {
   consegnaDaRiga,
   validaConfermaInvio,
@@ -56,6 +57,31 @@ function aziendaValida(aziendaId: number): boolean {
   return Number.isInteger(aziendaId) && aziendaId > 0;
 }
 
+/**
+ * Esegue un'operazione sul registro dopo aver garantito la tabella.
+ *
+ * Il DDL dei tenant si esegue una volta per processo e per schema
+ * (`src/db/provision.ts`), e quella garanzia non sa se la tabella è sparita
+ * sotto: uno schema ricreato da un ripristino, o una garanzia ereditata da uno
+ * stato che non c'è più, lasciavano la scheda con «relation … does not exist»
+ * al posto del registro — e uno scaricamento che non si registra è una consegna
+ * che nessuno può dimostrare. Qui l'assenza si riconosce, la garanzia si
+ * dimentica, la tabella si ricrea e l'operazione si ripete UNA volta. Un diario
+ * vuoto è un esito; un errore SQL no.
+ */
+async function conTabellaConsegne<T>(nomeSchema: string, esegui: () => Promise<T>): Promise<T> {
+  await assicuraTabellaConsegneReparti(nomeSchema);
+  try {
+    return await esegui();
+  } catch (error) {
+    if (!tabellaMancante(error)) throw error;
+    console.warn(`[consegne_reparti] Tabella assente in ${nomeSchema}: la ricreo.`);
+    dimenticaTabelleGarantite(nomeSchema);
+    await assicuraTabellaConsegneReparti(nomeSchema);
+    return esegui();
+  }
+}
+
 export interface EsitoRegistrazioneConsegna {
   success: boolean;
   consegna?: ConsegnaRegistrata;
@@ -83,30 +109,31 @@ export async function registraConsegnaRepartoAction(
     if (!validato.ok) return { success: false, error: validato.errore };
     const dati = validato.dati;
 
-    await assicuraTabellaConsegneReparti(nomeSchema);
-    const r = await pool.query(
-      // La ragione sociale è letta dal database, non dal browser: è una
-      // fotografia dell'anagrafica al momento della consegna e deve dire
-      // quello che dice la piattaforma, non quello che le è stato inviato.
-      `INSERT INTO "${nomeSchema}".consegne_reparti
+    const r = await conTabellaConsegne(nomeSchema, () =>
+      pool.query(
+        // La ragione sociale è letta dal database, non dal browser: è una
+        // fotografia dell'anagrafica al momento della consegna e deve dire
+        // quello che dice la piattaforma, non quello che le è stato inviato.
+        `INSERT INTO "${nomeSchema}".consegne_reparti
          (azienda_id, ragione_sociale, reparto, tipo, data_verifica, versione, nome_file, righe,
           totale, posizioni_da_contabilizzare, importo_da_contabilizzare, consegnato_da)
        VALUES ($1, (SELECT ragione_sociale FROM "${nomeSchema}".aziende WHERE id = $1),
                $2, $11, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING ${COLONNE_REGISTRO}`,
-      [
-        aziendaId,
-        dati.reparto,
-        dati.dataVerifica,
-        dati.versione,
-        dati.nomeFile,
-        dati.righe,
-        dati.totale,
-        dati.posizioniDaContabilizzare,
-        dati.importoDaContabilizzare,
-        contesto.modalita === 'SALVAGENTE' ? 'Superadmin (ispezione)' : (contesto.email ?? null),
-        dati.tipo ?? 'reparto',
-      ]
+        [
+          aziendaId,
+          dati.reparto,
+          dati.dataVerifica,
+          dati.versione,
+          dati.nomeFile,
+          dati.righe,
+          dati.totale,
+          dati.posizioniDaContabilizzare,
+          dati.importoDaContabilizzare,
+          contesto.modalita === 'SALVAGENTE' ? 'Superadmin (ispezione)' : (contesto.email ?? null),
+          dati.tipo ?? 'reparto',
+        ]
+      )
     );
     return { success: true, consegna: consegnaDaRiga(r.rows[0]) };
   } catch (error: unknown) {
@@ -144,22 +171,22 @@ export async function ottieniConsegneRepartiAction(
     if (!aziendaValida(aziendaId)) {
       return { success: false, consegne: [], error: 'Azienda non valida.' };
     }
-    await assicuraTabellaConsegneReparti(nomeSchema);
-    const r = await pool.query(
-      // L'ULTIMA CONSEGNA PER REPARTO, non tutto il diario. `riassumiConsegne`
-      // ne tiene una riga per reparto: scaricare ogni evento di un'azienda
-      // seguita per mesi significava trasferire migliaia di righe per mostrarne
-      // dieci, a ogni cambio di fase della scheda.
-      //
-      // `DISTINCT ON` prende la più recente di ogni reparto (nome senza
-      // maiuscole, come il raggruppamento nel client) e la finestra conta gli
-      // scaricamenti veri, così il numero mostrato non è «1» per costruzione.
-      //
-      // to_char: la colonna è DATE, e il driver la rende come Date a mezzanotte
-      // (locale con `pg`, UTC con PGlite in portable). Passare da Date sposterebbe
-      // il giorno a seconda del fuso e del driver; come testo è sempre il giorno
-      // scritto nel database. Vale per data_verifica e per inviata_il.
-      `SELECT DISTINCT ON (tipo, lower(reparto)) *
+    const r = await conTabellaConsegne(nomeSchema, () =>
+      pool.query(
+        // L'ULTIMA CONSEGNA PER REPARTO, non tutto il diario. `riassumiConsegne`
+        // ne tiene una riga per reparto: scaricare ogni evento di un'azienda
+        // seguita per mesi significava trasferire migliaia di righe per mostrarne
+        // dieci, a ogni cambio di fase della scheda.
+        //
+        // `DISTINCT ON` prende la più recente di ogni reparto (nome senza
+        // maiuscole, come il raggruppamento nel client) e la finestra conta gli
+        // scaricamenti veri, così il numero mostrato non è «1» per costruzione.
+        //
+        // to_char: la colonna è DATE, e il driver la rende come Date a mezzanotte
+        // (locale con `pg`, UTC con PGlite in portable). Passare da Date sposterebbe
+        // il giorno a seconda del fuso e del driver; come testo è sempre il giorno
+        // scritto nel database. Vale per data_verifica e per inviata_il.
+        `SELECT DISTINCT ON (tipo, lower(reparto)) *
          FROM (
            SELECT ${COLONNE_REGISTRO},
                   count(*) OVER (PARTITION BY tipo, lower(reparto)) AS scaricamenti
@@ -168,7 +195,8 @@ export async function ottieniConsegneRepartiAction(
          ) AS registro
         ORDER BY tipo, lower(reparto), consegnato_il DESC, id DESC
         LIMIT ${MASSIMO_REPARTI}`,
-      [aziendaId]
+        [aziendaId]
+      )
     );
     return { success: true, consegne: r.rows.map(consegnaDaRiga) };
   } catch (error: unknown) {
@@ -225,21 +253,22 @@ export async function confermaInvioConsegnaAction(
     if (!validato.ok) return { success: false, error: validato.errore };
     const dati = validato.dati;
 
-    await assicuraTabellaConsegneReparti(nomeSchema);
-    const r = await pool.query(
-      `UPDATE "${nomeSchema}".consegne_reparti
+    const r = await conTabellaConsegne(nomeSchema, () =>
+      pool.query(
+        `UPDATE "${nomeSchema}".consegne_reparti
           SET inviata_il = $1, mezzo_invio = $2, note_invio = $3,
               invio_confermato_il = now(), invio_confermato_da = $4
         WHERE id = $5 AND azienda_id = $6 AND invio_confermato_il IS NULL
         RETURNING ${COLONNE_REGISTRO}`,
-      [
-        dati.inviataIl,
-        dati.mezzo,
-        dati.note,
-        contesto.modalita === 'SALVAGENTE' ? 'Superadmin (ispezione)' : (contesto.email ?? null),
-        consegnaId,
-        aziendaId,
-      ]
+        [
+          dati.inviataIl,
+          dati.mezzo,
+          dati.note,
+          contesto.modalita === 'SALVAGENTE' ? 'Superadmin (ispezione)' : (contesto.email ?? null),
+          consegnaId,
+          aziendaId,
+        ]
+      )
     );
 
     // Nessuna riga restituita da un UPDATE ... RETURNING = nessuna riga

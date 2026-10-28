@@ -89,30 +89,38 @@ describe('instradamento delle posizioni V.E.R.A. per materia', () => {
     expect(esito.senzaDestinazione).toEqual({ righe: 0, totale: 0 });
   });
 
-  it('la materia scelta a mano sulla sezione vince su quella dedotta', () => {
-    const esito = instradaPerMateria([riga({ categoria: chiaveMateria(2) })], {
-      titoli: TITOLI,
-      materie: MATERIE,
-      lavorazioni: [
-        ...LAVORAZIONI,
-        {
-          id: 3,
-          materiaId: 2,
-          tipologia: 'Emissione del verbale',
-          dipendenza: 'Ufficio Verbali',
-          procedura: null,
-          esito: null,
-          ordine: 1,
-        },
-      ],
-    });
+  it('la materia scelta sulla sezione è un ripiego, non un ordine', () => {
+    const lavorazioni: LavorazioneMateria[] = [
+      ...LAVORAZIONI,
+      {
+        id: 3,
+        materiaId: 2,
+        tipologia: 'Emissione del verbale',
+        dipendenza: 'Ufficio Verbali',
+        procedura: null,
+        esito: null,
+        ordine: 1,
+      },
+    ];
 
-    // La voce porta il codice 27 (materia 1), ma l’operatore ha scelto la 2.
-    expect(esito.righe[0].categoria).toBe(chiaveMateria(2));
-    expect(esito.perMateria).toEqual([
+    // La sezione contributiva è mappata sui flussi, ma la voce nomina un
+    // verbale: va ai verbali (e al loro ufficio).
+    const conVoce = instradaPerMateria(
+      [riga({ sezione: 'FLUSSI UNIEMENS', voce: 'Verbale Evasione', categoria: chiaveMateria(1) })],
+      { titoli: TITOLI, materie: MATERIE, lavorazioni }
+    );
+    expect(conVoce.righe[0].categoria).toBe(chiaveMateria(2));
+    expect(conVoce.perMateria).toEqual([
       { materiaId: 2, nome: 'Verbali di accertamento', righe: 1, totale: 1200 },
     ]);
-    expect(esito.lavorazioni.some((l) => l.destinatario === 'Ufficio Verbali')).toBe(true);
+    expect(conVoce.lavorazioni.some((l) => l.destinatario === 'Ufficio Verbali')).toBe(true);
+
+    // Dove il file non identifica niente, la scelta sulla sezione vale.
+    const senzaVoce = instradaPerMateria(
+      [riga({ sezione: 'SEZIONE NUOVA', voce: 'Voce misteriosa', categoria: chiaveMateria(2) })],
+      { titoli: TITOLI, materie: MATERIE, lavorazioni }
+    );
+    expect(senzaVoce.righe[0].categoria).toBe(chiaveMateria(2));
   });
 
   it('senza materia resta la categoria vecchia, con le sue lavorazioni', () => {

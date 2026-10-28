@@ -148,14 +148,23 @@ export function instradaPerMateria<R extends RigaInstradabile>(
   const senzaDestinazione = { righe: 0, totale: 0 };
 
   const instradate = righe.map((r) => {
-    // Precedenza: la scelta esplicita sulla sezione, poi la materia che il
-    // server ha già risolto per quella riga, poi la deduzione dal codice e
-    // dalla descrizione. La categoria vecchia resta solo se nessuna delle tre
-    // produce una materia utilizzabile.
+    // Precedenza: la materia che la POSIZIONE stessa dichiara — quella già
+    // risolta dal server, il codice di partita, la voce e solo in ultimo il
+    // titolo di sezione — e, soltanto se nessuna di queste risponde, la
+    // mappatura scelta per la sezione.
+    //
+    // PERCHÉ LA MAPPATURA NON VIENE PRIMA. La mappatura esiste per le sezioni
+    // che non si riconducono a niente (§ la finestra «Mappa le sezioni»): è un
+    // ripiego, non un ordine. Mettendola davanti, una sezione mappata su una
+    // materia trascinava con sé anche le posizioni che una materia ce l'avevano
+    // già — i «Verbale Evasione» di una gestione contributiva finivano sul
+    // foglio dei flussi informativi, e l'ufficio di vigilanza non riceveva più
+    // nulla. Una voce che dice che cos'è il debito non può essere scavalcata
+    // dal titolo della sezione in cui il file l'ha messa.
     const scelta =
-      materiaDaChiave(r.categoria) ??
       r.materia?.id ??
       materiaPerRigaVera(r.voce, r.sezione, opzioni.titoli, opzioni.materie)?.id ??
+      materiaDaChiave(r.categoria) ??
       null;
     const materiaId = scelta;
     if (materiaId !== null && perMateria.has(materiaId)) {
