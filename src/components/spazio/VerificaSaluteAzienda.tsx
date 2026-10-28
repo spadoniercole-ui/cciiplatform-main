@@ -3042,7 +3042,22 @@ export function VerificaSaluteAzienda({
                       reportUo.senzaCodice.righe === 1
                         ? 'posizione non porta né un codice di partita né una materia riconoscibile: resta fuori dal report'
                         : 'posizioni non portano né un codice di partita né una materia riconoscibile: restano fuori dal report'
-                    } (${formattaImportoEuro(reportUo.senzaCodice.totale)}).`}
+                    } (${formattaImportoEuro(reportUo.senzaCodice.totale)}).`}{' '}
+                    {/* LA MAPPATURA SI APRE ANCHE DA QUI. Chi guarda il report per
+                        primo arriva a questo avviso, non a quello delle
+                        comunicazioni: se il comando vivesse solo là, l'ingresso
+                        dipenderebbe dal riquadro in cui si passa prima. La
+                        finestra è la stessa, e il salvataggio aggancia le righe
+                        già lette allo stesso modo. */}
+                    {sezioniDaMappare.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setMostraMappaturaVera(true)}
+                        className="font-bold text-sky-700 hover:underline"
+                      >
+                        Mappa le sezioni qui
+                      </button>
+                    )}
                   </p>
                 )}
                 {reportUo.codiciSenzaLavorazione > 0 && (

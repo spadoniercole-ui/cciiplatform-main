@@ -26,6 +26,17 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.12 — 2026-10-28
+
+**La mappatura V.E.R.A. si apre anche dal report per unità operativa**
+
+L'avviso del report che dichiara le posizioni senza codice di partita e senza materia
+riconoscibile diceva il danno ma non offriva il rimedio: il comando per mappare le
+sezioni viveva solo nel riquadro delle comunicazioni ai colleghi, così chi guardava il
+report per primo doveva andarlo a cercare altrove. Ora anche quell'avviso porta
+«Mappa le sezioni qui», apre la stessa finestra e, al salvataggio, aggancia le posizioni
+già lette allo stesso modo: i documenti per le unità operative si compongono subito.
+
 ## 0.139.11 — 2026-10-28
 
 **La mappatura V.E.R.A. si fa dal triage, e aggancia subito le posizioni**

@@ -768,7 +768,16 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
       ).toBeTruthy()
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Mappa le sezioni qui/i }));
+    // DUE INGRESSI, LA STESSA FINESTRA. Il comando sta nell'avviso delle
+    // comunicazioni e in quello del report: chi guarda il report per primo non
+    // deve andarlo a cercare nell'altro riquadro. Qui si entra da quello del
+    // report, che è il caso nuovo.
+    const report = sezioneDi('Report per unità operativa');
+    const mappaDalReport = within(report).getByRole('button', {
+      name: /Mappa le sezioni qui/i,
+    });
+    expect(screen.getAllByRole('button', { name: /Mappa le sezioni qui/i })).toHaveLength(2);
+    fireEvent.click(mappaDalReport);
     const finestra = await screen.findByRole('dialog');
     const scelta = await within(finestra).findByLabelText(/Destinazione di Gestione artisti/i);
     fireEvent.change(scelta, { target: { value: 'MATERIA:1' } });
@@ -791,9 +800,8 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
         screen.getByText('Puoi procedere alle comunicazioni per le unità operative')
       ).toBeTruthy()
     );
-    const unitaOperative = sezioneDi('Report per unità operativa');
-    expect(within(unitaOperative).getByText('Ufficio Recupero Crediti')).toBeTruthy();
-    expect(within(unitaOperative).getAllByText(/1 posizione/).length).toBeGreaterThan(0);
+    expect(within(report).getByText('Ufficio Recupero Crediti')).toBeTruthy();
+    expect(within(report).getAllByText(/1 posizione/).length).toBeGreaterThan(0);
   });
 
   it('«Verifica un’altra azienda» riporta al caricamento, senza restare sull’esito', async () => {
