@@ -72,12 +72,26 @@ export async function salvaMappaturaTitoliVeraAction(
     await assicuraTabelleVera(nomeSchema);
     for (const v of voci) {
       if (!v.norm || !v.categoria) continue;
-      await pool.query(
+      const ris = await pool.query(
         `INSERT INTO "${nomeSchema}".vera_titoli (titolo_norm, titolo, categoria)
          VALUES ($1, $2, $3)
-         ON CONFLICT (titolo_norm) DO UPDATE SET titolo = EXCLUDED.titolo, categoria = EXCLUDED.categoria`,
+         ON CONFLICT (titolo_norm) DO UPDATE SET titolo = EXCLUDED.titolo, categoria = EXCLUDED.categoria
+         RETURNING titolo`,
         [v.norm, v.label, v.categoria]
       );
+      // L'AGGANCIO AL PROSPETTO: la mappatura vale subito anche sulle righe già
+      // importate. Chi mappa una sezione dal triage ha davanti le posizioni di
+      // quella verifica; se la nuova destinazione restasse solo sulla tabella
+      // delle sezioni, i documenti si ricomporrebbero identici e la scelta
+      // sembrerebbe non aver fatto nulla. Il confronto è sul titolo della
+      // sezione, che è quello scritto nelle righe del file.
+      const titolo = ris.rows[0]?.titolo as string | undefined;
+      if (titolo) {
+        await pool.query(
+          `UPDATE "${nomeSchema}".debiti_vera SET categoria = $2 WHERE sezione = $1`,
+          [titolo, v.categoria]
+        );
+      }
     }
     return { success: true };
   } catch (error: any) {

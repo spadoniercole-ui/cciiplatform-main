@@ -41,7 +41,6 @@ import {
   Info,
   Copy,
   ClipboardList,
-  Building2,
   FileDown,
   Send,
   Layers,
@@ -112,12 +111,14 @@ import {
   formattaImportoEuro,
   raggruppaPerReparto,
 } from '@/lib/lavorazioni/comunicazioni';
-import { preparaDocumentiReparto, type DocumentoReparto } from '@/lib/lavorazioni/reparti';
 import { componiReportUo, type DocumentoUo } from '@/lib/lavorazioni/reportUo';
 import { testiContabilizzate } from '@/lib/lavorazioni/daLavorare';
 import { instradaPerMateria, materiaDaChiave } from '@/lib/lavorazioni/instradamentoMateria';
-import { chiaveDipendenza, dipendenzeSosia } from '@/lib/lavorazioni/dipendenze';
+import { chiaveDipendenza } from '@/lib/lavorazioni/dipendenze';
 import { conRitorno } from '@/lib/navigazione/ritorno';
+import { materiaPerRigaVera } from '@/lib/titoliEnte/materiaVera';
+import { normalizzaEtichetta } from '@/lib/debitiEnte/tracciatoCore';
+import { MappaturaSezioniVera } from '@/components/spazio/MappaturaSezioniVera';
 import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import type { StatoMateria } from '@/lib/titoliEnte/materie';
@@ -305,6 +306,10 @@ export function VerificaSaluteAzienda({
   >([]);
   const [lavorazioniUo, setLavorazioniUo] = useState<LavorazioneMateria[]>([]);
   const [erroreUo, setErroreUo] = useState<string | null>(null);
+  // La finestra che mappa le sezioni V.E.R.A. non riconosciute. La mappatura
+  // è un dato dello SPAZIO, non dell'azienda: si fa qui, senza uscire dal
+  // triage e senza aspettare che l'anagrafica sblocchi la scheda V.E.R.A.
+  const [mostraMappaturaVera, setMostraMappaturaVera] = useState(false);
   // La verifica riaperta: dice se l'azienda è ancora in verifica (si può
   // decidere) o è già stata presa in carico, e con quale data si è verificata.
   const [ripresa, setRipresa] = useState<VerificaDaRiprendere | null>(null);
@@ -1387,25 +1392,11 @@ export function VerificaSaluteAzienda({
     [aziendaMostrata, dataVerifica, instradamento, raggruppamentoReparti]
   );
 
-  // Un documento per reparto: le posizioni da lavorare e le attività di
-  // contabilizzazione, da scaricare e inviare per conto proprio. Sta accanto
-  // alla presa in carico, non al posto suo: chi decide di non procedere ha
-  // comunque bisogno di sapere che cosa c'è da contabilizzare, e chi procede
-  // deve poter consegnare i debiti ai reparti prima che il resto parta.
-  const documentiReparti = useMemo(
-    () =>
-      preparaDocumentiReparto(
-        {
-          azienda: aziendaMostrata,
-          dataVerifica,
-          righe: instradamento.righe,
-          lavorazioni: instradamento.lavorazioni,
-          etichette: instradamento.etichette,
-        },
-        raggruppamentoReparti
-      ),
-    [aziendaMostrata, dataVerifica, instradamento, raggruppamentoReparti]
-  );
+  // UNA USCITA SOLA. Il documento per reparto è stato ritirato: il report
+  // per unità operativa dice le stesse cose e in più legge le lavorazioni
+  // delle materie — la procedura che l'ufficio deve eseguire. Due documenti
+  // per lo stesso destinatario erano due versioni da tenere allineate, e la
+  // seconda era la meno informata delle due.
 
   // LA SECONDA USCITA: un report per unità operativa, raggruppato per codice
   // di partita. Le lavorazioni sono quelle della materia in cui il codice
@@ -1423,48 +1414,57 @@ export function VerificaSaluteAzienda({
     [aziendaMostrata, dataVerifica, righeVera, titoliUo, materieUo, lavorazioniUo]
   );
 
+  // LE SEZIONI CHE NON SANNO DOVE ANDARE, e la mappatura che si può fare qui.
+  //
+  // La mappatura sezione → materia (o categoria) è un dato dello spazio: vale
+  // per tutti i caricamenti, di tutte le aziende. Chiederla passando per la
+  // scheda dell'azienda significava uscire dal triage e tornare indietro, e in
+  // quella scheda la sezione si apriva solo dopo l'anagrafica. Qui si aprono
+  // solo le sezioni che davvero non si riconducono a niente: quelle a cui
+  // manca una lavorazione hanno già il loro rimando, che è un'altra cosa.
+  const sezioniDaMappare = useMemo(() => {
+    const perSezione = new Map<
+      string,
+      { norm: string; titolo: string; righe: number; totale: number }
+    >();
+    righeVera.forEach((r, i) => {
+      const categoria = (instradamento.righe[i]?.categoria ?? r.categoria ?? '').trim();
+      if (categoria) return;
+      if (r.trattamento === 'ignora') return;
+      if (materiaPerRigaVera(r.voce, r.sezione, titoliUo, materieUo) !== null) return;
+      const norm = normalizzaEtichetta(r.sezione);
+      if (!norm) return;
+      const voce = perSezione.get(norm) ?? {
+        norm,
+        titolo: r.sezione.trim() || '(sezione senza titolo)',
+        righe: 0,
+        totale: 0,
+      };
+      voce.righe += 1;
+      voce.totale += r.importo;
+      perSezione.set(norm, voce);
+    });
+    return Array.from(perSezione.values()).sort((a, b) =>
+      a.titolo.localeCompare(b.titolo, 'it-IT')
+    );
+  }, [righeVera, instradamento, titoliUo, materieUo]);
+
   // ---- LE COMUNICAZIONI PER LE UNITÀ OPERATIVE -------------------------
   // Il triage serviva a decidere; da quando produce documenti per gli uffici
   // serve anche a dire se quei documenti ci sono e per quali uffici. Un «puoi
   // procedere» senza numeri sarebbe una frase di cortesia: qui ci sono gli
   // uffici, le posizioni e l'importo, oppure il motivo per cui mancano.
-  const ufficiConDocumenti = Array.from(
-    new Set([
-      ...documentiReparti.documenti.map((d) => d.reparto),
-      ...reportUo.documenti.map((d) => d.dipendenza),
-    ])
-  ).sort((a, b) => a.localeCompare(b, 'it-IT'));
-  // LE POSIZIONI SI CONTANO PER UFFICIO, NON SOLO SUL DOCUMENTO DI REPARTO.
-  //
-  // Lo stesso ufficio compare in due uscite: il documento per reparto (che
-  // passa dalle lavorazioni configurate) e il report per unita' operativa (che
-  // usa la dipendenza del codice). Un codice con una dipendenza propria e una
-  // materia senza lavorazioni ha il suo report e nessun documento di reparto:
-  // contando solo i documenti per reparto l'avviso diceva «1 ufficio, 0
-  // posizioni, 0,00 euro» - le posizioni sembravano svanite - e mandava a un
-  // riquadro vuoto. Si conta per ufficio: il reparto se c'e', altrimenti il
-  // report, senza sommare due volte l'ufficio presente in entrambi.
-  const posizioniPerUfficio = new Map<string, { righe: number; totale: number }>();
-  for (const d of documentiReparti.documenti)
-    posizioniPerUfficio.set(chiaveDipendenza(d.reparto), { righe: d.righe, totale: d.totale });
-  for (const d of reportUo.documenti) {
-    const chiaveUfficio = chiaveDipendenza(d.dipendenza);
-    if (!posizioniPerUfficio.has(chiaveUfficio))
-      posizioniPerUfficio.set(chiaveUfficio, { righe: d.righe, totale: d.totale });
-  }
-  const posizioniUo = Array.from(posizioniPerUfficio.values()).reduce((a, v) => a + v.righe, 0);
-  const totaleUo = Array.from(posizioniPerUfficio.values()).reduce((a, v) => a + v.totale, 0);
+  // Ciò che il report non elenca — perché è già in contabilità — si dice nello
+  // stesso avviso che annuncia i documenti: altrimenti il suo totale sembra più
+  // basso del debito e nessuno sa dove sia finita la differenza.
   const avanzamentoUo = {
-    uffici: ufficiConDocumenti.length,
-    posizioni: posizioniUo,
-    totale: totaleUo,
-    // Ciò che i documenti non elencano — perché è già in contabilità — si dice
-    // nello stesso avviso che annuncia i documenti: altrimenti il loro totale
-    // sembra più basso del debito e nessuno sa dove sia finita la differenza.
-    contabilizzate: documentiReparti.contabilizzate,
-    contabilizzateAdr: documentiReparti.contabilizzateAdr,
-    codiciAdr: documentiReparti.codiciAdr,
-    duplicati: documentiReparti.duplicati,
+    uffici: reportUo.documenti.length,
+    posizioni: reportUo.documenti.reduce((a, d) => a + d.righe, 0),
+    totale: reportUo.documenti.reduce((a, d) => a + d.totale, 0),
+    contabilizzate: reportUo.contabilizzate,
+    contabilizzateAdr: reportUo.contabilizzateAdr,
+    codiciAdr: reportUo.codiciAdr,
+    duplicati: reportUo.duplicati,
   };
   const notaContabilizzate = testiContabilizzate(avanzamentoUo, formattaImportoEuro).collegiale;
 
@@ -1500,15 +1500,6 @@ export function VerificaSaluteAzienda({
     }
   };
 
-  // Gli uffici che si chiamano quasi uguale: lo stesso destinatario scritto in
-  // tre modi produce tre documenti. Non si uniscono d'ufficio — potrebbero
-  // essere sedi che rispondono a pratiche diverse — ma non si tace.
-  const ufficiSosia = dipendenzeSosia([
-    ...lavorazioni.map((l) => l.destinatario),
-    ...lavorazioniUo.map((l) => l.dipendenza),
-    ...titoliUo.map((t) => t.dipendenza),
-  ]);
-
   // LE MATERIE DA COMPLETARE, dall'elenco di ciò che resta fuori: una
   // lavorazione senza ufficio, o una tipologia senza lavorazione. I link ai
   // Parametri devono portare LÌ, e dire il nome di cosa manca.
@@ -1538,12 +1529,14 @@ export function VerificaSaluteAzienda({
       : `/spazio/${codice}/parametri/lavorazioni`,
     ritornoDaTriage
   );
+  // «Vedi le lavorazioni» era un vicolo cieco: la pagina dei Parametri mostra
+  // le stesse righe, e la tabella dei destinatari è in sola lettura. Resta il
+  // solo rimando su cui si può agire — quello che nomina la materia da
+  // completare — e sparisce quando non c'è nessuna materia da completare.
   const etichettaLavorazioni =
     materieDaCompletare.length > 0
       ? `Configura la lavorazione di «${nomiMaterieDaCompletare.join('», «')}»`
-      : LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
-        ? 'Vedi le lavorazioni'
-        : 'Configura le lavorazioni';
+      : null;
 
   // Il registro per destinatario: l'ultima consegna e quante volte il documento
   // è uscito. La chiave porta il TIPO di documento: le due impronte di versione
@@ -1557,81 +1550,6 @@ export function VerificaSaluteAzienda({
   const consegnePerDestinatario = new Map(
     riepilogoConsegne.map((c) => [chiaveConsegna(c.tipo, c.reparto), c])
   );
-  const repartiConDocumento = new Set(
-    documentiReparti.documenti.map((d) => chiaveDipendenza(d.reparto))
-  );
-  const consegneFuoriConfigurazione = riepilogoConsegne.filter(
-    (c) => c.tipo === 'reparto' && !repartiConDocumento.has(chiaveDipendenza(c.reparto))
-  );
-
-  // I reparti che hanno in mano una versione precedente: servono al conteggio
-  // in testa all'elenco e al comando che li riscarica tutti insieme.
-  const documentiSuperati = documentiReparti.documenti.filter(
-    (d) =>
-      statoConsegnaReparto(
-        consegnePerDestinatario.get(chiaveConsegna('reparto', d.reparto)),
-        d.versione
-      ).stato === 'superata'
-  );
-
-  /**
-   * Il PDF si carica solo quando si scarica: jsPDF pesa quanto mezza pagina,
-   * e la verifica si usa molto più spesso di quanto si scarichi il documento.
-   * Un caricamento fallito non resta muto — la pagina è la stessa che deve
-   * produrre quel file.
-   */
-  const scaricaDocumentoReparto = async (documento: DocumentoReparto): Promise<boolean> => {
-    setErrorePdf(null);
-    setAvvisoConsegna(null);
-    setPdfInCorso(documento.reparto);
-    try {
-      const { scaricaPdfReparto } = await import('@/lib/lavorazioni/pdfReparto');
-      scaricaPdfReparto(documento);
-    } catch (e) {
-      setErrorePdf(`PDF non generato: ${String(e)}`);
-      setPdfInCorso(null);
-      return false;
-    }
-
-    // Il file è già salvato: da qui in poi nulla può toglierlo. La
-    // registrazione viene dopo di proposito — un registro che non risponde
-    // non deve impedire di consegnare il documento al reparto — e se fallisce
-    // lo dice, perché allora la piattaforma non sa che quel foglio è uscito.
-    if (aziendaId) {
-      const r = await registraConsegnaRepartoAction(nomeSchema, aziendaId, {
-        reparto: documento.reparto,
-        dataVerifica: documento.dataVerifica,
-        versione: documento.versione,
-        nomeFile: documento.nomeFile,
-        righe: documento.righe,
-        totale: documento.totale,
-        posizioniDaContabilizzare: documento.posizioniDaContabilizzare,
-        importoDaContabilizzare: documento.importoDaContabilizzare,
-      });
-      const registrata = r.consegna;
-      if (r.success && registrata) {
-        setConsegneReparti((prev) => [registrata, ...prev]);
-        // Il passo successivo è dichiarare l'invio: il modulo si apre da solo
-        // sotto il reparto appena scaricato, con la data di oggi già dentro.
-        // È una proposta, non un obbligo — chi scarica per archiviare la
-        // lascia chiusa e la dichiara quando spedisce davvero.
-        setInviataIl(new Date().toISOString().slice(0, 10));
-        setNoteInvio('');
-        setErroreInvio(null);
-        setAvvisoInvio(null);
-        setConfermaAperta(chiaveConsegna('reparto', documento.reparto));
-      } else {
-        setAvvisoConsegna(
-          `Documento scaricato, ma la consegna non è stata registrata: ${
-            r.error ?? 'errore sconosciuto'
-          }`
-        );
-      }
-    }
-    setPdfInCorso(null);
-    return true;
-  };
-
   /**
    * Scarica il report di un'unità operativa e ne lascia traccia nel registro.
    *
@@ -1685,23 +1603,6 @@ export function VerificaSaluteAzienda({
   };
 
   /**
-   * Riscarica i documenti cambiati, uno via l'altro.
-   *
-   * Quando cambia la data della verifica tutti i reparti passano a
-   * «superata»: ripetere lo stesso gesto otto volte è il modo in cui un
-   * aggiornamento si dimentica a metà. Il ciclo è sequenziale di proposito —
-   * i download partono nell'ordine in cui si legge l'elenco — e si ferma al
-   * primo errore, perché il messaggio dev'essere quello del reparto che non
-   * è riuscito.
-   */
-  const riscaricaDocumentiSuperati = async () => {
-    for (const documento of documentiSuperati) {
-      const riuscito = await scaricaDocumentoReparto(documento);
-      if (!riuscito) break;
-    }
-  };
-
-  /**
    * Dichiara che il documento di un reparto è stato spedito.
    *
    * L'invio vero — la PEC, la mail, il protocollo — lo fa l'ufficio: qui se ne
@@ -1734,9 +1635,6 @@ export function VerificaSaluteAzienda({
       setInvioInCorso(false);
     }
   };
-
-  const confermaInvioReparto = (documento: DocumentoReparto) =>
-    confermaInvioDestinatario('reparto', documento.reparto);
 
   const copiaTesto = async (chiave: string, testo: string) => {
     setErroreCopia(null);
@@ -2508,6 +2406,26 @@ export function VerificaSaluteAzienda({
             </div>
           )}
 
+          {/* LA MAPPATURA, SENZA USCIRE DAL TRIAGE. Le scelte tornano qui e
+              si applicano alle righe già lette: comunicazioni e report si
+              ricompongono subito, senza ricaricare il file né la pagina. */}
+          {mostraMappaturaVera && (
+            <MappaturaSezioniVera
+              nomeSchema={nomeSchema}
+              sezioni={sezioniDaMappare}
+              onChiudi={() => setMostraMappaturaVera(false)}
+              onSalvate={(scelte) => {
+                setRigheVera((precedenti) =>
+                  precedenti.map((r) => {
+                    const scelta = scelte[normalizzaEtichetta(r.sezione)];
+                    return scelta ? { ...r, categoria: scelta } : r;
+                  })
+                );
+                setMostraMappaturaVera(false);
+              }}
+            />
+          )}
+
           {/*
             «NON PROCEDO» — LA FINESTRA DEL MOTIVO.
 
@@ -2712,13 +2630,14 @@ export function VerificaSaluteAzienda({
                     ? 'posizione V.E.R.A. non ha'
                     : 'posizioni V.E.R.A. non hanno'
                 } né una materia né una categoria: la sezione non è mappata e la posizione resta fuori dalle comunicazioni.`}{' '}
-                {tipoSpazio === 'ENTE' && aziendaId && (
-                  <a
-                    href={`/spazio/${codice}/aziende/${aziendaId}/posizione-ente?scheda=vera`}
+                {sezioniDaMappare.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setMostraMappaturaVera(true)}
                     className="font-bold text-sky-700 hover:underline"
                   >
-                    Mappa le sezioni in Posizione V.E.R.A.
-                  </a>
+                    Mappa le sezioni qui
+                  </button>
                 )}
               </p>
             )}
@@ -2741,12 +2660,14 @@ export function VerificaSaluteAzienda({
                 generale: «configura le lavorazioni» senza dire quale lasciava
                 l'operatore davanti a una pagina di cui doveva indovinare la
                 riga. */}
-            <a
-              href={linkLavorazioni}
-              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
-            >
-              {etichettaLavorazioni} <ArrowRight className="w-3 h-3" />
-            </a>
+            {etichettaLavorazioni && (
+              <a
+                href={linkLavorazioni}
+                className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
+              >
+                {etichettaLavorazioni} <ArrowRight className="w-3 h-3" />
+              </a>
+            )}
           </div>
           {/* Il riepilogo si stampa dai documenti appena letti, che in una
               verifica riaperta non esistono più: offrirlo lì produrrebbe un
@@ -2809,18 +2730,14 @@ export function VerificaSaluteAzienda({
                       avanzamentoUo.uffici === 1 ? 'ufficio' : 'uffici'
                     }, ${avanzamentoUo.posizioni} ${
                       avanzamentoUo.posizioni === 1 ? 'posizione' : 'posizioni'
-                    }, ${formattaImportoEuro(avanzamentoUo.totale)}: per ognuno un documento per
-                    reparto e un report per unità operativa, qui sotto. Si scaricano e li invii
-                    tu — la piattaforma non manda nulla e registra ogni scaricamento.`}
+                    }, ${formattaImportoEuro(avanzamentoUo.totale)}: per ognuno un report per
+                    unità operativa, qui sotto. Si scarica e lo invii tu — la piattaforma non
+                    manda nulla e registra ogni scaricamento.`}
                     {fuoriPerimetro > 0
                       ? ` ${fuoriPerimetro} ${
                           fuoriPerimetro === 1 ? 'posizione resta' : 'posizioni restano'
                         } fuori perimetro e non entra nei totali.`
                       : ''}{' '}
-                    <a href="#comunica-reparti" className="font-bold underline">
-                      Vai ai documenti per reparto
-                    </a>
-                    {' · '}
                     <a href="#report-uo" className="font-bold underline">
                       Vai ai report per unità operativa
                     </a>
@@ -2830,9 +2747,11 @@ export function VerificaSaluteAzienda({
                     {`Non si può ancora procedere: ${motivo}. Il triage resta valido — l’esito e
                     la decisione non dipendono da questo — ma senza un ufficio non c’è a chi
                     indirizzare i debiti.`}{' '}
-                    <a href={linkLavorazioni} className="font-bold underline">
-                      {etichettaLavorazioni}
-                    </a>
+                    {etichettaLavorazioni && (
+                      <a href={linkLavorazioni} className="font-bold underline">
+                        {etichettaLavorazioni}
+                      </a>
+                    )}
                   </p>
                 )}
                 {notaContabilizzate && (
@@ -2842,364 +2761,6 @@ export function VerificaSaluteAzienda({
             );
           })()}
 
-          {/*
-            COMUNICA AI REPARTI — l'ultimo passo del triage, prima della presa
-            in carico. Non è un'alternativa al «Procedi»: serve a entrambe le
-            strade, perché anche chi non procede deve poter portare a
-            contabilizzazione i debiti che ha in mano.
-          */}
-          <div
-            id="comunica-reparti"
-            className="bg-white border border-slate-200 rounded-xl p-5 space-y-3"
-          >
-            <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-slate-500" />
-              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-                Comunica ai reparti
-              </h3>
-            </div>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Un PDF per reparto: i debiti da lavorare, le attività di contabilizzazione e i totali.
-              Si scarica da qui e lo invii tu all&apos;ufficio — la piattaforma non manda nulla, e
-              questa funzione non sostituisce né impedisce la presa in carico. Ogni scaricamento
-              resta registrato: data e nome sono scritti dalla piattaforma, mentre versione e totali
-              sono quelli che il browser ha usato per comporre il PDF — è un&apos;autodichiarazione
-              di scaricamento, non un controllo del contenuto del file. Quando lo spedisci puoi
-              dichiararne l&apos;invio — data, mezzo e note — e il registro conserva la
-              dichiarazione con il tuo nome.
-            </p>
-
-            {/*
-              LO STESSO UFFICIO CON TRE NOMI. Le dipendenze si scrivono in tre
-              punti (lavorazioni delle materie, titoli, vecchia tabella) e due
-              grafie dello stesso ufficio producono due documenti, ognuno con
-              metà delle posizioni. Qui si vede e si dice dove si sistema; non
-              si unisce d'ufficio, perché due sedi possono chiamarsi così.
-            */}
-            {ufficiSosia.length > 0 && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1">
-                <p className="text-[11px] font-bold text-amber-900">
-                  {ufficiSosia.length === 1
-                    ? 'Un ufficio compare con nomi diversi'
-                    : `${ufficiSosia.length} uffici compaiono con nomi diversi`}
-                </p>
-                {ufficiSosia.map((gruppo) => (
-                  <p key={gruppo.join('|')} className="text-[11px] text-amber-900 leading-relaxed">
-                    — {gruppo.join(' / ')}
-                  </p>
-                ))}
-                <p className="text-[10px] text-amber-800 leading-relaxed">
-                  Se sono lo stesso ufficio, le sue posizioni sono divise fra due documenti. Scrivi
-                  la stessa dipendenza nelle lavorazioni delle materie: la piattaforma non unisce da
-                  sola — due sedi possono chiamarsi quasi uguale.{' '}
-                  <a
-                    href={conRitorno(
-                      `/spazio/${codice}/parametri/materie-lavorazione`,
-                      ritornoDaTriage
-                    )}
-                    className="font-bold underline hover:text-amber-900"
-                  >
-                    Apri le lavorazioni delle materie
-                  </a>
-                </p>
-              </div>
-            )}
-
-            {documentiSuperati.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <p className="text-[11px] text-amber-900 leading-relaxed">
-                  {documentiSuperati.length === 1
-                    ? 'Un reparto ha in mano una versione precedente del suo documento.'
-                    : `${documentiSuperati.length} reparti hanno in mano una versione precedente del loro documento.`}{' '}
-                  Il motivo di ogni cambiamento è indicato accanto al reparto.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void riscaricaDocumentiSuperati()}
-                  disabled={pdfInCorso !== null}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 disabled:opacity-50"
-                >
-                  <FileDown className="w-3.5 h-3.5" />
-                  {pdfInCorso !== null
-                    ? 'Preparazione...'
-                    : `Riscarica tutti (${documentiSuperati.length})`}
-                </button>
-              </div>
-            )}
-
-            {documentiReparti.documenti.length === 0 ? (
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                {instradamento.lavorazioni.length === 0
-                  ? LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
-                    ? 'Nessuna lavorazione configurata: senza una lavorazione per tipologia non c’è un reparto a cui indirizzare i debiti, e la tabella che la definisce è in sola lettura.'
-                    : 'Nessuna lavorazione configurata: senza una lavorazione per tipologia non c’è un reparto a cui indirizzare i debiti. Aggiungila nei Parametri di Spazio.'
-                  : 'Nessuna posizione V.E.R.A. riconducibile a una lavorazione attiva: non c’è un reparto a cui indirizzare i debiti.'}
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {' '}
-                {documentiReparti.documenti.map((d) => {
-                  const stato = statoConsegnaReparto(
-                    consegnePerDestinatario.get(chiaveConsegna('reparto', d.reparto)),
-                    d.versione
-                  );
-                  // Estratto una volta: nella scheda si legge tre volte, e un
-                  // `?.` ripetuto su una catena lunga è dove nascono i «forse
-                  // nullo» che poi si aggiustano con un `!` di troppo.
-                  const invioConfermato =
-                    stato.stato === 'mai' ? null : stato.consegna.ultima.invio;
-                  return (
-                    <li
-                      key={d.reparto}
-                      className="border border-slate-200 rounded-lg p-3 space-y-2"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="min-w-0">
-                          <span className="block text-xs font-bold text-slate-900">
-                            {d.reparto}
-                          </span>
-                          <span className="block text-[10px] text-slate-500 font-mono">
-                            {d.righe} {d.righe === 1 ? 'posizione' : 'posizioni'} ·{' '}
-                            {formattaImportoEuro(d.totale)} · {d.attivita.length} attività
-                            {d.posizioniDaContabilizzare > 0
-                              ? ` · ${d.posizioniDaContabilizzare} da contabilizzare`
-                              : ''}
-                          </span>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => void scaricaDocumentoReparto(d)}
-                          disabled={pdfInCorso !== null}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                        >
-                          <FileDown className="w-3.5 h-3.5" />{' '}
-                          {pdfInCorso === d.reparto ? 'Preparazione...' : 'Scarica il PDF'}
-                        </button>
-                      </div>
-
-                      {stato.stato === 'mai' ? (
-                        <p className="text-[10px] text-slate-400 leading-relaxed">
-                          Mai scaricato: nessuna consegna registrata per questo reparto.
-                        </p>
-                      ) : (
-                        <p className="text-[10px] text-slate-500 leading-relaxed">
-                          Scaricato il {dataOraConsegna(stato.consegna.ultima.consegnatoIl)}
-                          {stato.consegna.ultima.consegnatoDa
-                            ? ` da ${stato.consegna.ultima.consegnatoDa}`
-                            : ''}{' '}
-                          · versione{' '}
-                          <span className="font-mono">{stato.consegna.ultima.versione}</span> ·{' '}
-                          {stato.consegna.scaricamenti === 1
-                            ? '1 scaricamento'
-                            : `${stato.consegna.scaricamenti} scaricamenti`}
-                        </p>
-                      )}
-
-                      {stato.stato === 'superata' && (
-                        <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
-                          Il reparto ha in mano la versione{' '}
-                          <span className="font-mono">{stato.consegna.ultima.versione}</span>, non
-                          questa (ora <span className="font-mono">{d.versione}</span>):{' '}
-                          {causaSuperamento(stato.consegna.ultima, d)}. Riscarica il PDF e invia la
-                          nuova versione.
-                        </p>
-                      )}
-
-                      {/*
-                        LA CONFERMA D'INVIO — la seconda metà della consegna.
-                        Il registro sa che il foglio è uscito dalla piattaforma;
-                        non sa se è arrivato al reparto. Chi lo spedisce lo
-                        dichiara qui, e la dichiarazione porta la sua firma.
-                        Senza, la riga resta muta: «invio non confermato» è un
-                        fatto, «non inviato» sarebbe una supposizione.
-                      */}
-                      {stato.stato !== 'mai' &&
-                        (invioConfermato ? (
-                          <div className="text-[10px] text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg p-2 leading-relaxed space-y-0.5">
-                            <p className="flex items-start gap-1.5">
-                              <Check className="w-3 h-3 shrink-0 mt-0.5" />
-                              <span>
-                                <span className="font-bold">
-                                  Inviato il {dataInvio(invioConfermato.inviataIl)} via{' '}
-                                  {etichettaMezzo(invioConfermato.mezzo)}
-                                </span>
-                                {invioConfermato.confermatoDa
-                                  ? ` — dichiarato da ${invioConfermato.confermatoDa}`
-                                  : ''}
-                                {`, registrato il ${dataOraConsegna(invioConfermato.confermatoIl)}`}
-                                .
-                              </span>
-                            </p>
-                            {invioConfermato.note && (
-                              <p className="pl-5 italic text-emerald-800">
-                                «{invioConfermato.note}»
-                              </p>
-                            )}
-                          </div>
-                        ) : confermaAperta === chiaveConsegna('reparto', d.reparto) ? (
-                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-                            <p className="text-[10px] text-slate-600 leading-relaxed">
-                              Dichiara l&apos;invio al reparto. La piattaforma non spedisce nulla:
-                              registra quello che hai fatto, così il registro sa che il documento è
-                              arrivato e non solo che è uscito.
-                            </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                                Data di invio
-                                <input
-                                  type="date"
-                                  value={inviataIl}
-                                  max={new Date().toISOString().slice(0, 10)}
-                                  onChange={(e) => setInviataIl(e.target.value)}
-                                  className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-slate-900 bg-white"
-                                />
-                              </label>
-                              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                                Mezzo
-                                <select
-                                  value={mezzoInvio}
-                                  onChange={(e) => setMezzoInvio(e.target.value as MezzoInvio)}
-                                  className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-slate-900 bg-white"
-                                >
-                                  {MEZZI_INVIO.map((m) => (
-                                    <option key={m.valore} value={m.valore}>
-                                      {m.etichetta}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
-                            </div>
-                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                              Note (facoltative)
-                              <textarea
-                                value={noteInvio}
-                                onChange={(e) => setNoteInvio(e.target.value)}
-                                rows={2}
-                                maxLength={500}
-                                placeholder="Es. protocollo n. 1234 del 21/10, consegnato all’ufficio contributi"
-                                className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-normal normal-case tracking-normal text-slate-900 bg-white"
-                              />
-                            </label>
-                            {erroreInvio && (
-                              <p className="text-[10px] text-red-700 leading-relaxed">
-                                {erroreInvio}
-                              </p>
-                            )}
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => void confermaInvioReparto(d)}
-                                disabled={invioInCorso}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-emerald-700 disabled:opacity-50"
-                              >
-                                <Send className="w-3.5 h-3.5" />
-                                {invioInCorso ? 'Registro...' : 'Registra l’invio'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConfermaAperta(null);
-                                  setErroreInvio(null);
-                                }}
-                                disabled={invioInCorso}
-                                className="px-3 py-2 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-white disabled:opacity-50"
-                              >
-                                Annulla
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setConfermaAperta(chiaveConsegna('reparto', d.reparto));
-                              setErroreInvio(null);
-                              setAvvisoInvio(null);
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50"
-                          >
-                            <Send className="w-3 h-3" /> Confermo l&apos;invio
-                          </button>
-                        ))}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-
-            {documentiReparti.posizioniEscluse.righe > 0 && (
-              <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed">
-                {`${documentiReparti.posizioniEscluse.righe} ${
-                  documentiReparti.posizioniEscluse.righe === 1
-                    ? 'posizione resta'
-                    : 'posizioni restano'
-                } fuori dai documenti per ${formattaImportoEuro(
-                  documentiReparti.posizioniEscluse.totale
-                )}: sono sospese o fuori perimetro (trattamento «Ignora») e non vanno contabilizzate. Non entrano nei totali.`}
-              </p>
-            )}
-
-            {errorePdf && <p className="text-[11px] text-red-700">{errorePdf}</p>}
-            {avvisoConsegna && (
-              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
-                {avvisoConsegna}
-              </p>
-            )}
-            {avvisoInvio && (
-              <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3 leading-relaxed">
-                {avvisoInvio}
-              </p>
-            )}
-            {erroreConsegne && <p className="text-[11px] text-amber-800">{erroreConsegne}</p>}
-
-            {consegneFuoriConfigurazione.length > 0 && (
-              <p className="text-[10px] text-slate-500 leading-relaxed">
-                {`${
-                  consegneFuoriConfigurazione.length === 1
-                    ? 'Un reparto ha già ricevuto un documento'
-                    : `${consegneFuoriConfigurazione.length} reparti hanno già ricevuto un documento`
-                } ma non compare più fra i destinatari: `}
-                {consegneFuoriConfigurazione
-                  .map(
-                    (c) =>
-                      `${c.reparto} (${dataOraConsegna(c.ultima.consegnatoIl)}${
-                        c.ultima.invio
-                          ? `, inviato il ${dataInvio(c.ultima.invio.inviataIl)} via ${etichettaMezzo(
-                              c.ultima.invio.mezzo
-                            )}`
-                          : ''
-                      })`
-                  )
-                  .join(', ')}
-                . Se la lavorazione è stata cambiata o spenta, lo storico resta qui.
-              </p>
-            )}
-
-            {/*
-              L'AVVISO SULLE TIPOLOGIE SCOPERTE NON SI RIPETE. A configurazione
-              vuota lo stato vuoto qui sopra dice già che non c'è un reparto a
-              cui indirizzare i debiti: il secondo avviso aggiungerebbe solo
-              numeri. Serve quando qualche lavorazione esiste ma non copre
-              tutto — lì è il conto di ciò che resta fuori.
-            */}
-            {documentiReparti.categorieSenzaLavorazione.length > 0 &&
-              lavorazioni.some((l) => l.attivo) && (
-                <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
-                  {`${
-                    documentiReparti.categorieSenzaLavorazione.length === 1
-                      ? '1 tipologia resta fuori dai documenti'
-                      : `${documentiReparti.categorieSenzaLavorazione.length} tipologie restano fuori dai documenti`
-                  }: senza una lavorazione configurata non si sa a quale reparto appartengono — sono elencate più sopra in «Tipologie senza lavorazione».`}
-                </p>
-              )}
-
-            <a
-              href={linkLavorazioni}
-              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
-            >
-              {etichettaLavorazioni} <ArrowRight className="w-3 h-3" />
-            </a>
-          </div>
           {/*
             SECONDA USCITA — IL REPORT PER UNITÀ OPERATIVA.
             Non sostituisce il documento per reparto: risponde a un'altra
@@ -3231,6 +2792,18 @@ export function VerificaSaluteAzienda({
                 {erroreUo}
               </p>
             )}
+            {errorePdf && <p className="text-[11px] text-red-700">{errorePdf}</p>}
+            {avvisoConsegna && (
+              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+                {avvisoConsegna}
+              </p>
+            )}
+            {avvisoInvio && (
+              <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3 leading-relaxed">
+                {avvisoInvio}
+              </p>
+            )}
+            {erroreConsegne && <p className="text-[11px] text-amber-800">{erroreConsegne}</p>}
 
             {reportUo.documenti.length === 0 ? (
               <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -3494,15 +3067,14 @@ export function VerificaSaluteAzienda({
               </p>
             )}
 
-            <a
-              href={linkLavorazioni}
-              className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
-            >
-              {materieDaCompletare.length > 0
-                ? etichettaLavorazioni
-                : 'Dipendenze e lavorazioni delle materie'}{' '}
-              <ArrowRight className="w-3 h-3" />
-            </a>
+            {etichettaLavorazioni && (
+              <a
+                href={linkLavorazioni}
+                className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
+              >
+                {etichettaLavorazioni} <ArrowRight className="w-3 h-3" />
+              </a>
+            )}
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">

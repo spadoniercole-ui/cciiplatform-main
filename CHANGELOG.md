@@ -26,6 +26,39 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.11 — 2026-10-28
+
+**La mappatura V.E.R.A. si fa dal triage, e aggancia subito le posizioni**
+
+Una sezione del file di verifica che non si riconduce a una materia lascia le sue
+posizioni fuori da ogni documento per gli uffici. L'unico posto dove mapparla era la
+scheda Posizione V.E.R.A. della singola azienda — e ci si arrivava uscendo dal triage,
+con la scheda che si apriva solo dopo l'anagrafica: il rimando `?scheda=vera` non
+veniva nemmeno letto, quindi si finiva sull'Anagrafica.
+
+- La mappatura si apre ora **in una finestra dal triage** («Mappa le sezioni qui»),
+  con le sezioni che nessuna materia e nessuna categoria reclamano, le loro posizioni
+  e il loro importo. È un dato dello **spazio**, non dell'azienda: non serve
+  l'anagrafica, non si esce dalla verifica.
+- Al salvataggio la scelta viene **riagganciata alle posizioni già lette**
+  (`salvaMappaturaTitoliVeraAction` riapplica la categoria anche alle righe
+  importate): i documenti per le unità operative si compongono subito, senza
+  ricaricare il file né rifare il triage.
+
+**Una sola uscita per gli uffici: il report per unità operativa**
+
+- «Comunica ai reparti» è stato ritirato: faceva lo stesso lavoro del report per
+  unità operativa, che in più legge le lavorazioni delle materie — la procedura che
+  l'ufficio deve eseguire. Due fogli per lo stesso destinatario erano due versioni da
+  tenere allineate, e la seconda era la meno informata delle due.
+- L'avviso «puoi procedere» conta ora un solo documento per ufficio, con le stesse
+  cifre che il report dichiara (già contabilizzate, quota TS 25/27/81, doppie
+  scritture del file).
+- Ritirati i due rimandi che non portavano da nessuna parte: «Vedi le lavorazioni»
+  (la tabella dei destinatari è in sola lettura, e la pagina mostra le stesse righe) e
+  «Dipendenze e lavorazioni delle materie». Resta il solo rimando utile, quello che
+  **nomina** la materia da completare.
+
 ## 0.139.10 — 2026-10-28
 
 **La conferma di una materia si toglie o si corregge, e i codici che vi cadono lo sanno subito**

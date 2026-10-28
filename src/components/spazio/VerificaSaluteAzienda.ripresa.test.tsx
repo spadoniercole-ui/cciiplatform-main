@@ -63,6 +63,7 @@ vi.mock('@/app/actions/xbrlAzienda', () => ({
 
 vi.mock('@/app/actions/posizioneVera', () => ({
   sostituisciDebitiVeraAction: vi.fn(),
+  salvaMappaturaTitoliVeraAction: vi.fn(),
   ottieniMappaturaTitoliVera: vi.fn(),
   ottieniDebitiVera: vi.fn(),
   impostaDuplicatoVeraAction: vi.fn(),
@@ -126,6 +127,7 @@ import {
   impostaDuplicatoVeraAction,
   ottieniDebitiVera,
   ottieniMappaturaTitoliVera,
+  salvaMappaturaTitoliVeraAction,
 } from '@/app/actions/posizioneVera';
 import { ottieniMaterieEnteAction, ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
 import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
@@ -408,18 +410,18 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     expect(testo.textContent).not.toContain('TS 25 - nota di rettifica');
     expect(testo.textContent).toContain('TS 25');
 
-    // I due export, ciascuno nel proprio riquadro.
-    const reparti = sezioneDi('Comunica ai reparti');
-    expect(within(reparti).getByText('Ufficio Recupero Crediti')).toBeTruthy();
-    expect(within(reparti).getByRole('button', { name: /Scarica il PDF/i })).toBeTruthy();
-
+    // UNA SOLA USCITA: il report per unità operativa. Il documento per reparto
+    // diceva le stesse cose e non leggeva le lavorazioni delle materie, quindi
+    // è stato ritirato: due fogli per lo stesso ufficio erano due versioni da
+    // tenere allineate, e la seconda era la meno informata delle due.
+    expect(screen.queryByRole('heading', { name: 'Comunica ai reparti' })).toBeNull();
     const unitaOperative = sezioneDi('Report per unità operativa');
     expect(within(unitaOperative).getByText('Ufficio Recupero Crediti')).toBeTruthy();
     expect(within(unitaOperative).getByText(/Codici: 27/)).toBeTruthy();
     expect(within(unitaOperative).getByRole('button', { name: /Scarica il PDF/i })).toBeTruthy();
 
-    // Due documenti, due file: uno per reparto, uno per unità operativa.
-    expect(screen.getAllByRole('button', { name: /Scarica il PDF/i })).toHaveLength(2);
+    // Un documento, un file.
+    expect(screen.getAllByRole('button', { name: /Scarica il PDF/i })).toHaveLength(1);
 
     // Il triage NON è ricominciato: nessuna visura letta, nessuna azienda
     // creata, nessun ciclo nuovo che archivi il lavoro precedente.
@@ -445,8 +447,7 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     // I numeri dell'avviso sono quelli dei documenti, non una frase generica:
     // un ufficio, una posizione, 1.200 €.
     expect(screen.getByText(/1 ufficio, 1 posizione, 1\.200,00 €/)).toBeTruthy();
-    // E porta ai due riquadri, senza farli cercare.
-    expect(screen.getByRole('link', { name: /Vai ai documenti per reparto/i })).toBeTruthy();
+    // E porta al riquadro, senza farlo cercare.
     expect(screen.getByRole('link', { name: /Vai ai report per unità operativa/i })).toBeTruthy();
 
     // E dice che cosa i documenti NON elencano: il loro totale non è quello del
@@ -720,6 +721,79 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     await waitFor(() =>
       expect(screen.getAllByText(/1 posizione per 9\.590,00 €/).length).toBeGreaterThan(0)
     );
+  });
+
+  //
+  // LA MAPPATURA V.E.R.A. SI FA QUI.
+  //
+  // La sezione che non si riconduce a una materia lascia le sue posizioni fuori
+  // da ogni documento. La mappatura è un dato dello spazio, non dell'azienda:
+  // si fa in una finestra aperta dal triage, e al salvataggio si aggancia alle
+  // posizioni già lette — il report si compone subito, senza uscire dalla
+  // verifica, senza aprire la scheda dell'azienda e senza ricaricare il file.
+  it('le sezioni non mappate si mappano qui, e il report si compone subito', async () => {
+    vi.mocked(ottieniDebitiVera).mockResolvedValue({
+      success: true,
+      righe: [
+        {
+          id: 21,
+          sezione: 'Gestione artisti',
+          ambito: 'INPS',
+          voce: 'Compensi non versati',
+          importo: 830,
+          categoria: '',
+          stato: 'Da verificare',
+          periodo: '202507 - 202507',
+          trattamento: 'da_contabilizzare',
+          contributi: 830,
+          sanzioni: 0,
+        },
+      ],
+    });
+    vi.mocked(salvaMappaturaTitoliVeraAction).mockResolvedValue({ success: true });
+
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    // Senza una destinazione la posizione non arriva a nessun ufficio.
+    await waitFor(() =>
+      expect(
+        screen.getByText('Le comunicazioni per le unità operative non sono pronte')
+      ).toBeTruthy()
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Mappa le sezioni qui/i }));
+    const finestra = await screen.findByRole('dialog');
+    const scelta = await within(finestra).findByLabelText(/Destinazione di Gestione artisti/i);
+    fireEvent.change(scelta, { target: { value: 'MATERIA:1' } });
+    fireEvent.click(within(finestra).getByRole('button', { name: /Salva e aggancia/i }));
+
+    // La scelta si salva SULLO SPAZIO: la sezione come la scrive il file, con la
+    // sua etichetta e la materia scelta.
+    await waitFor(() => expect(salvaMappaturaTitoliVeraAction).toHaveBeenCalled());
+    const chiamata = vi.mocked(salvaMappaturaTitoliVeraAction).mock.calls[0];
+    expect(chiamata[0]).toBe(SCHEMA);
+    expect(chiamata[1]).toHaveLength(1);
+    expect(chiamata[1][0].label).toBe('Gestione artisti');
+    expect(chiamata[1][0].categoria).toBe('MATERIA:1');
+
+    // Chiusa la finestra, la posizione ha una materia e il report esiste: gli
+    // stessi numeri dell'avviso, senza ricaricare nulla.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(
+        screen.getByText('Puoi procedere alle comunicazioni per le unità operative')
+      ).toBeTruthy()
+    );
+    const unitaOperative = sezioneDi('Report per unità operativa');
+    expect(within(unitaOperative).getByText('Ufficio Recupero Crediti')).toBeTruthy();
+    expect(within(unitaOperative).getAllByText(/1 posizione/).length).toBeGreaterThan(0);
   });
 
   it('«Verifica un’altra azienda» riporta al caricamento, senza restare sull’esito', async () => {

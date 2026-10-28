@@ -61,6 +61,7 @@ import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
 import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 import type { StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
 import type { PosizioniEscluse } from './comunicazioni';
+import { materiaDaChiave } from './instradamentoMateria';
 import { ripartisciRigheVera, type RiepilogoRighe } from './daLavorare';
 // Lo stesso ufficio scritto due volte resta un documento solo (vedi dipendenze.ts).
 import { chiaveDipendenza } from './dipendenze';
@@ -69,6 +70,13 @@ import { chiaveDipendenza } from './dipendenze';
 export interface RigaVeraReportUo {
   sezione: string;
   voce: string;
+  /**
+   * La destinazione scelta a mano sulla sezione (`MATERIA:<id>` oppure un
+   * codice di categoria). È la mappatura che l'operatore fa quando la voce non
+   * si riconduce da sola a niente: senza, il report ignorerebbe la scelta
+   * appena salvata e la posizione resterebbe fuori da ogni ufficio.
+   */
+  categoria?: string;
   /** Periodo di competenza («202506 - 202506»); vuoto quando la sezione non lo porta. */
   periodo?: string;
   stato: string;
@@ -343,7 +351,9 @@ export function componiReportUo(input: {
     // sezione (o dai codici che la materia dichiara propri).
     const materiaId = codice
       ? (perCodiceTitolo.get(normalizzaCodice(codice))?.materiaId ?? null)
-      : (materiaPerRigaVera(r.voce, r.sezione, input.titoli, materieMinime)?.id ?? null);
+      : (materiaDaChiave(r.categoria) ??
+        materiaPerRigaVera(r.voce, r.sezione, input.titoli, materieMinime)?.id ??
+        null);
     // Senza codice e senza materia non resta nessuna chiave: si conta.
     if (!codice && materiaId === null) {
       senzaCodice.righe += 1;
