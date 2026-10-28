@@ -26,6 +26,41 @@ il terzo per correzioni.
 
 ---
 
+## 0.139.10 — 2026-10-28
+
+**La conferma di una materia si toglie o si corregge, e i codici che vi cadono lo sanno subito**
+
+Una materia «Confermata» copre i codici che vi cadono: il loro riscontro è quello della materia,
+riletto a ogni caricamento. La conferma, però, una volta data non si poteva né ritirare né
+correggere — così un verde dato per errore, o un presupposto cambiato dopo una correzione
+normativa, restava appeso ai codici di quella materia e nessuno poteva più toglierlo.
+
+- **Si toglie**: «Togli la conferma» riporta la materia alla proposta (o alla ricerca, se non c'è
+  una proposta da rileggere) e cancella nome e data della conferma. Il presupposto resta scritto —
+  è lavoro, non una firma — così si corregge e si riconferma senza rifare la ricerca. La pagina
+  dice quanti codici smettono di essere coperti e ricarica subito materie e codici: nessun verde
+  resta appeso a una materia che nessuno ha più confermato.
+- **Si corregge**: «Correggi la conferma» riapre i due campi che si confermano — presupposto e
+  riferimenti interni — con il testo attuale. Confermando, i codici della materia leggono da subito
+  il presupposto nuovo, con la data della nuova conferma e il numero dei codici che lo leggono.
+- **Sui codici non si cancella niente**: il loro verde non è una copia salvata, è la materia
+  riletta (`src/lib/titoliEnte/riscontroMateria.ts`). Cambiato lo stato o il testo della materia,
+  l'esito dei codici cambia con lei. Gli esiti propri del codice — confermato, in contrasto, in
+  verifica — restano suoi.
+
+Nella stessa consegna, la correzione sulle comunicazioni per le unità operative: l'avviso che dice
+se si può procedere contava le posizioni solo sui documenti per reparto. Un ufficio raggiunto dal
+solo report per unità operativa — un codice con la sua dipendenza e una materia senza lavorazioni —
+finiva in «1 ufficio, 0 posizioni, 0,00 €», come se le posizioni fossero svanite, e il link portava
+a un riquadro vuoto. Ora si conta per ufficio, una volta sola: il documento per reparto se c'è,
+altrimenti il report.
+
+Verifiche: 2 test nuovi sulla logica della revoca e della correzione (`materie.test.ts`), 1 sul
+riscontro revocato che non copre più il codice (`riscontroMateria.test.ts`), 3 d'interfaccia sulla
+pagina delle materie (togliere, correggere, materia non confermata) e 1 sulla verifica riaperta
+(l'avviso che conta la posizione del report invece di zero). `type-check`, `lint`, `test` e `build`
+verdi.
+
 ## 0.139.9 — 2026-10-27
 
 **Il riscontro fatto una volta per la materia vale per tutti i codici che vi cadono**
@@ -185,24 +220,24 @@ debito senza che nessuno dicesse perché. Sul V.E.R.A. di prova: 11 posizioni da
 27 già contabilizzate.
 
 - **Si elenca ciò che manca** (`src/lib/lavorazioni/daLavorare.ts`, una sola classificazione per
-tre uscite): stato valorizzato → da lavorare; importo ignoto (natura senza importo, «Denunce
-non trasmesse») → da accertare; stato vuoto → già contabilizzata. Comunicazione al collega,
-documento per reparto e report per unità operativa condividono la stessa regola, quindi non
-possono elencare posizioni diverse partendo dagli stessi dati.
+  tre uscite): stato valorizzato → da lavorare; importo ignoto (natura senza importo, «Denunce
+  non trasmesse») → da accertare; stato vuoto → già contabilizzata. Comunicazione al collega,
+  documento per reparto e report per unità operativa condividono la stessa regola, quindi non
+  possono elencare posizioni diverse partendo dagli stessi dati.
 - **Ciò che è già in contabilità si dichiara**: numero e importo, in una frase nel testo e sul
-PDF, così chi confronta il documento con il V.E.R.A. trova la differenza spiegata invece di
-concludere che manchi roba.
+  PDF, così chi confronta il documento con il V.E.R.A. trova la differenza spiegata invece di
+  concludere che manchi roba.
 - **Le TS 25, 27 e 81 a parte**: sono contabilizzate; l’unica decisione ancora aperta è se
-affidarle all’Agente della Riscossione, un passaggio che sposta la stessa partita e non cambia
-lo stato complessivo. Non è quindi un intervento da chiedere all’ufficio, ma non si tace:
-l’avviso che annuncia i documenti dice quante sono e per quanto. Se il V.E.R.A. segna una di
-queste voci come ancora da contabilizzare, vince il file e la posizione si lavora.
+  affidarle all’Agente della Riscossione, un passaggio che sposta la stessa partita e non cambia
+  lo stato complessivo. Non è quindi un intervento da chiedere all’ufficio, ma non si tace:
+  l’avviso che annuncia i documenti dice quante sono e per quanto. Se il V.E.R.A. segna una di
+  queste voci come ancora da contabilizzare, vince il file e la posizione si lavora.
 - **Un ufficio che ha solo posizioni già contabilizzate non riceve un documento**: non ha nulla
-da fare, e un foglio vuoto sarebbe solo una perdita di tempo. L’importo resta dichiarato.
+  da fare, e un foglio vuoto sarebbe solo una perdita di tempo. L’importo resta dichiarato.
 - **Il foglio non è più scambiato per un documento nuovo**: l’impronta di versione include ciò
-che il documento dichiara di non elencare (formato 2 per i reparti, 3 per le unità operative),
-quindi una variazione dell’importo contabilizzato non lascia in giro un PDF che sembra
-aggiornato.
+  che il documento dichiara di non elencare (formato 2 per i reparti, 3 per le unità operative),
+  quindi una variazione dell’importo contabilizzato non lascia in giro un PDF che sembra
+  aggiornato.
 
 Test aggiunti: 14 (dominio della classificazione e dei testi, esclusione e dichiarazione nelle
 tre uscite, quota AdR sul PDF).
@@ -386,6 +421,7 @@ documenti e si prende la decisione. La via di ritorno c’è anche dalla scheda 
 («Riprendi la verifica») e dalla dashboard per le verifiche ancora in sospeso. Se l’azienda
 è già stata presa in carico o la verifica è archiviata, la si consulta ma non si decide di
 nuovo: la decisione è presa e non si ripete.
+
 - Servivano due dati che il database non conservava: il **periodo di competenza** delle
   posizioni (`debiti_vera.periodo`, colonna idempotente) e la **data di riferimento della
   verifica** (`aziende.verifica_riferita_al`). Senza, una verifica riaperta avrebbe
@@ -398,17 +434,18 @@ nuovo: la decisione è presa e non si ripete.
 
 **2. Report per unità operativa: i debiti raggruppati per CODICE, divisi per dipendenza.**
 Accanto al documento per reparto (che indirizza per tipologia di debito) c’è una seconda
-uscita, che risponde alla domanda di chi lavora la partita: *questo codice, che procedura
-segue, e quali inadempienze lo compongono?* Un PDF per ufficio, e dentro, per ogni codice
+uscita, che risponde alla domanda di chi lavora la partita: _questo codice, che procedura
+segue, e quali inadempienze lo compongono?_ Un PDF per ufficio, e dentro, per ogni codice
 di partita: la materia, il totale, le inadempienze (voce, periodo di competenza, stato,
 importo) e le lavorazioni configurate sulla materia, con i passi e l’esito.
+
 - L’ufficio è la **dipendenza**: quella del codice se c’è, altrimenti quella della sua
   materia — la stessa regola della scheda dei titoli, «il codice vince». Le due uscite
   restano distinte: il documento per reparto continua a indirizzare per categoria.
 - Nulla sparisce in silenzio: le posizioni sospese restano fuori dai totali e si
-dichiarano; le voci senza codice di partita si contano; i codici senza dipendenza si
-elencano a parte (configurazione mancante, non debito inesistente); i codici senza
-lavorazioni lo dicono sul foglio.
+  dichiarano; le voci senza codice di partita si contano; i codici senza dipendenza si
+  elencano a parte (configurazione mancante, non debito inesistente); i codici senza
+  lavorazioni lo dicono sul foglio.
 - Il registro delle consegne tiene separati i due documenti (`tipo` = `reparto` |
   `dipendenza`): le due impronte di versione non sono confrontabili, e un ufficio che si
   chiama come un reparto non deve far risultare «superato» un foglio che nessuno ha mai

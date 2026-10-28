@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { normalizzaProposta, materiaSuggeritaPerDescrizione } from './materie';
+import {
+  confermaModificata,
+  normalizzaProposta,
+  materiaSuggeritaPerDescrizione,
+  statoSenzaConferma,
+} from './materie';
 
 const MATERIE = [
   { id: 1, nome: 'Denunce Uniemens e flussi mensili' },
@@ -42,5 +47,61 @@ describe('materie dell’ente', () => {
       4
     );
     expect(materiaSuggeritaPerDescrizione('SEGNALAZIONE SETTORE ISCRIZIONI', MATERIE)).toBeNull();
+  });
+});
+
+//
+// LA CONFERMA NON È DEFINITIVA (0.139.10).
+//
+// Una materia confermata copre i codici che vi cadono, e il loro riscontro è il
+// suo. Toglierla o correggerla deve cambiare subito quello che i codici
+// leggono: queste due funzioni dicono in quale stato si torna e quando una
+// conferma è da considerarsi corretta.
+//
+describe('la conferma di una materia si toglie e si corregge', () => {
+  it('tolta la conferma si torna alla proposta, o alla ricerca se non c’è nulla da rileggere', () => {
+    const proposta = normalizzaProposta(
+      { presupposti: [{ norma: 'art. 44, comma 9, D.L. 269/2003' }] },
+      '2026-10-28',
+      []
+    );
+    // Mai «confermata»: quello è un atto di una persona, e toglierlo non può
+    // lasciarla in piedi.
+    expect(statoSenzaConferma({ proposta })).toBe('PROPOSTA');
+    expect(statoSenzaConferma({ proposta: null })).toBe('DA_RICERCARE');
+  });
+
+  it('una conferma è corretta quando cambia il testo che i codici leggono', () => {
+    const confermata = {
+      presuppostoGiuridico: 'Art. 2, comma 18, legge 8 agosto 1995, n. 335',
+      riferimentiInterni: 'circolare n. 162 del 27-12-2010',
+    };
+    // Gli spazi ai bordi non sono una correzione.
+    expect(
+      confermaModificata(confermata, {
+        presuppostoGiuridico: ` ${confermata.presuppostoGiuridico} `,
+        riferimentiInterni: confermata.riferimentiInterni,
+      })
+    ).toBe(false);
+    expect(
+      confermaModificata(confermata, {
+        presuppostoGiuridico: 'Art. 3, comma 1, legge 8 agosto 1995, n. 335',
+        riferimentiInterni: confermata.riferimentiInterni,
+      })
+    ).toBe(true);
+    // Anche togliere il riferimento interno è una correzione: il codice smette
+    // di leggere quel documento.
+    expect(
+      confermaModificata(confermata, {
+        presuppostoGiuridico: confermata.presuppostoGiuridico,
+        riferimentiInterni: null,
+      })
+    ).toBe(true);
+    expect(
+      confermaModificata(
+        { presuppostoGiuridico: null, riferimentiInterni: null },
+        { presuppostoGiuridico: 'Art. 1', riferimentiInterni: '' }
+      )
+    ).toBe(true);
   });
 });

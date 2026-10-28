@@ -52,6 +52,39 @@ export const ETICHETTA_STATO_MATERIA: Record<StatoMateria, string> = {
   CONFERMATA: 'Confermata',
 };
 
+/**
+ * LA CONFERMA SI PUÒ TOGLIERE (0.139.10).
+ *
+ * Una materia confermata copre i codici che vi cadono: il loro riscontro è il
+ * suo, letto a ogni caricamento (vedi `riscontroMateria.ts`). Quando la
+ * conferma viene tolta — data per errore, o perché il presupposto va rifatto —
+ * quei codici non devono continuare a mostrarsi riscontrati: tornano al loro
+ * esito, che è quello che nessuno ha ancora verificato.
+ *
+ * Lo stato coerente è la proposta se c'è ancora qualcosa da rileggere,
+ * altrimenti la ricerca. Mai «confermata»: quello è un atto di una persona, e
+ * toglierlo non può lasciarla in piedi.
+ */
+export function statoSenzaConferma(materia: { proposta: PropostaMateria | null }): StatoMateria {
+  return materia.proposta ? 'PROPOSTA' : 'DA_RICERCARE';
+}
+
+/**
+ * La conferma è stata CORRETTA? Il confronto è sul testo che si conferma —
+ * presupposto e riferimenti interni — perché è quello che i codici leggono
+ * dalla materia. Il nome e i codici indicativi non contano: cambiano la
+ * ricerca, non il titolo che i codici ereditano.
+ */
+export function confermaModificata(
+  prima: { presuppostoGiuridico: string | null; riferimentiInterni: string | null },
+  dopo: { presuppostoGiuridico: string | null; riferimentiInterni: string | null }
+): boolean {
+  return (
+    (prima.presuppostoGiuridico ?? '').trim() !== (dopo.presuppostoGiuridico ?? '').trim() ||
+    (prima.riferimentiInterni ?? '').trim() !== (dopo.riferimentiInterni ?? '').trim()
+  );
+}
+
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 const url = (v: unknown): string | null =>
   typeof v === 'string' && /^https?:\/\//.test(v) ? v : null;

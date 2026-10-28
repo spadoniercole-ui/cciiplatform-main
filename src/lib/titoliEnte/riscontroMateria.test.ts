@@ -148,6 +148,26 @@ describe('riscontro ereditato dalla materia', () => {
     expect(riscontroEffettivo('norma', codice(), []).riscontro.esito).toBe('NON_ESEGUITO');
   });
 
+  it('tolta la conferma, i codici non leggono più il verde della materia', () => {
+    // La conferma ritirata: il presupposto resta scritto (è lavoro, non una
+    // firma), ma nessuno ha più confermato — e il codice torna al suo esito.
+    const revocata = materia({ stato: 'PROPOSTA', confermataDa: null, confermataIl: null });
+    expect(revocata.presuppostoGiuridico).toContain('legge 8 agosto 1995');
+    expect(riscontroDallaMateria('norma', revocata)).toBeNull();
+    expect(riscontroDallaMateria('interno', revocata)).toBeNull();
+
+    const eff = riscontroEffettivo('norma', codice(), [revocata]);
+    expect(eff.riscontro.esito).toBe('NON_ESEGUITO');
+    expect(eff.dallaMateria).toBe(false);
+    expect(copertoDallaMateria(codice(), [revocata])).toBe(false);
+    // L'esito proprio del codice non si tocca: la revoca toglie il prestito,
+    // non il lavoro fatto sulla riga.
+    const proprio = riscontro('CONFERMATO', { url: 'https://www.gazzettaufficiale.it/x' });
+    const suo = riscontroEffettivo('norma', codice({ riscontroNorma: proprio }), [revocata]);
+    expect(suo.riscontro.esito).toBe('CONFERMATO');
+    expect(suo.dallaMateria).toBe(false);
+  });
+
   it('la riga risulta coperta dalla materia anche quando lo è per un solo campo', () => {
     expect(copertoDallaMateria(codice(), [materia()])).toBe(true);
     expect(copertoDallaMateria(codice({ materiaId: null }), [materia()])).toBe(false);

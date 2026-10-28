@@ -45,11 +45,14 @@ import {
 import { consumaQuotaAi } from '@/lib/limiteAi';
 import { direttriceConfigurata, nomiDirettrici } from '@/lib/titoliEnte/direttrici';
 import {
+  confermaModificata,
   materiaSuggeritaPerDescrizione,
   normalizzaProposta,
   promptRicercaMateria,
+  statoSenzaConferma,
   type MateriaEnte,
   type PropostaMateria,
+  type StatoMateria,
 } from '@/lib/titoliEnte/materie';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -813,21 +816,58 @@ export async function ricercaMateriaAction(
   }
 }
 
-/** Conferma umana: presupposto e riferimenti (eventualmente corretti) diventano quelli della materia. */
+/**
+ * Quanti codici cadono in una materia. Il numero serve all'interfaccia per dire
+ * la conseguenza di una conferma corretta o tolta: «N codici leggono questo
+ * presupposto». Se la tabella dei titoli non esiste ancora (spazio nuovo) il
+ * conto è zero, e non è un errore.
+ */
+async function contaCodiciDellaMateria(nomeSchema: string, materiaId: number): Promise<number> {
+  try {
+    const r = await pool.query(
+      `SELECT count(*)::int AS n FROM "${nomeSchema}".titoli_ente WHERE materia_id = $1`,
+      [materiaId]
+    );
+    return Number(r.rows[0]?.n ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Conferma umana: presupposto e riferimenti (eventualmente corretti) diventano
+ * quelli della materia.
+ *
+ * LA CORREZIONE ARRIVA SUBITO AI CODICI (0.139.10). Il riscontro di un codice
+ * che cade nella materia non è una copia scritta una volta: è il riscontro
+ * della materia, riletto a ogni caricamento. Corretto qui il presupposto, la
+ * riga di ogni codice che non ha un esito suo mostra da subito il testo nuovo —
+ * e il numero dei codici coperti torna al chiamante, così la pagina lo dice
+ * invece di lasciarlo dedurre.
+ */
 export async function confermaMateriaEnteAction(
   codiceSpazio: string,
   materiaId: number,
   presuppostoGiuridico: string,
   riferimentiInterni: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; corretta?: boolean; codici?: number; error?: string }> {
   try {
     const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
     if (!contesto || contesto.modalita === 'OPERATORE')
       return { success: false, error: 'Operazione riservata all’Admin di Spazio.' };
     if (!presuppostoGiuridico.trim())
       return { success: false, error: 'Indicare il presupposto giuridico prima di confermare.' };
+    const nomeSchema = contesto.nomeSchema;
+    const precedente = (
+      await pool.query(`SELECT * FROM "${nomeSchema}".materie_ente WHERE id = $1`, [materiaId])
+    ).rows[0];
+    if (!precedente) return { success: false, error: 'Materia non trovata.' };
+    const prima = materiaDaRiga(precedente);
+    const corretta =
+      prima.stato === 'CONFERMATA' &&
+      confermaModificata(prima, { presuppostoGiuridico, riferimentiInterni });
     await pool.query(
-      `UPDATE "${contesto.nomeSchema}".materie_ente
+      `UPDATE "${nomeSchema}".materie_ente
           SET presupposto_giuridico = $2, riferimenti_interni = $3, stato = 'CONFERMATA', confermata_da = $4, confermata_il = now(), aggiornato_il = now()
         WHERE id = $1`,
       [
@@ -837,9 +877,74 @@ export async function confermaMateriaEnteAction(
         contesto.email ?? contesto.modalita,
       ]
     );
-    return { success: true };
+    return {
+      success: true,
+      corretta,
+      codici: await contaCodiciDellaMateria(nomeSchema, materiaId),
+    };
   } catch (error: unknown) {
     return { success: false, error: `Conferma non riuscita: ${(error as Error).message || error}` };
+  }
+}
+
+/**
+ * TOGLIERE LA CONFERMA (0.139.10).
+ *
+ * Una materia confermata copre i codici che vi cadono, e la pagina dei titoli
+ * lo mostra con un verde che arriva dalla materia. Se quella conferma non si
+ * poteva ritirare, il verde restava per sempre: una conferma data per errore,
+ * o un presupposto che va rifatto dopo una correzione normativa, lasciavano i
+ * codici «riscontrati» su una materia che nessuno aveva più confermato.
+ *
+ * Qui lo stato torna alla proposta (se c'è una ricerca da rileggere) o alla
+ * ricerca, e la data e il nome della conferma si cancellano: non si può
+ * risultare confermati da una persona che non ha confermato. Il presupposto
+ * resta scritto — è lavoro, non una firma — così si può correggere e
+ * riconfermare senza rifare la ricerca.
+ *
+ * NESSUN RISCONTRO DA CANCELLARE SUI CODICI. Il verde dei codici non è una
+ * copia salvata: si legge dalla materia a ogni caricamento (vedi
+ * `riscontroMateria.ts`). Cambiato lo stato qui, i codici che non hanno un
+ * esito proprio tornano al loro — ed è per questo che la pagina ricarica le
+ * materie subito dopo, senza aspettare un refresh.
+ */
+export async function annullaConfermaMateriaEnteAction(
+  codiceSpazio: string,
+  materiaId: number
+): Promise<{ success: boolean; stato?: StatoMateria; codici?: number; error?: string }> {
+  try {
+    const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
+    if (!contesto || contesto.modalita === 'OPERATORE')
+      return { success: false, error: 'Operazione riservata all’Admin di Spazio.' };
+    const nomeSchema = contesto.nomeSchema;
+    await assicuraTabelleParametriSpazio(nomeSchema);
+    const riga = (
+      await pool.query(`SELECT * FROM "${nomeSchema}".materie_ente WHERE id = $1`, [materiaId])
+    ).rows[0];
+    if (!riga) return { success: false, error: 'Materia non trovata.' };
+    const materia = materiaDaRiga(riga);
+    if (materia.stato !== 'CONFERMATA')
+      return {
+        success: false,
+        error: 'La materia non è confermata: non c’è una conferma da togliere.',
+      };
+    const stato = statoSenzaConferma(materia);
+    await pool.query(
+      `UPDATE "${nomeSchema}".materie_ente
+          SET stato = $2, confermata_da = NULL, confermata_il = NULL, aggiornato_il = now()
+        WHERE id = $1`,
+      [materiaId, stato]
+    );
+    return {
+      success: true,
+      stato,
+      codici: await contaCodiciDellaMateria(nomeSchema, materiaId),
+    };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: `Conferma non tolta: ${(error as Error).message || error}`,
+    };
   }
 }
 

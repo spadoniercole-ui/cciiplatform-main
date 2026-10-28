@@ -493,6 +493,32 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
+  it('con il solo report per unità operativa, l’avviso conta la posizione invece di dire zero', async () => {
+    // La materia non ha lavorazioni: nessun documento per reparto. Ma il codice
+    // 27 ha una dipendenza propria, quindi il report per unità operativa esiste
+    // e la posizione va a un ufficio. Contando solo i documenti per reparto
+    // l’avviso diceva «1 ufficio, 0 posizioni, 0,00 €»: le posizioni sembravano
+    // svanite, e il link portava a un riquadro vuoto.
+    vi.mocked(ottieniLavorazioniMateria).mockResolvedValue({ success: true, lavorazioni: [] });
+    vi.mocked(ottieniLavorazioniTipoDebito).mockResolvedValue({ success: true, lavorazioni: [] });
+
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Puoi procedere alle comunicazioni per le unità operative')
+      ).toBeTruthy()
+    );
+    expect(screen.getByText(/1 ufficio, 1 posizione, 1\.200,00 €/)).toBeTruthy();
+  });
+
   it('senza ufficio sulla materia, il link porta alla lavorazione che manca', async () => {
     // Nessuna lavorazione, né della materia né della vecchia tabella: il codice
     // 27 non ha una dipendenza propria e la sua materia non ne porta una.

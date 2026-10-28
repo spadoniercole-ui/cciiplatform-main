@@ -1434,8 +1434,26 @@ export function VerificaSaluteAzienda({
       ...reportUo.documenti.map((d) => d.dipendenza),
     ])
   ).sort((a, b) => a.localeCompare(b, 'it-IT'));
-  const posizioniUo = documentiReparti.documenti.reduce((a, d) => a + d.righe, 0);
-  const totaleUo = documentiReparti.documenti.reduce((a, d) => a + d.totale, 0);
+  // LE POSIZIONI SI CONTANO PER UFFICIO, NON SOLO SUL DOCUMENTO DI REPARTO.
+  //
+  // Lo stesso ufficio compare in due uscite: il documento per reparto (che
+  // passa dalle lavorazioni configurate) e il report per unita' operativa (che
+  // usa la dipendenza del codice). Un codice con una dipendenza propria e una
+  // materia senza lavorazioni ha il suo report e nessun documento di reparto:
+  // contando solo i documenti per reparto l'avviso diceva «1 ufficio, 0
+  // posizioni, 0,00 euro» - le posizioni sembravano svanite - e mandava a un
+  // riquadro vuoto. Si conta per ufficio: il reparto se c'e', altrimenti il
+  // report, senza sommare due volte l'ufficio presente in entrambi.
+  const posizioniPerUfficio = new Map<string, { righe: number; totale: number }>();
+  for (const d of documentiReparti.documenti)
+    posizioniPerUfficio.set(chiaveDipendenza(d.reparto), { righe: d.righe, totale: d.totale });
+  for (const d of reportUo.documenti) {
+    const chiaveUfficio = chiaveDipendenza(d.dipendenza);
+    if (!posizioniPerUfficio.has(chiaveUfficio))
+      posizioniPerUfficio.set(chiaveUfficio, { righe: d.righe, totale: d.totale });
+  }
+  const posizioniUo = Array.from(posizioniPerUfficio.values()).reduce((a, v) => a + v.righe, 0);
+  const totaleUo = Array.from(posizioniPerUfficio.values()).reduce((a, v) => a + v.totale, 0);
   const avanzamentoUo = {
     uffici: ufficiConDocumenti.length,
     posizioni: posizioniUo,

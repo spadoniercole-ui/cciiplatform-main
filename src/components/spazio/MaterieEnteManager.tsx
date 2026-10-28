@@ -8,6 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import { BookMarked, Plus, Trash2, Search, ExternalLink, Check, Pencil } from 'lucide-react';
 import {
+  annullaConfermaMateriaEnteAction,
   confermaMateriaEnteAction,
   eliminaMateriaEnteAction,
   ottieniMaterieEnteAction,
@@ -25,6 +26,67 @@ import { confermaApp } from '@/components/FinestreApp';
 
 const CLASSE_CAMPO =
   'w-full p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 disabled:text-slate-500';
+
+/**
+ * I due campi che una persona conferma: il presupposto giuridico e i
+ * riferimenti interni. Una sola forma per tutte le strade — proposta da
+ * approvare, materia confermata da correggere, compilazione a mano — perché
+ * sono gli stessi due valori e finiscono nella stessa colonna: quello che i
+ * codici della materia leggono.
+ */
+function ModuloConferma({
+  conferma,
+  correggibile = false,
+  inCorso,
+  onChange,
+  onConferma,
+  onAnnulla,
+}: {
+  conferma: { presupposto: string; riferimenti: string };
+  correggibile?: boolean;
+  inCorso: boolean;
+  onChange: (patch: { presupposto?: string; riferimenti?: string }) => void;
+  onConferma: () => void;
+  onAnnulla: () => void;
+}) {
+  return (
+    <div className="space-y-2 pt-1">
+      <label className="block text-[9px] font-bold text-slate-400 uppercase">
+        Presupposto giuridico{correggibile ? ' (correggibile)' : ''}
+      </label>
+      <input
+        value={conferma.presupposto}
+        onChange={(e) => onChange({ presupposto: e.target.value })}
+        className={CLASSE_CAMPO}
+      />
+      <label className="block text-[9px] font-bold text-slate-400 uppercase">
+        Riferimenti interni{correggibile ? ' (correggibili)' : ''}
+      </label>
+      <input
+        value={conferma.riferimenti}
+        onChange={(e) => onChange({ riferimenti: e.target.value })}
+        className={CLASSE_CAMPO}
+      />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onConferma}
+          disabled={inCorso || !conferma.presupposto.trim()}
+          className="flex items-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
+        >
+          <Check className="w-3.5 h-3.5" /> Confermo
+        </button>
+        <button
+          type="button"
+          onClick={onAnnulla}
+          className="px-3 py-2 text-[10px] font-bold uppercase text-slate-500"
+        >
+          Annulla
+        </button>
+      </div>
+    </div>
+  );
+}
 
 interface Props {
   nomeSchema: string;
@@ -57,6 +119,9 @@ export function MaterieEnteManager({
     presupposto: string;
     riferimenti: string;
   } | null>(null);
+  const [inCorso, setInCorso] = useState(false);
+  /** L'esito di una conferma corretta o tolta: quanti codici ne sono toccati. */
+  const [avviso, setAvviso] = useState<string | null>(null);
 
   const carica = async () => {
     const r = await ottieniMaterieEnteAction(nomeSchema);
@@ -134,6 +199,70 @@ export function MaterieEnteManager({
     await carica();
   };
 
+  /** «1 codice» / «N codici»: il numero che rende visibile la conseguenza. */
+  const codiciToccati = (n: number | undefined) =>
+    `${n ?? 0} ${(n ?? 0) === 1 ? 'codice' : 'codici'}`;
+
+  /**
+   * La conferma, data o corretta. Da qui in poi i codici della materia leggono
+   * il presupposto nuovo: la ricarica che segue aggiorna anche loro, senza che
+   * nessuno debba ricaricare la pagina dei titoli.
+   */
+  const confermaLaMateria = async (m: MateriaEnte) => {
+    if (!conferma) return;
+    setInCorso(true);
+    setErrore(null);
+    setAvviso(null);
+    const r = await confermaMateriaEnteAction(
+      codice,
+      m.id!,
+      conferma.presupposto,
+      conferma.riferimenti
+    );
+    setInCorso(false);
+    if (!r.success) {
+      setErrore(r.error ?? 'Errore.');
+      return;
+    }
+    setConferma(null);
+    await carica();
+    if (r.corretta)
+      setAvviso(
+        `Conferma corretta: ${codiciToccati(r.codici)} ${
+          (r.codici ?? 0) === 1 ? 'legge' : 'leggono'
+        } ora il presupposto nuovo.`
+      );
+  };
+
+  /**
+   * Togliere la conferma. Non cancella il presupposto — è lavoro, non una
+   * firma — ma restituisce ai codici il loro esito: nessun verde resta appeso a
+   * una materia che nessuno ha più confermato.
+   */
+  const annullaLaConferma = async (m: MateriaEnte) => {
+    const ok = await confermaApp(
+      `Togliere la conferma alla materia «${m.nome}»? I codici che vi cadono smettono di risultare riscontrati dalla materia e tornano al loro esito. Il presupposto resta scritto: potrai correggerlo e riconfermarlo senza rifare la ricerca.`,
+      { distruttiva: true, etichettaConferma: 'Togli la conferma' }
+    );
+    if (!ok) return;
+    setInCorso(true);
+    setErrore(null);
+    setAvviso(null);
+    const r = await annullaConfermaMateriaEnteAction(codice, m.id!);
+    setInCorso(false);
+    if (!r.success) {
+      setErrore(r.error ?? 'Errore.');
+      return;
+    }
+    setConferma(null);
+    await carica();
+    setAvviso(
+      `Conferma tolta: ${codiciToccati(r.codici)} ${
+        (r.codici ?? 0) === 1 ? 'non risulta più coperto' : 'non risultano più coperti'
+      } dalla materia e ${(r.codici ?? 0) === 1 ? 'torna' : 'tornano'} al proprio esito.`
+    );
+  };
+
   return (
     <section className="space-y-3" aria-label="Materie dell’ente">
       <div className="flex items-start gap-2">
@@ -187,6 +316,12 @@ export function MaterieEnteManager({
       {errore && (
         <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">
           {errore}
+        </p>
+      )}
+
+      {avviso && (
+        <p className="text-xs text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+          {avviso}
         </p>
       )}
 
@@ -354,6 +489,47 @@ export function MaterieEnteManager({
                     ? ` il ${new Date(m.confermataIl).toLocaleDateString('it-IT')}`
                     : ''}
                 </span>
+                {/* La conferma non è definitiva: si corregge o si toglie. */}
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  <button
+                    type="button"
+                    disabled={inCorso}
+                    onClick={() =>
+                      setConferma({
+                        id: m.id!,
+                        presupposto: m.presuppostoGiuridico ?? '',
+                        riferimenti: m.riferimentiInterni ?? '',
+                      })
+                    }
+                    className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 font-bold text-[10px] uppercase rounded-lg disabled:text-slate-400"
+                  >
+                    Correggi la conferma
+                  </button>
+                  <button
+                    type="button"
+                    disabled={inCorso}
+                    onClick={() => void annullaLaConferma(m)}
+                    className="px-3 py-1.5 bg-white border border-slate-300 text-slate-500 hover:text-red-700 hover:border-red-300 font-bold text-[10px] uppercase rounded-lg disabled:text-slate-400"
+                  >
+                    Togli la conferma
+                  </button>
+                  <span className="text-[10px] text-slate-400">
+                    Toglierla non cancella il presupposto: i codici della materia tornano al loro
+                    esito finché non riconfermi.
+                  </span>
+                </div>
+                {conferma?.id === m.id && (
+                  <ModuloConferma
+                    conferma={conferma}
+                    correggibile
+                    inCorso={inCorso}
+                    onChange={(patch) =>
+                      setConferma((prev) => (prev ? { ...prev, ...patch } : prev))
+                    }
+                    onConferma={() => void confermaLaMateria(m)}
+                    onAnnulla={() => setConferma(null)}
+                  />
+                )}
               </div>
             )}
 
@@ -411,50 +587,16 @@ export function MaterieEnteManager({
                   </ul>
                 )}
                 {conferma?.id === m.id ? (
-                  <div className="space-y-2 pt-1">
-                    <label className="block text-[9px] font-bold text-slate-400 uppercase">
-                      Presupposto giuridico (correggibile)
-                    </label>
-                    <input
-                      value={conferma.presupposto}
-                      onChange={(e) => setConferma({ ...conferma, presupposto: e.target.value })}
-                      className={CLASSE_CAMPO}
-                    />
-                    <label className="block text-[9px] font-bold text-slate-400 uppercase">
-                      Riferimenti interni (correggibili)
-                    </label>
-                    <input
-                      value={conferma.riferimenti}
-                      onChange={(e) => setConferma({ ...conferma, riferimenti: e.target.value })}
-                      className={CLASSE_CAMPO}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const r = await confermaMateriaEnteAction(
-                            codice,
-                            m.id!,
-                            conferma.presupposto,
-                            conferma.riferimenti
-                          );
-                          if (!r.success) setErrore(r.error ?? 'Errore.');
-                          setConferma(null);
-                          await carica();
-                        }}
-                        className="flex items-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase rounded-lg"
-                      >
-                        <Check className="w-3.5 h-3.5" /> Confermo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConferma(null)}
-                        className="px-3 py-2 text-[10px] font-bold uppercase text-slate-500"
-                      >
-                        Annulla
-                      </button>
-                    </div>
-                  </div>
+                  <ModuloConferma
+                    conferma={conferma}
+                    correggibile
+                    inCorso={inCorso}
+                    onChange={(patch) =>
+                      setConferma((prev) => (prev ? { ...prev, ...patch } : prev))
+                    }
+                    onConferma={() => void confermaLaMateria(m)}
+                    onAnnulla={() => setConferma(null)}
+                  />
                 ) : (
                   <button
                     type="button"
@@ -518,50 +660,15 @@ export function MaterieEnteManager({
                   </button>
                 </div>
                 {conferma?.id === m.id && (
-                  <div className="space-y-2 pt-1">
-                    <label className="block text-[9px] font-bold text-slate-400 uppercase">
-                      Presupposto giuridico
-                    </label>
-                    <input
-                      value={conferma.presupposto}
-                      onChange={(e) => setConferma({ ...conferma, presupposto: e.target.value })}
-                      className={CLASSE_CAMPO}
-                    />
-                    <label className="block text-[9px] font-bold text-slate-400 uppercase">
-                      Riferimenti interni
-                    </label>
-                    <input
-                      value={conferma.riferimenti}
-                      onChange={(e) => setConferma({ ...conferma, riferimenti: e.target.value })}
-                      className={CLASSE_CAMPO}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const r = await confermaMateriaEnteAction(
-                            codice,
-                            m.id!,
-                            conferma.presupposto,
-                            conferma.riferimenti
-                          );
-                          if (!r.success) setErrore(r.error ?? 'Errore.');
-                          setConferma(null);
-                          await carica();
-                        }}
-                        className="flex items-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase rounded-lg"
-                      >
-                        <Check className="w-3.5 h-3.5" /> Confermo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConferma(null)}
-                        className="px-3 py-2 text-[10px] font-bold uppercase text-slate-500"
-                      >
-                        Annulla
-                      </button>
-                    </div>
-                  </div>
+                  <ModuloConferma
+                    conferma={conferma}
+                    inCorso={inCorso}
+                    onChange={(patch) =>
+                      setConferma((prev) => (prev ? { ...prev, ...patch } : prev))
+                    }
+                    onConferma={() => void confermaLaMateria(m)}
+                    onAnnulla={() => setConferma(null)}
+                  />
                 )}
               </div>
             )}
