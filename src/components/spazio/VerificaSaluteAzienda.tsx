@@ -31,6 +31,9 @@ import {
 } from '@/lib/triage/riepilogoHtml';
 import { stampaHtml } from '@/lib/stampaTesto';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { MateriaVociVera, type VoceDaRimappare } from './MateriaVociVera';
+import { ottieniMaterieVociVera } from '@/app/actions/posizioneVera';
+import { chiaveVoceVera } from '@/lib/titoliEnte/materiaVera';
 import {
   Stethoscope,
   Upload,
@@ -39,8 +42,6 @@ import {
   ArrowRight,
   Printer,
   Info,
-  Copy,
-  ClipboardList,
   FileDown,
   Send,
   Layers,
@@ -83,7 +84,6 @@ import {
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { generaPreCompilazioneMinisterialeAction } from '@/app/actions/checklistMinisterialeAzienda';
 import { registraVisuraTriageAction } from '@/app/actions/visuraTriage';
-import { salvaAnalisiXbrlAziendaAction } from '@/app/actions/xbrlAzienda';
 import {
   analizzaVera,
   estraiRigheVera,
@@ -224,13 +224,6 @@ export function VerificaSaluteAzienda({
   const [dati, setDati] = useState<AnagraficaEstratta | null>(null);
   const [aziendaId, setAziendaId] = useState<number | null>(null);
   const [attenzione, setAttenzione] = useState<Attenzione | null>(null);
-  // I due documenti che danno sostanza all'indicatore. Con la sola visura le
-  // dimensioni portanti — bilancio ed esposizione — mancano entrambe, e
-  // l'esito sarebbe rosso sempre: un semaforo che dice sempre la stessa cosa
-  // non è un semaforo.
-  // Più bilanci: ognuno porta due esercizi, quindi due bilanci danno tre anni
-  // di indici. Un campo singolo lo faceva sembrare impossibile.
-  const [fileXbrl, setFileXbrl] = useState<File[]>([]);
   // Un solo punto di caricamento per la posizione debitoria: N file di
   // qualunque natura, riconosciuti dalle intestazioni al momento della
   // conferma. Sostituisce i campi fissi — V.E.R.A. e tre fogli INPS — che
@@ -289,7 +282,6 @@ export function VerificaSaluteAzienda({
   const [righeVera, setRigheVera] = useState<RigaVera[]>([]);
   const [lavorazioni, setLavorazioni] = useState<LavorazioneTipoDebito[]>([]);
   const [etichetteCategorie, setEtichetteCategorie] = useState<Record<string, string>>({});
-  const [erroreComunicazioni, setErroreComunicazioni] = useState<string | null>(null);
   // ---- Report per unità operativa ---------------------------------------
   // La seconda uscita del triage non parte dalla categoria di debito ma dal
   // CODICE di partita: servono i titoli dell'ente (che dicono in quale materia
@@ -310,11 +302,14 @@ export function VerificaSaluteAzienda({
   // è un dato dello SPAZIO, non dell'azienda: si fa qui, senza uscire dal
   // triage e senza aspettare che l'anagrafica sblocchi la scheda V.E.R.A.
   const [mostraMappaturaVera, setMostraMappaturaVera] = useState(false);
+  // La finestra che cambia la MATERIA di una voce: è il posto da correggere
+  // quando la mappatura della sezione non sposta niente, perché le voci si
+  // riconducono già da sole — ma alla materia sbagliata.
+  const [mostraMaterieVoci, setMostraMaterieVoci] = useState(false);
+  const [scelteVociVera, setScelteVociVera] = useState<Record<string, number>>({});
   // La verifica riaperta: dice se l'azienda è ancora in verifica (si può
   // decidere) o è già stata presa in carico, e con quale data si è verificata.
   const [ripresa, setRipresa] = useState<VerificaDaRiprendere | null>(null);
-  const [copiato, setCopiato] = useState<string | null>(null);
-  const [erroreCopia, setErroreCopia] = useState<string | null>(null);
   // Il reparto di cui si sta preparando il PDF (null = nessuno) e l'eventuale
   // errore di generazione: il pulsante deve dire che sta lavorando e, se
   // qualcosa va storto, perché il file non è arrivato.
@@ -488,7 +483,10 @@ export function VerificaSaluteAzienda({
    * — anche a una verifica RIAPERTA, dove non c'è un file appena letto da cui
    * ricavarle — e una lettura fallita non deve azzerare l'altra.
    */
-  const caricaConfigurazioni = async (): Promise<Record<string, string>> => {
+  const caricaConfigurazioni = async (): Promise<{
+    mappatura: Record<string, string>;
+    scelteVoci: Record<string, number>;
+  }> => {
     let mappatura: Record<string, string> = {};
     try {
       const [mappa, lav, cat] = await Promise.all([
@@ -497,19 +495,15 @@ export function VerificaSaluteAzienda({
         ottieniCategorieTipoDebito(nomeSchema),
       ]);
       if (mappa.success) mappatura = mappa.mappatura;
-      else
-        setErroreComunicazioni(mappa.error ?? 'Mappatura delle sezioni V.E.R.A. non disponibile.');
       if (lav.success) setLavorazioni(lav.lavorazioni);
-      else setErroreComunicazioni(lav.error ?? 'Lavorazioni non disponibili.');
       if (cat.success) {
         setEtichetteCategorie(
           Object.fromEntries(cat.categorie.map((x) => [x.codice, x.etichetta]))
         );
-      } else {
-        setErroreComunicazioni(cat.error ?? 'Categorie di debito non disponibili.');
       }
-    } catch (e) {
-      setErroreComunicazioni(`Parametri delle comunicazioni non caricati: ${String(e)}.`);
+    } catch {
+      // Un parametro mancante non ferma il triage: il report dice che cosa
+      // manca, e le lavorazioni restano vuote.
     }
 
     try {
@@ -554,7 +548,22 @@ export function VerificaSaluteAzienda({
       setErroreUo(`Report per unità operativa non disponibile: ${String(e)}`);
     }
 
-    return mappatura;
+    // LE MATERIE SCELTE SULLE VOCI. Valgono più di ogni deduzione automatica e
+    // servono qui, non solo alla finestra: le righe appena lette devono
+    // portarle con sé, altrimenti la scelta salvata ieri non cambierebbe il
+    // report di oggi.
+    let scelteVoci: Record<string, number> = {};
+    try {
+      const scelte = await ottieniMaterieVociVera(nomeSchema);
+      if (scelte.success) {
+        scelteVoci = scelte.scelte;
+        setScelteVociVera(scelte.scelte);
+      }
+    } catch {
+      // Senza scelte salvate si legge la sola deduzione automatica.
+    }
+
+    return { mappatura, scelteVoci };
   };
 
   /**
@@ -631,9 +640,6 @@ export function VerificaSaluteAzienda({
     setRigheVera([]);
     setLavorazioni([]);
     setEtichetteCategorie({});
-    setErroreComunicazioni(null);
-    setCopiato(null);
-    setErroreCopia(null);
     try {
       // ---- Presupposto: il V.E.R.A. --------------------------------------
       // Non basta che il file sia nell'elenco: deve essere riconosciuto e
@@ -693,7 +699,7 @@ export function VerificaSaluteAzienda({
       // Servono a dare un destinatario alle posizioni V.E.R.A. Se una delle
       // letture fallisce il triage prosegue: le comunicazioni mancheranno,
       // ma l'esito non si perde.
-      const mappaturaTitoli = await caricaConfigurazioni();
+      const { mappatura: mappaturaTitoli, scelteVoci } = await caricaConfigurazioni();
       let fileVera: File | null = null;
       let fileDenunce: File | null = null;
       let fileDelegheDettaglio: File | null = null;
@@ -712,12 +718,6 @@ export function VerificaSaluteAzienda({
       const documenti: DocumentoTriage[] = [];
       if (fileVisura)
         documenti.push({ nome: fileVisura.name, tipo: 'Visura camerale', esito: 'Anagrafica' });
-      for (const fx of fileXbrl)
-        documenti.push({
-          nome: fx.name,
-          tipo: 'Bilancio XBRL',
-          esito: 'Equilibrio economico-finanziario',
-        });
       for (const f of fileProspetti) {
         const tipo = await riconosciProspetto(f);
         const giaVisto =
@@ -769,37 +769,6 @@ export function VerificaSaluteAzienda({
         );
       }
 
-      for (const fx of fileXbrl) {
-        setAvanzamento(`Analisi del bilancio XBRL (${fx.name})...`);
-        try {
-          // Via la rotta dedicata, non chiamando la libreria da qui:
-          // `analizzaFileXbrl` legge le mappature dei tag dal database, e
-          // importarla in un componente client trascinerebbe `pg` nel bundle
-          // del browser — la build fallisce con "Can't resolve 'fs'".
-          const fd = new FormData();
-          fd.append('file', fx);
-          const resp = await fetch('/api/xbrl/parse', { method: 'POST', body: fd });
-          const esito = await resp.json();
-          if (!resp.ok || !esito.success) {
-            throw new Error(esito.error || 'Analisi non riuscita.');
-          }
-          const regX = await registraDocumentoOrigineAction(
-            nomeSchema,
-            c.aziendaId,
-            'XBRL',
-            await improntaFile(fx)
-          );
-          await salvaAnalisiXbrlAziendaAction(
-            nomeSchema,
-            c.aziendaId,
-            esito,
-            regX.success && regX.documentoId ? regX.documentoId : null
-          );
-        } catch (e) {
-          note.push(`Bilancio «${fx.name}» non analizzabile: ${String(e)}`);
-        }
-      }
-
       // Ritardo misurato sui periodi del V.E.R.A.: ripiego quando manca la
       // Lista Inadempienze (che resta la fonte prioritaria).
       let ritardoVera: ReturnType<typeof ritardoDaVera> = null;
@@ -812,7 +781,12 @@ export function VerificaSaluteAzienda({
           // dà una tipologia alle righe e permette di indirizzarle al
           // collega giusto. Le sezioni non mappate restano senza categoria.
           const { righe } = estraiRigheVera(analisiVera.sezioni, mappaturaTitoli, {}, true);
-          setRigheVera(righe);
+          setRigheVera(
+            righe.map((r) => ({
+              ...r,
+              materiaId: scelteVoci[chiaveVoceVera(r.sezione, r.voce)] ?? null,
+            }))
+          );
           // Le poste del V.E.R.A. non vanno tutte nella stessa base: dirlo qui
           // evita che l'operatore si chieda perché la soglia INPS non usa il
           // totale del file.
@@ -1189,9 +1163,6 @@ export function VerificaSaluteAzienda({
     setRigheVera([]);
     setLavorazioni([]);
     setEtichetteCategorie({});
-    setErroreComunicazioni(null);
-    setCopiato(null);
-    setErroreCopia(null);
   };
 
   const stampaRiepilogo = () => {
@@ -1469,6 +1440,43 @@ export function VerificaSaluteAzienda({
     );
   }, [righeVera, instradamento, titoliUo, materieUo]);
 
+  // LE VOCI CHE IL REPORT MANDA A UN UFFICIO, con la materia che le accompagna.
+  //
+  // Serve alla correzione: quando una mappatura di sezione non sposta niente, il
+  // posto da sistemare è la voce. Si elencano le voci delle sezioni inerti e
+  // quelle su cui una scelta è già stata presa (per poterla togliere) — non
+  // tutte quelle del file, che sarebbero un secondo elenco del V.E.R.A.
+  const vociDaRimappare = useMemo<VoceDaRimappare[]>(() => {
+    const sezioniInerti = new Set(
+      reportUo.mappatureSenzaEffetto.map((m) => normalizzaEtichetta(m.sezione))
+    );
+    const perVoce = new Map<string, VoceDaRimappare>();
+    for (const r of righeVera) {
+      if (r.trattamento === 'ignora') continue;
+      const chiave = chiaveVoceVera(r.sezione, r.voce);
+      const scelta = scelteVociVera[chiave] ?? null;
+      if (scelta === null && !sezioniInerti.has(normalizzaEtichetta(r.sezione))) continue;
+      const materia =
+        scelta !== null
+          ? (materieUo.find((m) => m.id === scelta)?.nome ?? `Materia ${scelta}`)
+          : (materiaPerRigaVera(r.voce, r.sezione, titoliUo, materieUo)?.nome ?? null);
+      const voce = perVoce.get(chiave) ?? {
+        sezione: r.sezione,
+        voce: r.voce,
+        righe: 0,
+        importo: 0,
+        materiaAttuale: materia,
+        materiaScelta: scelta,
+      };
+      voce.righe += 1;
+      voce.importo += r.importo;
+      perVoce.set(chiave, voce);
+    }
+    return Array.from(perVoce.values()).sort(
+      (a, b) => a.sezione.localeCompare(b.sezione, 'it-IT') || a.voce.localeCompare(b.voce, 'it-IT')
+    );
+  }, [righeVera, reportUo, scelteVociVera, materieUo, titoliUo]);
+
   // ---- LE COMUNICAZIONI PER LE UNITÀ OPERATIVE -------------------------
   // Il triage serviva a decidere; da quando produce documenti per gli uffici
   // serve anche a dire se quei documenti ci sono e per quali uffici. Un «puoi
@@ -1656,19 +1664,6 @@ export function VerificaSaluteAzienda({
     }
   };
 
-  const copiaTesto = async (chiave: string, testo: string) => {
-    setErroreCopia(null);
-    try {
-      await navigator.clipboard.writeText(testo);
-      setCopiato(chiave);
-      window.setTimeout(() => {
-        setCopiato((prev) => (prev === chiave ? null : prev));
-      }, 2000);
-    } catch {
-      setErroreCopia('Copia non riuscita: seleziona il testo e copialo a mano.');
-    }
-  };
-
   return (
     <div className="space-y-5">
       <div>
@@ -1780,53 +1775,12 @@ export function VerificaSaluteAzienda({
                 Documenti per l&apos;analisi
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                Il primo livello si regge su documenti pubblici, recuperabili da chiunque: la visura
-                e il bilancio. Bastano a leggere l&apos;azienda e a fotografarne i conti, e
-                collocano sulla soglia del CCII senza entrarci — per quello serve la posizione
-                debitoria, più sotto.
+                Il triage si regge su documenti pubblici, recuperabili da chiunque: la visura. Basta
+                a leggere l&apos;azienda e a collocarla sulla soglia del CCII senza entrarci — per
+                quello serve la posizione debitoria, più sotto. Il bilancio XBRL non si carica qui:
+                è un approfondimento, e si carica dallo screening in poi, se si decide di
+                proseguire.
               </p>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                Bilanci XBRL
-              </label>
-              <input
-                type="file"
-                accept=".xbrl,.xml"
-                multiple
-                onChange={(e) => {
-                  const scelti = Array.from(e.target.files ?? []);
-                  setFileXbrl((prev) => accumulaFile(prev, scelti));
-                  // Si svuota il campo: senza, riscegliere lo stesso file non
-                  // produce alcun evento e sembra che il clic non funzioni.
-                  e.target.value = '';
-                }}
-                className="w-full font-mono text-xs text-slate-900 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:uppercase file:text-slate-700"
-              />
-              <p className="mt-1 text-[10px] text-slate-400">
-                Anche più di uno: ogni bilancio porta due esercizi, quindi due bilanci danno tre
-                anni di indici. Servono al quadro d&apos;insieme, mai al test delle soglie.
-              </p>
-              {fileXbrl.length > 0 && (
-                <ul className="mt-1 space-y-0.5">
-                  {fileXbrl.map((f) => (
-                    <li
-                      key={`${f.name}|${f.size}`}
-                      className="flex items-center gap-2 font-mono text-[10px] text-slate-600"
-                    >
-                      — {f.name}
-                      <button
-                        onClick={() => setFileXbrl((prev) => togliFile(prev, f))}
-                        className="font-sans font-bold text-slate-400 hover:text-red-600"
-                        aria-label={`Togli ${f.name}`}
-                      >
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
 
             <div>
@@ -1947,8 +1901,7 @@ export function VerificaSaluteAzienda({
             <span className="font-bold text-slate-700">
               è da lì che si procede alle comunicazioni per le unità operative
             </span>{' '}
-            — le comunicazioni ai colleghi, i documenti per i reparti e i report per ufficio si
-            ricompongono dai dati salvati e dalle lavorazioni configurate.
+            — i report per ufficio si ricompongono dai dati salvati e dalle lavorazioni configurate.
           </p>
           <div className="divide-y divide-slate-100">
             {storico.slice(0, 15).map((v) => (
@@ -2446,6 +2399,25 @@ export function VerificaSaluteAzienda({
             />
           )}
 
+          {/* LA MATERIA DELLA VOCE, DAL REPORT CHE LA MOSTRA SBAGLIATA. */}
+          {mostraMaterieVoci && (
+            <MateriaVociVera
+              nomeSchema={nomeSchema}
+              voci={vociDaRimappare}
+              onChiudi={() => setMostraMaterieVoci(false)}
+              onSalvate={(scelte) => {
+                setScelteVociVera(scelte);
+                setRigheVera((precedenti) =>
+                  precedenti.map((r) => ({
+                    ...r,
+                    materiaId: scelte[chiaveVoceVera(r.sezione, r.voce)] ?? null,
+                  }))
+                );
+                setMostraMaterieVoci(false);
+              }}
+            />
+          )}
+
           {/*
             «NON PROCEDO» — LA FINESTRA DEL MOTIVO.
 
@@ -2535,148 +2507,6 @@ export function VerificaSaluteAzienda({
               </div>
             </div>
           )}
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-slate-500" />
-              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-                Comunicazioni ai colleghi
-              </h3>
-            </div>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Preparate dai dati del file V.E.R.A. e dalle lavorazioni configurate. Non vengono
-              inviate: copia il testo e invialo tu al collega che se ne occupa.
-            </p>
-
-            {erroreComunicazioni && (
-              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
-                {`${erroreComunicazioni} Le comunicazioni non sono state preparate; il triage resta valido.`}
-              </p>
-            )}
-
-            {comunicazioni.comunicazioni.length === 0 ? (
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                {erroreComunicazioni
-                  ? 'Nessuna comunicazione preparata: mancano i parametri necessari.'
-                  : instradamento.lavorazioni.length === 0
-                    ? LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
-                      ? 'Nessuna lavorazione configurata: la tabella dei destinatari è in sola lettura e non ne esistono ancora, quindi non c’è nessuno a cui indirizzare la comunicazione.'
-                      : 'Nessuna lavorazione configurata: aggiungila nei Parametri di Spazio per preparare le comunicazioni.'
-                    : 'Nessuna posizione V.E.R.A. riconducibile a una lavorazione attiva.'}
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {comunicazioni.comunicazioni.map((c) => {
-                  const chiave = c.destinatario;
-                  return (
-                    <details key={chiave} className="border border-slate-200 rounded-lg">
-                      <summary className="cursor-pointer p-3 flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-slate-900">{c.destinatario}</span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {c.righe} {c.righe === 1 ? 'posizione' : 'posizioni'} ·{' '}
-                          {formattaImportoEuro(c.totale)}
-                        </span>
-                      </summary>
-                      <div className="border-t border-slate-100 p-3 space-y-2">
-                        <p className="text-[11px] text-slate-700">
-                          <span className="font-bold">Oggetto:</span> {c.oggetto}
-                        </p>
-                        <pre className="whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-200 p-3 text-[11px] leading-relaxed text-slate-800 font-sans">
-                          {c.corpo}
-                        </pre>
-                        <button
-                          type="button"
-                          onClick={() => void copiaTesto(chiave, c.corpo)}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50"
-                        >
-                          {copiato === chiave ? (
-                            <Check className="w-3.5 h-3.5" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                          {copiato === chiave ? 'Copiato' : 'Copia testo'}
-                        </button>
-                      </div>
-                    </details>
-                  );
-                })}
-              </div>
-            )}
-
-            {comunicazioni.categorieSenzaLavorazione.length > 0 && (
-              <div className="border-t border-slate-100 pt-3 space-y-1">
-                <p className="text-[11px] font-bold text-amber-800">Tipologie senza lavorazione</p>
-                <ul className="space-y-1">
-                  {comunicazioni.categorieSenzaLavorazione.map((c) => (
-                    <li
-                      key={c.categoria}
-                      className="flex gap-2 text-[11px] leading-relaxed text-amber-800"
-                    >
-                      <span className="shrink-0 text-amber-500">—</span>
-                      <span>
-                        {c.etichetta}: {c.righe} {c.righe === 1 ? 'posizione' : 'posizioni'},{' '}
-                        {formattaImportoEuro(c.totale)}
-                        {materiaDaChiave(c.categoria) !== null && (
-                          <>
-                            {' '}
-                            <a
-                              href={conRitorno(
-                                `/spazio/${codice}/parametri/materie-lavorazione?materia=${materiaDaChiave(
-                                  c.categoria
-                                )}`,
-                                ritornoDaTriage
-                              )}
-                              className="font-bold underline"
-                            >
-                              Aggiungi la lavorazione
-                            </a>
-                          </>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-[10px] text-slate-500 leading-relaxed">
-                  {LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA
-                    ? 'Restano fuori dalle comunicazioni: la tabella dei destinatari è in sola lettura e nessuna delle sue righe riguarda queste tipologie.'
-                    : 'Restano fuori dalle comunicazioni finché non configuri la lavorazione.'}
-                </p>
-              </div>
-            )}
-
-            {comunicazioni.righeSenzaCategoria > 0 && (
-              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
-                {`${comunicazioni.righeSenzaCategoria} ${
-                  comunicazioni.righeSenzaCategoria === 1
-                    ? 'posizione V.E.R.A. non ha'
-                    : 'posizioni V.E.R.A. non hanno'
-                } né una materia né una categoria: la sezione non è mappata e la posizione resta fuori dalle comunicazioni.`}{' '}
-                {sezioniDaMappare.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setMostraMappaturaVera(true)}
-                    className="font-bold text-sky-700 hover:underline"
-                  >
-                    Mappa le sezioni qui
-                  </button>
-                )}
-              </p>
-            )}
-
-            {erroreCopia && <p className="text-[11px] text-red-700">{erroreCopia}</p>}
-
-            {/* Il link porta alla lavorazione che manca, non ai Parametri in
-                generale: «configura le lavorazioni» senza dire quale lasciava
-                l'operatore davanti a una pagina di cui doveva indovinare la
-                riga. */}
-            {etichettaLavorazioni && (
-              <a
-                href={linkLavorazioni}
-                className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-sky-700 hover:text-sky-800"
-              >
-                {etichettaLavorazioni} <ArrowRight className="w-3 h-3" />
-              </a>
-            )}
-          </div>
           {/* Il riepilogo si stampa dai documenti appena letti, che in una
               verifica riaperta non esistono più: offrirlo lì produrrebbe un
               foglio con i valori dei fogli INPS mancanti, indistinguibile da
@@ -3059,6 +2889,15 @@ export function VerificaSaluteAzienda({
                   queste posizioni devono andare altrove, il posto da cambiare è la materia della
                   voce, non la mappatura della sezione.
                 </p>
+                {vociDaRimappare.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setMostraMaterieVoci(true)}
+                    className="text-[11px] font-bold text-sky-800 hover:underline"
+                  >
+                    Cambia la materia delle voci
+                  </button>
+                )}
               </div>
             )}
 
@@ -3265,9 +3104,6 @@ export function VerificaSaluteAzienda({
                   setRigheVera([]);
                   setLavorazioni([]);
                   setEtichetteCategorie({});
-                  setErroreComunicazioni(null);
-                  setCopiato(null);
-                  setErroreCopia(null);
                   setConfermaAperta(null);
                   setErroreInvio(null);
                   setAvvisoInvio(null);

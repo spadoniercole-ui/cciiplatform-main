@@ -2045,6 +2045,26 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
       trattamento TEXT NOT NULL
     )`
   );
+  // LA MATERIA SCELTA SULLA SINGOLA VOCE.
+  //
+  // La mappatura di sezione è un ripiego: quando le voci si riconducono già da
+  // sole alla loro materia, la scelta salvata sulla sezione non sposta niente, e
+  // il report lo dichiara. Ma la destinazione sbagliata resta, e per correggerla
+  // non c'è modo: la deduzione automatica legge la voce, e la voce non si tocca
+  // dall'applicazione. Qui l'operatore dice, una volta per voce, quale materia
+  // le compete: la scelta vale per lo spazio (non per la singola azienda) e
+  // batte ogni deduzione automatica, perché è una decisione e non un'ipotesi.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.vera_voci (
+      sezione_norm TEXT NOT NULL,
+      voce_norm TEXT NOT NULL,
+      sezione TEXT NOT NULL,
+      voce TEXT NOT NULL,
+      materia_id INTEGER NOT NULL,
+      aggiornata_il TIMESTAMP NOT NULL DEFAULT now(),
+      PRIMARY KEY (sezione_norm, voce_norm)
+    )`
+  );
   // LE SOSPENSIONI GIÀ SALVATE.
   //
   // La classificazione del V.E.R.A. metteva le posizioni con stato «Sospeso»

@@ -1,3 +1,43 @@
+## 0.140.0 — 2026-10-28
+
+**I debiti che il V.E.R.A. scrive soltanto nel totale non spariscono più.** Il
+report per le unità operative era incompleto: c'erano posizioni che finivano fra le
+«già contabilizzate» — dichiarate in testa al foglio e mai elencate — pur non essendo
+mai state iscritte in contabilità dall'ente. Il segno era nel file: quelle righe
+portano la cifra SOLTANTO nel «Totale debito» o nel «Totale credito», mentre una
+posizione già contabilizzata porta anche la sua composizione (contributi, sanzioni,
+iscritto, residuo, riscosso). Un debito che l'ente deve ancora contabilizzare, non
+essendo certo, liquido ed esigibile, non può comparire in quelle colonne. Ora la riga
+si riconosce, prende il trattamento «da contabilizzare» e arriva all'ufficio giusto;
+l'esposizione e le soglie dell'art. 25-novies non si muovono, perché i totali
+contavano già quella cifra.
+
+**Il foglio dice perché la posizione è arrivata a quell'ufficio.** Accanto a ogni voce,
+la provenienza: dal codice di partita, dalla voce stessa, dal titolo della sezione,
+dalla mappatura della sezione o dalla materia scelta a mano. È ciò che permette
+all'ufficio di controllare l'instradamento invece di scoprire l'errore lavorando la
+partita — e la versione del documento lo comprende, così un cambio di provenienza
+produce una nuova versione da inviare.
+
+**Una mappatura inerte si corregge dove nasce.** Il riquadro che dichiara «questa
+mappatura di sezione non sposta nulla» ha ora il comando che apre la materia delle
+voci: si sceglie, si salva e il report si ricompone lì, senza uscire dal triage né
+passare dalla scheda dell'azienda. La scelta è dello spazio — una voce si legge allo
+stesso modo in tutte le aziende — batte la deduzione automatica e si toglie da sé
+(«Riconduci da sé»). Table `vera_voci`, che il DDL del tenant crea alla prima lettura.
+
+**Il triage resta una visita, non un'istruttoria.** Via il caricamento dei bilanci
+XBRL: si carica dallo screening in poi, quando l'azienda si è decisa a proseguire. Il
+triage mantiene i prospetti aziendali e la visura.
+
+**Una sola uscita per i colleghi.** La sezione «Comunicazioni ai colleghi» è stata
+ritirata: diceva le stesse cose del report per unità operativa, senza registrare
+l'invio a chi riceve il foglio. Restano i report, con lo scaricamento e la conferma
+d'invio nel registro delle consegne.
+
+Test aggiunti: 7 (tre sul V.E.R.A. con la cifra solo nel totale, due sulla materia
+scelta sulla voce, uno sulla provenienza nel PDF, uno sul collegamento al registro).
+
 # Changelog
 
 Ogni consegna riporta qui il numero di versione e le modifiche incluse.

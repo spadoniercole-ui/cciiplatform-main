@@ -125,7 +125,14 @@ describe('V.E.R.A.: l’importo delle righe con «Totale debito» vuoto', () => 
     expect(a.sezioni[0].righe[0].importo).toBe(3_404.02);
   });
 
-  it('le righe lette così sono contabilizzate, non «a importo ignoto»', async () => {
+  // CHI HA LA COMPOSIZIONE È CONTABILIZZATO, CHI HA SOLO IL TOTALE NO.
+  //
+  // Le righe F24 hanno contributi e sanzioni: la cifra è già in contabilità, sotto
+  // il suo dettaglio. La «Denunce non trasmesse» con la sola cifra nel totale non
+  // ha nessuna composizione: è un debito che l'ente deve ancora iscrivere, e per
+  // questo deve arrivare ai documenti per gli uffici invece di essere dichiarata
+  // «già contabilizzata». Restano fuori soltanto le righe senza alcun importo.
+  it('non sono «a importo ignoto»: contabilizzate se composte, da contabilizzare se solo a totale', async () => {
     const a = await analizzaVera(fileVera());
     const { righe } = estraiRigheVera(a.sezioni, {}, {}, true);
     expect(righe.map((r) => r.trattamento)).toEqual([
@@ -133,7 +140,7 @@ describe('V.E.R.A.: l’importo delle righe con «Totale debito» vuoto', () => 
       'contabilizzato',
       'contabilizzato',
       'contabilizzato',
-      'contabilizzato',
+      'da_contabilizzare',
       'potenziale',
     ]);
     const t = totaliVera(righe);

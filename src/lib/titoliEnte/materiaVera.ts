@@ -15,6 +15,7 @@
 
 import { materiaSuggeritaPerDescrizione, type StatoMateria } from './materie';
 import { titoloPerCodice, type TitoloEnte } from './titoli';
+import { normalizzaEtichetta } from '@/lib/debitiEnte/tracciatoCore';
 
 export interface MateriaMinima {
   id: number;
@@ -49,6 +50,19 @@ const normCodice = (c: string) =>
     .trim()
     .replace(/^0+(?=\d)/, '')
     .toUpperCase();
+
+/**
+ * «sezione|voce», normalizzate: la chiave con cui si ricorda la MATERIA SCELTA
+ * su una voce del V.E.R.A.
+ *
+ * La stessa voce può stare in sezioni diverse dello stesso file — e la sezione
+ * fa parte dell'identità della voce, perché è il contenitore che il file le ha
+ * dato. Si normalizza per non salvare due scelte per la stessa riga scritta in
+ * due modi.
+ */
+export function chiaveVoceVera(sezione: string, voce: string): string {
+  return `${normalizzaEtichetta(sezione)}|${normalizzaEtichetta(voce)}`;
+}
 
 export function materiaPerRigaVera(
   voce: string,

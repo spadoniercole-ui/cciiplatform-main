@@ -182,3 +182,61 @@ describe('V.E.R.A.: ritardo oltre 90 giorni dai periodi', () => {
     expect(ritardoDaVera([sez[1]] as never, new Date('2026-09-21'))).toBeNull();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LA CIFRA CHE STA SOLO NEL TOTALE.
+//
+// Il debito che l'ente non ha ancora contabilizzato non compare nelle colonne
+// di dettaglio — non è certo, liquido ed esigibile — e il file lo scrive
+// soltanto nel «Totale debito» (o nel «Totale credito»). Leggere quel vuoto
+// come «già contabilizzato» faceva sparire la posizione dai documenti per gli
+// uffici: né elencata, né da lavorare. Queste righe devono arrivare all'ufficio.
+describe('V.E.R.A.: la riga con la cifra solo nel totale', () => {
+  const conTotaleSolo = [
+    {
+      titolo: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+      righe: [
+        {
+          voce: 'F24 non presentato',
+          stato: '',
+          importo: 1_500,
+          contributi: null,
+          sanzioni: null,
+          soloTotale: true,
+        },
+        {
+          voce: 'TS 27 flusso Uniemens non versato',
+          stato: '',
+          importo: 3_000,
+          contributi: 2_700,
+          sanzioni: 300,
+          soloTotale: false,
+        },
+      ],
+    },
+  ];
+
+  it('non è «già contabilizzata»: il trattamento diventa «da contabilizzare»', () => {
+    const { righe } = estraiRigheVera(conTotaleSolo as never, {}, {}, true);
+    expect(righe[0].trattamento).toBe('da_contabilizzare');
+  });
+
+  it('una riga con la sua composizione resta contabilizzata', () => {
+    const { righe } = estraiRigheVera(conTotaleSolo as never, {}, {}, true);
+    expect(righe[1].trattamento).toBe('contabilizzato');
+  });
+
+  it('la soglia non si muove: cambia l’elenco, non l’esposizione', () => {
+    // La stessa riga letta con e senza il segno «cifra solo nel totale»: i
+    // documenti per gli uffici la elencano, ma le soglie dell’art. 25-novies
+    // non si spostano di un centesimo.
+    const conDettaglio = (conTotaleSolo as never as { righe: { soloTotale: boolean }[] }[]).map(
+      (s) => ({ ...s, righe: s.righe.map((r) => ({ ...r, soloTotale: false })) })
+    );
+    const a = totaliVera(estraiRigheVera(conTotaleSolo as never, {}, {}, true).righe);
+    const b = totaliVera(estraiRigheVera(conDettaglio as never, {}, {}, true).righe);
+    expect(a.contributiInps).toBeCloseTo(b.contributiInps, 2);
+    expect(a.sanzioni).toBeCloseTo(b.sanzioni, 2);
+    expect(a.quantificato).toBeCloseTo(b.quantificato, 2);
+  });
+});

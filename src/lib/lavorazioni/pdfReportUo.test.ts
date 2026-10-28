@@ -123,6 +123,32 @@ describe('generaPdfReportUo', () => {
     expect(sorgente).toContain('AdR');
   });
 
+  // L'ufficio deve poter controllare PERCHÉ quelle posizioni sono sul suo
+  // foglio: il codice, la voce, o una mappatura. Senza, una mappatura sbagliata
+  // resta indistinguibile da un instradamento corretto.
+  it('dice perché ogni posizione è arrivata a quell’ufficio', () => {
+    const d = documento();
+    const conOrigini = {
+      ...d,
+      codici: d.codici.map((c) => ({
+        ...c,
+        origini: [
+          {
+            sezione: 'FLUSSI UNIEMENS',
+            voce: 'TS 27 flusso Uniemens non versato',
+            motivo: 'voce' as const,
+            righe: 2,
+            importo: 2_000,
+          },
+        ],
+      })),
+    };
+    const sorgente = generaPdfReportUo(conOrigini).output();
+    expect(sorgente).toContain('Perché queste posizioni sono qui');
+    expect(sorgente).toContain('la voce si riconduce da sé alla materia');
+    expect(sorgente).toContain('TS 27 flusso Uniemens non versato');
+  });
+
   it('dichiara il codice senza lavorazioni configurate invece di lasciare il vuoto', () => {
     const pdf = generaPdfReportUo(
       documento({

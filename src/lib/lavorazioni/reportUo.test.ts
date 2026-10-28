@@ -602,3 +602,60 @@ describe('report UO: le voci assegnate a ogni ufficio, e perché', () => {
     expect(componiReportUo({ ...base, righe: [riga()] }).mappatureSenzaEffetto).toEqual([]);
   });
 });
+
+// LA SCELTA SULLA VOCE. Quando la deduzione automatica manda la posizione
+// all'ufficio sbagliato, l'operatore corregge la materia della voce dal report.
+// La scelta è una decisione, non una lettura: vince su tutto e lo dice.
+describe('report UO: la materia scelta su una voce', () => {
+  const materie = [
+    { id: 10, nome: 'Flussi Uniemens' },
+    { id: 11, nome: 'Verbali ispettivi' },
+  ];
+  const lavorazioni = [
+    lav({ id: 1, materiaId: 10, dipendenza: 'Presidio dei flussi informativi' }),
+    lav({
+      id: 2,
+      materiaId: 11,
+      dipendenza: 'Vigilanza documentale',
+      tipologia: 'Acquisizione del verbale',
+    }),
+  ];
+  const unaRiga = (over: Partial<RigaVeraReportUo>) =>
+    riga({
+      sezione: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+      voce: 'Verbale Evasione',
+      importo: 500,
+      ...over,
+    });
+
+  it('la scelta porta la voce dove dice l’operatore, e si dichiara come scelta', () => {
+    const esito = componiReportUo({
+      azienda: 'Alfa Srl',
+      dataVerifica: '2026-10-28',
+      titoli: [],
+      materie,
+      lavorazioni,
+      righe: [unaRiga({ materiaId: 10 })],
+    });
+    const presidio = esito.documenti.find(
+      (d) => d.dipendenza === 'Presidio dei flussi informativi'
+    );
+    expect(presidio).toBeTruthy();
+    expect(presidio!.codici[0].origini[0].motivo).toBe('scelto');
+    expect(esito.documenti.some((d) => d.dipendenza === 'Vigilanza documentale')).toBe(false);
+  });
+
+  it('senza scelta vale la lettura della voce', () => {
+    const esito = componiReportUo({
+      azienda: 'Alfa Srl',
+      dataVerifica: '2026-10-28',
+      titoli: [],
+      materie,
+      lavorazioni,
+      righe: [unaRiga({})],
+    });
+    const vigilanza = esito.documenti.find((d) => d.dipendenza === 'Vigilanza documentale');
+    expect(vigilanza).toBeTruthy();
+    expect(vigilanza!.codici[0].origini[0].motivo).toBe('voce');
+  });
+});

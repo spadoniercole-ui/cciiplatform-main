@@ -67,6 +67,8 @@ vi.mock('@/app/actions/posizioneVera', () => ({
   ottieniMappaturaTitoliVera: vi.fn(),
   ottieniDebitiVera: vi.fn(),
   impostaDuplicatoVeraAction: vi.fn(),
+  ottieniMaterieVociVera: vi.fn(),
+  salvaMaterieVociVeraAction: vi.fn(),
 }));
 
 vi.mock('@/app/actions/titoliEnte', () => ({
@@ -393,32 +395,27 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
       screen.getByRole('heading', { name: 'Soglie di segnalazione (art. 25-novies)' })
     ).toBeTruthy();
 
-    // Le comunicazioni ai colleghi: il testo c'è, con il destinatario della
-    // MATERIA (la configurazione viva), non con quello della vecchia tabella
-    // per categoria — che qui è configurato, ma non deve più instradare.
-    const comunicazioni = sezioneDi('Comunicazioni ai colleghi');
-    expect(within(comunicazioni).getByText('Ufficio Recupero Crediti')).toBeTruthy();
-    expect(within(comunicazioni).queryByText('Sportello Entrate')).toBeNull();
-    expect(within(comunicazioni).getByRole('button', { name: /Copia testo/i })).toBeTruthy();
-    // Il testo elenca solo ciò che manca: la posizione già contabilizzata non
-    // è una riga dell'elenco, ma una dichiarazione con il suo importo.
-    const testo = within(comunicazioni).getByText(
-      /Già contabilizzate, e per questo non elencate: 1 posizione/,
-      { selector: 'pre' }
-    );
-    // La posizione non è fra quelle elencate, ma il suo importo è dichiarato.
-    expect(testo.textContent).not.toContain('TS 25 - nota di rettifica');
-    expect(testo.textContent).toContain('TS 25');
-
-    // UNA SOLA USCITA: il report per unità operativa. Il documento per reparto
-    // diceva le stesse cose e non leggeva le lavorazioni delle materie, quindi
-    // è stato ritirato: due fogli per lo stesso ufficio erano due versioni da
-    // tenere allineate, e la seconda era la meno informata delle due.
+    // UNA SOLA USCITA: il report per unità operativa. Le comunicazioni ai
+    // colleghi sono state ritirate — dicevano le stesse cose senza registrare
+    // l'invio — e con loro il documento per reparto: due fogli per lo stesso
+    // ufficio erano due versioni da tenere allineate.
+    expect(screen.queryByRole('heading', { name: 'Comunicazioni ai colleghi' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Comunica ai reparti' })).toBeNull();
     const unitaOperative = sezioneDi('Report per unità operativa');
+    // Il destinatario è quello della MATERIA (la configurazione viva), non
+    // della vecchia tabella per categoria — che qui è configurata, ma non deve
+    // più instradare.
     expect(within(unitaOperative).getByText('Ufficio Recupero Crediti')).toBeTruthy();
+    expect(within(unitaOperative).queryByText('Sportello Entrate')).toBeNull();
     expect(within(unitaOperative).getByText(/Codici: 27/)).toBeTruthy();
     expect(within(unitaOperative).getByRole('button', { name: /Scarica il PDF/i })).toBeTruthy();
+
+    // Ciò che il report non elenca si dichiara: la posizione già contabilizzata
+    // non è una riga dell'elenco, ma il suo importo non sparisce.
+    const dichiarazione = screen.getByText(
+      /Già contabilizzate, e per questo non elencate: 1 posizione/
+    );
+    expect(dichiarazione.textContent).toContain('TS 25');
 
     // Un documento, un file.
     expect(screen.getAllByRole('button', { name: /Scarica il PDF/i })).toHaveLength(1);
@@ -560,10 +557,12 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
       ).toBeTruthy()
     );
 
-    // Il link non manda «ai parametri»: dice quale materia e la apre.
-    const link = within(sezioneDi('Comunicazioni ai colleghi')).getByRole('link', {
+    // Il link non manda «ai parametri»: dice quale materia e la apre. Compare
+    // nell'avviso e in fondo al report, perché chi arriva all'uno o all'altro
+    // deve trovarlo lo stesso.
+    const link = screen.getAllByRole('link', {
       name: /Configura la lavorazione di «Flussi Uniemens»/i,
-    });
+    })[0];
     // E porta con sé la via del ritorno: chi esce dai Parametri deve tornare
     // a QUESTA verifica, non alla dashboard dei parametri.
     expect(link.getAttribute('href')).toBe(
@@ -768,15 +767,13 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
       ).toBeTruthy()
     );
 
-    // DUE INGRESSI, LA STESSA FINESTRA. Il comando sta nell'avviso delle
-    // comunicazioni e in quello del report: chi guarda il report per primo non
-    // deve andarlo a cercare nell'altro riquadro. Qui si entra da quello del
-    // report, che è il caso nuovo.
+    // UN INGRESSO SOLO, nel riquadro del report: è lì che si vede che cosa
+    // manca alle posizioni. Il comando sta accanto all'avviso che lo spiega.
     const report = sezioneDi('Report per unità operativa');
     const mappaDalReport = within(report).getByRole('button', {
       name: /Mappa le sezioni qui/i,
     });
-    expect(screen.getAllByRole('button', { name: /Mappa le sezioni qui/i })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /Mappa le sezioni qui/i })).toHaveLength(1);
     fireEvent.click(mappaDalReport);
     const finestra = await screen.findByRole('dialog');
     const scelta = await within(finestra).findByLabelText(/Destinazione di Gestione artisti/i);

@@ -10,6 +10,7 @@ import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazi
 import { assicuraTabelleParametriSpazio, assicuraTabelleVera } from '@/db/provision';
 import { normalizzaEtichetta } from '@/lib/debitiEnte/tracciatoCore';
 import {
+  chiaveVoceVera,
   materiaPerRigaVera,
   type MateriaMinima,
   type MateriaRigaVera,
@@ -97,6 +98,91 @@ export async function salvaMappaturaTitoliVeraAction(
   } catch (error: any) {
     console.error('[salvaMappaturaTitoliVeraAction] Errore:', error);
     return { success: false, error: `Impossibile salvare la mappatura: ${error.message || error}` };
+  }
+}
+
+// ------------------------------------------------------------- La voce → materia
+//
+// LA MATERIA SCELTA SULLA VOCE. La deduzione automatica (codice, descrizione)
+// può sbagliare, e quando sbaglia la mappatura di sezione non aiuta: le voci si
+// riconducono già da sole, quindi la sezione non decide nulla e il report lo
+// dichiara. Qui l'operatore corregge alla radice, sulla voce, senza uscire dal
+// triage. La scelta è dello SPAZIO: una voce si legge allo stesso modo in tutte
+// le aziende, e chiederla azienda per azienda sarebbe la stessa domanda
+// ripetuta.
+
+export interface RisultatoScelteVoci {
+  success: boolean;
+  /** chiave «sezione|voce» normalizzata → id della materia scelta. */
+  scelte: Record<string, number>;
+  error?: string;
+}
+
+export async function ottieniMaterieVociVera(nomeSchema: string): Promise<RisultatoScelteVoci> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!validaSchema(nomeSchema))
+      return { success: false, scelte: {}, error: 'Nome schema non valido.' };
+    await assicuraTabelleVera(nomeSchema);
+    const r = await pool.query(
+      `SELECT sezione_norm, voce_norm, materia_id FROM "${nomeSchema}".vera_voci`
+    );
+    const scelte: Record<string, number> = {};
+    for (const x of r.rows) scelte[`${x.sezione_norm}|${x.voce_norm}`] = Number(x.materia_id);
+    return { success: true, scelte };
+  } catch (error: any) {
+    console.error('[ottieniMaterieVociVera] Errore:', error);
+    return {
+      success: false,
+      scelte: {},
+      error: `Impossibile caricare le materie scelte sulle voci: ${error.message || error}`,
+    };
+  }
+}
+
+/**
+ * Salva (o toglie, con `materiaId` ≤ 0) la materia scelta su una o più voci.
+ *
+ * Non tocca le righe già importate: la scelta non è una fotografia della
+ * verifica, è una regola di lettura del file. La rileggono il triage, il report
+ * e la verifica riaperta, ognuno quando compone i suoi documenti.
+ */
+export async function salvaMaterieVociVeraAction(
+  nomeSchema: string,
+  voci: { sezione: string; voce: string; materiaId: number }[]
+): Promise<RisultatoOperazioneVera> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabelleVera(nomeSchema);
+    for (const v of voci) {
+      const normSezione = normalizzaEtichetta(v.sezione);
+      const normVoce = normalizzaEtichetta(v.voce);
+      if (!normVoce) return { success: false, error: 'Voce senza denominazione.' };
+      if (!Number.isInteger(v.materiaId)) return { success: false, error: 'Materia non valida.' };
+      if (v.materiaId <= 0) {
+        await pool.query(
+          `DELETE FROM "${nomeSchema}".vera_voci WHERE sezione_norm = $1 AND voce_norm = $2`,
+          [normSezione, normVoce]
+        );
+        continue;
+      }
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".vera_voci (sezione_norm, voce_norm, sezione, voce, materia_id)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (sezione_norm, voce_norm)
+         DO UPDATE SET sezione = EXCLUDED.sezione, voce = EXCLUDED.voce,
+                       materia_id = EXCLUDED.materia_id, aggiornata_il = now()`,
+        [normSezione, normVoce, v.sezione, v.voce, v.materiaId]
+      );
+    }
+    return { success: true };
+  } catch (error: any) {
+    console.error('[salvaMaterieVociVeraAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile salvare la materia della voce: ${error.message || error}`,
+    };
   }
 }
 
@@ -381,6 +467,8 @@ export interface RigaVeraSalvata extends RigaVera {
   id: number;
   /** Materia (tipologia di credito) dell'ente, dal codice o dalla descrizione. */
   materia?: MateriaRigaVera | null;
+  /** La materia scelta sullo spazio per questa voce, se c'è: vince su tutto. */
+  materiaId?: number | null;
 }
 
 export interface RisultatoElencoVera {
@@ -430,6 +518,17 @@ export async function ottieniDebitiVera(
     // partita nella natura, attraverso i titoli e le materie mappate.
     let titoli: { codice: string; materiaId: number | null }[] = [];
     let materie: MateriaMinima[] = [];
+    const scelteVoci: Record<string, number> = {};
+    try {
+      const sc = await pool.query(
+        `SELECT sezione_norm, voce_norm, materia_id FROM "${nomeSchema}".vera_voci`
+      );
+      for (const x of sc.rows) {
+        scelteVoci[`${x.sezione_norm}|${x.voce_norm}`] = Number(x.materia_id);
+      }
+    } catch {
+      // Spazio senza scelte sulle voci: si legge la sola deduzione automatica.
+    }
     try {
       await assicuraTabelleParametriSpazio(nomeSchema);
       const t = await pool.query(`SELECT codice, materia_id FROM "${nomeSchema}".titoli_ente`);
@@ -471,6 +570,7 @@ export async function ottieniDebitiVera(
         duplicatoStato: (x.duplicato_stato ?? '') as StatoDuplicatoVera | '',
         trattamento: (x.trattamento ?? 'contabilizzato') as TrattamentoVera,
         materia: materie.length ? materiaPerRigaVera(x.voce, x.sezione, titoli, materie) : null,
+        materiaId: scelteVoci[chiaveVoceVera(x.sezione, x.voce)] ?? null,
       })),
     };
   } catch (error: any) {

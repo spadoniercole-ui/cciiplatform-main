@@ -22,7 +22,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formattaImportoEuro } from './comunicazioni';
 import { testiContabilizzate } from './daLavorare';
-import type { DocumentoUo } from './reportUo';
+import { ETICHETTE_MOTIVO, type DocumentoUo } from './reportUo';
 
 function dataItaliana(dataIso: string): string {
   const d = new Date(`${dataIso}T12:00:00Z`);
@@ -196,6 +196,42 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
       y = 22;
     }
 
+    // PERCHÉ QUESTA POSIZIONE È QUI. L'ufficio che riceve il foglio deve poter
+    // controllare che quelle voci siano arrivate a lui per un fatto suo — il
+    // codice di partita, la voce che dice che cos'è il debito — e non per una
+    // mappatura di comodo. Senza, una mappatura sbagliata resta indistinguibile
+    // da un instradamento corretto, e l'errore si scopre lavorando la partita.
+    if (c.origini.length > 0) {
+      if (y > LIMITE_PAGINA - 12) {
+        doc.addPage();
+        y = 22;
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text('Perché queste posizioni sono qui', 14, y);
+      y += 3.6;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      for (const o of c.origini) {
+        if (y > LIMITE_PAGINA - 8) {
+          doc.addPage();
+          y = 22;
+        }
+        const sezione = o.sezione ? ` (sezione «${o.sezione}»)` : '';
+        const testo = `- ${o.voce || 'voce senza denominazione'}: ${o.righe} ${
+          o.righe === 1 ? 'posizione' : 'posizioni'
+        }, ${formattaImportoEuro(o.importo)} — ${ETICHETTE_MOTIVO[o.motivo]}${sezione}`;
+        const righe = doc.splitTextToSize(testo, 182) as string[];
+        doc.text(righe, 14, y);
+        y += righe.length * 3.4;
+      }
+      y += 2;
+    }
+
+    if (y > LIMITE_PAGINA - 20) {
+      doc.addPage();
+      y = 22;
+    }
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.text('Lavorazioni da svolgere', 14, y);
@@ -236,9 +272,11 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
   doc.setFontSize(8);
   const chiusura = doc.splitTextToSize(
     'Il totale di ogni voce (codice di partita, o materia quando il codice non c’è) è la somma delle sue ' +
-      'inadempienze: i debiti da contabilizzare che risultano dai documenti ' +
+      'inadempienze: i debiti che risultano dai documenti ' +
       `dell’ente alla data della verifica (${data}). Non è l’accertamento della singola partita, che resta ` +
-      'in capo all’ufficio. Le posizioni già contabilizzate sono dichiarate in testa e non elencate; quelle ' +
+      'in capo all’ufficio. Sono elencate anche le posizioni che il V.E.R.A. scrive soltanto nel totale ' +
+      'debito o credito: sono debiti non ancora contabilizzati. Le posizioni già contabilizzate sono ' +
+      'dichiarate in testa e non elencate; quelle ' +
       'sospese o fuori perimetro non sono elencate e non entrano nei ' +
       'totali. Le lavorazioni sono quelle configurate per la materia della voce. Il documento non viene ' +
       'trasmesso dalla piattaforma: l’invio all’ufficio è a cura di chi lo scarica, e lo scaricamento ' +

@@ -87,6 +87,14 @@ export interface RigaVeraReportUo {
    * (`duplicatiVera.ts`): vuoto = vale il riconoscimento automatico.
    */
   duplicatoStato?: StatoDuplicatoVera | '';
+  /**
+   * LA MATERIA SCELTA SULLA VOCE. Quando la voce non si riconduce da sola alla
+   * materia giusta — ed è il caso in cui una sezione mappata non sposta
+   * niente — l'operatore lo dice una volta per la voce, e da lì in poi la
+   * posizione va dove ha deciso lui. Vale più di ogni deduzione automatica:
+   * è una scelta, non un'ipotesi.
+   */
+  materiaId?: number | null;
 }
 
 export interface MateriaReportUo {
@@ -126,7 +134,8 @@ export interface LavorazioneUo {
  * mappatura senza effetto — la voce si riconduceva già da sé — è
  * indistinguibile da una mappatura applicata.
  */
-export type MotivoInstradamento = 'codice' | 'voce' | 'sezione' | 'mappatura' | 'categoria';
+export type MotivoInstradamento =
+  'codice' | 'voce' | 'sezione' | 'mappatura' | 'categoria' | 'scelto';
 
 /** Una voce del V.E.R.A. dentro un documento, e come ci è arrivata. */
 export interface ProvenienzaVoce {
@@ -144,6 +153,7 @@ export const ETICHETTE_MOTIVO: Record<MotivoInstradamento, string> = {
   sezione: 'dal titolo della sezione, perché la voce non basta',
   mappatura: 'dalla mappatura della sezione',
   categoria: 'dalla mappatura della sezione, su una categoria di debito',
+  scelto: 'dalla materia scelta su questa voce',
 };
 
 export interface CodiceUo {
@@ -309,6 +319,7 @@ export function versioneReportUo(d: Omit<DocumentoUo, 'versione' | 'nomeFile'>):
           )
         ),
         ...c.lavorazioni.map((l) => [l.tipologia, l.procedura ?? '', l.esito ?? ''].join('|')),
+        ...c.origini.map((o) => [o.sezione, o.voce, o.motivo, String(o.righe)].join('|')),
       ].join('~')
     ),
     ...d.sospese.map((x) =>
@@ -525,6 +536,18 @@ export function componiReportUo(input: {
    * della sezione — che resta il ripiego per ciò che il file non identifica.
    */
   const colloca = (r: RigaVeraReportUo): Posto | null => {
+    // LA SCELTA SULLA VOCE VIENE PRIMA DI TUTTO: è una decisione presa
+    // guardando il report, e una deduzione automatica non può scavalcarla.
+    if (r.materiaId !== null && r.materiaId !== undefined) {
+      return {
+        codice: null,
+        materiaId: r.materiaId,
+        materia: nomeMateria(r.materiaId),
+        dipendenza: ufficioDi(null, r.materiaId),
+        chiaveVoce: `M:${r.materiaId}`,
+        motivo: 'scelto',
+      };
+    }
     const codice = codiceDaVoceVera(r.voce);
     if (codice) {
       const titolo = perCodiceTitolo.get(normalizzaCodice(codice));

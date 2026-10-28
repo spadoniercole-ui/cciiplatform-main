@@ -89,6 +89,27 @@ function indiceSanzioni(intestazioni: string[]): number {
 }
 
 /**
+ * LE COLONNE CHE PORTANO UNA CIFRA DI DETTAGLIO, cioè la COMPOSIZIONE del
+ * debito: contributi, sanzioni, iscritto, residuo, mora, riscosso, sospeso.
+ *
+ * Servono a una distinzione che il file fa senza dirla: una posizione già in
+ * contabilità porta la cifra anche nelle colonne che la compongono, una
+ * posizione ancora da contabilizzare porta la cifra SOLTANTO nel «Totale
+ * debito» (o nel «Totale credito»). Il totale, da solo, non dice se il debito
+ * è già stato contabilizzato: lo dice il fatto che non ci sia altro.
+ *
+ * Restano fuori gli identificativi — posizione, numero di inadempienza, anno
+ * della cartella — che sono numeri ma non importi.
+ */
+function indiciDettaglio(intestazioni: string[]): number[] {
+  const norm = intestazioni.map(normalizzaEtichetta);
+  const totale = new Set(['totale debito', 'totale credito']);
+  const rx =
+    /(contributi|sanzioni|iscritto|residuo|mora|riscosso|sospeso|importo a debito|importo a credito|def\. agev|dilazione)/;
+  return norm.map((h, i) => (!totale.has(h) && rx.test(h) ? i : -1)).filter((i) => i >= 0);
+}
+
+/**
  * AMBITO della sezione: contributi INPS oppure crediti già affidati all'Agente
  * della Riscossione.
  *
@@ -134,6 +155,13 @@ export interface SezioneVera {
     contributi: number | null;
     /** Quota sanzioni della riga; null se la sezione non la espone. */
     sanzioni: number | null;
+    /**
+     * La riga porta una cifra SOLTANTO nel totale debito/credito, senza alcuna
+     * colonna di dettaglio valorizzata (vedi `indiciDettaglio`). È il segno di
+     * un debito non ancora contabilizzato, che i documenti per gli uffici
+     * devono elencare invece di dichiararlo già in contabilità.
+     */
+    soloTotale?: boolean;
   }[];
 }
 
@@ -163,6 +191,7 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
   // dovuto alle Note di Rettifica, che l'Esito somma ma non compaiono nelle
   // righe di dettaglio.
   const idxCredito = indiceCredito(s.intestazioni);
+  const idxDettaglio = indiciDettaglio(s.intestazioni);
   const idxStato = indiceStato(s.intestazioni);
   const idxSospeso = indiceSospeso(s.intestazioni);
   const idxPeriodo = indicePeriodo(s.intestazioni);
@@ -189,6 +218,17 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
     // ignoto. L'importo è quello della colonna Sospeso, e la riga si marca
     // come sospesa: non entra nell'esposizione esigibile.
     const sospeso = idxSospeso >= 0 ? parseNumero(r[idxSospeso]) : 0;
+    // UNA CIFRA CHE STA SOLO NEL TOTALE. Il debito che l'ente non ha ancora
+    // contabilizzato non compare nelle colonne di dettaglio — non è certo,
+    // liquido ed esigibile — e il file lo scrive soltanto nel «Totale debito»
+    // (o nel «Totale credito», per una posta a credito). Leggere quel vuoto
+    // come «già contabilizzato» faceva sparire la posizione dai documenti per
+    // gli uffici: né elencata, né da lavorare, solo un numero fra le già
+    // contabilizzate. Qui la riga si riconosce, e più sotto prende il
+    // trattamento che le compete.
+    const soloTotale =
+      (Math.abs(debito) > 0.005 || Math.abs(credito) > 0.005) &&
+      !idxDettaglio.some((i) => Math.abs(parseNumero(r[i])) > 0.005);
     if (Math.abs(debitoEffettivo - credito) < 0.005 && sospeso > 0.005) {
       return {
         voce:
@@ -201,6 +241,7 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
         stato: 'Sospeso',
         contributi: null,
         sanzioni: null,
+        soloTotale: false,
       };
     }
     return {
@@ -213,6 +254,7 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
       ...(idxPeriodo >= 0 ? { periodo: testoCella(r[idxPeriodo]).trim() } : {}),
       contributi,
       sanzioni,
+      soloTotale,
     };
   });
   // Il totale della sezione è l'esposizione della sezione: le partite
@@ -478,6 +520,15 @@ export function estraiRigheVera(
         if (!triage) continue;
         trattamento = suggerisciTrattamento(r.stato, r.importo);
       }
+      // UNA CIFRA CHE STA SOLO NEL TOTALE È UN DEBITO ANCORA DA CONTABILIZZARE.
+      //
+      // La regola generale del V.E.R.A. è che la colonna «Stato» vuota significhi
+      // «già contabilizzato». Ma una riga che porta l'importo soltanto nel totale
+      // — nessun contributo, nessuna sanzione, nessun residuo — non ha una
+      // composizione in contabilità: è un debito che l'ente deve ancora iscrivere,
+      // e finché resta dichiarato «contabilizzato» non arriva a nessun ufficio.
+      // Il file, non l'etichetta della colonna, dice che cosa è questa posizione.
+      if (trattamento === 'contabilizzato' && r.soloTotale) trattamento = 'da_contabilizzare';
       righe.push({
         sezione: s.titolo,
         // Le fixture e i file letti prima di questa distinzione non portano
