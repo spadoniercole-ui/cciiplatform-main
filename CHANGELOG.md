@@ -1,3 +1,16 @@
+## 0.143.6 — 2026-10-29
+
+**Il foglio stampato porta in testa i due avvisi che a video si vedono.** Il riepilogo del
+triage è ciò che resta in mano all'ufficio quando la videata è chiusa, ma taceva due cose che
+la scheda diceva: che i numeri sono vecchi e che un'esposizione sotto la soglia non è
+un'assenza di debito. Ora, superato il trentesimo giorno dalla data di riferimento, il foglio
+dichiara quanti giorni sono trascorsi, quando si è chiusa la finestra per il ricontrollo e che
+le posizioni sono quelle lette allora; e quando nessun parametro dell'art. 25-novies risulta
+superato, dichiara l'importo confrontato e la soglia, precisando che il debito resta dovuto e
+che il foglio non conclude nulla sulla crisi dell'impresa. Stessa regola di calcolo della
+scheda (`etaVerifica`, in UTC), così foglio e videata non possono dire due cose diverse; con
+una soglia superata la nota tace, perché l'alert dice già di più.
+
 ## 0.143.5 — 2026-10-29
 
 **Il semaforo non dice più «nessuna criticità» mentre un debito c'è.** Con 16.756 € di

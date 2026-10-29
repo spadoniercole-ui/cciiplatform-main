@@ -14,6 +14,7 @@
 // Logica pura: riceve i dati già calcolati dalla pagina, non ricalcola nulla.
 
 import type { Attenzione } from '@/lib/screening/indicatore';
+import { etaVerifica } from './etaVerifica';
 
 export interface DocumentoTriage {
   nome: string;
@@ -47,6 +48,18 @@ export interface SogliaRiepilogo {
 export interface AlertSoglie {
   titolo: string;
   dettaglio: string;
+}
+
+/**
+ * Un avviso in testa al foglio: qualcosa che va letto PRIMA dei numeri.
+ *
+ * `attenzione` = i numeri non sono più affidabili così come sono (sono
+ * vecchi); `nota` = i numeri sono buoni ma vanno letti per quello che sono
+ * (un'esposizione che non integra la soglia non è un'assenza di debito).
+ */
+export interface AvvisoRiepilogo {
+  tono: 'attenzione' | 'nota';
+  testo: string;
 }
 
 /** Ciò che è stato preparato per un ufficio: quante posizioni e quali voci. */
@@ -136,11 +149,69 @@ const ESITO_SOGLIA: Record<SogliaRiepilogo['esito'], string> = {
   non_determinabile: '<i>non determinabile</i>',
 };
 
+/**
+ * GLI AVVISI CHE STANNO IN TESTA AL FOGLIO.
+ *
+ * Due cose non si leggono dai numeri e vanno dette prima di stamparli.
+ *
+ * 1. I NUMERI SONO VECCHI. Una verifica riaperta dopo la finestra dei trenta
+ *    giorni si stampa identica a quella del primo giorno: le posizioni sono
+ *    quelle lette allora, e il foglio stesso dichiara un termine per tornare
+ *    a controllare. Se lo dice la videata e non il foglio, chi riceve il
+ *    foglio non lo sa — e il foglio è ciò che resta.
+ *
+ * 2. UN'ESPOSIZIONE SOTTO LA SOGLIA NON È UN'ASSENZA DI DEBITO. Il foglio
+ *    elenca le posizioni instradate agli uffici e, se nessun parametro è
+ *    superato, potrebbe sembrare che non ci sia nulla: l'importo invece c'è,
+ *    ed è dovuto. Si dichiara il confronto con la soglia, perché è quello che
+ *    il motore ha misurato, e non si conclude nulla che vada oltre.
+ *
+ * Entrambe si contano sulla stessa regola della videata (`etaVerifica`, in
+ * UTC): due calcoli diversi dello stesso termine darebbero un foglio e una
+ * schermata in disaccordo sullo stesso fascicolo.
+ */
+function avvisiRiepilogo(d: DatiRiepilogoTriage, giorni: number): AvvisoRiepilogo[] {
+  const out: AvvisoRiepilogo[] = [];
+
+  const eta = etaVerifica(d.dataVerifica, new Date().toISOString().slice(0, 10), giorni);
+  if (eta?.daRicontrollare) {
+    out.push({
+      tono: 'attenzione',
+      testo:
+        `I numeri di questo foglio risalgono alla verifica del ${data(d.dataVerifica)}: sono ` +
+        `trascorsi ${eta.giorni} giorni e la finestra dei ${giorni} giorni per il ricontrollo si è ` +
+        `chiusa il ${data(eta.riverifica)}. Le posizioni e gli importi sono quelli letti allora. ` +
+        'Prima di decidere ricontrolla i prospetti — V.E.R.A. e fogli dell’ente — e ricarica ciò ' +
+        'che è cambiato.',
+    });
+  }
+
+  // L'esposizione si cita solo se è NOTA e se nessun parametro è superato:
+  // con una soglia sopra, l'alert dice già molto di più e ripetersi qui
+  // toglierebbe forza all'unica riga che conta.
+  const righe = d.soglie ?? [];
+  const sotto = righe.filter((r) => r.esito === 'sotto' && (r.esposizione ?? 0) > 0);
+  if (!righe.some((r) => r.esito === 'sopra') && sotto.length > 0) {
+    const r = sotto.reduce((a, b) => ((b.esposizione ?? 0) > (a.esposizione ?? 0) ? b : a));
+    out.push({
+      tono: 'nota',
+      testo:
+        `Esposizione di ${euro(r.esposizione)} confrontata con il parametro «${r.ambito}»: la ` +
+        'soglia non risulta superata. L’importo è il debito che gli uffici stanno lavorando e resta ' +
+        'dovuto: il foglio dichiara il confronto con la soglia di segnalazione, non l’assenza del ' +
+        'debito né alcuna conclusione sulla crisi dell’impresa.',
+    });
+  }
+
+  return out;
+}
+
 export function htmlRiepilogoTriage(d: DatiRiepilogoTriage): string {
   const v = d.valori;
   const parti: string[] = [];
   const giorni = d.giorniRiverifica ?? 30;
   const riverifica = d.prossimaVerifica ?? dataRiverifica(d.dataVerifica, giorni);
+  const avvisiInTesta = avvisiRiepilogo(d, giorni);
   // La numerazione segue l'ordine reale delle sezioni: un titolo «5.» su una
   // pagina che ne ha tre è il genere di dettaglio che fa sembrare il foglio
   // incompleto.
@@ -158,6 +229,10 @@ export function htmlRiepilogoTriage(d: DatiRiepilogoTriage): string {
   .rt .alert{font-size:11px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px;color:#7f1d1d}
   .rt .quando{font-size:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;color:#1e3a8a}
   .rt .ristampa{font-size:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px;color:#78350f;margin:10px 0}
+  .rt .avvisi{margin:10px 0}
+  .rt .avvisi p{font-size:11px;border-radius:6px;padding:8px;margin:6px 0}
+  .rt .avvisi .attenzione{background:#fffbeb;border:1px solid #fde68a;color:#78350f}
+  .rt .avvisi .nota{background:#f1f5f9;border:1px solid #cbd5e1;color:#334155}
 </style>`);
   parti.push('<div class="rt">');
   parti.push(
@@ -176,6 +251,16 @@ export function htmlRiepilogoTriage(d: DatiRiepilogoTriage): string {
       )}</b> — ristampata${il ? ` il <b>${esc(il)}</b>` : ''}.<br>Posizioni e importi sono quelli letti dai documenti${
         caricati ? ` caricati il <b>${esc(caricati)}</b>` : ''
       }; le assegnazioni ai reparti e le soglie sono ricalcolate con la configurazione attuale.</p>`
+    );
+  }
+
+  // 0-bis. Gli avvisi, prima di ogni numero: un foglio che li mette in coda
+  // arriva a chi lo legge dopo che si è già fatto un'idea.
+  if (avvisiInTesta.length) {
+    parti.push(
+      `<div class="avvisi">${avvisiInTesta
+        .map((x) => `<p class="${x.tono}">${esc(x.testo)}</p>`)
+        .join('')}</div>`
     );
   }
 

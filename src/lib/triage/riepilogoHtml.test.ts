@@ -142,3 +142,67 @@ describe('riepilogo: soglie, evidenze e riverifica', () => {
     expect(dataRiverifica('non una data')).toBeNull();
   });
 });
+
+//
+// GLI AVVISI IN TESTA: SONO LA PARTE CHE RESTA.
+//
+// Il foglio si stampa e finisce in mano a un ufficio, dove non c'è nessuna
+// videata che lampeggi. Due cose devono quindi stare scritte sul foglio:
+// quando i numeri sono vecchi, e che un'esposizione sotto la soglia non è
+// un'assenza di debito.
+describe('riepilogo: avvisi in testa', () => {
+  const giorniFa = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+
+  it('oltre i trenta giorni dice che i numeri sono vecchi e quando la finestra si è chiusa', () => {
+    const h = htmlRiepilogoTriage({ ...base, dataVerifica: giorniFa(200) });
+    expect(h).toContain('sono trascorsi 200 giorni');
+    expect(h).toContain('la finestra dei 30 giorni per il ricontrollo si è chiusa il');
+    expect(h).toContain('ricontrolla i prospetti');
+    // In testa, prima della prima sezione numerata: un avviso in coda arriva a
+    // chi legge dopo che si è già fatto un'idea.
+    expect(h.indexOf('sono trascorsi 200 giorni')).toBeLessThan(
+      h.indexOf('1. Indicazione del triage')
+    );
+  });
+
+  it('dentro la finestra non avvisa: un allarme qui sarebbe rumore', () => {
+    const h = htmlRiepilogoTriage({ ...base, dataVerifica: giorniFa(5) });
+    expect(h).not.toContain('sono trascorsi');
+    expect(h).not.toContain('ricontrolla i prospetti');
+  });
+
+  it('l’esposizione sotto la soglia è dichiarata, senza farne un’assenza di debito', () => {
+    const h = htmlRiepilogoTriage({
+      ...base,
+      soglie: [
+        {
+          ambito: 'Segnalazione INPS — imprese CON lavoratori',
+          valore: '> 30% dei contributi dovuti nell’anno precedente E > 15.000 €',
+          esito: 'sotto',
+          esposizione: 16_756.41,
+        },
+      ],
+    });
+    expect(h).toContain('Esposizione di 16.756,41 €');
+    expect(h).toContain('la soglia non risulta superata');
+    expect(h).toContain('non l’assenza del debito');
+
+    // Con una soglia SUPERATA la nota tace: l'alert dice già molto di più, e
+    // ripetersi toglierebbe forza all'unica riga che conta.
+    const sopra = htmlRiepilogoTriage({
+      ...base,
+      soglie: [
+        {
+          ambito: 'Segnalazione INPS — imprese CON lavoratori',
+          valore: '> 15.000 €',
+          esito: 'sopra',
+          esposizione: 31_236.35,
+        },
+      ],
+    });
+    expect(sopra).not.toContain('la soglia non risulta superata');
+
+    // Senza soglie confrontate non c'è nulla da dichiarare.
+    expect(htmlRiepilogoTriage(base)).not.toContain('Esposizione di');
+  });
+});
