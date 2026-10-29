@@ -136,7 +136,11 @@ import {
   ottieniConsegneRepartiAction,
   registraConsegnaRepartoAction,
 } from '@/app/actions/consegneReparti';
-import { salvaValoriSoglieParzialeAction, valutaSoglieAction } from '@/app/actions/soglie25novies';
+import {
+  ottieniValoriSoglieAction,
+  salvaValoriSoglieParzialeAction,
+  valutaSoglieAction,
+} from '@/app/actions/soglie25novies';
 import { riepilogaSoglieTriage } from '@/lib/soglie25novies/triage';
 import {
   baseInpsDaVera,
@@ -596,6 +600,28 @@ export function VerificaSaluteAzienda({
         else setErroreSoglie(s.error ?? 'Valutazione non riuscita per causa non riportata.');
       } catch (e) {
         setErroreSoglie(String(e));
+      }
+
+      // I VALORI DEL RIEPILOGO, ANCHE IN RIAPERTURA.
+      //
+      // I file non ci sono più, i numeri sì: sono quelli conservati con la
+      // verifica. Senza questo passaggio il foglio — ora stampabile anche da
+      // qui — direbbe «non rilevato» dove la videata mostra il dovuto
+      // dell'anno precedente e il ritardo accertato.
+      const salvati = await ottieniValoriSoglieAction(nomeSchema, id);
+      if (salvati.success && salvati.valori) {
+        const g = salvati.valori;
+        setValoriTriage({
+          conLavoratori: g.conLavoratoriSubordinati,
+          annoPrecedente:
+            g.annoContributiDovuti ?? new Date(`${v.dataVerifica}T12:00:00Z`).getUTCFullYear() - 1,
+          contributiDovutiAnnoPrecedente: g.contributiDovutiAnnoPrecedente,
+          nonVersatoOltre90: g.contributiScaduti,
+          ritardoOltre90Giorni: g.ritardoOltre90Giorni,
+          periodiInRitardo: g.periodiInRitardo,
+          denunceNonPresentate: g.denunceNonPresentate,
+          creditiAffidatiAgente: g.creditiAffidatiAer,
+        });
       }
 
       setFase('esito');
@@ -1137,7 +1163,28 @@ export function VerificaSaluteAzienda({
       // restare muto, altrimenti l'assenza dell'esito sembrerebbe un esito.
       setAvanzamento('Verifica delle soglie di segnalazione...');
       try {
-        const s = await valutaSoglieAction(nomeSchema, c.aziendaId, tipoSpazio);
+        // I VALORI APPENA LETTI VIAGGIANO CON LA RICHIESTA.
+        //
+        // Questa videata ha in mano i numeri estratti dai fogli; il database
+        // può ancora avere i campi vuoti, o averli ricevuti un istante prima da
+        // un salvataggio che non è arrivato. Leggendo solo dal database, la
+        // pagina mostrava 242.107 € di dovuto e la finestra delle soglie
+        // dichiarava il confronto «non determinabile»: due schermate, due
+        // verità, sullo stesso fascicolo e nello stesso minuto.
+        const s = await valutaSoglieAction(nomeSchema, c.aziendaId, tipoSpazio, {
+          conLavoratori: conLavoratori === '' ? undefined : conLavoratori === 'si',
+          contributiDovutiAnnoPrecedente:
+            dovutoAnnoPrec ??
+            (contributiDovuti.trim() === '' ? undefined : Number(contributiDovuti)),
+          contributiScaduti:
+            scelteFonti['vera:elenchi'] === 'VERA'
+              ? sogliaVera?.misurabile
+                ? sogliaVera.scadutiOltre90
+                : undefined
+              : (nonVersato ?? undefined),
+          ritardoOltre90Giorni: ritardo90 ?? undefined,
+          creditiAffidati: creditiAffidatiNetti ?? undefined,
+        });
         if (s.success && s.esito) setEsitoSoglie(s.esito);
         else setErroreSoglie(s.error ?? 'Valutazione non riuscita per causa non riportata.');
       } catch (e) {
@@ -1227,6 +1274,11 @@ export function VerificaSaluteAzienda({
         dataVerifica,
         perimetro: dichiarazionePerimetro('TRIAGE'),
         documenti: documentiTriage,
+        // In riapertura i file non esistono più: il foglio lo dice, invece di
+        // far credere che il triage sia stato fatto senza documenti.
+        documentiNota: ripresa
+          ? 'In riapertura i file caricati non sono più disponibili: sono stati letti e trasformati in posizioni di database. I valori qui sopra sono quelli conservati con la verifica.'
+          : null,
         note: esitoFogli,
         valori: valoriTriage ?? {
           conLavoratori: conLavoratori === '' ? null : conLavoratori === 'si',
@@ -2113,7 +2165,9 @@ export function VerificaSaluteAzienda({
                 </p>
                 <p>
                   I file caricati allora non ci sono più — sono stati letti e trasformati in righe
-                  di database — quindi il riepilogo dei documenti letti non è ristampabile da qui.
+                  di database. Il riepilogo resta stampabile: porta i valori conservati con la
+                  verifica, e dichiara al posto dell’elenco dei file che quelli non sono più
+                  disponibili.
                 </p>
                 {ripresa.dataApprossimata && (
                   <p>
@@ -2429,6 +2483,31 @@ export function VerificaSaluteAzienda({
                   </table>
                 </div>
 
+                {/* PERCHÉ UN ESITO RESTA APERTO. «Non determinabile» da solo è
+                    un diniego: qui si legge quale dato manca, e la frase sotto
+                    dice che il confronto usa ciò che la pagina ha già. */}
+                {esitoSoglie.righe.some(
+                  (r) => r.applicabile && r.esito === 'non_determinabile'
+                ) && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900">
+                      Perché un esito resta da accertare
+                    </p>
+                    <ul className="space-y-1">
+                      {esitoSoglie.righe
+                        .filter((r) => r.applicabile && r.esito === 'non_determinabile')
+                        .map((r) => (
+                          <li
+                            key={`motivo-${r.ente}-${r.ambito}`}
+                            className="text-[10px] text-amber-900 leading-relaxed"
+                          >
+                            <span className="font-bold">{r.ambito}</span>: {r.motivo}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                )}
+
                 <p className="text-[10px] text-slate-500 leading-relaxed">
                   Gli importi vengono dai documenti letti nel triage (V.E.R.A., denunce, deleghe,
                   ruoli) e dai valori salvati per l’azienda. Per cambiarli si apre la scheda
@@ -2591,12 +2670,12 @@ export function VerificaSaluteAzienda({
               verifica riaperta non esistono più: offrirlo lì produrrebbe un
               foglio con i valori dei fogli INPS mancanti, indistinguibile da
               un triage senza documenti. */}
-          {/* Il pulsante non compare e sparisce: prima dipendeva dal solo
-              `ripresa`, che nasce `null` e si popola quando la riapertura
-              finisce — per un istante la videata mostrava un comando che poi
-              toglieva. La condizione ora guarda la richiesta (l'URL) e il
-              caricamento, che sono stabili dall'inizio. */}
-          {!ripresa && !aziendaDaRiprendere && !inCorso && (
+          {/* C'È ANCHE NELLA RIAPERTURA. Prima il comando era nascosto lì
+              perché mancavano i file: ma al foglio non servono i file, servono
+              i numeri — soglie, attenzione, evidenze per ufficio — che la
+              riapertura ha e mostra già a schermo. Il documento dice che i
+              file non sono più disponibili, invece di non esistere. */}
+          {!inCorso && (
             <div className="flex justify-end">
               <button
                 type="button"

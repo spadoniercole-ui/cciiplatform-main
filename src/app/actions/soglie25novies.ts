@@ -226,7 +226,22 @@ export interface RisultatoEsitoSoglie {
 export async function valutaSoglieAction(
   nomeSchema: string,
   aziendaId: number,
-  tipoSpazio: 'ENTE' | 'NON_ENTE'
+  tipoSpazio: 'ENTE' | 'NON_ENTE',
+  /**
+   * I VALORI APPENA LETTI DAI FOGLI, che hanno la precedenza su ciò che è
+   * salvato.
+   *
+   * Serve al triage: nel momento in cui valuta le soglie ha in mano i numeri
+   * appena estratti dai documenti, mentre il database può ancora avere i campi
+   * vuoti — o averli scritti un istante prima da un salvataggio che non è
+   * arrivato. Senza questo passaggio la pagina mostrava i valori e la finestra
+   * delle soglie li dichiarava «non determinabili»: due schermate, due verità,
+   * sullo stesso fascicolo e nello stesso minuto.
+   *
+   * `undefined` = non fornito, vale ciò che è salvato: un campo che il triage
+   * non conosce non deve cancellare quello scritto in scheda.
+   */
+  daSessione?: Partial<DatiSoglie>
 ): Promise<RisultatoEsitoSoglie> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
@@ -256,8 +271,15 @@ export async function valutaSoglieAction(
         .map((x) => String(x.categoria_creditore));
     }
 
+    // Solo le chiavi fornite: uno spread con `undefined` cancellerebbe il
+    // valore salvato, che è l'esatto contrario di «non lo conosco».
+    const dallaSessione: Partial<DatiSoglie> = {};
+    for (const [chiave, valore] of Object.entries(daSessione ?? {})) {
+      if (valore !== undefined) (dallaSessione as Record<string, unknown>)[chiave] = valore;
+    }
     const dati: DatiSoglie = {
       ...lettura.dati,
+      ...dallaSessione,
       vociImportoIgnoto: await contaVociVeraIgnote(nomeSchema, aziendaId),
     };
 

@@ -49,6 +49,26 @@ describe('materia di una riga V.E.R.A.', () => {
   // Il file mette i verbali nella stessa sezione dei flussi contributivi. Se a
   // decidere è il titolo di sezione, ogni posizione senza codice diventa
   // «flussi» — e l'ufficio di vigilanza non riceve più il suo verbale.
+  // IL CASO DELLA DEMO: «Flusso di regolarizzazione» contiene «flusso», e la
+  // regola generica lo mandava ai Flussi Uniemens — ufficio sbagliato, e la
+  // posizione si spostava solo scegliendo a mano la materia sulla voce.
+  it('la regolarizzazione dei flussi non si prende per un flusso Uniemens', () => {
+    const conVig: MateriaMinima[] = [
+      { id: 1, nome: 'FLUSSI UNIEMENS', codiciIndicativi: null, stato: 'CONFERMATA' },
+      { id: 2, nome: 'NOTE DI RETTIFICA', codiciIndicativi: null, stato: 'CONFERMATA' },
+      { id: 3, nome: 'VARIAZIONI FLUSSI (VIG)', codiciIndicativi: null, stato: 'CONFERMATA' },
+      { id: 4, nome: 'VERBALI ISPETTIVI', codiciIndicativi: null, stato: 'CONFERMATA' },
+    ];
+    const r = materiaPerRigaVera(
+      'Flusso di regolarizzazione',
+      'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+      [],
+      conVig
+    );
+    expect(r?.nome).toBe('VARIAZIONI FLUSSI (VIG)');
+    expect(r?.via).toBe('voce');
+  });
+
   it('la voce vince sul titolo della sezione', () => {
     const verbale = materiaPerRigaVera('Verbale Evasione', 'FLUSSI UNIEMENS', [], materie);
     expect(verbale?.nome).toBe('VERBALI ISPETTIVI');

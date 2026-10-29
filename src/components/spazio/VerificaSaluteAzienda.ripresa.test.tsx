@@ -95,6 +95,7 @@ vi.mock('@/app/actions/consegneReparti', () => ({
 }));
 
 vi.mock('@/app/actions/soglie25novies', () => ({
+  ottieniValoriSoglieAction: vi.fn(),
   salvaValoriSoglieParzialeAction: vi.fn(),
   valutaSoglieAction: vi.fn(),
 }));
@@ -136,7 +137,7 @@ import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
 import { ottieniCategorieTipoDebito } from '@/app/actions/categorieTipoDebito';
 import { ottieniLavorazioniTipoDebito } from '@/app/actions/lavorazioniTipoDebito';
 import { ottieniConsegneRepartiAction } from '@/app/actions/consegneReparti';
-import { valutaSoglieAction } from '@/app/actions/soglie25novies';
+import { ottieniValoriSoglieAction, valutaSoglieAction } from '@/app/actions/soglie25novies';
 import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import { RISCONTRO_VUOTO } from '@/lib/titoliEnte/titoli';
@@ -233,6 +234,24 @@ beforeEach(() => {
     },
   });
 
+  vi.mocked(ottieniValoriSoglieAction).mockResolvedValue({
+    success: true,
+    valori: {
+      conLavoratoriSubordinati: true,
+      contributiScaduti: 16756.41,
+      contributiDovutiAnnoPrecedente: 242107,
+      annoContributiDovuti: 2025,
+      sanzioniPresunteVera: 1636,
+      premiInail: null,
+      ivaScaduta: null,
+      volumeAffari: null,
+      creditiAffidatiAer: 23601,
+      soglieAggiornateAl: '2026-10-29',
+      ritardoOltre90Giorni: true,
+      periodiInRitardo: 13,
+      denunceNonPresentate: '03/2026, 04/2026',
+    },
+  });
   vi.mocked(valutaSoglieAction).mockResolvedValue({
     success: true,
     esito: {
@@ -446,6 +465,11 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     expect(screen.getByText(/1 ufficio, 1 posizione, 1\.200,00 €/)).toBeTruthy();
     // E porta al riquadro, senza farlo cercare.
     expect(screen.getByRole('link', { name: /Vai ai report per unità operativa/i })).toBeTruthy();
+
+    // Il riepilogo si stampa anche da una verifica riaperta: i file non ci
+    // sono più, i numeri sì. Prima il comando spariva proprio lì, e la nota
+    // diceva che il foglio non era ristampabile.
+    expect(screen.getByRole('button', { name: /Stampa il riepilogo/i })).toBeTruthy();
 
     // E dice che cosa i documenti NON elencano: il loro totale non è quello del
     // V.E.R.A., e la differenza ha una spiegazione, con la quota AdR.

@@ -1,3 +1,23 @@
+## 0.143.1 — 2026-10-29
+
+**La finestra delle soglie non nega più i numeri che la pagina mostra.** Il
+triage aveva in mano il dovuto dell'anno precedente e il ritardo accertato sui
+periodi, ma la valutazione delle soglie leggeva solo il database: se il
+salvataggio era in ritardo, o non era arrivato, la stessa schermata diceva
+242.107 € di dovuto sopra e «non determinabile» dentro la finestra. Ora i valori
+appena letti viaggiano con la richiesta (`daSessione` in `valutaSoglieAction`) e
+vincono su ciò che è salvato; un campo non fornito non cancella quello scritto
+in scheda. La finestra dice anche **perché** un esito resta aperto, riga per
+riga: «non determinabile» senza il motivo è un diniego.
+
+**Il riepilogo si stampa anche da una verifica riaperta.** I file caricati non
+esistono più, i numeri sì: il comando era nascosto proprio dove serviva, e la
+nota diceva che il foglio non era ristampabile. Ora è lì, con i valori
+conservati (con lavoratori, dovuto dell'anno precedente, contributi oltre i 90
+giorni, ritardo, crediti all'Agente) e con una riga che dichiara, al posto
+dell'elenco dei file, che quelli non sono più disponibili. Attenzione, soglie,
+evidenze per ufficio e giorno della riverifica restano dove sono.
+
 ## 0.143.0 — 2026-10-29
 
 **Il triage non giudica più un documento che non ha chiesto.** I bilanci XBRL

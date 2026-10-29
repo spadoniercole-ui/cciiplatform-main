@@ -65,6 +65,13 @@ export interface DatiRiepilogoTriage {
   dataVerifica: string; // AAAA-MM-GG
   perimetro: string;
   documenti: DocumentoTriage[];
+  /**
+   * Perché l'elenco dei documenti è vuoto, quando lo è per un motivo noto.
+   * In una verifica riaperta i file non esistono più: dire «nessun documento
+   * caricato: valori inseriti a mano» sarebbe falso, e farebbe dubitare dei
+   * numeri che invece vengono da quei documenti.
+   */
+  documentiNota?: string | null;
   note: string[];
   valori: ValoriTriage;
   attenzione: Attenzione | null;
@@ -207,7 +214,9 @@ export function htmlRiepilogoTriage(d: DatiRiepilogoTriage): string {
             (x) => `<tr><td>${esc(x.nome)}</td><td>${esc(x.tipo)}</td><td>${esc(x.esito)}</td></tr>`
           )
           .join('')}</tbody></table>`
-      : '<p style="font-size:11px">Nessun documento caricato: valori inseriti a mano.</p>'
+      : d.documentiNota
+        ? `<p style="font-size:11px">${esc(d.documentiNota)}</p>`
+        : '<p style="font-size:11px">Nessun documento caricato: valori inseriti a mano.</p>'
   );
 
   // 5. Lettura

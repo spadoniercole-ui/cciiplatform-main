@@ -93,6 +93,16 @@ describe('riepilogo: soglie, evidenze e riverifica', () => {
     const h = htmlRiepilogoTriage(base);
     expect(h).not.toContain('Soglie di segnalazione (art. 25-novies) e alert');
     expect(h).not.toContain('Evidenze preparate per i reparti');
+
+    // In riapertura i file non ci sono più: il foglio lo dichiara, invece di
+    // dire che non è stato caricato nulla.
+    const riaperta = htmlRiepilogoTriage({
+      ...base,
+      documenti: [],
+      documentiNota: 'In riapertura i file caricati non sono più disponibili.',
+    });
+    expect(riaperta).toContain('In riapertura i file caricati non sono più disponibili.');
+    expect(riaperta).not.toContain('Nessun documento caricato');
     // La riverifica c'è comunque: si conta dalla data della verifica.
     expect(h).toContain('Entro il <b>21/10/2026</b>');
   });
