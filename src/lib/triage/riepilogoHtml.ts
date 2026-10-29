@@ -72,6 +72,14 @@ export interface DatiRiepilogoTriage {
    * numeri che invece vengono da quei documenti.
    */
   documentiNota?: string | null;
+  /**
+   * LA RISTAMPA DI UNA VERIFICA RIAPERTA. I file non esistono più: il foglio
+   * si ricostruisce dalle righe salvate. Va detto IN TESTA, con la data della
+   * verifica e quella della ristampa: senza quelle due date il foglio sembra
+   * emesso nella stessa seduta della verifica, e chi lo legge fra sei mesi non
+   * sa che le assegnazioni sono state rifatte con la configurazione di oggi.
+   */
+  ristampa?: { ricostruitaIl: string } | null;
   note: string[];
   valori: ValoriTriage;
   attenzione: Attenzione | null;
@@ -104,6 +112,18 @@ const euro = (n: number | null) =>
 const sino = (b: boolean | null, si: string, no: string) =>
   b === null ? '<i>non determinabile con i documenti caricati</i>' : b ? si : no;
 const data = (iso: string) => iso.split('-').reverse().join('/');
+/** Data e ora locali; stringa vuota se il valore non è una data. */
+const quando = (iso: string) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 const ESITO_SOGLIA: Record<SogliaRiepilogo['esito'], string> = {
   sopra: '<b style="color:#b91c1c">SUPERATA</b>',
   sotto: 'non superata',
@@ -131,6 +151,7 @@ export function htmlRiepilogoTriage(d: DatiRiepilogoTriage): string {
   .rt .lacune li{color:#92400e}
   .rt .alert{font-size:11px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px;color:#7f1d1d}
   .rt .quando{font-size:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px;color:#1e3a8a}
+  .rt .ristampa{font-size:11px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px;color:#78350f;margin:10px 0}
 </style>`);
   parti.push('<div class="rt">');
   parti.push(
@@ -138,6 +159,16 @@ export function htmlRiepilogoTriage(d: DatiRiepilogoTriage): string {
       d.partitaIva && d.partitaIva !== d.codiceFiscale ? ` — P.IVA ${esc(d.partitaIva)}` : ''
     }${d.sede ? `<br>${esc(d.sede)}` : ''}<br>Verifica riferita al <b>${data(d.dataVerifica)}</b></p>`
   );
+
+  // 0. Se è una ricostruzione, si dice subito: prima di ogni numero.
+  if (d.ristampa) {
+    const il = quando(d.ristampa.ricostruitaIl);
+    parti.push(
+      `<p class="ristampa"><b>Copia ricostruita dai dati salvati</b><br>Verifica riferita al <b>${data(
+        d.dataVerifica
+      )}</b> — ristampata${il ? ` il <b>${esc(il)}</b>` : ''}.<br>Posizioni e importi sono quelli letti dai documenti; le assegnazioni ai reparti e le soglie sono ricalcolate con la configurazione attuale.</p>`
+    );
+  }
 
   // 1. Esito
   parti.push(titolo('Indicazione del triage'));

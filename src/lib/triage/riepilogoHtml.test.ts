@@ -34,6 +34,23 @@ describe('riepilogo del triage', () => {
     expect(h).toMatch(/Denunce non presentate<\/td><td>nessuna/);
   });
 
+  it('la ristampa dichiara in testa di essere una ricostruzione, con le due date', () => {
+    const h = htmlRiepilogoTriage({
+      ...base,
+      documenti: [],
+      documentiNota: 'In riapertura i file caricati non sono più disponibili.',
+      ristampa: { ricostruitaIl: '2026-10-29T09:15:00.000Z' },
+    });
+    expect(h).toContain('Copia ricostruita dai dati salvati');
+    // Le due date: quella dei conti e quella della ristampa.
+    expect(h).toContain('Verifica riferita al <b>21/09/2026</b>');
+    expect(h).toMatch(/ristampata il <b>\d{2}\/\d{2}\/2026/);
+    // In testa, non in coda: prima della prima sezione numerata.
+    expect(h.indexOf('Copia ricostruita')).toBeLessThan(h.indexOf('1. Indicazione del triage'));
+    // Un triage appena eseguito non è una ricostruzione e non lo dichiara.
+    expect(htmlRiepilogoTriage(base)).not.toContain('Copia ricostruita');
+  });
+
   it('distingue «non letto» da «nessuna mancante» e il ritardo non determinabile', () => {
     const h = htmlRiepilogoTriage({
       ...base,

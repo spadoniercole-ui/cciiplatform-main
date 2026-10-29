@@ -1279,6 +1279,11 @@ export function VerificaSaluteAzienda({
         documentiNota: ripresa
           ? 'In riapertura i file caricati non sono più disponibili: sono stati letti e trasformati in posizioni di database. I valori qui sopra sono quelli conservati con la verifica.'
           : null,
+        // IN TESTA, NON IN NOTA. Una ricostruzione che non lo dichiara sembra un
+        // documento emesso nella stessa seduta della verifica: le due date —
+        // quella dei conti e quella della ristampa — sono ciò che rende il
+        // foglio leggibile fra sei mesi, quando la configurazione sarà cambiata.
+        ristampa: ripresa ? { ricostruitaIl: new Date().toISOString() } : null,
         note: esitoFogli,
         valori: valoriTriage ?? {
           conLavoratori: conLavoratori === '' ? null : conLavoratori === 'si',
@@ -2666,10 +2671,6 @@ export function VerificaSaluteAzienda({
               </div>
             </div>
           )}
-          {/* Il riepilogo si stampa dai documenti appena letti, che in una
-              verifica riaperta non esistono più: offrirlo lì produrrebbe un
-              foglio con i valori dei fogli INPS mancanti, indistinguibile da
-              un triage senza documenti. */}
           {/* C'È ANCHE NELLA RIAPERTURA. Prima il comando era nascosto lì
               perché mancavano i file: ma al foglio non servono i file, servono
               i numeri — soglie, attenzione, evidenze per ufficio — che la

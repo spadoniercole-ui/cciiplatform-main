@@ -475,8 +475,9 @@ riferimento della verifica** (diversa dall'istante di esecuzione).
 | vie di ritorno: scheda azienda («Riprendi la verifica») e dashboard per le verifiche in sospeso; lo storico del triage porta alla ripresa, non alla scheda | `CruscottoAzienda.tsx`, `DashboardPannelli.tsx`, `VerificaSaluteAzienda.tsx` |
 | una verifica già presa in carico o archiviata si consulta ma non si decide di nuovo | `VerificaSaluteAzienda.tsx` |
 
-**Limite dichiarato.** Il riepilogo dei documenti letti non è ristampabile da una verifica
-riaperta: i file caricati non ci sono più. La scheda lo dice e non offre il pulsante.
+**Ricostruzione dichiarata.** Il riepilogo si stampa anche da una verifica riaperta: i file
+caricati non ci sono più, le righe sì, quindi il foglio si ricostruisce dai dati salvati e lo
+dichiara in testa, con la data della verifica e quella della ristampa.
 La ripresa torna all'esito, non alla conferma anagrafica con i file: quella richiederebbe
 di caricare i documenti sul server a ogni passo, e non è stata fatta.
 

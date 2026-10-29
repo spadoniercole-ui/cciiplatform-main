@@ -1,3 +1,12 @@
+## 0.143.2 — 2026-10-29
+
+**La ristampa di una verifica riaperta dichiara di essere una ricostruzione.** In testa al
+foglio, prima di ogni numero, ora c’è un riquadro con la data della verifica e quella della
+ristampa, e la nota che posizioni e importi sono quelli letti dai documenti mentre le
+assegnazioni ai reparti e le soglie sono ricalcolate con la configurazione attuale. Senza
+quelle due date il documento sembrava emesso nella stessa seduta della verifica, e chi lo
+rileggeva dopo un cambio di mappatura non aveva modo di sapere che cosa era cambiato dopo.
+
 ## 0.143.1 — 2026-10-29
 
 **La finestra delle soglie non nega più i numeri che la pagina mostra.** Il
