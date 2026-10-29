@@ -22,10 +22,19 @@
 // non c'è accoppiamento: senza il periodo non c'è prova che sia lo stesso
 // debito, e scontarne una a caso toglierebbe dall'esposizione un debito vero.
 //
-// QUALE DELLE DUE SI SCONTA. Si tiene la riga F24 e si sconta la denuncia:
-// è la riga F24 che porta la quota di contributi, cioè la grandezza su cui si
-// misura la soglia dell'art. 25-novies. Scontare l'altra lascerebbe la soglia
-// invariata ma l'esposizione composta da una riga che nella base non entra.
+// QUALE DELLE DUE SI SCONTA. Si tiene la riga «Denunce non trasmesse» e si
+// sconta l'F24: la cifra è la stessa al centesimo (è il criterio
+// dell'accoppiamento), quindi nulla cambia nei totali, ma la posizione che
+// resta in elenco è quella che l'ufficio deve lavorare. L'F24 dice quanto e per
+// quale periodo quel versamento è scoperto; la denuncia dice cosa manca — la
+// trasmissione — ed è l'unica delle due che ha un ufficio a cui andare. Prima
+// si teneva l'F24 e si scontava la denuncia, e la posizione che arrivava a
+// «Presidio dei flussi informativi» spariva dal foglio: restava la misura
+// finanziaria del debito, senza l'adempimento che lo riguarda.
+//
+// La riga F24 resta comunque nel file e nel conteggio dell'esposizione — è il
+// file, non questa funzione, a decidere quali tipi di riga formano la base
+// della soglia — ma non è lei a intitolare la posizione nel documento.
 //
 // LA SCELTA DELL'OPERATORE VINCE SUL CRITERIO. Il riconoscimento automatico
 // può sbagliare: due righe identiche per periodo e importo possono descrivere
@@ -73,8 +82,9 @@ export interface CoppiaDuplicati {
 
 export interface DuplicatiVera {
   /**
-   * Gli indici — nell'ordine delle righe ricevute — delle righe «denunce» da
-   * non sommare: la stessa cifra è già dichiarata dalla riga F24.
+   * Gli indici — nell'ordine delle righe ricevute — delle righe «F24» da non
+   * sommare: la stessa cifra è già dichiarata dalla riga «Denunce non
+   * trasmesse», che è quella che porta l'adempimento e il suo ufficio.
    */
   indiciDaNonSommare: number[];
   righe: number;
@@ -180,7 +190,8 @@ export function denunceDuplicateVera(righe: readonly RigaPerDuplicati[]): Duplic
     if (!denunciaAccoppiabile(r) || r.duplicatoStato === 'NEGATO') return;
     const partner = trovaPartner(r, disponibili);
     if (partner === null) return;
-    indiciDaNonSommare.push(i);
+    // Si sconta l'F24, non la denuncia: vedi «QUALE DELLE DUE SI SCONTA».
+    indiciDaNonSommare.push(partner);
     totale += r.importo;
     const chiave = chiaveDenuncia(r);
     if (!periodi.includes(chiave)) periodi.push(chiave);

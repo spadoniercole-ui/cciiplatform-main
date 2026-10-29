@@ -60,6 +60,11 @@ import {
 import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
 import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 import type { StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
+import {
+  eVersamentoConTermine,
+  scoperturaDaVera,
+  type ScoperturaVera,
+} from '@/lib/debitiEnte/scopertura';
 import type { PosizioniEscluse } from './comunicazioni';
 import { materiaDaChiave } from './instradamentoMateria';
 import { ripartisciRigheVera, type RiepilogoRighe } from './daLavorare';
@@ -113,6 +118,15 @@ export interface InadempienzaUo {
   stato: string;
   trattamento: string;
   importo: number;
+  /**
+   * DA QUANDO QUEL VERSAMENTO È SCOPERTO, calcolato dal periodo e dalla data
+   * della verifica (`scopertura.ts`): il file dichiara il mese di competenza,
+   * non la scadenza, e l'ufficio deve leggere sul foglio da quanti giorni il
+   * debito è aperto — non ricavarlo a mente da «03/2026».
+   * null sulle nature senza termine di versamento (verbali, verifiche,
+   * cartelle): il 16 del mese successivo non le riguarda.
+   */
+  scopertura?: ScoperturaVera | null;
 }
 
 export interface LavorazioneUo {
@@ -214,6 +228,8 @@ export interface DocumentoUo {
   codiciAdr: string[];
   /** Lo stesso debito scritto due volte nel file: contato una volta sola. */
   duplicati?: RiepilogoRighe;
+  /** Denunce non trasmesse elencate qui sotto: importo già iscritto (F24). */
+  adempimenti?: RiepilogoRighe;
   nomeFile: string;
   versione: string;
 }
@@ -265,6 +281,8 @@ export interface EsitoReportUo {
   contabilizzateAdr: RiepilogoRighe;
   codiciAdr: string[];
   duplicati: RiepilogoRighe;
+  /** Denunce non trasmesse elencate per il loro ufficio: importo già iscritto. */
+  adempimenti: RiepilogoRighe;
   /** Voci elencate in un documento (codici o materie) senza lavorazioni configurate. */
   codiciSenzaLavorazione: number;
 }
@@ -314,9 +332,15 @@ export function versioneReportUo(d: Omit<DocumentoUo, 'versione' | 'nomeFile'>):
         c.materia ?? '',
         c.importo.toFixed(2),
         ...c.inadempienze.map((i) =>
-          [i.sezione, i.voce, i.periodo ?? '', i.stato, i.trattamento, i.importo.toFixed(2)].join(
-            '|'
-          )
+          [
+            i.sezione,
+            i.voce,
+            i.periodo ?? '',
+            i.stato,
+            i.trattamento,
+            i.scopertura ? `${i.scopertura.termine}:${i.scopertura.giorni}` : '',
+            i.importo.toFixed(2),
+          ].join('|')
         ),
         ...c.lavorazioni.map((l) => [l.tipologia, l.procedura ?? '', l.esito ?? ''].join('|')),
         ...c.origini.map((o) => [o.sezione, o.voce, o.motivo, String(o.righe)].join('|')),
@@ -688,6 +712,9 @@ export function componiReportUo(input: {
                 stato: r.stato.trim(),
                 trattamento: trattamenti[r.trattamento] ?? String(r.trattamento ?? ''),
                 importo: r.importo,
+                scopertura: eVersamentoConTermine(r.voce)
+                  ? scoperturaDaVera(r.periodo, input.dataVerifica)
+                  : null,
               }))
               .sort(
                 (a, b) =>
@@ -729,6 +756,7 @@ export function componiReportUo(input: {
         contabilizzateAdr: ripartizione.contabilizzateAdr,
         codiciAdr: ripartizione.codiciAdr,
         duplicati: ripartizione.duplicati,
+        adempimenti: ripartizione.adempimenti,
       };
       const versione = versioneReportUo(contenuto);
       return {
@@ -762,6 +790,7 @@ export function componiReportUo(input: {
     contabilizzateAdr: ripartizione.contabilizzateAdr,
     codiciAdr: ripartizione.codiciAdr,
     duplicati: ripartizione.duplicati,
+    adempimenti: ripartizione.adempimenti,
     codiciSenzaLavorazione,
   };
 }

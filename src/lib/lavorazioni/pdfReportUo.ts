@@ -23,6 +23,7 @@ import autoTable from 'jspdf-autotable';
 import { formattaImportoEuro } from './comunicazioni';
 import { testiContabilizzate } from './daLavorare';
 import { ETICHETTE_MOTIVO, type DocumentoUo } from './reportUo';
+import { SCOPERTURA_GIORNI_RILEVANTE } from '@/lib/debitiEnte/scopertura';
 
 function dataItaliana(dataIso: string): string {
   const d = new Date(`${dataIso}T12:00:00Z`);
@@ -166,12 +167,13 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
     autoTable(doc, {
       startY: y,
       margin: { left: 14, right: 14 },
-      head: [['Posizione V.E.R.A.', 'Periodo', 'Stato', 'Natura', 'Importo']],
+      head: [['Posizione V.E.R.A.', 'Periodo', 'Stato', 'Natura', 'Scoperto da', 'Importo']],
       body: c.inadempienze.map((i) => [
         `${i.sezione} — ${i.voce}`,
         i.periodo ?? '—',
         i.stato || '—',
         i.trattamento,
+        i.scopertura ? `${i.scopertura.giorni} gg` : '—',
         formattaImportoEuro(i.importo),
       ]),
       styles: { fontSize: 7.5, cellPadding: 1.8 },
@@ -180,11 +182,12 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
       // lato): una tabella più larga fa sparire l'ultima colonna — quella
       // degli importi, la prima che si guarda.
       columnStyles: {
-        0: { cellWidth: 72 },
-        1: { cellWidth: 28 },
-        2: { cellWidth: 26 },
-        3: { cellWidth: 28 },
-        4: { cellWidth: 28, halign: 'right' },
+        0: { cellWidth: 62 },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 24 },
+        4: { cellWidth: 22 },
+        5: { cellWidth: 26, halign: 'right' },
       },
       theme: 'grid',
     });
@@ -194,6 +197,34 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
     if (y > LIMITE_PAGINA) {
       doc.addPage();
       y = 22;
+    }
+
+    // LA SCOPERTURA VA SPIEGATA, NON SOLO SCRITTA. «195 gg» senza il termine da
+    // cui si contano è un numero che l'ufficio deve interpretare; e la soglia
+    // dei 30 giorni è la ragione per cui la posizione non può attendere.
+    const scoperte = c.inadempienze.filter((i) => i.scopertura);
+    if (scoperte.length > 0) {
+      const oltreSoglia = scoperte.filter(
+        (i) => (i.scopertura?.giorni ?? 0) > SCOPERTURA_GIORNI_RILEVANTE
+      );
+      const notaScopertura =
+        '«Scoperto da» conta i giorni dal termine di versamento (il 16 del mese successivo al periodo) alla data ' +
+        'della verifica.' +
+        (oltreSoglia.length > 0
+          ? ` Oltre ${SCOPERTURA_GIORNI_RILEVANTE} giorni la denuncia non trasmessa va presa in carico senza ` +
+            `attendere: ${oltreSoglia.length} ${
+              oltreSoglia.length === 1 ? 'posizione' : 'posizioni'
+            } per ${formattaImportoEuro(
+              oltreSoglia.reduce((a, i) => a + i.importo, 0)
+            )} hanno superato la soglia.`
+          : ` Nessuna posizione ha superato i ${SCOPERTURA_GIORNI_RILEVANTE} giorni.`);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7.5);
+      const righeNota = doc.splitTextToSize(notaScopertura, 182) as string[];
+      doc.text(righeNota, 14, y);
+      y += righeNota.length * 3.4 + 3;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
     }
 
     // PERCHÉ QUESTA POSIZIONE È QUI. L'ufficio che riceve il foglio deve poter

@@ -1509,6 +1509,7 @@ export function VerificaSaluteAzienda({
     contabilizzateAdr: reportUo.contabilizzateAdr,
     codiciAdr: reportUo.codiciAdr,
     duplicati: reportUo.duplicati,
+    adempimenti: reportUo.adempimenti,
   };
   const notaContabilizzate = testiContabilizzate(avanzamentoUo, formattaImportoEuro).collegiale;
 

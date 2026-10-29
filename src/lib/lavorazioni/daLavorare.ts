@@ -34,6 +34,17 @@
 // FUORI PERIMETRO resta fuori da entrambi gli elenchi (sospese da un giudice):
 // non è «già contabilizzata», è una partita che non si contabilizza affatto.
 //
+// LA DENUNCIA NON TRASMESSA NON È UN DEBITO GIÀ ISCRITTO. La colonna «Stato»
+// vuota vale «contabilizzato» per le partite che l'ente ha iscritto; su una
+// riga «Denunce non trasmesse» dice un'altra cosa, perché una denuncia che non
+// è stata trasmessa non può essere in contabilità. L'importo di quella riga è
+// la misura del versamento che manca (lo stesso che l'F24 scrive accanto), ma
+// l'intervento aperto è la trasmissione, e lo compie l'ufficio dei flussi. Per
+// questo prende una sorta sua — `ADEMPIMENTO` — che la elenca nel documento
+// dell'ufficio senza farla passare per «importo da contabilizzare»: dire a un
+// ufficio che deve contabilizzare un debito già iscritto sarebbe falso quanto
+// non dirgli nulla.
+//
 // LA STESSA CIFRA UNA VOLTA SOLA. Quando il file descrive lo stesso debito due
 // volte — «F24 non presentato» e «Denunce non trasmesse» dello stesso periodo e
 // dello stesso importo (vedi `duplicatiVera.ts`) — la dichiarazione delle già
@@ -70,7 +81,20 @@ export interface RiepilogoRighe {
 }
 
 export type SortaRigaVera =
-  'DA_LAVORARE' | 'CONTABILIZZATA_ADR' | 'CONTABILIZZATA' | 'SOSPESA' | 'FUORI_PERIMETRO';
+  | 'DA_LAVORARE'
+  | 'ADEMPIMENTO'
+  | 'CONTABILIZZATA_ADR'
+  | 'CONTABILIZZATA'
+  | 'SOSPESA'
+  | 'FUORI_PERIMETRO';
+
+/**
+ * La natura che il V.E.R.A. usa per l'adempimento, non per il debito: la
+ * denuncia non trasmessa. L'F24 è la sua faccia finanziaria e non rientra qui.
+ */
+export function eDenunciaNonTrasmessa(voce: string): boolean {
+  return /denunc/i.test(voce) && !/f24/i.test(voce);
+}
 
 /**
  * Che cosa è questa riga per i documenti che chiedono di intervenire.
@@ -83,6 +107,8 @@ export type SortaRigaVera =
 export function sortaRigaVera(r: RigaConStatoVera): SortaRigaVera {
   if (r.trattamento === 'ignora') return 'FUORI_PERIMETRO';
   if (r.trattamento === 'sospeso') return 'SOSPESA';
+  // LA TRASMISSIONE DELLA DENUNCIA RESTA UN LAVORO, ANCHE A DEBITO ISCRITTO.
+  if (eDenunciaNonTrasmessa(r.voce) && r.trattamento === 'contabilizzato') return 'ADEMPIMENTO';
   if (r.trattamento === 'contabilizzato') {
     const codice = codiceDaVoceVera(r.voce);
     return codice !== null && (CODICI_TS_CONTABILIZZATI_ADR as readonly string[]).includes(codice)
@@ -116,9 +142,16 @@ export interface RipartizioneRighe<R extends RigaConStatoVera> {
   righeSospese: R[];
   /**
    * Le posizioni scontate perché il file le scrive due volte (F24 e denunce
-   * dello stesso periodo): la cifra è quella della riga F24, già dichiarata.
+   * dello stesso periodo): la cifra è quella già dichiarata dalla denuncia,
+   * che resta elencata perché è lei a portare l'adempimento.
    */
   duplicati: RiepilogoRighe;
+  /**
+   * Adempimenti elencati che non sono importi da contabilizzare (denunce non
+   * trasmesse): si dichiarano a parte perché il totale delle voci li contiene
+   * ma la contabilità li ha già, sotto la riga F24.
+   */
+  adempimenti: RiepilogoRighe;
 }
 
 function aggiungi(riepilogo: RiepilogoRighe, importo: number): void {
@@ -143,6 +176,7 @@ export function ripartisciRigheVera<R extends RigaConStatoVera>(righe: R[]): Rip
     sospese: { righe: 0, totale: 0 },
     righeSospese: [],
     duplicati: { righe: 0, totale: 0 },
+    adempimenti: { righe: 0, totale: 0 },
   };
   // La doppia scrittura si sconta solo dove è una dichiarazione di importo:
   // una riga da lavorare resta in elenco anche se la cifra è ripetuta, perché
@@ -151,17 +185,29 @@ export function ripartisciRigheVera<R extends RigaConStatoVera>(righe: R[]): Rip
 
   for (const [i, r] of righe.entries()) {
     const sorta = sortaRigaVera(r);
-    if (doppie.has(i) && (sorta === 'CONTABILIZZATA' || sorta === 'CONTABILIZZATA_ADR')) {
+    // LA SCELTA SULLA COPPIA CAMBIA IL CONTO. Se l'operatore ha dichiarato che
+    // le due righe sono debiti distinti, la denuncia non è più l'adempimento
+    // della riga F24: è un debito suo, che il file dice iscritto, e si dichiara
+    // fra le già contabilizzate come qualunque altra posizione.
+    const effettiva: SortaRigaVera =
+      sorta === 'ADEMPIMENTO' && r.duplicatoStato === 'NEGATO' ? 'CONTABILIZZATA' : sorta;
+    if (doppie.has(i) && (effettiva === 'CONTABILIZZATA' || effettiva === 'CONTABILIZZATA_ADR')) {
       aggiungi(ripartizione.duplicati, r.importo);
       continue;
     }
-    switch (sorta) {
+    switch (effettiva) {
       case 'FUORI_PERIMETRO':
         aggiungi(ripartizione.fuoriPerimetro, r.importo);
         break;
       case 'SOSPESA':
         aggiungi(ripartizione.sospese, r.importo);
         ripartizione.righeSospese.push(r);
+        break;
+      case 'ADEMPIMENTO':
+        // In elenco per il suo ufficio, fuori dal conteggio delle posizioni da
+        // contabilizzare: l'importo è già in contabilità (la riga F24).
+        aggiungi(ripartizione.adempimenti, r.importo);
+        ripartizione.daLavorare.push(r);
         break;
       case 'CONTABILIZZATA':
         aggiungi(ripartizione.contabilizzate, r.importo);
@@ -213,12 +259,14 @@ export function testiContabilizzate(
   ripartizione: Pick<
     RipartizioneRighe<RigaConStatoVera>,
     'contabilizzate' | 'contabilizzateAdr' | 'codiciAdr'
-  > & { duplicati?: RiepilogoRighe },
+  > & { duplicati?: RiepilogoRighe; adempimenti?: RiepilogoRighe },
   euro: (importo: number) => string
 ): TestiContabilizzate {
   const { contabilizzate, contabilizzateAdr, codiciAdr } = ripartizione;
   const duplicati = ripartizione.duplicati ?? { righe: 0, totale: 0 };
-  if (contabilizzate.righe === 0) return { collegiale: null, documento: null };
+  const adempimenti = ripartizione.adempimenti ?? { righe: 0, totale: 0 };
+  if (contabilizzate.righe === 0 && adempimenti.righe === 0)
+    return { collegiale: null, documento: null };
 
   // Il file scrive due volte lo stesso debito (F24 non presentato e denunce
   // dello stesso periodo): la cifra è contata una volta, e va detto — altrimenti
@@ -237,28 +285,47 @@ export function testiContabilizzate(
         )} sono ${elencoCodiciTs(codiciAdr)}: l’unica decisione ancora aperta è se affidarle all’Agente della Riscossione, un passaggio che sposta la stessa partita e non cambia lo stato complessivo.`
       : '';
 
+  // LE DENUNCE NON TRASMESSE SONO ELENCATE, NON CONTABILIZZATE: la cifra che
+  // portano è già in contabilità sotto la riga F24 dello stesso periodo. Senza
+  // questa frase il foglio elencherebbe un importo che il file dichiara anche
+  // iscritto, e chi somma non saprebbe quale delle due letture vale.
+  const notaAdempimenti =
+    adempimenti.righe > 0
+      ? ` ${conto(adempimenti.righe)} per ${euro(adempimenti.totale)} ${
+          adempimenti.righe === 1 ? 'è una denuncia' : 'sono denunce'
+        } non ${
+          adempimenti.righe === 1 ? 'trasmessa' : 'trasmesse'
+        }: la cifra è già in contabilità (la riga F24 dello stesso periodo) e la posizione resta elencata nel report dell’ufficio, senza contare una seconda volta.`
+      : '';
+
   const collegiale =
-    `Già contabilizzate, e per questo non elencate: ${conto(contabilizzate.righe)} per ${euro(
-      contabilizzate.totale
-    )}. Non richiedono di essere contabilizzate — l’importo è già in contabilità.` +
-    ripetute +
-    adr;
+    contabilizzate.righe > 0
+      ? `Già contabilizzate, e per questo non elencate: ${conto(contabilizzate.righe)} per ${euro(
+          contabilizzate.totale
+        )}. Non richiedono di essere contabilizzate — l’importo è già in contabilità.` +
+        ripetute +
+        adr +
+        notaAdempimenti
+      : notaAdempimenti.trim();
 
   const documento =
-    `Già contabilizzate e non elencate: ${conto(contabilizzate.righe)} per ${euro(
-      contabilizzate.totale
-    )}` +
-    (contabilizzateAdr.righe > 0
-      ? ` (di cui ${elencoCodiciTs(codiciAdr)}: ${conto(contabilizzateAdr.righe)} per ${euro(
-          contabilizzateAdr.totale
-        )}, con la sola decisione dell’invio all’Agente della Riscossione (AdR), che non cambia lo stato complessivo)`
-      : '') +
-    (duplicati.righe > 0
-      ? `; ${conto(duplicati.righe)} per ${euro(
-          duplicati.totale
-        )} sono lo stesso debito scritto due volte nel file («F24 non presentato» e «Denunce non trasmesse»), contato una volta sola`
-      : '') +
-    '.';
+    contabilizzate.righe > 0
+      ? `Già contabilizzate e non elencate: ${conto(contabilizzate.righe)} per ${euro(
+          contabilizzate.totale
+        )}` +
+        (contabilizzateAdr.righe > 0
+          ? ` (di cui ${elencoCodiciTs(codiciAdr)}: ${conto(contabilizzateAdr.righe)} per ${euro(
+              contabilizzateAdr.totale
+            )}, con la sola decisione dell’invio all’Agente della Riscossione (AdR), che non cambia lo stato complessivo)`
+          : '') +
+        (duplicati.righe > 0
+          ? `; ${conto(duplicati.righe)} per ${euro(
+              duplicati.totale
+            )} sono lo stesso debito scritto due volte nel file («F24 non presentato» e «Denunce non trasmesse»), contato una volta sola`
+          : '') +
+        notaAdempimenti +
+        '.'
+      : notaAdempimenti.trim();
 
   return { collegiale, documento };
 }

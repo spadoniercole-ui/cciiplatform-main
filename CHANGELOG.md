@@ -1,3 +1,34 @@
+## 0.142.0 — 2026-10-29
+
+**La denuncia non trasmessa smette di sparire dal foglio dell'ufficio.** Il V.E.R.A.
+scrive lo stesso debito due volte — «F24 non presentato» e «Denunce non trasmesse»,
+stesso periodo e stessa cifra — e la piattaforma scontava la DENUNCIA tenendo l'F24.
+La cifra restava una, ma la posizione che arrivava al Presidio dei flussi informativi
+era la misura finanziaria del debito, senza l'adempimento che le appartiene: mesi di
+flussi Uniemens non trasmessi non comparivano in nessun report per unità operativa.
+Ora si sconta l'F24 e resta la denuncia, che è l'unica delle due ad avere un ufficio a
+cui andare; l'importo è lo stesso al centesimo, quindi i totali non si muovono, e il
+foglio dichiara che quella cifra è scritta due volte nel file.
+
+**La denuncia ha una sorta sua.** Lo stato vuoto del V.E.R.A. vale «contabilizzato»,
+ma su una denuncia mai trasmessa non può voler dire che il debito è iscritto:
+l'importo è già in contabilità sotto la riga F24, l'intervento aperto è la
+trasmissione. Prende la sorta `ADEMPIMENTO`: elencata nel documento del suo ufficio,
+fuori dal conteggio delle posizioni «non ancora contabilizzate» — dire a un ufficio di
+contabilizzare un debito già iscritto sarebbe falso quanto non dirgli nulla.
+
+**Il foglio dice da quanti giorni il versamento è scoperto.** Il file dichiara il
+periodo di competenza, non la scadenza: il versamento di un mese si esegue entro il 16
+del successivo, e la distanza da quel termine alla data della verifica è un conto che
+si fa, non un dato da chiedere. Nuova colonna «Scoperto da», con la soglia dei 30
+giorni dichiarata sul foglio — oltre, la denuncia va presa in carico senza attendere.
+Vale per F24 e denunce: verbali, verifiche e cartelle non hanno un termine del 16, e
+misurarli come versamenti scaduti produrrebbe numeri senza senso.
+
+Test: 7 sul calcolo della scopertura, 2 sulle nature con termine, e le prove della
+doppia scrittura riscritte sull'inversione (la posizione elencata è la denuncia).
+
+
 ## 0.141.0 — 2026-10-29
 
 **Il V.E.R.A. obbligatorio smette di essere una regola uguale per tutti.** Nel triage

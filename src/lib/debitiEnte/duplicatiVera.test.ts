@@ -29,7 +29,9 @@ describe('denunceDuplicateVera', () => {
       riga(DENUNCE, '2026-06-01', 9_590),
       riga('TS 27 flusso Uniemens non versato', '202506 - 202506', 3_404.02),
     ]);
-    expect(esito.indiciDaNonSommare).toEqual([1]);
+    // Si sconta la riga F24: la posizione che resta in elenco è la denuncia,
+    // cioè quella che l'ufficio deve trasmettere.
+    expect(esito.indiciDaNonSommare).toEqual([0]);
     expect(esito.righe).toBe(1);
     expect(esito.totale).toBe(9_590);
     expect(esito.periodi).toEqual(['2026-06']);
@@ -110,12 +112,12 @@ describe('denunceDuplicateVera', () => {
       riga(DENUNCE, '2026-06-01', 9_590),
     ];
     const esito = denunceDuplicateVera(righe);
-    expect(esito.indiciDaNonSommare).toEqual([3]);
+    expect(esito.indiciDaNonSommare).toEqual([1]);
     const escluse = insiemeEsclusi(esito);
     expect(righe.filter((_, i) => !escluse.has(i)).map((r) => r.voce)).toEqual([
       'Verbale Evasione',
-      F24,
       'TS 25 nota di rettifica',
+      DENUNCE,
     ]);
   });
 });
@@ -150,7 +152,7 @@ describe('la scelta dell’operatore sulla coppia', () => {
 
   it('«confermato»: contata una volta sola, con la decisione registrata', () => {
     const esito = denunceDuplicateVera(conScelta('CONFERMATO'));
-    expect(esito.indiciDaNonSommare).toEqual([1]);
+    expect(esito.indiciDaNonSommare).toEqual([0]);
     expect(esito.totale).toBe(9_590);
     expect(esito.coppie[0]).toEqual({
       f24: 0,
@@ -164,7 +166,7 @@ describe('la scelta dell’operatore sulla coppia', () => {
 
   it('senza scelta vale il criterio, e la coppia si dichiara automatica', () => {
     const esito = denunceDuplicateVera(conScelta(''));
-    expect(esito.indiciDaNonSommare).toEqual([1]);
+    expect(esito.indiciDaNonSommare).toEqual([0]);
     expect(esito.coppie[0].decisione).toBe('');
     expect(esito.coppie[0].scontata).toBe(true);
   });
@@ -177,7 +179,8 @@ describe('la scelta dell’operatore sulla coppia', () => {
       { ...riga(DENUNCE, '2026-06-01', 9_590), duplicatoStato: 'NEGATO' as const },
       riga(DENUNCE, '2026-06-01', 9_590),
     ]);
-    expect(esito.indiciDaNonSommare).toEqual([2]);
+    // La cifra F24 è quella che si sconta: la riga 0.
+    expect(esito.indiciDaNonSommare).toEqual([0]);
     expect(esito.totale).toBe(9_590);
     expect(esito.coppie.map((c) => [c.denunce, c.scontata])).toEqual([
       [1, false],
@@ -291,11 +294,16 @@ describe('la doppia scrittura nei documenti per gli uffici', () => {
       contabilizzata(DENUNCE, '2026-06-01', 9_590),
       contabilizzata('TS 27 flusso Uniemens non versato', '202506 - 202506', 3_404.02),
     ]);
-    expect(ripartizione.contabilizzate).toEqual({ righe: 2, totale: 12_994.02 });
+    // LA DENUNCIA RESTA IN ELENCO, L'F24 È LA CIFRA CHE SI SCONTA. Prima la
+    // denuncia spariva e con lei il foglio dell'ufficio dei flussi: restava la
+    // misura finanziaria del debito, senza l'adempimento che lo riguarda.
+    expect(ripartizione.daLavorare.map((r) => r.voce)).toEqual([DENUNCE]);
+    expect(ripartizione.adempimenti).toEqual({ righe: 1, totale: 9_590 });
+    expect(ripartizione.contabilizzate).toEqual({ righe: 1, totale: 3_404.02 });
     expect(ripartizione.duplicati).toEqual({ righe: 1, totale: 9_590 });
 
     const testi = testiContabilizzate(ripartizione, (n) => `${n.toFixed(2)} €`);
-    expect(testi.collegiale).toContain('2 posizioni per 12994.02 €');
+    expect(testi.collegiale).toContain('1 posizione per 3404.02 €');
     expect(testi.collegiale).toContain('sono lo stesso debito scritto due volte nel file');
     expect(testi.collegiale).toContain('9590.00 €');
     expect(testi.documento).toContain('contato una volta sola');
@@ -307,7 +315,11 @@ describe('la doppia scrittura nei documenti per gli uffici', () => {
       { ...contabilizzata(DENUNCE, '2026-06-01', 9_590), duplicatoStato: 'NEGATO' as const },
     ]);
     expect(ripartizione.duplicati).toEqual({ righe: 0, totale: 0 });
+    // Due debiti distinti: la denuncia non è più l'adempimento della riga F24,
+    // è un debito suo che il file dice iscritto, e le due cifre contano
+    // entrambe nella dichiarazione delle già contabilizzate.
     expect(ripartizione.contabilizzate).toEqual({ righe: 2, totale: 19_180 });
+    expect(ripartizione.adempimenti).toEqual({ righe: 0, totale: 0 });
     const testi = testiContabilizzate(ripartizione, (n) => `${n.toFixed(2)} €`);
     expect(testi.collegiale).toContain('2 posizioni per 19180.00 €');
     expect(testi.collegiale).not.toContain('due volte');
@@ -315,8 +327,8 @@ describe('la doppia scrittura nei documenti per gli uffici', () => {
 
   it('una riga da lavorare resta in elenco anche se la cifra è ripetuta', () => {
     // La denuncia va trasmessa: la riga è lavoro da chiedere anche quando
-    // l'importo è già dichiarato dalla riga F24. Si sconta la cifra dalla
-    // contabilità, non la posizione dall'elenco.
+    // l'importo è già dichiarato dalla riga F24. Si sconta la cifra F24, non la
+    // posizione dall'elenco: l'ufficio dei flussi riceve la denuncia.
     const ripartizione = ripartisciRigheVera([
       contabilizzata(F24, '06/2026', 9_590),
       {
@@ -328,8 +340,8 @@ describe('la doppia scrittura nei documenti per gli uffici', () => {
       },
     ]);
     expect(ripartizione.daLavorare.map((r) => r.voce)).toEqual([DENUNCE]);
-    expect(ripartizione.duplicati).toEqual({ righe: 0, totale: 0 });
-    expect(ripartizione.contabilizzate).toEqual({ righe: 1, totale: 9_590 });
+    expect(ripartizione.duplicati).toEqual({ righe: 1, totale: 9_590 });
+    expect(ripartizione.contabilizzate).toEqual({ righe: 0, totale: 0 });
   });
 
   it('senza doppie scritture la dichiarazione non ne parla', () => {

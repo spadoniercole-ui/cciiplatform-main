@@ -180,8 +180,10 @@ describe('lo stesso debito scritto due volte nel V.E.R.A.', () => {
     // Le due righe restano nel fascicolo: sono due righe del file.
     expect(conCoppia.some((e) => e.id === 'EV-VER-11')).toBe(true);
     expect(conCoppia.some((e) => e.id === 'EV-VER-12')).toBe(true);
-    // …ma il totale dichiara da quale riga viene la cifra che conta.
-    expect(totale.derivatoDa?.ids).toEqual(['EV-VER-11', 'EV-VER-13']);
+    // …ma il totale dichiara da quale riga viene la cifra che conta: la
+    // denuncia (12), che è la posizione con l'adempimento e l'ufficio, non la
+    // riga F24 (11) che ne è solo la misura finanziaria.
+    expect(totale.derivatoDa?.ids).toEqual(['EV-VER-12', 'EV-VER-13']);
   });
 
   it('senza periodo le due cifre restano due, come le scrive il file', () => {

@@ -47,6 +47,21 @@ describe('sortaRigaVera', () => {
     expect(sortaRigaVera(riga({ voce: 'TS 27 flusso Uniemens non versato' }))).toBe('DA_LAVORARE');
   });
 
+  it('la denuncia non trasmessa resta un adempimento da elencare, non un importo da contabilizzare', () => {
+    // Lo stato è vuoto — per il V.E.R.A. «contabilizzato» — ma una denuncia che
+    // non è partita non può essere in contabilità: lo stato dichiara che il
+    // debito è iscritto (lo scrive l'F24 accanto), l'adempimento aperto è la
+    // trasmissione. Resta in elenco per il suo ufficio, senza entrare fra le
+    // posizioni «non ancora contabilizzate».
+    expect(sortaRigaVera(contabilizzata('Denunce non trasmesse', 9_590))).toBe('ADEMPIMENTO');
+    const r = ripartisciRigheVera([contabilizzata('Denunce non trasmesse', 9_590)]);
+    expect(r.daLavorare.map((x) => x.voce)).toEqual(['Denunce non trasmesse']);
+    expect(r.adempimenti).toEqual({ righe: 1, totale: 9_590 });
+    expect(r.contabilizzate).toEqual({ righe: 0, totale: 0 });
+    // L'F24 resta la faccia finanziaria: da solo è una posizione già iscritta.
+    expect(sortaRigaVera(contabilizzata('F24 Non presentato', 9_590))).toBe('CONTABILIZZATA');
+  });
+
   it('un importo ignoto è da accertare, non da dimenticare', () => {
     expect(
       sortaRigaVera(
