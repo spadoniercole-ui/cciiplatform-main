@@ -474,6 +474,13 @@ export interface RigaVeraSalvata extends RigaVera {
 export interface RisultatoElencoVera {
   success: boolean;
   righe: RigaVeraSalvata[];
+  /**
+   * Il giorno in cui queste righe sono state lette dal prospetto
+   * (`debiti_vera.created_at`). Non è la data della verifica: è la data di
+   * rigiro, quella che permette a un foglio ristampato di dire quanto sono
+   * vecchi i numeri che porta.
+   */
+  documentiCaricatiIl?: string | null;
   error?: string;
 }
 
@@ -492,6 +499,20 @@ export async function ottieniDebitiVera(
        WHERE azienda_id = $1 ORDER BY id ASC`,
       [aziendaId]
     );
+
+    // LA DATA DI RIGIRO, in un blocco suo e tollerante: una tabella senza la
+    // colonna (spazi vecchi, prove) non deve impedire di leggere le posizioni.
+    let documentiCaricatiIl: string | null = null;
+    try {
+      const d = await pool.query(
+        `SELECT to_char(MAX(created_at), 'YYYY-MM-DD') AS giorno
+           FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1`,
+        [aziendaId]
+      );
+      documentiCaricatiIl = d.rows[0]?.giorno ? String(d.rows[0].giorno) : null;
+    } catch {
+      documentiCaricatiIl = null;
+    }
 
     // Categoria di calcolo: le righe caricate in triage nascono senza (lì
     // non si mappa nulla). Se il titolo di sezione è stato mappato DOPO, la
@@ -551,6 +572,7 @@ export async function ottieniDebitiVera(
 
     return {
       success: true,
+      documentiCaricatiIl,
       righe: r.rows.map((x) => ({
         id: x.id,
         sezione: x.sezione,

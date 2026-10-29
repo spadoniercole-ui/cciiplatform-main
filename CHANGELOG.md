@@ -1,3 +1,12 @@
+## 0.143.3 — 2026-10-29
+
+**Il riepilogo ristampato dice anche quando i prospetti sono stati letti.** La verifica
+riferita al 28/10 non diceva se le posizioni venivano da un V.E.R.A. caricato quel giorno o un
+mese prima: bastava un nuovo caricamento perché i numeri cambiassero senza che il foglio lo
+mostrasse. Ora la data di rigiro — `debiti_vera.created_at`, letta dalle righe salvate e non
+ricalcolata — compare in testa accanto alle altre due, e la lettura è tollerante: uno spazio
+senza la colonna continua a mostrare le posizioni, semplicemente senza quella data.
+
 ## 0.143.2 — 2026-10-29
 
 **La ristampa di una verifica riaperta dichiara di essere una ricostruzione.** In testa al

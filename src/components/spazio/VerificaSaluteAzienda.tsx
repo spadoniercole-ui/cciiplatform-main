@@ -299,6 +299,8 @@ export function VerificaSaluteAzienda({
    */
   const [tipiProspetti, setTipiProspetti] = useState<Record<string, TipoProspetto>>({});
   const [righeVera, setRigheVera] = useState<RigaVera[]>([]);
+  /** Il giorno in cui le righe del V.E.R.A. sono state lette dal prospetto. */
+  const [veraCaricataIl, setVeraCaricataIl] = useState<string | null>(null);
   const [lavorazioni, setLavorazioni] = useState<LavorazioneTipoDebito[]>([]);
   const [etichetteCategorie, setEtichetteCategorie] = useState<Record<string, string>>({});
   // ---- Report per unità operativa ---------------------------------------
@@ -584,8 +586,10 @@ export function VerificaSaluteAzienda({
 
       setAvanzamento('Lettura delle posizioni V.E.R.A....');
       const debiti = await ottieniDebitiVera(nomeSchema, id);
-      if (debiti.success) setRigheVera(debiti.righe);
-      else setErrore(debiti.error ?? 'Posizioni V.E.R.A. non leggibili.');
+      if (debiti.success) {
+        setRigheVera(debiti.righe);
+        setVeraCaricataIl(debiti.documentiCaricatiIl ?? null);
+      } else setErrore(debiti.error ?? 'Posizioni V.E.R.A. non leggibili.');
 
       setAvanzamento('Ricalcolo dell’indicatore...');
       // SENZA IL BILANCIO: la verifica riaperta è sempre un triage, e in
@@ -852,7 +856,10 @@ export function VerificaSaluteAzienda({
             // F24/denunce. I valori sono quelli appena scritti — è la stessa
             // estrazione — e la verifica riaperta farà lo stesso giro.
             const salvate = await ottieniDebitiVera(nomeSchema, c.aziendaId);
-            if (salvate.success) setRigheVera(salvate.righe);
+            if (salvate.success) {
+              setRigheVera(salvate.righe);
+              setVeraCaricataIl(salvate.documentiCaricatiIl ?? null);
+            }
           }
         } catch (e) {
           setErrore(`File V.E.R.A. non leggibile: ${String(e)}`);
@@ -1284,6 +1291,11 @@ export function VerificaSaluteAzienda({
         // quella dei conti e quella della ristampa — sono ciò che rende il
         // foglio leggibile fra sei mesi, quando la configurazione sarà cambiata.
         ristampa: ripresa ? { ricostruitaIl: new Date().toISOString() } : null,
+        // LA DATA DI RIGIRO. La verifica dice a quando si riferiscono i conti,
+        // non quando i prospetti sono stati letti: senza questa, un foglio
+        // ristampato dopo un nuovo caricamento non distingue i numeri del
+        // caricamento vecchio da quelli attuali.
+        documentiCaricatiIl: ripresa ? veraCaricataIl : null,
         note: esitoFogli,
         valori: valoriTriage ?? {
           conLavoratori: conLavoratori === '' ? null : conLavoratori === 'si',

@@ -40,8 +40,11 @@ describe('riepilogo del triage', () => {
       documenti: [],
       documentiNota: 'In riapertura i file caricati non sono più disponibili.',
       ristampa: { ricostruitaIl: '2026-10-29T09:15:00.000Z' },
+      documentiCaricatiIl: '2026-09-20',
     });
     expect(h).toContain('Copia ricostruita dai dati salvati');
+    // La terza data: quando i prospetti sono stati letti.
+    expect(h).toContain('caricati il <b>20/09/2026</b>');
     // Le due date: quella dei conti e quella della ristampa.
     expect(h).toContain('Verifica riferita al <b>21/09/2026</b>');
     expect(h).toMatch(/ristampata il <b>\d{2}\/\d{2}\/2026/);
@@ -49,6 +52,14 @@ describe('riepilogo del triage', () => {
     expect(h.indexOf('Copia ricostruita')).toBeLessThan(h.indexOf('1. Indicazione del triage'));
     // Un triage appena eseguito non è una ricostruzione e non lo dichiara.
     expect(htmlRiepilogoTriage(base)).not.toContain('Copia ricostruita');
+    // Senza la data di caricamento la frase resta leggibile, senza un «il»
+    // appeso al nulla.
+    const senza = htmlRiepilogoTriage({
+      ...base,
+      documenti: [],
+      ristampa: { ricostruitaIl: '2026-10-29T09:15:00.000Z' },
+    });
+    expect(senza).toContain('quelli letti dai documenti;');
   });
 
   it('distingue «non letto» da «nessuna mancante» e il ritardo non determinabile', () => {

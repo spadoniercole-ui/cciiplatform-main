@@ -80,6 +80,12 @@ export interface DatiRiepilogoTriage {
    * sa che le assegnazioni sono state rifatte con la configurazione di oggi.
    */
   ristampa?: { ricostruitaIl: string } | null;
+  /**
+   * QUANDO I PROSPETTI SONO STATI LETTI (AAAA-MM-GG). La data della verifica
+   * dice a quando si riferiscono i conti, non quando sono stati letti: se un
+   * nuovo V.E.R.A. è stato caricato dopo, il foglio deve poterlo dire.
+   */
+  documentiCaricatiIl?: string | null;
   note: string[];
   valori: ValoriTriage;
   attenzione: Attenzione | null;
@@ -163,10 +169,13 @@ export function htmlRiepilogoTriage(d: DatiRiepilogoTriage): string {
   // 0. Se è una ricostruzione, si dice subito: prima di ogni numero.
   if (d.ristampa) {
     const il = quando(d.ristampa.ricostruitaIl);
+    const caricati = d.documentiCaricatiIl ? data(d.documentiCaricatiIl) : null;
     parti.push(
       `<p class="ristampa"><b>Copia ricostruita dai dati salvati</b><br>Verifica riferita al <b>${data(
         d.dataVerifica
-      )}</b> — ristampata${il ? ` il <b>${esc(il)}</b>` : ''}.<br>Posizioni e importi sono quelli letti dai documenti; le assegnazioni ai reparti e le soglie sono ricalcolate con la configurazione attuale.</p>`
+      )}</b> — ristampata${il ? ` il <b>${esc(il)}</b>` : ''}.<br>Posizioni e importi sono quelli letti dai documenti${
+        caricati ? ` caricati il <b>${esc(caricati)}</b>` : ''
+      }; le assegnazioni ai reparti e le soglie sono ricalcolate con la configurazione attuale.</p>`
     );
   }
 
