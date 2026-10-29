@@ -1,3 +1,23 @@
+## 0.141.0 — 2026-10-29
+
+**Il V.E.R.A. obbligatorio smette di essere una regola uguale per tutti.** Nel triage
+il file era un presupposto senza eccezioni: senza, la conferma restava spenta e un
+altro ente — o un professionista, che il file lo chiede all'istituto — non aveva modo
+di cominciare. Ma il V.E.R.A. è la fonte delle posizioni solo per l'INPS: per gli
+altri non esiste. Ora l'obbligo è un parametro dello spazio (`parametri_triage`): di
+default segue l'ente — obbligatorio se lo spazio è dell'INPS, facoltativo per gli
+altri — e l'Admin può imporlo o spegnerlo da Parametri di Spazio → Triage. Dove è
+facoltativo il triage parte lo stesso e lo dice: si perdono le posizioni dell'ente,
+non la visita. Se il parametro non si legge, la pagina non allenta la regola.
+
+**L'ente si legge dove lo leggono già le soglie.** Un solo ente fra quelli
+configurati nelle soglie dell'art. 25-novies è l'ente dello spazio; più d'uno (o
+nessuno) è una configurazione ambigua, e non si indovina: il facoltativo è il
+default e la scheda chiede di scegliere.
+
+Test aggiunti: 5 sulla regola (ente, impostazione che prevale, assenza di ente).
+
+
 ## 0.140.0 — 2026-10-28
 
 **I debiti che il V.E.R.A. scrive soltanto nel totale non spariscono più.** Il

@@ -770,6 +770,21 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
     )`
   );
 
+  // Parametri del TRIAGE — un'unica riga (id=1).
+  //
+  // vera_obbligatorio: se il file V.E.R.A. è il presupposto del triage in
+  // questo spazio. NULL = automatico, cioè segue l'ente (obbligatorio per
+  // l'INPS, facoltativo per gli altri). La regola sta in
+  // src/lib/triage/veraObbligatorio.ts: qui solo il valore scelto, così un
+  // ente che non emette il prospetto non resta con il triage bloccato.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_triage (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      vera_obbligatorio BOOLEAN,
+      CONSTRAINT una_sola_riga_triage CHECK (id = 1)
+    )`
+  );
+
   // Quali tab del motore XBRL (Indici CNDCEC, Altri Indici, Situazione
   // Debitoria, Andamento Storico) l'Admin di Spazio vuole attive
   // nell'Import XBRL di ogni azienda — non tutte servono a ogni studio.

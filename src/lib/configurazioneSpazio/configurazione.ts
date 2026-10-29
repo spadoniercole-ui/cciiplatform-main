@@ -41,6 +41,9 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
   { nome: 'limiti_ricevibilita_rango', descrizione: 'Parametri per rango' },
   { nome: 'parametri_proposta_redigente', descrizione: 'Percentuale media della proposta' },
   { nome: 'parametri_visualizzazione', descrizione: 'Visualizzazione' },
+  // 0.141.0: obbligo del file V.E.R.A. nel triage. Configurazione, non dato:
+  // un altro spazio dello stesso ente deve poter partire con la stessa regola.
+  { nome: 'parametri_triage', descrizione: 'Triage: obbligo del file V.E.R.A.' },
   { nome: 'xbrl_tab_abilitate', descrizione: 'Schede XBRL' },
   { nome: 'checklist_pesi_domande', descrizione: 'Check List: pesi delle domande' },
   { nome: 'checklist_config_pesi', descrizione: 'Check List: parametri' },

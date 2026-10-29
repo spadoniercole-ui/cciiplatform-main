@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
+import { ottieniObbligoVeraAction } from '@/app/actions/parametriTriage';
 import { VerificaSaluteAzienda } from '@/components/spazio/VerificaSaluteAzienda';
 
 // L'estrazione dalla visura è una chiamata al modello su un PDF: il tetto di
@@ -25,6 +26,13 @@ export default async function VerificaSalutePage({
   const id = Number(azienda);
   const aziendaDaRiprendere = Number.isInteger(id) && id > 0 ? id : null;
 
+  // Il V.E.R.A. è il presupposto del triage solo dove esiste per chi lo fa:
+  // è un parametro dello spazio (obbligatorio di default per l'INPS,
+  // facoltativo altrove). Se il parametro non si legge, la pagina non
+  // allenta la regola: resta obbligatorio, e lo dichiara come prima.
+  const obbligo = await ottieniObbligoVeraAction(contesto.nomeSchema);
+  const veraObbligatorio = obbligo.success && obbligo.obbligo ? obbligo.obbligo.obbligatorio : true;
+
   return (
     <main className="p-6 max-w-5xl mx-auto">
       <VerificaSaluteAzienda
@@ -32,6 +40,7 @@ export default async function VerificaSalutePage({
         codice={codice}
         tipoSpazio={contesto.tipoSpazio}
         aziendaDaRiprendere={aziendaDaRiprendere}
+        veraObbligatorio={veraObbligatorio}
       />
     </main>
   );

@@ -177,6 +177,16 @@ interface Props {
    */
   tipoSpazio: 'ENTE' | 'NON_ENTE';
   /**
+   * Se il V.E.R.A. è il presupposto del triage in questo spazio.
+   *
+   * Non è uguale per tutti: per l'INPS il file è l'unico documento che elenca
+   * le posizioni da lavorare, mentre un ente che non lo emette non ha modo di
+   * procurarselo. È un parametro dello spazio (Parametri → Triage), che di
+   * default segue l'ente. Senza il parametro resta obbligatorio: una regola
+   * non si allenta per un errore di lettura.
+   */
+  veraObbligatorio?: boolean;
+  /**
    * L'azienda di cui RIAPRIRE la verifica, dall'URL (`?azienda=`).
    *
    * Il triage viveva soltanto nella scheda del browser: un crash, una ricarica
@@ -215,6 +225,7 @@ export function VerificaSaluteAzienda({
   codice,
   tipoSpazio,
   aziendaDaRiprendere = null,
+  veraObbligatorio = true,
 }: Props) {
   const [fase, setFase] = useState<Fase>('caricamento');
   const [inCorso, setInCorso] = useState(false);
@@ -647,19 +658,24 @@ export function VerificaSaluteAzienda({
       // triage senza V.E.R.A. non lascia una pratica a metà.
       const tipi = await Promise.all(fileProspetti.map((f) => riconosciProspetto(f)));
       const indiceVera = tipi.indexOf('VERA');
-      if (indiceVera < 0) {
+      // Il V.E.R.A. è un presupposto, non una condizione di esistenza del
+      // triage: dove lo spazio lo richiede senza file non si parte; dove è
+      // facoltativo la visita si fa lo stesso, e mancano le posizioni.
+      if (indiceVera < 0 && veraObbligatorio) {
         setErrore(
-          'Il file V.E.R.A. è obbligatorio: senza, il triage non parte. Caricalo tra i prospetti e attendi che compaia «Posizione V.E.R.A.».'
+          'Il file V.E.R.A. è obbligatorio in questo spazio: senza, il triage non parte. Caricalo tra i prospetti e attendi che compaia «Posizione V.E.R.A.».'
         );
         return;
       }
-      setAvanzamento('Lettura del file V.E.R.A....');
-      let analisiVera: Awaited<ReturnType<typeof analizzaVera>>;
-      try {
-        analisiVera = await analizzaVera(fileProspetti[indiceVera]);
-      } catch (e) {
-        setErrore(`File V.E.R.A. non leggibile: ${String(e)}`);
-        return;
+      let analisiVera: Awaited<ReturnType<typeof analizzaVera>> | null = null;
+      if (indiceVera >= 0) {
+        setAvanzamento('Lettura del file V.E.R.A....');
+        try {
+          analisiVera = await analizzaVera(fileProspetti[indiceVera]);
+        } catch (e) {
+          setErrore(`File V.E.R.A. non leggibile: ${String(e)}`);
+          return;
+        }
       }
 
       const c = await creaAziendaInVerificaAction(nomeSchema, dati);
@@ -772,7 +788,7 @@ export function VerificaSaluteAzienda({
       // Ritardo misurato sui periodi del V.E.R.A.: ripiego quando manca la
       // Lista Inadempienze (che resta la fonte prioritaria).
       let ritardoVera: ReturnType<typeof ritardoDaVera> = null;
-      if (fileVera) {
+      if (fileVera && analisiVera) {
         setAvanzamento('Lettura della Posizione V.E.R.A....');
         try {
           ritardoVera = ritardoDaVera(analisiVera.sezioni, new Date(`${dataVerifica}T12:00:00Z`));
@@ -1801,7 +1817,7 @@ export function VerificaSaluteAzienda({
               </p>
             </div>
 
-            {!haVera && (
+            {veraObbligatorio && !haVera && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-1">
                 <p className="text-[11px] font-bold text-amber-900">
                   Il file V.E.R.A. è obbligatorio
@@ -1809,6 +1825,20 @@ export function VerificaSaluteAzienda({
                 <p className="text-[11px] text-amber-800 leading-relaxed">
                   Senza il V.E.R.A. il triage non parte: caricalo tra i prospetti qui sotto e
                   attendi che compaia «Posizione V.E.R.A.» accanto al nome del file.
+                </p>
+              </div>
+            )}
+
+            {!veraObbligatorio && !haVera && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
+                <p className="text-[11px] font-bold text-slate-700">
+                  Il V.E.R.A. non è richiesto in questo spazio
+                </p>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Il triage parte anche senza il file. Senza, però, restano fuori le posizioni
+                  dell’ente: nessun elenco da instradare alle unità operative e nessun report per
+                  ufficio. Se questo spazio è dell’INPS, l’obbligo si riaccende da Parametri di
+                  Spazio → Triage.
                 </p>
               </div>
             )}
@@ -1873,11 +1903,13 @@ export function VerificaSaluteAzienda({
             </button>
             <button
               onClick={() => void confermaEValuta()}
-              disabled={inCorso || !dati.ragioneSociale || conflittoAperto || !haVera}
+              disabled={
+                inCorso || !dati.ragioneSociale || conflittoAperto || (veraObbligatorio && !haVera)
+              }
               title={
-                haVera
+                haVera || !veraObbligatorio
                   ? undefined
-                  : 'Carica il file V.E.R.A.: è obbligatorio per eseguire il triage.'
+                  : 'Carica il file V.E.R.A.: è obbligatorio in questo spazio per eseguire il triage.'
               }
               className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-800 disabled:bg-slate-300"
             >
