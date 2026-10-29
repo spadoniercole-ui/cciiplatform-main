@@ -1,3 +1,13 @@
+## 0.143.4 — 2026-10-29
+
+**La verifica riaperta dice quando è il momento di ricontrollare.** La finestra dei trenta
+giorni era scritta nel foglio che si consegna, ma la videata non la usava: riaperta la verifica
+dopo due mesi, i numeri si presentavano identici a quelli del primo giorno, senza un segno del
+tempo passato. Ora, superato il trentesimo giorno dalla data di riferimento, la scheda lo scrive
+— quanti giorni sono passati, quando si è chiusa la finestra, e che i prospetti vanno riletti
+prima di decidere. Il calcolo sta in `src/lib/triage/etaVerifica.ts`, in UTC e con il confine
+esatto: il trentesimo giorno è ancora dentro, il trentunesimo no.
+
 ## 0.143.3 — 2026-10-29
 
 **Il riepilogo ristampato dice anche quando i prospetti sono stati letti.** La verifica

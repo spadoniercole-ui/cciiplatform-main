@@ -31,6 +31,7 @@ import {
   type ValoriTriage,
 } from '@/lib/triage/riepilogoHtml';
 import { stampaHtml } from '@/lib/stampaTesto';
+import { etaVerifica } from '@/lib/triage/etaVerifica';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MateriaVociVera, type VoceDaRimappare } from './MateriaVociVera';
 import { ottieniMaterieVociVera } from '@/app/actions/posizioneVera';
@@ -2193,6 +2194,27 @@ export function VerificaSaluteAzienda({
                     {ripresa.dataVerifica}).
                   </p>
                 )}
+                {/* LA FINESTRA È CHIUSA. Il foglio dichiara trenta giorni per
+                    tornare a controllare: oltre quel termine la videata è
+                    identica a quella del primo giorno e i numeri restano
+                    quelli letti allora. Meglio dirlo che lasciarlo dedurre da
+                    una data in mezzo al paragrafo. */}
+                {(() => {
+                  const eta = etaVerifica(
+                    ripresa.dataVerifica,
+                    new Date().toISOString().slice(0, 10)
+                  );
+                  if (!eta || !eta.daRicontrollare) return null;
+                  return (
+                    <p className="font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                      Sono trascorsi {eta.giorni} giorni dalla verifica: la finestra dei trenta
+                      giorni per il ricontrollo si è chiusa il{' '}
+                      {eta.riverifica.split('-').reverse().join('/')} e i numeri qui sotto sono
+                      quelli letti allora. Prima di decidere ricontrolla i prospetti — V.E.R.A. e
+                      fogli dell&apos;ente — e ricarica ciò che è cambiato.
+                    </p>
+                  );
+                })()}
                 {!ripresa.inVerifica && (
                   <p className="font-bold">
                     L&apos;azienda è già stata presa in carico: la verifica si consulta e i

@@ -843,4 +843,49 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     await waitFor(() => expect(screen.queryByText('Verifica riaperta')).toBeNull());
     expect(screen.getByText('Visura camerale (PDF)')).toBeTruthy();
   });
+  it('oltre i trenta giorni dice che i numeri vanno ricontrollati', async () => {
+    // Duecento giorni fa: la finestra dei trenta è chiusa da un pezzo, e la
+    // videata senza avviso sembrerebbe quella del primo giorno.
+    const vecchia = new Date(Date.now() - 200 * 86_400_000).toISOString().slice(0, 10);
+    vi.mocked(ottieniVerificaDaRiprendereAction).mockResolvedValue({
+      success: true,
+      verifica: { ...VERIFICA, dataVerifica: vecchia },
+    });
+
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    const avviso = await screen.findByText(/Sono trascorsi \d+ giorni dalla verifica/i);
+    expect(avviso.textContent).toMatch(/Sono trascorsi 200 giorni/);
+    // Dice quando la finestra si è chiusa e che cosa fare: rileggere i prospetti.
+    expect(avviso.textContent).toMatch(/si è chiusa il/);
+    expect(avviso.textContent).toMatch(/ricontrolla i prospetti/i);
+  });
+
+  it('dentro i trenta giorni non avvisa di nulla', async () => {
+    // Cinque giorni fa: la finestra è aperta, un avviso qui sarebbe rumore.
+    const recente = new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10);
+    vi.mocked(ottieniVerificaDaRiprendereAction).mockResolvedValue({
+      success: true,
+      verifica: { ...VERIFICA, dataVerifica: recente },
+    });
+
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    await waitFor(() => expect(screen.getByText('Verifica riaperta')).toBeTruthy());
+    expect(screen.queryByText(/Sono trascorsi \d+ giorni dalla verifica/i)).toBeNull();
+  });
 });
