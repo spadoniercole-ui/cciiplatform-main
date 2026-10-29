@@ -131,6 +131,16 @@ export interface IngressoIndicatore {
   esposizione: number | null;
   /** Soglia di legge applicabile a questa impresa; null se non determinabile. */
   sogliaApplicabile: number | null;
+  /**
+   * PERCHÉ la soglia applicabile è (o non è) superata, con i numeri
+   * confrontati.
+   *
+   * È il `motivo` della riga che il motore delle soglie compone già per la
+   * scheda Soglie. Si passa da qui invece di ricomporre la frase: due
+   * versioni della stessa spiegazione divergono, e quella mostrata nel
+   * semaforo sarebbe la meno controllata. Facoltativo: senza, il semaforo
+   * dichiara l'importo e tace il confronto. */
+  dettaglioSogliaApplicabile?: string | null;
   /** Colore del quadro qualitativo (Check List / Direttrici). */
   coloreQualitativo: 'verde' | 'giallo' | 'rosso' | 'grigio' | null;
   /**
@@ -203,6 +213,11 @@ export interface Attenzione {
  * significherebbe prendere posizione su una prassi che nell'ente non è
  * univoca.
  */
+/** L'importo nella forma in cui lo legge un ufficio: «16.756 €». */
+function importoEuro(n: number): string {
+  return `${Math.round(n).toLocaleString('it-IT')} €`;
+}
+
 function etichettaCriticita(daAccertare: string[]): string {
   return daAccertare.length > 0
     ? 'Criticità rilevante che potrebbe richiedere approfondimenti'
@@ -440,11 +455,48 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
     );
   }
 
+  // ---- Livello 4: l'esposizione, anche quando NON è una criticità ------
+  //
+  // «Nessuna criticità rilevata con i dati disponibili» accanto a un'azienda
+  // che ha 16.756 € di contributi non versati è una frase che si smentisce da
+  // sola: la soglia dell'art. 25-novies non è integrata, ma il debito ESISTE,
+  // il triage lo sta instradando agli uffici e la videata non ne parlava
+  // affatto. L'assenza di presupposti per la segnalazione è una conclusione
+  // giuridica, non un motivo per nascondere l'importo.
+  //
+  // Si dichiara perciò il fatto — quanti euro, e con quale confronto — e
+  // l'esito smette di chiamarsi «nessuna criticità» quando c'è un debito:
+  // si chiama «esposizione sotto la soglia di segnalazione», che è vero e
+  // verificabile senza chiedere di che importo si stia parlando.
+  //
+  // Con esposizione zero o ignota la frase di prima resta: lì non c'è nulla
+  // da dichiarare, e un verde che dice «con i dati disponibili» continua a
+  // essere la conclusione più mite e più onesta.
+  const esposizione = input.esposizione;
+  const esposizioneDaDichiarare =
+    input.sogliaSuperata === false && esposizione !== null && esposizione > 0;
+  const importoEsposizione = esposizioneDaDichiarare ? importoEuro(esposizione) : null;
+
+  if (importoEsposizione) {
+    accertato.unshift(
+      `Esposizione verso l’ente di ${importoEsposizione}: nessuna soglia di segnalazione superata.` +
+        (input.dettaglioSogliaApplicabile ? ` ${input.dettaglioSogliaApplicabile}` : '')
+    );
+  }
+
+  const soloEsposizione = esito === 'ATTENZIONE_MINIMA' && importoEsposizione !== null;
+
   return {
     esito,
     etichetta:
-      esito === 'GIALLO' ? 'Attenzione' : 'Nessuna criticità rilevata con i dati disponibili',
-    fattoreDeterminante,
+      esito === 'GIALLO'
+        ? 'Attenzione'
+        : soloEsposizione
+          ? 'Esposizione sotto la soglia di segnalazione'
+          : 'Nessuna criticità rilevata con i dati disponibili',
+    fattoreDeterminante: soloEsposizione
+      ? `Esposizione di ${importoEsposizione} — sotto la soglia di segnalazione`
+      : fattoreDeterminante,
     accertato,
     daAccertare,
     dimensioniScoperte,

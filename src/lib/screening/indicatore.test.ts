@@ -194,8 +194,8 @@ describe('vincoli giuridici ed equilibrio', () => {
 });
 
 describe('l’esito migliore non è un verde pieno', () => {
-  it('con tutto in ordine si dichiara comunque il limite del giudizio', () => {
-    const a = calcolaAttenzione(completo);
+  it('senza esposizione si dichiara comunque il limite del giudizio', () => {
+    const a = calcolaAttenzione({ ...completo, esposizione: 0 });
     expect(a.esito).toBe('ATTENZIONE_MINIMA');
     expect(a.etichetta).toContain('con i dati disponibili');
   });
@@ -216,6 +216,51 @@ describe('l’esito migliore non è un verde pieno', () => {
     expect(a.copertura).toEqual({ determinate: 4, totali: 4 });
     const b = calcolaAttenzione({ ...completo, sogliaSuperata: null, coloreQualitativo: null });
     expect(b.copertura.determinate).toBe(2);
+  });
+});
+
+describe('i debiti si vedono anche quando non integrano la soglia', () => {
+  // È il caso ARETUSEA: 16.756 € di contributi scaduti, sotto il 30% dei
+  // dovuti (242.107 €) ma sopra i 15.000 €. I presupposti dell'art. 25-novies
+  // non sono integrati — e la videata diceva «nessuna criticità», senza un
+  // numero, mentre il triage instradava quelle posizioni agli uffici.
+  const sottoSoglia: IngressoIndicatore = {
+    ...completo,
+    esposizione: 16_756.41,
+    sogliaApplicabile: 15_000,
+    sogliaSuperata: false,
+    dettaglioSogliaApplicabile:
+      'Contributi 16.756 € — 30% dei dovuti: 242.107 € (non superato); 15.000 € (superato). Requisiti congiunti: non entrambi superati.',
+  };
+
+  it('l’importo e il confronto compaiono fra gli elementi accertati', () => {
+    const a = calcolaAttenzione(sottoSoglia);
+    expect(a.accertato.join(' ')).toContain('16.756');
+    expect(a.accertato.join(' ')).toContain('30% dei dovuti');
+  });
+
+  it('il verde non dice «nessuna criticità» mentre un debito c’è', () => {
+    const a = calcolaAttenzione(sottoSoglia);
+    expect(a.esito).toBe('ATTENZIONE_MINIMA');
+    expect(a.etichetta).not.toContain('Nessuna criticità');
+    expect(a.etichetta).toContain('sotto la soglia');
+    expect(a.fattoreDeterminante).toContain('16.756');
+  });
+
+  it('senza esposizione la frase di prima resta, e resta mite', () => {
+    const a = calcolaAttenzione({ ...sottoSoglia, esposizione: 0 });
+    expect(a.etichetta).toBe('Nessuna criticità rilevata con i dati disponibili');
+    expect(a.accertato.join(' ')).not.toContain('Esposizione verso l’ente');
+  });
+
+  it('sopra soglia non si duplica: il ramo rosso lo dice già', () => {
+    const a = calcolaAttenzione({
+      ...sottoSoglia,
+      sogliaSuperata: true,
+      dettaglioSoglieSuperate: ['INPS — soglia > 15.000 €. Contributi oltre entrambe.'],
+    });
+    expect(a.esito).toBe('ROSSO');
+    expect(a.accertato.filter((x) => x.includes('16.756')).length).toBe(0);
   });
 });
 

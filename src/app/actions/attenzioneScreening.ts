@@ -69,7 +69,13 @@ export async function ottieniAttenzioneScreeningAction(
     );
     const a = az.rows[0] ?? {};
     const dati: DatiSoglie = lettura.dati;
-    const esposizione = lettura.esposizione;
+    // L'importo che il motore confronta DAVVERO: prima le posizioni del
+    // triage, poi la scheda, poi il V.E.R.A. (fonti.ts). Prima si passava il
+    // solo valore manuale/V.E.R.A., così un'azienda con i contributi nelle
+    // posizioni e il resto vuoto arrivava all'indicatore con esposizione
+    // nulla — e il semaforo non poteva dichiarare l'importo che stava
+    // valutando.
+    const esposizione = dati.contributiScaduti ?? lettura.esposizione;
     // Le soglie configurate per lo spazio, non le costanti: altrimenti la
     // pagina dei Parametri sarebbe una configurazione senza effetto.
     const par = await ottieniParametriSoglieAction(nomeSchema);
@@ -194,6 +200,9 @@ export async function ottieniAttenzioneScreeningAction(
       dettaglioSoglieSuperate: soglie.superate.map(
         (r) => `${r.ambito} — soglia ${r.valore}. ${r.motivo}`
       ),
+      // Anche quando la soglia NON è superata il semaforo deve dire con quali
+      // numeri: il debito c'è comunque, e senza questo il verde restava muto.
+      dettaglioSogliaApplicabile: rigaApplicabile?.motivo ?? null,
       ritardoOltre90Giorni: dati.ritardoOltre90Giorni,
       periodiInRitardo: num(a.periodi_in_ritardo),
       senzaBilancio,

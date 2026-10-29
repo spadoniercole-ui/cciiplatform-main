@@ -36,6 +36,15 @@ describe('triage: il bilancio non entra nel giudizio', () => {
     expect(calcolaAttenzione(triage).copertura.totali).toBe(3);
   });
 
+  it('l’esposizione da 16.756 € si dichiara, invece di sparire dietro il verde', () => {
+    // È il caso che il triage mostra davvero: i contributi stanno sotto il
+    // 30% dei dovuti e sopra i 15.000 €, quindi nessuna segnalazione è
+    // integrata — ma il debito esiste e la videata deve dirlo.
+    const a = calcolaAttenzione(triage);
+    expect(a.accertato.join(' ')).toContain('16.756');
+    expect(a.etichetta).toContain('sotto la soglia');
+  });
+
   it('dove il bilancio si legge davvero, la dimensione torna a contare', () => {
     const screening = calcolaAttenzione({ ...triage, senzaBilancio: false });
     expect(screening.copertura.totali).toBe(4);

@@ -70,7 +70,8 @@ export function SemaforoAttenzione({ attenzione }: { attenzione: Attenzione }) {
             {attenzione.fattoreDeterminante}
           </p>
           <p className="text-[10px] text-slate-500 mt-1">
-            Copertura informativa: {determinate} dimensioni su {totali}
+            Copertura informativa: {determinate} {determinate === 1 ? 'dimensione' : 'dimensioni'}{' '}
+            su {totali}
             {determinate < totali && ' — il giudizio è limitato ai dati disponibili'}
           </p>
         </div>

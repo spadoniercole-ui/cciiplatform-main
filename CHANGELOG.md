@@ -1,3 +1,16 @@
+## 0.143.5 — 2026-10-29
+
+**Il semaforo non dice più «nessuna criticità» mentre un debito c'è.** Con 16.756 € di
+contributi scaduti sotto il 30% dei dovuti, l'indicatore restava verde con la sola scritta
+«Nessuna criticità rilevata con i dati disponibili» e nessun numero: le posizioni che il triage
+stava instradando agli uffici non comparivano da nessuna parte, e la videata contraddiceva i
+documenti. Ora, quando l'esposizione non integra i presupposti dell'art. 25-novies, il semaforo
+dichiara l'importo fra gli elementi accertati, riporta il confronto con la soglia così com'è
+calcolato dal motore — 30% dei dovuti e importo assoluto — e intitola l'esito «Esposizione sotto
+la soglia di segnalazione». L'esposizione portata all'indicatore è quella che il motore
+confronta davvero (posizioni del triage prima della scheda, scheda prima del V.E.R.A.), e la
+copertura informativa passa al singolare quando la dimensione è una sola.
+
 ## 0.143.4 — 2026-10-29
 
 **La verifica riaperta dice quando è il momento di ricontrollare.** La finestra dei trenta

@@ -43,6 +43,16 @@ describe('SemaforoAttenzione — copertura dichiarata', () => {
     expect(screen.getByText(/dimensione accessoria, che non cambia l’esito/)).toBeTruthy();
   });
 
+  it('al singolare dice «1 dimensione», non «1 dimensioni»', () => {
+    render(
+      <SemaforoAttenzione
+        attenzione={{ ...BASE, copertura: { determinate: 1, totali: 3 }, dimensioniScoperte: [] }}
+      />
+    );
+
+    expect(screen.getByText(/Copertura informativa: 1 dimensione su 3/)).toBeTruthy();
+  });
+
   it('con la copertura piena dice che non c’è nulla da integrare', () => {
     render(
       <SemaforoAttenzione
