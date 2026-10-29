@@ -139,6 +139,11 @@ import {
 } from '@/app/actions/consegneReparti';
 import { salvaValoriSoglieParzialeAction, valutaSoglieAction } from '@/app/actions/soglie25novies';
 import { riepilogaSoglieTriage } from '@/lib/soglie25novies/triage';
+import {
+  baseInpsDaVera,
+  GIORNI_RITARDO_SOGLIA_INPS,
+  type BaseInpsVera,
+} from '@/lib/soglie25novies/baseVera';
 import type { EsitoSoglie } from '@/lib/soglie25novies/calcolo';
 import { SemaforoAttenzione } from '@/components/spazio/SemaforoAttenzione';
 import { DebitiTriage } from '@/components/spazio/DebitiTriage';
@@ -788,6 +793,10 @@ export function VerificaSaluteAzienda({
       // Ritardo misurato sui periodi del V.E.R.A.: ripiego quando manca la
       // Lista Inadempienze (che resta la fonte prioritaria).
       let ritardoVera: ReturnType<typeof ritardoDaVera> = null;
+      // Il debito che concorre alla soglia INPS, separato per anzianità (vedi
+      // `baseVera.ts`): non è l'esposizione, è la parte scaduta da oltre 90
+      // giorni.
+      let sogliaVera: BaseInpsVera | null = null;
       if (fileVera && analisiVera) {
         setAvanzamento('Lettura della Posizione V.E.R.A....');
         try {
@@ -797,6 +806,7 @@ export function VerificaSaluteAzienda({
           // dà una tipologia alle righe e permette di indirizzarle al
           // collega giusto. Le sezioni non mappate restano senza categoria.
           const { righe } = estraiRigheVera(analisiVera.sezioni, mappaturaTitoli, {}, true);
+          sogliaVera = baseInpsDaVera(righe, dataVerifica);
           setRigheVera(
             righe.map((r) => ({
               ...r,
@@ -1024,6 +1034,45 @@ export function VerificaSaluteAzienda({
         );
       }
 
+      // ---- IL DEBITO CHE CONCORRE ALLA SOGLIA INPS ----------------------
+      //
+      // L'art. 25-novies, comma 1, lett. a) confronta i contributi scaduti da
+      // OLTRE 90 GIORNI con il 30% dei dovuti dell'anno precedente e con
+      // 15.000 euro: non l'esposizione complessiva. Con quattro anni di denunce
+      // nel file la differenza non è un dettaglio — l'esposizione comprende i
+      // periodi appena scaduti, che il requisito temporale non lo soddisfano
+      // ancora, e dichiarare superato un requisito che non lo è farebbe partire
+      // una segnalazione che non andava fatta.
+      if (sogliaVera?.misurabile) {
+        const eu = (x: number) => Math.round(x).toLocaleString('it-IT');
+        if (!fileInadempienze) nonVersato = sogliaVera.scadutiOltre90;
+        if (ritardo90 === null) ritardo90 = sogliaVera.scadutiOltre90 > 0;
+        if (!fileInadempienze && sogliaVera.scadutiOltre90 > 0) {
+          periodiRitardo = sogliaVera.periodiOltre90.length;
+        }
+        note.push(
+          `Soglia INPS misurata sul V.E.R.A.: concorrono solo i contributi scaduti da oltre ${GIORNI_RITARDO_SOGLIA_INPS} giorni, ${eu(sogliaVera.scadutiOltre90)} € su ${sogliaVera.partiteOltre90} ${
+            sogliaVera.partiteOltre90 === 1 ? 'partita' : 'partite'
+          }${
+            sogliaVera.periodiOltre90.length > 0
+              ? ` (periodi ${sogliaVera.periodiOltre90.join(', ')})`
+              : ''
+          }.` +
+            (sogliaVera.recenti > 0
+              ? ` Altri ${eu(sogliaVera.recenti)} € riguardano periodi scaduti da meno di ${GIORNI_RITARDO_SOGLIA_INPS} giorni: restano fuori dal confronto, perché il requisito è congiunto e riguarda lo stesso debito.`
+              : '') +
+            (sogliaVera.partiteSenzaPeriodo > 0
+              ? ` ${sogliaVera.partiteSenzaPeriodo} ${
+                  sogliaVera.partiteSenzaPeriodo === 1
+                    ? 'partita non è databile'
+                    : 'partite non sono databili'
+                } (senza periodo nel file): ${eu(
+                  sogliaVera.senzaPeriodo
+                )} € restano fuori dal conteggio del ritardo.`
+              : '')
+        );
+      }
+
       if (scelteFonti['vera:elenchi'] === 'VERA') {
         note.push(
           'Fonte del debito: il V.E.R.A., per scelta. Inadempienze e ruoli non sono stati sommati, perché già compresi.'
@@ -1067,8 +1116,14 @@ export function VerificaSaluteAzienda({
           // l'indicatore userà l'esposizione del V.E.R.A., che li comprende.
           // Prima gli elenchi vincevano sempre, e il V.E.R.A. spariva in
           // silenzio anche quando era la fonte che si voleva usare.
+          // Con il V.E.R.A. come fonte il valore è la parte scaduta da oltre 90
+          // giorni, non l'esposizione intera: è quella che la norma confronta.
           contributiScaduti:
-            scelteFonti['vera:elenchi'] === 'VERA' ? undefined : (nonVersato ?? undefined),
+            scelteFonti['vera:elenchi'] === 'VERA'
+              ? sogliaVera?.misurabile
+                ? sogliaVera.scadutiOltre90
+                : undefined
+              : (nonVersato ?? undefined),
           ritardoOltre90Giorni: ritardo90 ?? undefined,
           creditiAffidatiAer: creditiAffidatiNetti ?? undefined,
           periodiInRitardo: periodiRitardo ?? undefined,

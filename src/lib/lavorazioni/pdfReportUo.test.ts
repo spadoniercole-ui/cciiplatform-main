@@ -261,6 +261,32 @@ describe('generaPdfReportUo', () => {
     expect(pdf.getNumberOfPages()).toBeGreaterThan(1);
     expect(pdf.output().startsWith('%PDF-')).toBe(true);
   });
+
+  // UNA LAVORAZIONE, UNA PAGINA. In tabella due lavorazioni vicine si
+  // confondevano e i passi di una finivano sotto il titolo dell'altra: con più
+  // di una, ognuna comincia su una pagina sua, che porta in testa il codice.
+  it('mette ogni lavorazione su una pagina, quando sono più di una', () => {
+    const d = documento();
+    const pdf = generaPdfReportUo({
+      ...d,
+      codici: [
+        {
+          ...d.codici[0],
+          lavorazioni: [
+            { tipologia: 'Verifica UNIEMENS', procedura: 'Estrarre il flusso', esito: 'Diffida' },
+            { tipologia: 'Contabilizzazione', procedura: 'Iscrivere il debito', esito: 'TL 27' },
+            { tipologia: 'Invio ad AdR', procedura: 'Preparare la delega', esito: 'Cartella' },
+          ],
+        },
+      ],
+    });
+    const sorgente = pdf.output();
+    expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(3);
+    expect(sorgente).toContain('Lavorazione 2 di 3');
+    expect(sorgente).toContain('Lavorazione 3 di 3');
+    // Le parentesi sono protette nel flusso PDF: basta la parola.
+    expect(sorgente).toContain('segue');
+  });
 });
 
 describe('scaricaPdfReportUo', () => {

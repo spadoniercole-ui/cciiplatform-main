@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 import {
   elencoCodiciTs,
+  naturaRigaVera,
   ripartisciRigheVera,
   sortaRigaVera,
   testiContabilizzate,
@@ -166,5 +167,25 @@ describe('la sospensione da un provvedimento', () => {
     // Non è più «fuori perimetro»: quella è la colonna da ignorare, questa ha
     // un ufficio che la riprenderà quando il provvedimento cade.
     expect(r.fuoriPerimetro).toEqual({ righe: 0, totale: 0 });
+  });
+});
+describe('naturaRigaVera', () => {
+  it('la denuncia non trasmessa è «Omesso», mai «Contabilizzato»', () => {
+    expect(naturaRigaVera(contabilizzata('Denunce non trasmesse', 9_590))).toBe('Omesso');
+    // L'F24 è la faccia finanziaria: quella resta un debito iscritto.
+    expect(naturaRigaVera(contabilizzata('F24 Non presentato', 9_590))).toBe('Contabilizzato');
+    expect(
+      naturaRigaVera(
+        riga({ voce: 'Denunce non trasmesse', stato: '', importo: 0, trattamento: 'potenziale' })
+      )
+    ).toBe('Potenziale (importo ignoto)');
+    // Se l'operatore dichiara che sono due debiti, la denuncia torna un debito
+    // iscritto e la natura è quella del file.
+    expect(
+      naturaRigaVera({
+        ...contabilizzata('Denunce non trasmesse', 9_590),
+        duplicatoStato: 'NEGATO',
+      })
+    ).toBe('Contabilizzato');
   });
 });

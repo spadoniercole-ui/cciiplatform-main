@@ -22,7 +22,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formattaImportoEuro } from './comunicazioni';
 import { testiContabilizzate } from './daLavorare';
-import { ETICHETTE_MOTIVO, type DocumentoUo } from './reportUo';
+import { ETICHETTE_MOTIVO, type DocumentoUo, type LavorazioneUo } from './reportUo';
 import { SCOPERTURA_GIORNI_RILEVANTE } from '@/lib/debitiEnte/scopertura';
 
 function dataItaliana(dataIso: string): string {
@@ -33,6 +33,76 @@ function dataItaliana(dataIso: string): string {
 
 /** Sotto questa coordinata una tabella lascerebbe il contenuto fuori dal foglio. */
 const LIMITE_PAGINA = 262;
+
+/** Fondo utile per il testo corrente: sotto, si cambia pagina. */
+const FONDO_TESTO = 276;
+
+/**
+ * UNA LAVORAZIONE SU UN FOGLIO SUO: il titolo, i passi della procedura, l'esito.
+ *
+ * Non è una tabella, ed è la ragione per cui esiste: qui la procedura è la cosa
+ * che si legge, e va letta per intero e nell'ordine in cui si esegue. In tabella
+ * due lavorazioni vicine si confondevano, i passi di una finivano sotto il
+ * titolo dell'altra e il foglio, spezzato a metà, non diceva più dove si era.
+ * Qui ogni passo è una riga — o le righe che servono a contenerlo — e il testo
+ * scorre sulla pagina successiva solo quando lo spazio è finito.
+ */
+function scriviLavorazione(
+  doc: jsPDF,
+  l: LavorazioneUo,
+  indice: number,
+  totale: number,
+  y: number
+): number {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  for (const r of doc.splitTextToSize(
+    `Lavorazione ${indice} di ${totale} — ${l.tipologia}`,
+    182
+  ) as string[]) {
+    if (y > FONDO_TESTO) {
+      doc.addPage();
+      y = 22;
+    }
+    doc.text(r, 14, y);
+    y += 5;
+  }
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  const passi = (l.procedura ?? '')
+    .split(/\r?\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (passi.length === 0) {
+    doc.setFont('helvetica', 'italic');
+    doc.text('Procedura non indicata nei parametri dell’ente.', 14, y);
+    doc.setFont('helvetica', 'normal');
+    y += 4.6;
+  } else {
+    for (const passo of passi) {
+      for (const r of doc.splitTextToSize(passo, 176) as string[]) {
+        if (y > FONDO_TESTO) {
+          doc.addPage();
+          y = 22;
+        }
+        doc.text(r, 18, y);
+        y += 4.2;
+      }
+      y += 1.4;
+    }
+  }
+
+  for (const r of doc.splitTextToSize(`Esito: ${l.esito?.trim() || '—'}`, 182) as string[]) {
+    if (y > FONDO_TESTO) {
+      doc.addPage();
+      y = 22;
+    }
+    doc.text(r, 14, y);
+    y += 4.2;
+  }
+  return y + 4;
+}
 
 export function generaPdfReportUo(d: DocumentoUo): jsPDF {
   const doc = new jsPDF();
@@ -280,18 +350,48 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
       return;
     }
 
-    autoTable(doc, {
-      startY: y,
-      margin: { left: 14, right: 14 },
-      head: [['Lavorazione', 'Procedura', 'Esito']],
-      body: c.lavorazioni.map((l) => [l.tipologia, l.procedura ?? '—', l.esito ?? '—']),
-      styles: { fontSize: 7.5, cellPadding: 1.8 },
-      headStyles: { fillColor: [71, 85, 105] },
-      columnStyles: { 0: { cellWidth: 48 }, 1: { cellWidth: 100 }, 2: { cellWidth: 34 } },
-      theme: 'grid',
-    });
-    // @ts-expect-error jspdf-autotable estende jsPDF con questa proprietà a runtime
-    y = doc.lastAutoTable.finalY + 8;
+    // PIÙ LAVORAZIONI, UNA PAGINA CIASCUNA.
+    //
+    // La tabella compatta spezzava la procedura a metà foglio: chi lavora la
+    // partita leggeva un elenco di compiti senza sapere quale procedura stesse
+    // seguendo, e il passo successivo poteva cominciare sotto il titolo di
+    // un'altra. Con più di una lavorazione ognuna comincia su una pagina sua, e
+    // la pagina porta in testa il codice e la materia, così il foglio sciolto
+    // non perde il riferimento. Con una sola resta la tabella: non c'è niente
+    // da separare, e il foglio è più corto.
+    if (c.lavorazioni.length === 1) {
+      autoTable(doc, {
+        startY: y,
+        margin: { left: 14, right: 14 },
+        head: [['Lavorazione', 'Procedura', 'Esito']],
+        body: c.lavorazioni.map((l) => [l.tipologia, l.procedura ?? '—', l.esito ?? '—']),
+        styles: { fontSize: 7.5, cellPadding: 1.8 },
+        headStyles: { fillColor: [71, 85, 105] },
+        columnStyles: { 0: { cellWidth: 48 }, 1: { cellWidth: 100 }, 2: { cellWidth: 34 } },
+        theme: 'grid',
+      });
+      // @ts-expect-error jspdf-autotable estende jsPDF con questa proprietà a runtime
+      y = doc.lastAutoTable.finalY + 8;
+    } else {
+      c.lavorazioni.forEach((l, i) => {
+        if (i > 0) {
+          doc.addPage();
+          y = 22;
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9);
+          doc.text(
+            `${indice + 1}. ${
+              c.codice ? `Codice ${c.codice}` : 'Senza codice di partita'
+            }${c.materia ? ` — ${c.materia}` : ''} (segue)`,
+            14,
+            y
+          );
+          y += 6;
+        }
+        y = scriviLavorazione(doc, l, i + 1, c.lavorazioni.length, y);
+      });
+      y += 2;
+    }
   });
 
   if (y > LIMITE_PAGINA) {

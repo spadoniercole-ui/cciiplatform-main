@@ -58,7 +58,7 @@ import {
   insiemeEsclusi,
   type StatoDuplicatoVera,
 } from '@/lib/debitiEnte/duplicatiVera';
-import type { TrattamentoVera } from '@/lib/debitiEnte/veraImport';
+import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 
 /** I codici «TS» che il V.E.R.A. porta già in contabilità. */
 export const CODICI_TS_CONTABILIZZATI_ADR = ['25', '27', '81'] as const;
@@ -118,6 +118,26 @@ export function sortaRigaVera(r: RigaConStatoVera): SortaRigaVera {
   // `da_contabilizzare` e `potenziale`: c'è un intervento da chiedere, che sia
   // di contabilizzazione o di quantificazione.
   return 'DA_LAVORARE';
+}
+
+/**
+ * LA NATURA CHE SI STAMPA SUL FOGLIO.
+ *
+ * Per l'adempimento non è «Contabilizzato», e non lo è mai: una denuncia mai
+ * trasmessa non è un importo iscritto in contabilità, e chiamarla così sul
+ * foglio dell'ufficio direbbe la cosa sbagliata proprio dove si chiede di
+ * intervenire. È «Omesso» — il flusso che l'azienda non ha trasmesso — e la
+ * cifra che porta resta quella dell'F24 che il file scrive accanto.
+ *
+ * La scelta dell'operatore sulla coppia F24/denunce riporta la riga fra le già
+ * contabilizzate: in quel caso la natura torna a essere quella del file.
+ */
+export function naturaRigaVera(r: RigaConStatoVera): string {
+  const sorta = sortaRigaVera(r);
+  const effettiva =
+    sorta === 'ADEMPIMENTO' && r.duplicatoStato === 'NEGATO' ? 'CONTABILIZZATA' : sorta;
+  if (effettiva === 'ADEMPIMENTO') return 'Omesso';
+  return ETICHETTE_TRATTAMENTO[r.trattamento];
 }
 
 export interface RipartizioneRighe<R extends RigaConStatoVera> {

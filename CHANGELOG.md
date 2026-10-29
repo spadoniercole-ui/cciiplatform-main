@@ -1,3 +1,31 @@
+## 0.142.1 — 2026-10-29
+
+**La denuncia non trasmessa è «Omesso», non «Contabilizzato».** Nel foglio
+dell'ufficio la natura di un flusso mai partito non può essere quella di un
+importo iscritto in contabilità: sarebbe falsa proprio dove si chiede di
+intervenire. La colonna «Natura» ora scrive «Omesso», e la cifra resta quella
+dell'F24 che il file scrive accanto. Se l'operatore dichiara che sono due debiti
+distinti, la riga torna un debito iscritto e la natura torna quella del file.
+
+**Una lavorazione, una pagina.** Con più lavorazioni la tabella compatta
+spezzava la procedura a metà foglio e i passi di una finivano sotto il titolo
+dell'altra: chi lavora la partita leggeva un elenco di compiti senza sapere
+quale procedura stesse seguendo. Ora ognuna comincia su una pagina sua, con il
+codice e la materia in testa perché il foglio sciolto non perda il riferimento;
+con una sola lavorazione resta la tabella.
+
+**La soglia INPS si misura sul debito scaduto da oltre 90 giorni.** L'art.
+25-novies, comma 1, lett. a) confronta i contributi scaduti da oltre 90 giorni
+con il 30% dei dovuti dell'anno precedente e con 15.000 euro — non
+l'esposizione complessiva. Senza la Lista Inadempienze la piattaforma ripiegava
+sul totale del V.E.R.A., che comprende anche i periodi appena scaduti: con
+quattro anni di denunce non trasmesse il requisito risultava superato da un
+debito che il tempo non lo soddisfa ancora. Ora il V.E.R.A. si legge riga per
+riga, la scadenza si ricava dal periodo (il 16 del mese successivo) e al
+confronto concorre la sola parte oltre i 90 giorni; i periodi più recenti e le
+partite senza periodo databile si dichiarano a parte, e la base del 30% resta
+quella dei contributi dovuti nell'anno precedente letta dalle denunce.
+
 ## 0.142.0 — 2026-10-29
 
 **La denuncia non trasmessa smette di sparire dal foglio dell'ufficio.** Il V.E.R.A.

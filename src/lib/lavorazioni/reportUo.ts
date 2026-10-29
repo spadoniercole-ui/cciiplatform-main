@@ -58,7 +58,7 @@ import {
   type LavorazioneMateria,
 } from '@/lib/titoliEnte/lavorazioniMateria';
 import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
-import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
+import type { TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 import type { StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
 import {
   eVersamentoConTermine,
@@ -67,7 +67,7 @@ import {
 } from '@/lib/debitiEnte/scopertura';
 import type { PosizioniEscluse } from './comunicazioni';
 import { materiaDaChiave } from './instradamentoMateria';
-import { ripartisciRigheVera, type RiepilogoRighe } from './daLavorare';
+import { naturaRigaVera, ripartisciRigheVera, type RiepilogoRighe } from './daLavorare';
 // Lo stesso ufficio scritto due volte resta un documento solo (vedi dipendenze.ts).
 import { chiaveDipendenza } from './dipendenze';
 
@@ -383,7 +383,6 @@ export function nomeFileUo(azienda: string, dipendenza: string, versione?: strin
   return `report_uo_${a}_${d}${coda}.pdf`;
 }
 
-const trattamenti = ETICHETTE_TRATTAMENTO as Record<string, string>;
 const COLLATORE_IT = new Intl.Collator('it-IT');
 // I codici sono numeri scritti come testo: «9» prima di «10», non dopo.
 const COLLATORE_CODICI = new Intl.Collator('it-IT', { numeric: true });
@@ -710,7 +709,9 @@ export function componiReportUo(input: {
                 voce: r.voce,
                 periodo: r.periodo?.trim() ? r.periodo.trim() : null,
                 stato: r.stato.trim(),
-                trattamento: trattamenti[r.trattamento] ?? String(r.trattamento ?? ''),
+                // LA DENUNCIA NON TRASMESSA NON È «CONTABILIZZATO»: sul foglio
+                // dell'ufficio la sua natura è «Omesso» (vedi `naturaRigaVera`).
+                trattamento: naturaRigaVera(r),
                 importo: r.importo,
                 scopertura: eVersamentoConTermine(r.voce)
                   ? scoperturaDaVera(r.periodo, input.dataVerifica)
