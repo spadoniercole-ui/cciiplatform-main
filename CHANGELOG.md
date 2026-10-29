@@ -1,3 +1,38 @@
+## 0.143.0 — 2026-10-29
+
+**Il triage non giudica più un documento che non ha chiesto.** I bilanci XBRL
+entrano nell'analisi dopo la presa in carico: prima, un'impresa costituita nel
+2013 senza bilancio caricato veniva segnalata per «bilanci non depositati» in una
+fase in cui nessuno li aveva chiesti, e la copertura contava «1 dimensione su 4»
+comprendendo una dimensione che non si stava guardando. Ora la dimensione esce
+dal conteggio (`senzaBilancio`), l'XBRL non si legge nemmeno, e il sistema
+chiede i bilanci dove si leggono davvero — nello screening e nell'analisi di
+bilancio. L'unico dato esterno del triage resta la visura, che dà la storia
+dell'azienda.
+
+**Le soglie non passano dalla matricola.** La finestra del confronto mostrava
+«Riconosciuta dall'ente come» e, senza identificativi salvati, lasciava credere
+che il calcolo dipendesse da quelli. Non è così: il confronto si misura sui
+documenti caricati — il V.E.R.A. per i debiti certi e in divenire, le denunce per
+il dovuto dell'anno precedente (la base del 30%), le deleghe F24 per il requisito
+dei 90 giorni — e l'unica anagrafica che serve è quella camerale.
+
+**Il flusso di regolarizzazione nasceva nel punto sbagliato.** «Flusso di
+regolarizzazione» contiene «flusso», e la regola generica dei flussi assegnava la
+voce alla prima materia con «flussi» nel nome — i Flussi Uniemens — mandandola
+all'ufficio sbagliato: si spostava soltanto scegliendo a mano la materia sulla
+voce. Ora la descrizione più specifica vince (regolarizzazioni, variazioni) e la
+regola larga non cattura le materie che hanno un titolo proprio.
+
+**Il paper della verifica, e il pulsante che non sparisce più.** Il riepilogo
+stampabile compare con una condizione stabile — prima dipendeva da uno stato che
+nasceva vuoto e si popolava dopo, e il comando appariva per un istante per poi
+togliere sé stesso. Il foglio ora porta, oltre a indicazione, valori, documenti e
+perimetro: le soglie riga per riga con l'alert quando una è superata, le evidenze
+preparate per ogni reparto con posizioni e totale, e il giorno entro cui tornare
+a verificare che i reparti si siano attivati (30 giorni dalla data della
+verifica, non da oggi).
+
 ## 0.142.1 — 2026-10-29
 
 **La denuncia non trasmessa è «Omesso», non «Contabilizzato».** Nel foglio

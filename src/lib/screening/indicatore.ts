@@ -151,6 +151,18 @@ export interface IngressoIndicatore {
    */
   ritardoOltre90Giorni?: boolean | null;
   periodiInRitardo?: number | null;
+  /**
+   * IL BILANCIO NON È MATERIA DI QUESTA FASE.
+   *
+   * Nel triage il bilancio non si è ancora chiesto — è il triage che decide se
+   * chiederlo — quindi la sua assenza non è una lacuna e non può essere un
+   * allarme. Prima, un'impresa costituita nel 2013 senza XBRL veniva segnalata
+   * come «bilanci non depositati» in una fase in cui nessuno aveva ancora
+   * chiesto il bilancio: un documento che non è stato richiesto non può
+   * mancare. Con `true` la dimensione esce dal conteggio della copertura, e
+   * con essa spariscono l'accertato e il da accertare che ne derivano.
+   */
+  senzaBilancio?: boolean;
 }
 
 export interface DimensioneScoperta {
@@ -210,9 +222,6 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
   let determinate = 0;
 
   // ---- Livello 0: copertura informativa --------------------------------
-  const eta = input.annoCostituzione !== null ? input.annoCorrente - input.annoCostituzione : null;
-  const giovane = eta !== null && eta <= ANNI_GIOVANE_IMPRESA;
-
   // "Debito importante": si usa la soglia di legge applicabile, non un
   // numero inventato. Sono le soglie dell'art. 25-novies, già configurate.
   const debitoOltreSoglia =
@@ -220,39 +229,52 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
     input.sogliaApplicabile !== null &&
     input.esposizione > input.sogliaApplicabile;
 
-  if (input.annoCostituzione === null) {
-    daAccertare.push(
-      'Anno di costituzione non dichiarato: non è possibile stabilire se l’assenza di bilanci dipenda dalla giovane età dell’impresa o dal mancato deposito.'
-    );
-  }
+  // IL BILANCIO ENTRA SOLO DOVE SI LEGGE.
+  //
+  // Nel triage l'unico dato esterno è la visura, che dà la storia dell'azienda;
+  // i bilanci si chiedono DOPO, a chi ha deciso di procedere. La loro assenza
+  // non è quindi una lacuna del perimetro, e non può essere un allarme: era il
+  // caso di un'impresa costituita nel 2013 segnalata per «bilanci non
+  // depositati» in una fase in cui nessuno li aveva chiesti.
+  if (!input.senzaBilancio) {
+    const eta =
+      input.annoCostituzione !== null ? input.annoCorrente - input.annoCostituzione : null;
+    const giovane = eta !== null && eta <= ANNI_GIOVANE_IMPRESA;
 
-  if (!input.xbrlPresente) {
-    dimensioniScoperte.push({ nome: 'Equilibrio di bilancio (XBRL)', portante: true });
     if (input.annoCostituzione === null) {
-      daAccertare.push('Bilancio XBRL non caricato.');
-      lacunePortanti.push('Bilancio XBRL non caricato.');
-    } else if (giovane && !debitoOltreSoglia) {
-      // Unico caso in cui l'assenza di bilancio non è un segnale: impresa
-      // giovane E esposizione sotto la soglia di legge.
-      accertato.push(
-        `Bilancio XBRL assente, compatibile con la costituzione recente (${input.annoCostituzione}) e con un’esposizione sotto la soglia di legge.`
+      daAccertare.push(
+        'Anno di costituzione non dichiarato: non è possibile stabilire se l’assenza di bilanci dipenda dalla giovane età dell’impresa o dal mancato deposito.'
       );
-      determinate++;
-    } else if (giovane && debitoOltreSoglia) {
-      accertato.push(
-        `Bilancio XBRL assente e impresa di costituzione recente (${input.annoCostituzione}), MA l’esposizione supera la soglia di legge: la giovane età non spiega l’esposizione.`
-      );
-      daAccertare.push('Bilancio XBRL non caricato.');
-      lacunePortanti.push('Bilancio XBRL non caricato.');
-    } else {
-      accertato.push(
-        `Bilancio XBRL assente per un’impresa costituita nel ${input.annoCostituzione}: l’età non giustifica il mancato deposito.`
-      );
-      daAccertare.push('Bilancio XBRL non caricato o bilanci non depositati.');
-      lacunePortanti.push('Bilancio XBRL non caricato o bilanci non depositati.');
     }
-  } else {
-    determinate++;
+
+    if (!input.xbrlPresente) {
+      dimensioniScoperte.push({ nome: 'Equilibrio di bilancio (XBRL)', portante: true });
+      if (input.annoCostituzione === null) {
+        daAccertare.push('Bilancio XBRL non caricato.');
+        lacunePortanti.push('Bilancio XBRL non caricato.');
+      } else if (giovane && !debitoOltreSoglia) {
+        // Unico caso in cui l'assenza di bilancio non è un segnale: impresa
+        // giovane E esposizione sotto la soglia di legge.
+        accertato.push(
+          `Bilancio XBRL assente, compatibile con la costituzione recente (${input.annoCostituzione}) e con un’esposizione sotto la soglia di legge.`
+        );
+        determinate++;
+      } else if (giovane && debitoOltreSoglia) {
+        accertato.push(
+          `Bilancio XBRL assente e impresa di costituzione recente (${input.annoCostituzione}), MA l’esposizione supera la soglia di legge: la giovane età non spiega l’esposizione.`
+        );
+        daAccertare.push('Bilancio XBRL non caricato.');
+        lacunePortanti.push('Bilancio XBRL non caricato.');
+      } else {
+        accertato.push(
+          `Bilancio XBRL assente per un’impresa costituita nel ${input.annoCostituzione}: l’età non giustifica il mancato deposito.`
+        );
+        daAccertare.push('Bilancio XBRL non caricato o bilanci non depositati.');
+        lacunePortanti.push('Bilancio XBRL non caricato o bilanci non depositati.');
+      }
+    } else {
+      determinate++;
+    }
   }
 
   if (input.sogliaSuperata === null) {
@@ -301,7 +323,12 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
     determinate++;
   }
 
-  const copertura = { determinate, totali: DIMENSIONI_TOTALI };
+  // Una dimensione che non si guarda non entra nemmeno nel totale: «1 su 4»
+  // accanto a «bilancio non chiesto» era un numero che si contraddiceva.
+  const copertura = {
+    determinate,
+    totali: input.senzaBilancio ? DIMENSIONI_TOTALI - 1 : DIMENSIONI_TOTALI,
+  };
 
   // ---- Livello 1: vincoli giuridici ------------------------------------
   if (input.sogliaSuperata === true) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { htmlRiepilogoTriage } from './riepilogoHtml';
+import { dataRiverifica, htmlRiepilogoTriage } from './riepilogoHtml';
 
 const base = {
   azienda: 'ARETUSEA <DETERGENTI> S.R.L.',
@@ -41,5 +41,66 @@ describe('riepilogo del triage', () => {
     });
     expect(h).toContain('Elenco denunce non letto');
     expect(h).toContain('non determinabile con i documenti caricati');
+  });
+});
+
+//
+// IL PAPER DELLA VERIFICA, NON L'ISTRUZIONE DI LAVORO.
+//
+// Le comunicazioni dicono a un ufficio che cosa fare. Questo foglio dice che
+// cosa è stato verificato ALLA DATA: le soglie con l'alert, le evidenze
+// partite per i reparti, e il giorno in cui tornare a controllare se i reparti
+// si sono attivati. Senza le tre cose insieme è un riassunto, non una
+// certificazione.
+describe('riepilogo: soglie, evidenze e riverifica', () => {
+  it('porta le soglie con l’alert, le evidenze per ufficio e il giorno del controllo', () => {
+    const h = htmlRiepilogoTriage({
+      ...base,
+      soglie: [
+        {
+          ambito: 'Segnalazione INPS — imprese CON lavoratori',
+          valore: '> 30% dei contributi dovuti nell’anno precedente E > 15.000 €',
+          esito: 'sopra',
+          esposizione: 31_236.35,
+        },
+      ],
+      alertSoglie: {
+        titolo: 'Un parametro oltre la soglia di segnalazione',
+        dettaglio: 'Requisito temporale integrato.',
+      },
+      uffici: [
+        {
+          dipendenza: 'VIGILANZA DOCUMENTALE',
+          righe: 5,
+          totale: 26_226.79,
+          voci: ['Codice 27'],
+        },
+      ],
+      prossimaVerifica: '2026-10-21',
+    });
+    expect(h).toContain('SUPERATA');
+    expect(h).toContain('31.236,35 €');
+    expect(h).toContain('Un parametro oltre la soglia');
+    expect(h).toContain('VIGILANZA DOCUMENTALE');
+    expect(h).toContain('Codice 27');
+    expect(h).toContain('26.226,79 €');
+    // Il totale delle evidenze è la somma dei fogli, dichiarata una volta.
+    expect(h).toContain('Totale delle evidenze');
+    expect(h).toContain('Entro il <b>21/10/2026</b>');
+  });
+
+  it('senza soglie né uffici il foglio resta quello di prima, senza sezioni vuote', () => {
+    const h = htmlRiepilogoTriage(base);
+    expect(h).not.toContain('Soglie di segnalazione (art. 25-novies) e alert');
+    expect(h).not.toContain('Evidenze preparate per i reparti');
+    // La riverifica c'è comunque: si conta dalla data della verifica.
+    expect(h).toContain('Entro il <b>21/10/2026</b>');
+  });
+
+  it('la riverifica si conta dalla data della verifica, non da oggi', () => {
+    expect(dataRiverifica('2026-10-29')).toBe('2026-11-28');
+    expect(dataRiverifica('2026-10-29', 30)).toBe('2026-11-28');
+    expect(dataRiverifica('2026-01-31', 30)).toBe('2026-03-02');
+    expect(dataRiverifica('non una data')).toBeNull();
   });
 });

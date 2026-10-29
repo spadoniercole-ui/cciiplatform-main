@@ -25,6 +25,7 @@
 
 import { dichiarazionePerimetro } from '@/lib/revisore/perimetro';
 import {
+  dataRiverifica,
   htmlRiepilogoTriage,
   type DocumentoTriage,
   type ValoriTriage,
@@ -119,8 +120,6 @@ import { conRitorno } from '@/lib/navigazione/ritorno';
 import { materiaPerRigaVera } from '@/lib/titoliEnte/materiaVera';
 import { normalizzaEtichetta } from '@/lib/debitiEnte/tracciatoCore';
 import { MappaturaSezioniVera } from '@/components/spazio/MappaturaSezioniVera';
-import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
-import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
 import type { StatoMateria } from '@/lib/titoliEnte/materie';
 import { LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA } from '@/lib/lavorazioni/solaLettura';
 import {
@@ -371,17 +370,13 @@ export function VerificaSaluteAzienda({
    *
    * Il triage è il momento in cui si decide: mandare l'operatore nella scheda
    * dell'azienda per vedere i numeri significava farlo uscire dal lavoro, con
-   * il rischio di non tornare. La finestra mostra il confronto e gli
-   * identificativi con cui l'ente riconosce l'azienda — i valori che servono a
-   * una informativa — e si chiude. Per modificare si va nella scheda, ma solo
-   * se lo si sceglie.
+   * il rischio di non tornare. La finestra mostra il confronto e DA QUALI
+   * DOCUMENTI vengono i numeri — non da quale matricola l'ente riconosce
+   * l'azienda: il confronto non passa dai riferimenti interni, e mostrarli lì
+   * faceva credere che senza quelli il calcolo non si potesse fare. Per
+   * modificare si va nella scheda, ma solo se lo si sceglie.
    */
   const [mostraSoglie, setMostraSoglie] = useState(false);
-  const [identificativiSoglie, setIdentificativiSoglie] = useState<
-    { etichetta: string; valore: string }[]
-  >([]);
-  const [erroreIdentificativi, setErroreIdentificativi] = useState<string | null>(null);
-  const [identificativiInCorso, setIdentificativiInCorso] = useState(false);
 
   // Lo storico rende vera la promessa fatta a schermo — "la verifica resta
   // consultabile" — che finora non lo era: esito e data stavano nel
@@ -414,35 +409,6 @@ export function VerificaSaluteAzienda({
       annullato = true;
     };
   }, [nomeSchema, aziendaId, fase]);
-
-  // Gli identificativi si leggono quando la finestra si apre: sono quelli
-  // salvati per questa azienda (Anagrafica Ente), non valori tenuti in memoria.
-  useEffect(() => {
-    if (!mostraSoglie || !aziendaId) return;
-    let annullato = false;
-    setIdentificativiInCorso(true);
-    setErroreIdentificativi(null);
-    void Promise.all([
-      ottieniAnagraficaEnte(nomeSchema, aziendaId),
-      ottieniEtichetteAnagraficaEnte(nomeSchema),
-    ]).then(([a, et]) => {
-      if (annullato) return;
-      if (!a.success) setErroreIdentificativi(a.error ?? 'Identificativi non leggibili.');
-      const dati = a.dati as unknown as Record<string, string | null>;
-      const righe = et.success
-        ? et.etichette
-            .filter((e) => e.attivo)
-            .map((e) => ({ etichetta: e.etichetta, valore: dati[`campo${e.campo}`] ?? '' }))
-            .filter((e) => e.valore.trim() !== '')
-        : [];
-      if (a.dati.idEnte) righe.unshift({ etichetta: 'ID ente', valore: a.dati.idEnte });
-      setIdentificativiSoglie(righe);
-      setIdentificativiInCorso(false);
-    });
-    return () => {
-      annullato = true;
-    };
-  }, [mostraSoglie, aziendaId, nomeSchema]);
 
   const caricaVisura = async (f: File | null) => {
     if (!f) return;
@@ -618,7 +584,9 @@ export function VerificaSaluteAzienda({
       else setErrore(debiti.error ?? 'Posizioni V.E.R.A. non leggibili.');
 
       setAvanzamento('Ricalcolo dell’indicatore...');
-      const a = await ottieniAttenzioneScreeningAction(nomeSchema, id);
+      // SENZA IL BILANCIO: la verifica riaperta è sempre un triage, e in
+      // triage i bilanci non sono stati chiesti (vedi `indicatore.ts`).
+      const a = await ottieniAttenzioneScreeningAction(nomeSchema, id, { senzaBilancio: true });
       if (a.success && a.attenzione) setAttenzione(a.attenzione);
       else setErrore(a.error ?? 'Indicatore non calcolato: causa non riportata dal server.');
 
@@ -1140,7 +1108,9 @@ export function VerificaSaluteAzienda({
       }
 
       setAvanzamento('Calcolo dell’indicatore...');
-      const a = await ottieniAttenzioneScreeningAction(nomeSchema, c.aziendaId);
+      const a = await ottieniAttenzioneScreeningAction(nomeSchema, c.aziendaId, {
+        senzaBilancio: true,
+      });
       if (a.success && a.attenzione) {
         setAttenzione(a.attenzione);
         // Con l'esito si conserva la data a cui si riferiscono i conti: è
@@ -1270,6 +1240,36 @@ export function VerificaSaluteAzienda({
           creditiAffidatiAgente: null,
         },
         attenzione,
+        // Le soglie riga per riga, con l'alert quando è superata: il foglio
+        // deve dire su quale parametro e con quale importo, non solo che
+        // «qualcosa» è oltre.
+        soglie: esitoSoglie
+          ? esitoSoglie.righe
+              .filter((r) => r.applicabile)
+              .map((r) => ({
+                ambito: r.ambito,
+                valore: r.valore,
+                esito: r.esito,
+                esposizione: r.esposizione,
+              }))
+          : [],
+        alertSoglie:
+          riepilogoSoglie && riepilogoSoglie.stato !== 'nessuna_superata'
+            ? { titolo: riepilogoSoglie.titolo, dettaglio: riepilogoSoglie.dettaglio }
+            : null,
+        // Le evidenze che partono per i reparti: chi riceve il riepilogo deve
+        // sapere che cosa è stato mandato a chi, e quanto vale.
+        uffici: reportUo.documenti.map((d) => ({
+          dipendenza: d.dipendenza,
+          righe: d.righe,
+          totale: d.totale,
+          voci: d.codici.map((c) =>
+            c.codice ? `Codice ${c.codice}` : (c.materia ?? 'senza materia')
+          ),
+        })),
+        // Trenta giorni: la data entro cui tornare a vedere se i reparti si
+        // sono attivati. Si conta dalla data della verifica, non da oggi.
+        prossimaVerifica: dataRiverifica(dataVerifica),
       }),
       undefined,
       new Date().toISOString()
@@ -2369,34 +2369,26 @@ export function VerificaSaluteAzienda({
 
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                    Riconosciuta dall’ente come
+                    Da dove vengono i numeri
                   </p>
-                  {identificativiInCorso ? (
-                    <p className="text-[11px] text-slate-500">Lettura degli identificativi…</p>
-                  ) : erroreIdentificativi ? (
-                    <p className="text-[11px] text-amber-800">{erroreIdentificativi}</p>
-                  ) : identificativiSoglie.length === 0 ? (
-                    <p className="text-[11px] text-slate-600 leading-relaxed">
-                      Nessun identificativo salvato (matricola, posizione, codici CSC…). Si
-                      compilano in{' '}
-                      <span className="font-bold">Posizione Ente › Anagrafica Ente</span> e restano
-                      salvati: non sono valori tenuti in memoria dalla videata.
-                    </p>
-                  ) : (
-                    <ul className="space-y-0.5">
-                      {identificativiSoglie.map((x) => (
-                        <li key={x.etichetta} className="text-[11px] text-slate-700">
-                          <span className="text-slate-500">{x.etichetta}</span>{' '}
-                          <span className="font-bold font-mono">{x.valore}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <ul className="space-y-1 text-[11px] text-slate-700 leading-relaxed">
+                    <li>
+                      <span className="font-bold">V.E.R.A.</span> — i debiti certi e in divenire: è
+                      l’esposizione che si confronta con le soglie di importo.
+                    </li>
+                    <li>
+                      <span className="font-bold">Denunce e flussi inviati</span> — il dovuto
+                      dell’anno precedente, che è la base del 30%.
+                    </li>
+                    <li>
+                      <span className="font-bold">Deleghe F24 e pagamenti</span> — da quanto il
+                      versamento è scoperto: è il requisito dei 90 giorni.
+                    </li>
+                  </ul>
                   <p className="text-[10px] text-slate-500 leading-relaxed">
-                    Identificativi dell’azienda presso l’ente, salvati in{' '}
-                    <span className="font-bold">Posizione Ente › Anagrafica Ente</span> — è lì che
-                    si caricano, prima del triage: senza, l’azienda si riconosce solo con la partita
-                    IVA.
+                    Il confronto non passa dalla matricola né da altri riferimenti con cui l’ente
+                    identifica l’azienda: si misura sui documenti caricati, e l’unica anagrafica che
+                    serve è quella camerale (denominazione e partita IVA).
                   </p>
                 </div>
 
@@ -2599,7 +2591,12 @@ export function VerificaSaluteAzienda({
               verifica riaperta non esistono più: offrirlo lì produrrebbe un
               foglio con i valori dei fogli INPS mancanti, indistinguibile da
               un triage senza documenti. */}
-          {!ripresa && (
+          {/* Il pulsante non compare e sparisce: prima dipendeva dal solo
+              `ripresa`, che nasce `null` e si popola quando la riapertura
+              finisce — per un istante la videata mostrava un comando che poi
+              toglieva. La condizione ora guarda la richiesta (l'URL) e il
+              caricamento, che sono stabili dall'inizio. */}
+          {!ripresa && !aziendaDaRiprendere && !inCorso && (
             <div className="flex justify-end">
               <button
                 type="button"
@@ -3110,7 +3107,8 @@ export function VerificaSaluteAzienda({
               <p className="text-[11px] text-slate-500 leading-relaxed">
                 Procedendo, l&apos;azienda entra fra quelle in lavorazione e viene pre-compilata la{' '}
                 <span className="font-bold">check list</span> — un minuto circa. La troverai già
-                pronta nella scheda.
+                pronta nella scheda. I bilanci <span className="font-bold">XBRL</span> si chiedono
+                dopo, nell’analisi di bilancio: qui non sono un requisito.
               </p>
             ) : (
               <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -3119,7 +3117,10 @@ export function VerificaSaluteAzienda({
                 parametro dell&apos;ente (matricola, posizione…) perché da lì in poi l&apos;azienda
                 si riconosce con i tuoi riferimenti interni. Al salvataggio parte da sola la prima
                 elaborazione dello <span className="font-bold">screening</span> con la visura
-                caricata qui, che resta conservata.
+                caricata qui, che resta conservata. I bilanci{' '}
+                <span className="font-bold">XBRL</span> si chiedono dopo, nell’analisi di bilancio:
+                in questa fase l’unico documento esterno è la visura, e la sua assenza di bilanci
+                non è un allarme.
               </p>
             )}
             {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}

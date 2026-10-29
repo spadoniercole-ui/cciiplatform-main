@@ -36,7 +36,17 @@ const num = (v: unknown): number | null =>
 
 export async function ottieniAttenzioneScreeningAction(
   nomeSchema: string,
-  aziendaId: number
+  aziendaId: number,
+  /**
+   * `senzaBilancio`: il BILANCIO non è materia di questa fase.
+   *
+   * È il triage a chiederlo: finché l'ente non ha deciso di procedere, i
+   * bilanci non sono stati richiesti, e la loro assenza non può diventare un
+   * allarme né una lacuna di perimetro. In quel caso non si legge nemmeno la
+   * tabella dello storico XBRL: un dato che non entra nel giudizio non si
+   * legge, così non può rientrare da un'altra strada.
+   */
+  opzioni?: { senzaBilancio?: boolean }
 ): Promise<RisultatoAttenzione> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
@@ -139,14 +149,17 @@ export async function ottieniAttenzioneScreeningAction(
     // significa "dato non disponibile" — che per l'indicatore è
     // un'informazione legittima — non un errore che debba far fallire
     // l'intero calcolo e sparire il semaforo dalla pagina.
-    const xbrl = await pool
-      .query(
-        `SELECT dati_finanziari, indici, altri_indici
+    const senzaBilancio = opzioni?.senzaBilancio === true;
+    const xbrl = senzaBilancio
+      ? { rows: [] as Record<string, unknown>[] }
+      : await pool
+          .query(
+            `SELECT dati_finanziari, indici, altri_indici
            FROM "${nomeSchema}".xbrl_storico_azienda WHERE azienda_id = $1
           ORDER BY anno_bilancio DESC NULLS LAST LIMIT 1`,
-        [aziendaId]
-      )
-      .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+            [aziendaId]
+          )
+          .catch(() => ({ rows: [] as Record<string, unknown>[] }));
     const xbrlPresente = xbrl.rows.length > 0;
     let patrimonioNetto: number | null = null;
     let indiciViolati: number | null = null;
@@ -183,6 +196,7 @@ export async function ottieniAttenzioneScreeningAction(
       ),
       ritardoOltre90Giorni: dati.ritardoOltre90Giorni,
       periodiInRitardo: num(a.periodi_in_ritardo),
+      senzaBilancio,
     });
 
     // Il motivo preciso al posto di quello generico: "manca l'esposizione" e

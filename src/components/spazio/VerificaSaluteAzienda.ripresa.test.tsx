@@ -459,7 +459,7 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     expect(dichiarazione.textContent).toContain('Agente della Riscossione');
   });
 
-  it('le soglie si aprono in una finestra, con gli identificativi salvati per l’azienda', async () => {
+  it('le soglie si aprono in una finestra, che dice da dove vengono i numeri', async () => {
     render(
       <VerificaSaluteAzienda
         nomeSchema={SCHEMA}
@@ -474,16 +474,18 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     apri.click();
 
     const finestra = await screen.findByRole('dialog');
-    // Gli identificativi sono quelli salvati (Anagrafica Ente), non valori
-    // rimasti nella videata: matricola, codice CSC e ID ente.
-    expect(within(finestra).getByText(/Riconosciuta dall.ente come/i)).toBeTruthy();
-    await waitFor(() => expect(within(finestra).getByText('Matricola INPS')).toBeTruthy());
-    expect(within(finestra).getByText('0912345678')).toBeTruthy();
-    expect(within(finestra).getByText('Codice CSC')).toBeTruthy();
-    expect(within(finestra).getByText('CSC-01')).toBeTruthy();
-    expect(within(finestra).getByText('ENTE-77')).toBeTruthy();
-    // Un campo disattivato non compare, anche se avesse un valore.
-    expect(within(finestra).queryByText('Campo disattivato')).toBeNull(); // Si chiude: la finestra è una lettura, non un passaggio obbligato.
+    // Il confronto si misura sui documenti caricati — il V.E.R.A. per i debiti
+    // certi e in divenire, i flussi inviati per il dovuto dell'anno
+    // precedente, le deleghe F24 per il ritardo di versamento. I riferimenti
+    // con cui l'ente identifica l'azienda (matricola, codici CSC) NON entrano
+    // nel calcolo: mostrarli qui faceva credere che senza quelli il confronto
+    // non si potesse fare.
+    expect(within(finestra).getByText(/Da dove vengono i numeri/i)).toBeTruthy();
+    expect(within(finestra).getAllByText(/V\.E\.R\.A\./).length).toBeGreaterThan(0);
+    expect(within(finestra).getByText(/Denunce e flussi inviati/i)).toBeTruthy();
+    expect(within(finestra).getByText(/Deleghe F24 e pagamenti/i)).toBeTruthy();
+    expect(within(finestra).queryByText(/Matricola INPS/)).toBeNull();
+    // Si chiude: la finestra è una lettura, non un passaggio obbligato.
     within(finestra)
       .getAllByRole('button', { name: /^Chiudi$/ })
       .at(-1)!

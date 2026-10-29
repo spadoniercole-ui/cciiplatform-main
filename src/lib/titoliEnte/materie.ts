@@ -148,28 +148,48 @@ export function materiaSuggeritaPerDescrizione(
   materie: { id: number; nome: string }[]
 ): number | null {
   const d = descrizione.toLowerCase();
-  const regole: [RegExp, RegExp][] = [
+  //
+  // DALLA DESCRIZIONE PIÙ SPECIFICA ALLA PIÙ GENERICA, e con l'esclusione
+  // esplicita delle materie che portano un titolo più preciso.
+  //
+  // L'ordine non è cosmetico: «Flusso di regolarizzazione» contiene «flusso»,
+  // e la regola generica dei flussi — che veniva prima — trovava la prima
+  // materia con «flussi» nel nome, cioè i Flussi Uniemens. La posizione finiva
+  // così all'ufficio sbagliato, e si spostava soltanto scegliendo a mano la
+  // materia sulla voce. Una descrizione che dice «regolarizzazione» o
+  // «variazioni» ha una materia propria e non va ricondotta al flusso generico:
+  // la regola larga resta per ciò che non ha un titolo più preciso.
+  const regole: [RegExp, RegExp, RegExp?][] = [
     [/rettifica/, /rettific/],
     [/dilazion/, /dilazion/],
     [/verbale|vigilanza|ispettiv|accertamento/, /verbal|ispettiv|vigilanz|accertament/],
     [/diffida/, /diffid/],
-    [/denuncia|uniemens|dm ?10|flusso|insolut/, /denunc|uniemens|flussi|dichiarativ/],
-    [/regolarizzazion/, /regolarizzazion/],
+    // La regolarizzazione dei flussi e le variazioni dei flussi: la loro
+    // materia è quella, non quella dei flussi Uniemens.
+    [/regolarizzazion/, /regolarizzazion|variazion|\bvig\b/],
+    [/variazion|\bvig\b/, /variazion|\bvig\b/],
+    [
+      /denuncia|uniemens|dm ?10|flusso|insolut/,
+      /denunc|uniemens|flussi|dichiarativ/,
+      // Mai su una materia che porta già un titolo proprio.
+      /variazion|rettific|regolarizzazion|verbal|ispettiv/,
+    ],
     [/sanzion/, /sanzion/],
     [/compensazion|f24/, /compensazion|f24/],
     [/anf|prestazion/, /prestazion|anf/],
     [/sentenza|fallimento|giudicato/, /sentenz|giudizial|fallimen|accertamenti giudizial/],
-    [/variazion|vig/, /variazion|vig/],
     [
       /agente della riscossione|cartell|avvis[oi] di addebito|\badr\b/,
       /riscossion|cartell|addebit|ruol/,
     ],
   ];
-  for (const [rxDescr, rxMateria] of regole) {
-    if (rxDescr.test(d)) {
-      const m = materie.find((x) => rxMateria.test(x.nome.toLowerCase()));
-      if (m) return m.id;
-    }
+  for (const [rxDescr, rxMateria, rxEscludi] of regole) {
+    if (!rxDescr.test(d)) continue;
+    const m = materie.find((x) => {
+      const nome = x.nome.toLowerCase();
+      return rxMateria.test(nome) && !(rxEscludi?.test(nome) ?? false);
+    });
+    if (m) return m.id;
   }
   return null;
 }

@@ -51,6 +51,36 @@ describe('materie dell’ente', () => {
 });
 
 //
+// LA DESCRIZIONE PIÙ SPECIFICA VINCE SU «FLUSSO».
+//
+// «Flusso di regolarizzazione» contiene «flusso», e la regola generica dei
+// flussi trovava la prima materia con «flussi» nel nome — i Flussi Uniemens.
+// La posizione finiva all’ufficio sbagliato, e si spostava soltanto scegliendo
+// a mano la materia sulla voce: una mappatura che «si sistema» solo con un
+// intervento manuale è un difetto, non una configurazione.
+//
+describe('flussi: una materia con un titolo proprio non si prende per «flusso»', () => {
+  const MATERIE_FLUSSI = [
+    { id: 1, nome: 'Flussi Uniemens' },
+    { id: 2, nome: 'Note di rettifica' },
+    { id: 3, nome: 'Variazioni flussi (VIG)' },
+    { id: 4, nome: 'Verbali ispettivi' },
+  ];
+
+  it('la regolarizzazione dei flussi va alle variazioni, non ai flussi Uniemens', () => {
+    expect(materiaSuggeritaPerDescrizione('Flusso di regolarizzazione', MATERIE_FLUSSI)).toBe(3);
+  });
+
+  it('le variazioni dei flussi vanno alla loro materia, non a quella generica', () => {
+    expect(materiaSuggeritaPerDescrizione('VARIAZIONI FLUSSI (VIG)', MATERIE_FLUSSI)).toBe(3);
+  });
+
+  it('un flusso senza titolo proprio resta ai flussi Uniemens', () => {
+    expect(materiaSuggeritaPerDescrizione('FLUSSO UNIEMENS NON TRASMESSO', MATERIE_FLUSSI)).toBe(1);
+  });
+});
+
+//
 // LA CONFERMA NON È DEFINITIVA (0.139.10).
 //
 // Una materia confermata copre i codici che vi cadono, e il loro riscontro è il
