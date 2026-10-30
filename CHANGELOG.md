@@ -1,3 +1,28 @@
+## 0.149.0 — 2026-10-30
+
+**La vista dei contributi si filtra.** Quattro pastiglie sopra la tabella — tutte, in crescita, con
+ritardo oltre 90 giorni, e le due cose insieme — con il numero di aziende accanto a ciascuna. Il
+filtro sta nell'URL, non nello stato del browser: il link si manda a un collega e ricaricare la
+pagina non riporta all'elenco intero. Le due condizioni restano separate perché sono cose diverse;
+l'ultima pastiglia le mette insieme per chi vuole l'elenco corto. Anche l'Excel esporta le righe
+mostrate, non quelle nascoste.
+
+**Il periodo di competenza si legge anche quando è una data.** Nei file INPS la colonna del periodo
+spesso non è testo ma una vera cella di data: letta come stringa diventava «Mon Sep 01 2024…», non
+somigliava a nessuna delle forme attese e la riga spariva senza un avviso. L'Elenco denunce
+risultava così senza denunce, e il triage scriveva «nessuna denuncia presente nel file per
+quell'anno»: un'accusa all'azienda al posto di un errore di lettura. Ora una sola funzione
+riconosce date, seriali di Excel, `09/2024`, `2024/09`, `AAAAMM` e il mese a parole, e restituisce
+sempre la stessa coppia anno / mese. Vale per denunce, deleghe e inadempienze, compresa la fine del
+periodo che serve all'anzianità della partita.
+
+**Se il file non si legge, lo dice.** Intestazioni riconosciute e zero periodi letti non sono più
+un'azienda che non dichiara: è un file che questa lettura non ha capito. La nota del triage lo
+dichiara con il numero di righe scartate, e la serie resta senza il lato mancante invece di
+ereditare un elenco di «denunce non presentate» calcolato sul vuoto. Per la stessa ragione la
+colonna «Fonte» non scrive più «DM10 / inadempienze» quando uno solo dei due file ha dato un anno:
+dichiara il lato che c'è.
+
 ## 0.148.0 — 2026-10-30
 
 **La vista d'insieme dei contributi si porta via in Excel.** La tabella delle aziende con il

@@ -12,6 +12,7 @@
 import { leggiFoglioAoa } from '@/lib/debitiEnte/tracciatoExcel';
 import type { RigaDenuncia, RigaDelega, RigaInadempienza } from './analisi';
 import { leggiImportoItaliano } from '@/lib/debitiTriage/mappatura';
+import { periodoCompetenza, testoPeriodo } from './periodi';
 
 function normalizza(v: unknown): string {
   return String(v ?? '')
@@ -66,6 +67,20 @@ export interface EsitoLettura<T> {
   righe: T[];
   /** Colonne attese e non trovate: il file non è quello giusto. */
   colonneMancanti?: string[];
+  /**
+   * Righe che portavano qualcosa ma non un periodo interpretabile.
+   *
+   * Serve a distinguere due cose che sembrano uguali e non lo sono: un file
+   * senza denunce (nessuna riga) e un file le cui righe non si sono capite.
+   * Con zero righe lette il conteggio dei «periodi mancanti» accuso l'azienda
+   * di non aver presentato niente, che è falso.
+   */
+  righeNonInterpretate?: number;
+}
+
+/** Una riga senza nulla dentro: non è un dato illeggibile, è assenza. */
+function vuota(riga: readonly unknown[]): boolean {
+  return riga.every((c) => c === null || c === undefined || String(c).trim() === '');
 }
 
 // VARIANTI DELLO STESSO TRACCIATO.
@@ -105,18 +120,25 @@ export async function leggiElencoDenunce(file: File): Promise<EsitoLettura<RigaD
 
   const [colPeriodo, colData, colSaldo] = colonne;
   const righe: RigaDenuncia[] = [];
+  let nonInterpretate = 0;
   for (let r = t.riga + 1; r < aoa.length; r++) {
     const riga = aoa[r] ?? [];
-    const periodo = String(riga[t.indici[colPeriodo]] ?? '').trim();
-    // Entrambi i versi: MM/AAAA dal Cassetto, AAAA/MM da INPS-CPC.
-    if (!/^\d{1,2}\/\d{4}$/.test(periodo) && !/^\d{4}\/\d{1,2}$/.test(periodo)) continue;
+    // Il periodo arriva come testo («09/2024», «2024/09») ma nei fogli veri
+    // è spesso una cella di DATA: con `cellDates` è un oggetto Date, e
+    // leggerlo come stringa lo scartava in silenzio — il file sembrava senza
+    // denunce. `periodoCompetenza` riconosce tutte le forme.
+    const periodo = periodoCompetenza(riga[t.indici[colPeriodo]]);
+    if (!periodo) {
+      if (!vuota(riga)) nonInterpretate++;
+      continue;
+    }
     righe.push({
-      periodo,
+      periodo: testoPeriodo(periodo, 'MM/AAAA'),
       dataPresentazione: data(riga[t.indici[colData]]),
       saldo: numero(riga[t.indici[colSaldo]]),
     });
   }
-  return { righe };
+  return nonInterpretate > 0 ? { righe, righeNonInterpretate: nonInterpretate } : { righe };
 }
 
 /**
@@ -153,12 +175,16 @@ export async function leggiElencoDeleghe(file: File): Promise<EsitoLettura<RigaD
   const idxStato = celle.findIndex((x) => x.startsWith('stato'));
 
   const righe: RigaDelega[] = [];
+  let nonInterpretate = 0;
   for (let r = t.riga + 1; r < aoa.length; r++) {
     const riga = aoa[r] ?? [];
-    const periodo = String(riga[t.indici['Periodo comp.']] ?? '').trim();
-    if (!/^\d{1,2}\/\d{4}$/.test(periodo)) continue;
+    const periodo = periodoCompetenza(riga[t.indici['Periodo comp.']]);
+    if (!periodo) {
+      if (!vuota(riga)) nonInterpretate++;
+      continue;
+    }
     righe.push({
-      periodo,
+      periodo: testoPeriodo(periodo, 'MM/AAAA'),
       dataVersamento: data(riga[t.indici['Data versamento']]),
       importo: numero(riga[t.indici['Importo']]),
       codiceTributo: String(riga[t.indici['Codice tributo']] ?? '').trim(),
@@ -166,7 +192,7 @@ export async function leggiElencoDeleghe(file: File): Promise<EsitoLettura<RigaD
       stato: idxStato >= 0 ? String(riga[idxStato] ?? '').trim() : null,
     });
   }
-  return { righe };
+  return nonInterpretate > 0 ? { righe, righeNonInterpretate: nonInterpretate } : { righe };
 }
 
 const COL_INADEMPIENZE = ['Inizio Periodo', 'Importo Addebitato', 'Importo Accreditato'];
@@ -181,19 +207,26 @@ export async function leggiListaInadempienze(file: File): Promise<EsitoLettura<R
   const idxFine = (aoa[t.riga] ?? []).map(normalizza).findIndex((x) => x.startsWith('fineperiodo'));
 
   const righe: RigaInadempienza[] = [];
+  let nonInterpretate = 0;
   for (let r = t.riga + 1; r < aoa.length; r++) {
     const riga = aoa[r] ?? [];
-    const periodo = String(riga[t.indici['Inizio Periodo']] ?? '').trim();
-    if (!/^\d{4}\/\d{1,2}$/.test(periodo)) continue;
+    const inizio = periodoCompetenza(riga[t.indici['Inizio Periodo']]);
+    if (!inizio) {
+      if (!vuota(riga)) nonInterpretate++;
+      continue;
+    }
+    // Anche la fine può arrivare come data: le serve la stessa lettura, o
+    // l'anzianità della partita resterebbe senza periodo.
+    const fine = idxFine >= 0 ? periodoCompetenza(riga[idxFine]) : null;
     righe.push({
-      inizioPeriodo: periodo,
+      inizioPeriodo: testoPeriodo(inizio, 'AAAA/MM'),
       importoAddebitato: numero(riga[t.indici['Importo Addebitato']]),
       importoAccreditato: numero(riga[t.indici['Importo Accreditato']]),
       fase: idxFase >= 0 ? String(riga[idxFase] ?? '').trim() : null,
-      finePeriodo: idxFine >= 0 ? String(riga[idxFine] ?? '').trim() || null : null,
+      finePeriodo: fine ? testoPeriodo(fine, 'AAAA/MM') : null,
     });
   }
-  return { righe };
+  return nonInterpretate > 0 ? { righe, righeNonInterpretate: nonInterpretate } : { righe };
 }
 
 // ---------------------------------------------------------------------------

@@ -904,9 +904,26 @@ export function VerificaSaluteAzienda({
         const r = await leggiElencoDenunce(fileDenunce);
         if (r.colonneMancanti) {
           note.push(`Elenco denunce non riconosciuto: mancano ${r.colonneMancanti.join(', ')}.`);
+        } else if (r.righe.length === 0) {
+          // Intestazioni giuste, nessun periodo letto: NON è un'azienda che
+          // non ha presentato denunce. Con zero righe l'analisi elencherebbe
+          // come «mancanti» tutti i mesi della finestra — ventidue denunce
+          // mai presentate, inventate da un file che non si è letto.
+          note.push(
+            'Elenco denunce: intestazioni riconosciute, ma nessun periodo di competenza leggibile' +
+              (r.righeNonInterpretate
+                ? ` (${r.righeNonInterpretate} righe con un periodo non interpretabile)`
+                : ' (il foglio non contiene righe)') +
+              '. I contributi dovuti non si ricavano da questo file: il rapporto resta senza denominatore.'
+          );
         } else {
           righeDenunce = r.righe;
           denunceAnalizzate = true;
+          if (r.righeNonInterpretate) {
+            note.push(
+              `Elenco denunce: ${r.righeNonInterpretate} righe con un periodo non interpretabile sono state escluse.`
+            );
+          }
           const a = analizzaDenunce(r.righe, riferimento, annoPrec);
           dovutoAnnoPrec = a.dovutoPerAnno[annoPrec] ?? null;
           anniDovuti = a.dovutoPerAnno;
@@ -935,6 +952,14 @@ export function VerificaSaluteAzienda({
           note.push(
             `Lista Inadempienze non riconosciuta: mancano ${r.colonneMancanti.join(', ')}.`
           );
+        } else if (r.righe.length === 0) {
+          note.push(
+            'Lista Inadempienze: intestazioni riconosciute, ma nessun periodo di competenza leggibile' +
+              (r.righeNonInterpretate
+                ? ` (${r.righeNonInterpretate} righe con un periodo non interpretabile)`
+                : ' (il foglio non contiene righe)') +
+              '. Il debito scaduto non si ricava da questo file.'
+          );
         } else {
           // Le partite iscritte a ruolo escono dalla soglia INPS SEMPRE, non
           // solo quando c'è il file dei ruoli: consegnate all'Agente della
@@ -944,6 +969,11 @@ export function VerificaSaluteAzienda({
           // senza quel file restavano dentro la lettera a).
           const b = analizzaInadempienze(r.righe, { escludiIscritteARuolo: true });
           anniScaduti = b.nettoPerAnno;
+          if (r.righeNonInterpretate) {
+            note.push(
+              `Lista Inadempienze: ${r.righeNonInterpretate} righe con un periodo non interpretabile sono state escluse.`
+            );
+          }
           // Della partite rimaste all'Istituto, contano per la lettera a)
           // SOLO quelle scadute da oltre 90 giorni: importo e ritardo devono
           // riguardare lo stesso debito (regola di Ercole). Il ritardo si
@@ -1017,6 +1047,10 @@ export function VerificaSaluteAzienda({
         const r = await leggiElencoDeleghe(fileDeleghe);
         if (r.colonneMancanti) {
           note.push(`Elenco Deleghe non riconosciuto: mancano ${r.colonneMancanti.join(', ')}.`);
+        } else if (r.righe.length === 0) {
+          note.push(
+            'Elenco Deleghe: intestazioni riconosciute, ma nessun periodo di competenza leggibile. Il ritardo oltre 90 giorni non si misura da questo file.'
+          );
         } else {
           const c = analizzaVersamenti(righeDenunce, r.righe, riferimento);
           periodiRitardo = c.oltre90Giorni.length + c.maiVersati.length;

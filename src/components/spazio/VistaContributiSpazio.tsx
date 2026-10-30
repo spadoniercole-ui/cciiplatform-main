@@ -3,6 +3,8 @@ import { AlertTriangle, TrendingUp } from 'lucide-react';
 import { EsportaContributiExcel } from '@/components/spazio/EsportaContributiExcel';
 import {
   etichettaFonte,
+  FILTRI_VISTA,
+  type FiltroVista,
   type RiepilogoVista,
   type RigaVistaContributi,
 } from '@/lib/soglie25novies/vistaSpazio';
@@ -23,6 +25,12 @@ interface Props {
   /** Aziende senza serie conservata: il ricalcolo non le ha ancora toccate. */
   senzaSerie: number;
   errore: string | null;
+  /** Le righe qui sopra sono già filtrate: il filtro vive nell'URL. */
+  filtro: FiltroVista;
+  /** Quante aziende restano con ciascun filtro: i numeri accanto alle pastiglie. */
+  conteggi: Record<FiltroVista, number>;
+  /** Le aziende con una serie, prima del filtro. */
+  totaleAziende: number;
 }
 
 const euro = (v: number | null) =>
@@ -38,7 +46,16 @@ const punti = (v: number | null) =>
 
 const fonte = (r: RigaVistaContributi) => etichettaFonte(r);
 
-export function VistaContributiSpazio({ codice, righe, riepilogo, senzaSerie, errore }: Props) {
+export function VistaContributiSpazio({
+  codice,
+  righe,
+  riepilogo,
+  senzaSerie,
+  errore,
+  filtro,
+  conteggi,
+  totaleAziende,
+}: Props) {
   // Gli anni di tutte le serie: una colonna per esercizio, anche se qualche
   // azienda non lo copre. La cella vuota dice che quel rapporto non si
   // calcola, ed è un'informazione.
@@ -121,11 +138,48 @@ export function VistaContributiSpazio({ codice, righe, riepilogo, senzaSerie, er
         </div>
       )}
 
+      {(totaleAziende > 0 || errore) && (
+        <div className="flex items-center gap-2 flex-wrap text-[11px]">
+          <span className="text-slate-500 font-semibold">Mostra</span>
+          {FILTRI_VISTA.map((f) => {
+            const attivo = f.valore === filtro;
+            const href =
+              f.valore === 'tutte'
+                ? `/spazio/${codice}/contributi`
+                : `/spazio/${codice}/contributi?filtro=${f.valore}`;
+            return (
+              <Link
+                key={f.valore}
+                href={href}
+                aria-current={attivo ? 'true' : undefined}
+                className={`px-2 py-1 rounded-full border ${
+                  attivo
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                }`}
+              >
+                {f.etichetta}{' '}
+                <span className={attivo ? 'text-slate-300' : 'text-slate-400'}>
+                  {conteggi[f.valore]}
+                </span>
+              </Link>
+            );
+          })}
+          {filtro !== 'tutte' && (
+            <span className="text-slate-400">
+              {righe.length} di {totaleAziende} aziende
+            </span>
+          )}
+        </div>
+      )}
+
       {righe.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl p-6 text-xs text-slate-500 leading-relaxed">
           {errore
             ? 'La tabella non si può costruire finché la lettura non riesce.'
-            : 'Nessuna azienda dello spazio ha ancora una serie dei contributi. Si popola caricando DM10 e Lista Inadempienze nel triage, oppure con il ricalcolo d’ufficio dalle posizioni e dai valori conservati (Parametri di Spazio › Soglie).'}
+            : totaleAziende > 0
+              ? `Nessuna delle ${totaleAziende} aziende con una serie rientra in questo filtro: togliendolo tornano tutte.`
+              : 'Nessuna azienda dello spazio ha ancora una serie dei contributi. Si popola caricando DM10 e Lista Inadempienze nel triage, oppure con il ricalcolo d’ufficio dalle posizioni e dai valori conservati (Parametri di Spazio › Soglie).'}
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl p-5">

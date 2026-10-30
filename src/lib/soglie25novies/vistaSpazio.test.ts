@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { riepilogoVistaContributi, vistaContributiSpazio } from './vistaSpazio';
+import {
+  etichettaFonte,
+  filtraVistaContributi,
+  filtroVistaDaParam,
+  riepilogoVistaContributi,
+  vistaContributiSpazio,
+} from './vistaSpazio';
 
 const azienda = (
   id: number,
@@ -140,5 +146,83 @@ describe('riepilogoVistaContributi', () => {
       azienda(1, 'SENZA MISURA', [{ anno: 2025, dovuti: 50_000, scaduti: 20_000 }]),
     ]);
     expect(riepilogoVistaContributi(righe).oltre90Totale).toBeNull();
+  });
+});
+
+describe('filtroVistaDaParam', () => {
+  it('accetta i filtri previsti e ricade su «tutte» per il resto', () => {
+    expect(filtroVistaDaParam('crescita')).toBe('crescita');
+    expect(filtroVistaDaParam(['ritardo', 'crescita'])).toBe('ritardo');
+    expect(filtroVistaDaParam('interessanti')).toBe('interessanti');
+    expect(filtroVistaDaParam('boh')).toBe('tutte');
+    expect(filtroVistaDaParam(undefined)).toBe('tutte');
+  });
+});
+
+describe('filtraVistaContributi', () => {
+  // Tre aziende, una per caso: chi cresce, chi ha solo il ritardo misurato,
+  // chi non ha né l'uno né l'altro.
+  const righe = vistaContributiSpazio([
+    azienda(1, 'CRESCE', [
+      { anno: 2023, dovuti: 50_000, scaduti: 10_000, oltre90: 0 },
+      { anno: 2025, dovuti: 50_000, scaduti: 30_000, oltre90: 0 },
+    ]),
+    azienda(2, 'RITARDO', [
+      { anno: 2023, dovuti: 50_000, scaduti: 20_000, oltre90: 18_000 },
+      { anno: 2025, dovuti: 50_000, scaduti: 10_000, oltre90: 9_000 },
+    ]),
+    azienda(3, 'NESSUNA DELLE DUE', [{ anno: 2025, dovuti: 50_000, scaduti: 20_000 }]),
+  ]);
+
+  it('«crescita» e «ritardo» non si sovrappongono', () => {
+    expect(filtraVistaContributi(righe, 'crescita').map((r) => r.ragioneSociale)).toEqual([
+      'CRESCE',
+    ]);
+    expect(filtraVistaContributi(righe, 'ritardo').map((r) => r.ragioneSociale)).toEqual([
+      'RITARDO',
+    ]);
+  });
+
+  it('«interessanti» tiene la crescita O il ritardo, e scarta il resto', () => {
+    expect(filtraVistaContributi(righe, 'interessanti').map((r) => r.ragioneSociale)).toEqual([
+      'CRESCE',
+      'RITARDO',
+    ]);
+  });
+
+  it('il ritardo a zero o non misurato non entra nel filtro', () => {
+    // La terza azienda ha il rapporto calcolabile ma nessun ritardo misurato:
+    // «non lo so» non è «sì».
+    expect(filtraVistaContributi(righe, 'ritardo')).toHaveLength(1);
+    expect(filtraVistaContributi(righe, 'interessanti')).toHaveLength(2);
+  });
+
+  it('«tutte» conserva l’ordine della vista', () => {
+    expect(filtraVistaContributi(righe, 'tutte')).toEqual(righe);
+  });
+});
+
+describe('etichettaFonte', () => {
+  const riga = (anni: Parameters<typeof vistaContributiSpazio>[0][0]['anni']) =>
+    vistaContributiSpazio([
+      { aziendaId: 1, ragioneSociale: 'X', anni, origine: 'file', ricostruitaIl: null },
+    ])[0];
+
+  it('dichiara entrambi i file solo se entrambi hanno dato un anno', () => {
+    expect(etichettaFonte(riga([{ anno: 2024, dovuti: 50_000, scaduti: 20_000 }]))).toBe(
+      'DM10 / inadempienze'
+    );
+  });
+
+  it('con un solo lato non nomina l’altro file', () => {
+    expect(etichettaFonte(riga([{ anno: 2024, dovuti: null, scaduti: 20_000 }]))).toBe(
+      'lista inadempienze'
+    );
+    expect(etichettaFonte(riga([{ anno: 2024, dovuti: 50_000, scaduti: null }]))).toBe(
+      'DM10 (denunce)'
+    );
+    expect(etichettaFonte(riga([{ anno: 2024, dovuti: null, scaduti: null }]))).toBe(
+      'file senza importi'
+    );
   });
 });

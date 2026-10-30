@@ -155,20 +155,88 @@ export function riepilogoVistaContributi(righe: readonly RigaVistaContributi[]):
 }
 
 /**
+ * I filtri della vista: quali aziende restano in tabella.
+ *
+ * «In crescita» e «con ritardo oltre 90 giorni» sono le due domande che la
+ * pagina serve a fare — dove guardare, e chi ha già il requisito temporale —
+ * e restano separate: sono cose diverse, e sommarle in un verdetto unico è
+ * proprio ciò che la vista evita di fare. L'ultimo filtro le mette insieme
+ * per chi vuole l'elenco corto.
+ */
+export type FiltroVista = 'tutte' | 'crescita' | 'ritardo' | 'interessanti';
+
+/** I filtri nell'ordine in cui compaiono, con l'etichetta della pagina. */
+export const FILTRI_VISTA: readonly { valore: FiltroVista; etichetta: string }[] = [
+  { valore: 'tutte', etichetta: 'Tutte' },
+  { valore: 'crescita', etichetta: 'In crescita' },
+  { valore: 'ritardo', etichetta: 'Con ritardo oltre 90 giorni' },
+  { valore: 'interessanti', etichetta: 'In crescita o con ritardo' },
+];
+
+/**
+ * Il filtro scritto nell'URL, se è uno di quelli previsti.
+ *
+ * `undefined` e i valori sconosciuti ricadono su «tutte»: un parametro
+ * sbagliato non deve svuotare la tabella, e un link vecchio non deve rompere
+ * la pagina.
+ */
+export function filtroVistaDaParam(valore: string | string[] | null | undefined): FiltroVista {
+  const v = Array.isArray(valore) ? valore[0] : valore;
+  return FILTRI_VISTA.some((f) => f.valore === v) ? (v as FiltroVista) : 'tutte';
+}
+
+/**
+ * L'azienda che merita un secondo sguardo: cresce, oppure ha un esercizio in
+ * cui il ritardo oltre 90 giorni è misurato e maggiore di zero.
+ *
+ * Il ritardo non misurato non entra: «non lo so» non è «sì».
+ */
+export function rigaInteressante(r: RigaVistaContributi): boolean {
+  return r.inCrescita || r.anniConRitardo.length > 0;
+}
+
+/** Le righe che restano con il filtro scelto, nello stesso ordine. */
+export function filtraVistaContributi(
+  righe: readonly RigaVistaContributi[],
+  filtro: FiltroVista
+): RigaVistaContributi[] {
+  switch (filtro) {
+    case 'crescita':
+      return righe.filter((r) => r.inCrescita);
+    case 'ritardo':
+      return righe.filter((r) => r.anniConRitardo.length > 0);
+    case 'interessanti':
+      return righe.filter(rigaInteressante);
+    default:
+      return [...righe];
+  }
+}
+
+/**
  * La provenienza della serie, in una riga: la stessa nella tabella e nel
  * foglio Excel, così i due non possono divergere.
  *
  * Un'origine «file» non porta la data di ricostruzione: i file sono la fonte,
  * non una ricostruzione da datare.
  */
-export function etichettaFonte(r: Pick<RigaVistaContributi, 'origine' | 'ricostruitaIl'>): string {
-  const base =
-    r.origine === 'file'
-      ? 'DM10 / inadempienze'
-      : r.origine === 'posizioni'
-        ? 'posizioni triage'
-        : 'valori conservati';
-  if (!r.ricostruitaIl || r.origine === 'file') return base;
-  const [anno, mese, giorno] = r.ricostruitaIl.split('-');
-  return `${base} · ${giorno}/${mese}/${anno}`;
+export function etichettaFonte(
+  r: Pick<RigaVistaContributi, 'origine' | 'ricostruitaIl' | 'anni'>
+): string {
+  if (r.origine !== 'file') {
+    const base = r.origine === 'posizioni' ? 'posizioni triage' : 'valori conservati';
+    if (!r.ricostruitaIl) return base;
+    const [anno, mese, giorno] = r.ricostruitaIl.split('-');
+    return `${base} · ${giorno}/${mese}/${anno}`;
+  }
+
+  // «DM10 / inadempienze» è vero solo se ENTRAMBI i file hanno contribuito.
+  // Con un solo lato la serie si dichiara per quello che è: scrivere anche
+  // l'altro farebbe credere letto un file che non ha dato nemmeno un anno —
+  // che è esattamente ciò che si vede quando un periodo non si legge.
+  const haDovuti = r.anni.some((a) => a.dovuti !== null);
+  const haScaduti = r.anni.some((a) => a.scaduti !== null);
+  if (haDovuti && haScaduti) return 'DM10 / inadempienze';
+  if (haDovuti) return 'DM10 (denunce)';
+  if (haScaduti) return 'lista inadempienze';
+  return 'file senza importi';
 }
