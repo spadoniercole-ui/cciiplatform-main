@@ -101,11 +101,11 @@ export default async function AziendaLayout({
   // la sua assenza la dichiara l'indicatore di attenzione, non un blocco che
   // impedisce di proseguire.
   const posizioneEnteCompleta = anagraficaEnteCompilata;
-  // "Analisi Bilancio" verde: le due sotto-sezioni (Configurazione XBRL e
-  // Indici) sono un sottoinsieme dei parametri di spazio — non c'è nulla di
-  // pesante da caricare qui. Basta che l'operatore le abbia aperte
-  // entrambe (presa visione registrata lato server). Resta verde anche se
-  // in futuro si carica un bilancio XBRL vero da uno Scenario (storico > 0).
+  // "Analisi Bilancio" verde: la parte XBRL (caricamento in Bilanci XBRL o
+  // configurazione delle tab) e gli Indici sono sotto-sezioni dello stesso
+  // passo. Basta che l'operatore le abbia aperte (presa visione registrata
+  // lato server), e resta verde in ogni caso con un bilancio in archivio —
+  // che è il segnale più forte, perché lo Screening lo legge da lì.
   const analisiBilancioCompleta =
     (xbrlRis?.storico?.length ?? 0) > 0 ||
     (!!statoAnalisiBilancio?.stato.xbrlConfigVista && !!statoAnalisiBilancio?.stato.indiciVisti);

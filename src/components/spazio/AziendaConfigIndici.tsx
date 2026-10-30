@@ -116,7 +116,7 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
         {perAnno.length === 0 ? (
           <p className="text-xs text-slate-500">
             Nessun bilancio XBRL caricato per questa azienda: i valori degli indici compariranno qui
-            al caricamento (Analisi Bilancio › Configurazione XBRL).
+            al caricamento (Analisi Bilancio › Bilanci XBRL).
           </p>
         ) : (
           <div className="overflow-x-auto">

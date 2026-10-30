@@ -2,7 +2,7 @@
 
 // Import XBRL dello Scenario — il caricamento di partenza avviene prima,
 // nello step Analisi Bilancio dell'azienda (dopo il triage, prima dello
-// Screening: `AziendaConfigXbrl`). Qui si aggiungono le annualità che
+// Screening: scheda "Bilanci XBRL", `AziendaBilanciXbrl`). Qui si aggiungono le annualità che
 // servono alla proposta, con i dati attualizzati. Mostra solo le tab e solo
 // gli indici configurati per l'azienda di questo scenario
 // (Aziende → [azienda] → Configurazione XBRL / Indici) — gli scenari sono

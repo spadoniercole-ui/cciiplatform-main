@@ -1,20 +1,27 @@
 import Link from 'next/link';
-import { FileSpreadsheet, TrendingUp } from 'lucide-react';
+import { FileSpreadsheet, FileUp, TrendingUp } from 'lucide-react';
 
-// Sotto-navigazione dello step "Analisi Bilancio": raggruppa Configurazione
-// XBRL e Indici sotto un'unica voce (come Posizione Ente ha le sue due
-// sotto-schede). Server component: solo link, nessuno stato client.
+// Sotto-navigazione dello step "Analisi Bilancio": raggruppa il caricamento
+// dei bilanci, la configurazione delle tab e gli indici sotto un'unica voce
+// (come Posizione Ente ha le sue sotto-schede). Server component: solo link,
+// nessuno stato client.
+//
+// "Bilanci XBRL" è una scheda a sé e non un riquadro dentro Configurazione:
+// il caricamento ammette più file in un colpo solo e ha un elenco di esiti
+// suo, che in mezzo ai checkbox delle tab non si leggeva.
 
 interface Props {
   base: string; // es. /spazio/CODICE/aziende/3
-  attivo: 'xbrl' | 'indici';
+  attivo: 'xbrl' | 'indici' | 'bilanci';
 }
 
 export function SottoNavAnalisiBilancio({ base, attivo }: Props) {
-  const voci: { id: 'xbrl' | 'indici'; label: string; icon: typeof FileSpreadsheet }[] = [
-    { id: 'indici', label: 'Indici', icon: TrendingUp },
-    { id: 'xbrl', label: 'Configurazione XBRL', icon: FileSpreadsheet },
-  ];
+  const voci: { id: 'xbrl' | 'indici' | 'bilanci'; label: string; icon: typeof FileSpreadsheet }[] =
+    [
+      { id: 'bilanci', label: 'Bilanci XBRL', icon: FileUp },
+      { id: 'xbrl', label: 'Configurazione XBRL', icon: FileSpreadsheet },
+      { id: 'indici', label: 'Indici', icon: TrendingUp },
+    ];
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">

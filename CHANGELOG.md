@@ -1,3 +1,17 @@
+## 0.143.8 — 2026-10-30
+
+**I bilanci XBRL hanno una scheda loro, e si caricano più file in un colpo.** In Analisi Bilancio
+il caricamento era finito dentro «Configurazione XBRL», mescolato ai checkbox delle tab: chi
+apriva il passo vedeva due sole schede, Indici e Configurazione, e non trovava il punto da cui si
+carica il bilancio. Ora le schede sono tre — **Bilanci XBRL**, Configurazione XBRL, Indici — e la
+prima è quella del caricamento: selezione multipla dal disco o trascinamento di più file (uno per
+annualità depositata), analisi in sequenza con l'avanzamento «file 2 di 3», un esito per file (un
+file difettoso non blocca gli altri) e l'elenco delle annualità in archivio. Il caricamento resta
+lo stesso motore di sempre — parsing, registrazione nel fascicolo con l'impronta, upsert per anno
+con il comparativo — e la scheda di configurazione ora rimanda qui invece di ospitare il
+riquadro. Aprire Bilanci XBRL vale come presa visione della parte XBRL del passo: nessuna
+migrazione, la colonna è la stessa.
+
 ## 0.143.7 — 2026-10-30
 
 **Il bilancio XBRL si carica dove serve, prima dello Screening.** Il percorso è triage → Analisi

@@ -2,11 +2,12 @@
 
 // Presa in carico dello step "Analisi Bilancio" a livello di azienda.
 //
-// Il passo diventa verde quando l'operatore ha aperto ENTRAMBE le
-// sotto-sezioni — Configurazione XBRL e Indici — che sono solo un
-// sottoinsieme dei parametri di spazio (nessun caricamento pesante qui: il
-// bilancio XBRL vero si carica nello Scenario). Registriamo la visita una
-// riga per azienda, due booleani. La visita è idempotente: se la sezione
+// Il passo diventa verde quando l'operatore ha aperto la sotto-sezione XBRL
+// (che sia il caricamento — Bilanci XBRL — o la configurazione delle tab) e
+// gli Indici, oppure quando un bilancio è già in archivio. Registriamo la
+// visita una riga per azienda, due booleani: le due schede XBRL condividono
+// la stessa colonna, quindi aggiungere "Bilanci XBRL" non ha richiesto una
+// migrazione dello schema. La visita è idempotente: se la sezione
 // era già segnata, non cambia nulla e non forziamo un refresh inutile del
 // semaforo (per quello serve il flag `cambiato`).
 

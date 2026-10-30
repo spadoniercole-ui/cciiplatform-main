@@ -19,10 +19,16 @@ export default async function AziendaXbrlPage({
     redirect(`/spazio/${codice}/aziende`);
   }
 
+  const base = `/spazio/${codice}/aziende/${aziendaId}`;
+
   return (
     <div className="space-y-4">
-      <SottoNavAnalisiBilancio base={`/spazio/${codice}/aziende/${aziendaId}`} attivo="xbrl" />
-      <AziendaConfigXbrl nomeSchema={contesto.nomeSchema} aziendaId={Number(aziendaId)} />
+      <SottoNavAnalisiBilancio base={base} attivo="xbrl" />
+      <AziendaConfigXbrl
+        nomeSchema={contesto.nomeSchema}
+        aziendaId={Number(aziendaId)}
+        hrefBilanci={`${base}/bilanci`}
+      />
     </div>
   );
 }
