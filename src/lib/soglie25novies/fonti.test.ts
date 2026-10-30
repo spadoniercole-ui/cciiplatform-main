@@ -16,4 +16,13 @@ describe('scegliValore', () => {
   it('uno zero scritto a mano è un valore, non un campo vuoto', () => {
     expect(scegliValore(null, 0, 41_993)).toEqual({ valore: 0, fonte: 'manuale' });
   });
+  it('senza posizioni né valore scritto vale quanto letto dai file INPS', () => {
+    expect(scegliValore(null, null, 41_993, 48_380)).toEqual({
+      valore: 48_380,
+      fonte: 'file',
+    });
+  });
+  it('i file INPS prevalgono sul V.E.R.A., che misura un’altra cosa', () => {
+    expect(scegliValore(null, null, 41_993, 16_756)?.fonte).toBe('file');
+  });
 });

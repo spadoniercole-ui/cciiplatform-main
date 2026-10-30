@@ -1,3 +1,18 @@
+## 0.144.0 — 2026-10-30
+
+**I contributi INPS non si digitano più: si leggono dai file e restano, anno per anno.** Il
+triage leggeva già il DM10 e la Lista Inadempienze e ne cavava il dovuto dell'anno precedente e
+lo scaduto di oggi: due numeri usati per la soglia e poi buttati via. Il resto della serie —
+gli altri anni, e soprattutto il rapporto fra i due lati — non restava da nessuna parte, così
+il rapporto dell'art. 25-novies, comma 1, lett. a) si poteva leggere solo nell'istante del
+triage. Ora i contributi si conservano (colonna `contributi_per_anno`, JSON, idempotente) con i
+dovuti dal saldo delle denunce e gli scaduti dalla lista inadempienze, aggregati per esercizio.
+La scheda Soglie riempie da sé i campi vuoti con quei valori e dichiara la fonte; la scheda
+Indici li mostra nelle stesse colonne degli indici — dovuti, scaduti, rapporto con la quota del
+30% — così si vede in quale esercizio il rapporto si è acceso. La quota oltre il 30% resta una
+misura e non un giudizio: la soglia richiede anche il ritardo di oltre 90 giorni e, con
+lavoratori, i 15.000 €, e le righe portano il nome dei file, non un semaforo.
+
 ## 0.143.9 — 2026-10-30
 
 **C5 non è più una cifra sola, e la soglia INPS si legge col suo denominatore.** L'indice C5

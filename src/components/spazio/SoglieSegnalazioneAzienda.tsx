@@ -76,7 +76,9 @@ function NotaValoreUsato({ usato, scritto }: { usato?: ValoreUsato; scritto: num
   const da =
     usato.fonte === 'triage'
       ? 'dalle posizioni caricate nel triage'
-      : 'dal V.E.R.A. caricato (partite contabilizzate e da contabilizzare)';
+      : usato.fonte === 'file'
+        ? 'dai file INPS caricati (DM10 per i dovuti, lista inadempienze per gli scaduti)'
+        : 'dal V.E.R.A. caricato (partite contabilizzate e da contabilizzare)';
   return (
     <p className="text-[10px] mt-1 leading-snug text-sky-800 bg-sky-50 border border-sky-100 rounded px-2 py-1">
       {scritto === null ? (
@@ -138,13 +140,17 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
   const [messaggio, setMessaggio] = useState<string | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
 
-  const valuta = useCallback(async () => {
+  // Restituisce le fonti usate: chi carica la scheda ne ha bisogno per
+  // riempire i campi vuoti con ciò che il calcolo adopera comunque.
+  const valuta = useCallback(async (): Promise<ValoriUsati> => {
     const r = await valutaSoglieAction(nomeSchema, aziendaId, tipoSpazio);
     if (r.success && r.esito) {
       setEsito(r.esito);
       setEnte(r.ente ?? null);
       setUsati(r.usati ?? {});
+      return r.usati ?? {};
     }
+    return {};
   }, [nomeSchema, aziendaId, tipoSpazio]);
 
   useEffect(() => {
@@ -158,7 +164,18 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
       } else {
         setErrore(r.error ?? 'Lettura non riuscita.');
       }
-      await valuta();
+      // I CAMPI VUOTI SI RIEMPIONO DA SOLI. Se il valore c'è già — letto
+      // dai file INPS o dalle posizioni del triage — scriverlo nel campo lo
+      // rende visibile e correggibile: un campo vuoto con una nota sotto
+      // sembra un dato mancante, mentre quel numero nei documenti c'è. Non
+      // si tocca ciò che è già scritto: la scrittura a mano resta sovrana.
+      const u = await valuta();
+      setValori((prev) => ({
+        ...prev,
+        contributiScaduti: prev.contributiScaduti ?? u.contributiScaduti?.valore ?? null,
+        contributiDovutiAnnoPrecedente:
+          prev.contributiDovutiAnnoPrecedente ?? u.contributiDovutiAnnoPrecedente?.valore ?? null,
+      }));
       setCaricamento(false);
     })();
   }, [nomeSchema, aziendaId, valuta]);

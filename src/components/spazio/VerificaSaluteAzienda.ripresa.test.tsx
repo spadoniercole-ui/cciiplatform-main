@@ -97,6 +97,7 @@ vi.mock('@/app/actions/consegneReparti', () => ({
 vi.mock('@/app/actions/soglie25novies', () => ({
   ottieniValoriSoglieAction: vi.fn(),
   salvaValoriSoglieParzialeAction: vi.fn(),
+  salvaContributiPerAnnoAction: vi.fn().mockResolvedValue({ success: true }),
   valutaSoglieAction: vi.fn(),
 }));
 

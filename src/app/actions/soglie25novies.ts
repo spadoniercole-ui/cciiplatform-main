@@ -13,7 +13,7 @@
 // a ogni apertura, cosi' non puo' divergere dai dati.
 
 import { pool } from '@/lib/db';
-import { assicuraTabelleParametriSpazio } from '@/db/provision';
+import { assicuraTabellaAziende, assicuraTabelleParametriSpazio } from '@/db/provision';
 import { ottieniParametriSoglieAction } from '@/app/actions/parametriSoglie';
 import {
   calcolaSoglie25Novies,
@@ -23,9 +23,10 @@ import {
   type FormaAER,
 } from '@/lib/soglie25novies/calcolo';
 import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
-import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
 import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 import type { ValoriUsati } from '@/lib/soglie25novies/fonti';
+import { contributiPerAnnoDaDb, type ContributiAnno } from '@/lib/soglie25novies/rapportoAnni';
 
 export interface ValoriSoglie {
   conLavoratoriSubordinati: boolean | null;
@@ -200,6 +201,61 @@ export async function salvaValoriSoglieAction(
   } catch (error: unknown) {
     console.error('[salvaValoriSoglieAction] Errore:', error);
     return { success: false, error: `Salvataggio non riuscito: ${(error as Error).message}` };
+  }
+}
+
+/**
+ * I contributi INPS letti dai file, conservati ANNO PER ANNO.
+ *
+ * Li scrive il triage appena ha finito di leggere DM10 e Lista Inadempienze:
+ * due numeri per esercizio, non un testo. Da qui li leggono la scheda Soglie
+ * (che così non chiede a mano un dato già nei documenti) e la scheda Indici
+ * (che mostra il rapporto scaduti / dovuti accanto agli indici dello stesso
+ * anno). Si riscrive tutta a ogni caricamento: è una fotografia, e una
+ * fotografia vecchia non deve convivere con una nuova.
+ */
+export async function salvaContributiPerAnnoAction(
+  nomeSchema: string,
+  aziendaId: number,
+  anni: ContributiAnno[]
+): Promise<{ success: boolean; salvati?: number; error?: string }> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabellaAziende(nomeSchema);
+    const puliti = anni
+      .filter((a) => Number.isFinite(a.anno))
+      .map((a) => ({ anno: a.anno, dovuti: a.dovuti, scaduti: a.scaduti }))
+      .sort((a, b) => a.anno - b.anno);
+    await pool.query(
+      `UPDATE "${nomeSchema}".aziende SET contributi_per_anno = $2::jsonb WHERE id = $1`,
+      [aziendaId, JSON.stringify(puliti)]
+    );
+    return { success: true, salvati: puliti.length };
+  } catch (error: unknown) {
+    console.error('[salvaContributiPerAnnoAction] Errore:', error);
+    return { success: false, error: `Salvataggio non riuscito: ${(error as Error).message}` };
+  }
+}
+
+/** I contributi per anno conservati per l'azienda (serie vuota se non ci sono). */
+export async function ottieniContributiPerAnnoAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<{ success: boolean; anni?: ContributiAnno[]; error?: string }> {
+  try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabellaAziende(nomeSchema);
+    const r = await pool.query(
+      `SELECT contributi_per_anno FROM "${nomeSchema}".aziende WHERE id = $1`,
+      [aziendaId]
+    );
+    if (r.rows.length === 0) return { success: false, error: 'Azienda non trovata.' };
+    return { success: true, anni: contributiPerAnnoDaDb(r.rows[0].contributi_per_anno) };
+  } catch (error: unknown) {
+    console.error('[ottieniContributiPerAnnoAction] Errore:', error);
+    return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
   }
 }
 

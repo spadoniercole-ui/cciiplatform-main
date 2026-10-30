@@ -140,9 +140,11 @@ import {
 import {
   ottieniValoriSoglieAction,
   salvaValoriSoglieParzialeAction,
+  salvaContributiPerAnnoAction,
   valutaSoglieAction,
 } from '@/app/actions/soglie25novies';
 import { riepilogaSoglieTriage } from '@/lib/soglie25novies/triage';
+import { unisciContributiPerAnno } from '@/lib/soglie25novies/rapportoAnni';
 import {
   baseInpsDaVera,
   GIORNI_RITARDO_SOGLIA_INPS,
@@ -871,6 +873,12 @@ export function VerificaSaluteAzienda({
       // Da qui vengono i numeri che prima si digitavano a mano, e il terzo
       // requisito dell'art. 25-novies che finora non era accertabile.
       let dovutoAnnoPrec: number | null = null;
+      // I contributi per anno, mentre i file si leggono: due mappe che
+      // diventano una serie sola al momento del salvataggio. Il dovuto del
+      // solo anno precedente basta alla soglia ma non al rapporto, che per
+      // dire da quando si è acceso ha bisogno di tutti gli anni coperti.
+      let anniDovuti: Record<number, number> = {};
+      let anniScaduti: Record<number, number> = {};
       let nonVersato: number | null = null;
       let creditiAffidatiNetti: number | null = null;
       // Il ritardo della lettera a) viene dalla Lista Inadempienze quando c'è:
@@ -897,6 +905,7 @@ export function VerificaSaluteAzienda({
           denunceAnalizzate = true;
           const a = analizzaDenunce(r.righe, riferimento, annoPrec);
           dovutoAnnoPrec = a.dovutoPerAnno[annoPrec] ?? null;
+          anniDovuti = a.dovutoPerAnno;
           if (a.periodiMancanti.length > 0) {
             mancanti = a.periodiMancanti.join(', ');
             note.push(
@@ -930,6 +939,7 @@ export function VerificaSaluteAzienda({
           // escludevano solo per evitare il doppio conteggio con i ruoli, e
           // senza quel file restavano dentro la lettera a).
           const b = analizzaInadempienze(r.righe, { escludiIscritteARuolo: true });
+          anniScaduti = b.nettoPerAnno;
           // Della partite rimaste all'Istituto, contano per la lettera a)
           // SOLO quelle scadute da oltre 90 giorni: importo e ritardo devono
           // riguardare lo stesso debito (regola di Ercole). Il ritardo si
@@ -1137,6 +1147,27 @@ export function VerificaSaluteAzienda({
         // mostra i numeri mentre il semaforo li dichiara mancanti. Va detto.
         if (!salv.success) {
           note.push(`Valori non salvati: ${salv.error ?? 'errore non riportato'}.`);
+          setEsitoFogli([...note]);
+        }
+      }
+
+      // ---- I contributi per anno ----------------------------------------
+      // Si conservano subito, finché i valori letti dai fogli sono in mano: la
+      // scheda Soglie li usa come sorgente quando i campi sono vuoti, la
+      // scheda Indici li mostra accanto agli indici dello stesso esercizio.
+      // Senza questo salvataggio il rapporto esisteva solo per l'istante del
+      // triage e non si poteva più leggere lungo il tempo.
+      const perAnnoContributi = unisciContributiPerAnno(anniDovuti, anniScaduti);
+      if (perAnnoContributi.length > 0) {
+        const salvAnni = await salvaContributiPerAnnoAction(
+          nomeSchema,
+          c.aziendaId,
+          perAnnoContributi
+        );
+        if (!salvAnni?.success) {
+          note.push(
+            `Contributi per anno non salvati: ${salvAnni?.error ?? 'errore non riportato'}.`
+          );
           setEsitoFogli([...note]);
         }
       }

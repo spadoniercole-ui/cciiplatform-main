@@ -20,6 +20,7 @@ import { formaAERdaAnagrafica } from './formaAER';
 import { ottieniDebitiTriageAction } from '@/app/actions/debitiTriage';
 import { valoriSoglieDaPosizioni } from '@/lib/debitiTriage/modello';
 import { scegliValore, type ValoriUsati } from './fonti';
+import { contributiPerAnnoDaDb } from './rapportoAnni';
 
 const num = (v: unknown): number | null =>
   v === null || v === undefined || v === '' ? null : Number(v);
@@ -49,12 +50,34 @@ export async function leggiDatiSoglieAzienda(
     `SELECT anno_costituzione, forma_giuridica, con_lavoratori_subordinati,
             contributi_scaduti, contributi_dovuti_anno_precedente, anno_contributi_dovuti,
             sanzioni_presunte_vera, premi_inail, iva_scaduta, volume_affari, crediti_affidati_aer,
-            ritardo_oltre_90_giorni, periodi_in_ritardo, denunce_non_presentate, soglie_aggiornate_al
+            ritardo_oltre_90_giorni, periodi_in_ritardo, denunce_non_presentate, soglie_aggiornate_al,
+            contributi_per_anno
        FROM "${nomeSchema}".aziende WHERE id = $1`,
     [aziendaId]
   );
   if (az.rows.length === 0) return null;
   const a = az.rows[0];
+
+  // I contributi letti dai file INPS, conservati anno per anno.
+  //
+  // Sono la sorgente che rende la scheda Soglie compilabile senza digitare:
+  // il dovuto viene dal saldo delle denunce, lo scaduto dalla lista
+  // inadempienze, e restano nel database anche dopo che il triage è stato
+  // chiuso. Si usano solo come RIPIEGO — posizioni del triage e valore
+  // scritto in scheda restano davanti — e il dovuto si cerca nell'anno che
+  // la scheda dichiara, perché è quello il denominatore del 30%.
+  const contributiPerAnno = contributiPerAnnoDaDb(a.contributi_per_anno);
+  const annoDovutiScheda = num(a.anno_contributi_dovuti);
+  const conDovuti = [...contributiPerAnno].reverse().filter((x) => x.dovuti !== null);
+  const dovutiDaFile =
+    (annoDovutiScheda === null
+      ? undefined
+      : contributiPerAnno.find((x) => x.anno === annoDovutiScheda)?.dovuti) ??
+    conDovuti[0]?.dovuti ??
+    null;
+  const annoDovutiDaFile = conDovuti[0]?.anno ?? null;
+  const scadutiDaFile =
+    [...contributiPerAnno].reverse().find((x) => x.scaduti !== null)?.scaduti ?? null;
 
   // Esposizione dal V.E.R.A., solo come ripiego (vedi attenzioneScreening).
   //
@@ -96,9 +119,10 @@ export async function leggiDatiSoglieAzienda(
     k: K,
     pos: number | null | undefined,
     man: number | null,
-    vera: number | null = null
+    vera: number | null = null,
+    file: number | null = null
   ): number | null => {
-    const u = scegliValore(pos, man, vera);
+    const u = scegliValore(pos, man, vera, file);
     if (u) usati[k] = u;
     return u ? u.valore : null;
   };
@@ -112,14 +136,17 @@ export async function leggiDatiSoglieAzienda(
       'contributiScaduti',
       daPosizioni.contributiScaduti,
       num(a.contributi_scaduti),
-      daVera
+      daVera,
+      scadutiDaFile
     ),
     contributiDovutiAnnoPrecedente: scegli(
       'contributiDovutiAnnoPrecedente',
       daPosizioni.contributiDovutiAnnoPrecedente,
-      num(a.contributi_dovuti_anno_precedente)
+      num(a.contributi_dovuti_anno_precedente),
+      null,
+      dovutiDaFile
     ),
-    annoContributiDovuti: num(a.anno_contributi_dovuti),
+    annoContributiDovuti: annoDovutiScheda ?? annoDovutiDaFile,
     // Le sanzioni del V.E.R.A. si mostrano nella riconciliazione; il valore
     // manuale, se inserito, resta quello che vince.
     sanzioniPresunte: num(a.sanzioni_presunte_vera) ?? (sanzioniVera > 0 ? sanzioniVera : null),

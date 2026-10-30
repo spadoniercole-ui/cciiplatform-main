@@ -201,6 +201,22 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
     sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS anno_costituzione INTEGER`
   );
 
+  // Contributi INPS letti dai file e conservati ANNO PER ANNO.
+  //
+  // `[{ anno, dovuti, scaduti }]`: i dovuti vengono dal saldo delle denunce
+  // (DM10 / UNIEMENS), gli scaduti dalla Lista Inadempienze, già entrambi
+  // aggregati per anno all'atto della lettura. Servono a due cose: la scheda
+  // Soglie li usa come sorgente automatica quando i campi non sono stati
+  // compilati, e la scheda Indici mostra il rapporto scaduti/dovuti accanto
+  // agli indici dello stesso anno — così si vede da quale esercizio il
+  // rapporto dell'art. 25-novies, lett. a) si è acceso.
+  //
+  // JSON e non una tabella: è una fotografia per azienda, si riscrive tutta
+  // a ogni caricamento e non si interroga per riga.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS contributi_per_anno JSONB`
+  );
+
   // Stato "in verifica": l'azienda esiste come record ma non è ancora una
   // posizione in lavorazione.
   //

@@ -16,8 +16,10 @@ import {
 } from '@/app/actions/aziendaConfig';
 import { segnaVistaAnalisiBilancioAction } from '@/app/actions/analisiBilancioStep';
 import { ottieniStoricoXbrlAzienda, type BilancioStoricoAzienda } from '@/app/actions/xbrlAzienda';
+import { ottieniContributiPerAnnoAction } from '@/app/actions/soglie25novies';
 import type { IndiceCcii } from '@/lib/xbrl/types';
 import { calcolaQuoteDebitoPubblico } from '@/lib/xbrl/indici';
+import { rapportiPerAnno, type RapportoAnno } from '@/lib/soglie25novies/rapportoAnni';
 
 interface Props {
   nomeSchema: string;
@@ -31,17 +33,20 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
   const [errore, setErrore] = useState<string | null>(null);
   const [erroreSalvataggio, setErroreSalvataggio] = useState<string | null>(null);
   const [storico, setStorico] = useState<BilancioStoricoAzienda[]>([]);
+  const [contributiAnni, setContributiAnni] = useState<RapportoAnno[]>([]);
 
   useEffect(() => {
     (async () => {
       setCaricamento(true);
-      const [risultato, st] = await Promise.all([
+      const [risultato, st, contributi] = await Promise.all([
         ottieniIndiciAzienda(nomeSchema, aziendaId),
         ottieniStoricoXbrlAzienda(nomeSchema, aziendaId),
+        ottieniContributiPerAnnoAction(nomeSchema, aziendaId),
       ]);
       if (risultato.success) setIndici(risultato.indici);
       else setErrore(risultato.error || 'Impossibile caricare gli indici.');
       if (st.success) setStorico(st.storico);
+      if (contributi.success) setContributiAnni(rapportiPerAnno(contributi.anni ?? []));
       setCaricamento(false);
     })();
   }, [nomeSchema, aziendaId]);
@@ -103,6 +108,21 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
     v === 'N/D' ? 'n/d' : v.toLocaleString('it-IT', { maximumFractionDigits: 2 });
   const sogliaDi = (codice: string) =>
     perAnno.map((a) => a.mappa.get(codice)?.soglia).find((x) => !!x) ?? '—';
+
+  // Il rapporto della soglia INPS, allineato agli anni del bilancio: stesse
+  // colonne della tabella degli indici, così si vede in quale esercizio il
+  // rapporto si è acceso — che è la domanda che il solo ultimo dato non
+  // risponde. Gli anni vengono dai file INPS (DM10 e lista inadempienze),
+  // quindi può mancare il più vecchio: in quel caso la cella resta vuota
+  // invece di mostrare uno zero che non esiste.
+  const inpsPerAnno = new Map(contributiAnni.map((r) => [r.anno, r]));
+  const contributiDi = (anno: number | null) => (anno === null ? undefined : inpsPerAnno.get(anno));
+  const euro = (v: number | null | undefined) =>
+    v === null || v === undefined ? '—' : `${Math.round(v).toLocaleString('it-IT')} €`;
+  const quota = (q: number | null | undefined) =>
+    q === null || q === undefined
+      ? '—'
+      : `${(q * 100).toLocaleString('it-IT', { maximumFractionDigits: 1 })}%`;
 
   return (
     // Affiancati: a sinistra i calcoli, a destra le scelte — senza scorrere.
@@ -197,6 +217,79 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
                     </React.Fragment>
                   );
                 })}
+              </tbody>
+              {/* La soglia INPS nelle stesse colonne degli indici: il rapporto
+                  scaduti / dovuti dell'esercizio in cui C5 scatta. */}
+              <tbody className="divide-y divide-slate-100 border-t border-slate-200">
+                <tr>
+                  <td
+                    colSpan={2}
+                    className="p-2 pt-3 text-[10px] font-bold uppercase tracking-wider text-slate-500"
+                  >
+                    Contributi INPS — art. 25-novies, lett. a)
+                  </td>
+                </tr>
+                {contributiAnni.length === 0 ? (
+                  <tr>
+                    <td colSpan={perAnno.length + 2} className="p-2 text-[11px] text-slate-400">
+                      Nessun contributo per anno conservato: si popola caricando DM10 e Lista
+                      Inadempienze nel triage.
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    <tr>
+                      <td className="p-2 pl-6 text-[11px] text-slate-500">
+                        Contributi dovuti (DM10)
+                      </td>
+                      <td className="p-2 text-[11px] text-slate-400">saldo delle denunce</td>
+                      {perAnno.map((a, k) => (
+                        <td key={k} className="p-2 text-right tabular-nums text-slate-600">
+                          {euro(contributiDi(a.anno)?.dovuti)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="p-2 pl-6 text-[11px] text-slate-500">
+                        Contributi scaduti (inadempienze)
+                      </td>
+                      <td className="p-2 text-[11px] text-slate-400">non versati, per anno</td>
+                      {perAnno.map((a, k) => (
+                        <td key={k} className="p-2 text-right tabular-nums text-slate-600">
+                          {euro(contributiDi(a.anno)?.scaduti)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="p-2 pl-6 text-[11px] text-slate-500">
+                        Rapporto scaduti / dovuti
+                      </td>
+                      <td className="p-2 text-[11px] text-slate-400">quota del 30%</td>
+                      {perAnno.map((a, k) => {
+                        const r = contributiDi(a.anno);
+                        const cls =
+                          r?.oltreQuota === true
+                            ? 'text-red-700 font-bold'
+                            : r?.quota != null
+                              ? 'text-emerald-700'
+                              : 'text-slate-400';
+                        return (
+                          <td
+                            key={k}
+                            className={`p-2 text-right tabular-nums ${cls}`}
+                            title={
+                              r?.quota == null
+                                ? 'Rapporto non calcolabile: manca il dovuto o lo scaduto di questo anno'
+                                : 'Quota oltre il 30%: non è ancora la soglia, che richiede anche il ritardo oltre 90 giorni (e 15.000 € con lavoratori)'
+                            }
+                          >
+                            {quota(r?.quota)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </>
+                )}
               </tbody>
             </table>
             <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
