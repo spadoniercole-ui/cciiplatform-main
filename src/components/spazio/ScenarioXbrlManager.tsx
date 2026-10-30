@@ -1,8 +1,9 @@
 'use client';
 
-// Import XBRL dello Scenario — qui avviene davvero il caricamento (l'unico
-// punto della piattaforma dove si carica un file, coerente con quanto
-// deciso: niente doppio caricamento in Aziende). Mostra solo le tab e solo
+// Import XBRL dello Scenario — il caricamento di partenza avviene prima,
+// nello step Analisi Bilancio dell'azienda (dopo il triage, prima dello
+// Screening: `AziendaConfigXbrl`). Qui si aggiungono le annualità che
+// servono alla proposta, con i dati attualizzati. Mostra solo le tab e solo
 // gli indici configurati per l'azienda di questo scenario
 // (Aziende → [azienda] → Configurazione XBRL / Indici) — gli scenari sono
 // aziendali, quindi ereditano quella configurazione. Lo storico è salvato

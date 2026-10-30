@@ -1,3 +1,17 @@
+## 0.143.7 — 2026-10-30
+
+**Il bilancio XBRL si carica dove serve, prima dello Screening.** Il percorso è triage → Analisi
+Bilancio → Screening, ma il caricamento del bilancio esisteva solo nello Scenario — che viene
+dopo, quando lo Screening è già stato generato — e dentro lo Screening stesso: chi aveva appena
+preso in carico l'azienda arrivava ad Analisi Bilancio e trovava solo la configurazione delle
+tab, nessun modo di caricare il file. Ora lo step Analisi Bilancio › Configurazione XBRL carica
+il bilancio, lo analizza con lo stesso motore (`/api/xbrl/parse`), lo registra nel fascicolo di
+evidenza con la sua impronta e lo salva nello storico dell'azienda; l'elenco delle annualità in
+archivio è lì, con anno, file e severità, e il passo diventa verde appena il bilancio c'è. Un
+file può essere ricaricato per correggere un anno: l'upsert lo sovrascrive senza duplicarlo. Lo
+Scenario resta il punto in cui si aggiungono le annualità della proposta, e lo Screening
+continua a poter procedere senza bilancio, dichiarandolo nella relazione.
+
 ## 0.143.6 — 2026-10-29
 
 **Il foglio stampato porta in testa i due avvisi che a video si vedono.** Il riepilogo del
