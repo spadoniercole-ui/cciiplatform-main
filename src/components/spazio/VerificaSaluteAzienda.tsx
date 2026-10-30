@@ -879,6 +879,10 @@ export function VerificaSaluteAzienda({
       // dire da quando si è acceso ha bisogno di tutti gli anni coperti.
       let anniDovuti: Record<number, number> = {};
       let anniScaduti: Record<number, number> = {};
+      // La parte di ciascun anno gia' scaduta da oltre 90 giorni alla data
+      // della verifica: e' il terzo requisito della lett. a), e senza di esso
+      // la quota si legge accanto a un silenzio.
+      let anniOltre90: Record<number, number> = {};
       let nonVersato: number | null = null;
       let creditiAffidatiNetti: number | null = null;
       // Il ritardo della lettera a) viene dalla Lista Inadempienze quando c'è:
@@ -948,6 +952,7 @@ export function VerificaSaluteAzienda({
           const anz = partiteInpsPerAnzianita(r.righe, riferimento);
           const bScadute = analizzaInadempienze(anz.scadute);
           const bRecenti = analizzaInadempienze(anz.recenti);
+          anniOltre90 = bScadute.nettoPerAnno;
           nonVersato = bScadute.totaleNonVersato;
           ritardo90 = bScadute.totaleNonVersato > 0;
           ritardoDaLista = true;
@@ -1157,7 +1162,7 @@ export function VerificaSaluteAzienda({
       // scheda Indici li mostra accanto agli indici dello stesso esercizio.
       // Senza questo salvataggio il rapporto esisteva solo per l'istante del
       // triage e non si poteva più leggere lungo il tempo.
-      const perAnnoContributi = unisciContributiPerAnno(anniDovuti, anniScaduti);
+      const perAnnoContributi = unisciContributiPerAnno(anniDovuti, anniScaduti, anniOltre90);
       if (perAnnoContributi.length > 0) {
         const salvAnni = await salvaContributiPerAnnoAction(
           nomeSchema,

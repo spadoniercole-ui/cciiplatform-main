@@ -26,7 +26,13 @@ import { formaAERdaAnagrafica } from '@/lib/soglie25novies/formaAER';
 import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
 import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 import type { ValoriUsati } from '@/lib/soglie25novies/fonti';
-import { contributiPerAnnoDaDb, type ContributiAnno } from '@/lib/soglie25novies/rapportoAnni';
+import {
+  anniDellaVerifica,
+  contributiPerAnnoDaDb,
+  serieDaPosizioni,
+  serieDaValoriConservati,
+  type ContributiAnno,
+} from '@/lib/soglie25novies/rapportoAnni';
 
 export interface ValoriSoglie {
   conLavoratoriSubordinati: boolean | null;
@@ -238,21 +244,91 @@ export async function salvaContributiPerAnnoAction(
   }
 }
 
-/** I contributi per anno conservati per l'azienda (serie vuota se non ci sono). */
+export interface RisultatoContributiPerAnno {
+  success: boolean;
+  anni?: ContributiAnno[];
+  /** Da dove viene la serie (vedi sotto). */
+  origine?: 'file' | 'posizioni' | 'valori';
+  /** Giorno a cui si riferiscono i valori ricostruiti, se noto. */
+  ricostruitaIl?: string | null;
+  error?: string;
+}
+
+/**
+ * I contributi per anno dell'azienda.
+ *
+ * Prima si leggeva solo la serie scritta dal triage leggendo DM10 e Lista
+ * Inadempienze. Per le aziende verificate prima che quella serie esistesse
+ * la scheda restava vuota fino a un nuovo caricamento dei file, che però non
+ * sono conservati sul server: chi non li ha più non vedeva nulla.
+ *
+ * Perciò, se la serie non c'è, si ricostruisce da ciò che il triage ha già
+ * scritto in database — le posizioni previdenziali (tre anni di scaduti e il
+ * dovuto dell'anno precedente) e, in mancanza, i due valori della scheda
+ * Soglie. La ricostruzione è parziale e viene dichiarata (`origine`): non si
+ * presenta come la serie letta dai file.
+ */
 export async function ottieniContributiPerAnnoAction(
   nomeSchema: string,
   aziendaId: number
-): Promise<{ success: boolean; anni?: ContributiAnno[]; error?: string }> {
+): Promise<RisultatoContributiPerAnno> {
   try {
     await richiediAccessoAzienda(nomeSchema, aziendaId);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaAziende(nomeSchema);
     const r = await pool.query(
-      `SELECT contributi_per_anno FROM "${nomeSchema}".aziende WHERE id = $1`,
+      `SELECT contributi_per_anno, anno_contributi_dovuti, contributi_dovuti_anno_precedente,
+              contributi_scaduti, soglie_aggiornate_al
+         FROM "${nomeSchema}".aziende WHERE id = $1`,
       [aziendaId]
     );
     if (r.rows.length === 0) return { success: false, error: 'Azienda non trovata.' };
-    return { success: true, anni: contributiPerAnnoDaDb(r.rows[0].contributi_per_anno) };
+    const a = r.rows[0];
+    const daFile = contributiPerAnnoDaDb(a.contributi_per_anno);
+    if (daFile.length > 0) return { success: true, anni: daFile, origine: 'file' };
+
+    // La data del triage serve ad attribuire gli anni: senza, le posizioni
+    // non si datano e si resta sui soli valori che portano il proprio anno.
+    const giorno = a.soglie_aggiornate_al
+      ? new Date(a.soglie_aggiornate_al).toISOString().slice(0, 10)
+      : null;
+    const anniTriage = anniDellaVerifica(giorno);
+
+    const pos = await pool
+      .query(
+        `SELECT categoria, importo_anno_corrente, importo_anno_precedente, importo_anno_meno2,
+                riferimento_anno_precedente
+           FROM "${nomeSchema}".debiti_triage WHERE azienda_id = $1`,
+        [aziendaId]
+      )
+      .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+    const daPosizioni = anniTriage
+      ? serieDaPosizioni(
+          pos.rows.map((x: Record<string, unknown>) => ({
+            categoria: String(x.categoria ?? ''),
+            importoAnnoCorrente: num(x.importo_anno_corrente),
+            importoAnnoPrecedente: num(x.importo_anno_precedente),
+            importoAnnoMeno2: num(x.importo_anno_meno2),
+            riferimentoAnnoPrecedente: num(x.riferimento_anno_precedente),
+          })),
+          anniTriage
+        )
+      : [];
+    if (daPosizioni.length > 0)
+      return { success: true, anni: daPosizioni, origine: 'posizioni', ricostruitaIl: giorno };
+
+    const daValori = serieDaValoriConservati({
+      annoDovuti: num(a.anno_contributi_dovuti),
+      dovuti: num(a.contributi_dovuti_anno_precedente),
+      annoScaduti: anniTriage?.corrente ?? null,
+      scaduti: num(a.contributi_scaduti),
+    });
+    return {
+      success: true,
+      anni: daValori,
+      origine: daValori.length > 0 ? 'valori' : undefined,
+      ricostruitaIl: giorno,
+    };
   } catch (error: unknown) {
     console.error('[ottieniContributiPerAnnoAction] Errore:', error);
     return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };

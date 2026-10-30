@@ -34,6 +34,12 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
   const [erroreSalvataggio, setErroreSalvataggio] = useState<string | null>(null);
   const [storico, setStorico] = useState<BilancioStoricoAzienda[]>([]);
   const [contributiAnni, setContributiAnni] = useState<RapportoAnno[]>([]);
+  // Da dove viene la serie quando non e' la lettura dei file: dichiararlo
+  // nella scheda e' parte del dato.
+  const [origineContributi, setOrigineContributi] = useState<
+    'file' | 'posizioni' | 'valori' | null
+  >(null);
+  const [ricostruitaIl, setRicostruitaIl] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -46,7 +52,11 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
       if (risultato.success) setIndici(risultato.indici);
       else setErrore(risultato.error || 'Impossibile caricare gli indici.');
       if (st.success) setStorico(st.storico);
-      if (contributi.success) setContributiAnni(rapportiPerAnno(contributi.anni ?? []));
+      if (contributi.success) {
+        setContributiAnni(rapportiPerAnno(contributi.anni ?? []));
+        setOrigineContributi(contributi.origine ?? null);
+        setRicostruitaIl(contributi.ricostruitaIl ?? null);
+      }
       setCaricamento(false);
     })();
   }, [nomeSchema, aziendaId]);
@@ -262,6 +272,32 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
                     </tr>
                     <tr>
                       <td className="p-2 pl-6 text-[11px] text-slate-500">
+                        di cui scaduti da oltre 90 giorni
+                      </td>
+                      <td className="p-2 text-[11px] text-slate-400">
+                        requisito temporale, alla data della verifica
+                      </td>
+                      {perAnno.map((a, k) => {
+                        const r = contributiDi(a.anno);
+                        return (
+                          <td
+                            key={k}
+                            className={`p-2 text-right tabular-nums ${
+                              r?.ritardoOltre90 ? 'text-amber-700 font-semibold' : 'text-slate-600'
+                            }`}
+                            title={
+                              r?.oltre90 == null
+                                ? 'Ritardo non misurato per questo esercizio: la serie viene dalle posizioni del triage o dai valori conservati, che non portano il ritardo'
+                                : 'Contributi di questo esercizio gia’ scaduti da oltre 90 giorni alla data della verifica: e’ il terzo requisito della lett. a)'
+                            }
+                          >
+                            {euro(r?.oltre90)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    <tr>
+                      <td className="p-2 pl-6 text-[11px] text-slate-500">
                         Rapporto scaduti / dovuti
                       </td>
                       <td className="p-2 text-[11px] text-slate-400">quota del 30%</td>
@@ -292,11 +328,29 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
                 )}
               </tbody>
             </table>
+            {origineContributi && origineContributi !== 'file' && contributiAnni.length > 0 && (
+              <p className="text-[10px] text-amber-700 mt-2 leading-relaxed">
+                {origineContributi === 'posizioni'
+                  ? 'Serie ricostruita dalle posizioni del triage'
+                  : 'Serie ricostruita dai valori conservati nell’ultima verifica'}
+                {ricostruitaIl
+                  ? ` del ${new Date(`${ricostruitaIl}T00:00:00Z`).toLocaleDateString('it-IT')}`
+                  : ''}
+                : non e’ la lettura dei file, e non porta il ritardo oltre 90 giorni. Ricaricando
+                DM10 e Lista Inadempienze arriva l’andamento per esercizio.
+              </p>
+            )}
             <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
               Valori del bilancio depositato (in rosso oltre la soglia). Strumenti operativi di
               lettura, non parametri normativi: il sistema di indici dell’originario art. 13 CCII è
               abrogato. Nello scenario gli stessi indici sono ricalcolati anche sulla Posizione
               Aggiornata, con i dati attualizzati.
+            </p>
+            <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+              «Di cui scaduti da oltre 90 giorni» misura il ritardo alla data della verifica: dice
+              quali esercizi compongono il debito che soddisfa il requisito temporale, non quando ci
+              sono arrivati. Va letto accanto al rapporto: la quota del 30% senza il ritardo di
+              oltre 90 giorni non integra la fattispecie della lett. a).
             </p>
             <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
               C5 somma le due voci; le righe «di cui» le tengono separate. Serve perché un debito

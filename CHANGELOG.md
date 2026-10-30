@@ -1,3 +1,19 @@
+## 0.145.0 — 2026-10-30
+
+**Il requisito del ritardo accanto al rapporto, e la serie anche per chi ha gia' verificato.** La
+quota scaduti/dovuti dice quanto, non da quando, e da sola non integra la fattispecie della lett.
+a): serve anche un ritardo di oltre 90 giorni. La scheda Indici mostra ora, per ciascun esercizio,
+la parte dei contributi scaduti gia' oltre i 90 giorni alla data della verifica, letta con la
+stessa partizione che il triage usa per la soglia: si vede se il rapporto che si e' acceso poggia
+anche sul requisito temporale. Il ritardo e' misurato alla data della verifica, quindi per gli
+esercizi piu' vecchi il debito e' per intero oltre i 90 giorni — la riga dice quali esercizi
+compongono quel debito, non quando ci sono arrivati, e la nota lo dichiara. Inoltre la serie dei
+contributi non richiede piu' un nuovo caricamento dei file: se per un'azienda verificata prima non
+c'e', si ricostruisce dalle posizioni del triage (tre anni) o dai valori conservati nella scheda
+Soglie, e la scheda dice che e' ricostruita. I file INPS restano nel browser e non si conservano
+sul server: una ricostruzione parziale dichiarata e' meglio di una scheda vuota, e non si presenta
+come la lettura dei file.
+
 ## 0.144.0 — 2026-10-30
 
 **I contributi INPS non si digitano più: si leggono dai file e restano, anno per anno.** Il
