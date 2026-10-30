@@ -239,6 +239,78 @@ export function serieDaValoriConservati(valori: {
 }
 
 /**
+ * La serie ricostruita da ciò che il triage ha già scritto in database.
+ *
+ * Prima le posizioni previdenziali (tre anni di scaduti e il dovuto
+ * dell'anno precedente), perché sono più vicine ai file; se non ce ne sono,
+ * i due valori conservati nella scheda Soglie. Nessuna delle due strade
+ * inventa il lato che manca, e nessuna porta il ritardo oltre 90 giorni:
+ * per questo `origine` esiste — una serie ricostruita va dichiarata, non
+ * presentata come lettura dei file.
+ */
+export function serieRicostruita(dati: {
+  giorno: string | null;
+  posizioni: readonly PosizionePerAnno[];
+  annoDovuti: number | null;
+  dovuti: number | null;
+  annoScaduti: number | null;
+  scaduti: number | null;
+}): { anni: ContributiAnno[]; origine: 'posizioni' | 'valori' | null } {
+  const anniTriage = anniDellaVerifica(dati.giorno);
+  const daPosizioni = anniTriage ? serieDaPosizioni(dati.posizioni, anniTriage) : [];
+  if (daPosizioni.length > 0) return { anni: daPosizioni, origine: 'posizioni' };
+
+  const daValori = serieDaValoriConservati({
+    annoDovuti: dati.annoDovuti,
+    dovuti: dati.dovuti,
+    annoScaduti: dati.annoScaduti,
+    scaduti: dati.scaduti,
+  });
+  return { anni: daValori, origine: daValori.length > 0 ? 'valori' : null };
+}
+
+/** Un'azienda dello spazio, con ciò che serve a ricostruirne la serie. */
+export interface AziendaDaRicalcolare {
+  id: number;
+  /** La serie già letta dai file: se c'è, non si tocca. */
+  anniDaiFile: ContributiAnno[];
+  giorno: string | null;
+  posizioni: readonly PosizionePerAnno[];
+  annoDovuti: number | null;
+  dovuti: number | null;
+  annoScaduti: number | null;
+  scaduti: number | null;
+}
+
+/** Ciò che il ricalcolo d'ufficio scrive in database per un'azienda. */
+export interface AggiornamentoSerie {
+  aziendaId: number;
+  anni: ContributiAnno[];
+  origine: 'posizioni' | 'valori';
+}
+
+/**
+ * Il piano del ricalcolo d'ufficio: per ogni azienda, la serie da scrivere.
+ *
+ * Le aziende con una serie letta dai file restano fuori anche quando quella
+ * ricostruibile sarebbe più lunga: i file sono la fonte, e una ricostruzione
+ * non li sostituisce. Chi non ha abbastanza dati non produce una riga — non
+ * si scrive una serie vuota al posto di un'assenza.
+ */
+export function pianoRicalcoloSerie(
+  aziende: readonly AziendaDaRicalcolare[]
+): AggiornamentoSerie[] {
+  const piano: AggiornamentoSerie[] = [];
+  for (const a of aziende) {
+    if (a.anniDaiFile.length > 0) continue;
+    const { anni, origine } = serieRicostruita(a);
+    if (anni.length === 0 || origine === null) continue;
+    piano.push({ aziendaId: a.id, anni, origine });
+  }
+  return piano;
+}
+
+/**
  * Lettura difensiva del valore JSON salvato in `aziende.contributi_per_anno`.
  *
  * Il driver Postgres può restituire l'oggetto già decodificato oppure la

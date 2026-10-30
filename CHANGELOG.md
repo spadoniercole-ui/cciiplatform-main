@@ -1,3 +1,30 @@
+## 0.146.0 — 2026-10-30
+
+**La serie dei contributi si ricostruisce per tutto lo spazio, in un comando.** La ricostruzione
+d'ufficio nasce dal limite della versione precedente: la serie si ricomponeva aprendo la scheda
+Indici di un'azienda, quindi chi voleva guardare il quadro d'insieme — quali posizioni hanno un
+rapporto che sale, e da quando — doveva aprire ogni fascicolo. In Parametri di Spazio > Soglie c'è
+ora un comando che la ricostruisce una volta per tutte le aziende passate da una verifica o con
+posizioni del triage, e la conserva: dalle posizioni previdenziali, e in mancanza dai due valori
+della scheda Soglie. Il comando dice quante serie ha ricostruito, quante erano già lette dai file
+e quante non hanno abbastanza dati — non dichiara «fatto» al posto dei numeri. Le serie lette da
+DM10 e Lista Inadempienze non si toccano: i file restano la fonte, e una ricostruzione non li
+sostituisce.
+
+**La ricostruzione non si presenta più come lettura dei file.** La serie conservata porta ora la
+sua origine (`contributi_per_anno_origine`), così una serie dedotta dal triage riletta dopo il
+ricalcolo continua a dichiararsi ricostruita invece di passare per i fogli INPS. Resta senza
+ritardo oltre 90 giorni, che compare come «—» e non come zero.
+
+**Corretto un salvataggio che perdeva il ritardo.** Scrivendo la serie letta dai file si
+conservavano solo dovuti e scaduti: il «di cui oltre 90 giorni» sarebbe sparito al primo
+ricaricamento della scheda. Ora fa parte della serie salvata.
+
+**Test.** Il nuovo test di componente della scheda Indici guarda le tre forme della stessa tabella:
+serie dai file con ritardo misurato (uno zero misurato è «0 €»), serie ricostruita dalle posizioni
+(ritardo non misurato, trattino e nota con la data), serie ricostruita dai valori conservati
+(nessun rapporto quando i due lati cadono su anni diversi).
+
 ## 0.145.0 — 2026-10-30
 
 **Il requisito del ritardo accanto al rapporto, e la serie anche per chi ha gia' verificato.** La

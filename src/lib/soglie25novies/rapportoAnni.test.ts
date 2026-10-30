@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   anniDellaVerifica,
   contributiPerAnnoDaDb,
+  pianoRicalcoloSerie,
   rapportiPerAnno,
   serieDaPosizioni,
   serieDaValoriConservati,
+  serieRicostruita,
   unisciContributiPerAnno,
 } from './rapportoAnni';
 
@@ -239,5 +241,163 @@ describe('contributiPerAnnoDaDb', () => {
     expect(contributiPerAnnoDaDb([{ anno: 0 }, { anno: 'x' }, { anno: 2025, dovuti: 10 }])).toEqual(
       [{ anno: 2025, dovuti: 10, scaduti: null, oltre90: null }]
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// LA RICOSTRUZIONE D'UFFICIO
+//
+// Stesse regole della lettura pigra, ma su tutte le aziende in una volta.
+// Due cose vanno garantite qui, perché in database non si vedrebbero: che la
+// serie letta dai file non venga mai sostituita, e che un'azienda senza dati
+// non produca una riga — una serie vuota scritta al posto di un'assenza è
+// indistinguibile da «l'azienda non deve nulla».
+// ---------------------------------------------------------------------------
+describe('serieRicostruita', () => {
+  const posizioni = [
+    {
+      categoria: 'PREVIDENZIALE',
+      importoAnnoCorrente: 44_471,
+      importoAnnoPrecedente: 18_400,
+      importoAnnoMeno2: 15_200,
+      riferimentoAnnoPrecedente: 48_380,
+    },
+  ];
+
+  it('preferisce le posizioni del triage, e lo dichiara', () => {
+    const r = serieRicostruita({
+      giorno: '2026-09-11',
+      posizioni,
+      annoDovuti: 2024,
+      dovuti: 41_820,
+      annoScaduti: 2026,
+      scaduti: 44_471,
+    });
+    expect(r.origine).toBe('posizioni');
+    expect(r.anni).toEqual([
+      { anno: 2024, dovuti: null, scaduti: 15_200, oltre90: null },
+      { anno: 2025, dovuti: 48_380, scaduti: 18_400, oltre90: null },
+      { anno: 2026, dovuti: null, scaduti: 44_471, oltre90: null },
+    ]);
+  });
+
+  it('senza posizioni ricade sui valori conservati', () => {
+    const r = serieRicostruita({
+      giorno: '2026-09-11',
+      posizioni: [],
+      annoDovuti: 2024,
+      dovuti: 41_820,
+      annoScaduti: 2026,
+      scaduti: 44_471,
+    });
+    expect(r.origine).toBe('valori');
+    expect(r.anni).toEqual([
+      { anno: 2024, dovuti: 41_820, scaduti: null, oltre90: null },
+      { anno: 2026, dovuti: null, scaduti: 44_471, oltre90: null },
+    ]);
+  });
+
+  it('senza data di verifica i valori restano quelli che portano il proprio anno', () => {
+    const r = serieRicostruita({
+      giorno: null,
+      posizioni,
+      annoDovuti: 2024,
+      dovuti: 41_820,
+      annoScaduti: null,
+      scaduti: 44_471,
+    });
+    // Lo scaduto non ha un anno dichiarato: non si attribuisce a caso.
+    expect(r.anni).toEqual([{ anno: 2024, dovuti: 41_820, scaduti: null, oltre90: null }]);
+  });
+
+  it('senza nulla da cui partire non inventa una serie', () => {
+    const r = serieRicostruita({
+      giorno: null,
+      posizioni: [],
+      annoDovuti: null,
+      dovuti: null,
+      annoScaduti: null,
+      scaduti: null,
+    });
+    expect(r.anni).toEqual([]);
+    expect(r.origine).toBeNull();
+  });
+});
+
+describe('pianoRicalcoloSerie', () => {
+  const base = {
+    giorno: '2026-09-11',
+    posizioni: [
+      {
+        categoria: 'PREVIDENZIALE',
+        importoAnnoCorrente: 44_471,
+        importoAnnoPrecedente: null,
+        importoAnnoMeno2: null,
+        riferimentoAnnoPrecedente: 48_380,
+      },
+    ],
+    annoDovuti: null,
+    dovuti: null,
+    annoScaduti: 2026,
+    scaduti: 44_471,
+  };
+
+  it('scrive le serie ricostruite con la loro origine', () => {
+    const piano = pianoRicalcoloSerie([
+      { ...base, id: 7, anniDaiFile: [] },
+      {
+        ...base,
+        id: 8,
+        anniDaiFile: [],
+        posizioni: [],
+        annoDovuti: 2024,
+        dovuti: 41_820,
+      },
+    ]);
+    expect(piano).toEqual([
+      {
+        aziendaId: 7,
+        origine: 'posizioni',
+        anni: [
+          { anno: 2025, dovuti: 48_380, scaduti: null, oltre90: null },
+          { anno: 2026, dovuti: null, scaduti: 44_471, oltre90: null },
+        ],
+      },
+      {
+        aziendaId: 8,
+        origine: 'valori',
+        anni: [
+          { anno: 2024, dovuti: 41_820, scaduti: null, oltre90: null },
+          { anno: 2026, dovuti: null, scaduti: 44_471, oltre90: null },
+        ],
+      },
+    ]);
+  });
+
+  it('non tocca chi ha già la serie letta dai file', () => {
+    const piano = pianoRicalcoloSerie([
+      {
+        ...base,
+        id: 9,
+        anniDaiFile: [{ anno: 2024, dovuti: 41_820, scaduti: 17_000, oltre90: 17_000 }],
+      },
+    ]);
+    expect(piano).toEqual([]);
+  });
+
+  it('chi non ha abbastanza dati non entra nel piano', () => {
+    const piano = pianoRicalcoloSerie([
+      {
+        id: 10,
+        anniDaiFile: [],
+        giorno: null,
+        posizioni: [],
+        annoDovuti: null,
+        dovuti: null,
+        annoScaduti: null,
+        scaduti: null,
+      },
+    ]);
+    expect(piano).toEqual([]);
   });
 });

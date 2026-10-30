@@ -217,6 +217,17 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
     sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS contributi_per_anno JSONB`
   );
 
+  // DA DOVE viene la serie conservata: 'file' (DM10 e Lista Inadempienze),
+  // oppure 'posizioni'/'valori' quando l'ha ricostruita il ricalcolo
+  // d'ufficio (o la lettura pigra della scheda Indici). Serve perché la
+  // ricostruzione non si presenti come la lettura dei file: senza questa
+  // colonna, una serie dedotta dal triage si rileggerebbe come se i fogli
+  // fossero stati caricati. NULL = serie scritta prima che la colonna
+  // esistesse, cioè dai file.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS contributi_per_anno_origine TEXT`
+  );
+
   // Stato "in verifica": l'azienda esiste come record ma non è ancora una
   // posizione in lavorazione.
   //

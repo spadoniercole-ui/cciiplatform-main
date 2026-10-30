@@ -27,11 +27,12 @@ import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazi
 import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 import type { ValoriUsati } from '@/lib/soglie25novies/fonti';
 import {
-  anniDellaVerifica,
   contributiPerAnnoDaDb,
-  serieDaPosizioni,
-  serieDaValoriConservati,
+  pianoRicalcoloSerie,
+  serieRicostruita,
+  type AziendaDaRicalcolare,
   type ContributiAnno,
+  type PosizionePerAnno,
 } from '@/lib/soglie25novies/rapportoAnni';
 
 export interface ValoriSoglie {
@@ -231,10 +232,20 @@ export async function salvaContributiPerAnnoAction(
     await assicuraTabellaAziende(nomeSchema);
     const puliti = anni
       .filter((a) => Number.isFinite(a.anno))
-      .map((a) => ({ anno: a.anno, dovuti: a.dovuti, scaduti: a.scaduti }))
+      .map((a) => ({
+        anno: a.anno,
+        dovuti: a.dovuti,
+        scaduti: a.scaduti,
+        // Il ritardo oltre 90 giorni fa parte della serie: lasciarlo fuori
+        // dal salvataggio lo faceva sparire al primo ricaricamento della
+        // scheda, che rilegge da qui.
+        oltre90: a.oltre90 ?? null,
+      }))
       .sort((a, b) => a.anno - b.anno);
     await pool.query(
-      `UPDATE "${nomeSchema}".aziende SET contributi_per_anno = $2::jsonb WHERE id = $1`,
+      `UPDATE "${nomeSchema}".aziende
+          SET contributi_per_anno = $2::jsonb, contributi_per_anno_origine = 'file'
+        WHERE id = $1`,
       [aziendaId, JSON.stringify(puliti)]
     );
     return { success: true, salvati: puliti.length };
@@ -277,22 +288,37 @@ export async function ottieniContributiPerAnnoAction(
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaAziende(nomeSchema);
     const r = await pool.query(
-      `SELECT contributi_per_anno, anno_contributi_dovuti, contributi_dovuti_anno_precedente,
-              contributi_scaduti, soglie_aggiornate_al
+      `SELECT contributi_per_anno, contributi_per_anno_origine, anno_contributi_dovuti,
+              contributi_dovuti_anno_precedente, contributi_scaduti, soglie_aggiornate_al
          FROM "${nomeSchema}".aziende WHERE id = $1`,
       [aziendaId]
     );
     if (r.rows.length === 0) return { success: false, error: 'Azienda non trovata.' };
     const a = r.rows[0];
     const daFile = contributiPerAnnoDaDb(a.contributi_per_anno);
-    if (daFile.length > 0) return { success: true, anni: daFile, origine: 'file' };
+    // L'origine si conserva con la serie: una serie ricostruita dal ricalcolo
+    // d'ufficio, riletta qui, non deve passare per la lettura dei file — che
+    // è esattamente ciò che faceva scrivendola senza marchio.
+    const origineSalvata = (a.contributi_per_anno_origine ?? null) as
+      'file' | 'posizioni' | 'valori' | null;
+    if (daFile.length > 0)
+      return {
+        success: true,
+        anni: daFile,
+        origine: origineSalvata ?? 'file',
+        ricostruitaIl:
+          origineSalvata && origineSalvata !== 'file'
+            ? a.soglie_aggiornate_al
+              ? new Date(a.soglie_aggiornate_al).toISOString().slice(0, 10)
+              : null
+            : null,
+      };
 
     // La data del triage serve ad attribuire gli anni: senza, le posizioni
     // non si datano e si resta sui soli valori che portano il proprio anno.
     const giorno = a.soglie_aggiornate_al
       ? new Date(a.soglie_aggiornate_al).toISOString().slice(0, 10)
       : null;
-    const anniTriage = anniDellaVerifica(giorno);
 
     const pos = await pool
       .query(
@@ -302,36 +328,146 @@ export async function ottieniContributiPerAnnoAction(
         [aziendaId]
       )
       .catch(() => ({ rows: [] as Record<string, unknown>[] }));
-    const daPosizioni = anniTriage
-      ? serieDaPosizioni(
-          pos.rows.map((x: Record<string, unknown>) => ({
-            categoria: String(x.categoria ?? ''),
-            importoAnnoCorrente: num(x.importo_anno_corrente),
-            importoAnnoPrecedente: num(x.importo_anno_precedente),
-            importoAnnoMeno2: num(x.importo_anno_meno2),
-            riferimentoAnnoPrecedente: num(x.riferimento_anno_precedente),
-          })),
-          anniTriage
-        )
-      : [];
-    if (daPosizioni.length > 0)
-      return { success: true, anni: daPosizioni, origine: 'posizioni', ricostruitaIl: giorno };
-
-    const daValori = serieDaValoriConservati({
+    const ricostruita = serieRicostruita({
+      giorno,
+      posizioni: pos.rows.map((x: Record<string, unknown>) => ({
+        categoria: String(x.categoria ?? ''),
+        importoAnnoCorrente: num(x.importo_anno_corrente),
+        importoAnnoPrecedente: num(x.importo_anno_precedente),
+        importoAnnoMeno2: num(x.importo_anno_meno2),
+        riferimentoAnnoPrecedente: num(x.riferimento_anno_precedente),
+      })),
       annoDovuti: num(a.anno_contributi_dovuti),
       dovuti: num(a.contributi_dovuti_anno_precedente),
-      annoScaduti: anniTriage?.corrente ?? null,
+      annoScaduti: giorno ? Number(giorno.slice(0, 4)) : null,
       scaduti: num(a.contributi_scaduti),
     });
     return {
       success: true,
-      anni: daValori,
-      origine: daValori.length > 0 ? 'valori' : undefined,
+      anni: ricostruita.anni,
+      origine: ricostruita.origine ?? undefined,
       ricostruitaIl: giorno,
     };
   } catch (error: unknown) {
     console.error('[ottieniContributiPerAnnoAction] Errore:', error);
     return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
+  }
+}
+
+export interface EsitoRicalcoloSerie {
+  success: boolean;
+  /** Aziende guardate: quelle passate da una verifica o con posizioni del triage. */
+  esaminate?: number;
+  /** Serie ricostruite e scritte in database. */
+  ricostruite?: number;
+  daPosizioni?: number;
+  daValori?: number;
+  /** Serie già lette dai file: lasciate intatte. */
+  daFile?: number;
+  /** Aziende senza abbastanza dati: nessuna serie scritta. */
+  senzaDati?: number;
+  error?: string;
+}
+
+/**
+ * Ricostruisce d'ufficio la serie dei contributi per anno di tutte le aziende
+ * dello spazio, e la conserva.
+ *
+ * La ricostruzione alla lettura (scheda Indici) copre le aziende una per una.
+ * Per guardare il quadro d'insieme — quali posizioni hanno un rapporto che
+ * sale, e da quando — serviva aprirle tutte: qui si fa una volta, e il
+ * risultato resta in `contributi_per_anno` con la sua origine.
+ *
+ * Il perimetro sono le aziende passate da una verifica (che ha lasciato la
+ * data e i valori) e quelle che hanno posizioni del triage. Le serie già lette
+ * dai file non si toccano: la ricostruzione non sostituisce la fonte. Chi non
+ * ha abbastanza dati resta fuori dal conteggio delle ricostruite, e viene
+ * dichiarato: non si scrive una serie vuota al posto di un'assenza.
+ */
+export async function ricostruisciContributiPerAnnoSpazioAction(
+  nomeSchema: string
+): Promise<EsitoRicalcoloSerie> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabellaAziende(nomeSchema);
+
+    const posizioni = await pool
+      .query(
+        `SELECT azienda_id, categoria, importo_anno_corrente, importo_anno_precedente,
+                importo_anno_meno2, riferimento_anno_precedente
+           FROM "${nomeSchema}".debiti_triage`
+      )
+      .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+
+    const perAzienda = new Map<number, PosizionePerAnno[]>();
+    for (const x of posizioni.rows as Record<string, unknown>[]) {
+      const id = Number(x.azienda_id);
+      if (!Number.isFinite(id)) continue;
+      const elenco = perAzienda.get(id) ?? [];
+      elenco.push({
+        categoria: String(x.categoria ?? ''),
+        importoAnnoCorrente: num(x.importo_anno_corrente),
+        importoAnnoPrecedente: num(x.importo_anno_precedente),
+        importoAnnoMeno2: num(x.importo_anno_meno2),
+        riferimentoAnnoPrecedente: num(x.riferimento_anno_precedente),
+      });
+      perAzienda.set(id, elenco);
+    }
+
+    const aziende = await pool.query(
+      `SELECT id, contributi_per_anno, anno_contributi_dovuti,
+              contributi_dovuti_anno_precedente, contributi_scaduti, soglie_aggiornate_al
+         FROM "${nomeSchema}".aziende
+        WHERE soglie_aggiornate_al IS NOT NULL
+           OR contributi_scaduti IS NOT NULL
+           OR contributi_dovuti_anno_precedente IS NOT NULL
+           OR anno_contributi_dovuti IS NOT NULL
+           OR id = ANY($1::int[])
+        ORDER BY id`,
+      [Array.from(perAzienda.keys())]
+    );
+
+    const daGuardare: AziendaDaRicalcolare[] = aziende.rows.map((a: Record<string, unknown>) => {
+      const giorno = a.soglie_aggiornate_al
+        ? new Date(a.soglie_aggiornate_al as string).toISOString().slice(0, 10)
+        : null;
+      return {
+        id: Number(a.id),
+        anniDaiFile: contributiPerAnnoDaDb(a.contributi_per_anno),
+        giorno,
+        posizioni: perAzienda.get(Number(a.id)) ?? [],
+        annoDovuti: num(a.anno_contributi_dovuti),
+        dovuti: num(a.contributi_dovuti_anno_precedente),
+        annoScaduti: giorno ? Number(giorno.slice(0, 4)) : null,
+        scaduti: num(a.contributi_scaduti),
+      };
+    });
+
+    const piano = pianoRicalcoloSerie(daGuardare);
+    for (const aggiornamento of piano) {
+      await pool.query(
+        `UPDATE "${nomeSchema}".aziende
+            SET contributi_per_anno = $2::jsonb, contributi_per_anno_origine = $3
+          WHERE id = $1`,
+        [aggiornamento.aziendaId, JSON.stringify(aggiornamento.anni), aggiornamento.origine]
+      );
+    }
+
+    const ricostruite = new Set(piano.map((p) => p.aziendaId));
+    return {
+      success: true,
+      esaminate: daGuardare.length,
+      ricostruite: piano.length,
+      daPosizioni: piano.filter((p) => p.origine === 'posizioni').length,
+      daValori: piano.filter((p) => p.origine === 'valori').length,
+      daFile: daGuardare.filter((a) => a.anniDaiFile.length > 0).length,
+      senzaDati: daGuardare.filter((a) => a.anniDaiFile.length === 0 && !ricostruite.has(a.id))
+        .length,
+    };
+  } catch (error: unknown) {
+    console.error('[ricostruisciContributiPerAnnoSpazioAction] Errore:', error);
+    return { success: false, error: `Ricalcolo non riuscito: ${(error as Error).message}` };
   }
 }
 
