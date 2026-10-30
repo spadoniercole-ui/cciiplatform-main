@@ -78,6 +78,37 @@ export function calcolaIndiciCcii(dati: DatiFinanziariPeriodo): IndiceCcii[] {
   ];
 }
 
+/**
+ * Scomposizione di C5 nelle sue due componenti.
+ *
+ * C5 somma debiti tributari e previdenziali sul totale debiti (soglia < 0.30)
+ * in un'unica misura. Le due voci pero' hanno presidi diversi: il debito
+ * previdenziale risponde alla soglia dell'art. 25-novies, comma 1, lett. a)
+ * — che si misura sui contributi scaduti rispetto ai contributi DOVUTI, non
+ * sul totale dei debiti — mentre quello tributario risponde alle lettere c)
+ * e d). Sommarli nasconde quale creditore pubblico sta crescendo: in una
+ * posizione dove il debito e' quasi tutto fiscale, C5 oltre soglia non dice
+ * nulla sull'INPS. Restituisce percentuali sul totale debiti, o 'N/D' quando
+ * il totale e' zero (nessuna divisione per zero, nessun valore inventato).
+ */
+export interface QuoteDebitoPubblico {
+  quotaTributari: number | 'N/D';
+  quotaPrevidenziali: number | 'N/D';
+}
+
+export function calcolaQuoteDebitoPubblico(dati: {
+  debitiTributari: number;
+  debitiPrevidenziali: number;
+  totaleDebiti: number;
+}): QuoteDebitoPubblico {
+  if (!dati.totaleDebiti) return { quotaTributari: 'N/D', quotaPrevidenziali: 'N/D' };
+  const quota = (n: number) => Number(((n / dati.totaleDebiti) * 100).toFixed(2));
+  return {
+    quotaTributari: quota(dati.debitiTributari),
+    quotaPrevidenziali: quota(dati.debitiPrevidenziali),
+  };
+}
+
 /** Step 1 (patrimonio netto positivo) + Step 2 (indici oltre soglia) -> semaforo. */
 export function calcolaSeverity(indici: IndiceCcii[], patrimonioNetto: number): AlertSeverity {
   const step1Superato = patrimonioNetto > 0;

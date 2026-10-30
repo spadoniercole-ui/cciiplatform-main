@@ -1,3 +1,16 @@
+## 0.143.9 — 2026-10-30
+
+**C5 non è più una cifra sola, e la soglia INPS si legge col suo denominatore.** L'indice C5
+somma debito tributario e previdenziale sul totale dei debiti: comodo per il semaforo, inutile per
+capire quale creditore pubblico sta crescendo, perché un debito fiscale che sale porta C5 oltre
+0,30 mentre la posizione previdenziale resta fisiologica. In Indici, sotto la riga C5, compaiono
+ora due righe «di cui» — quota tributaria e quota previdenziale per ciascuna annualità — calcolate
+dalla scomposizione già salvata col bilancio: nessuna migrazione, nessuna soglia cambiata, nessun
+effetto sulla severità. In Soglie di segnalazione la riga INPS con lavoratori espone anche il
+rapporto fra contributi scaduti e contributi dovuti dell'anno precedente («44.471 € / 48.380 € =
+91,9% contro la soglia del 30,0%»), così il 30% non resta un numero senza denominatore: la norma
+lo misura sui contributi dovuti, non sul debito iscritto in bilancio.
+
 ## 0.143.8 — 2026-10-30
 
 **I bilanci XBRL hanno una scheda loro, e si caricano più file in un colpo.** In Analisi Bilancio

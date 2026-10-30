@@ -58,6 +58,11 @@ const CLASSE_CAMPO =
   'w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500';
 
 const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
+const percentuale = (q: number) =>
+  `${(q * 100).toLocaleString('it-IT', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}%`;
 const testo = (n: number | null) => (n === null || n === undefined ? '' : String(n));
 const numero = (v: string): number | null => (v.trim() === '' ? null : Number(v));
 
@@ -431,6 +436,26 @@ function GrigliaRicevente({ esito }: { esito: EsitoSoglie }) {
               <p className="font-bold text-xs text-slate-900">{r.ambito}</p>
               <p className="text-[10px] text-slate-500 mt-0.5">{r.descrizione}</p>
               <p className="text-[10px] font-bold text-slate-700 mt-1">{r.valore}</p>
+              {r.rapportoContributi && (
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Contributi scaduti / dovuti{' '}
+                  {r.rapportoContributi.anno
+                    ? `(${r.rapportoContributi.anno})`
+                    : '(anno precedente)'}
+                  : <span className="font-mono">{euro(r.rapportoContributi.scaduti)}</span> /{' '}
+                  <span className="font-mono">{euro(r.rapportoContributi.dovuti)}</span> ={' '}
+                  <span
+                    className={`font-bold ${
+                      r.rapportoContributi.quota > r.rapportoContributi.sogliaQuota
+                        ? 'text-red-700'
+                        : 'text-emerald-700'
+                    }`}
+                  >
+                    {percentuale(r.rapportoContributi.quota)}
+                  </span>{' '}
+                  contro la soglia del {percentuale(r.rapportoContributi.sogliaQuota)}
+                </p>
+              )}
             </div>
             <span
               className={`inline-block text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 whitespace-nowrap ${

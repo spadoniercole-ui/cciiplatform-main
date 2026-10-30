@@ -608,3 +608,59 @@ describe('INPS con lavoratori — riconciliazione con l’esposizione V.E.R.A.',
   // differenza va riconciliata.
   it.todo('riga INPS SENZA lavoratori: dovrebbe riportare anche la riconciliazione V.E.R.A.');
 });
+
+describe('INPS — il 30% si legge con il suo denominatore', () => {
+  it('espone il rapporto contributi scaduti / dovuti e lo scrive nel motivo', () => {
+    const e = calcolaSoglie25Novies({
+      ...vuoto,
+      conLavoratori: true,
+      contributiScaduti: 44_471,
+      contributiDovutiAnnoPrecedente: 48_380,
+      annoContributiDovuti: 2024,
+    });
+    const inps = e.righe.find((r) => r.ente === 'INPS' && r.applicabile);
+    expect(inps?.rapportoContributi).toEqual({
+      scaduti: 44_471,
+      dovuti: 48_380,
+      quota: 44_471 / 48_380,
+      sogliaQuota: 0.3,
+      anno: 2024,
+    });
+    expect(inps?.motivo).toContain('91,9%');
+    expect(inps?.motivo).toContain('soglia 30,0%');
+    expect(inps?.esito).toBe('sopra');
+  });
+
+  it('senza i contributi dovuti non inventa il rapporto', () => {
+    const e = calcolaSoglie25Novies({
+      ...vuoto,
+      conLavoratori: true,
+      contributiScaduti: 20_000,
+    });
+    const inps = e.righe.find((r) => r.ente === 'INPS' && r.applicabile);
+    expect(inps?.rapportoContributi).toBeNull();
+    expect(inps?.motivo).toContain('30% non è calcolabile');
+  });
+
+  it('con dovuti a zero non divide per zero', () => {
+    const e = calcolaSoglie25Novies({
+      ...vuoto,
+      conLavoratori: true,
+      contributiScaduti: 20_000,
+      contributiDovutiAnnoPrecedente: 0,
+    });
+    const inps = e.righe.find((r) => r.ente === 'INPS' && r.applicabile);
+    expect(inps?.rapportoContributi).toBeNull();
+  });
+
+  it('la riga senza lavoratori non porta il rapporto', () => {
+    const e = calcolaSoglie25Novies({
+      ...vuoto,
+      conLavoratori: false,
+      contributiScaduti: 9_000,
+      contributiDovutiAnnoPrecedente: 20_000,
+    });
+    const inps = e.righe.find((r) => r.ente === 'INPS' && r.applicabile);
+    expect(inps?.rapportoContributi).toBeUndefined();
+  });
+});

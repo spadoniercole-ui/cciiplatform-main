@@ -4,6 +4,7 @@ import {
   calcolaSeverity,
   calcolaAltriIndici,
   costruisciBundleIndici,
+  calcolaQuoteDebitoPubblico,
 } from './indici';
 import type { DatiFinanziariPeriodo, IndiceCcii } from './types';
 
@@ -570,5 +571,35 @@ describe('costruisciBundleIndici', () => {
       bilancio({ debitiBanche: 200, disponibilitaLiquide: 500 })
     );
     expect(situazioneDebitoria.pfn).toBe(-300);
+  });
+});
+
+describe('scomposizione di C5 — tributario e previdenziale', () => {
+  it('divide le due componenti sul totale debiti', () => {
+    expect(
+      calcolaQuoteDebitoPubblico({
+        debitiTributari: 300,
+        debitiPrevidenziali: 100,
+        totaleDebiti: 1000,
+      })
+    ).toEqual({ quotaTributari: 30, quotaPrevidenziali: 10 });
+  });
+
+  it('con totale zero non divide: N/D', () => {
+    expect(
+      calcolaQuoteDebitoPubblico({ debitiTributari: 0, debitiPrevidenziali: 0, totaleDebiti: 0 })
+    ).toEqual({ quotaTributari: 'N/D', quotaPrevidenziali: 'N/D' });
+  });
+
+  it('le due quote ricostruiscono C5, senza cambiarlo', () => {
+    const dati = bilancio({
+      totaleDebiti: 1_000,
+      debitiTributari: 280,
+      debitiPrevidenziali: 20,
+    });
+    const c5 = calcolaIndiciCcii(dati).find((i) => i.codice === 'C5');
+    const q = calcolaQuoteDebitoPubblico(dati);
+    expect(c5?.valore).toBe(0.3);
+    expect((q.quotaTributari as number) + (q.quotaPrevidenziali as number)).toBeCloseTo(30, 6);
   });
 });

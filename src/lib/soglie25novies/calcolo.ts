@@ -166,6 +166,26 @@ export interface RigaSoglia {
   motivo: string;
   /** Importo confrontato con la soglia; null se non disponibile. */
   esposizione: number | null;
+  /**
+   * Solo riga INPS con lavoratori: il rapporto fra contributi scaduti e
+   * contributi DOVUTI nell'anno precedente, con la soglia del 30%.
+   *
+   * Serve a leggere la soglia con il suo denominatore: il 30% si calcola sui
+   * contributi dovuti, non sul debito previdenziale iscritto in bilancio ne'
+   * sul totale dei debiti. Senza questo passaggio un rapporto del 91,9% — che
+   * e' il doppio del 40% — puo' sembrare una cifra qualunque accanto a un
+   * importo in euro.
+   */
+  rapportoContributi?: {
+    scaduti: number;
+    dovuti: number;
+    /** scaduti / dovuti, gia' in forma decimale (0.919 = 91,9%). */
+    quota: number;
+    /** Percentuale di legge (0.3). */
+    sogliaQuota: number;
+    /** Anno cui si riferiscono i contributi dovuti, se dichiarato. */
+    anno: number | null;
+  } | null;
 }
 
 export interface EsitoSoglie {
@@ -181,6 +201,14 @@ export interface EsitoSoglie {
 
 function euro(n: number): string {
   return `${Math.round(n).toLocaleString('it-IT')} €`;
+}
+
+/** Percentuale con un decimale, in forma italiana (91,9%). */
+function percentuale(q: number): string {
+  return `${(q * 100).toLocaleString('it-IT', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}%`;
 }
 
 const val = (n: number | null | undefined): number | null =>
@@ -264,6 +292,7 @@ export function calcolaSoglie25Novies(
     const applicabile = dati.conLavoratori === true;
     let esito: EsitoSoglia = 'non_determinabile';
     let motivo: string;
+    let rapportoContributi: RigaSoglia['rapportoContributi'] = null;
     if (contributi === null) {
       motivo = 'Contributi previdenziali scaduti non inseriti: esito non determinabile.';
     } else if (sogliaPerc === null) {
@@ -285,6 +314,24 @@ export function calcolaSoglie25Novies(
         `Contributi ${euro(contributi)} — 30% dei dovuti: ${euro(sogliaPerc)} (${oltrePerc ? 'superato' : 'non superato'}); ` +
         `${euro(S.inpsImportoConLavoratori)} (${oltreImp ? 'superato' : 'non superato'}). ` +
         `Requisiti congiunti: ${esito === 'sopra' ? 'entrambi superati' : 'non entrambi superati'}.`;
+      // Il rapporto, scritto per esteso: senza il denominatore (i contributi
+      // DOVUTI, non il debito) la soglia del 30% resta un numero senza unità
+      // di misura e un 91,9% non dice che è il triplo del limite.
+      if (dovuti !== null && dovuti > 0) {
+        const quota = contributi / dovuti;
+        const anno = dati.annoContributiDovuti ?? null;
+        rapportoContributi = {
+          scaduti: contributi,
+          dovuti,
+          quota,
+          sogliaQuota: S.inpsPercentuale,
+          anno,
+        };
+        motivo +=
+          ` Rapporto contributi scaduti / contributi dovuti ${anno ? `nell’anno ${anno}` : 'nell’anno precedente'}: ` +
+          `${euro(contributi)} / ${euro(dovuti)} = ${percentuale(quota)} — soglia ${percentuale(S.inpsPercentuale)} ` +
+          `(${quota > S.inpsPercentuale ? 'superata' : 'non superata'}).`;
+      }
       // Rilievo di Libra: se ci sono partite a importo ignoto, «sotto soglia»
       // vale solo sui dati quantificati e la verifica sul perimetro complessivo
       // resta sospesa. Non e' un esito, e' una distinzione da dire.
@@ -330,6 +377,7 @@ export function calcolaSoglie25Novies(
       esito,
       motivo,
       esposizione: contributi,
+      rapportoContributi,
     });
   }
 

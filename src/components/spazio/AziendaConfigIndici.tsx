@@ -17,6 +17,7 @@ import {
 import { segnaVistaAnalisiBilancioAction } from '@/app/actions/analisiBilancioStep';
 import { ottieniStoricoXbrlAzienda, type BilancioStoricoAzienda } from '@/app/actions/xbrlAzienda';
 import type { IndiceCcii } from '@/lib/xbrl/types';
+import { calcolaQuoteDebitoPubblico } from '@/lib/xbrl/indici';
 
 interface Props {
   nomeSchema: string;
@@ -95,7 +96,7 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
   const perAnno = anni.map((b) => {
     const m = new Map<string, IndiceCcii>();
     for (const i of [...(b.indici ?? []), ...(b.altriIndici ?? [])]) m.set(i.codice, i);
-    return { anno: b.annoBilancio, mappa: m };
+    return { anno: b.annoBilancio, mappa: m, situazione: b.situazioneDebitoria };
   });
   const abilitati = indici.filter((i) => i.abilitato);
   const fmt = (v: number | 'N/D') =>
@@ -133,35 +134,69 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {abilitati.map((ind) => (
-                  <tr key={ind.id}>
-                    <td className="p-2 text-slate-800">
-                      <span className="font-mono text-[10px] text-slate-400 mr-1">
-                        {ind.codice}
-                      </span>
-                      {ind.nome}
-                    </td>
-                    <td className="p-2 text-slate-500 text-[11px]">{sogliaDi(ind.codice)}</td>
-                    {perAnno.map((a, k) => {
-                      const v = a.mappa.get(ind.codice);
-                      const cls =
-                        v?.esito === 'VIOLATO'
-                          ? 'text-red-700 font-bold'
-                          : v?.esito === 'OK'
-                            ? 'text-emerald-700'
-                            : 'text-slate-400';
-                      return (
-                        <td
-                          key={k}
-                          className={`p-2 text-right tabular-nums ${cls}`}
-                          title={v?.note}
-                        >
-                          {v ? fmt(v.valore) : '—'}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                {abilitati.map((ind) => {
+                  const riga = (
+                    <tr key={ind.id}>
+                      <td className="p-2 text-slate-800">
+                        <span className="font-mono text-[10px] text-slate-400 mr-1">
+                          {ind.codice}
+                        </span>
+                        {ind.nome}
+                      </td>
+                      <td className="p-2 text-slate-500 text-[11px]">{sogliaDi(ind.codice)}</td>
+                      {perAnno.map((a, k) => {
+                        const v = a.mappa.get(ind.codice);
+                        const cls =
+                          v?.esito === 'VIOLATO'
+                            ? 'text-red-700 font-bold'
+                            : v?.esito === 'OK'
+                              ? 'text-emerald-700'
+                              : 'text-slate-400';
+                        return (
+                          <td
+                            key={k}
+                            className={`p-2 text-right tabular-nums ${cls}`}
+                            title={v?.note}
+                          >
+                            {v ? fmt(v.valore) : '—'}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                  // C5 somma debito tributario e previdenziale: sotto la sua
+                  // riga le due quote restano distinte, perché hanno presidi
+                  // normativi diversi — la soglia INPS dell'art. 25-novies si
+                  // misura sui contributi scaduti rispetto ai contributi
+                  // DOVUTI, non sul totale dei debiti.
+                  if (ind.codice !== 'C5') return riga;
+                  const quota = (chiave: 'quotaTributari' | 'quotaPrevidenziali') => (
+                    <tr>
+                      <td className="p-2 pl-6 text-[11px] text-slate-500">
+                        di cui{' '}
+                        {chiave === 'quotaTributari' ? 'debito tributario' : 'debito previdenziale'}
+                      </td>
+                      <td className="p-2 text-[11px] text-slate-400">quota di C5</td>
+                      {perAnno.map((a, k) => {
+                        const q = a.situazione
+                          ? calcolaQuoteDebitoPubblico(a.situazione)[chiave]
+                          : 'N/D';
+                        return (
+                          <td key={k} className="p-2 text-right tabular-nums text-slate-600">
+                            {q === 'N/D' ? 'n/d' : `${q.toLocaleString('it-IT')}%`}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                  return (
+                    <React.Fragment key={ind.id}>
+                      {riga}
+                      {quota('quotaTributari')}
+                      {quota('quotaPrevidenziali')}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
             <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
@@ -169,6 +204,12 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
               lettura, non parametri normativi: il sistema di indici dell’originario art. 13 CCII è
               abrogato. Nello scenario gli stessi indici sono ricalcolati anche sulla Posizione
               Aggiornata, con i dati attualizzati.
+            </p>
+            <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+              C5 somma le due voci; le righe «di cui» le tengono separate. Serve perché un debito
+              fiscale che cresce porta C5 oltre 0,30 senza che la soglia previdenziale sia toccata:
+              l&apos;art. 25-novies, comma 1, lett. a), misura i contributi scaduti sui contributi
+              dovuti dell&apos;anno precedente, non sul totale dei debiti.
             </p>
           </div>
         )}
