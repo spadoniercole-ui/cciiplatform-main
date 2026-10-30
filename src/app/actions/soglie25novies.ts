@@ -34,6 +34,7 @@ import {
   type ContributiAnno,
   type PosizionePerAnno,
 } from '@/lib/soglie25novies/rapportoAnni';
+import type { AziendaConSerie, OrigineSerie } from '@/lib/soglie25novies/vistaSpazio';
 
 export interface ValoriSoglie {
   conLavoratoriSubordinati: boolean | null;
@@ -468,6 +469,69 @@ export async function ricostruisciContributiPerAnnoSpazioAction(
   } catch (error: unknown) {
     console.error('[ricostruisciContributiPerAnnoSpazioAction] Errore:', error);
     return { success: false, error: `Ricalcolo non riuscito: ${(error as Error).message}` };
+  }
+}
+
+export interface EsitoVistaContributiSpazio {
+  success: boolean;
+  righe?: AziendaConSerie[];
+  /** Aziende senza serie conservata: il ricalcolo non le ha ancora toccate. */
+  senzaSerie?: number;
+  error?: string;
+}
+
+/**
+ * Le serie dei contributi di tutte le aziende dello spazio, per la vista
+ * d'insieme.
+ *
+ * Non ricostruisce nulla: legge `contributi_per_anno` con la sua origine. La
+ * scrittura resta al ricalcolo d'ufficio (Parametri di Spazio › Soglie),
+ * l'unico posto dove la serie si forma per tutto lo spazio: una lettura che
+ * scrivesse renderebbe il risultato dipendente dall'ordine delle aperture.
+ *
+ * Le aziende senza serie non si omettono in silenzio: si contano
+ * (`senzaSerie`) e la pagina lo dichiara, così una tabella corta non passa
+ * per «nessun debito».
+ */
+export async function elencoContributiPerAnnoSpazioAction(
+  nomeSchema: string
+): Promise<EsitoVistaContributiSpazio> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    await assicuraTabellaAziende(nomeSchema);
+    const r = await pool.query(
+      `SELECT id, ragione_sociale, contributi_per_anno, contributi_per_anno_origine,
+              soglie_aggiornate_al
+         FROM "${nomeSchema}".aziende
+        ORDER BY ragione_sociale`
+    );
+    const righe: AziendaConSerie[] = [];
+    let senzaSerie = 0;
+    for (const a of r.rows as Record<string, unknown>[]) {
+      const anni = contributiPerAnnoDaDb(a.contributi_per_anno);
+      if (anni.length === 0) {
+        senzaSerie += 1;
+        continue;
+      }
+      const origine = (a.contributi_per_anno_origine ?? null) as OrigineSerie | null;
+      righe.push({
+        aziendaId: Number(a.id),
+        ragioneSociale: String(a.ragione_sociale ?? ''),
+        anni,
+        // Una serie scritta prima che la colonna esistesse veniva dai file: il
+        // null storico non vuol dire «origine ignota».
+        origine: origine ?? 'file',
+        ricostruitaIl:
+          origine && origine !== 'file' && a.soglie_aggiornate_al
+            ? new Date(a.soglie_aggiornate_al as string).toISOString().slice(0, 10)
+            : null,
+      });
+    }
+    return { success: true, righe, senzaSerie };
+  } catch (error: unknown) {
+    console.error('[elencoContributiPerAnnoSpazioAction] Errore:', error);
+    return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
   }
 }
 

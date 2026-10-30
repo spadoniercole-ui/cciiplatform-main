@@ -1,3 +1,31 @@
+## 0.147.0 — 2026-10-30
+
+**Il quadro d'insieme dei contributi, in una pagina.** La scheda Indici dice a un'azienda alla
+volta se il rapporto scaduti / dovuti sale; il ricalcolo d'ufficio scrive la serie di tutte le
+aziende verificate, ma per leggerle insieme bisognava aprirle tutte. Nella nuova voce «Contributi
+per anno» della sidebar c'è una tabella con una riga per azienda e una colonna per esercizio: la
+quota di ciascun anno, la variazione in punti tra la prima e l'ultima quota calcolabile, e accanto
+il debito scaduto da oltre 90 giorni. Chi sale di più sta in alto, con l'etichetta «in crescita»;
+in testa quattro conteggi dicono quante aziende hanno una serie, quante crescono, quante hanno un
+ritardo misurato e quanto vale in tutto.
+
+**«In crescita» non è «soglia superata».** La variazione si misura tra il primo e l'ultimo anno in
+cui il rapporto si può calcolare, saltando — non azzerando — gli esercizi a cui manca un lato. Un
+anno senza lo scaduto non vale zero: vale «non lo so», e resta fuori dal confronto. La pagina lo
+dichiara sotto la tabella, perché una crescita dal 2% al 4% resta una crescita senza essere la
+fattispecie dell'art. 25-novies, che richiede anche il ritardo e, con lavoratori, i 15.000 euro.
+
+**Il ritardo non misurato resta un trattino.** Le serie ricostruite dalle posizioni del triage o
+dai valori conservati non portano il «di cui oltre 90 giorni»: la colonna mostra «—» e non zero.
+La colonna «Fonte» dice da dove viene ogni serie (DM10 e inadempienze, posizioni, valori
+conservati) con la data della ricostruzione. Le aziende senza serie non spariscono in silenzio: si
+contano, e la pagina rimanda al ricalcolo in Parametri di Spazio › Soglie.
+
+**Pagina di sola lettura.** Non ricostruisce nulla mentre si apre: la serie si forma nel triage o
+con il ricalcolo d'ufficio, così il risultato non dipende dall'ordine con cui si aprono le schede.
+Come la gestione aziende, è riservata all'Admin di spazio: un Operatore vede solo le posizioni
+assegnate, non il quadro completo.
+
 ## 0.146.0 — 2026-10-30
 
 **La serie dei contributi si ricostruisce per tutto lo spazio, in un comando.** La ricostruzione
