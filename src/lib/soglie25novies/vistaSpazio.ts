@@ -153,3 +153,22 @@ export function riepilogoVistaContributi(righe: readonly RigaVistaContributi[]):
       misurate.length === 0 ? null : misurate.reduce((s, r) => s + (r.oltre90 ?? 0), 0),
   };
 }
+
+/**
+ * La provenienza della serie, in una riga: la stessa nella tabella e nel
+ * foglio Excel, così i due non possono divergere.
+ *
+ * Un'origine «file» non porta la data di ricostruzione: i file sono la fonte,
+ * non una ricostruzione da datare.
+ */
+export function etichettaFonte(r: Pick<RigaVistaContributi, 'origine' | 'ricostruitaIl'>): string {
+  const base =
+    r.origine === 'file'
+      ? 'DM10 / inadempienze'
+      : r.origine === 'posizioni'
+        ? 'posizioni triage'
+        : 'valori conservati';
+  if (!r.ricostruitaIl || r.origine === 'file') return base;
+  const [anno, mese, giorno] = r.ricostruitaIl.split('-');
+  return `${base} · ${giorno}/${mese}/${anno}`;
+}

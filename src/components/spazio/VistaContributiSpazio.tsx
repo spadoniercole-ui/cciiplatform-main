@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { AlertTriangle, TrendingUp } from 'lucide-react';
-import type { RiepilogoVista, RigaVistaContributi } from '@/lib/soglie25novies/vistaSpazio';
+import { EsportaContributiExcel } from '@/components/spazio/EsportaContributiExcel';
+import {
+  etichettaFonte,
+  type RiepilogoVista,
+  type RigaVistaContributi,
+} from '@/lib/soglie25novies/vistaSpazio';
 
 // La vista d'insieme dei contributi per anno: una riga per azienda, una
 // colonna per esercizio. Serve a decidere dove guardare — chi sale di più sta
@@ -31,16 +36,7 @@ const punti = (v: number | null) =>
     ? '—'
     : `${v > 0 ? '+' : ''}${v.toLocaleString('it-IT', { maximumFractionDigits: 1 })} pt`;
 
-const fonte = (r: RigaVistaContributi) => {
-  const base =
-    r.origine === 'file'
-      ? 'DM10 / inadempienze'
-      : r.origine === 'posizioni'
-        ? 'posizioni triage'
-        : 'valori conservati';
-  if (!r.ricostruitaIl || r.origine === 'file') return base;
-  return `${base} · ${new Date(`${r.ricostruitaIl}T00:00:00Z`).toLocaleDateString('it-IT')}`;
-};
+const fonte = (r: RigaVistaContributi) => etichettaFonte(r);
 
 export function VistaContributiSpazio({ codice, righe, riepilogo, senzaSerie, errore }: Props) {
   // Gli anni di tutte le serie: una colonna per esercizio, anche se qualche
@@ -73,15 +69,20 @@ export function VistaContributiSpazio({ codice, righe, riepilogo, senzaSerie, er
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-blue-600" />
-          Contributi per anno — vista d&apos;insieme
-        </h1>
-        <p className="text-slate-500 text-xs mt-1">
-          Il rapporto scaduti / dovuti dell&apos;art. 25-novies, lett. a), per tutte le aziende
-          dello spazio: prima quelle che salgono, accanto il debito scaduto da oltre 90 giorni.
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-blue-600" />
+            Contributi per anno — vista d&apos;insieme
+          </h1>
+          <p className="text-slate-500 text-xs mt-1">
+            Il rapporto scaduti / dovuti dell&apos;art. 25-novies, lett. a), per tutte le aziende
+            dello spazio: prima quelle che salgono, accanto il debito scaduto da oltre 90 giorni.
+          </p>
+        </div>
+        {!errore && righe.length > 0 && (
+          <EsportaContributiExcel nomeSpazio={codice} righe={righe} />
+        )}
       </div>
 
       {errore && (

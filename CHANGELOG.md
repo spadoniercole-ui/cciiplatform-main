@@ -1,3 +1,22 @@
+## 0.148.0 — 2026-10-30
+
+**La vista d'insieme dei contributi si porta via in Excel.** La tabella delle aziende con il
+rapporto scaduti / dovuti per esercizio si scarica così com'è, con un pulsante accanto al titolo:
+una riga per azienda, una colonna per anno, e in coda variazione in punti, debito scaduto da oltre
+90 giorni, esercizi che lo compongono, provenienza della serie e data della ricostruzione. L'ordine
+è quello della pagina — prima chi cresce di più — così chi apre il foglio trova le aziende dove le
+ha lasciate, senza riordinare a mano.
+
+**Le celle vuote restano vuote.** Un anno con il dovuto e senza lo scaduto non ha un rapporto
+calcolabile: nel foglio la cella è vuota, non zero. Lo stesso per il ritardo oltre 90 giorni, che le
+serie ricostruite dal triage non portano. Le quote sono numeri veri formattati a percentuale, non
+testo: si possono ordinare e sommare, e la nota in testa al foglio dichiara cosa vuol dire il vuoto
+e che la crescita non è una soglia superata, perché il file viaggia senza la pagina che lo spiega.
+
+**Stessa etichetta di provenienza in pagina e nel file.** «DM10 / inadempienze», «posizioni
+triage», «valori conservati», con la data della ricostruzione: una sola funzione la produce, così
+tabella e Excel non possono dire due cose diverse sulla stessa serie.
+
 ## 0.147.0 — 2026-10-30
 
 **Il quadro d'insieme dei contributi, in una pagina.** La scheda Indici dice a un'azienda alla
