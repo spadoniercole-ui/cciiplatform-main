@@ -1,3 +1,39 @@
+## 0.150.0 — 2026-10-31
+
+**Il perimetro delle operazioni è scritto, con i buchi dichiarati.** Nuovo
+`docs/GRIGLIA-OPERAZIONI-CCII.md`: venti operazioni con descrizione, rimando
+normativo, documento interno dell'ente e riferimenti divulgativi, e un segno per
+ogni fonte — letto, parziale, da verificare, oppure nessun documento reperito.
+Le soglie dell'art. 25-novies risultano allineate al testo (30% e 15.000 € con
+lavoratori, 5.000 € senza, 5.000 € INAIL, 5.000 € e 10% del volume d'affari per
+l'IVA, 100.000/200.000/500.000 € per l'Agente della Riscossione), compresi i
+versi dei confronti e l'esclusione dei 90 giorni per l'IVA. Restano segnalati
+come lacune i segnali dell'art. 3, comma 4 — retribuzioni a 30 giorni, fornitori
+a 90, banche a 60 — che la piattaforma non copre, e le soglie dell'art. 63 e
+degli artt. 57/60/61, che il prodotto usa ma che questa verifica non ha
+riscontrato sul testo. Le pagine Altalex non sono citabili (login Wolters
+Kluwer): il documento lo dice invece di incollare link che non si aprono.
+
+**Una soglia non applicata non è una soglia sotto.** Con «presenza di
+lavoratori» o «forma giuridica» non dichiarate, le due righe INPS (o le tre
+dell'Agente della Riscossione) restavano fuori dal confronto e il riepilogo del
+triage poteva titolare «Nessun parametro oltre soglia»: una conclusione
+favorevole su una soglia che nessuno aveva valutato. Ora il motore conta le
+soglie rimaste fuori per dato mancante, il riepilogo le nomina e l'esito scende
+a «non determinabile».
+
+**Scheda Indici e vista d'insieme dichiarano la stessa fonte.** La scheda
+azienda taceva la provenienza della serie quando veniva dai file e la scriveva a
+parole proprie quando era ricostruita; ora usa la stessa funzione dell'elenco,
+quindi non può dire «DM10 / inadempienze» se uno solo dei due file ha dato un
+anno.
+
+**Un test sul file vero.** `lettura.reale.test.ts` legge un Elenco denunce del
+Cassetto indicato con `ELENCO_DENUNCE_FILE` o appoggiato in
+`src/lib/denunce/__fixtures__/`: verifica che i periodi si leggano tutti e che i
+dovuti per anno siano la somma dei saldi, senza anni aggiunti. Se il file non
+c'è, il test si salta dichiarandolo.
+
 ## 0.149.0 — 2026-10-30
 
 **La vista dei contributi si filtra.** Quattro pastiglie sopra la tabella — tutte, in crescita, con

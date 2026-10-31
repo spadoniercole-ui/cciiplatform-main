@@ -26,6 +26,10 @@
 
 import type { EsitoSoglie, RigaSoglia } from './calcolo';
 
+// Una soglia «non applicata» non è una soglia «sotto». Il riepilogo le
+// distingue perché l'errore che evitano è il peggiore possibile: dire che
+// nulla supera la soglia quando la soglia non è stata confrontata.
+
 export type StatoSoglieTriage =
   'superate' | 'nessuna_superata' | 'non_determinabile' | 'non_applicabile';
 
@@ -45,6 +49,9 @@ export function riepilogaSoglieTriage(esito: EsitoSoglie): RiepilogoSoglieTriage
   const applicabili = esito.righe.filter((r) => r.applicabile).length;
   const superate = esito.superate;
   const nonDeterminabili = esito.nonDeterminabili.length;
+  // Le soglie rimaste fuori perché manca il dato che le seleziona (lavoratori
+  // per l'INPS, forma giuridica per l'Agente della Riscossione).
+  const nonApplicabili = esito.nonApplicabiliPerDatiMancanti ?? 0;
 
   if (superate.length > 0) {
     const unaSola = superate.length === 1;
@@ -62,6 +69,9 @@ export function riepilogaSoglieTriage(esito: EsitoSoglie): RiepilogoSoglieTriage
         'resta all’ente.' +
         (nonDeterminabili > 0
           ? ` Restano ${nonDeterminabili} ${nonDeterminabili === 1 ? 'soglia non determinabile' : 'soglie non determinabili'} per dati mancanti: il superamento rilevato non ne è influenzato.`
+          : '') +
+        (nonApplicabili > 0
+          ? ` Altre ${nonApplicabili} non sono state applicate perché manca il dato che le seleziona: non sono sotto soglia, restano fuori dal confronto.`
           : ''),
     };
   }
@@ -80,7 +90,7 @@ export function riepilogaSoglieTriage(esito: EsitoSoglie): RiepilogoSoglieTriage
     };
   }
 
-  if (nonDeterminabili > 0) {
+  if (nonDeterminabili > 0 || nonApplicabili > 0) {
     return {
       stato: 'non_determinabile',
       superate,
@@ -88,8 +98,13 @@ export function riepilogaSoglieTriage(esito: EsitoSoglie): RiepilogoSoglieTriage
       nonDeterminabili,
       titolo: 'Nessun superamento rilevato sui dati disponibili',
       dettaglio:
-        `${nonDeterminabili} ${nonDeterminabili === 1 ? 'soglia applicabile non è determinabile' : 'soglie applicabili non sono determinabili'} ` +
-        'per dati mancanti: l’esito vale solo su ciò che si è potuto misurare e non conclude sulle altre.',
+        (nonDeterminabili > 0
+          ? `${nonDeterminabili} ${nonDeterminabili === 1 ? 'soglia applicabile non è determinabile' : 'soglie applicabili non sono determinabili'} ` +
+            'per dati mancanti: l’esito vale solo su ciò che si è potuto misurare e non conclude sulle altre.'
+          : 'Il confronto non copre tutto il perimetro.') +
+        (nonApplicabili > 0
+          ? ` ${nonApplicabili} ${nonApplicabili === 1 ? 'soglia è rimasta' : 'soglie sono rimaste'} fuori perché manca il dato che le seleziona — la presenza di lavoratori per l’INPS, la forma giuridica per l’Agente della Riscossione: non sono sotto soglia, non sono state confrontate.`
+          : ''),
     };
   }
 

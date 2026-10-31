@@ -194,6 +194,17 @@ export interface EsitoSoglie {
   superate: RigaSoglia[];
   /** Righe applicabili il cui esito non e' determinabile per dati mancanti. */
   nonDeterminabili: RigaSoglia[];
+  /**
+   * Soglie che non sono state applicate perche' manca il dato che le
+   * seleziona: le due INPS (presenza di lavoratori non dichiarata) e le tre
+   * dell'Agente della Riscossione (forma giuridica non riconosciuta).
+   *
+   * Sono fuori dal confronto, non «sotto soglia». Senza contarle, il
+   * riepilogo del triage poteva dire «nessun parametro oltre soglia» su un
+   * perimetro in cui la soglia INPS non era mai stata valutata: una
+   * conclusione favorevole tratta da un dato che non c'era.
+   */
+  nonApplicabiliPerDatiMancanti?: number;
   datiMancanti: string[];
   /** INPS: contributi sotto soglia, ma con le sanzioni presunte la supererebbe. */
   inpsSopraSoloConSanzioni: boolean;
@@ -585,10 +596,20 @@ export function calcolaSoglie25Novies(
     soloEnte && soloEnte !== 'NON_PUBBLICO' ? righe.filter((r) => r.ente === soloEnte) : righe;
   const applicabili = filtrate.filter((r) => r.applicabile);
 
+  // Le soglie che il dato mancante tiene fuori dal confronto. Si contano
+  // sull'ente che si sta guardando: a un valutatore INAIL le due righe INPS
+  // non interessano e non devono pesare nel suo riepilogo.
+  const conta = (ente: Ente25Novies) =>
+    !soloEnte || soloEnte === 'NON_PUBBLICO' || soloEnte === ente;
+  const nonApplicabiliPerDatiMancanti =
+    (conta('INPS') && dati.conLavoratori === null ? 2 : 0) +
+    (conta('AGENZIA_RISCOSSIONE') && dati.formaAER === null ? 3 : 0);
+
   return {
     righe: filtrate,
     superate: applicabili.filter((r) => r.esito === 'sopra'),
     nonDeterminabili: applicabili.filter((r) => r.esito === 'non_determinabile'),
+    nonApplicabiliPerDatiMancanti,
     datiMancanti,
     inpsSopraSoloConSanzioni:
       inpsSopraSoloConSanzioni && (!soloEnte || soloEnte === 'INPS' || soloEnte === 'NON_PUBBLICO')

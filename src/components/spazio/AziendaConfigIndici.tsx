@@ -20,6 +20,7 @@ import { ottieniContributiPerAnnoAction } from '@/app/actions/soglie25novies';
 import type { IndiceCcii } from '@/lib/xbrl/types';
 import { calcolaQuoteDebitoPubblico } from '@/lib/xbrl/indici';
 import { rapportiPerAnno, type RapportoAnno } from '@/lib/soglie25novies/rapportoAnni';
+import { etichettaFonte } from '@/lib/soglie25novies/vistaSpazio';
 
 interface Props {
   nomeSchema: string;
@@ -338,6 +339,30 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
                   : ''}
                 : non e’ la lettura dei file, e non porta il ritardo oltre 90 giorni. Ricaricando
                 DM10 e Lista Inadempienze arriva l’andamento per esercizio.
+              </p>
+            )}
+            {/* La scheda e la vista d'insieme devono dire la stessa cosa della
+                stessa serie: una sola funzione produce l'etichetta, così non
+                possono divergere. Prima la scheda taceva la fonte quando i
+                file c'erano, e «DM10 / inadempienze» restava vero anche con
+                un solo file letto. */}
+            {origineContributi && contributiAnni.length > 0 && (
+              <p
+                className={`text-[10px] mt-1 leading-relaxed ${
+                  origineContributi === 'file' ? 'text-slate-500' : 'text-amber-700'
+                }`}
+              >
+                Fonte della serie:{' '}
+                <span className="font-semibold">
+                  {etichettaFonte({
+                    origine: origineContributi,
+                    ricostruitaIl,
+                    anni: contributiAnni,
+                  })}
+                </span>
+                {origineContributi === 'file'
+                  ? ' — nomina solo i file che hanno davvero dato un anno.'
+                  : ' — la stessa etichetta della vista d’insieme.'}
               </p>
             )}
             <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
