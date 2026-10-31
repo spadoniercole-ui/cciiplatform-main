@@ -1,3 +1,27 @@
+## 0.151.0 — 2026-10-31
+
+**I segnali dell'art. 3, comma 4 hanno un posto, un esito e una fonte
+dichiarata.** Nuovo modulo `src/lib/segnaliArt3/segnali.ts`, mostrato nella
+scheda azienda accanto alle soglie: retribuzioni scadute da almeno 30 giorni
+oltre la metà del monte mensile, fornitori scaduti da 90 giorni superiori ai non
+scaduti, banche scadute da oltre 60 giorni o oltre affidamento da almeno 60 se
+raggiungono il 5% delle esposizioni, e rinvio alle soglie dell'art. 25-novies.
+I versi sono quelli della legge — «oltre la metà» è `>`, «superiore» è `>`,
+«almeno il cinque per cento» è `>=` — e i test li fissano sui valori di confine.
+La lettera d) si alimenta dal confronto con l'art. 25-novies già eseguito; le
+lettere a), b) e c) restano **non verificabili** e dicono quale documento
+servirebbe: libro paga, scadenzario fornitori, centrale dei rischi. Un segnale
+non misurato non diventa un segnale assente.
+
+**Cinque articoli in meno da verificare nella griglia.** Artt. 56, 57, 60, 61 e
+63 letti sul testo (Brocardi, aggiornato al 12/08/2026): accordi ordinari al
+60%, agevolati al 30%, ad efficacia estesa al 75% dei crediti della categoria;
+transazione fiscale al 50% con altri aderenti per almeno un quarto
+dell'indebitamento e al 60% con dilazione non oltre dieci anni, con risoluzione
+di diritto se i pagamenti non sono integrali entro 60 giorni. Restano segnati
+«da verificare» soltanto la riduzione del capitale per perdite con la
+sospensione COVID e il confronto con la liquidazione.
+
 ## 0.150.0 — 2026-10-31
 
 **Il perimetro delle operazioni è scritto, con i buchi dichiarati.** Nuovo
@@ -372,7 +396,6 @@ misurarli come versamenti scaduti produrrebbe numeri senza senso.
 Test: 7 sul calcolo della scopertura, 2 sulle nature con termine, e le prove della
 doppia scrittura riscritte sull'inversione (la posizione elencata è la denuncia).
 
-
 ## 0.141.0 — 2026-10-29
 
 **Il V.E.R.A. obbligatorio smette di essere una regola uguale per tutti.** Nel triage
@@ -391,7 +414,6 @@ nessuno) è una configurazione ambigua, e non si indovina: il facoltativo è il
 default e la scheda chiede di scegliere.
 
 Test aggiunti: 5 sulla regola (ente, impostazione che prevale, assenza di ente).
-
 
 ## 0.140.0 — 2026-10-28
 

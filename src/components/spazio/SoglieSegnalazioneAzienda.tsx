@@ -26,6 +26,7 @@ import {
   type ValoriSoglie,
 } from '@/app/actions/soglie25novies';
 import { ETICHETTA_ENTE, type EsitoSoglie, type Ente25Novies } from '@/lib/soglie25novies/calcolo';
+import { valutaSegnaliArt3, type EsitoSegnaleArt3 } from '@/lib/segnaliArt3/segnali';
 
 interface Props {
   nomeSchema: string;
@@ -425,6 +426,67 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
           )}
         </div>
       )}
+
+      <SegnaliAllertaArt3 soglieSuperate={esito ? esito.superate.length : null} />
+    </div>
+  );
+}
+
+/**
+ * Segnali dell'art. 3, comma 4: la parte dell'allerta che riguarda l'impresa,
+ * non l'ente creditore. Le lettere a), b) e c) richiedono libro paga,
+ * scadenzario fornitori e centrale dei rischi, che la piattaforma non
+ * acquisisce: qui compaiono come non verificabili, con la fonte che
+ * servirebbe. La lettera d) usa il confronto già eseguito sulle soglie.
+ */
+function SegnaliAllertaArt3({ soglieSuperate }: { soglieSuperate: number | null }) {
+  const esito = valutaSegnaliArt3({ soglie25NoviesSuperate: soglieSuperate });
+  const classi: Record<EsitoSegnaleArt3, string> = {
+    segnale: 'bg-red-50 text-red-700 border-red-200',
+    sotto: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    non_determinabile: 'bg-amber-50 text-amber-700 border-amber-200',
+  };
+  const etichetta: Record<EsitoSegnaleArt3, string> = {
+    segnale: 'Segnale',
+    sotto: 'Non presente',
+    non_determinabile: 'Non verificabile',
+  };
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+      <div className="border-b border-slate-100 pb-3">
+        <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+          Segnali dell’art. 3, comma 4
+        </h3>
+        <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+          {esito.sintesi} Sono segnali che l’imprenditore deve saper vedere, prima e a prescindere
+          dall’obbligo di segnalazione dell’ente.
+        </p>
+      </div>
+      {esito.righe.map((r) => (
+        <div key={r.lettera} className="border border-slate-200 rounded-lg p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-bold text-xs text-slate-900">
+                {r.lettera}) {r.titolo}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">{r.testoLegge}</p>
+            </div>
+            <span
+              className={`inline-block text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 whitespace-nowrap ${classi[r.esito]}`}
+            >
+              {etichetta[r.esito]}
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-600 mt-2 pt-2 border-t border-slate-100 leading-relaxed">
+            {r.confronto}
+          </p>
+          {r.fonteNecessaria && (
+            <p className="text-[10px] text-amber-800 mt-1 leading-relaxed">
+              Serve: {r.fonteNecessaria}
+            </p>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
