@@ -1,3 +1,24 @@
+## 0.157.0 — 2026-11-01
+
+**Le TL si scrivono nei prodotti, e la materia le eredita.**
+Il flusso è 1 → 2 → 3 — direttrici e prodotti, lavorazioni, titoli di credito — ma girava al
+contrario: il prodotto era soltanto un nome nel questionario, la TL nasceva nella materia, e per
+lavorare un DURC bisognava aspettare che una materia esistesse, inventare lì la tipologia e solo
+alla fine associarla ai codici. Chi configurava tornava al passo 1 a mani vuote.
+
+- **Un catalogo, sotto il prodotto.** Ogni prodotto di ogni direttrice porta la sua tabella di TL:
+  tipologia, esito, ufficio, passi e contrassegno di perimetro. Si scrive una volta, dove il lavoro
+  si organizza.
+- **La materia associa, non possiede.** «Materie e TL» elenca le TL che la materia eredita e
+  permette di associarne altre dal catalogo, con l'ordine di esecuzione: la prima è quella che il
+  titolo del codice eredita, e un ufficio scritto sul singolo codice ha ancora la precedenza.
+- **Le configurazioni esistenti non si perdono.** Le TL già scritte nelle materie vengono copiate
+  nel catalogo al primo accesso — con lo stesso id, così le risposte della check di perimetro
+  restano agganciate — sotto un prodotto che porta il loro nome, rinominabile. La vecchia tabella
+  resta come storico: non è più letta né scritta.
+- **La check di perimetro resta una voce per TL.** Se la stessa TL copre più materie la domanda è
+  una sola: è la lavorazione a essere stata attivata o no, non la materia in cui cade il codice.
+
 ## 0.156.0 — 2026-11-01
 
 **Le tre check del triage restano a schermo, e dalla verifica si torna alla dashboard.**
@@ -17,10 +38,6 @@ lo stato senza la check e faceva sparire l'avviso senza aver risolto nulla.
   non deve bloccare o sbloccare la successiva.
 - **Dalla verifica si torna alla dashboard del triage.** In cima alla videata, in ogni fase, c'è il
   ritorno alle verifiche in sospeso: prima si usciva solo perdendo quello che si aveva a schermo.
-
-**Resta aperto:** l'ordine del flusso delle TL (direttrici e prodotti → lavorazioni → titoli di
-credito) è ancora quello attuale, con le TL nate nelle materie: la loro tabellazione nei prodotti
-è un cambio di modello, non una correzione di percorso.
 
 ## 0.155.0 — 2026-11-01
 

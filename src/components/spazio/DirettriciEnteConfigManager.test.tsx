@@ -21,6 +21,7 @@ vi.mock('@/app/actions/screeningAzienda', () => ({
 vi.mock('@/app/actions/materieLavorazione', () => ({
   ottieniLavorazioniMateria: vi.fn(),
   riallineaUfficioAllaDirettriceAction: vi.fn(),
+  ottieniCatalogoTl: vi.fn().mockResolvedValue({ success: true, tl: [] }),
 }));
 
 vi.mock('@/app/actions/titoliEnte', () => ({

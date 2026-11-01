@@ -21,7 +21,7 @@ import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
 import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { pool } from '@/lib/db';
-import { assicuraTabellaMaterieLavorazione, assicuraTabelleParametriSpazio } from '@/db/provision';
+import { assicuraTabelleProdottiTl, assicuraTabelleParametriSpazio } from '@/db/provision';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { estraiJson } from '@/lib/visura/fatti';
 import {
@@ -703,13 +703,10 @@ export async function eliminaMateriaEnteAction(
       `UPDATE "${contesto.nomeSchema}".titoli_ente SET materia_id = NULL WHERE materia_id = $1`,
       [id]
     );
-    // Le lavorazioni appartengono alla materia: via anche quelle, altrimenti
-    // restano righe che nessun titolo può più leggere (0.138.0).
-    await assicuraTabellaMaterieLavorazione(contesto.nomeSchema);
-    await pool.query(
-      `DELETE FROM "${contesto.nomeSchema}".materie_lavorazione WHERE materia_id = $1`,
-      [id]
-    );
+    // La materia perde le associazioni alle TL: le TL restano nel catalogo,
+    // perché lo stesso prodotto si lavora su più materie (0.157.0).
+    await assicuraTabelleProdottiTl(contesto.nomeSchema);
+    await pool.query(`DELETE FROM "${contesto.nomeSchema}".materia_tl WHERE materia_id = $1`, [id]);
     await pool.query(`DELETE FROM "${contesto.nomeSchema}".materie_ente WHERE id = $1`, [id]);
     return { success: true };
   } catch (error: unknown) {

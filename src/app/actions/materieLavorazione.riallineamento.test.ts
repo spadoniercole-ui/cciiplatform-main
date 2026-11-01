@@ -40,7 +40,7 @@ vi.mock('@/lib/autorizzazione', () => ({ richiediAccessoSchema }));
 // Le tabelle le crea questo test: qui ciò che conta è che esistano con le
 // colonne che le query nominano.
 vi.mock('@/db/provision', () => ({
-  assicuraTabellaMaterieLavorazione: async () => {},
+  assicuraTabelleProdottiTl: async () => {},
   assicuraTabelleParametriSpazio: async () => {},
 }));
 
@@ -79,15 +79,25 @@ async function nuovoSpazio(opzioni: { titoliBloccati?: boolean } = {}): Promise<
   await db.exec(`
     CREATE SCHEMA ${schema};
 
-    CREATE TABLE ${schema}.materie_lavorazione (
+    CREATE TABLE ${schema}.prodotti_tl (
       id SERIAL PRIMARY KEY,
-      materia_id INTEGER NOT NULL,
-      tipologia TEXT NOT NULL,
+      direttrice TEXT NOT NULL DEFAULT '',
+      prodotto TEXT NOT NULL DEFAULT '',
+      tipologia TEXT NOT NULL DEFAULT '',
       dipendenza TEXT,
       procedura TEXT,
       esito TEXT,
       ordine INTEGER NOT NULL DEFAULT 0,
+      rilevante_perimetro BOOLEAN NOT NULL DEFAULT false,
+      verso_perimetro TEXT,
       aggiornato_il TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE ${schema}.materia_tl (
+      materia_id INTEGER NOT NULL,
+      tl_id INTEGER NOT NULL,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (materia_id, tl_id)
     );
 
     CREATE TABLE ${schema}.titoli_ente (
@@ -102,11 +112,13 @@ async function nuovoSpazio(opzioni: { titoliBloccati?: boolean } = {}): Promise<
     INSERT INTO public.spazi (nome_schema, direttrici_ente_strutturate)
     VALUES ('${schema}', '${JSON.stringify(DIRETTRICI)}'::jsonb);
 
-    INSERT INTO ${schema}.materie_lavorazione (materia_id, tipologia, dipendenza) VALUES
-      (10, 'Emissione diffida', 'Ufficio Legale'),
-      (11, 'Verifica del flusso', 'ufficio legale'),
-      (12, 'Contabilizzazione', 'Gestione del credito'),
-      (13, 'Recupero coattivo', NULL);
+    INSERT INTO ${schema}.prodotti_tl (prodotto, tipologia, dipendenza) VALUES
+      ('Emissione diffida', 'Emissione diffida', 'Ufficio Legale'),
+      ('Verifica del flusso', 'Verifica del flusso', 'ufficio legale'),
+      ('Contabilizzazione', 'Contabilizzazione', 'Gestione del credito'),
+      ('Recupero coattivo', 'Recupero coattivo', NULL);
+
+    INSERT INTO ${schema}.materia_tl (materia_id, tl_id) VALUES (10, 1), (11, 2), (12, 3), (13, 4);
 
     INSERT INTO ${schema}.titoli_ente (codice, atto, dipendenza) VALUES
       ('27', 'Flusso Uniemens', NULL),
@@ -123,7 +135,7 @@ interface Riga {
 
 /** Le dipendenze di una tabella, per id: quello che è finito davvero a database. */
 async function dipendenze(
-  tabella: 'materie_lavorazione' | 'titoli_ente',
+  tabella: 'prodotti_tl' | 'titoli_ente',
   schema: string
 ): Promise<(string | null)[]> {
   const r = await db.query<Riga>(`SELECT id, dipendenza FROM ${schema}.${tabella} ORDER BY id`);
@@ -149,7 +161,7 @@ describe('riallineare un ufficio fuori elenco a una direttrice', () => {
     });
 
     // La riga 12 era già della direttrice, la 13 non ha ufficio: non si toccano.
-    expect(await dipendenze('materie_lavorazione', schema)).toEqual([
+    expect(await dipendenze('prodotti_tl', schema)).toEqual([
       'Gestione del credito',
       'Gestione del credito',
       'Gestione del credito',
@@ -175,7 +187,12 @@ describe('riallineare un ufficio fuori elenco a una direttrice', () => {
       id: number;
       materia_id: number;
       dipendenza: string | null;
-    }>(`SELECT id, materia_id, dipendenza FROM ${schema}.materie_lavorazione ORDER BY id`);
+    }>(
+      `SELECT t.id, a.materia_id, t.dipendenza
+         FROM ${schema}.materia_tl a
+         JOIN ${schema}.prodotti_tl t ON t.id = a.tl_id
+        ORDER BY t.id`
+    );
     const titoli = await db.query<Riga>(
       `SELECT id, dipendenza FROM ${schema}.titoli_ente ORDER BY id`
     );
@@ -215,7 +232,7 @@ describe('riallineare un ufficio fuori elenco a una direttrice', () => {
 
     expect(esito.success).toBe(false);
     expect(esito.error).toMatch(/una delle direttrici configurate/);
-    expect(await dipendenze('materie_lavorazione', schema)).toEqual([
+    expect(await dipendenze('prodotti_tl', schema)).toEqual([
       'Ufficio Legale',
       'ufficio legale',
       'Gestione del credito',
@@ -243,7 +260,7 @@ describe('riallineare un ufficio fuori elenco a una direttrice', () => {
     // passerebbe anche se il comando si fermasse prima di toccare il database.
     expect(esito.error).toMatch(/titoli_bloccati/);
 
-    expect(await dipendenze('materie_lavorazione', schema)).toEqual([
+    expect(await dipendenze('prodotti_tl', schema)).toEqual([
       'Ufficio Legale',
       'ufficio legale',
       'Gestione del credito',

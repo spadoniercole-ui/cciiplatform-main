@@ -9,11 +9,14 @@ import {
   type DirettriceStrutturata,
 } from '@/app/actions/screeningAzienda';
 import {
+  ottieniCatalogoTl,
   ottieniLavorazioniMateria,
   riallineaUfficioAllaDirettriceAction,
 } from '@/app/actions/materieLavorazione';
+import { TlDelProdotto } from '@/components/spazio/TlDelProdotto';
+import type { TlProdotto } from '@/lib/titoliEnte/prodottiTl';
 import { ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
-import { componiCatenaDirettrici } from '@/lib/titoliEnte/direttrici';
+import { componiCatenaDirettrici, nomiDirettrici } from '@/lib/titoliEnte/direttrici';
 import { conRitorno } from '@/lib/navigazione/ritorno';
 import type { LavorazioneMateria } from '@/lib/titoliEnte/lavorazioniMateria';
 import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
@@ -37,6 +40,11 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
   const [direttrici, setDirettrici] = useState<DirettriceStrutturata[]>([]);
   const [lavorazioni, setLavorazioni] = useState<LavorazioneMateria[]>([]);
   const [titoli, setTitoli] = useState<TitoloEnte[]>([]);
+  /**
+   * Il catalogo delle TL (0.157.0): si scrivono qui, dentro il prodotto a cui
+   * si applicano, e la materia le eredita al passo successivo.
+   */
+  const [catalogo, setCatalogo] = useState<TlProdotto[]>([]);
   const [nuovoProdotto, setNuovoProdotto] = useState<Record<number, string>>({});
   const [caricamento, setCaricamento] = useState(true);
   const [salvataggio, setSalvataggio] = useState(false);
@@ -51,26 +59,30 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
   useEffect(() => {
     (async () => {
       setCaricamento(true);
-      const [d, l, t] = await Promise.all([
+      const [d, l, t, c] = await Promise.all([
         ottieniDirettriciEnte(nomeSchema),
         ottieniLavorazioniMateria(nomeSchema),
         ottieniTitoliEnteAction(nomeSchema),
+        ottieniCatalogoTl(nomeSchema),
       ]);
       if (d.success) setDirettrici(d.direttrici);
       else setErrore(d.error || 'Impossibile caricare.');
       if (l.success) setLavorazioni(l.lavorazioni);
       if (t.success) setTitoli(t.titoli);
+      if (c.success) setCatalogo(c.tl);
       setCaricamento(false);
     })();
   }, [nomeSchema]);
 
   const ricaricaLavorazioniETitoli = async () => {
-    const [l, t] = await Promise.all([
+    const [l, t, c] = await Promise.all([
       ottieniLavorazioniMateria(nomeSchema),
       ottieniTitoliEnteAction(nomeSchema),
+      ottieniCatalogoTl(nomeSchema),
     ]);
     if (l.success) setLavorazioni(l.lavorazioni);
     if (t.success) setTitoli(t.titoli);
+    if (c.success) setCatalogo(c.tl);
   };
 
   // Un ufficio fuori elenco non è un errore da correggere a mano, riga per
@@ -162,6 +174,18 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
         prodotti o le procedure concreti (es. Cassa Integrazione, DURC, DICA): l&apos;AI genera
         domande ancorate a questi, non alla direttrice in astratto — è quello che tiene le domande
         pertinenti invece di generiche.
+      </p>
+      <p className="text-[11px] text-slate-500">
+        Sotto ogni prodotto si scrivono le <strong>TL</strong>: le lavorazioni con cui l&apos;ente
+        tratta quel fatto concreto — ufficio, passi, esito e contrassegno di perimetro. Si scrivono
+        qui, una volta sola; la{' '}
+        <Link
+          href={conRitorno(`/spazio/${codice}/parametri/materie-lavorazione`, ritorno)}
+          className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
+        >
+          materia le eredita <ArrowRight className="w-3 h-3" />
+        </Link>{' '}
+        associandole ai propri codici.
       </p>
       <p className="text-[11px] text-slate-500">
         Il nome di ogni direttrice è anche il <strong>nome dell&apos;ufficio</strong>: le{' '}
@@ -397,6 +421,25 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
                 all&apos;AI per generare domande ancorate a qualcosa di concreto.
               </p>
             )}
+
+            {/* LE TL DEL PRODOTTO (0.157.0). Stanno sotto il fatto a cui si
+                applicano: il prodotto è la chiave, e la materia le eredita al
+                passo 2 senza riscriverle. */}
+            {d.prodotti.map((prodotto) => (
+              <TlDelProdotto
+                key={prodotto}
+                nomeSchema={nomeSchema}
+                direttrice={d.nome}
+                prodotto={prodotto}
+                voci={catalogo.filter(
+                  (t) =>
+                    t.direttrice.trim().toLowerCase() === d.nome.trim().toLowerCase() &&
+                    t.prodotto.trim().toLowerCase() === prodotto.trim().toLowerCase()
+                )}
+                uffici={nomiDirettrici(direttrici)}
+                onCambia={ricaricaLavorazioniETitoli}
+              />
+            ))}
           </div>
         ))}
 
