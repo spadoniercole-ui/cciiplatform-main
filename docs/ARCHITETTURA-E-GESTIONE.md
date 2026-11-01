@@ -302,6 +302,12 @@ Un solo ingresso per il nome degli uffici, tre passaggi:
    materia (`dipendenzaEffettiva`, `proceduraEffettiva`); se il codice ne ha una propria,
    quella vince e il campo del titolo si salva con la grafia delle direttrici.
 
+Il legame serve anche alla domanda di Screening: un **prodotto** di una direttrice può richiamare
+le TL che lo lavorano (`lavorazioneIds`, scelti tra quelli di `materie_lavorazione`) e il prompt
+nomina la TL invece di lasciare la domanda sulla materia intera. Il formato salvato resta valido —
+`string | { nome, lavorazioneIds }`, normalizzato in `src/lib/checklist/direttriciEnte.ts`; i pesi
+non cambiano, si conta sempre il numero di prodotti.
+
 La logica della catena sta in `src/lib/titoliEnte/direttrici.ts` (nomi canonici e
 `componiCatenaDirettrici`: per ogni direttrice quante lavorazioni, materie e codici; gli
 uffici fuori elenco; le lavorazioni e i codici senza ufficio). Da lì il nome arriva alle

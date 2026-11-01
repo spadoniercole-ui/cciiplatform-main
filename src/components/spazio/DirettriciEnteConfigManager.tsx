@@ -12,10 +12,18 @@ import {
   ottieniLavorazioniMateria,
   riallineaUfficioAllaDirettriceAction,
 } from '@/app/actions/materieLavorazione';
-import { ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
+import { ottieniMaterieEnteAction, ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
 import { componiCatenaDirettrici } from '@/lib/titoliEnte/direttrici';
+import {
+  conLavorazione,
+  etichettaLavorazione,
+  lavorazioniDelProdotto,
+  normalizzaProdotto,
+  senzaLavorazione,
+} from '@/lib/checklist/direttriciEnte';
 import { conRitorno } from '@/lib/navigazione/ritorno';
 import type { LavorazioneMateria } from '@/lib/titoliEnte/lavorazioniMateria';
+import type { MateriaEnte } from '@/lib/titoliEnte/materie';
 import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
 
 interface Props {
@@ -37,6 +45,7 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
   const [direttrici, setDirettrici] = useState<DirettriceStrutturata[]>([]);
   const [lavorazioni, setLavorazioni] = useState<LavorazioneMateria[]>([]);
   const [titoli, setTitoli] = useState<TitoloEnte[]>([]);
+  const [materie, setMaterie] = useState<MateriaEnte[]>([]);
   const [nuovoProdotto, setNuovoProdotto] = useState<Record<number, string>>({});
   const [caricamento, setCaricamento] = useState(true);
   const [salvataggio, setSalvataggio] = useState(false);
@@ -51,15 +60,17 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
   useEffect(() => {
     (async () => {
       setCaricamento(true);
-      const [d, l, t] = await Promise.all([
+      const [d, l, t, m] = await Promise.all([
         ottieniDirettriciEnte(nomeSchema),
         ottieniLavorazioniMateria(nomeSchema),
         ottieniTitoliEnteAction(nomeSchema),
+        ottieniMaterieEnteAction(nomeSchema),
       ]);
       if (d.success) setDirettrici(d.direttrici);
       else setErrore(d.error || 'Impossibile caricare.');
       if (l.success) setLavorazioni(l.lavorazioni);
       if (t.success) setTitoli(t.titoli);
+      if (m.success) setMaterie(m.materie);
       setCaricamento(false);
     })();
   }, [nomeSchema]);
@@ -133,6 +144,23 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
     setNuovoProdotto({ ...nuovoProdotto, [indice]: '' });
   };
 
+  // Le TL del prodotto si scelgono da quelle configurate (Materie e
+  // lavorazioni): nessuna grafia libera da tenere allineata, e un prodotto può
+  // richiamarne più d'una perché la stessa diffida vive in più TL.
+  const aggiornaProdotto = (
+    indiceDirettrice: number,
+    indiceProdotto: number,
+    trasforma: (
+      prodotto: DirettriceStrutturata['prodotti'][number]
+    ) => ReturnType<typeof conLavorazione>
+  ) => {
+    const nuove = [...direttrici];
+    const prodotti = [...nuove[indiceDirettrice].prodotti];
+    prodotti[indiceProdotto] = trasforma(prodotti[indiceProdotto]);
+    nuove[indiceDirettrice] = { ...nuove[indiceDirettrice], prodotti };
+    setDirettrici(nuove);
+  };
+
   const rimuoviProdotto = (indiceDirettrice: number, indiceProdotto: number) => {
     const nuove = [...direttrici];
     nuove[indiceDirettrice] = {
@@ -162,6 +190,14 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
         prodotti o le procedure concreti (es. Cassa Integrazione, DURC, DICA): l&apos;AI genera
         domande ancorate a questi, non alla direttrice in astratto — è quello che tiene le domande
         pertinenti invece di generiche.
+      </p>
+      <p className="text-[11px] text-slate-500">
+        Ogni prodotto può richiamare le <strong>lavorazioni (TL)</strong> che lo lavorano, scelte
+        tra quelle configurate in Materie e lavorazioni — si sceglie, non si riscrive, e se ne può
+        collegare più d&apos;una. La domanda dello Screening nasce allora su quella TL e non sulla
+        materia intera: la diffida per il ticket licenziamento non finisce più nello stesso
+        calderone di sgravi e variazioni da verbale. I pesi non cambiano — conta sempre il numero di
+        prodotti.
       </p>
       <p className="text-[11px] text-slate-500">
         Il nome di ogni direttrice è anche il <strong>nome dell&apos;ufficio</strong>: le{' '}
@@ -350,22 +386,88 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
               </button>
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
-              {d.prodotti.map((prodotto, indiceProdotto) => (
-                <span
-                  key={indiceProdotto}
-                  className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-md"
-                >
-                  {prodotto}
-                  <button
-                    type="button"
-                    onClick={() => rimuoviProdotto(indice, indiceProdotto)}
-                    className="hover:text-red-600"
+            <div className="space-y-1.5">
+              {d.prodotti.map((prodotto, indiceProdotto) => {
+                const nomeProdotto = normalizzaProdotto(prodotto).nome;
+                const collegate = lavorazioniDelProdotto(prodotto, lavorazioni);
+                const giaCollegate = new Set(collegate.map((l) => l.id));
+                const disponibili = lavorazioni.filter((l) => !giaCollegate.has(l.id));
+                // Le TL si raggruppano per materia: «Emissione diffida» esiste in
+                // più materie, e senza il nome della materia due voci sarebbero
+                // due stringhe identiche.
+                const perMateria = new Map<number, LavorazioneMateria[]>();
+                for (const l of disponibili) {
+                  const gruppo = perMateria.get(l.materiaId) ?? [];
+                  gruppo.push(l);
+                  perMateria.set(l.materiaId, gruppo);
+                }
+                const nomeMateria = (id: number) =>
+                  materie.find((m) => m.id === id)?.nome ?? `Materia ${id}`;
+                return (
+                  <div
+                    key={indiceProdotto}
+                    className="flex flex-wrap items-center gap-2 border border-slate-100 bg-slate-50/60 rounded-lg px-2 py-1.5"
                   >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
+                    <span className="text-[11px] font-bold text-blue-700">{nomeProdotto}</span>
+                    {collegate.map((l) => (
+                      <span
+                        key={l.id}
+                        title={nomeMateria(l.materiaId)}
+                        className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-800 text-[10px] font-bold rounded-md"
+                      >
+                        {etichettaLavorazione(l)}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            aggiornaProdotto(indice, indiceProdotto, (p) =>
+                              senzaLavorazione(p, l.id)
+                            )
+                          }
+                          className="hover:text-red-600"
+                          title="Togli la TL dal prodotto"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                    {lavorazioni.length > 0 ? (
+                      <select
+                        aria-label={`Lavorazione da collegare a ${nomeProdotto}`}
+                        value=""
+                        onChange={(e) => {
+                          const id = Number(e.target.value);
+                          if (id > 0)
+                            aggiornaProdotto(indice, indiceProdotto, (p) => conLavorazione(p, id));
+                        }}
+                        className="ml-auto p-1 text-[10px] border border-slate-200 rounded-md text-slate-700 bg-white max-w-[18rem]"
+                      >
+                        <option value="">Collega una TL…</option>
+                        {Array.from(perMateria.entries()).map(([materiaId, gruppo]) => (
+                          <optgroup key={materiaId} label={nomeMateria(materiaId)}>
+                            {gruppo.map((l) => (
+                              <option key={l.id} value={l.id}>
+                                {etichettaLavorazione(l)}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="ml-auto text-[10px] text-slate-400">
+                        Nessuna TL configurata
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => rimuoviProdotto(indice, indiceProdotto)}
+                      className="text-slate-400 hover:text-red-600"
+                      title="Rimuovi prodotto"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="flex items-center gap-2">

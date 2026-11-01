@@ -25,6 +25,7 @@ vi.mock('@/app/actions/materieLavorazione', () => ({
 
 vi.mock('@/app/actions/titoliEnte', () => ({
   ottieniTitoliEnteAction: vi.fn(),
+  ottieniMaterieEnteAction: vi.fn(),
 }));
 
 import { ottieniDirettriciEnte } from '@/app/actions/screeningAzienda';
@@ -32,8 +33,12 @@ import {
   ottieniLavorazioniMateria,
   riallineaUfficioAllaDirettriceAction,
 } from '@/app/actions/materieLavorazione';
-import { ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
+import { ottieniMaterieEnteAction, ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
+import type { MateriaEnte } from '@/lib/titoliEnte/materie';
 import { DirettriciEnteConfigManager } from './DirettriciEnteConfigManager';
+import { aggiornaDirettriciEnteAction } from '@/app/actions/screeningAzienda';
+
+const materia = (id: number, nome: string) => ({ id, nome }) as unknown as MateriaEnte;
 
 const titolo = (p: Partial<TitoloEnte>): TitoloEnte => ({
   id: 1,
@@ -91,6 +96,10 @@ describe('direttrici: la catena fino ai titoli', () => {
         // ufficio che non è una direttrice, scritto sul codice
         titolo({ id: 2, codice: '74', materiaId: 11, dipendenza: 'Ufficio legale' }),
       ],
+    });
+    vi.mocked(ottieniMaterieEnteAction).mockResolvedValue({
+      success: true,
+      materie: [materia(10, 'Ticket licenziamento'), materia(11, 'Contributi')],
     });
   });
 
@@ -261,6 +270,40 @@ describe('direttrici: la catena fino ai titoli', () => {
         'Presidio qualità flussi informativi',
         'Presidio dei flussi informativi'
       )
+    );
+  });
+
+  // Il legame prodotto → TL: la TL si sceglie tra quelle configurate e si
+  // salva sul prodotto. Non tocca i pesi (conta il numero di prodotti): serve a
+  // dire su quale lavorazione nasce la domanda dello Screening.
+  it('collega una TL configurata al prodotto e la salva con lui', async () => {
+    vi.mocked(aggiornaDirettriciEnteAction).mockResolvedValue({ success: true });
+
+    render(<DirettriciEnteConfigManager nomeSchema="tenant_prova" codice="prova" />);
+    const selettore = await waitFor(() =>
+      screen.getByLabelText('Lavorazione da collegare a Diffide')
+    );
+
+    fireEvent.change(selettore, { target: { value: '1' } });
+    // La TL compare accanto al prodotto (un'etichetta, non più una voce del
+    // selettore), con l'ufficio che la esegue.
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByText('Emissione diffida — Gestione del credito')
+          .some((el) => el.tagName === 'SPAN')
+      ).toBe(true)
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Salva/ }));
+    await waitFor(() =>
+      expect(vi.mocked(aggiornaDirettriciEnteAction)).toHaveBeenCalledWith('tenant_prova', [
+        {
+          nome: 'Gestione del credito',
+          prodotti: [{ nome: 'Diffide', lavorazioneIds: [1] }],
+        },
+        { nome: 'Presidio dei flussi informativi', prodotti: ['DURC'] },
+      ])
     );
   });
 

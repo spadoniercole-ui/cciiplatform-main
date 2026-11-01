@@ -39,6 +39,13 @@ import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicati
 import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
 import { ottieniEtichetteTipoDebito } from '@/app/actions/tipoDebitoConfig';
 import { calcolaQuadroDirettrici, type QuadroDirettrici } from '@/lib/checklist/scoringDirettrici';
+import {
+  descriviProdotto,
+  haLavorazioniNeiProdotti,
+  serializzaDirettrice,
+  type ProdottoDirettrice,
+} from '@/lib/checklist/direttriciEnte';
+import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
 import { deveEliminareVisura } from '@/lib/screening/conservazioneVisura';
 import {
   leggiIdentificativiEnte,
@@ -109,10 +116,15 @@ function estraiDomandeDaJson(raw: string): { domanda?: unknown; peso?: unknown }
 /** Una direttrice con i suoi "prodotti" — ancoraggi concreti e
  * verificabili (es. Cassa Integrazione, DURC, DICA) su cui l'AI genera
  * domande specifiche, invece di indovinare cosa chiedere da un nome di
- * direttrice generico. */
+ * direttrice generico.
+ *
+ * Un prodotto può richiamare le lavorazioni (TL) che lo lavorano: è la
+ * differenza fra una domanda sulle 81 e una che vale anche per 74/76/CIG.
+ * Il formato salvato vecchio (`string`) resta valido: la normalizzazione
+ * sta in `src/lib/checklist/direttriciEnte.ts`, nessuna migrazione. */
 export interface DirettriceStrutturata {
   nome: string;
-  prodotti: string[];
+  prodotti: ProdottoDirettrice[];
 }
 
 export async function ottieniDirettriciEnte(nomeSchema: string): Promise<{
@@ -146,11 +158,10 @@ export async function aggiornaDirettriciEnteAction(
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    // Si salva nella forma più semplice che rappresenta la configurazione: il
+    // prodotto senza TL resta una stringa, com'era prima del legame.
     const pulite = direttrici
-      .map((d) => ({
-        nome: d.nome.trim(),
-        prodotti: d.prodotti.map((p) => p.trim()).filter(Boolean),
-      }))
+      .map(serializzaDirettrice)
       .filter((d) => d.nome && d.prodotti.length > 0);
     await pool.query(
       `UPDATE public.spazi SET direttrici_ente_strutturate = $1 WHERE nome_schema = $2`,
@@ -524,13 +535,18 @@ export async function generaScreeningAziendaAction(
 
     await assicuraTabelleScreeningAzienda(nomeSchema);
 
-    const [direttriciRis, storicoRis, debitiRis, veraRis, categorieRis] = await Promise.all([
-      ottieniDirettriciEnte(nomeSchema),
-      ottieniStoricoXbrlAzienda(nomeSchema, aziendaId),
-      ottieniDebitiEnte(nomeSchema, aziendaId),
-      ottieniDebitiVera(nomeSchema, aziendaId),
-      ottieniCategorieTipoDebito(nomeSchema),
-    ]);
+    const [direttriciRis, storicoRis, debitiRis, veraRis, categorieRis, lavorazioniRis] =
+      await Promise.all([
+        ottieniDirettriciEnte(nomeSchema),
+        ottieniStoricoXbrlAzienda(nomeSchema, aziendaId),
+        ottieniDebitiEnte(nomeSchema, aziendaId),
+        ottieniDebitiVera(nomeSchema, aziendaId),
+        ottieniCategorieTipoDebito(nomeSchema),
+        // Le TL configurate servono a nominare, nella domanda, la lavorazione
+        // del prodotto: si leggono qui, una volta per tutta la generazione.
+        ottieniLavorazioniMateria(nomeSchema),
+      ]);
+    const lavorazioni = lavorazioniRis.success ? lavorazioniRis.lavorazioni : [];
 
     const direttriciTutte = direttriciRis.direttrici;
     if (!direttriciTutte || direttriciTutte.length === 0) {
@@ -768,10 +784,16 @@ Prima di scrivere ciascuna domanda, chiediti: "se rispondo Sì, è una buona not
      * veloci, parallelizzabili senza far esplodere banda e token.
      */
     const generaSezione = async (
-      d: { nome: string; prodotti: string[] },
+      d: DirettriceStrutturata,
       numero: number,
       signal: AbortSignal
     ): Promise<SezioneChecklist | null> => {
+      // Dove un prodotto ha la sua TL, il prompt la nomina: la domanda nasce
+      // su quella lavorazione e non sulla materia intera.
+      const regolaLavorazioni = haLavorazioniNeiProdotti([d])
+        ? `
+REGOLA VINCOLANTE SULLE LAVORAZIONI (TL) — dove un prodotto indica la sua TL: le domande di quel prodotto riguardano QUELLA lavorazione, non la materia nel suo complesso e non le altre TL che stanno nella stessa materia. Non attribuire a un prodotto il comportamento di un'altra lavorazione, e non allargare la domanda a «tutte le lavorazioni della materia»: chi risponde deve poter dire che cosa è successo su quella TL, non su un calderone.`
+        : '';
       // Tetto di domande PER QUESTA sezione derivato dai suoi prodotti (1-2 a
       // testa), con un massimo di sicurezza per tenere ogni chiamata piccola.
       const perSezioneMax = Math.min(12, Math.max(2, d.prodotti.length * 2));
@@ -779,7 +801,7 @@ Prima di scrivere ciascuna domanda, chiediti: "se rispondo Sì, è una buona not
 
 DIRETTRICE: "${d.nome}"
 PRODOTTI/PROCEDURE concreti a cui ancorare le domande (mai una domanda generica sulla direttrice nel suo complesso, sempre su uno di questi):
-${d.prodotti.map((p) => `- ${p}`).join('\n')}
+${d.prodotti.map((p) => descriviProdotto(p, lavorazioni)).join('\n')}${regolaLavorazioni}
 
 DATI GIÀ RACCOLTI SULL'AZIENDA:
 ${contestoTesto}

@@ -1,3 +1,24 @@
+## 0.156.0 — 2026-11-01
+
+**Il prodotto di una direttrice dice quale TL lo lavora, e la domanda dello Screening nasce su
+quella lavorazione.**
+La diffida amministrativa per il ticket licenziamento sta insieme a sgravi, variazioni da verbali
+altrui e CIG: senza il legame la domanda generata su quel prodotto finiva nel calderone della
+materia, e una TL su tre non si distingueva dalle altre.
+
+- **Il legame si configura in Direttrici Ente.** Nella riga del prodotto c'è il selettore delle TL
+  già configurate in Materie e lavorazioni, con l'ufficio accanto e raggruppate per materia: si
+  sceglie, non si riscrive. Un prodotto può richiamarne più d'una, e la TL si toglie con la stessa
+  facilità con cui si aggiunge.
+- **Il formato salvato vecchio resta valido.** `spazi.direttrici_ente_strutturate` accetta sia la
+  stringa di prima sia l'oggetto con `lavorazioneIds`: si normalizza in lettura e si riscrive nella
+  forma più semplice (stringa se il prodotto non ha TL), senza migrazione e senza toccare i dati.
+- **Il prompt nomina la TL.** Dove il prodotto la indica, la sezione dello Screening riceve il nome
+  della lavorazione e la regola che la domanda riguarda quella, non la materia nel suo complesso:
+  chi risponde sa se sta parlando delle 81 o delle 74/76/CIG.
+- **I pesi non cambiano.** Conta sempre il numero di prodotti, non le TL collegate: la formula di
+  `scoringDirettrici` resta quella di prima, e i questionari già generati pesano allo stesso modo.
+
 ## 0.155.0 — 2026-11-01
 
 **La check list nasce anche per un'azienda nuova, si corregge dal triage e finisce nel foglio

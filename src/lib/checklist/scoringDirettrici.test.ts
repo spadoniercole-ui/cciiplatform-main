@@ -56,6 +56,23 @@ describe('calcolaPesiDirettrici', () => {
     expect(somma(pesiPerDomanda)).toBeCloseTo(100, 10);
   });
 
+  // La TL sul prodotto non è un'unità di peso: i pesi restano quelli di oggi e
+  // si contano i prodotti. Il legame serve alla domanda, non al punteggio.
+  it('una TL collegata al prodotto non cambia i pesi', () => {
+    const { pesiPerDirettrice } = calcolaPesiDirettrici(
+      [sezione('1', 1), sezione('2', 1)],
+      [
+        {
+          nome: 'Contributiva',
+          prodotti: [{ nome: 'Ticket licenziamento', lavorazioneIds: [81] }, 'INPS'],
+        },
+        { nome: 'Fiscale', prodotti: [{ nome: 'Sgravio', lavorazioneIds: [74, 76] }] },
+      ]
+    );
+    expect(pesiPerDirettrice.map((p) => p.prodotti)).toEqual([2, 1]);
+    expect(pesiPerDirettrice.reduce((a, p) => a + p.peso, 0)).toBeCloseTo(100, 10);
+  });
+
   it('nessun prodotto configurato → nessun peso', () => {
     expect(calcolaPesiDirettrici([sezione('1', 2)], [{ nome: 'Vuota', prodotti: [] }])).toEqual({
       pesiPerDomanda: {},
