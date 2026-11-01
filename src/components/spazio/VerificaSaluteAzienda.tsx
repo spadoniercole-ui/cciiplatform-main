@@ -76,6 +76,7 @@ import {
 } from '@/app/actions/triagePerimetro';
 import { ottieniParametriScenariAction } from '@/app/actions/parametriScenari';
 import { PerimetroTriage } from '@/components/spazio/PerimetroTriage';
+import { CheckListTriage } from '@/components/spazio/CheckListTriage';
 import { ScenariTriage } from '@/components/spazio/ScenariTriage';
 import { calcolaScenari } from '@/lib/triage/scenari';
 import { salvaStrutturaProspettoAction } from '@/app/actions/struttureProspetto';
@@ -405,11 +406,14 @@ export function VerificaSaluteAzienda({
   // Lo storico rende vera la promessa fatta a schermo — "la verifica resta
   // consultabile" — che finora non lo era: esito e data stavano nel
   // database e non esistevano per l'utente.
+  // Lo storico si legge quando cambia l'azienda, non a ogni passaggio di
+  // fase: fra «caricamento», «conferma» ed «esito» è lo stesso elenco, e
+  // rileggerlo tre volte per visita era lavoro sprecato (0.154.0).
   useEffect(() => {
     void ottieniStoricoVerificheAction(nomeSchema).then((r) => {
       if (r.success && r.righe) setStorico(r.righe);
     });
-  }, [nomeSchema, fase]);
+  }, [nomeSchema, aziendaId]);
 
   // Il registro si legge quando c'è un'azienda su cui leggerlo, e si rilegge
   // a ogni passaggio di fase: la scheda dei reparti compare nell'esito, ma il
@@ -432,7 +436,7 @@ export function VerificaSaluteAzienda({
     return () => {
       annullato = true;
     };
-  }, [nomeSchema, aziendaId, fase]);
+  }, [nomeSchema, aziendaId]);
 
   const caricaVisura = async (f: File | null) => {
     if (!f) return;
@@ -2111,6 +2115,22 @@ export function VerificaSaluteAzienda({
                   La check di perimetro si apre dopo il riconoscimento dell’azienda.
                 </p>
               )}
+            </div>
+
+            {/* LA CHECK LIST DELLO SCREENING (0.154.0). Prima stava in due
+                pagine dell'Azienda — una che generava il questionario, una che
+                raccoglieva le risposte — con un passo del semaforo che diceva
+                quando erano finite. Qui si genera e si risponde nello stesso
+                posto. */}
+            <div className="border-t border-slate-100 pt-4">
+              {aziendaId ? (
+                <CheckListTriage
+                  nomeSchema={nomeSchema}
+                  aziendaId={aziendaId}
+                  codice={codice}
+                  visuraSessione={fileVisura}
+                />
+              ) : null}
             </div>
 
             {/* GLI SCENARI (0.153.0): il credito misurato dalle soglie, con i

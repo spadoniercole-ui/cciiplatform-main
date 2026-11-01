@@ -153,13 +153,18 @@ export default async function AziendaLayout({
       ? 'Completa prima Anagrafica, Anagrafica Ente e Analisi Bilancio.'
       : 'Completa prima Anagrafica e Analisi Bilancio.',
   });
-  steps.push({
-    id: 'checklist',
-    label: 'Check List',
-    stato: !screeningGenerato ? 'bloccato' : checklistCompleta ? 'completo' : 'attivo',
-    motivo: 'Genera prima lo Screening.',
-    badge: screeningGenerato && domandeMancanti > 0 ? domandeMancanti : undefined,
-  });
+  // La Check List dello screening non è più un passo dell'Azienda: si genera
+  // e si risponde dentro il triage (0.154.0). Il passo resta per il Redigente,
+  // dove la stessa scheda ospita il Test pratico e la Ministeriale.
+  if (!isEnte) {
+    steps.push({
+      id: 'checklist',
+      label: 'Check List',
+      stato: !screeningGenerato ? 'bloccato' : checklistCompleta ? 'completo' : 'attivo',
+      motivo: 'Genera prima lo Screening.',
+      badge: screeningGenerato && domandeMancanti > 0 ? domandeMancanti : undefined,
+    });
+  }
 
   const classePerStato = (stato: StatoStep): string => {
     if (stato === 'completo')

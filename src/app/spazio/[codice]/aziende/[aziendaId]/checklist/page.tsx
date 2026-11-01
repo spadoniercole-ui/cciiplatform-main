@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
-import { CheckListAziendaScenario } from '@/components/spazio/CheckListAziendaScenario';
 import { CheckListMinisterialeAziendaScenario } from '@/components/spazio/CheckListMinisterialeAziendaScenario';
 import { TestPraticoAziendaScenario } from '@/components/spazio/TestPraticoAziendaScenario';
 import { destinazioneRitorno } from '@/lib/ritorno';
@@ -41,11 +40,8 @@ export default async function CheckListAziendaPage({
     );
   }
 
-  return (
-    <CheckListAziendaScenario
-      nomeSchema={contesto.nomeSchema}
-      aziendaId={Number(aziendaId)}
-      codice={codice}
-    />
-  );
+  // ENTE: la check list generata dallo screening vive nel triage (0.154.0).
+  // Questa rotta resta solo come rimando per i collegamenti già salvati: il
+  // questionario e le risposte stanno dove si decide se procedere.
+  redirect(`/spazio/${codice}/verifica-salute?azienda=${aziendaId}`);
 }

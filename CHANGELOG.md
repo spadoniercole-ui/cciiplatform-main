@@ -1,3 +1,35 @@
+## 0.154.0 — 2026-11-01
+
+**La check list dello screening entra nel triage, e la check di perimetro entra nell'elaborato.**
+Erano due schede dell'Azienda per lo stesso atto: una generava il questionario, l'altra raccoglieva
+le risposte, e il semaforo diceva quando il giro era finito. Chi decide se procedere adesso trova
+il questionario dove prende la decisione.
+
+- **Generazione e risposte nello stesso posto.** Nel triage, dopo la check di perimetro, c'è il
+  blocco della check list: se il questionario non c'è si genera dalla visura già caricata nel
+  triage — non si richiede lo stesso PDF due volte — e le domande si rispondono lì. Il passo
+  «Check List» sparisce dal percorso dell'Azienda per gli spazi ENTE; la vecchia rotta rimanda al
+  triage, così i collegamenti salvati non si rompono. Per il Redigente il passo resta: lì la stessa
+  scheda ospita il Test pratico e la check Ministeriale.
+- **I parametri dell'ente restano un presupposto.** La generazione non salta il vincolo: senza
+  almeno un identificativo dell'ente salvato il questionario non si elabora, e il blocco lo dice
+  con il collegamento a Posizione Ente → Anagrafica Ente, invece di restare spento senza
+  spiegazione. Quando i parametri si salvano, la prima elaborazione parte da sola come prima.
+- **La check di perimetro nell'elaborato dello screening.** La stampa dello Screening aggiunge la
+  tabella delle TL rilevanti con l'esito dichiarato nel triage. La parte obbligatoria c'è sempre,
+  anche quando una voce è ancora «da verificare»; la nota facoltativa si stampa solo se scritta, e
+  quando manca non lascia avvisi. Una check senza voci non produce una sezione vuota.
+- **Meno riletture nel triage.** Lo storico delle verifiche e il registro delle consegne si
+  rileggevano a ogni passaggio di fase (caricamento, conferma, esito), pur essendo lo stesso
+  elenco: ora si leggono quando cambia l'azienda. Sono due chiamate server in meno per visita,
+  contate sul codice: non c'è stato un profilo di runtime, perché qui manca il database.
+
+**Resta aperto:** la generazione della check list dentro il triage funziona quando gli
+identificativi dell'ente esistono già (riapertura di una verifica, o dopo il salvataggio
+dell'Anagrafica Ente). Per un'azienda nuova il questionario nasce al salvataggio dei parametri,
+come prima: farlo nascere prima significherebbe un elaborato senza i riferimenti interni
+dell'ente, che è esattamente il problema che quel vincolo evita.
+
 ## 0.153.0 — 2026-11-01
 
 **Il triage dice anche che cosa sta facendo l'azienda, non solo quanto deve.** Le soglie misurano
