@@ -10,6 +10,8 @@ function voce(patch: Partial<VocePerimetro> = {}): VocePerimetro {
     dipendenza: 'Ufficio legale',
     verso: 'COLLABORATIVA',
     codici: ['TS27'],
+    prodotti: [],
+    codiciDallaMateria: true,
     stato: 'RISCONTRATA',
     natura: null,
     nota: null,
@@ -43,6 +45,14 @@ describe('htmlCheckPerimetro', () => {
 
     const con = htmlCheckPerimetro([voce({ nota: 'tre solleciti senza risposta' })]);
     expect(con).toContain('tre solleciti senza risposta');
+  });
+
+  it('stampa il prodotto da cui nasce la verifica, quando c’è', () => {
+    expect(htmlCheckPerimetro([voce()])).not.toContain('Prodotti');
+    const html = htmlCheckPerimetro([
+      voce({ prodotti: ['Ticket licenziamento'], codiciDallaMateria: false }),
+    ]);
+    expect(html).toContain('Prodotti: Ticket licenziamento');
   });
 
   it('mette in sicurezza il testo proveniente dalle configurazioni', () => {

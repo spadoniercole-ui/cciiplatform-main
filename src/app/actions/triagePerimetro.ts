@@ -20,11 +20,18 @@ import {
   sintesiPerimetro,
   vociObbligatorie,
   type LavorazionePerimetro,
+  type MateriaPerimetro,
   type NaturaProblema,
+  type ProdottoPerimetro,
   type StatoPerimetro,
   type VersoPerimetro,
   type VocePerimetro,
 } from '@/lib/triage/perimetro';
+import {
+  normalizzaDirettrice,
+  normalizzaProdotto,
+  type DirettriceConProdotti,
+} from '@/lib/checklist/direttriciEnte';
 import type { RangoCredito } from '@/lib/triage/scenari';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
@@ -52,7 +59,7 @@ export async function ottieniPerimetroTriageAction(
     await richiediAccessoAzienda(nomeSchema, aziendaId);
     await assicuraTabelleScenariTriage(nomeSchema);
 
-    const [lavorazioni, titoli, risposte] = await Promise.all([
+    const [lavorazioni, titoli, risposte, direttriciRis, materieRis] = await Promise.all([
       pool.query(
         `SELECT l.id, l.materia_id, l.tipologia, l.dipendenza,
                 l.rilevante_perimetro, l.verso_perimetro,
@@ -70,7 +77,29 @@ export async function ottieniPerimetroTriageAction(
           [aziendaId]
         )
         .catch(() => ({ rows: [] as Record<string, unknown>[] })),
+      // Il legame prodotto → TL: i prodotti delle direttrici dicono quali
+      // lavorazioni toccano e con quale materia (per nome).
+      pool
+        .query(`SELECT direttrici_ente_strutturate FROM public.spazi WHERE nome_schema = $1`, [
+          nomeSchema,
+        ])
+        .catch(() => ({ rows: [] as Record<string, unknown>[] })),
+      pool
+        .query(`SELECT id, nome FROM "${nomeSchema}".materie_ente ORDER BY nome`)
+        .catch(() => ({ rows: [] as Record<string, unknown>[] })),
     ]);
+
+    const prodotti: ProdottoPerimetro[] = (
+      (direttriciRis.rows[0]?.direttrici_ente_strutturate as DirettriceConProdotti[] | null) ?? []
+    )
+      .flatMap((d) => normalizzaDirettrice(d).prodotti)
+      .map((p) => normalizzaProdotto(p))
+      .filter((p) => p.nome !== '');
+
+    const materie: MateriaPerimetro[] = materieRis.rows.map((x) => ({
+      id: Number(x.id),
+      nome: String(x.nome ?? ''),
+    }));
 
     const configurate: LavorazionePerimetro[] = lavorazioni.rows.map((x) => ({
       id: Number(x.id),
@@ -90,7 +119,9 @@ export async function ottieniPerimetroTriageAction(
           codice: String(x.codice),
           materiaId: x.materia_id === null ? null : Number(x.materia_id),
         })),
-        configurate
+        configurate,
+        prodotti,
+        materie
       ),
       risposte.rows.map((x) => ({
         lavorazioneId: Number(x.lavorazione_id),

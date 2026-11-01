@@ -35,8 +35,14 @@ export function htmlCheckPerimetro(voci: VocePerimetro[]): string {
       ]
         .filter(Boolean)
         .join(' · ');
+      // Il prodotto dice su quale procedura è nata la verifica: senza, due TL
+      // della stessa materia si leggono come se fossero la stessa cosa.
+      const prodotti =
+        v.prodotti.length > 0
+          ? `<br><span class="note">Prodotti: ${esc(v.prodotti.join(', '))}</span>`
+          : '';
       return `<tr>
-        <td><b>${esc(v.tipologia)}</b><br><span class="note">${contesto}</span>${
+        <td><b>${esc(v.tipologia)}</b><br><span class="note">${contesto}</span>${prodotti}${
           v.codici.length > 0
             ? `<br><span class="note">Codici: ${esc(v.codici.join(', '))}</span>`
             : ''

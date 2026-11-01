@@ -306,7 +306,9 @@ Il legame serve anche alla domanda di Screening: un **prodotto** di una direttri
 le TL che lo lavorano (`lavorazioneIds`, scelti tra quelli di `materie_lavorazione`) e il prompt
 nomina la TL invece di lasciare la domanda sulla materia intera. Il formato salvato resta valido —
 `string | { nome, lavorazioneIds }`, normalizzato in `src/lib/checklist/direttriciEnte.ts`; i pesi
-non cambiano, si conta sempre il numero di prodotti.
+non cambiano, si conta sempre il numero di prodotti. La stessa lettura fa la **check di perimetro**
+del triage: i codici di una TL sono quelli delle materie dei prodotti che la richiamano (il nome del
+prodotto si riconosce per chiave), non più tutti quelli della materia in cui la TL vive.
 
 La logica della catena sta in `src/lib/titoliEnte/direttrici.ts` (nomi canonici e
 `componiCatenaDirettrici`: per ogni direttrice quante lavorazioni, materie e codici; gli

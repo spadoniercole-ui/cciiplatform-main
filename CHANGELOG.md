@@ -1,3 +1,23 @@
+## 0.157.0 — 2026-11-01
+
+**La check di perimetro nasce dalla lavorazione e non più dal calderone della materia.**
+Una materia raccoglie più procedure — la diffida amministrativa per il ticket licenziamento sta con
+sgravi, variazioni da verbali altrui e CIG — e la voce di ogni TL elencava *tutti* i codici della
+materia: chi rispondeva sulla 81 vedeva contati anche i crediti di 74/76/CIG.
+
+- **I codici vengono dal legame prodotto → TL.** La voce legge i prodotti delle direttrici che
+  richiamano la TL e prende i codici delle materie di quei prodotti — il nome del prodotto si
+  riconosce per chiave, come per gli uffici. La 81 porta i codici del ticket licenziamento, non
+  quelli di tutta la materia, e i prodotti che la richiamano si leggono nella voce.
+- **Il ripiego è dichiarato, non silenzioso.** Una TL che nessun prodotto nomina — configurazione
+  più vecchia del legame — riprende i codici dalla sua materia, e la voce lo dice
+  (`codiciDallaMateria`): nessuno spazio esistente resta senza codici, e il ripiego non passa per
+  un dato.
+- **Un prodotto che non è una materia non inventa codici.** Se il nome non corrisponde a nessuna
+  materia la voce resta senza codici e lo scrive: meglio un vuoto spiegato di un'attribuzione
+  sbagliata. I codici così attribuiti alimentano la sintesi del perimetro (modus operandi,
+  incidenti, codici da attenzionare) e quindi il riepilogo del triage.
+
 ## 0.156.0 — 2026-11-01
 
 **Il prodotto di una direttrice dice quale TL lo lavora, e la domanda dello Screening nasce su

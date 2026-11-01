@@ -26,7 +26,19 @@
 // risposta, e può restare «non valutabile» quando l'operatore non lo sa: è
 // un'informazione, non un silenzio.
 //
+// DA DOVE VENGONO I CODICI DI UNA VOCE. Dalla materia della TL no: una materia
+// raccoglie più procedure — la 81 sta con 74, 76 e CIG — e prendere i suoi
+// codici li attribuiva tutti a ogni TL, così la risposta sulla 81 finiva per
+// contare anche crediti che quella lavorazione non aveva mai toccato. I codici
+// si leggono dal legame esplicito prodotto → TL (Direttrici Ente): il prodotto
+// è la procedura concreta e la sua materia si riconosce dal nome, con la stessa
+// chiave con cui si riconoscono gli uffici. Solo quando nessun prodotto nomina
+// la TL si riprende la materia, e la voce lo dichiara (`codiciDallaMateria`): è
+// la configurazione più vecchia del legame, non una deduzione silenziosa.
+//
 // Logica pura: nessun accesso al database, così si verifica con i test.
+
+import { chiaveDipendenza } from '@/lib/lavorazioni/dipendenze';
 
 /** Che atteggiamento esprime la lavorazione, secondo l'ente. */
 export type VersoPerimetro = 'COLLABORATIVA' | 'RESISTENZA';
@@ -69,6 +81,18 @@ export interface TitoloPerimetro {
   materiaId: number | null;
 }
 
+/** Un prodotto delle direttrici: il nome della procedura e le TL che richiama. */
+export interface ProdottoPerimetro {
+  nome: string;
+  lavorazioneIds: number[];
+}
+
+/** Una materia dell'ente: il nome è la chiave con cui si riconosce un prodotto. */
+export interface MateriaPerimetro {
+  id: number;
+  nome: string;
+}
+
 /** Una voce della check: la TL rilevante e la risposta dell'operatore. */
 export interface VocePerimetro {
   lavorazioneId: number;
@@ -76,11 +100,57 @@ export interface VocePerimetro {
   materia: string | null;
   dipendenza: string | null;
   verso: VersoPerimetro | null;
-  /** I codici di partita che cadono nella materia di questa lavorazione. */
+  /** I codici di partita che questa TL lavora, letti dal legame prodotto → TL. */
   codici: string[];
+  /** I prodotti delle direttrici che richiamano questa TL. */
+  prodotti: string[];
+  /**
+   * Nessun prodotto richiama la TL: i codici sono quelli della materia, come
+   * prima del legame. La voce lo dice invece di far passare un ripiego per un
+   * dato.
+   */
+  codiciDallaMateria: boolean;
   stato: StatoPerimetro | null;
   natura: NaturaProblema | null;
   nota: string | null;
+}
+
+/**
+ * I codici che il legame prodotto → TL attribuisce a una lavorazione.
+ *
+ * `codici: null` significa «nessun prodotto nomina questa TL», non «nessun
+ * codice»: chi chiama decide il ripiego (vedi `vociObbligatorie`). Un prodotto
+ * che non corrisponde a nessuna materia non inventa codici: elenca sé stesso e
+ * lascia la voce senza codici, che è meglio di un'attribuzione sbagliata.
+ */
+export function codiciDeiProdotti(
+  lavorazioneId: number,
+  prodotti: ProdottoPerimetro[],
+  materie: MateriaPerimetro[],
+  titoli: TitoloPerimetro[]
+): { prodotti: string[]; codici: string[] | null } {
+  const collegati = prodotti.filter((p) => p.lavorazioneIds.includes(lavorazioneId));
+  if (collegati.length === 0) return { prodotti: [], codici: null };
+
+  const materiePerChiave = new Map(materie.map((m) => [chiaveDipendenza(m.nome), m.id]));
+  const materieDeiProdotti = new Set<number>();
+  for (const p of collegati) {
+    const id = materiePerChiave.get(chiaveDipendenza(p.nome));
+    if (id !== undefined) materieDeiProdotti.add(id);
+  }
+
+  const codici = Array.from(
+    new Set(
+      titoli
+        .filter((t) => t.materiaId !== null && materieDeiProdotti.has(t.materiaId))
+        .map((t) => t.codice)
+    )
+  ).sort((a, b) => a.localeCompare(b, 'it'));
+
+  return {
+    prodotti: collegati.map((p) => p.nome).sort((a, b) => a.localeCompare(b, 'it')),
+    codici,
+  };
 }
 
 /**
@@ -90,32 +160,49 @@ export interface VocePerimetro {
  * un importo del triage non è un dato che la piattaforma possiede — le
  * posizioni hanno una descrizione, non un codice. Dire «questa TL riguarda
  * solo i crediti con debito» sarebbe una deduzione, e per giunta sbagliata
- * quando il debito è a zero perché la pratica è stata chiusa. La voce elenca
- * i codici che la materia copre: chi risponde sa di che cosa sta parlando.
+ * quando il debito è a zero perché la pratica è stata chiusa. La voce elenca i
+ * codici che la lavorazione tocca davvero: chi risponde sa di che cosa sta
+ * parlando.
+ *
+ * La TL viene prima della materia. I codici si leggono dal legame
+ * prodotto → TL configurato in Direttrici Ente (`codiciDeiProdotti`), non dalla
+ * materia in cui la TL vive: una materia raccoglie più procedure e i suoi
+ * codici finivano attribuiti a tutte. Il ripiego sulla materia resta solo per
+ * le TL che nessun prodotto nomina — cioè per le configurazioni più vecchie
+ * del legame — e la voce lo dichiara con `codiciDallaMateria`.
  */
 export function vociObbligatorie(
   titoli: TitoloPerimetro[],
-  lavorazioni: LavorazionePerimetro[]
+  lavorazioni: LavorazionePerimetro[],
+  prodotti: ProdottoPerimetro[] = [],
+  materie: MateriaPerimetro[] = []
 ): VocePerimetro[] {
   const perLavorazione = lavorazioni
     .filter((l) => l.rilevantePerimetro)
     .slice()
     .sort((a, b) => (a.materia ?? '').localeCompare(b.materia ?? '', 'it') || a.id - b.id);
 
-  return perLavorazione.map((l) => ({
-    lavorazioneId: l.id,
-    tipologia: l.tipologia,
-    materia: l.materia,
-    dipendenza: l.dipendenza,
-    verso: l.versoPerimetro,
-    codici: titoli
-      .filter((t) => t.materiaId === l.materiaId)
-      .map((t) => t.codice)
-      .sort((a, b) => a.localeCompare(b, 'it')),
-    stato: null,
-    natura: null,
-    nota: null,
-  }));
+  return perLavorazione.map((l) => {
+    const legame = codiciDeiProdotti(l.id, prodotti, materie, titoli);
+    return {
+      lavorazioneId: l.id,
+      tipologia: l.tipologia,
+      materia: l.materia,
+      dipendenza: l.dipendenza,
+      verso: l.versoPerimetro,
+      codici:
+        legame.codici ??
+        titoli
+          .filter((t) => t.materiaId === l.materiaId)
+          .map((t) => t.codice)
+          .sort((a, b) => a.localeCompare(b, 'it')),
+      prodotti: legame.prodotti,
+      codiciDallaMateria: legame.codici === null,
+      stato: null,
+      natura: null,
+      nota: null,
+    };
+  });
 }
 
 /** Le risposte già salvate, applicate alle voci ricalcolate dai titoli. */

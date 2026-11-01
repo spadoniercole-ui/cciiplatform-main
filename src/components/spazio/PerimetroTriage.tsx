@@ -3,10 +3,11 @@
 // LA CHECK DI PERIMETRO DEL TRIAGE — dove l'operatore risponde.
 //
 // Le voci non si scrivono qui: arrivano dai titoli dell'ente. Ogni TL
-// contrassegnata come rilevante è una riga, con i codici che la materia copre
-// e l'ufficio che la lavora. La risposta è obbligatoria; la natura lo è solo
-// quando la TL non è stata riscontrata, perché è lì che serve distinguere un
-// incidente da un modus operandi.
+// contrassegnata come rilevante è una riga, con i prodotti che la richiamano,
+// i codici che quella lavorazione tocca davvero e l'ufficio che la esegue. La
+// risposta è obbligatoria; la natura lo è solo quando la TL non è stata
+// riscontrata, perché è lì che serve distinguere un incidente da un modus
+// operandi.
 //
 // IL SALVATAGGIO NON CHIUDE NULLA. Si salva anche una check a metà: il triage
 // è quello che decide di non elaborare, e lo dice con le mancanze esatte.
@@ -173,10 +174,17 @@ export function PerimetroTriage({ nomeSchema, aziendaId, onEsito }: Props) {
                     {v.materia ? `Materia: ${v.materia}` : 'Materia non indicata'}
                     {v.dipendenza ? ` · Ufficio: ${v.dipendenza}` : ''}
                   </p>
+                  {v.prodotti.length > 0 && (
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Prodotti che la richiamano: {v.prodotti.join(', ')}
+                    </p>
+                  )}
                   <p className="text-[10px] text-slate-400 mt-0.5">
                     {v.codici.length > 0
                       ? `Codici coperti (${v.codici.length}): ${v.codici.join(', ')}`
-                      : 'Nessun codice di partita cade in questa materia'}
+                      : v.codiciDallaMateria
+                        ? 'Nessun codice di partita cade in questa materia'
+                        : 'Nessun codice: i prodotti collegati non corrispondono a una materia'}
                   </p>
                 </div>
                 {v.verso && (
