@@ -53,6 +53,15 @@ export interface LavorazioneMateria {
   esito: string | null;
   /** Ordine di lavorazione: la prima per ordine è quella che il titolo eredita. */
   ordine: number;
+  /**
+   * LA TL ENTRA NELLA CHECK DI PERIMETRO DEL TRIAGE (0.153.0). Non tutte le
+   * lavorazioni dicono qualcosa della condotta dell'azienda: alcune sono il
+   * presidio che l'ente attiva quando la condotta è elusiva, altre
+   * accompagnano un adempimento. Solo le prime generano una voce
+   * obbligatoria nel triage, e il verso dice da che parte stanno.
+   */
+  rilevantePerimetro?: boolean;
+  versoPerimetro?: 'COLLABORATIVA' | 'RESISTENZA' | null;
 }
 
 export interface InputLavorazioneMateria {
@@ -62,6 +71,8 @@ export interface InputLavorazioneMateria {
   dipendenza: string | null;
   procedura: string | null;
   esito: string | null;
+  rilevantePerimetro?: boolean;
+  versoPerimetro?: 'COLLABORATIVA' | 'RESISTENZA' | null;
 }
 
 const esiste = (v: string | null | undefined): v is string => !!v && v.trim() !== '';
@@ -92,6 +103,11 @@ export function validaLavorazioneMateria(input: InputLavorazioneMateria): string
   const esito = normalizzaEsito(input.esito);
   if (esito && esito.length > MASSIMO_CARATTERI_ESITO)
     return `L'esito non può superare ${MASSIMO_CARATTERI_ESITO} caratteri.`;
+  // Il verso non è un dettaglio: senza, la check del triage non sa se la TL
+  // descrive una collaborazione o un presidio, e la sintesi non può dire se i
+  // codici sono sotto una condotta elusiva. Si chiede insieme al contrassegno.
+  if (input.rilevantePerimetro === true && !input.versoPerimetro)
+    return 'Se la lavorazione è rilevante per il perimetro, indica se è collaborativa o di resistenza.';
   return validaDipendenza(input.dipendenza) ?? validaAttivitaRecupero(input.procedura);
 }
 
@@ -103,6 +119,9 @@ export function normalizzaLavorazione(input: InputLavorazioneMateria): InputLavo
     dipendenza: normalizzaDipendenza(input.dipendenza),
     procedura: normalizzaAttivitaRecupero(input.procedura),
     esito: normalizzaEsito(input.esito),
+    rilevantePerimetro: input.rilevantePerimetro === true,
+    versoPerimetro:
+      input.rilevantePerimetro === true && input.versoPerimetro ? input.versoPerimetro : null,
   };
 }
 

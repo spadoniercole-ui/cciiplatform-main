@@ -1,3 +1,39 @@
+## 0.153.0 — 2026-11-01
+
+**Il triage dice anche che cosa sta facendo l'azienda, non solo quanto deve.** Le soglie misurano
+un importo; non dicono se il mancato pagamento è un incidente o il modo in cui l'azienda sta sul
+mercato. La risposta non è in nessun documento che la piattaforma legge, ma nella qualificazione
+dei titoli che l'ente ha già fatto.
+
+- **La TL si contrassegna.** In Materie e lavorazioni ogni lavorazione può essere dichiarata
+  rilevante per il perimetro, con il verso: collaborativa, oppure di resistenza. Solo le TL
+  contrassegnate generano una voce nella check del triage.
+- **Check obbligatoria, con i codici sotto gli occhi.** Il triage mostra una voce per ogni TL
+  rilevante, con i codici di partita della sua materia e l'ufficio che la lavora. Si dichiara se è
+  stata riscontrata; se non lo è, la natura è obbligatoria — problema momentaneo, modus operandi,
+  o non valutabile. Finché una TL rilevante non ha risposta il triage non si chiude: il pulsante
+  «Procedi» resta spento e dice quante voci mancano.
+- **Il quadro separa i codici.** Il riepilogo non somma «crediti da attenzionare»: tiene distinti i
+  codici sotto un modus operandi da quelli che vengono da un problema momentaneo, perché portano a
+  decisioni diverse. Una TL di resistenza non riscontrata resta da attenzionare anche quando la
+  natura non è ancora dichiarata.
+- **Il confronto con le due ipotesi.** Accanto alle soglie, il triage calcola quanto l'ente
+  recupererebbe in una liquidazione giudiziale (realizzo lordo meno spese di procedura) e in un cram
+  down omologato, sul credito e sul rango scelti per l'azienda. Le percentuali sono dell'ente:
+  **nessun valore di default**. Se una manca, l'ipotesi si dichiara non calcolabile con il dato che
+  serve, invece di stampare uno zero o una media di settore.
+- **Il rendiconto è a box numerati.** Ogni sezione del riepilogo porta il numero in alto a sinistra,
+  i numeri che la fondano, la spiegazione e i riferimenti; ogni box comincia su una pagina nuova.
+  La convenzione vale da qui in poi per i report in cascata.
+- **Il riferimento normativo corretto.** Il confronto cita gli artt. 84, 87 e 112 CCII, non gli
+  artt. 63/88 (che riguardano i soli crediti fiscali e contributivi). Il comma del cram down è
+  dichiarato «da verificare sul testo».
+
+**Cosa non è stato fatto in questa consegna.** La check list generata dallo screening non è stata
+ancora spostata nel triage, e la sua parte facoltativa non è ancora distinta nella elaborazione
+dello screening. Il confronto non stima l'attivo dell'azienda: applica al credito dell'ente le
+percentuali configurate.
+
 ## 0.152.0 — 2026-11-01
 
 **I segnali dell'art. 3, comma 4 diventano misurabili.** Sette importi — retribuzioni

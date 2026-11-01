@@ -133,6 +133,13 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
         (LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA ? ' Oggi è in sola lettura.' : ''),
     },
     {
+      href: `/spazio/${codice}/parametri/scenari`,
+      icon: Scale,
+      titolo: 'Scenari del triage',
+      descrizione:
+        'Realizzo in liquidazione e soddisfacimento nel cram down, per rango del credito, con le spese di procedura. Nessun default: una percentuale vuota rende l’ipotesi non calcolabile.',
+    },
+    {
       href: `/spazio/${codice}/parametri/triage`,
       icon: Stethoscope,
       titolo: 'Triage: file V.E.R.A.',

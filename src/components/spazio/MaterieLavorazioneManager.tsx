@@ -79,7 +79,76 @@ const vuota = (materiaId = 0): InputLavorazioneMateria => ({
   dipendenza: null,
   procedura: null,
   esito: null,
+  rilevantePerimetro: false,
+  versoPerimetro: null,
 });
+
+/**
+ * IL CONTRASSEGNO DI PERIMETRO (0.153.0).
+ *
+ * Non tutte le TL dicono qualcosa della condotta dell'azienda: alcune sono il
+ * presidio che l'ente attiva quando la condotta è elusiva, altre accompagnano
+ * un adempimento. Solo le prime generano una voce obbligatoria nel triage.
+ * Il verso è obbligatorio col contrassegno: senza, la sintesi del triage non
+ * sa dire se i codici stanno sotto una condotta o sotto una collaborazione.
+ */
+function CampoPerimetro({
+  rilevante,
+  verso,
+  onChange,
+}: {
+  rilevante: boolean;
+  verso: 'COLLABORATIVA' | 'RESISTENZA' | null;
+  onChange: (patch: {
+    rilevantePerimetro?: boolean;
+    versoPerimetro?: 'COLLABORATIVA' | 'RESISTENZA' | null;
+  }) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+        Check di perimetro del triage
+      </p>
+      <label className="mt-2 flex items-start gap-2 text-[11px] text-slate-700">
+        <input
+          type="checkbox"
+          checked={rilevante}
+          onChange={(e) =>
+            onChange({
+              rilevantePerimetro: e.target.checked,
+              ...(e.target.checked ? {} : { versoPerimetro: null }),
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          Questa lavorazione entra nella check obbligatoria del triage: senza risposta il triage non
+          si chiude.
+        </span>
+      </label>
+      {rilevante && (
+        <label className="mt-2 block text-[10px] font-bold uppercase tracking-wider text-slate-600">
+          Verso
+          <select
+            value={verso ?? ''}
+            onChange={(e) =>
+              onChange({
+                versoPerimetro: (e.target.value || null) as 'COLLABORATIVA' | 'RESISTENZA' | null,
+              })
+            }
+            className={`${CLASSE} mt-1`}
+          >
+            <option value="">Scegli...</option>
+            <option value="COLLABORATIVA">
+              Collaborativa — l’azienda si muove per restare nel perimetro
+            </option>
+            <option value="RESISTENZA">Di resistenza — presidio contro una condotta elusiva</option>
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
 
 function Contatore({ testo, massimo }: { testo: string; massimo: number }) {
   return (
@@ -526,6 +595,13 @@ export function MaterieLavorazioneManager({
             <div className="lg:col-span-1 flex items-end text-[10px] text-slate-400">
               {riassuntoAttivitaRecupero(nuova.procedura)}
             </div>
+            <div className="lg:col-span-12">
+              <CampoPerimetro
+                rilevante={nuova.rilevantePerimetro === true}
+                verso={nuova.versoPerimetro ?? null}
+                onChange={(patch) => setNuova((prev) => ({ ...prev, ...patch }))}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -558,6 +634,8 @@ export function MaterieLavorazioneManager({
               dipendenza: l.dipendenza,
               procedura: l.procedura,
               esito: l.esito,
+              rilevantePerimetro: l.rilevantePerimetro === true,
+              versoPerimetro: l.versoPerimetro ?? null,
             };
             return (
               <div key={l.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
@@ -620,6 +698,11 @@ export function MaterieLavorazioneManager({
                     <Contatore testo={b.esito ?? ''} massimo={MASSIMO_CARATTERI_ESITO} />
                   </label>
                 </div>
+                <CampoPerimetro
+                  rilevante={b.rilevantePerimetro === true}
+                  verso={b.versoPerimetro ?? null}
+                  onChange={(patch) => modificaBozza(l.id, patch)}
+                />
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
                   Procedura — un passo per riga
                   <textarea

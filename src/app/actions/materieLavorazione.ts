@@ -119,6 +119,11 @@ function daRiga(r: Record<string, unknown>): LavorazioneMateria {
     procedura: (r.procedura as string | null) ?? null,
     esito: (r.esito as string | null) ?? null,
     ordine: Number(r.ordine ?? 0),
+    rilevantePerimetro: r.rilevante_perimetro === true,
+    versoPerimetro:
+      r.verso_perimetro === 'COLLABORATIVA' || r.verso_perimetro === 'RESISTENZA'
+        ? r.verso_perimetro
+        : null,
   };
 }
 
@@ -131,7 +136,8 @@ export async function ottieniLavorazioniMateria(
       return { success: false, lavorazioni: [], error: 'Nome schema non valido.' };
     await assicuraTabellaMaterieLavorazione(nomeSchema);
     const r = await pool.query(
-      `SELECT id, materia_id, tipologia, dipendenza, procedura, esito, ordine
+      `SELECT id, materia_id, tipologia, dipendenza, procedura, esito, ordine,
+              rilevante_perimetro, verso_perimetro
          FROM "${nomeSchema}".materie_lavorazione
         ORDER BY materia_id, ordine ASC, id ASC`
     );
@@ -183,10 +189,20 @@ export async function salvaLavorazioneMateriaAction(
       const r = await pool.query(
         `UPDATE "${nomeSchema}".materie_lavorazione
             SET materia_id = $2, tipologia = $3, dipendenza = $4, procedura = $5,
-                esito = $6, aggiornato_il = now()
+                esito = $6, rilevante_perimetro = $7, verso_perimetro = $8,
+                aggiornato_il = now()
           WHERE id = $1
           RETURNING id`,
-        [dato.id, dato.materiaId, dato.tipologia, dato.dipendenza, dato.procedura, dato.esito]
+        [
+          dato.id,
+          dato.materiaId,
+          dato.tipologia,
+          dato.dipendenza,
+          dato.procedura,
+          dato.esito,
+          dato.rilevantePerimetro === true,
+          dato.versoPerimetro,
+        ]
       );
       if ((r.rowCount ?? 0) === 0) return { success: false, error: 'Lavorazione non trovata.' };
       return { success: true, id: dato.id };
@@ -201,8 +217,9 @@ export async function salvaLavorazioneMateriaAction(
     );
     const r = await pool.query(
       `INSERT INTO "${nomeSchema}".materie_lavorazione
-         (materia_id, tipologia, dipendenza, procedura, esito, ordine)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (materia_id, tipologia, dipendenza, procedura, esito, ordine,
+          rilevante_perimetro, verso_perimetro)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
         dato.materiaId,
@@ -211,6 +228,8 @@ export async function salvaLavorazioneMateriaAction(
         dato.procedura,
         dato.esito,
         Number(ordine.rows[0]?.n ?? 1),
+        dato.rilevantePerimetro === true,
+        dato.versoPerimetro,
       ]
     );
     return { success: true, id: Number(r.rows[0].id) };

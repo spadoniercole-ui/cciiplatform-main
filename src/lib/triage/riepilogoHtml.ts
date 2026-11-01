@@ -15,6 +15,9 @@
 
 import type { Attenzione } from '@/lib/screening/indicatore';
 import { etaVerifica } from './etaVerifica';
+import { STILE_BOX } from './box';
+import type { SintesiPerimetro } from './perimetro';
+import type { EsitoScenari } from './scenari';
 
 export interface DocumentoTriage {
   nome: string;
@@ -112,6 +115,14 @@ export interface DatiRiepilogoTriage {
   prossimaVerifica?: string | null;
   /** Giorni concessi ai reparti per attivarsi. Default 30. */
   giorniRiverifica?: number;
+  /**
+   * Il confronto con le due ipotesi (0.153.0): liquidazione giudiziale e cram
+   * down, sulle percentuali dell'ente. `null` quando non c'è nulla da
+   * confrontare: il box non compare, invece di comparire vuoto.
+   */
+  scenari?: EsitoScenari | null;
+  /** La check di perimetro delle TL, se qualcuna è contrassegnata. */
+  checkPerimetro?: SintesiPerimetro | null;
 }
 
 /** Il giorno entro cui tornare a verificare: la data più i giorni concessi. */
@@ -233,6 +244,7 @@ export function htmlRiepilogoTriage(d: DatiRiepilogoTriage): string {
   .rt .avvisi p{font-size:11px;border-radius:6px;padding:8px;margin:6px 0}
   .rt .avvisi .attenzione{background:#fffbeb;border:1px solid #fde68a;color:#78350f}
   .rt .avvisi .nota{background:#f1f5f9;border:1px solid #cbd5e1;color:#334155}
+${STILE_BOX}
 </style>`);
   parti.push('<div class="rt">');
   parti.push(
@@ -307,6 +319,74 @@ export function htmlRiepilogoTriage(d: DatiRiepilogoTriage): string {
       parti.push(
         `<p class="alert"><b>${esc(d.alertSoglie.titolo)}</b><br>${esc(d.alertSoglie.dettaglio)}</p>`
       );
+  }
+
+  // 2-bis. IL CONFRONTO CON LE DUE IPOTESI (0.153.0). Subito dopo le soglie:
+  // il numero misurato e il suo contesto si leggono uno dopo l'altro, non a
+  // distanza di pagine. Ciò che non è calcolabile lo dice, con il dato che
+  // manca: un'ipotesi vuota non si stampa come zero.
+  if (d.scenari) {
+    const s = d.scenari;
+    parti.push(titolo('Confronto con gli scenari: liquidazione giudiziale e cram down'));
+    parti.push('<table><tbody>');
+    parti.push(
+      `<tr><td>Credito dell’ente confrontato</td><td class="num">${euro(s.credito)}</td></tr>`
+    );
+    parti.push(
+      `<tr><td>Rango del credito</td><td>${
+        s.rango ? esc(s.rango) : '<i>non indicato</i>'
+      }</td></tr>`
+    );
+    parti.push(
+      `<tr><td>Liquidazione giudiziale</td><td class="num">${euro(s.liquidazione.netto)}</td><td>${
+        s.liquidazione.calcolabile
+          ? `${s.liquidazione.percentuale}% al netto delle spese`
+          : esc(s.liquidazione.motivo ?? 'non calcolabile')
+      }</td></tr>`
+    );
+    parti.push(
+      `<tr><td>Cram down omologato</td><td class="num">${euro(s.cramDown.netto)}</td><td>${
+        s.cramDown.calcolabile
+          ? `${s.cramDown.percentuale}% del credito`
+          : esc(s.cramDown.motivo ?? 'non calcolabile')
+      }</td></tr>`
+    );
+    parti.push('</tbody></table>');
+    if (s.confronto) parti.push(`<p style="font-size:11px">${esc(s.confronto.testo)}</p>`);
+    if (s.mancanti.length)
+      parti.push(
+        `<p class="lacune" style="font-size:11px">Per completare il confronto manca: ${esc(
+          s.mancanti.join('; ')
+        )}. I parametri si impostano in Parametri di Spazio → Scenari: la piattaforma non ne propone nessuno.</p>`
+      );
+    parti.push(
+      '<p style="font-size:10px;color:#475569">Riferimenti: CCII, art. 84, c. 1 (soddisfacimento non inferiore a quello della liquidazione giudiziale); art. 87, c. 1, lett. c) e cc. 2-3 (valore di liquidazione e obbligo di motivare la preferibilità); art. 112, cc. 3 e 5 (giudizio di convenienza). Il cram down richiama l’omologazione nonostante il dissenso delle classi: il comma va riscontrato sul testo prima di citarlo in un atto. Percentuali e spese di procedura sono parametri dell’ente, non della legge.</p>'
+    );
+    parti.push(
+      '<p style="font-size:10px;color:#92400e">Il confronto applica al credito dell’ente le percentuali configurate: non stima l’attivo dell’azienda e non è un giudizio di convenienza su una proposta.</p>'
+    );
+  }
+
+  // 2-ter. LA CHECK DI PERIMETRO (0.153.0). Non è un giudizio sul debito: dice
+  // sotto quale condotta stanno i codici, che è ciò che le soglie non possono
+  // dire.
+  if (d.checkPerimetro) {
+    const c = d.checkPerimetro;
+    parti.push(titolo('Check di perimetro dei crediti'));
+    parti.push(`<p class="esito">${esc(c.etichetta)}</p>`);
+    parti.push(`<p style="font-size:11px">${esc(c.dettaglio)}</p>`);
+    parti.push(`<table><tbody>
+<tr><td>TL rilevanti verificate</td><td class="num">${c.totali}</td></tr>
+<tr><td>Riscontrate</td><td class="num">${c.riscontrate}</td></tr>
+<tr><td>Non riscontrate</td><td class="num">${c.nonRiscontrate}</td></tr>
+<tr><td>Non applicabili</td><td class="num">${c.nonApplicabili}</td></tr>
+<tr><td>Voci ancora da compilare</td><td class="num">${c.daCompilare}</td></tr>
+<tr><td>Codici sotto un modus operandi</td><td>${esc(c.codiciStrutturali.join(', ') || 'nessuno')}</td></tr>
+<tr><td>Codici da un problema momentaneo</td><td>${esc(c.codiciIncidentali.join(', ') || 'nessuno')}</td></tr>
+</tbody></table>`);
+    parti.push(
+      '<p style="font-size:10px;color:#475569">Le voci nascono dalle TL contrassegnate in Parametri di Spazio → Materie e lavorazioni; i codici sono quelli che cadono nella materia della TL. La check riguarda le lavorazioni configurate, non l’intera storia dell’azienda.</p>'
+    );
   }
 
   // 3. Valori
@@ -389,5 +469,34 @@ export function htmlRiepilogoTriage(d: DatiRiepilogoTriage): string {
   parti.push(titolo('Perimetro'));
   parti.push(`<p class="perimetro">${esc(d.perimetro)}</p>`);
   parti.push('</div>');
-  return parti.join('\n');
+  return incorniciaSezioni(parti.join('\n'));
+}
+
+/**
+ * LA CORNICE NUMERATA (0.153.0).
+ *
+ * Le sezioni sono già scritte una dopo l'altra da `titolo()`. Qui si avvolgono
+ * in un box per sezione, con il numero in alto a sinistra e il salto di pagina
+ * dopo ciascuna: il foglio si legge un box alla volta, come si legge un
+ * verbale, e ogni citazione ha un numero. Il preambolo — intestazione,
+ * ristampa, avvisi — resta fuori dalle cornici: non è una verifica.
+ *
+ * La trasformazione è testuale e volutamente semplice: il numero è già nel
+ * titolo (`<h2>3. ...</h2>`), quindi non c'è una seconda numerazione da
+ * tenere allineata a quella visibile.
+ */
+function incorniciaSezioni(html: string): string {
+  const parti = html.split(/(?=<h2>)/);
+  if (parti.length <= 1) return html;
+  return parti
+    .map((parte, i) => {
+      const m = parte.match(/^<h2>(\d+)\./);
+      if (!m) return parte;
+      const ultimo = i === parti.length - 1;
+      const corpo = parte.replace(/^<h2>/, '<h2 style="padding-left:34px">');
+      return `<section class="triage-box"${
+        ultimo ? '' : ' style="page-break-after:always"'
+      }><div class="triage-box-num" aria-hidden="true">${m[1]}</div>${corpo}</section>`;
+    })
+    .join('\n');
 }

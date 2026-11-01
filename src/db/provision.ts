@@ -2219,9 +2219,78 @@ export async function assicuraTabellaMaterieLavorazione(nomeSchema: string): Pro
       aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
+  // IL PERIMETRO DELLA TL (0.153.0). Non tutte le lavorazioni dicono la
+  // stessa cosa dell'azienda: alcune sono il presidio che l'ente attiva quando
+  // la condotta è elusiva. Il contrassegno dice quali entrano nella check
+  // obbligatoria del triage, e il verso dice da che parte stanno. Due colonne
+  // e non una tabella: la qualificazione è della lavorazione, non un elenco a
+  // parte da tenere allineato.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.materie_lavorazione
+        ADD COLUMN IF NOT EXISTS rilevante_perimetro BOOLEAN NOT NULL DEFAULT false`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.materie_lavorazione
+        ADD COLUMN IF NOT EXISTS verso_perimetro TEXT`
+  );
   await eseguiDdlTenant(
     sql`CREATE INDEX IF NOT EXISTS idx_materie_lavorazione_materia
         ON ${s}.materie_lavorazione (materia_id, ordine)`
+  );
+}
+
+/**
+ * CHECK DI PERIMETRO E SCENARI DEL TRIAGE (0.153.0).
+ *
+ * Quattro tabelle, ognuna con un compito solo:
+ *
+ *  - `triage_perimetro` — le risposte dell'operatore alle TL rilevanti, una
+ *    riga per azienda e lavorazione. La chiave è la coppia: la stessa TL vale
+ *    per tutte le aziende nella configurazione, ma la risposta è di ciascuna.
+ *  - `parametri_scenari` — la riga unica delle spese di procedura.
+ *  - `parametri_scenari_rango` — le percentuali per rango, fissate dall'ente.
+ *    Nessun valore di default: una riga assente è un'ipotesi non calcolabile.
+ *  - `triage_scenario` — il rango del credito scelto per questa azienda.
+ *
+ * Si creano a runtime come le altre: uno spazio esistente le riceve alla prima
+ * apertura del triage, senza migrazioni e senza perdere nulla.
+ */
+export async function assicuraTabelleScenariTriage(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaAziende(nomeSchema);
+  await assicuraTabellaMaterieLavorazione(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.triage_perimetro (
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      lavorazione_id INTEGER NOT NULL,
+      stato TEXT NOT NULL,
+      natura TEXT,
+      nota TEXT,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now(),
+      PRIMARY KEY (azienda_id, lavorazione_id)
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_scenari (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      costi_procedura_pct NUMERIC,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_scenari_rango (
+      rango TEXT PRIMARY KEY,
+      tasso_liquidazione_pct NUMERIC,
+      cram_down_pct NUMERIC,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.triage_scenario (
+      azienda_id INTEGER PRIMARY KEY REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      rango TEXT NOT NULL,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
   );
 }
 

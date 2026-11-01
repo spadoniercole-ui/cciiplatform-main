@@ -70,6 +70,14 @@ import { accumulaFile, togliFile } from '@/lib/file/accumula';
 import type { RigaDebitoTriage } from '@/lib/debitiTriage/modello';
 import type { MappaturaProspetto } from '@/lib/debitiTriage/mappatura';
 import { salvaTutteDebitiTriageAction } from '@/app/actions/debitiTriage';
+import {
+  ottieniPerimetroTriageAction,
+  ottieniRangoCreditoAction,
+} from '@/app/actions/triagePerimetro';
+import { ottieniParametriScenariAction } from '@/app/actions/parametriScenari';
+import { PerimetroTriage } from '@/components/spazio/PerimetroTriage';
+import { ScenariTriage } from '@/components/spazio/ScenariTriage';
+import { calcolaScenari } from '@/lib/triage/scenari';
 import { salvaStrutturaProspettoAction } from '@/app/actions/struttureProspetto';
 import {
   leggiElencoDenunce,
@@ -386,6 +394,13 @@ export function VerificaSaluteAzienda({
    * modificare si va nella scheda, ma solo se lo si sceglie.
    */
   const [mostraSoglie, setMostraSoglie] = useState(false);
+  // La check di perimetro è obbligatoria: il triage non si chiude se una TL
+  // rilevante non ha risposta. Lo stato serve al pulsante «Procedi», che
+  // altrimenti porterebbe avanti un'azienda senza la verifica qualificata.
+  const [perimetroEsito, setPerimetroEsito] = useState<{
+    completa?: boolean;
+    mancanze?: string[];
+  } | null>(null);
 
   // Lo storico rende vera la promessa fatta a schermo — "la verifica resta
   // consultabile" — che finora non lo era: esito e data stavano nel
@@ -1331,7 +1346,7 @@ export function VerificaSaluteAzienda({
     setEtichetteCategorie({});
   };
 
-  const stampaRiepilogo = () => {
+  const stampaRiepilogo = async () => {
     const sede = dati
       ? [
           dati.indirizzoSedeLegale,
@@ -1342,6 +1357,29 @@ export function VerificaSaluteAzienda({
           .filter(Boolean)
           .join(' ')
       : null;
+    // Le due cose che il riepilogo deve portare oltre alle soglie: la check
+    // obbligatoria e il confronto con gli scenari. Si leggono qui, al momento
+    // della stampa, così il foglio non può divergere da ciò che è salvato.
+    const parametriScenari = await ottieniParametriScenariAction(nomeSchema);
+    const rangoCredito = aziendaId ? await ottieniRangoCreditoAction(nomeSchema, aziendaId) : null;
+    const checkPerimetro = aziendaId
+      ? await ottieniPerimetroTriageAction(nomeSchema, aziendaId)
+      : null;
+    const creditoScenari =
+      esitoSoglie && esitoSoglie.righe.some((r) => r.applicabile)
+        ? esitoSoglie.righe
+            .filter((r) => r.applicabile && r.esposizione !== null)
+            .reduce((a, r) => a + (r.esposizione ?? 0), 0)
+        : null;
+    const scenari =
+      parametriScenari.success && parametriScenari.parametri
+        ? calcolaScenari({
+            credito: creditoScenari,
+            rango: rangoCredito?.success ? (rangoCredito.rango ?? null) : null,
+            parametri: parametriScenari.parametri,
+          })
+        : null;
+
     stampaHtml(
       `Riepilogo del triage — ${dati?.ragioneSociale ?? 'azienda'}`,
       htmlRiepilogoTriage({
@@ -1397,6 +1435,9 @@ export function VerificaSaluteAzienda({
           riepilogoSoglie && riepilogoSoglie.stato !== 'nessuna_superata'
             ? { titolo: riepilogoSoglie.titolo, dettaglio: riepilogoSoglie.dettaglio }
             : null,
+        scenari,
+        checkPerimetro:
+          checkPerimetro && checkPerimetro.success ? (checkPerimetro.sintesi ?? null) : null,
         // Le evidenze che partono per i reparti: chi riceve il riepilogo deve
         // sapere che cosa è stato mandato a chi, e quanto vale.
         uffici: reportUo.documenti.map((d) => ({
@@ -2053,6 +2094,42 @@ export function VerificaSaluteAzienda({
                 onScelte={setScelteFonti}
                 onStruttura={(st) => setStruttureDaSalvare((prev) => [...prev, st])}
               />
+            </div>
+
+            {/* LA CHECK OBBLIGATORIA (0.153.0). Sta dopo i prospetti perché
+                sono loro a dire quali TL rilevanti esistono; le voci però
+                arrivano dai titoli dell'ente, non dai file. */}
+            <div className="border-t border-slate-100 pt-4">
+              {aziendaId ? (
+                <PerimetroTriage
+                  nomeSchema={nomeSchema}
+                  aziendaId={aziendaId}
+                  onEsito={setPerimetroEsito}
+                />
+              ) : (
+                <p className="text-[11px] text-slate-400">
+                  La check di perimetro si apre dopo il riconoscimento dell’azienda.
+                </p>
+              )}
+            </div>
+
+            {/* GLI SCENARI (0.153.0): il credito misurato dalle soglie, con i
+                due termini di paragone. */}
+            <div className="border-t border-slate-100 pt-4">
+              {aziendaId ? (
+                <ScenariTriage
+                  nomeSchema={nomeSchema}
+                  aziendaId={aziendaId}
+                  codice={codice}
+                  credito={
+                    esitoSoglie && esitoSoglie.righe.some((r) => r.applicabile)
+                      ? esitoSoglie.righe
+                          .filter((r) => r.applicabile && r.esposizione !== null)
+                          .reduce((a, r) => a + (r.esposizione ?? 0), 0)
+                      : null
+                  }
+                />
+              ) : null}
             </div>
 
             <div className="border-t border-slate-100 pt-4">
@@ -2784,7 +2861,7 @@ export function VerificaSaluteAzienda({
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={stampaRiepilogo}
+                onClick={() => void stampaRiepilogo()}
                 className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase rounded-lg"
                 title="Documenti caricati e letti, valori misurati, indicazione del triage e perimetro: da consegnare al responsabile"
               >
@@ -3308,6 +3385,13 @@ export function VerificaSaluteAzienda({
               </p>
             )}
             {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}
+            {perimetroEsito?.completa === false && (
+              <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
+                Il triage non è completo: resta da rispondere alla check di perimetro (
+                {perimetroEsito.mancanze?.length ?? 0} voci). Le TL rilevanti vanno verificate prima
+                di procedere — è la sola parte obbligatoria della check.
+              </p>
+            )}
             <div className="flex flex-wrap gap-3">
               {/* La decisione si ripropone solo se è ancora da prendere. Una
                   verifica riaperta su un'azienda già presa in carico non deve
@@ -3323,7 +3407,12 @@ export function VerificaSaluteAzienda({
                 <>
                   <button
                     onClick={() => void procedi()}
-                    disabled={inCorso || !aziendaId}
+                    disabled={inCorso || !aziendaId || perimetroEsito?.completa === false}
+                    title={
+                      perimetroEsito?.completa === false
+                        ? 'Completa la check di perimetro: le TL rilevanti devono avere una risposta.'
+                        : undefined
+                    }
                     className="flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700 disabled:bg-slate-300"
                   >
                     <ArrowRight className="w-3.5 h-3.5" />
