@@ -51,6 +51,17 @@ export interface ValoriSoglie {
   ritardoOltre90Giorni: boolean | null;
   periodiInRitardo: number | null;
   denunceNonPresentate: string | null;
+  // ---- Segnali dell'art. 3, comma 4: dati dell'IMPRESA, non dell'ente.
+  // Stanno qui perché la scheda che li raccoglie è la stessa, ma non
+  // entrano nel calcolo dell'art. 25-novies: li legge il modulo
+  // src/lib/segnaliArt3/segnali.ts.
+  retribuzioniScaduteOltre30: number | null;
+  retribuzioniMensiliTotali: number | null;
+  fornitoriScadutiOltre90: number | null;
+  fornitoriNonScaduti: number | null;
+  bancheScaduteOltre60: number | null;
+  bancheOltreAffidamentoOltre60: number | null;
+  bancheEsposizioniTotali: number | null;
 }
 
 export interface RisultatoValoriSoglie {
@@ -77,7 +88,11 @@ export async function ottieniValoriSoglieAction(
       `SELECT con_lavoratori_subordinati, contributi_scaduti, contributi_dovuti_anno_precedente,
               anno_contributi_dovuti, sanzioni_presunte_vera, premi_inail, iva_scaduta,
               volume_affari, crediti_affidati_aer, soglie_aggiornate_al, forma_giuridica,
-              ritardo_oltre_90_giorni, periodi_in_ritardo, denunce_non_presentate
+              ritardo_oltre_90_giorni, periodi_in_ritardo, denunce_non_presentate,
+              retribuzioni_scadute_oltre_30, retribuzioni_mensili_totali,
+              fornitori_scaduti_oltre_90, fornitori_non_scaduti,
+              banche_scadute_oltre_60, banche_oltre_affidamento_oltre_60,
+              banche_esposizioni_totali
          FROM "${nomeSchema}".aziende WHERE id = $1`,
       [aziendaId]
     );
@@ -107,6 +122,13 @@ export async function ottieniValoriSoglieAction(
             : Boolean(a.ritardo_oltre_90_giorni),
         periodiInRitardo: num(a.periodi_in_ritardo),
         denunceNonPresentate: a.denunce_non_presentate ? String(a.denunce_non_presentate) : null,
+        retribuzioniScaduteOltre30: num(a.retribuzioni_scadute_oltre_30),
+        retribuzioniMensiliTotali: num(a.retribuzioni_mensili_totali),
+        fornitoriScadutiOltre90: num(a.fornitori_scaduti_oltre_90),
+        fornitoriNonScaduti: num(a.fornitori_non_scaduti),
+        bancheScaduteOltre60: num(a.banche_scadute_oltre_60),
+        bancheOltreAffidamentoOltre60: num(a.banche_oltre_affidamento_oltre_60),
+        bancheEsposizioniTotali: num(a.banche_esposizioni_totali),
       },
       formaAER: formaAERdaAnagrafica(a.forma_giuridica),
       formaGiuridicaTesto: a.forma_giuridica ?? null,
@@ -148,6 +170,13 @@ export async function salvaValoriSoglieParzialeAction(
       ritardoOltre90Giorni: 'ritardo_oltre_90_giorni',
       periodiInRitardo: 'periodi_in_ritardo',
       denunceNonPresentate: 'denunce_non_presentate',
+      retribuzioniScaduteOltre30: 'retribuzioni_scadute_oltre_30',
+      retribuzioniMensiliTotali: 'retribuzioni_mensili_totali',
+      fornitoriScadutiOltre90: 'fornitori_scaduti_oltre_90',
+      fornitoriNonScaduti: 'fornitori_non_scaduti',
+      bancheScaduteOltre60: 'banche_scadute_oltre_60',
+      bancheOltreAffidamentoOltre60: 'banche_oltre_affidamento_oltre_60',
+      bancheEsposizioniTotali: 'banche_esposizioni_totali',
     };
 
     const set: string[] = [];
@@ -189,7 +218,14 @@ export async function salvaValoriSoglieAction(
          iva_scaduta = $8,
          volume_affari = $9,
          crediti_affidati_aer = $10,
-         soglie_aggiornate_al = $11
+         soglie_aggiornate_al = $11,
+         retribuzioni_scadute_oltre_30 = $12,
+         retribuzioni_mensili_totali = $13,
+         fornitori_scaduti_oltre_90 = $14,
+         fornitori_non_scaduti = $15,
+         banche_scadute_oltre_60 = $16,
+         banche_oltre_affidamento_oltre_60 = $17,
+         banche_esposizioni_totali = $18
        WHERE id = $1`,
       [
         aziendaId,
@@ -203,6 +239,13 @@ export async function salvaValoriSoglieAction(
         valori.volumeAffari,
         valori.creditiAffidatiAer,
         valori.soglieAggiornateAl,
+        valori.retribuzioniScaduteOltre30,
+        valori.retribuzioniMensiliTotali,
+        valori.fornitoriScadutiOltre90,
+        valori.fornitoriNonScaduti,
+        valori.bancheScaduteOltre60,
+        valori.bancheOltreAffidamentoOltre60,
+        valori.bancheEsposizioniTotali,
       ]
     );
     return { success: true };

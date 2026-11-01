@@ -251,6 +251,13 @@ beforeEach(() => {
       ritardoOltre90Giorni: true,
       periodiInRitardo: 13,
       denunceNonPresentate: '03/2026, 04/2026',
+      retribuzioniScaduteOltre30: null,
+      retribuzioniMensiliTotali: null,
+      fornitoriScadutiOltre90: null,
+      fornitoriNonScaduti: null,
+      bancheScaduteOltre60: null,
+      bancheOltreAffidamentoOltre60: null,
+      bancheEsposizioniTotali: null,
     },
   });
   vi.mocked(valutaSoglieAction).mockResolvedValue({

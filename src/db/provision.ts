@@ -306,6 +306,21 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
     'ritardo_oltre_90_giorni BOOLEAN',
     'periodi_in_ritardo INTEGER',
     'denunce_non_presentate TEXT',
+    // ---- SEGNALI DELL'ART. 3, COMMA 4 (dati dell'impresa).
+    //
+    // L'art. 25-novies guarda ciò che l'ente vede; l'art. 3, comma 4 guarda
+    // ciò che l'impresa deve saper vedere: retribuzioni, fornitori, banche.
+    // Questi importi non arrivano da nessun documento che la piattaforma
+    // legge, quindi si dichiarano a mano nella scheda Soglie — e restano
+    // NULL quando nessuno li ha dichiarati, così il confronto risulta «non
+    // verificabile» invece di sparire o di valere zero.
+    'retribuzioni_scadute_oltre_30 NUMERIC',
+    'retribuzioni_mensili_totali NUMERIC',
+    'fornitori_scaduti_oltre_90 NUMERIC',
+    'fornitori_non_scaduti NUMERIC',
+    'banche_scadute_oltre_60 NUMERIC',
+    'banche_oltre_affidamento_oltre_60 NUMERIC',
+    'banche_esposizioni_totali NUMERIC',
     // Visura caricata nel triage, TRATTENUTA fino alla generazione dello
     // screening e poi eliminata. Deroga consapevole alla regola per cui i
     // documenti non si conservano mai: senza, la visura appena fornita

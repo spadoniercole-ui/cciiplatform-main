@@ -26,7 +26,11 @@ import {
   type ValoriSoglie,
 } from '@/app/actions/soglie25novies';
 import { ETICHETTA_ENTE, type EsitoSoglie, type Ente25Novies } from '@/lib/soglie25novies/calcolo';
-import { valutaSegnaliArt3, type EsitoSegnaleArt3 } from '@/lib/segnaliArt3/segnali';
+import {
+  valutaSegnaliArt3,
+  type DatiSegnaliArt3,
+  type EsitoSegnaleArt3,
+} from '@/lib/segnaliArt3/segnali';
 
 interface Props {
   nomeSchema: string;
@@ -48,6 +52,13 @@ const VUOTI: ValoriSoglie = {
   ritardoOltre90Giorni: null,
   periodiInRitardo: null,
   denunceNonPresentate: null,
+  retribuzioniScaduteOltre30: null,
+  retribuzioniMensiliTotali: null,
+  fornitoriScadutiOltre90: null,
+  fornitoriNonScaduti: null,
+  bancheScaduteOltre60: null,
+  bancheOltreAffidamentoOltre60: null,
+  bancheEsposizioniTotali: null,
 };
 
 // Il `body` dell'applicazione ha `color: white` (sfondo scuro della pagina di
@@ -364,6 +375,66 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
           </div>
         )}
 
+        {/* Art. 3, comma 4 — segnali dell'impresa */}
+        <div className="space-y-3 border-t border-slate-100 pt-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+            Art. 3, comma 4 — segnali dell&apos;impresa
+          </p>
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Sono i segnali che l&apos;imprenditore deve saper vedere e non nascono dai dati
+            dell&apos;ente creditore: retribuzioni, fornitori e banche. Restano facoltativi come gli
+            altri, e un campo vuoto rende il confronto «non verificabile», mai «sotto soglia».
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <CampoEuro
+              etichetta="Retribuzioni scadute da almeno 30 giorni"
+              fonte="Dal libro paga: competenze lorde scadute e non ancora pagate alla data di riferimento."
+              valore={valori.retribuzioniScaduteOltre30}
+              onCambia={(v) => setValori({ ...valori, retribuzioniScaduteOltre30: v })}
+            />
+            <CampoEuro
+              etichetta="Retribuzioni mensili complessive"
+              fonte="Dal libro paga del mese di riferimento: è il denominatore della metà prevista dalla lettera a)."
+              valore={valori.retribuzioniMensiliTotali}
+              onCambia={(v) => setValori({ ...valori, retribuzioniMensiliTotali: v })}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <CampoEuro
+              etichetta="Fornitori scaduti da almeno 90 giorni"
+              fonte="Dallo scadenzario fornitori: partite aperte con scadenza superata da 90 giorni o più."
+              valore={valori.fornitoriScadutiOltre90}
+              onCambia={(v) => setValori({ ...valori, fornitoriScadutiOltre90: v })}
+            />
+            <CampoEuro
+              etichetta="Fornitori non ancora scaduti"
+              fonte="Dallo stesso scadenzario: debiti con scadenza futura. La lettera b) confronta i due importi."
+              valore={valori.fornitoriNonScaduti}
+              onCambia={(v) => setValori({ ...valori, fornitoriNonScaduti: v })}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <CampoEuro
+              etichetta="Banche: scaduto oltre 60 giorni"
+              fonte="Dalla centrale dei rischi o dall'estratto conto affidamenti."
+              valore={valori.bancheScaduteOltre60}
+              onCambia={(v) => setValori({ ...valori, bancheScaduteOltre60: v })}
+            />
+            <CampoEuro
+              etichetta="Banche: oltre affidamento da 60 giorni"
+              fonte="Sforamenti del limite di affidamento che durano da almeno 60 giorni."
+              valore={valori.bancheOltreAffidamentoOltre60}
+              onCambia={(v) => setValori({ ...valori, bancheOltreAffidamentoOltre60: v })}
+            />
+            <CampoEuro
+              etichetta="Banche: esposizioni totali"
+              fonte="Totale delle esposizioni verso banche e intermediari: è la base del 5% della lettera c)."
+              valore={valori.bancheEsposizioniTotali}
+              onCambia={(v) => setValori({ ...valori, bancheEsposizioniTotali: v })}
+            />
+          </div>
+        </div>
+
         <div className="flex items-center gap-3 border-t border-slate-100 pt-4">
           <button
             onClick={() => void salva()}
@@ -427,20 +498,32 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
         </div>
       )}
 
-      <SegnaliAllertaArt3 soglieSuperate={esito ? esito.superate.length : null} />
+      <SegnaliAllertaArt3
+        dati={{
+          retribuzioniScaduteOltre30: valori.retribuzioniScaduteOltre30,
+          retribuzioniMensiliTotali: valori.retribuzioniMensiliTotali,
+          fornitoriScadutiOltre90: valori.fornitoriScadutiOltre90,
+          fornitoriNonScaduti: valori.fornitoriNonScaduti,
+          bancheScaduteOltre60: valori.bancheScaduteOltre60,
+          bancheOltreAffidamentoOltre60: valori.bancheOltreAffidamentoOltre60,
+          bancheEsposizioniTotali: valori.bancheEsposizioniTotali,
+          soglie25NoviesSuperate: esito ? esito.superate.length : null,
+        }}
+      />
     </div>
   );
 }
 
 /**
  * Segnali dell'art. 3, comma 4: la parte dell'allerta che riguarda l'impresa,
- * non l'ente creditore. Le lettere a), b) e c) richiedono libro paga,
- * scadenzario fornitori e centrale dei rischi, che la piattaforma non
- * acquisisce: qui compaiono come non verificabili, con la fonte che
- * servirebbe. La lettera d) usa il confronto già eseguito sulle soglie.
+ * non l'ente creditore. Le lettere a), b) e c) usano gli importi dichiarati
+ * nella scheda qui sopra — libro paga, scadenzario fornitori, centrale dei
+ * rischi non sono documenti che la piattaforma legge — e finché un campo è
+ * vuoto restano non verificabili, con la fonte che servirebbe. La lettera d)
+ * usa il confronto già eseguito sulle soglie.
  */
-function SegnaliAllertaArt3({ soglieSuperate }: { soglieSuperate: number | null }) {
-  const esito = valutaSegnaliArt3({ soglie25NoviesSuperate: soglieSuperate });
+function SegnaliAllertaArt3({ dati }: { dati: DatiSegnaliArt3 }) {
+  const esito = valutaSegnaliArt3(dati);
   const classi: Record<EsitoSegnaleArt3, string> = {
     segnale: 'bg-red-50 text-red-700 border-red-200',
     sotto: 'bg-emerald-50 text-emerald-700 border-emerald-200',

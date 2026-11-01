@@ -1,3 +1,27 @@
+## 0.152.0 — 2026-11-01
+
+**I segnali dell'art. 3, comma 4 diventano misurabili.** Sette importi — retribuzioni
+scadute e monte mensile, fornitori scaduti e non scaduti, scaduto bancario, sforamento
+dell'affidamento, esposizioni totali — si dichiarano nella scheda Soglie, accanto a quelli
+dell'art. 25-novies, e le quattro lettere si confrontano subito, mentre si scrive. Restano
+facoltativi: un campo vuoto lascia la lettera «non verificabile» con la fonte che manca, e
+compilarne uno non rende verificabili gli altri. Le colonne nascono a runtime con lo stesso
+`ADD COLUMN IF NOT EXISTS` delle altre, così gli spazi esistenti non richiedono migrazioni.
+
+**Riduzione del capitale per perdite: verificata, con una scadenza da segnare.** Artt. 2446,
+2447, 2482-bis, 2482-ter c.c. e art. 6 D.L. 23/2020 letti sul testo: la sospensione COVID
+copre le perdite emerse entro il 31/12/2022 e sposta il termine al quinto esercizio
+successivo, quindi per le perdite 2020 il quinquennio si è chiuso con il bilancio 2025 e gli
+obblighi sono tornati operativi; restano sospesi per il 2021 e il 2022. La convocazione
+dell'assemblea con la relazione sulla situazione patrimoniale non è mai stata sospesa.
+
+**Il confronto con la liquidazione aveva il riferimento sbagliato.** Gli artt. 63 e 88, citati
+dal prodotto, regolano il trattamento dei crediti tributari e contributivi — convenienza nel
+concordato liquidatorio, trattamento non deteriore in continuità — e non il criterio generale,
+che è la non inferiorità dell'art. 84, c. 1, con il valore di liquidazione dell'art. 87, c. 1,
+lett. c) e il giudizio di convenienza dell'art. 112, cc. 3 e 5. La griglia ora lo dichiara:
+il rinvio del prodotto va allineato, non lasciato passare per verificato.
+
 ## 0.151.0 — 2026-10-31
 
 **I segnali dell'art. 3, comma 4 hanno un posto, un esito e una fonte
