@@ -133,7 +133,6 @@ import { materiaPerRigaVera } from '@/lib/titoliEnte/materiaVera';
 import { normalizzaEtichetta } from '@/lib/debitiEnte/tracciatoCore';
 import { MappaturaSezioniVera } from '@/components/spazio/MappaturaSezioniVera';
 import type { StatoMateria } from '@/lib/titoliEnte/materie';
-import { LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA } from '@/lib/lavorazioni/solaLettura';
 import {
   MEZZI_INVIO,
   causaSuperamento,

@@ -500,3 +500,72 @@ export async function riallineaUfficioAllaDirettriceAction(
     };
   }
 }
+
+/**
+ * RINOMINA IN BLOCCO IL PRODOTTO DELLE TL IMPORTATE (0.158.0).
+ *
+ * Le TL copiate dalle vecchie `materie_lavorazione` non avevano un prodotto:
+ * la copia ha messo il nome della lavorazione anche come prodotto. Il risultato
+ * è un prodotto che nessuna direttrice ha configurato — la TL resta fuori
+ * sequenza e il nome resta doppio.
+ *
+ * Qui si rinomina il prodotto di tutte le TL della direttrice in una volta. Non
+ * è una rinomina della TL: è la chiave che le tiene insieme, e cambiarla una
+ * riga per volta è il modo in cui i doppioni tornano. La pagina aggiunge il
+ * nome nuovo ai prodotti della direttrice, così la catena resta in piedi.
+ */
+export async function rinominaProdottoTlAction(
+  nomeSchema: string,
+  direttrice: string,
+  da: string,
+  a: string
+): Promise<{ success: boolean; rinominati?: number; error?: string }> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    const ufficio = String(direttrice ?? '').trim();
+    const vecchio = String(da ?? '').trim();
+    const nuovo = String(a ?? '').trim();
+    if (!ufficio) return { success: false, error: 'Indica la direttrice.' };
+    if (!vecchio) return { success: false, error: 'Indica il prodotto da rinominare.' };
+    if (!nuovo) return { success: false, error: 'Indica il nome nuovo del prodotto.' };
+    if (vecchio.toLowerCase() === nuovo.toLowerCase())
+      return { success: false, error: 'Il nome nuovo è uguale a quello attuale.' };
+    await assicuraTabelleProdottiTl(nomeSchema);
+
+    // Rinominare su un prodotto che ha già la stessa lavorazione creerebbe due
+    // TL identiche sotto lo stesso prodotto: il doppione che il comando deve
+    // togliere, non crearne uno nuovo.
+    const doppioni = await pool.query(
+      `SELECT 1
+         FROM "${nomeSchema}".prodotti_tl x
+         JOIN "${nomeSchema}".prodotti_tl y
+           ON lower(btrim(y.direttrice)) = lower(btrim(x.direttrice))
+          AND lower(btrim(y.prodotto)) = lower(btrim($3))
+          AND lower(btrim(y.tipologia)) = lower(btrim(x.tipologia))
+        WHERE lower(btrim(x.direttrice)) = lower(btrim($1))
+          AND lower(btrim(x.prodotto)) = lower(btrim($2))
+        LIMIT 1`,
+      [ufficio, vecchio, nuovo]
+    );
+    if ((doppioni.rowCount ?? 0) > 0)
+      return {
+        success: false,
+        error: `«${nuovo}» ha già una TL con la stessa lavorazione: uniscile prima dalla scheda del prodotto.`,
+      };
+
+    const r = await pool.query(
+      `UPDATE "${nomeSchema}".prodotti_tl
+          SET prodotto = $3, aggiornato_il = now()
+        WHERE lower(btrim(direttrice)) = lower(btrim($1))
+          AND lower(btrim(prodotto)) = lower(btrim($2))`,
+      [ufficio, vecchio, nuovo]
+    );
+    const rinominati = r.rowCount ?? 0;
+    if (rinominati === 0) return { success: false, error: 'Nessuna TL trovata su quel prodotto.' };
+    return { success: true, rinominati };
+  } catch (error: unknown) {
+    console.error('[rinominaProdottoTlAction]', error);
+    return { success: false, error: `Rinomina non riuscita: ${(error as Error).message || error}` };
+  }
+}

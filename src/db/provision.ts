@@ -2335,6 +2335,74 @@ export async function assicuraTabelleProdottiTl(nomeSchema: string): Promise<voi
       client.release();
     }
   }
+
+  // LE LAVORAZIONI PER TIPOLOGIA DI DEBITO ENTRANO NEL CATALOGO (0.158.0).
+  //
+  // Prima ogni categoria di debito aveva una riga scritta a mano con la
+  // lavorazione e il destinatario: la stessa procedura esisteva in due tabelle
+  // e andava tenuta allineata a mano. Qui la categoria punta a una TL di
+  // `prodotti_tl`, così ufficio, passi ed esito si scrivono in un posto solo.
+  //
+  // La vecchia `lavorazioni_tipo_debito` resta in piedi (i documenti del
+  // triage già emessi la citano) ma nessuno la legge più: la copia avviene una
+  // volta sola, e se la categoria ha già dei collegamenti non si torna
+  // indietro sopra le scelte fatte dall'ente.
+  await assicuraTabellaLavorazioniTipoDebito(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.categoria_tl (
+      categoria TEXT NOT NULL,
+      tl_id INTEGER NOT NULL,
+      attivo BOOLEAN NOT NULL DEFAULT TRUE,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (categoria, tl_id)
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_categoria_tl_tl ON ${s}.categoria_tl (tl_id)`
+  );
+
+  const categorie = await pool.query(
+    `SELECT NOT EXISTS (SELECT 1 FROM "${nomeSchema}".categoria_tl) AS vuoto,
+            EXISTS (SELECT 1 FROM "${nomeSchema}".lavorazioni_tipo_debito) AS legate`
+  );
+  if (categorie.rows[0]?.vuoto && categorie.rows[0]?.legate) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Le TL che la vecchia tabella citava e che il catalogo non ha ancora:
+      // stesso ufficio e stessa lavorazione, grafia a confronto senza
+      // maiuscole, altrimenti «Contributi» e «contributi» diventano due TL.
+      await client.query(
+        `INSERT INTO "${nomeSchema}".prodotti_tl
+           (direttrice, prodotto, tipologia, dipendenza, ordine)
+         SELECT DISTINCT ON (lower(COALESCE(l.destinatario, '')), lower(l.lavorazione))
+                COALESCE(l.destinatario, ''), l.lavorazione, l.lavorazione,
+                NULLIF(l.destinatario, ''), 0
+           FROM "${nomeSchema}".lavorazioni_tipo_debito l
+          WHERE NOT EXISTS (
+                  SELECT 1 FROM "${nomeSchema}".prodotti_tl t
+                   WHERE lower(t.tipologia) = lower(l.lavorazione)
+                     AND lower(COALESCE(t.dipendenza, '')) = lower(COALESCE(l.destinatario, ''))
+                )
+          ORDER BY lower(COALESCE(l.destinatario, '')), lower(l.lavorazione), l.id`
+      );
+      await client.query(
+        `INSERT INTO "${nomeSchema}".categoria_tl (categoria, tl_id, attivo, ordine)
+         SELECT l.categoria, t.id, l.attivo, l.ordine
+           FROM "${nomeSchema}".lavorazioni_tipo_debito l
+           JOIN "${nomeSchema}".prodotti_tl t
+             ON lower(t.tipologia) = lower(l.lavorazione)
+            AND lower(COALESCE(t.dipendenza, '')) = lower(COALESCE(l.destinatario, ''))
+          ON CONFLICT (categoria, tl_id) DO NOTHING`
+      );
+      await client.query('COMMIT');
+    } catch (errore) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw errore;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 /**
