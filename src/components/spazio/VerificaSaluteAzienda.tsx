@@ -75,6 +75,8 @@ import {
   ottieniRangoCreditoAction,
 } from '@/app/actions/triagePerimetro';
 import { ottieniParametriScenariAction } from '@/app/actions/parametriScenari';
+import { ottieniScreeningAzienda } from '@/app/actions/screeningAzienda';
+import { riepilogoCheckList } from '@/lib/triage/checkListRiepilogo';
 import { PerimetroTriage } from '@/components/spazio/PerimetroTriage';
 import { CheckListTriage } from '@/components/spazio/CheckListTriage';
 import { ScenariTriage } from '@/components/spazio/ScenariTriage';
@@ -1369,6 +1371,26 @@ export function VerificaSaluteAzienda({
     const checkPerimetro = aziendaId
       ? await ottieniPerimetroTriageAction(nomeSchema, aziendaId)
       : null;
+    // LA CHECK LIST CON LE RISPOSTE (0.155.0). Accanto alla check di perimetro:
+    // il perimetro dice come l'azienda si muove sui crediti, il questionario
+    // dice che cosa è stato verificato sui documenti. Si legge al momento
+    // della stampa, come il perimetro, così il foglio non diverge da ciò che è
+    // salvato.
+    const screening = aziendaId ? await ottieniScreeningAzienda(nomeSchema, aziendaId) : null;
+    const checkList =
+      screening && screening.success && screening.stato.esiste
+        ? riepilogoCheckList({
+            sezioni: screening.stato.sezioni,
+            risposte: screening.stato.risposte,
+            esito: screening.stato.quadro
+              ? {
+                  etichetta: screening.stato.quadro.etichetta,
+                  punteggio: screening.stato.quadro.punteggio,
+                }
+              : null,
+            generatoIl: screening.stato.generatoIl,
+          })
+        : null;
     const creditoScenari =
       esitoSoglie && esitoSoglie.righe.some((r) => r.applicabile)
         ? esitoSoglie.righe
@@ -1442,6 +1464,7 @@ export function VerificaSaluteAzienda({
         scenari,
         checkPerimetro:
           checkPerimetro && checkPerimetro.success ? (checkPerimetro.sintesi ?? null) : null,
+        checkList,
         // Le evidenze che partono per i reparti: chi riceve il riepilogo deve
         // sapere che cosa è stato mandato a chi, e quanto vale.
         uffici: reportUo.documenti.map((d) => ({

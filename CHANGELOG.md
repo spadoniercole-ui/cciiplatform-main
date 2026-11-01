@@ -1,3 +1,37 @@
+## 0.155.0 — 2026-11-01
+
+**La check list nasce anche per un'azienda nuova, si corregge dal triage e finisce nel foglio
+stampato.**
+Il giro della verifica si chiudeva con un passo indietro: per generare il questionario bisognava
+uscire dal triage e compilare l'Anagrafica Ente, e per cambiare una domanda scritta male si tornava
+allo Screening. E il riepilogo che si consegna al responsabile portava l'esito del questionario
+senza le domande.
+
+- **Gli identificativi dell'ente si raccolgono sul posto.** Quando l'azienda è nuova e i parametri
+  dell'ente non ci sono, il blocco della check list apre i campi con le etichette configurate dallo
+  spazio (matricola, posizione…, più ID Ente): si salvano lì, restano nell'Anagrafica Ente e la
+  generazione diventa possibile senza lasciare il triage. Il vincolo non cambia — l'elaborato nasce
+  solo con i riferimenti interni dell'ente, altrimenti non porta con sé il modo in cui l'ente
+  ritrova i propri documenti — cambia il giro che serviva per averli. Chiude il punto lasciato
+  aperto dalla 0.154.0.
+- **Il testo della domanda si corregge dalla matita.** Accanto a ogni domanda del questionario
+  compare una matita: si cambia il testo e si salva. L'identificativo della domanda non cambia, così
+  le risposte già date restano agganciate al fatto che rappresentano.
+- **La polarità si corregge senza tornare allo Screening.** Il pulsante «Correggi polarità» rilegge
+  le domande già generate e riformula solo quelle in cui «Sì» non è la buona notizia, invertendo le
+  risposte già date a quelle domande: un «Sì» dato alla vecchia formulazione non può restare «Sì»
+  sulla nuova, cambierebbe il fatto. Il risultato dice quante domande sono state riformulate e
+  quante risposte invertite.
+- **Il riepilogo stampabile porta la check list con le risposte.** Accanto alla check di perimetro,
+  il foglio elenca le domande sezione per sezione con la risposta data, l'esito delle direttrici e
+  la data della generazione. Una domanda senza risposta si stampa come «senza risposta»: «non ho
+  ancora guardato» non è un «no», e confonderli cambierebbe il senso dell'esito. Senza questionario
+  generato la sezione non compare.
+
+**Resta aperto:** la correzione della polarità e la modifica del testo riguardano le domande di
+questa azienda (una riga per azienda): una domanda sbagliata in una direttrice va ancora corretta
+azienda per azienda, perché il questionario nasce per azienda e non come modello dello spazio.
+
 ## 0.154.0 — 2026-11-01
 
 **La check list dello screening entra nel triage, e la check di perimetro entra nell'elaborato.**

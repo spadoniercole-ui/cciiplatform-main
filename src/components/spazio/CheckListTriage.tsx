@@ -11,25 +11,59 @@
 // LA GENERAZIONE NON SALTA I PARAMETRI DELL'ENTE. Lo screening si elabora
 // solo quando l'azienda si riconosce con i riferimenti interni dell'ente
 // (matricola, posizione…): senza, l'elaborato non porta con sé il modo in cui
-// l'ente ritrova i propri documenti, e la ricerca va rifatta ogni volta. È il
-// motivo per cui la generazione automatica parte al salvataggio
-// dell'Anagrafica Ente. Qui il pulsante c'è, e quando i parametri mancano lo
-// dice con il collegamento al passo che li raccoglie, invece di restare
-// spento senza spiegazione.
+// l'ente ritrova i propri documenti, e la ricerca va rifatta ogni volta.
+//
+// I PARAMETRI SI RACCOLGONO QUI (0.155.0). Prima, per un'azienda nuova, il
+// triage si fermava con un collegamento ad Anagrafica Ente: si usciva dalla
+// verifica per compilare un modulo, e si tornava. Ora i campi dell'ente sono
+// nel blocco stesso, con le etichette configurate dallo spazio: si salvano sul
+// posto e la generazione prosegue, senza lasciare il triage. Il vincolo non
+// cambia — l'elaborato nasce solo con i riferimenti dell'ente — cambia il
+// giro che serve per averli.
+//
+// IL TESTO DELLE DOMANDE SI CORREGGE DA QUI (0.155.0). La matita accanto alla
+// domanda ne cambia il testo; il pulsante di correzione rilegge le domande
+// esistenti e riformula solo quelle con la polarità sbagliata («Sì» deve
+// essere sempre la buona notizia). Erano due funzioni della scheda Screening:
+// chi si accorge di una domanda scritta male mentre risponde non deve
+// interrompere la verifica e andare in un'altra pagina. L'`id` della domanda
+// non cambia mai, quindi le risposte già date restano agganciate.
 //
 // LA VISURA NON SI CHIEDE DUE VOLTE. Se il triage l'ha già caricata, si usa
 // quella trattenuta: è lo stesso documento, letto poche schermate prima.
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ListChecks, Sparkles, Upload, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import {
+  ListChecks,
+  Sparkles,
+  Upload,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle2,
+  Pencil,
+  Check,
+  X,
+  Wand2,
+} from 'lucide-react';
 import {
   generaScreeningAziendaAction,
   ottieniScreeningAzienda,
   salvaRispostaScreeningAction,
+  aggiornaTestoDomandaScreeningAction,
+  correggiPolaritaScreeningAction,
   type StatoScreeningAzienda,
 } from '@/app/actions/screeningAzienda';
 import { ottieniVisuraTriageAction, registraVisuraTriageAction } from '@/app/actions/visuraTriage';
+import {
+  ottieniEtichetteAnagraficaEnte,
+  type EtichettaAnagraficaEnte,
+} from '@/app/actions/anagraficaEnteConfig';
+import {
+  ottieniAnagraficaEnte,
+  salvaAnagraficaEnteAction,
+  type AnagraficaEnte,
+} from '@/app/actions/anagraficaEnte';
 
 interface Props {
   nomeSchema: string;
@@ -39,15 +73,32 @@ interface Props {
   visuraSessione?: File | null;
 }
 
+const CLASSE_CAMPO =
+  'w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500';
+
 export function CheckListTriage({ nomeSchema, aziendaId, codice, visuraSessione }: Props) {
   const [stato, setStato] = useState<StatoScreeningAzienda | null>(null);
   const [caricamento, setCaricamento] = useState(true);
   const [generazione, setGenerazione] = useState(false);
   const [secondi, setSecondi] = useState(0);
   const [errore, setErrore] = useState<string | null>(null);
+  const [avviso, setAvviso] = useState<string | null>(null);
   const [fileScelto, setFileScelto] = useState<File | null>(null);
   const [visuraTrattenuta, setVisuraTrattenuta] = useState<string | null>(null);
   const [rispostaInCorso, setRispostaInCorso] = useState<string | null>(null);
+
+  // Correzione del testo di una domanda.
+  const [domandaInModifica, setDomandaInModifica] = useState<string | null>(null);
+  const [testoInModifica, setTestoInModifica] = useState('');
+  const [salvataggioTesto, setSalvataggioTesto] = useState(false);
+
+  // Correzione della polarità delle domande già generate.
+  const [correzionePolarita, setCorrezionePolarita] = useState(false);
+
+  // Identificativi dell'ente, quando mancano: si raccolgono qui.
+  const [etichette, setEtichette] = useState<EtichettaAnagraficaEnte[]>([]);
+  const [anagrafica, setAnagrafica] = useState<AnagraficaEnte | null>(null);
+  const [salvataggioAnagrafica, setSalvataggioAnagrafica] = useState(false);
 
   const carica = async () => {
     setCaricamento(true);
@@ -85,8 +136,59 @@ export function CheckListTriage({ nomeSchema, aziendaId, codice, visuraSessione 
     return () => clearInterval(t);
   }, [generazione]);
 
+  // SENZA IDENTIFICATIVI NON SI GENERA: i campi si aprono qui, con le
+  // etichette che l'ente ha configurato per lo spazio (matricola, posizione…).
+  const senzaIdentificativi =
+    stato !== null && !stato.esiste && (stato.identificativiEnte?.length ?? 0) === 0;
+
+  useEffect(() => {
+    if (!senzaIdentificativi) return;
+    let annullato = false;
+    void Promise.all([
+      ottieniEtichetteAnagraficaEnte(nomeSchema),
+      ottieniAnagraficaEnte(nomeSchema, aziendaId),
+    ]).then(([et, an]) => {
+      if (annullato) return;
+      if (et.success) setEtichette(et.etichette);
+      if (an.success) setAnagrafica(an.dati);
+    });
+    return () => {
+      annullato = true;
+    };
+  }, [nomeSchema, aziendaId, senzaIdentificativi]);
+
+  const valoreCampo = (campo: number) =>
+    anagrafica
+      ? ((anagrafica as unknown as Record<string, string | null>)[`campo${campo}`] ?? '')
+      : '';
+
+  const impostaCampo = (campo: number, valore: string) =>
+    setAnagrafica((prev) =>
+      prev
+        ? ({ ...prev, [`campo${campo}`]: valore.trim() ? valore : null } as AnagraficaEnte)
+        : prev
+    );
+
+  const salvaIdentificativi = async () => {
+    if (!anagrafica) return;
+    setSalvataggioAnagrafica(true);
+    setErrore(null);
+    setAvviso(null);
+    const r = await salvaAnagraficaEnteAction(nomeSchema, aziendaId, anagrafica);
+    if (r.success) {
+      setAvviso(
+        'Identificativi dell’ente salvati: la check list può essere generata. Restano nell’Anagrafica Ente e li ritrovi in Posizione Ente.'
+      );
+      await carica();
+    } else {
+      setErrore(r.error ?? 'Identificativi non salvati.');
+    }
+    setSalvataggioAnagrafica(false);
+  };
+
   const genera = async () => {
     setErrore(null);
+    setAvviso(null);
     setGenerazione(true);
     try {
       let url: string | null = null;
@@ -158,6 +260,51 @@ export function CheckListTriage({ nomeSchema, aziendaId, codice, visuraSessione 
     setRispostaInCorso(null);
   };
 
+  const salvaTesto = async (domandaId: string) => {
+    setSalvataggioTesto(true);
+    setErrore(null);
+    setAvviso(null);
+    const r = await aggiornaTestoDomandaScreeningAction(
+      nomeSchema,
+      aziendaId,
+      domandaId,
+      testoInModifica
+    );
+    if (r.success) {
+      setDomandaInModifica(null);
+      setTestoInModifica('');
+      setAvviso(
+        'Testo della domanda aggiornato. Le risposte già date restano sulla stessa domanda.'
+      );
+      await carica();
+    } else {
+      setErrore(r.error ?? 'Testo non salvato.');
+    }
+    setSalvataggioTesto(false);
+  };
+
+  const correggiPolarita = async () => {
+    setCorrezionePolarita(true);
+    setErrore(null);
+    setAvviso(null);
+    const r = await correggiPolaritaScreeningAction(nomeSchema, aziendaId);
+    if (r.success) {
+      setAvviso(
+        r.domandeCorrette === 0
+          ? 'Nessuna domanda ha la polarità invertita: il questionario è già scritto con «Sì» come buona notizia.'
+          : `Polarità corretta: ${r.domandeCorrette} ${
+              r.domandeCorrette === 1 ? 'domanda riformulata' : 'domande riformulate'
+            }, ${r.risposteInvertite} ${
+              r.risposteInvertite === 1 ? 'risposta invertita' : 'risposte invertite'
+            } per restare aderenti al fatto rappresentato.`
+      );
+      await carica();
+    } else {
+      setErrore(r.error ?? 'Correzione non riuscita.');
+    }
+    setCorrezionePolarita(false);
+  };
+
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento della check list…</p>;
 
   const domande = stato?.sezioni.flatMap((s) => s.domande) ?? [];
@@ -180,9 +327,25 @@ export function CheckListTriage({ nomeSchema, aziendaId, codice, visuraSessione 
           </p>
         </div>
         {stato?.esiste && (
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            {risposte}/{domande.length} risposte
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => void correggiPolarita()}
+              disabled={correzionePolarita}
+              title="Rilegge le domande e riformula solo quelle in cui «Sì» non è la buona notizia"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 disabled:bg-slate-100 text-slate-700 font-bold uppercase tracking-wider rounded-lg text-[10px]"
+            >
+              {correzionePolarita ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Wand2 className="w-3.5 h-3.5" />
+              )}
+              {correzionePolarita ? 'Correzione…' : 'Correggi polarità'}
+            </button>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              {risposte}/{domande.length} risposte
+            </span>
+          </div>
         )}
       </div>
 
@@ -203,12 +366,82 @@ export function CheckListTriage({ nomeSchema, aziendaId, codice, visuraSessione 
         </div>
       )}
 
+      {avviso && (
+        <p className="flex items-start gap-1.5 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+          <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>{avviso}</span>
+        </p>
+      )}
+
       {!stato?.esiste ? (
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
           <p className="text-xs text-slate-600 leading-relaxed">
             Per questa azienda il questionario non è ancora stato generato. Si costruisce dal
             fascicolo storico e dai dati già in archivio, sulle direttrici dell’ente.
           </p>
+
+          {senzaIdentificativi && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-800">
+                Identificativi dell’ente per questa azienda
+              </p>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Servono per generare: l’elaborato deve portare i riferimenti interni con cui l’ente
+                ritrova i documenti dell’azienda (matricola, posizione…). Si salvano qui e restano
+                nell’Anagrafica Ente, senza uscire dal triage.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                {etichette
+                  .filter((e) => e.attivo)
+                  .map((e) => (
+                    <label
+                      key={e.campo}
+                      className="text-[10px] font-bold uppercase tracking-wider text-slate-600"
+                    >
+                      {e.etichetta}
+                      <input
+                        type="text"
+                        value={valoreCampo(e.campo)}
+                        onChange={(ev) => impostaCampo(e.campo, ev.target.value)}
+                        className={`${CLASSE_CAMPO} mt-1`}
+                      />
+                    </label>
+                  ))}
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                  ID Ente
+                  <input
+                    type="text"
+                    value={anagrafica?.idEnte ?? ''}
+                    onChange={(ev) =>
+                      setAnagrafica((prev) =>
+                        prev
+                          ? { ...prev, idEnte: ev.target.value.trim() ? ev.target.value : null }
+                          : prev
+                      )
+                    }
+                    className={`${CLASSE_CAMPO} mt-1`}
+                  />
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={() => void salvaIdentificativi()}
+                disabled={salvataggioAnagrafica || !anagrafica}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold uppercase tracking-wider rounded-lg text-[10px]"
+              >
+                {salvataggioAnagrafica ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+                Salva identificativi
+              </button>
+              <p className="text-[10px] text-slate-400">
+                Le etichette dei campi si impostano in Parametri di Spazio → Anagrafica Ente.
+              </p>
+            </div>
+          )}
+
           {visuraSessione || visuraTrattenuta || fileScelto ? (
             <p className="text-[11px] text-slate-500">
               Visura disponibile:{' '}
@@ -231,7 +464,11 @@ export function CheckListTriage({ nomeSchema, aziendaId, codice, visuraSessione 
             <button
               type="button"
               onClick={() => void genera()}
-              disabled={generazione || (!visuraSessione && !visuraTrattenuta && !fileScelto)}
+              disabled={
+                generazione ||
+                senzaIdentificativi ||
+                (!visuraSessione && !visuraTrattenuta && !fileScelto)
+              }
               className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold uppercase tracking-wider rounded-lg text-[10px]"
             >
               {generazione ? (
@@ -244,6 +481,11 @@ export function CheckListTriage({ nomeSchema, aziendaId, codice, visuraSessione 
             {generazione && (
               <span className="text-[10px] text-slate-500">
                 Può richiedere fino a due minuti e mezzo: non chiudere la pagina.
+              </span>
+            )}
+            {senzaIdentificativi && !generazione && (
+              <span className="text-[10px] text-slate-500">
+                Salva prima gli identificativi dell’ente: la generazione li usa.
               </span>
             )}
           </div>
@@ -281,17 +523,69 @@ export function CheckListTriage({ nomeSchema, aziendaId, codice, visuraSessione 
               <div className="space-y-2">
                 {sez.domande.map((d) => {
                   const r = stato.risposte.find((x) => x.domandaId === d.id)?.risposta;
+                  const inModifica = domandaInModifica === d.id;
                   return (
                     <div
                       key={d.id}
                       className="flex items-center justify-between gap-3 border-b border-slate-50 pb-2 last:border-0 last:pb-0"
                     >
-                      <span className="text-xs text-slate-700 flex-1">{d.domanda}</span>
+                      {inModifica ? (
+                        <div className="flex items-center gap-1.5 flex-1">
+                          <input
+                            type="text"
+                            value={testoInModifica}
+                            onChange={(e) => setTestoInModifica(e.target.value)}
+                            className={CLASSE_CAMPO}
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void salvaTesto(d.id)}
+                            disabled={salvataggioTesto || !testoInModifica.trim()}
+                            title="Salva il nuovo testo"
+                            className="p-1.5 rounded bg-emerald-600 text-white disabled:bg-slate-300"
+                          >
+                            {salvataggioTesto ? (
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Check className="w-3 h-3" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDomandaInModifica(null);
+                              setTestoInModifica('');
+                            }}
+                            title="Annulla"
+                            className="p-1.5 rounded bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-700 flex-1 flex items-start gap-1.5">
+                          <span>{d.domanda}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDomandaInModifica(d.id);
+                              setTestoInModifica(d.domanda);
+                              setErrore(null);
+                              setAvviso(null);
+                            }}
+                            title="Modifica il testo della domanda"
+                            className="mt-0.5 p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 shrink-0"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )}
                       <div className="flex gap-1.5 shrink-0">
                         <button
                           type="button"
                           onClick={() => void rispondi(d.id, true)}
-                          disabled={rispostaInCorso === d.id}
+                          disabled={rispostaInCorso === d.id || inModifica}
                           className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors disabled:opacity-50 ${
                             r === true
                               ? 'bg-emerald-600 text-white'
@@ -303,7 +597,7 @@ export function CheckListTriage({ nomeSchema, aziendaId, codice, visuraSessione 
                         <button
                           type="button"
                           onClick={() => void rispondi(d.id, false)}
-                          disabled={rispostaInCorso === d.id}
+                          disabled={rispostaInCorso === d.id || inModifica}
                           className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors disabled:opacity-50 ${
                             r === false
                               ? 'bg-red-600 text-white'

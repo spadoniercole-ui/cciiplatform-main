@@ -18,6 +18,7 @@ import { etaVerifica } from './etaVerifica';
 import { STILE_BOX } from './box';
 import type { SintesiPerimetro } from './perimetro';
 import type { EsitoScenari } from './scenari';
+import type { CheckListRiepilogo } from './checkListRiepilogo';
 
 export interface DocumentoTriage {
   nome: string;
@@ -123,6 +124,12 @@ export interface DatiRiepilogoTriage {
   scenari?: EsitoScenari | null;
   /** La check di perimetro delle TL, se qualcuna è contrassegnata. */
   checkPerimetro?: SintesiPerimetro | null;
+  /**
+   * La check list dello screening con le risposte date, accanto alla check di
+   * perimetro. `null` quando il questionario non è mai stato generato: il
+   * foglio non annuncia una sezione che non ha contenuto.
+   */
+  checkList?: CheckListRiepilogo | null;
 }
 
 /** Il giorno entro cui tornare a verificare: la data più i giorni concessi. */
@@ -386,6 +393,57 @@ ${STILE_BOX}
 </tbody></table>`);
     parti.push(
       '<p style="font-size:10px;color:#475569">Le voci nascono dalle TL contrassegnate in Parametri di Spazio → Materie e lavorazioni; i codici sono quelli che cadono nella materia della TL. La check riguarda le lavorazioni configurate, non l’intera storia dell’azienda.</p>'
+    );
+  }
+
+  // 2-quater. LA CHECK LIST CON LE RISPOSTE, accanto alla check di perimetro.
+  // Il perimetro dice come l'azienda si sta muovendo sui crediti, il
+  // questionario dice che cosa è stato verificato sui suoi documenti: sono la
+  // stessa verifica guardata da due lati e si leggono una dopo l'altra. Una
+  // domanda senza risposta si stampa come tale — «non ho ancora guardato» non
+  // è un «no», e confonderli cambierebbe il senso dell'esito.
+  if (d.checkList) {
+    const cl = d.checkList;
+    parti.push(titolo('Check list dello screening: domande e risposte'));
+    if (cl.esito) {
+      parti.push(
+        `<p class="esito">${esc(cl.esito.etichetta)}${
+          cl.esito.punteggio !== null
+            ? ` — punteggio ${cl.esito.punteggio > 0 ? '+' : ''}${cl.esito.punteggio.toFixed(1)}`
+            : ''
+        }</p>`
+      );
+    }
+    parti.push(
+      `<p style="font-size:11px">${cl.risposte} ${
+        cl.risposte === 1 ? 'risposta data' : 'risposte date'
+      } su ${cl.totali} ${cl.totali === 1 ? 'domanda' : 'domande'}${
+        cl.generataIl ? ` — questionario generato il ${esc(quando(cl.generataIl))}` : ''
+      }. Un «Sì» è sempre la risposta favorevole all’azienda, un «No» sempre una criticità: la regola vale per costruzione, non per interpretazione.</p>`
+    );
+    for (const sez of cl.sezioni) {
+      parti.push(
+        `<h3 style="font-size:12px;margin:10px 0 4px">${esc(
+          sez.numero ? `${sez.numero}. ${sez.titolo}` : sez.titolo
+        )}</h3>`
+      );
+      parti.push(
+        `<table><thead><tr><th>Domanda</th><th>Risposta</th></tr></thead><tbody>${sez.domande
+          .map(
+            (x) =>
+              `<tr><td>${esc(x.testo)}</td><td>${
+                x.risposta === true
+                  ? '<b>Sì</b>'
+                  : x.risposta === false
+                    ? '<b>No</b>'
+                    : '<i>senza risposta</i>'
+              }</td></tr>`
+          )
+          .join('')}</tbody></table>`
+      );
+    }
+    parti.push(
+      '<p style="font-size:10px;color:#475569">Le domande nascono dalle direttrici dell’ente e dai suoi prodotti, per questa azienda. La domanda senza risposta è una verifica non ancora compiuta: non si legge come una risposta negativa. Il questionario dice che cosa risulta verificato, non conclude nulla sulla crisi dell’impresa.</p>'
     );
   }
 
