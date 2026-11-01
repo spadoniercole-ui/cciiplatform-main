@@ -404,6 +404,14 @@ export function VerificaSaluteAzienda({
     completa?: boolean;
     mancanze?: string[];
   } | null>(null);
+  /**
+   * IL TRIAGE SI CHIUDE SULLA CHECK VERIFICATA, NON SULLA SUA ASSENZA.
+   *
+   * Si guardano le MANCANZE e non `completa`: uno spazio senza TL rilevanti
+   * non ha voci da rispondere, e l'azione dichiara `completa: false` per
+   * definizione. Contano le voci rimaste senza risposta.
+   */
+  const perimetroIncompleto = (perimetroEsito?.mancanze?.length ?? 0) > 0;
 
   // Lo storico rende vera la promessa fatta a schermo — "la verifica resta
   // consultabile" — che finora non lo era: esito e data stavano nel
@@ -674,6 +682,8 @@ export function VerificaSaluteAzienda({
     setInCorso(true);
     setErrore(null);
     setEsitoSoglie(null);
+    // L'esito della check è dell'azienda appena creata, non della precedente.
+    setPerimetroEsito(null);
     setErroreSoglie(null);
     setRigheVera([]);
     setLavorazioni([]);
@@ -1947,10 +1957,22 @@ export function VerificaSaluteAzienda({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="flex items-center gap-2 font-bold text-slate-900 uppercase text-xs tracking-wider">
-          <Stethoscope className="w-4 h-4 text-slate-500" />
-          Verifica salute azienda
-        </h2>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <h2 className="flex items-center gap-2 font-bold text-slate-900 uppercase text-xs tracking-wider">
+            <Stethoscope className="w-4 h-4 text-slate-500" />
+            Verifica salute azienda
+          </h2>
+          {/* LA VIA DEL RITORNO, SEMPRE. Dentro una verifica aperta la
+              dashboard del triage — le verifiche in sospeso da riprendere —
+              non era raggiungibile da nessun punto della videata. Il comando
+              sta in cima e vale in ogni fase, anche a verifica riaperta. */}
+          <a
+            href={`/spazio/${codice}/verifica-salute`}
+            className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-sky-700"
+          >
+            ← Dashboard della verifica
+          </a>
+        </div>
         <p className="text-xs text-slate-500 mt-1 leading-relaxed">
           Il triage prima dell&apos;istruttoria: si carica la visura camerale, si confermano i dati
           e si ottiene l&apos;indicatore di attenzione. La posizione diventa una pratica solo se
@@ -2123,57 +2145,16 @@ export function VerificaSaluteAzienda({
               />
             </div>
 
-            {/* LA CHECK OBBLIGATORIA (0.153.0). Sta dopo i prospetti perché
-                sono loro a dire quali TL rilevanti esistono; le voci però
-                arrivano dai titoli dell'ente, non dai file. */}
-            <div className="border-t border-slate-100 pt-4">
-              {aziendaId ? (
-                <PerimetroTriage
-                  nomeSchema={nomeSchema}
-                  aziendaId={aziendaId}
-                  onEsito={setPerimetroEsito}
-                />
-              ) : (
-                <p className="text-[11px] text-slate-400">
-                  La check di perimetro si apre dopo il riconoscimento dell’azienda.
-                </p>
-              )}
-            </div>
-
-            {/* LA CHECK LIST DELLO SCREENING (0.154.0). Prima stava in due
-                pagine dell'Azienda — una che generava il questionario, una che
-                raccoglieva le risposte — con un passo del semaforo che diceva
-                quando erano finite. Qui si genera e si risponde nello stesso
-                posto. */}
-            <div className="border-t border-slate-100 pt-4">
-              {aziendaId ? (
-                <CheckListTriage
-                  nomeSchema={nomeSchema}
-                  aziendaId={aziendaId}
-                  codice={codice}
-                  visuraSessione={fileVisura}
-                />
-              ) : null}
-            </div>
-
-            {/* GLI SCENARI (0.153.0): il credito misurato dalle soglie, con i
-                due termini di paragone. */}
-            <div className="border-t border-slate-100 pt-4">
-              {aziendaId ? (
-                <ScenariTriage
-                  nomeSchema={nomeSchema}
-                  aziendaId={aziendaId}
-                  codice={codice}
-                  credito={
-                    esitoSoglie && esitoSoglie.righe.some((r) => r.applicabile)
-                      ? esitoSoglie.righe
-                          .filter((r) => r.applicabile && r.esposizione !== null)
-                          .reduce((a, r) => a + (r.esposizione ?? 0), 0)
-                      : null
-                  }
-                />
-              ) : null}
-            </div>
+            {/* LE TRE CHECK SI APRONO DOPO LA VALUTAZIONE.
+                Stavano qui, montate appena l'azienda esisteva: cioè per
+                l'istante fra la creazione e il passaggio alla fase d'esito.
+                Comparivano e sparivano subito, e l'esito — rimasto senza le
+                check — dichiarava il triage incompleto e spegneva «Procedi»
+                senza che esistesse un punto in cui rispondere. */}
+            <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
+              La check di perimetro, la check list dello screening e gli scenari si aprono al
+              termine della valutazione, quando l&apos;azienda è stata riconosciuta.
+            </p>
 
             <div className="border-t border-slate-100 pt-4">
               {/* Nessun documento la riporta: va dichiarata. Decide quale soglia
@@ -3401,6 +3382,43 @@ export function VerificaSaluteAzienda({
             )}
           </div>
 
+          {/* LA CHECK OBBLIGATORIA (0.153.0): le voci sono le TL contrassegnate
+              nei Parametri, i codici arrivano dai titoli dell'ente. */}
+          <div className="border-t border-slate-200 pt-4">
+            <PerimetroTriage
+              nomeSchema={nomeSchema}
+              aziendaId={aziendaId!}
+              onEsito={setPerimetroEsito}
+            />
+          </div>
+
+          {/* LA CHECK LIST DELLO SCREENING (0.154.0): si genera e si risponde qui. */}
+          <div className="border-t border-slate-200 pt-4">
+            <CheckListTriage
+              nomeSchema={nomeSchema}
+              aziendaId={aziendaId!}
+              codice={codice}
+              visuraSessione={fileVisura}
+            />
+          </div>
+
+          {/* GLI SCENARI (0.153.0): il credito misurato dalle soglie, con i due
+              termini di paragone. */}
+          <div className="border-t border-slate-200 pt-4">
+            <ScenariTriage
+              nomeSchema={nomeSchema}
+              aziendaId={aziendaId!}
+              codice={codice}
+              credito={
+                esitoSoglie && esitoSoglie.righe.some((r) => r.applicabile)
+                  ? esitoSoglie.righe
+                      .filter((r) => r.applicabile && r.esposizione !== null)
+                      .reduce((a, r) => a + (r.esposizione ?? 0), 0)
+                  : null
+              }
+            />
+          </div>
+
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
             <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">E adesso?</h3>
             <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -3428,11 +3446,11 @@ export function VerificaSaluteAzienda({
               </p>
             )}
             {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}
-            {perimetroEsito?.completa === false && (
+            {perimetroIncompleto && (
               <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
                 Il triage non è completo: resta da rispondere alla check di perimetro (
-                {perimetroEsito.mancanze?.length ?? 0} voci). Le TL rilevanti vanno verificate prima
-                di procedere — è la sola parte obbligatoria della check.
+                {perimetroEsito?.mancanze?.length ?? 0} voci). Le TL rilevanti vanno verificate
+                prima di procedere — è la sola parte obbligatoria della check.
               </p>
             )}
             <div className="flex flex-wrap gap-3">
@@ -3450,9 +3468,9 @@ export function VerificaSaluteAzienda({
                 <>
                   <button
                     onClick={() => void procedi()}
-                    disabled={inCorso || !aziendaId || perimetroEsito?.completa === false}
+                    disabled={inCorso || !aziendaId || perimetroIncompleto}
                     title={
-                      perimetroEsito?.completa === false
+                      perimetroIncompleto
                         ? 'Completa la check di perimetro: le TL rilevanti devono avere una risposta.'
                         : undefined
                     }
@@ -3502,6 +3520,7 @@ export function VerificaSaluteAzienda({
                   setDati(null);
                   setAttenzione(null);
                   setAziendaId(null);
+                  setPerimetroEsito(null);
                   setNonTrovati([]);
                   setEsitoSoglie(null);
                   setErroreSoglie(null);

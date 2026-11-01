@@ -55,6 +55,40 @@ vi.mock('@/app/actions/checklistMinisterialeAzienda', () => ({
 
 vi.mock('@/app/actions/visuraTriage', () => ({
   registraVisuraTriageAction: vi.fn(),
+  ottieniVisuraTriageAction: vi.fn().mockResolvedValue({ success: true, visura: null }),
+}));
+
+// LE TRE CHECK DELLA FASE D'ESITO (0.156.0). Prima vivevano nella conferma,
+// che dura un istante: questo test — che guarda l'esito — non le montava mai.
+// Ora si montano lì, e chiamano le loro azioni: senza il finto, React tratta
+// l'export mancante come un errore di rendering e la videata non esiste più.
+vi.mock('@/app/actions/screeningAzienda', () => ({
+  ottieniScreeningAzienda: vi.fn().mockResolvedValue({
+    success: true,
+    stato: { esiste: false, sezioni: [], risposte: [], quadro: null, identificativiEnte: [] },
+  }),
+  generaScreeningAziendaAction: vi.fn(),
+  salvaRispostaScreeningAction: vi.fn(),
+  aggiornaTestoDomandaScreeningAction: vi.fn(),
+  correggiPolaritaScreeningAction: vi.fn(),
+  ottieniDirettriciEnte: vi.fn().mockResolvedValue({ success: true, direttrici: [] }),
+  aggiornaDirettriciEnteAction: vi.fn(),
+}));
+
+vi.mock('@/app/actions/triagePerimetro', () => ({
+  ottieniPerimetroTriageAction: vi.fn().mockResolvedValue({
+    success: true,
+    voci: [],
+    completa: false,
+    mancanze: [],
+  }),
+  salvaPerimetroTriageAction: vi.fn(),
+  ottieniRangoCreditoAction: vi.fn().mockResolvedValue({ success: true, rango: null }),
+  salvaRangoCreditoAction: vi.fn(),
+}));
+
+vi.mock('@/app/actions/parametriScenari', () => ({
+  ottieniParametriScenariAction: vi.fn().mockResolvedValue({ success: false, error: 'non usato' }),
 }));
 
 vi.mock('@/app/actions/xbrlAzienda', () => ({
@@ -895,5 +929,42 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
 
     await waitFor(() => expect(screen.getByText('Verifica riaperta')).toBeTruthy());
     expect(screen.queryByText(/Sono trascorsi \d+ giorni dalla verifica/i)).toBeNull();
+  });
+});
+
+// LA REGRESSIONE (0.156.0). La check di perimetro era montata solo nella fase
+// di conferma — che dura l'istante fra la creazione dell'azienda e l'esito — e
+// qui non c'era più: il triage dichiarava di non potersi chiudere e il lavoro
+// da fare non era raggiungibile da nessun punto della videata.
+describe('Verifica salute azienda — le check nella fase d’esito', () => {
+  it('apre la check di perimetro e la check list dentro una verifica riaperta', async () => {
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    await waitFor(() => expect(screen.getByText('Verifica riaperta')).toBeTruthy());
+    expect(
+      await screen.findByRole('heading', { name: 'Check di perimetro dei crediti' })
+    ).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Check list dello screening' })).toBeTruthy();
+  });
+
+  it('dalla verifica si torna alla dashboard del triage', async () => {
+    render(
+      <VerificaSaluteAzienda
+        nomeSchema={SCHEMA}
+        codice="prova"
+        tipoSpazio="ENTE"
+        aziendaDaRiprendere={AZIENDA_ID}
+      />
+    );
+
+    const ritorno = await screen.findByRole('link', { name: /Dashboard della verifica/i });
+    expect(ritorno.getAttribute('href')).toBe('/spazio/prova/verifica-salute');
   });
 });

@@ -1,3 +1,27 @@
+## 0.156.0 — 2026-11-01
+
+**Le tre check del triage restano a schermo, e dalla verifica si torna alla dashboard.**
+La check di perimetro compariva e spariva in un istante: era montata nella fase di conferma, ma
+l'azienda — da cui le voci dipendono — esiste solo dopo la conferma, e il passaggio alla fase
+d'esito la smontava subito. L'esito restava senza check e, memore dell'esito mancato, dichiarava
+il triage incompleto e spegneva «Procedi»: il lavoro da fare non era più raggiungibile da nessun
+punto della videata. Chiudeva il giro l'unica via d'uscita, uscire e rientrare, che ricaricava
+lo stato senza la check e faceva sparire l'avviso senza aver risolto nulla.
+
+- **Le check vivono nella fase d'esito.** Check di perimetro, check list dello screening e scenari
+  si montano dove si resta a lavorare, non nell'istante fra la creazione dell'azienda e il
+  passaggio alla fase successiva. La conferma dice che si aprono al termine della valutazione.
+- **«Procedi» si blocca sulle voci mancanti, non sul flag della check.** Una spazio senza TL
+  rilevanti non ha voci da rispondere: contano le voci rimaste senza risposta, non `completa`.
+  L'esito della check si azzera quando si apre una nuova verifica — quello dell'azienda precedente
+  non deve bloccare o sbloccare la successiva.
+- **Dalla verifica si torna alla dashboard del triage.** In cima alla videata, in ogni fase, c'è il
+  ritorno alle verifiche in sospeso: prima si usciva solo perdendo quello che si aveva a schermo.
+
+**Resta aperto:** l'ordine del flusso delle TL (direttrici e prodotti → lavorazioni → titoli di
+credito) è ancora quello attuale, con le TL nate nelle materie: la loro tabellazione nei prodotti
+è un cambio di modello, non una correzione di percorso.
+
 ## 0.155.0 — 2026-11-01
 
 **La check list nasce anche per un'azienda nuova, si corregge dal triage e finisce nel foglio
