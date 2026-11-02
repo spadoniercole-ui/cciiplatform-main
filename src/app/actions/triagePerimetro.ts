@@ -13,7 +13,7 @@
 
 import { pool } from '@/lib/db';
 import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
-import { assicuraTabelleScenariTriage } from '@/db/provision';
+import { assicuraTabelleProdottiTl, assicuraTabelleScenariTriage } from '@/db/provision';
 import {
   applicaRisposte,
   mancanze,
@@ -51,15 +51,17 @@ export async function ottieniPerimetroTriageAction(
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await richiediAccessoAzienda(nomeSchema, aziendaId);
     await assicuraTabelleScenariTriage(nomeSchema);
+    await assicuraTabelleProdottiTl(nomeSchema);
 
     const [lavorazioni, titoli, risposte] = await Promise.all([
       pool.query(
-        `SELECT l.id, l.materia_id, l.tipologia, l.dipendenza,
-                l.rilevante_perimetro, l.verso_perimetro,
+        `SELECT t.id, a.materia_id, t.tipologia, t.dipendenza,
+                t.rilevante_perimetro, t.verso_perimetro,
                 m.nome AS materia
-           FROM "${nomeSchema}".materie_lavorazione l
-           LEFT JOIN "${nomeSchema}".materie_ente m ON m.id = l.materia_id
-          ORDER BY m.nome, l.ordine, l.id`
+           FROM "${nomeSchema}".materia_tl a
+           JOIN "${nomeSchema}".prodotti_tl t ON t.id = a.tl_id
+           LEFT JOIN "${nomeSchema}".materie_ente m ON m.id = a.materia_id
+          ORDER BY m.nome, a.ordine, t.id`
       ),
       pool.query(`SELECT codice, materia_id FROM "${nomeSchema}".titoli_ente ORDER BY codice`),
       pool
@@ -84,13 +86,25 @@ export async function ottieniPerimetroTriageAction(
         : null,
     }));
 
+    // UNA TL, UNA VOCE. La stessa TL può coprire più materie, e la query la
+    // restituisce una volta per materia: la check si risponde una volta sola —
+    // è la lavorazione a essere stata attivata o no, non la materia in cui il
+    // codice cade. L'ufficio proprio vince su quello vuoto.
+    const perLavorazione = new Map<number, LavorazionePerimetro>();
+    for (const l of configurate) {
+      const gia = perLavorazione.get(l.id);
+      if (!gia) perLavorazione.set(l.id, l);
+      else if (!gia.dipendenza && l.dipendenza)
+        perLavorazione.set(l.id, { ...gia, dipendenza: l.dipendenza });
+    }
+
     const voci = applicaRisposte(
       vociObbligatorie(
         titoli.rows.map((x) => ({
           codice: String(x.codice),
           materiaId: x.materia_id === null ? null : Number(x.materia_id),
         })),
-        configurate
+        Array.from(perLavorazione.values())
       ),
       risposte.rows.map((x) => ({
         lavorazioneId: Number(x.lavorazione_id),

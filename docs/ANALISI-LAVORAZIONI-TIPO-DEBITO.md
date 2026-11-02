@@ -7,6 +7,18 @@ registro delle consegne con la conferma d'invio.
 **Versione analizzata.** 0.138.3 (commit `306e3a4`), con la configurazione congelata
 dall'interruttore `LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA`.
 
+> **Aggiornamento 0.158.0 — il documento descrive una configurazione che non esiste più.**
+> Le lavorazioni non si scrivono più in `lavorazioni_tipo_debito`: vivono nel catalogo dei
+> prodotti (`prodotti_tl`) e `categoria_tl` collega ogni categoria di debito alle stesse TL.
+> La tabella vecchia resta come storico e non viene letta; l'interruttore di sola lettura è
+> stato rimosso insieme al secondo posto in cui si scriveva l'ufficio.
+> Conseguenze sui punti del documento: **P4** (riaprire la configurazione) e **M9** (due
+> verità su chi lavora il debito) sono superati dal nuovo flusso; **P8** (destinatario per
+> categoria o per materia) si risolve nella stessa TL; **M7** resta aperto solo per la parte
+> testuale — `categoria_tl.categoria` è ancora un codice, e cancellare una categoria lascia i
+> suoi collegamenti in tabella; **M8** resta valido per i confronti che leggono il testo.
+> Il resto dell'analisi (uscite, registro, PDF) descrive ancora il comportamento attuale.
+
 **Esito.** In **0.138.4** sono stati corretti C1, C2, A1 (resa visibile), A2 (linguaggio),
 A3, M1, M2, M3, M4, M5, M6, M7, M8 e B1, con i test che mancavano. Restano aperte — perché
 sono decisioni di prodotto, non difetti — la riapertura della configurazione (P4) e il

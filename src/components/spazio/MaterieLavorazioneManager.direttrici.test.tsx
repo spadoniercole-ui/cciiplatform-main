@@ -1,50 +1,32 @@
 // @vitest-environment jsdom
 //
-// L'UFFICIO SI SCEGLIE TRA LE DIRETTRICI.
+// IL PASSO 2: LA MATERIA EREDITA LE TL DEL CATALOGO (0.157.0).
 //
-// Era il punto che faceva sdoppiare lo stesso ufficio in tre documenti: un campo
-// di testo libero, scritto tre volte con tre grafie. Con le direttrici come
-// primo anello della catena il campo diventa un elenco — e gli uffici già in uso
-// che non sono (ancora) direttrici restano scegliibili, perché nessuno perda una
-// configurazione che aveva. Senza direttrici il campo torna testo libero: una
-// configurazione mancante non deve bloccare il lavoro.
+// Le TL non si scrivono più qui: si scelgono fra quelle del prodotto e la
+// materia le associa ai propri codici. Il test guarda le due cose che si
+// romperebbero in silenzio: la TL già associata compare con prodotto e
+// direttrice, e quella libera si può associare chiamando l'azione con la
+// materia giusta.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 vi.mock('@/app/actions/materieLavorazione', () => ({
   ottieniLavorazioniMateria: vi.fn(),
-  salvaLavorazioneMateriaAction: vi.fn(),
-  eliminaLavorazioneMateriaAction: vi.fn(),
+  ottieniCatalogoTl: vi.fn(),
+  collegaTlMateriaAction: vi.fn(),
+  scollegaTlMateriaAction: vi.fn(),
 }));
 
-vi.mock('@/app/actions/screeningAzienda', () => ({
-  ottieniDirettriciEnte: vi.fn(),
-}));
-
-// Il componente importa l'anteprima dei passi e il gestore delle materie dai
-// titoli: le funzioni non servono qui, ma i moduli devono esistere.
 vi.mock('@/app/actions/titoliEnte', () => ({
-  ottieniTitoliEnteAction: vi.fn(),
   ottieniMaterieEnteAction: vi.fn(),
-  salvaTitoloEnteAction: vi.fn(),
-  eliminaTitoloEnteAction: vi.fn(),
-  importaAnagraficaCodiciAction: vi.fn(),
-  riscontraTitoloAction: vi.fn(),
-  salvaAttivitaRecuperoAction: vi.fn(),
-  salvaDominioEnteAction: vi.fn(),
-  assegnaMateriaCodiceAction: vi.fn(),
-  suggerisciMaterieCodiciAction: vi.fn(),
-  confermaMateriaEnteAction: vi.fn(),
-  eliminaMateriaEnteAction: vi.fn(),
-  ricercaMateriaAction: vi.fn(),
-  salvaMateriaEnteAction: vi.fn(),
-  avviaRicercaDifferitaAction: vi.fn(),
-  verificaRicercaDifferitaAction: vi.fn(),
 }));
 
-import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
-import { ottieniDirettriciEnte } from '@/app/actions/screeningAzienda';
+import {
+  collegaTlMateriaAction,
+  ottieniCatalogoTl,
+  ottieniLavorazioniMateria,
+} from '@/app/actions/materieLavorazione';
 import { ottieniMaterieEnteAction } from '@/app/actions/titoliEnte';
 import { MaterieLavorazioneManager } from './MaterieLavorazioneManager';
 
@@ -61,11 +43,42 @@ const materia = (id: number, nome: string) => ({
   esitoRicerca: null,
 });
 
-describe('lavorazioni delle materie: la dipendenza è una direttrice', () => {
+describe('materie e TL', () => {
   beforeEach(() => {
     vi.mocked(ottieniMaterieEnteAction).mockResolvedValue({
       success: true,
       materie: [materia(10, 'CONTABILIZZAZIONE DIFFIDE'), materia(11, 'Denunce Uniemens')],
+    });
+    vi.mocked(ottieniCatalogoTl).mockResolvedValue({
+      success: true,
+      tl: [
+        {
+          id: 1,
+          direttrice: 'Gestione del credito',
+          prodotto: 'Diffide',
+          tipologia: 'Emissione diffida',
+          dipendenza: 'Gestione del credito',
+          procedura: null,
+          esito: 'diffida notificata',
+          ordine: 1,
+          rilevantePerimetro: false,
+          versoPerimetro: null,
+          materie: 1,
+        },
+        {
+          id: 2,
+          direttrice: 'Presidio dei flussi informativi',
+          prodotto: 'DURC',
+          tipologia: 'Verifica del flusso',
+          dipendenza: 'Presidio dei flussi informativi',
+          procedura: null,
+          esito: null,
+          ordine: 1,
+          rilevantePerimetro: true,
+          versoPerimetro: 'COLLABORATIVA',
+          materie: 0,
+        },
+      ],
     });
     vi.mocked(ottieniLavorazioniMateria).mockResolvedValue({
       success: true,
@@ -81,6 +94,7 @@ describe('lavorazioni delle materie: la dipendenza è una direttrice', () => {
         },
       ],
     });
+    vi.mocked(collegaTlMateriaAction).mockResolvedValue({ success: true });
   });
 
   afterEach(() => {
@@ -88,73 +102,27 @@ describe('lavorazioni delle materie: la dipendenza è una direttrice', () => {
     vi.clearAllMocks();
   });
 
-  it('propone le direttrici e lascia scegliere anche gli uffici già in uso', async () => {
-    vi.mocked(ottieniDirettriciEnte).mockResolvedValue({
-      success: true,
-      direttrici: [
-        { nome: 'Gestione del credito', prodotti: ['Diffide'] },
-        { nome: 'Presidio dei flussi informativi', prodotti: ['DURC'] },
-      ],
-    });
-    vi.mocked(ottieniLavorazioniMateria).mockResolvedValue({
-      success: true,
-      lavorazioni: [
-        {
-          id: 1,
-          materiaId: 10,
-          tipologia: 'Emissione diffida',
-          dipendenza: 'Gestione del credito',
-          procedura: null,
-          esito: null,
-          ordine: 1,
-        },
-        {
-          id: 2,
-          materiaId: 11,
-          tipologia: 'Verifica del flusso',
-          dipendenza: 'Ufficio legale',
-          procedura: null,
-          esito: null,
-          ordine: 1,
-        },
-      ],
-    });
-
+  it('mostra la TL ereditata con prodotto e direttrice, e associa quella libera', async () => {
     render(<MaterieLavorazioneManager nomeSchema="tenant_prova" codice="prova" />);
 
-    await waitFor(() => expect(screen.getByText('Nuova lavorazione')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Emissione diffida')).toBeTruthy());
+    // La provenienza si legge accanto alla TL: prodotto · direttrice.
+    expect(screen.getByText(/Diffide · Gestione del credito/)).toBeTruthy();
 
-    // Ogni campo dipendenza della pagina (la nuova lavorazione e quella già
-    // configurata) propone le stesse scelte.
-    const gruppiDirettrici = screen.getAllByRole('group', { name: 'Direttrici dell’ente' });
-    expect(gruppiDirettrici.length).toBeGreaterThanOrEqual(2);
-    for (const gruppo of gruppiDirettrici) {
-      expect(within(gruppo).getByRole('option', { name: 'Gestione del credito' })).toBeTruthy();
-      expect(
-        within(gruppo).getByRole('option', { name: 'Presidio dei flussi informativi' })
-      ).toBeTruthy();
-    }
+    const intestazione = screen.getByRole('heading', { name: 'Denunce Uniemens' });
+    const card = intestazione.parentElement?.parentElement as HTMLElement;
+    const select = within(card).getByLabelText(/TL da associare a Denunce Uniemens/);
+    fireEvent.change(select, { target: { value: '2' } });
+    fireEvent.click(within(card).getByRole('button', { name: /Associa/ }));
 
-    // L'ufficio che non è una direttrice resta scegliibile: la configurazione
-    // esistente non si perde.
-    const gruppiAltri = screen.getAllByRole('group', { name: 'Altri uffici già in uso' });
-    expect(gruppiAltri.length).toBeGreaterThanOrEqual(2);
-    for (const gruppo of gruppiAltri) {
-      expect(within(gruppo).getByRole('option', { name: 'Ufficio legale' })).toBeTruthy();
-    }
-    expect(screen.getByDisplayValue('Ufficio legale')).toBeTruthy();
+    await waitFor(() => expect(collegaTlMateriaAction).toHaveBeenCalledWith('tenant_prova', 11, 2));
   });
 
-  it('senza direttrici il campo torna testo libero, con la strada per aggiungerle', async () => {
-    vi.mocked(ottieniDirettriciEnte).mockResolvedValue({ success: true, direttrici: [] });
+  it('una materia senza TL lo dice, invece di restare muta', async () => {
+    vi.mocked(ottieniLavorazioniMateria).mockResolvedValue({ success: true, lavorazioni: [] });
 
     render(<MaterieLavorazioneManager nomeSchema="tenant_prova" codice="prova" />);
 
-    await waitFor(() =>
-      expect(screen.getAllByText(/Nessuna direttrice configurata/).length).toBeGreaterThan(0)
-    );
-    expect(
-      screen.getAllByPlaceholderText('Es. Ufficio Recupero Crediti — Sede di …').length
-    ).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByText(/Nessuna TL associata/).length).toBe(2));
   });
 });

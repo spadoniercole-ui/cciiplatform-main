@@ -58,6 +58,12 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
     nome: 'materie_lavorazione',
     descrizione: 'Lavorazioni delle materie (dipendenza e procedura)',
   },
+  // 0.157.0-0.158.0: le TL si scrivono nei prodotti, le materie le ereditano e
+  // le categorie di debito puntano alle stesse TL. Vanno dopo le materie (gli id
+  // devono esistere) e prima dei titoli, che le leggono.
+  { nome: 'prodotti_tl', descrizione: 'TL dei prodotti (ufficio e procedura)' },
+  { nome: 'materia_tl', descrizione: 'TL ereditate dalle materie' },
+  { nome: 'categoria_tl', descrizione: 'TL per tipologia di debito' },
   { nome: 'titoli_ente', descrizione: 'Titoli di credito dell’ente' },
   {
     nome: 'titoli_ente_config',
@@ -70,7 +76,7 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
   { nome: 'anagrafica_ente_config', descrizione: 'Etichette dell’Anagrafica Ente' },
   { nome: 'categorie_tipo_debito', descrizione: 'Categorie di debito' },
   { nome: 'tipo_debito_config', descrizione: 'Etichette dei tipi di debito' },
-  { nome: 'lavorazioni_tipo_debito', descrizione: 'Lavorazioni per tipologia di debito' },
+  { nome: 'lavorazioni_tipo_debito', descrizione: 'Lavorazioni per tipologia di debito (storico)' },
   { nome: 'vera_titoli', descrizione: 'V.E.R.A.: titoli di sezione mappati' },
   { nome: 'vera_trattamenti', descrizione: 'V.E.R.A.: trattamenti natura/stato' },
   { nome: 'strutture_prospetto', descrizione: 'Strutture dei prospetti riconosciute' },

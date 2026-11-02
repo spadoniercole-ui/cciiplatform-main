@@ -1,21 +1,19 @@
 'use server';
 
-// LAVORAZIONI DELLA MATERIA — configurazione dello spazio (0.138.0).
+// IL CATALOGO DELLE TL NEI PRODOTTI, E LE ASSOCIAZIONI ALLA MATERIA (0.157.0).
 //
-// La materia è la chiave dei titoli di credito: il titolo di una partita è
-// quello della sua materia. Dipendenza (a chi si scrive) e procedura (come si
-// incassa) sono quindi proprietà della materia, non del singolo codice, e si
-// scrivono qui una volta; i titoli dell'ente le leggono da qui dove il codice
-// non ha una sua versione.
+// Il flusso del lavoro è 1 → 2 → 3: direttrici e prodotti, lavorazioni, titoli
+// di credito. Le TL — le tipologie di lavorazione — stanno al passo 1, dentro
+// il prodotto a cui si applicano: è lì che l'ente sa che cosa fa su un DURC o
+// su una Cassa Integrazione. La materia (passo 2) non le possiede più: le
+// eredita, associandole ai propri codici. I titoli (passo 3) restano il punto
+// in cui il codice dichiara la sua materia e, se vuole, un ufficio proprio.
 //
-// Perché una tabella e non le direttrici dello screening: le direttrici sono il
-// questionario, questa è l'esecuzione. Aggiungere un campo di qualificazione
-// alla lavorazione non deve toccare il questionario né i titoli.
-//
-// Ma i NOMI DEGLI UFFICI sono delle direttrici (0.139.0): la dipendenza si
-// sceglie da lì, e questa azione salva la grafia scritta nei Parametri anche se
-// il browser ne manda una diversa per maiuscole o accenti. Un ufficio, un nome,
-// in ogni documento che lo nomina.
+// LE LETTURE SONO LE STESSE DI PRIMA. `ottieniLavorazioniMateria` continua a
+// restituire una riga per (materia, TL): triage, check di perimetro, report per
+// unità operativa e scheda dei titoli non cambiano una riga, cambia la
+// sorgente. È deliberato — un cambio di modello che si propaga in sei letture
+// è un cambio che si rompe in silenzio.
 //
 // Letture e scritture riservate all'Admin di spazio, come le altre voci dei
 // Parametri: la pagina che le usa è già riservata, la guardia non si fida della
@@ -23,13 +21,15 @@
 
 import { pool } from '@/lib/db';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
-import { assicuraTabellaMaterieLavorazione, assicuraTabelleParametriSpazio } from '@/db/provision';
+import { assicuraTabelleParametriSpazio, assicuraTabelleProdottiTl } from '@/db/provision';
 import {
-  normalizzaLavorazione,
-  validaLavorazioneMateria,
-  type InputLavorazioneMateria,
-  type LavorazioneMateria,
-} from '@/lib/titoliEnte/lavorazioniMateria';
+  normalizzaTlProdotto,
+  rigaTlProdotto,
+  validaTlProdotto,
+  type InputTlProdotto,
+  type TlProdotto,
+} from '@/lib/titoliEnte/prodottiTl';
+import type { LavorazioneMateria } from '@/lib/titoliEnte/lavorazioniMateria';
 import { grafiaGiaUsata, registroDipendenze } from '@/lib/lavorazioni/dipendenze';
 import {
   direttriceConfigurata,
@@ -43,8 +43,8 @@ function validaSchema(nomeSchema: string): boolean {
 
 /**
  * Le grafie degli uffici già configurati nello spazio, dalla più autorevole
- * alla più vecchia: prima le lavorazioni delle materie (la configurazione di
- * oggi), poi i titoli dei codici, infine la tabella per tipologia di debito
+ * alla più vecchia: prima il catalogo delle TL (la configurazione di oggi),
+ * poi i titoli dei codici, infine la tabella per tipologia di debito
  * (congelata, ma i suoi destinatari sono ancora quelli che ricevono i
  * documenti).
  *
@@ -53,8 +53,6 @@ function validaSchema(nomeSchema: string): boolean {
  * di dividersi in due documenti diversi.
  */
 async function grafieDegliUffici(nomeSchema: string, escludiId: number | null): Promise<string[]> {
-  // Ogni lettura è indipendente: una tabella che in questo spazio non esiste
-  // (o non è ancora stata creata) non deve impedire il salvataggio.
   const leggi = async (sql: string, parametri: unknown[], campo: string): Promise<string[]> => {
     try {
       const r = await pool.query(sql, parametri);
@@ -66,7 +64,7 @@ async function grafieDegliUffici(nomeSchema: string, escludiId: number | null): 
 
   return [
     ...(await leggi(
-      `SELECT DISTINCT dipendenza FROM "${nomeSchema}".materie_lavorazione
+      `SELECT DISTINCT dipendenza FROM "${nomeSchema}".prodotti_tl
         WHERE dipendenza IS NOT NULL AND btrim(dipendenza) <> ''
           AND ($1::int IS NULL OR id <> $1::int)
         ORDER BY dipendenza`,
@@ -90,12 +88,7 @@ async function grafieDegliUffici(nomeSchema: string, escludiId: number | null): 
   ];
 }
 
-/**
- * Le direttrici dello spazio: sono loro a dare il nome all'ufficio. Se non si
- * leggono (spazio senza direttrici, tabella globale assente) si prosegue con
- * l'elenco vuoto — il salvataggio non deve dipendere da una configurazione che
- * può ancora mancare.
- */
+/** I nomi delle direttrici dello spazio: sono loro a dare il nome all'ufficio. */
 async function direttriciDelloSpazio(nomeSchema: string): Promise<string[]> {
   try {
     const r = await pool.query(
@@ -110,7 +103,23 @@ async function direttriciDelloSpazio(nomeSchema: string): Promise<string[]> {
   }
 }
 
-function daRiga(r: Record<string, unknown>): LavorazioneMateria {
+/** La grafia canonica dell'ufficio: quella delle direttrici, o quella già in uso. */
+async function ufficioCanonico(
+  nomeSchema: string,
+  dipendenza: string | null,
+  escludiId: number | null
+): Promise<string | null> {
+  if (!dipendenza) return null;
+  const direttrici = await direttriciDelloSpazio(nomeSchema);
+  const registro = registroDipendenze(await grafieDegliUffici(nomeSchema, escludiId));
+  return (
+    direttriceConfigurata(dipendenza, direttrici) ??
+    grafiaGiaUsata(dipendenza, registro) ??
+    dipendenza
+  );
+}
+
+function daRigaLavorazione(r: Record<string, unknown>): LavorazioneMateria {
   return {
     id: Number(r.id),
     materiaId: Number(r.materia_id),
@@ -127,6 +136,13 @@ function daRiga(r: Record<string, unknown>): LavorazioneMateria {
   };
 }
 
+/**
+ * Le TL che una materia eredita, nella forma che tutte le letture conoscono.
+ *
+ * L'ordine è quello della materia (poi quello del catalogo): è la sequenza in
+ * cui l'ufficio le esegue, e la prima è quella che il titolo del codice
+ * eredita.
+ */
 export async function ottieniLavorazioniMateria(
   nomeSchema: string
 ): Promise<{ success: boolean; lavorazioni: LavorazioneMateria[]; error?: string }> {
@@ -134,14 +150,15 @@ export async function ottieniLavorazioniMateria(
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema))
       return { success: false, lavorazioni: [], error: 'Nome schema non valido.' };
-    await assicuraTabellaMaterieLavorazione(nomeSchema);
+    await assicuraTabelleProdottiTl(nomeSchema);
     const r = await pool.query(
-      `SELECT id, materia_id, tipologia, dipendenza, procedura, esito, ordine,
-              rilevante_perimetro, verso_perimetro
-         FROM "${nomeSchema}".materie_lavorazione
-        ORDER BY materia_id, ordine ASC, id ASC`
+      `SELECT t.id, a.materia_id, t.tipologia, t.dipendenza, t.procedura, t.esito,
+              a.ordine AS ordine, t.rilevante_perimetro, t.verso_perimetro
+         FROM "${nomeSchema}".materia_tl a
+         JOIN "${nomeSchema}".prodotti_tl t ON t.id = a.tl_id
+        ORDER BY a.materia_id, a.ordine ASC, t.id ASC`
     );
-    return { success: true, lavorazioni: r.rows.map(daRiga) };
+    return { success: true, lavorazioni: r.rows.map(daRigaLavorazione) };
   } catch (error: unknown) {
     console.error('[ottieniLavorazioniMateria]', error);
     return {
@@ -152,50 +169,70 @@ export async function ottieniLavorazioniMateria(
   }
 }
 
-export async function salvaLavorazioneMateriaAction(
+/** Il catalogo completo, con quante materie ereditano ogni TL. */
+export async function ottieniCatalogoTl(
+  nomeSchema: string
+): Promise<{ success: boolean; tl: TlProdotto[]; error?: string }> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!validaSchema(nomeSchema))
+      return { success: false, tl: [], error: 'Nome schema non valido.' };
+    await assicuraTabelleProdottiTl(nomeSchema);
+    const r = await pool.query(
+      `SELECT t.id, t.direttrice, t.prodotto, t.tipologia, t.dipendenza, t.procedura,
+              t.esito, t.ordine, t.rilevante_perimetro, t.verso_perimetro,
+              (SELECT COUNT(*) FROM "${nomeSchema}".materia_tl a WHERE a.tl_id = t.id) AS materie
+         FROM "${nomeSchema}".prodotti_tl t
+        ORDER BY t.direttrice, t.prodotto, t.ordine, t.id`
+    );
+    return { success: true, tl: r.rows.map(rigaTlProdotto) };
+  } catch (error: unknown) {
+    console.error('[ottieniCatalogoTl]', error);
+    return {
+      success: false,
+      tl: [],
+      error: `Impossibile leggere il catalogo delle TL: ${(error as Error).message || error}`,
+    };
+  }
+}
+
+/**
+ * Crea o aggiorna una TL del prodotto.
+ *
+ * Il prodotto lo sceglie la pagina fra quelli configurati sulla direttrice, ma
+ * il server non si fida: accetta qualunque nome non vuoto, perché un ente può
+ * aggiungere il prodotto proprio mentre scrive la TL — e una TL rifiutata è
+ * lavoro perso. Il nome dell'ufficio sì, viene ricondotto alla grafia
+ * configurata: due nomi per lo stesso ufficio sono due documenti.
+ */
+export async function salvaTlProdottoAction(
   nomeSchema: string,
-  input: InputLavorazioneMateria
+  input: InputTlProdotto
 ): Promise<{ success: boolean; id?: number; error?: string }> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    const errore = validaLavorazioneMateria(input);
+    const errore = validaTlProdotto(input);
     if (errore) return { success: false, error: errore };
-    const dato = normalizzaLavorazione(input);
+    const dato = normalizzaTlProdotto(input);
+    await assicuraTabelleProdottiTl(nomeSchema);
 
-    await assicuraTabellaMaterieLavorazione(nomeSchema);
-    // La materia deve esistere davvero: niente id inventati dal browser.
-    const materia = await pool.query(`SELECT 1 FROM "${nomeSchema}".materie_ente WHERE id = $1`, [
-      dato.materiaId,
-    ]);
-    if ((materia.rowCount ?? 0) === 0)
-      return { success: false, error: 'Materia non riconosciuta.' };
-
-    // L'ufficio ha un nome solo. Prima si cerca tra le direttrici (la fonte),
-    // poi tra le grafie già in uso: si evita che lo stesso ufficio si sdoppi.
-    // Non si uniscono uffici diversi, si sceglie la grafia che esiste.
-    if (dato.dipendenza) {
-      const direttrici = await direttriciDelloSpazio(nomeSchema);
-      const registro = registroDipendenze(await grafieDegliUffici(nomeSchema, dato.id ?? null));
-      dato.dipendenza =
-        direttriceConfigurata(dato.dipendenza, direttrici) ??
-        grafiaGiaUsata(dato.dipendenza, registro) ??
-        dato.dipendenza;
-    }
+    dato.dipendenza = await ufficioCanonico(nomeSchema, dato.dipendenza, dato.id ?? null);
 
     if (dato.id != null) {
       if (!Number.isInteger(dato.id) || dato.id <= 0)
-        return { success: false, error: 'Lavorazione non valida.' };
+        return { success: false, error: 'TL non valida.' };
       const r = await pool.query(
-        `UPDATE "${nomeSchema}".materie_lavorazione
-            SET materia_id = $2, tipologia = $3, dipendenza = $4, procedura = $5,
-                esito = $6, rilevante_perimetro = $7, verso_perimetro = $8,
-                aggiornato_il = now()
+        `UPDATE "${nomeSchema}".prodotti_tl
+            SET direttrice = $2, prodotto = $3, tipologia = $4, dipendenza = $5,
+                procedura = $6, esito = $7, rilevante_perimetro = $8,
+                verso_perimetro = $9, aggiornato_il = now()
           WHERE id = $1
           RETURNING id`,
         [
           dato.id,
-          dato.materiaId,
+          dato.direttrice,
+          dato.prodotto,
           dato.tipologia,
           dato.dipendenza,
           dato.procedura,
@@ -204,25 +241,42 @@ export async function salvaLavorazioneMateriaAction(
           dato.versoPerimetro,
         ]
       );
-      if ((r.rowCount ?? 0) === 0) return { success: false, error: 'Lavorazione non trovata.' };
+      if ((r.rowCount ?? 0) === 0) return { success: false, error: 'TL non trovata.' };
       return { success: true, id: dato.id };
     }
 
-    // L'ordine è per materia: si eseguono una dopo l'altra, la prima è quella
-    // che il titolo eredita.
+    // Lo stesso prodotto non porta due volte la stessa TL: sarebbe la stessa
+    // lavorazione scritta due volte, e il triage chiederebbe due volte la stessa
+    // risposta.
+    const doppia = await pool.query(
+      `SELECT 1 FROM "${nomeSchema}".prodotti_tl
+        WHERE lower(btrim(direttrice)) = lower(btrim($1))
+          AND lower(btrim(prodotto)) = lower(btrim($2))
+          AND lower(btrim(tipologia)) = lower(btrim($3))`,
+      [dato.direttrice, dato.prodotto, dato.tipologia]
+    );
+    if ((doppia.rowCount ?? 0) > 0)
+      return {
+        success: false,
+        error: 'Questa TL esiste già nel prodotto: modificala invece di aggiungerla.',
+      };
+
     const ordine = await pool.query(
       `SELECT COALESCE(MAX(ordine), 0) + 1 AS n
-         FROM "${nomeSchema}".materie_lavorazione WHERE materia_id = $1`,
-      [dato.materiaId]
+         FROM "${nomeSchema}".prodotti_tl
+        WHERE lower(btrim(direttrice)) = lower(btrim($1))
+          AND lower(btrim(prodotto)) = lower(btrim($2))`,
+      [dato.direttrice, dato.prodotto]
     );
     const r = await pool.query(
-      `INSERT INTO "${nomeSchema}".materie_lavorazione
-         (materia_id, tipologia, dipendenza, procedura, esito, ordine,
+      `INSERT INTO "${nomeSchema}".prodotti_tl
+         (direttrice, prodotto, tipologia, dipendenza, procedura, esito, ordine,
           rilevante_perimetro, verso_perimetro)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id`,
       [
-        dato.materiaId,
+        dato.direttrice,
+        dato.prodotto,
         dato.tipologia,
         dato.dipendenza,
         dato.procedura,
@@ -234,10 +288,124 @@ export async function salvaLavorazioneMateriaAction(
     );
     return { success: true, id: Number(r.rows[0].id) };
   } catch (error: unknown) {
-    console.error('[salvaLavorazioneMateriaAction]', error);
+    console.error('[salvaTlProdottoAction]', error);
     return {
       success: false,
       error: `Salvataggio non riuscito: ${(error as Error).message || error}`,
+    };
+  }
+}
+
+/**
+ * Toglie una TL dal catalogo, e con lei le associazioni alle materie.
+ *
+ * Le risposte della check di perimetro restano dove sono: se la TL viene
+ * ricreata con lo stesso id non succede (gli id non si riusano), ma una
+ * risposta orfana non blocca nulla — il triage legge solo le TL esistenti.
+ */
+export async function eliminaTlProdottoAction(
+  nomeSchema: string,
+  id: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (!Number.isInteger(id) || id <= 0) return { success: false, error: 'TL non valida.' };
+    await assicuraTabelleProdottiTl(nomeSchema);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`DELETE FROM "${nomeSchema}".materia_tl WHERE tl_id = $1`, [id]);
+      const r = await client.query(
+        `DELETE FROM "${nomeSchema}".prodotti_tl WHERE id = $1 RETURNING id`,
+        [id]
+      );
+      if ((r.rowCount ?? 0) === 0) {
+        await client.query('ROLLBACK');
+        return { success: false, error: 'TL non trovata.' };
+      }
+      await client.query('COMMIT');
+    } catch (errore) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw errore;
+    } finally {
+      client.release();
+    }
+    return { success: true };
+  } catch (error: unknown) {
+    console.error('[eliminaTlProdottoAction]', error);
+    return {
+      success: false,
+      error: `Eliminazione non riuscita: ${(error as Error).message || error}`,
+    };
+  }
+}
+
+/** La materia eredita una TL del catalogo. */
+export async function collegaTlMateriaAction(
+  nomeSchema: string,
+  materiaId: number,
+  tlId: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (!Number.isInteger(materiaId) || materiaId <= 0 || !Number.isInteger(tlId) || tlId <= 0)
+      return { success: false, error: 'Materia o TL non valida.' };
+    await assicuraTabelleProdottiTl(nomeSchema);
+
+    const materia = await pool.query(`SELECT 1 FROM "${nomeSchema}".materie_ente WHERE id = $1`, [
+      materiaId,
+    ]);
+    if ((materia.rowCount ?? 0) === 0)
+      return { success: false, error: 'Materia non riconosciuta.' };
+    const tl = await pool.query(`SELECT 1 FROM "${nomeSchema}".prodotti_tl WHERE id = $1`, [tlId]);
+    if ((tl.rowCount ?? 0) === 0) return { success: false, error: 'TL non riconosciuta.' };
+
+    const ordine = await pool.query(
+      `SELECT COALESCE(MAX(ordine), 0) + 1 AS n
+         FROM "${nomeSchema}".materia_tl WHERE materia_id = $1`,
+      [materiaId]
+    );
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".materia_tl (materia_id, tl_id, ordine)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (materia_id, tl_id) DO NOTHING`,
+      [materiaId, tlId, Number(ordine.rows[0]?.n ?? 1)]
+    );
+    return { success: true };
+  } catch (error: unknown) {
+    console.error('[collegaTlMateriaAction]', error);
+    return {
+      success: false,
+      error: `Associazione non riuscita: ${(error as Error).message || error}`,
+    };
+  }
+}
+
+/** La materia smette di ereditare una TL. La TL resta nel catalogo. */
+export async function scollegaTlMateriaAction(
+  nomeSchema: string,
+  materiaId: number,
+  tlId: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (!Number.isInteger(materiaId) || materiaId <= 0 || !Number.isInteger(tlId) || tlId <= 0)
+      return { success: false, error: 'Materia o TL non valida.' };
+    await assicuraTabelleProdottiTl(nomeSchema);
+    await pool.query(
+      `DELETE FROM "${nomeSchema}".materia_tl WHERE materia_id = $1 AND tl_id = $2`,
+      [materiaId, tlId]
+    );
+    return { success: true };
+  } catch (error: unknown) {
+    console.error('[scollegaTlMateriaAction]', error);
+    return {
+      success: false,
+      error: `Rimozione non riuscita: ${(error as Error).message || error}`,
     };
   }
 }
@@ -247,10 +415,10 @@ export async function salvaLavorazioneMateriaAction(
  *
  * Un ufficio che non è tra le direttrici ha un nome che vale solo per sé: le
  * sue posizioni finiscono in un documento a parte, e nessuno se ne accorge
- * finché non arriva in fondo alla catena. Qui si sposta il nome — nelle
- * lavorazioni che lo scelgono e nei titoli che lo dichiarano — sulla direttrice
- * indicata, con la grafia scritta nei Parametri. È un comando solo perché
- * toccare trenta righe a mano è il modo in cui l'ufficio si risdoppia.
+ * finché non arriva in fondo alla catena. Qui si sposta il nome — nelle TL del
+ * catalogo e nei titoli che lo dichiarano — sulla direttrice indicata, con la
+ * grafia scritta nei Parametri. È un comando solo perché toccare trenta righe a
+ * mano è il modo in cui l'ufficio si risdoppia.
  *
  * Le due scritture stanno in una transazione: o si sposta tutto, o niente.
  */
@@ -268,15 +436,13 @@ export async function riallineaUfficioAllaDirettriceAction(
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    await assicuraTabellaMaterieLavorazione(nomeSchema);
+    await assicuraTabelleProdottiTl(nomeSchema);
     // I titoli vivono in una tabella che potrebbe non essere ancora nata in uno
     // spazio nuovo: la crea la stessa funzione che usa la pagina dei titoli.
     await assicuraTabelleParametriSpazio(nomeSchema);
 
     const direttrici = await direttriciDelloSpazio(nomeSchema);
-    const lavorazioni = await pool.query(
-      `SELECT id, dipendenza FROM "${nomeSchema}".materie_lavorazione`
-    );
+    const lavorazioni = await pool.query(`SELECT id, dipendenza FROM "${nomeSchema}".prodotti_tl`);
     const titoli = await pool.query(`SELECT id, dipendenza FROM "${nomeSchema}".titoli_ente`);
 
     const pianificato = pianificaRiallineamento({
@@ -300,7 +466,7 @@ export async function riallineaUfficioAllaDirettriceAction(
       await client.query('BEGIN');
       if (piano.lavorazioni.length > 0)
         await client.query(
-          `UPDATE "${nomeSchema}".materie_lavorazione
+          `UPDATE "${nomeSchema}".prodotti_tl
               SET dipendenza = $2, aggiornato_il = now()
             WHERE id = ANY($1::int[])`,
           [piano.lavorazioni, piano.destinazione]
@@ -335,27 +501,71 @@ export async function riallineaUfficioAllaDirettriceAction(
   }
 }
 
-export async function eliminaLavorazioneMateriaAction(
+/**
+ * RINOMINA IN BLOCCO IL PRODOTTO DELLE TL IMPORTATE (0.158.0).
+ *
+ * Le TL copiate dalle vecchie `materie_lavorazione` non avevano un prodotto:
+ * la copia ha messo il nome della lavorazione anche come prodotto. Il risultato
+ * è un prodotto che nessuna direttrice ha configurato — la TL resta fuori
+ * sequenza e il nome resta doppio.
+ *
+ * Qui si rinomina il prodotto di tutte le TL della direttrice in una volta. Non
+ * è una rinomina della TL: è la chiave che le tiene insieme, e cambiarla una
+ * riga per volta è il modo in cui i doppioni tornano. La pagina aggiunge il
+ * nome nuovo ai prodotti della direttrice, così la catena resta in piedi.
+ */
+export async function rinominaProdottoTlAction(
   nomeSchema: string,
-  id: number
-): Promise<{ success: boolean; error?: string }> {
+  direttrice: string,
+  da: string,
+  a: string
+): Promise<{ success: boolean; rinominati?: number; error?: string }> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    if (!Number.isInteger(id) || id <= 0)
-      return { success: false, error: 'Lavorazione non valida.' };
-    await assicuraTabellaMaterieLavorazione(nomeSchema);
-    const r = await pool.query(
-      `DELETE FROM "${nomeSchema}".materie_lavorazione WHERE id = $1 RETURNING id`,
-      [id]
+    const ufficio = String(direttrice ?? '').trim();
+    const vecchio = String(da ?? '').trim();
+    const nuovo = String(a ?? '').trim();
+    if (!ufficio) return { success: false, error: 'Indica la direttrice.' };
+    if (!vecchio) return { success: false, error: 'Indica il prodotto da rinominare.' };
+    if (!nuovo) return { success: false, error: 'Indica il nome nuovo del prodotto.' };
+    if (vecchio.toLowerCase() === nuovo.toLowerCase())
+      return { success: false, error: 'Il nome nuovo è uguale a quello attuale.' };
+    await assicuraTabelleProdottiTl(nomeSchema);
+
+    // Rinominare su un prodotto che ha già la stessa lavorazione creerebbe due
+    // TL identiche sotto lo stesso prodotto: il doppione che il comando deve
+    // togliere, non crearne uno nuovo.
+    const doppioni = await pool.query(
+      `SELECT 1
+         FROM "${nomeSchema}".prodotti_tl x
+         JOIN "${nomeSchema}".prodotti_tl y
+           ON lower(btrim(y.direttrice)) = lower(btrim(x.direttrice))
+          AND lower(btrim(y.prodotto)) = lower(btrim($3))
+          AND lower(btrim(y.tipologia)) = lower(btrim(x.tipologia))
+        WHERE lower(btrim(x.direttrice)) = lower(btrim($1))
+          AND lower(btrim(x.prodotto)) = lower(btrim($2))
+        LIMIT 1`,
+      [ufficio, vecchio, nuovo]
     );
-    if ((r.rowCount ?? 0) === 0) return { success: false, error: 'Lavorazione non trovata.' };
-    return { success: true };
+    if ((doppioni.rowCount ?? 0) > 0)
+      return {
+        success: false,
+        error: `«${nuovo}» ha già una TL con la stessa lavorazione: uniscile prima dalla scheda del prodotto.`,
+      };
+
+    const r = await pool.query(
+      `UPDATE "${nomeSchema}".prodotti_tl
+          SET prodotto = $3, aggiornato_il = now()
+        WHERE lower(btrim(direttrice)) = lower(btrim($1))
+          AND lower(btrim(prodotto)) = lower(btrim($2))`,
+      [ufficio, vecchio, nuovo]
+    );
+    const rinominati = r.rowCount ?? 0;
+    if (rinominati === 0) return { success: false, error: 'Nessuna TL trovata su quel prodotto.' };
+    return { success: true, rinominati };
   } catch (error: unknown) {
-    console.error('[eliminaLavorazioneMateriaAction]', error);
-    return {
-      success: false,
-      error: `Eliminazione non riuscita: ${(error as Error).message || error}`,
-    };
+    console.error('[rinominaProdottoTlAction]', error);
+    return { success: false, error: `Rinomina non riuscita: ${(error as Error).message || error}` };
   }
 }

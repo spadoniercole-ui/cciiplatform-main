@@ -1,3 +1,72 @@
+## 0.158.0 — 2026-11-01
+
+**Un solo posto per l'ufficio: le lavorazioni per tipologia di debito entrano nel catalogo.**
+`lavorazioni_tipo_debito` scriveva a mano lavorazione e destinatario per ogni categoria di
+debito, mentre le stesse informazioni vivevano già nelle TL dei prodotti: due elenchi di uffici
+da tenere allineati e la stessa procedura scritta due volte.
+
+- **La categoria punta alla TL.** `categoria_tl` collega ogni categoria di debito alle TL di
+  `prodotti_tl`: una categoria può usare più TL e la stessa TL può servire più categorie.
+  Cambiare l'ufficio nella TL lo cambia per tutte, in un posto solo.
+- **La migrazione non chiede nulla.** Al primo accesso le righe della vecchia tabella creano le
+  TL che il catalogo non ha (stesso ufficio e stessa lavorazione) e vengono collegate; se la
+  categoria ha già collegamenti non si torna indietro sopra le scelte fatte.
+- **La pagina collega, non scrive.** «Lavorazioni per tipologia di debito» mostra per ogni
+  categoria le TL in uso, permette di collegarne altre dal catalogo e di togliere un
+  collegamento, e dice quante categorie restano senza TL.
+- **Sparisce la sola lettura.** Il congelamento esisteva perché due tabelle non potevano essere
+  allineate: con un catalogo solo la configurazione torna modificabile, e l'interruttore
+  `LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA` è stato rimosso insieme alla pagina che lo leggeva.
+- **Rinomina in blocco dei prodotti importati.** La scheda delle direttrici elenca i prodotti
+  che il catalogo conosce e la direttrice non configura — i nomi copiati dalle vecchie
+  lavorazioni — e li rinomina tutti in una volta su un prodotto esistente o nuovo, rifiutando
+  l'accorpamento quando creerebbe due TL identiche.
+- **La documentazione dice il flusso nuovo.** `docs/ARCHITETTURA-E-GESTIONE.md` descrive la
+  catena direttrici e prodotti → TL delle materie → titoli, il ruolo di `categoria_tl` e la
+  tabella dei prodotti; `docs/ANALISI-LAVORAZIONI-TIPO-DEBITO.md` porta una nota in testa che
+  dice quali punti dell'analisi il catalogo ha superato.
+
+## 0.157.0 — 2026-11-01
+
+**Le TL si scrivono nei prodotti, e la materia le eredita.**
+Il flusso è 1 → 2 → 3 — direttrici e prodotti, lavorazioni, titoli di credito — ma girava al
+contrario: il prodotto era soltanto un nome nel questionario, la TL nasceva nella materia, e per
+lavorare un DURC bisognava aspettare che una materia esistesse, inventare lì la tipologia e solo
+alla fine associarla ai codici. Chi configurava tornava al passo 1 a mani vuote.
+
+- **Un catalogo, sotto il prodotto.** Ogni prodotto di ogni direttrice porta la sua tabella di TL:
+  tipologia, esito, ufficio, passi e contrassegno di perimetro. Si scrive una volta, dove il lavoro
+  si organizza.
+- **La materia associa, non possiede.** «Materie e TL» elenca le TL che la materia eredita e
+  permette di associarne altre dal catalogo, con l'ordine di esecuzione: la prima è quella che il
+  titolo del codice eredita, e un ufficio scritto sul singolo codice ha ancora la precedenza.
+- **Le configurazioni esistenti non si perdono.** Le TL già scritte nelle materie vengono copiate
+  nel catalogo al primo accesso — con lo stesso id, così le risposte della check di perimetro
+  restano agganciate — sotto un prodotto che porta il loro nome, rinominabile. La vecchia tabella
+  resta come storico: non è più letta né scritta.
+- **La check di perimetro resta una voce per TL.** Se la stessa TL copre più materie la domanda è
+  una sola: è la lavorazione a essere stata attivata o no, non la materia in cui cade il codice.
+
+## 0.156.0 — 2026-11-01
+
+**Le tre check del triage restano a schermo, e dalla verifica si torna alla dashboard.**
+La check di perimetro compariva e spariva in un istante: era montata nella fase di conferma, ma
+l'azienda — da cui le voci dipendono — esiste solo dopo la conferma, e il passaggio alla fase
+d'esito la smontava subito. L'esito restava senza check e, memore dell'esito mancato, dichiarava
+il triage incompleto e spegneva «Procedi»: il lavoro da fare non era più raggiungibile da nessun
+punto della videata. Chiudeva il giro l'unica via d'uscita, uscire e rientrare, che ricaricava
+lo stato senza la check e faceva sparire l'avviso senza aver risolto nulla.
+
+- **Le check vivono nella fase d'esito.** Check di perimetro, check list dello screening e scenari
+  si montano dove si resta a lavorare, non nell'istante fra la creazione dell'azienda e il
+  passaggio alla fase successiva. La conferma dice che si aprono al termine della valutazione.
+- **«Procedi» si blocca sulle voci mancanti, non sul flag della check.** Una spazio senza TL
+  rilevanti non ha voci da rispondere: contano le voci rimaste senza risposta, non `completa`.
+  L'esito della check si azzera quando si apre una nuova verifica — quello dell'azienda precedente
+  non deve bloccare o sbloccare la successiva.
+- **Dalla verifica si torna alla dashboard del triage.** In cima alla videata, in ogni fase, c'è il
+  ritorno alle verifiche in sospeso: prima si usciva solo perdendo quello che si aveva a schermo.
+
 ## 0.155.0 — 2026-11-01
 
 **La check list nasce anche per un'azienda nuova, si corregge dal triage e finisce nel foglio

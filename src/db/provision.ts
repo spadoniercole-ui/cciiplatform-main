@@ -1,4 +1,5 @@
 import { db } from './client';
+import { pool } from '@/lib/db';
 import { sql } from 'drizzle-orm';
 import { deveRinominareInLegacy } from '@/lib/migrazioni/debitiEnteLegacy';
 import { sqlVincoloCheckIdempotente } from '@/lib/migrazioni/vincoloCheck';
@@ -2237,6 +2238,171 @@ export async function assicuraTabellaMaterieLavorazione(nomeSchema: string): Pro
     sql`CREATE INDEX IF NOT EXISTS idx_materie_lavorazione_materia
         ON ${s}.materie_lavorazione (materia_id, ordine)`
   );
+}
+
+/**
+ * CATALOGO DELLE TL NEI PRODOTTI (0.157.0).
+ *
+ * La TL — la tipologia di lavorazione — non appartiene più alla materia: sta
+ * sotto una direttrice e un prodotto, cioè dove il lavoro si organizza. La
+ * materia la EREDITA, associandola ai propri codici: \`materia_tl\` è quella
+ * associazione, e i titoli di credito restano il punto in cui il codice dichiara
+ * la sua materia (e, se vuole, un ufficio proprio).
+ *
+ * PERCHÉ DUE TABELLE E NON UNA. La stessa TL può coprire più materie — è il
+ * caso normale di un prodotto lavorato su partite diverse — e l'ordine con cui
+ * la materia la esegue è suo, non del catalogo. Tenerli separati evita di
+ * duplicare la TL (e di doverla correggere due volte).
+ *
+ * MIGRAZIONE DELLE CONFIGURAZIONI ESISTENTI. Le TL scritte finora in
+ * \`materie_lavorazione\` sono già lavoro fatto: si copiano una volta sola nel
+ * catalogo, conservando l'id (le risposte della check di perimetro lo
+ * referenziano) e come prodotto si usa la tipologia stessa, che è l'unico nome
+ * concreto disponibile. Nessuna riga si perde, e la vecchia tabella resta come
+ * storico: non viene più letta né scritta.
+ *
+ * Idempotente: ogni spazio già attivo la riceve alla prima lettura della
+ * configurazione, e la copia avviene solo se il catalogo è ancora vuoto.
+ */
+export async function assicuraTabelleProdottiTl(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaMaterieLavorazione(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.prodotti_tl (
+      id SERIAL PRIMARY KEY,
+      direttrice TEXT NOT NULL DEFAULT '',
+      prodotto TEXT NOT NULL DEFAULT '',
+      tipologia TEXT NOT NULL DEFAULT '',
+      dipendenza TEXT,
+      procedura TEXT,
+      esito TEXT,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      rilevante_perimetro BOOLEAN NOT NULL DEFAULT false,
+      verso_perimetro TEXT,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.materia_tl (
+      materia_id INTEGER NOT NULL,
+      tl_id INTEGER NOT NULL,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (materia_id, tl_id)
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_prodotti_tl_prodotto
+        ON ${s}.prodotti_tl (direttrice, prodotto, ordine)`
+  );
+
+  // La copia una volta sola. \`FILTER\` sul catalogo vuoto: se l'ente ha già
+  // scritto TL nuove, la vecchia tabella non torna a sovrascriverle.
+  const vuoto = await pool.query(
+    `SELECT NOT EXISTS (SELECT 1 FROM "${nomeSchema}".prodotti_tl) AS vuoto,
+            EXISTS (SELECT 1 FROM "${nomeSchema}".materie_lavorazione) AS legate`
+  );
+  if (vuoto.rows[0]?.vuoto && vuoto.rows[0]?.legate) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO "${nomeSchema}".prodotti_tl
+           (id, direttrice, prodotto, tipologia, dipendenza, procedura, esito, ordine,
+            rilevante_perimetro, verso_perimetro)
+         SELECT l.id, COALESCE(l.dipendenza, ''), l.tipologia, l.tipologia, l.dipendenza,
+                l.procedura, l.esito, l.ordine, l.rilevante_perimetro, l.verso_perimetro
+           FROM "${nomeSchema}".materie_lavorazione l`
+      );
+      await client.query(
+        `INSERT INTO "${nomeSchema}".materia_tl (materia_id, tl_id, ordine)
+         SELECT materia_id, id, ordine FROM "${nomeSchema}".materie_lavorazione
+         ON CONFLICT (materia_id, tl_id) DO NOTHING`
+      );
+      // Gli id copiati sono quelli vecchi: la sequenza riparte sopra, altrimenti
+      // la prima TL nuova riuserebbe un id già risposto nel triage.
+      await client.query(
+        `SELECT setval(
+           pg_get_serial_sequence('"${nomeSchema}".prodotti_tl', 'id'),
+           COALESCE((SELECT MAX(id) FROM "${nomeSchema}".prodotti_tl), 0) + 1,
+           false
+         )`
+      );
+      await client.query('COMMIT');
+    } catch (errore) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw errore;
+    } finally {
+      client.release();
+    }
+  }
+
+  // LE LAVORAZIONI PER TIPOLOGIA DI DEBITO ENTRANO NEL CATALOGO (0.158.0).
+  //
+  // Prima ogni categoria di debito aveva una riga scritta a mano con la
+  // lavorazione e il destinatario: la stessa procedura esisteva in due tabelle
+  // e andava tenuta allineata a mano. Qui la categoria punta a una TL di
+  // `prodotti_tl`, così ufficio, passi ed esito si scrivono in un posto solo.
+  //
+  // La vecchia `lavorazioni_tipo_debito` resta in piedi (i documenti del
+  // triage già emessi la citano) ma nessuno la legge più: la copia avviene una
+  // volta sola, e se la categoria ha già dei collegamenti non si torna
+  // indietro sopra le scelte fatte dall'ente.
+  await assicuraTabellaLavorazioniTipoDebito(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.categoria_tl (
+      categoria TEXT NOT NULL,
+      tl_id INTEGER NOT NULL,
+      attivo BOOLEAN NOT NULL DEFAULT TRUE,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (categoria, tl_id)
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_categoria_tl_tl ON ${s}.categoria_tl (tl_id)`
+  );
+
+  const categorie = await pool.query(
+    `SELECT NOT EXISTS (SELECT 1 FROM "${nomeSchema}".categoria_tl) AS vuoto,
+            EXISTS (SELECT 1 FROM "${nomeSchema}".lavorazioni_tipo_debito) AS legate`
+  );
+  if (categorie.rows[0]?.vuoto && categorie.rows[0]?.legate) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Le TL che la vecchia tabella citava e che il catalogo non ha ancora:
+      // stesso ufficio e stessa lavorazione, grafia a confronto senza
+      // maiuscole, altrimenti «Contributi» e «contributi» diventano due TL.
+      await client.query(
+        `INSERT INTO "${nomeSchema}".prodotti_tl
+           (direttrice, prodotto, tipologia, dipendenza, ordine)
+         SELECT DISTINCT ON (lower(COALESCE(l.destinatario, '')), lower(l.lavorazione))
+                COALESCE(l.destinatario, ''), l.lavorazione, l.lavorazione,
+                NULLIF(l.destinatario, ''), 0
+           FROM "${nomeSchema}".lavorazioni_tipo_debito l
+          WHERE NOT EXISTS (
+                  SELECT 1 FROM "${nomeSchema}".prodotti_tl t
+                   WHERE lower(t.tipologia) = lower(l.lavorazione)
+                     AND lower(COALESCE(t.dipendenza, '')) = lower(COALESCE(l.destinatario, ''))
+                )
+          ORDER BY lower(COALESCE(l.destinatario, '')), lower(l.lavorazione), l.id`
+      );
+      await client.query(
+        `INSERT INTO "${nomeSchema}".categoria_tl (categoria, tl_id, attivo, ordine)
+         SELECT l.categoria, t.id, l.attivo, l.ordine
+           FROM "${nomeSchema}".lavorazioni_tipo_debito l
+           JOIN "${nomeSchema}".prodotti_tl t
+             ON lower(t.tipologia) = lower(l.lavorazione)
+            AND lower(COALESCE(t.dipendenza, '')) = lower(COALESCE(l.destinatario, ''))
+          ON CONFLICT (categoria, tl_id) DO NOTHING`
+      );
+      await client.query('COMMIT');
+    } catch (errore) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw errore;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 /**

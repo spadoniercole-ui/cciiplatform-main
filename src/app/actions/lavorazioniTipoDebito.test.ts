@@ -1,30 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// LA GUARDIA DEL CONGELAMENTO, PROVATA DA FUORI.
+// I COLLEGAMENTI FRA CATEGORIE DI DEBITO E CATALOGO DELLE TL.
 //
-// La promessa centrale della configurazione in sola lettura non è la schermata
-// senza pulsanti — quella si aggira aprendo la console — ma il rifiuto nelle
-// due server action, che sono endpoint pubblici. Qui si chiamano direttamente,
-// come farebbe un browser manomesso, e si verifica che non tocchino il
-// database.
-//
-// L'interruttore è finto (e pilotabile) perché il test deve coprire anche il
-// caso opposto: con la configurazione modificabile, la stessa chiamata passa la
-// guardia e arriva alle sue validazioni. Se un giorno l'interruttore diventa un
-// permesso, questi due test vanno rifatti insieme alla guardia: è il loro
-// scopo.
+// Dalla 0.158.0 la pagina non scrive più una tabella propria: collega una
+// categoria di debito a una TL di `prodotti_tl`. Le due server action sono
+// endpoint pubblici, quindi le si chiama direttamente, come farebbe un browser
+// manomesso, e si verifica che cosa arriva al database.
 
-const stato = { sola: true };
-
-vi.mock('@/lib/lavorazioni/solaLettura', () => ({
-  get LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA() {
-    return stato.sola;
-  },
-  MESSAGGIO_LAVORAZIONI_SOLA_LETTURA:
-    'La configurazione delle lavorazioni per tipologia di debito è in sola lettura: si consulta, non si modifica.',
-}));
-
-const query = vi.fn(async (..._args: unknown[]) => ({ rows: [], rowCount: 0 }));
+const query = vi.fn(async (..._args: unknown[]) => ({ rows: [] as unknown[], rowCount: 0 }));
 vi.mock('@/lib/db', () => ({ pool: { query: (...args: unknown[]) => query(...args) } }));
 
 const richiediAccessoSchema = vi.fn(async () => ({
@@ -33,88 +16,99 @@ const richiediAccessoSchema = vi.fn(async () => ({
 }));
 vi.mock('@/lib/autorizzazione', () => ({ richiediAccessoSchema }));
 
-// Il DDL del tenant non serve qui: le azioni rifiutano (o validano) prima di
-// toccare le tabelle, e comunque nessuna tabella vera deve essere creata.
+// Il DDL del tenant non serve qui: le azioni validano prima di toccare le
+// tabelle, e comunque nessuna tabella vera deve essere creata.
 vi.mock('@/db/provision', () => ({
   assicuraTabellaCategorieTipoDebito: async () => {},
+  assicuraTabelleProdottiTl: async () => {},
   assicuraTabellaLavorazioniTipoDebito: async () => {},
 }));
 
-const { salvaLavorazioneTipoDebitoAction, eliminaLavorazioneTipoDebitoAction } =
+const { collegaCategoriaTlAction, scollegaCategoriaTlAction } =
   await import('./lavorazioniTipoDebito');
 
 const SCHEMA = 'tenant_alfa';
-const MESSAGGIO =
-  'La configurazione delle lavorazioni per tipologia di debito è in sola lettura: si consulta, non si modifica.';
+const unaRiga = { rows: [{ ok: 1 }], rowCount: 1 };
 
-const input = {
-  categoria: 'DEBITO',
-  lavorazione: 'Contabilizzare',
-  destinatario: 'Mario Rossi',
-  attivo: true,
-};
+const scritte = () =>
+  query.mock.calls.filter((c) => /^\s*(INSERT|UPDATE|DELETE)/i.test(String(c[0])));
 
 beforeEach(() => {
-  stato.sola = true;
-  query.mockClear();
+  query.mockReset();
+  query.mockResolvedValue({ rows: [], rowCount: 0 });
   richiediAccessoSchema.mockClear();
 });
 
-describe('configurazione in sola lettura', () => {
-  it('il salvataggio risponde con il motivo e non scrive nulla', async () => {
-    const esito = await salvaLavorazioneTipoDebitoAction(SCHEMA, input);
+describe('collegamento categoria → TL', () => {
+  it('una categoria che non esiste non viene collegata', async () => {
+    const esito = await collegaCategoriaTlAction(SCHEMA, 'INVENTATA', 12);
 
     expect(esito.success).toBe(false);
-    expect(esito.error).toBe(MESSAGGIO);
-    expect(query).not.toHaveBeenCalled();
+    expect(esito.error).toContain('non riconosciuta');
+    expect(scritte()).toHaveLength(0);
     // La guardia di accesso resta la prima istruzione: nessuna azione parte
     // senza sapere chi la chiama.
     expect(richiediAccessoSchema).toHaveBeenCalledWith(SCHEMA, { soloAdmin: true });
   });
 
-  it('l’eliminazione risponde con il motivo e non cancella righe', async () => {
-    const esito = await eliminaLavorazioneTipoDebitoAction(SCHEMA, 7);
+  it('una TL che non è nel catalogo non viene collegata', async () => {
+    // Prima la categoria esiste, poi la TL no.
+    query.mockResolvedValueOnce(unaRiga);
+
+    const esito = await collegaCategoriaTlAction(SCHEMA, 'DEBITO', 999);
 
     expect(esito.success).toBe(false);
-    expect(esito.error).toBe(MESSAGGIO);
+    expect(esito.error).toBe('TL non trovata nel catalogo.');
+    expect(scritte()).toHaveLength(0);
+  });
+
+  it('un id non intero viene rifiutato prima di qualunque lettura', async () => {
+    const esito = await collegaCategoriaTlAction(SCHEMA, 'DEBITO', 0);
+
+    expect(esito.success).toBe(false);
+    expect(esito.error).toBe('TL non valida.');
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('anche un id assurdo viene rifiutato dal congelamento, non dal database', async () => {
-    const esito = await eliminaLavorazioneTipoDebitoAction(SCHEMA, 0);
+  it('il collegamento si scrive su `categoria_tl` con la coppia categoria + TL', async () => {
+    query.mockResolvedValue(unaRiga);
 
-    expect(esito.success).toBe(false);
-    expect(esito.error).toBe(MESSAGGIO);
-    expect(query).not.toHaveBeenCalled();
+    const esito = await collegaCategoriaTlAction(SCHEMA, ' DEBITO ', 12);
+
+    expect(esito.success).toBe(true);
+    const insert = scritte();
+    expect(insert).toHaveLength(1);
+    expect(String(insert[0][0])).toContain('categoria_tl');
+    expect(String(insert[0][0])).toContain('ON CONFLICT');
+    expect(insert[0][1]).toEqual(['DEBITO', 12]);
   });
 });
 
-describe('configurazione modificabile', () => {
-  it('la stessa chiamata passa la guardia e arriva alle sue validazioni', async () => {
-    stato.sola = false;
-
-    // Nessuna categoria nel database e nessun codice legacy: la tipologia non
-    // è riconosciuta. È un errore DIVERSO dal congelamento, ed è la prova che
-    // la strada oltre la guardia è aperta quando la configurazione lo è.
-    const esito = await salvaLavorazioneTipoDebitoAction(SCHEMA, {
-      ...input,
-      categoria: 'NON_ESISTE',
-    });
+describe('scollegamento categoria → TL', () => {
+  it('senza righe da cancellare risponde con l’errore, non con un finto successo', async () => {
+    const esito = await scollegaCategoriaTlAction(SCHEMA, 'DEBITO', 7);
 
     expect(esito.success).toBe(false);
-    expect(esito.error).not.toBe(MESSAGGIO);
-    expect(esito.error).toContain('non riconosciuta');
-    expect(query).toHaveBeenCalled();
+    expect(esito.error).toBe('Collegamento non trovato.');
   });
 
-  it('senza lavorazione o destinatario non salva nemmeno con la configurazione aperta', async () => {
-    stato.sola = false;
+  it('cancella la coppia indicata e nient’altro', async () => {
+    query.mockResolvedValueOnce(unaRiga);
 
-    expect(
-      (await salvaLavorazioneTipoDebitoAction(SCHEMA, { ...input, lavorazione: '  ' })).error
-    ).toBe('Indica la lavorazione da svolgere.');
-    expect(
-      (await salvaLavorazioneTipoDebitoAction(SCHEMA, { ...input, destinatario: '' })).error
-    ).toBe('Indica il collega a cui inviare la comunicazione.');
+    const esito = await scollegaCategoriaTlAction(SCHEMA, 'DEBITO', 7);
+
+    expect(esito.success).toBe(true);
+    const cancellazioni = scritte();
+    expect(cancellazioni).toHaveLength(1);
+    expect(String(cancellazioni[0][0])).toContain('DELETE FROM');
+    expect(cancellazioni[0][1]).toEqual(['DEBITO', 7]);
+  });
+
+  it('uno schema non valido non arriva al database', async () => {
+    const esito = await scollegaCategoriaTlAction('tenant-alfa; DROP', 'DEBITO', 7);
+
+    expect(esito.success).toBe(false);
+    expect(esito.error).toBe('Nome schema non valido.');
+    expect(query).not.toHaveBeenCalled();
   });
 });

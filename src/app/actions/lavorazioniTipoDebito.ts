@@ -2,32 +2,30 @@
 
 // LAVORAZIONI PER TIPOLOGIA DI DEBITO — configurazione dello spazio.
 //
-// Per ogni categoria di debito (le stesse `categorie_tipo_debito`) si dice
-// che lavorazione va svolta e a quale collega va chiesta. È il dato che
-// rende pertinenti le comunicazioni preparate dal triage: senza una
-// lavorazione configurata la piattaforma non inventa un destinatario né un
-// compito.
+// Fino alla 0.157.0 ogni categoria di debito aveva una riga scritta a mano con
+// la lavorazione e il destinatario: la stessa procedura esisteva in due tabelle
+// (questa e le lavorazioni delle materie) e andava tenuta allineata a mano.
 //
-// Le letture sono accessibili a chi ha accesso allo schema; le scritture
-// solo all'Admin di spazio, come le altre configurazioni.
+// Dalla 0.158.0 la categoria **punta** a una TL del catalogo (`prodotti_tl`):
+// ufficio, procedura, esito e contrassegno di perimetro si scrivono una volta
+// sola, dentro il prodotto a cui la TL si applica, e qui si dice soltanto quale
+// di quelle TL lavora ogni categoria di debito. La vecchia tabella
+// `lavorazioni_tipo_debito` resta come storico: non si legge e non si scrive.
+//
+// Le letture sono accessibili a chi ha accesso allo schema; le scritture solo
+// all'Admin di spazio, come le altre configurazioni.
 
 import { pool } from '@/lib/db';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
-import {
-  assicuraTabellaCategorieTipoDebito,
-  assicuraTabellaLavorazioniTipoDebito,
-} from '@/db/provision';
+import { assicuraTabellaCategorieTipoDebito, assicuraTabelleProdottiTl } from '@/db/provision';
 import { TIPI_DEBITO_ENTE } from '@/lib/debitiEnte/tipoDebito';
-import {
-  LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA,
-  MESSAGGIO_LAVORAZIONI_SOLA_LETTURA,
-} from '@/lib/lavorazioni/solaLettura';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
 }
 
 export interface LavorazioneTipoDebito {
+  /** L'id della TL del catalogo: è la chiave del collegamento. */
   id: number;
   categoria: string;
   lavorazione: string;
@@ -42,6 +40,14 @@ export interface RisultatoLavorazioni {
   error?: string;
 }
 
+/**
+ * Le TL che lavorano ogni categoria di debito.
+ *
+ * La forma non cambia rispetto a prima — `id`, `categoria`, `lavorazione`,
+ * `destinatario`, `attivo`, `ordine` — perché la leggono il triage, le
+ * comunicazioni e i documenti per reparto. Cambia la provenienza: i campi
+ * arrivano dal catalogo, non da una tabella di configurazione parallela.
+ */
 export async function ottieniLavorazioniTipoDebito(
   nomeSchema: string
 ): Promise<RisultatoLavorazioni> {
@@ -50,19 +56,21 @@ export async function ottieniLavorazioniTipoDebito(
     if (!validaSchema(nomeSchema)) {
       return { success: false, lavorazioni: [], error: 'Nome schema non valido.' };
     }
-    await assicuraTabellaLavorazioniTipoDebito(nomeSchema);
+    await assicuraTabelleProdottiTl(nomeSchema);
     const r = await pool.query(
-      `SELECT id, categoria, lavorazione, destinatario, attivo, ordine
-       FROM "${nomeSchema}".lavorazioni_tipo_debito
-       ORDER BY ordine ASC, id ASC`
+      `SELECT t.id, c.categoria, t.tipologia AS lavorazione,
+              COALESCE(t.dipendenza, '') AS destinatario, c.attivo, c.ordine
+         FROM "${nomeSchema}".categoria_tl c
+         JOIN "${nomeSchema}".prodotti_tl t ON t.id = c.tl_id
+        ORDER BY c.categoria, c.ordine ASC, t.id ASC`
     );
     return {
       success: true,
       lavorazioni: r.rows.map((x) => ({
         id: Number(x.id),
         categoria: String(x.categoria),
-        lavorazione: String(x.lavorazione),
-        destinatario: String(x.destinatario),
+        lavorazione: String(x.tipologia ?? x.lavorazione ?? ''),
+        destinatario: String(x.destinatario ?? ''),
         attivo: x.attivo === true,
         ordine: Number(x.ordine ?? 0),
       })),
@@ -77,17 +85,8 @@ export async function ottieniLavorazioniTipoDebito(
   }
 }
 
-export interface InputLavorazioneTipoDebito {
-  id?: number | null;
-  categoria: string;
-  lavorazione: string;
-  destinatario: string;
-  attivo: boolean;
-}
-
 export interface RisultatoOperazioneLavorazione {
   success: boolean;
-  id?: number;
   error?: string;
 }
 
@@ -103,107 +102,70 @@ async function categoriaEsiste(nomeSchema: string, categoria: string): Promise<b
   return TIPI_DEBITO_ENTE.some((t) => t.valore === categoria);
 }
 
-export async function salvaLavorazioneTipoDebitoAction(
+/**
+ * Una categoria di debito lavora una TL del catalogo.
+ *
+ * Il collegamento non copia nulla: se domani l'ufficio cambia nome nella TL,
+ * cambia per tutte le categorie che la usano. Una categoria può avere più TL
+ * (due competenze distinte sulla stessa posizione), la stessa TL può servire
+ * più categorie.
+ */
+export async function collegaCategoriaTlAction(
   nomeSchema: string,
-  input: InputLavorazioneTipoDebito
+  categoria: string,
+  tlId: number
 ): Promise<RisultatoOperazioneLavorazione> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    // La configurazione è congelata: il rifiuto sta qui e non solo nella
-    // schermata, perché questa funzione è raggiungibile dal browser.
-    if (LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA) {
-      return { success: false, error: MESSAGGIO_LAVORAZIONI_SOLA_LETTURA };
-    }
+    const cod = String(categoria ?? '').trim();
+    if (!cod) return { success: false, error: 'Indica la categoria di debito.' };
+    if (!Number.isInteger(tlId) || tlId <= 0) return { success: false, error: 'TL non valida.' };
+    if (!(await categoriaEsiste(nomeSchema, cod)))
+      return { success: false, error: `Categoria di debito «${cod}» non riconosciuta.` };
 
-    const categoria = (input.categoria || '').trim();
-    const lavorazione = (input.lavorazione || '').trim();
-    const destinatario = (input.destinatario || '').trim();
+    await assicuraTabelleProdottiTl(nomeSchema);
+    const tl = await pool.query(`SELECT 1 FROM "${nomeSchema}".prodotti_tl WHERE id = $1`, [tlId]);
+    if ((tl.rowCount ?? 0) === 0) return { success: false, error: 'TL non trovata nel catalogo.' };
 
-    if (!categoria) return { success: false, error: 'Scegli la tipologia di debito.' };
-    if (!lavorazione) return { success: false, error: 'Indica la lavorazione da svolgere.' };
-    if (!destinatario)
-      return { success: false, error: 'Indica il collega a cui inviare la comunicazione.' };
-    if (lavorazione.length > 500) {
-      return { success: false, error: 'La lavorazione non può superare 500 caratteri.' };
-    }
-    if (destinatario.length > 160) {
-      return { success: false, error: 'Il destinatario non può superare 160 caratteri.' };
-    }
-
-    await assicuraTabellaLavorazioniTipoDebito(nomeSchema);
-    if (!(await categoriaEsiste(nomeSchema, categoria))) {
-      return { success: false, error: 'Tipologia di debito non riconosciuta.' };
-    }
-
-    const attivo = input.attivo !== false;
-    const id = input.id == null ? null : Number(input.id);
-    if (id !== null) {
-      if (!Number.isInteger(id) || id <= 0) {
-        return { success: false, error: 'Lavorazione non valida.' };
-      }
-      const r = await pool.query(
-        `UPDATE "${nomeSchema}".lavorazioni_tipo_debito
-         SET categoria = $2, lavorazione = $3, destinatario = $4, attivo = $5
-         WHERE id = $1
-         RETURNING id`,
-        [id, categoria, lavorazione, destinatario, attivo]
-      );
-      if ((r.rowCount ?? 0) === 0) return { success: false, error: 'Lavorazione non trovata.' };
-      return { success: true, id };
-    }
-
-    const ordine = await pool.query(
-      `SELECT COALESCE(MAX(ordine), 0) + 1 AS n FROM "${nomeSchema}".lavorazioni_tipo_debito`
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".categoria_tl (categoria, tl_id, attivo, ordine)
+       SELECT $1, $2, TRUE,
+              COALESCE(
+                (SELECT MAX(ordine) + 1 FROM "${nomeSchema}".categoria_tl WHERE categoria = $1),
+                0
+              )
+       ON CONFLICT (categoria, tl_id) DO NOTHING`,
+      [cod, tlId]
     );
-    const r = await pool.query(
-      `INSERT INTO "${nomeSchema}".lavorazioni_tipo_debito
-         (categoria, lavorazione, destinatario, attivo, ordine)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id`,
-      [categoria, lavorazione, destinatario, attivo, Number(ordine.rows[0]?.n ?? 1)]
-    );
-    return { success: true, id: Number(r.rows[0].id) };
+    return { success: true };
   } catch (error: any) {
-    if (error?.code === '23505') {
-      return {
-        success: false,
-        error: 'Esiste già una lavorazione con questo nome per la stessa tipologia di debito.',
-      };
-    }
-    console.error('[salvaLavorazioneTipoDebitoAction] Errore:', error);
-    return {
-      success: false,
-      error: `Impossibile salvare la lavorazione: ${error.message || error}`,
-    };
+    console.error('[collegaCategoriaTlAction] Errore:', error);
+    return { success: false, error: `Collegamento non riuscito: ${error.message || error}` };
   }
 }
 
-export async function eliminaLavorazioneTipoDebitoAction(
+/** La categoria smette di usare una TL. La TL resta nel catalogo. */
+export async function scollegaCategoriaTlAction(
   nomeSchema: string,
-  id: number
+  categoria: string,
+  tlId: number
 ): Promise<RisultatoOperazioneLavorazione> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    if (LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA) {
-      return { success: false, error: MESSAGGIO_LAVORAZIONI_SOLA_LETTURA };
-    }
-    if (!Number.isInteger(id) || id <= 0) {
-      return { success: false, error: 'Lavorazione non valida.' };
-    }
-    await assicuraTabellaLavorazioniTipoDebito(nomeSchema);
+    const cod = String(categoria ?? '').trim();
+    if (!cod) return { success: false, error: 'Indica la categoria di debito.' };
+    if (!Number.isInteger(tlId) || tlId <= 0) return { success: false, error: 'TL non valida.' };
+    await assicuraTabelleProdottiTl(nomeSchema);
     const r = await pool.query(
-      `DELETE FROM "${nomeSchema}".lavorazioni_tipo_debito WHERE id = $1 RETURNING id`,
-      [id]
+      `DELETE FROM "${nomeSchema}".categoria_tl WHERE categoria = $1 AND tl_id = $2`,
+      [cod, tlId]
     );
-    if ((r.rowCount ?? 0) === 0) return { success: false, error: 'Lavorazione non trovata.' };
-    return { success: true, id };
+    if ((r.rowCount ?? 0) === 0) return { success: false, error: 'Collegamento non trovato.' };
+    return { success: true };
   } catch (error: any) {
-    console.error('[eliminaLavorazioneTipoDebitoAction] Errore:', error);
-    return {
-      success: false,
-      error: `Impossibile eliminare la lavorazione: ${error.message || error}`,
-    };
+    console.error('[scollegaCategoriaTlAction] Errore:', error);
+    return { success: false, error: `Rimozione non riuscita: ${error.message || error}` };
   }
 }

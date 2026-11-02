@@ -9,11 +9,15 @@ import {
   type DirettriceStrutturata,
 } from '@/app/actions/screeningAzienda';
 import {
+  ottieniCatalogoTl,
   ottieniLavorazioniMateria,
   riallineaUfficioAllaDirettriceAction,
+  rinominaProdottoTlAction,
 } from '@/app/actions/materieLavorazione';
+import { TlDelProdotto } from '@/components/spazio/TlDelProdotto';
+import type { TlProdotto } from '@/lib/titoliEnte/prodottiTl';
 import { ottieniTitoliEnteAction } from '@/app/actions/titoliEnte';
-import { componiCatenaDirettrici } from '@/lib/titoliEnte/direttrici';
+import { componiCatenaDirettrici, nomiDirettrici } from '@/lib/titoliEnte/direttrici';
 import { conRitorno } from '@/lib/navigazione/ritorno';
 import type { LavorazioneMateria } from '@/lib/titoliEnte/lavorazioniMateria';
 import type { TitoloEnte } from '@/lib/titoliEnte/titoli';
@@ -37,6 +41,18 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
   const [direttrici, setDirettrici] = useState<DirettriceStrutturata[]>([]);
   const [lavorazioni, setLavorazioni] = useState<LavorazioneMateria[]>([]);
   const [titoli, setTitoli] = useState<TitoloEnte[]>([]);
+  /**
+   * Il nome nuovo scelto per un prodotto non configurato (0.158.0). La chiave
+   * è il nome vecchio: due direttrici possono avere un omonimo da rinominare
+   * in modo diverso.
+   */
+  const [rinomina, setRinomina] = useState<Record<string, string>>({});
+  const [rinominaInCorso, setRinominaInCorso] = useState<string | null>(null);
+  /**
+   * Il catalogo delle TL (0.157.0): si scrivono qui, dentro il prodotto a cui
+   * si applicano, e la materia le eredita al passo successivo.
+   */
+  const [catalogo, setCatalogo] = useState<TlProdotto[]>([]);
   const [nuovoProdotto, setNuovoProdotto] = useState<Record<number, string>>({});
   const [caricamento, setCaricamento] = useState(true);
   const [salvataggio, setSalvataggio] = useState(false);
@@ -51,26 +67,30 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
   useEffect(() => {
     (async () => {
       setCaricamento(true);
-      const [d, l, t] = await Promise.all([
+      const [d, l, t, c] = await Promise.all([
         ottieniDirettriciEnte(nomeSchema),
         ottieniLavorazioniMateria(nomeSchema),
         ottieniTitoliEnteAction(nomeSchema),
+        ottieniCatalogoTl(nomeSchema),
       ]);
       if (d.success) setDirettrici(d.direttrici);
       else setErrore(d.error || 'Impossibile caricare.');
       if (l.success) setLavorazioni(l.lavorazioni);
       if (t.success) setTitoli(t.titoli);
+      if (c.success) setCatalogo(c.tl);
       setCaricamento(false);
     })();
   }, [nomeSchema]);
 
   const ricaricaLavorazioniETitoli = async () => {
-    const [l, t] = await Promise.all([
+    const [l, t, c] = await Promise.all([
       ottieniLavorazioniMateria(nomeSchema),
       ottieniTitoliEnteAction(nomeSchema),
+      ottieniCatalogoTl(nomeSchema),
     ]);
     if (l.success) setLavorazioni(l.lavorazioni);
     if (t.success) setTitoli(t.titoli);
+    if (c.success) setCatalogo(c.tl);
   };
 
   // Un ufficio fuori elenco non è un errore da correggere a mano, riga per
@@ -101,6 +121,40 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
       await ricaricaLavorazioniETitoli();
     }
     setRiallineamentoInCorso(null);
+  };
+
+  // Un prodotto che il catalogo conosce e la direttrice no è quasi sempre un
+  // nome importato dalle vecchie TL: la copia non sapeva a quale prodotto
+  // appartenesse la lavorazione e ha usato il nome della lavorazione. Si
+  // rinomina in blocco su un prodotto configurato (o su uno nuovo scritto a
+  // mano) e il nome nuovo entra nei prodotti, così la catena resta intera.
+  const rinominaProdotto = async (indice: number, da: string) => {
+    const destinazione = (rinomina[da] || '').trim();
+    if (!destinazione) return;
+    const d = direttrici[indice];
+    setRinominaInCorso(da);
+    setErrore(null);
+    setSalvato(false);
+    const r = await rinominaProdottoTlAction(nomeSchema, d.nome, da, destinazione);
+    if (!r.success) setErrore(r.error || 'Rinomina non riuscita.');
+    else {
+      const gia = d.prodotti.some((p) => p.trim().toLowerCase() === destinazione.toLowerCase());
+      if (!gia) {
+        const nuove = [...direttrici];
+        nuove[indice] = { ...d, prodotti: [...d.prodotti, destinazione] };
+        setDirettrici(nuove);
+        const s = await aggiornaDirettriciEnteAction(nomeSchema, nuove);
+        if (!s.success)
+          setErrore(s.error || 'Prodotto rinominato, ma la direttrice non è stata salvata.');
+      }
+      setRinomina((prev) => {
+        const copia = { ...prev };
+        delete copia[da];
+        return copia;
+      });
+      await ricaricaLavorazioniETitoli();
+    }
+    setRinominaInCorso(null);
   };
 
   const handleSalva = async () => {
@@ -162,6 +216,18 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
         prodotti o le procedure concreti (es. Cassa Integrazione, DURC, DICA): l&apos;AI genera
         domande ancorate a questi, non alla direttrice in astratto — è quello che tiene le domande
         pertinenti invece di generiche.
+      </p>
+      <p className="text-[11px] text-slate-500">
+        Sotto ogni prodotto si scrivono le <strong>TL</strong>: le lavorazioni con cui l&apos;ente
+        tratta quel fatto concreto — ufficio, passi, esito e contrassegno di perimetro. Si scrivono
+        qui, una volta sola; la{' '}
+        <Link
+          href={conRitorno(`/spazio/${codice}/parametri/materie-lavorazione`, ritorno)}
+          className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
+        >
+          materia le eredita <ArrowRight className="w-3 h-3" />
+        </Link>{' '}
+        associandole ai propri codici.
       </p>
       <p className="text-[11px] text-slate-500">
         Il nome di ogni direttrice è anche il <strong>nome dell&apos;ufficio</strong>: le{' '}
@@ -397,6 +463,103 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
                 all&apos;AI per generare domande ancorate a qualcosa di concreto.
               </p>
             )}
+
+            {/* LE TL DEL PRODOTTO (0.157.0). Stanno sotto il fatto a cui si
+                applicano: il prodotto è la chiave, e la materia le eredita al
+                passo 2 senza riscriverle. */}
+            {d.prodotti.map((prodotto) => (
+              <TlDelProdotto
+                key={prodotto}
+                nomeSchema={nomeSchema}
+                direttrice={d.nome}
+                prodotto={prodotto}
+                voci={catalogo.filter(
+                  (t) =>
+                    t.direttrice.trim().toLowerCase() === d.nome.trim().toLowerCase() &&
+                    t.prodotto.trim().toLowerCase() === prodotto.trim().toLowerCase()
+                )}
+                uffici={nomiDirettrici(direttrici)}
+                onCambia={ricaricaLavorazioniETitoli}
+              />
+            ))}
+
+            {/* PRODOTTI NON CONFIGURATI (0.158.0). Le TL importate portano il
+                nome della lavorazione come prodotto: il catalogo li conosce, la
+                direttrice no. Il comando li riporta su un prodotto configurato
+                in blocco, senza toccare le TL una per una. */}
+            {(() => {
+              const configurati = d.prodotti.map((p) => p.trim().toLowerCase());
+              const orfani = Array.from(
+                new Set(
+                  catalogo
+                    .filter(
+                      (t) =>
+                        t.direttrice.trim().toLowerCase() === d.nome.trim().toLowerCase() &&
+                        !configurati.includes(t.prodotto.trim().toLowerCase())
+                    )
+                    .map((t) => t.prodotto.trim())
+                )
+              ).filter(Boolean);
+              if (orfani.length === 0) return null;
+              return (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900">
+                    Prodotti del catalogo non configurati
+                  </p>
+                  <p className="text-[10px] text-amber-900 leading-relaxed">
+                    Nomi arrivati dalle vecchie lavorazioni: il prodotto non è fra quelli di questa
+                    direttrice, quindi le sue TL restano fuori sequenza. Rinominalo su un prodotto
+                    configurato — vale per tutte le sue TL in una volta.
+                  </p>
+                  {orfani.map((prodotto) => {
+                    const quante = catalogo.filter(
+                      (t) =>
+                        t.direttrice.trim().toLowerCase() === d.nome.trim().toLowerCase() &&
+                        t.prodotto.trim().toLowerCase() === prodotto.toLowerCase()
+                    ).length;
+                    return (
+                      <div key={prodotto} className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] font-bold text-slate-800">
+                          {prodotto}
+                          <span className="font-normal text-slate-500">
+                            {` · ${quante === 1 ? 'una TL' : `${quante} TL`}`}
+                          </span>
+                        </span>
+                        <input
+                          type="text"
+                          list={`prodotti-direttrice-${indice}`}
+                          value={rinomina[prodotto] ?? ''}
+                          onChange={(e) => setRinomina({ ...rinomina, [prodotto]: e.target.value })}
+                          placeholder="Nome nuovo"
+                          className="flex-1 min-w-[10rem] p-1.5 text-[11px] border border-amber-300 rounded-lg text-slate-900 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void rinominaProdotto(indice, prodotto)}
+                          disabled={
+                            rinominaInCorso === prodotto || !(rinomina[prodotto] || '').trim()
+                          }
+                          className="px-2 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white text-[10px] font-bold uppercase rounded-lg"
+                        >
+                          {rinominaInCorso === prodotto ? 'Rinomino...' : 'Rinomina'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <datalist id={`prodotti-direttrice-${indice}`}>
+                    {d.prodotti.map((p) => (
+                      <option key={p} value={p} />
+                    ))}
+                  </datalist>
+                  {d.prodotti.length === 0 && (
+                    <p className="text-[10px] text-amber-900">
+                      Questa direttrice non ha ancora prodotti configurati: scrivi il nome nuovo e
+                      verrà aggiunto.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         ))}
 
