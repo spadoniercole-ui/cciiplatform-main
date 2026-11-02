@@ -4,6 +4,7 @@ import { deveRinominareInLegacy } from '@/lib/migrazioni/debitiEnteLegacy';
 import { sqlVincoloCheckIdempotente } from '@/lib/migrazioni/vincoloCheck';
 import { sqlChiaveEsternaIdempotente } from '@/lib/migrazioni/chiaveEsterna';
 import { eCorsaDdlBenigna } from '@/lib/migrazioni/corsaDdl';
+import { dimenticaCatalogoTlGarantito } from '@/lib/migrazioni/catalogoTlDb';
 import { getTabelleTenant } from './schema';
 
 // Ogni istruzione DDL è una query separata, non un unico blocco
@@ -45,6 +46,7 @@ function segnaGarantita(nomeSchema: string, tabella: string): void {
  * spazio). Senza `nomeSchema` si dimentica tutto.
  */
 export function dimenticaTabelleGarantite(nomeSchema?: string): void {
+  dimenticaCatalogoTlGarantito(nomeSchema);
   if (!nomeSchema) {
     tabelleGarantite.clear();
     return;
@@ -2158,36 +2160,15 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
 }
 
 /**
- * LAVORAZIONI per tipologia di debito — configurazione di spazio.
+ * LA CONFIGURAZIONE STORICA DELLE LAVORAZIONI NON SI CREA PIÙ (0.156.0).
  *
- * Per ogni categoria di debito (le stesse `categorie_tipo_debito` con cui si
- * classificano le posizioni) dice che cosa va fatto e a chi va chiesto. Non è
- * una tabella di dati dell'azienda: è il ponte fra il file V.E.R.A. e le
- * comunicazioni che l'operatore deve inviare ai colleghi.
- *
- * Idempotente. L'indice univoco evita che lo stesso binomio categoria +
- * lavorazione venga configurato due volte (e quindi che la stessa posizione
- * produca due richieste identiche).
+ * Il DDL che la creava è stato tolto: la configurazione vive nel catalogo
+ * delle TL (`lib/migrazioni/catalogoTlDb.ts`), e una tabella che nessuno scrive
+ * più non va fatta nascere negli spazi nuovi. Gli spazi già attivi ce l'hanno
+ * ancora, con le righe che il triage ha usato fino a oggi: la legge la sola
+ * migrazione, che le copia e le segna. Il ritiro è descritto in
+ * `docs/RITIRO-LAVORAZIONI-TIPO-DEBITO.md`.
  */
-export async function assicuraTabellaLavorazioniTipoDebito(nomeSchema: string): Promise<void> {
-  if (giaGarantita(nomeSchema, 'lavorazioni_tipo_debito')) return;
-  const s = sql.identifier(nomeSchema);
-  await eseguiDdlTenant(
-    sql`CREATE TABLE IF NOT EXISTS ${s}.lavorazioni_tipo_debito (
-      id SERIAL PRIMARY KEY,
-      categoria TEXT NOT NULL,
-      lavorazione TEXT NOT NULL,
-      destinatario TEXT NOT NULL,
-      attivo BOOLEAN NOT NULL DEFAULT TRUE,
-      ordine INTEGER NOT NULL DEFAULT 0
-    )`
-  );
-  await eseguiDdlTenant(
-    sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_lavorazioni_tipo_debito_unica
-        ON ${s}.lavorazioni_tipo_debito (categoria, lavorazione)`
-  );
-  segnaGarantita(nomeSchema, 'lavorazioni_tipo_debito');
-}
 
 /**
  * Lavorazioni della materia: la dipendenza (l'ufficio che lavora) e la procedura

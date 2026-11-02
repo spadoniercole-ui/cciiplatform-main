@@ -80,12 +80,15 @@ async function grafieDegliUffici(nomeSchema: string, escludiId: number | null): 
       [],
       'dipendenza'
     )),
+    // 0.156.0: la grafia degli uffici si legge dal catalogo delle TL, dove la
+    // configurazione storica è stata migrata. La tabella vecchia non si legge
+    // più — la legge solo la migrazione, che la sta ritirando.
     ...(await leggi(
-      `SELECT DISTINCT destinatario FROM "${nomeSchema}".lavorazioni_tipo_debito
-        WHERE btrim(destinatario) <> ''
-        ORDER BY destinatario`,
+      `SELECT DISTINCT direttrice FROM "${nomeSchema}".catalogo_tl
+        WHERE btrim(direttrice) <> ''
+        ORDER BY direttrice`,
       [],
-      'destinatario'
+      'direttrice'
     )),
   ];
 }

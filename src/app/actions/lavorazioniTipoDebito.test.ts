@@ -37,7 +37,6 @@ vi.mock('@/lib/autorizzazione', () => ({ richiediAccessoSchema }));
 // toccare le tabelle, e comunque nessuna tabella vera deve essere creata.
 vi.mock('@/db/provision', () => ({
   assicuraTabellaCategorieTipoDebito: async () => {},
-  assicuraTabellaLavorazioniTipoDebito: async () => {},
 }));
 
 const { salvaLavorazioneTipoDebitoAction, eliminaLavorazioneTipoDebitoAction } =

@@ -6,12 +6,13 @@
 // legacy (CLE/CEN/CEC/CEA) non stanno qui e restano validi per i dati vecchi.
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Save, Eye, EyeOff, Scale } from 'lucide-react';
+import { Plus, Save, Eye, EyeOff, Scale, Trash2 } from 'lucide-react';
 import { LAVORAZIONI_TIPO_DEBITO_SOLA_LETTURA } from '@/lib/lavorazioni/solaLettura';
 import {
   ottieniCategorieTipoDebito,
   creaCategoriaTipoDebitoAction,
   aggiornaCategoriaTipoDebitoAction,
+  eliminaCategoriaTipoDebitoAction,
   impostaAttivoCategoriaTipoDebitoAction,
   impostaContribuisceCategoriaTipoDebitoAction,
   type CategoriaTipoDebito,
@@ -94,6 +95,27 @@ export function CategorieTipoDebitoManager({ nomeSchema }: Props) {
     setInCorso(true);
     const r = await impostaAttivoCategoriaTipoDebitoAction(nomeSchema, c.codice, !c.attivo);
     if (!r.success) setErrore(r.error || 'Impossibile aggiornare.');
+    else await carica();
+    setInCorso(false);
+  };
+
+  /**
+   * Cancellare una categoria non è solo togliere una scelta dal tracciato: le
+   * TL del catalogo la nominano per codice, e resterebbero lì a indicare un
+   * ufficio per un debito che non esiste più. Il comando le toglie insieme
+   * alla categoria, e la conferma lo dice prima di farlo.
+   */
+  const handleElimina = async (c: CategoriaTipoDebito) => {
+    if (
+      !window.confirm(
+        `Eliminare la categoria «${c.etichetta}»? Verranno rimossi anche i suoi collegamenti nel catalogo delle TL, con le lavorazioni e gli uffici configurati per questa tipologia di debito.`
+      )
+    )
+      return;
+    setInCorso(true);
+    setErrore(null);
+    const r = await eliminaCategoriaTipoDebitoAction(nomeSchema, c.codice);
+    if (!r.success) setErrore(r.error || 'Impossibile eliminare la categoria.');
     else await carica();
     setInCorso(false);
   };
@@ -216,6 +238,15 @@ export function CategorieTipoDebitoManager({ nomeSchema }: Props) {
                 className="p-1.5 text-slate-400 hover:text-slate-700"
               >
                 {c.attivo ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleElimina(c)}
+                disabled={inCorso}
+                title="Elimina la categoria e i suoi collegamenti nel catalogo delle TL"
+                className="p-1.5 text-slate-400 hover:text-red-700"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

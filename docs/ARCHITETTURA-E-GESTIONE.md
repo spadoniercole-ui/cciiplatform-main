@@ -172,8 +172,9 @@ Drizzle è marginale.
    scelta si registra sulla riga denunce (`debiti_vera.duplicato_stato`) insieme alla posizione —
    la rileggono l'esposizione, i documenti e il fascicolo di evidenza, e la verifica riaperta
    rifà i conti con la decisione già presa.
-   Dalle sue righe, con la tabella `lavorazioni_tipo_debito`
-   (Parametri › Lavorazioni), il triage prepara una comunicazione per collega — solo testo
+   Dalle sue righe, con il **catalogo delle TL** (`catalogo_tl`, che la migrazione riempie
+   dalla vecchia tabella delle lavorazioni per tipologia di debito; Parametri › Lavorazioni),
+   il triage prepara una comunicazione per collega — solo testo
    da copiare e inviare personalmente, mai un invio automatico — e, con la stessa
    configurazione, **un PDF per reparto** («Comunica ai reparti»): elenca i debiti da
    lavorare e le attività di contabilizzazione, si scarica e l'invio resta a cura
@@ -490,7 +491,7 @@ la descrive.
 - bilanci: `xbrl_tab_azienda`, `xbrl_storico_azienda`, `indici_azienda`,
   `posizione_aggiornata`, `analisi_bilancio_step`;
 - debiti: `debiti_ente`, `debiti_ente_tracciati`, `debiti_ente_architrave`,
-  `tipo_debito_config`, `categorie_tipo_debito`, `lavorazioni_tipo_debito`, `debiti_triage`,
+  `tipo_debito_config`, `categorie_tipo_debito`, `catalogo_tl`, `debiti_triage`,
   `debiti_vera`, `vera_titoli`, `vera_trattamenti`, `consegne_reparti`,
   `strutture_prospetto`, `prospetti_triage`, `tracciati_bilancino`;
 - scenario: `scenari`, `proposta_creditori`, `simulazione_ricevente`,

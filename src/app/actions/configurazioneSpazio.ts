@@ -11,7 +11,6 @@ import {
   assicuraTabellaCategorieTipoDebito,
   assicuraTabellaChecklistModelli,
   assicuraTabellaDebitiEnte,
-  assicuraTabellaLavorazioniTipoDebito,
   assicuraTabellaTipoDebitoConfig,
   assicuraTabellaTracciatiDebitiEnte,
   assicuraTabelleAnagraficaEnte,
@@ -19,6 +18,7 @@ import {
   assicuraTabelleVera,
 } from '@/db/provision';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { assicuraCatalogoTl } from '@/lib/migrazioni/catalogoTlDb';
 import { APP_VERSION } from '@/lib/appVersion';
 import {
   esportaConfigurazione,
@@ -37,7 +37,12 @@ async function assicuraTutte(nomeSchema: string) {
   await assicuraTabellaTipoDebitoConfig(nomeSchema);
   await assicuraTabelleAnagraficaEnte(nomeSchema);
   await assicuraTabellaCategorieTipoDebito(nomeSchema);
-  await assicuraTabellaLavorazioniTipoDebito(nomeSchema);
+  // 0.156.0: il catalogo delle TL al posto della tabella storica delle
+  // lavorazioni per tipologia di debito, che non si esporta più.
+  await assicuraCatalogoTl(
+    async (sql, params) => (await pool.query(sql, params)).rows as Record<string, unknown>[],
+    nomeSchema
+  );
   await assicuraTabellaDebitiEnte(nomeSchema);
   await assicuraTabellaTracciatiDebitiEnte(nomeSchema);
   await assicuraTabelleVera(nomeSchema);
