@@ -2,7 +2,7 @@
 
 // LA MATERIA DI UNA VOCE SI CAMBIA QUI, DAL REPORT CHE LA MOSTRA SBAGLIATA.
 //
-// La deduzione automatica legge la voce del V.E.R.A. («Verbale Evasione», «F24
+// La deduzione automatica legge la voce della certificazione dei debiti («Verbale Evasione», «F24
 // non presentato», un codice di partita) e ne ricava la materia; la mappatura
 // di sezione resta il ripiego per ciò che la voce non dice. Quando la lettura
 // sbaglia, però, non c'è nessun posto dove correggerla: la mappatura della

@@ -1,8 +1,8 @@
 // src/lib/lavorazioni/comunicazioni.ts
 //
-// DAL V.E.R.A. ALLA COMUNICAZIONE AL COLLEGA.
+// DALLA certificazione dei debiti ALLA COMUNICAZIONE AL COLLEGA.
 //
-// Il file V.E.R.A. dice quali posizioni esistono, di che natura sono, in che
+// Il file della certificazione dei debiti dice quali posizioni esistono, di che natura sono, in che
 // stato e per quale periodo. La tabella «Lavorazioni» dice, per ogni
 // tipologia di debito, che cosa va fatto e a chi va chiesto. Questo modulo
 // unisce le due cose e produce un testo pronto da inviare.
@@ -40,7 +40,7 @@
 // indistinguibile da una riga persa.
 //
 // CIÒ CHE È GIÀ IN CONTABILITÀ NON SI CHIEDE. Il testo che parte è una
-// richiesta di lavorare delle partite, non un estratto del V.E.R.A.: le
+// richiesta di lavorare delle partite, non un estratto della certificazione dei debiti: le
 // posizioni già contabilizzate non si elencano (e le TS 25/27/81 si dichiarano
 // a parte, perché lì resta solo la decisione sull'invio ad AdR). La regola sta
 // in `daLavorare.ts`, perché la usano anche i documenti per reparto e per
@@ -103,9 +103,9 @@ export interface PosizioniEscluse {
 
 export interface EsitoComunicazioniVera {
   comunicazioni: ComunicazioneStandard[];
-  /** Tipologie presenti nel V.E.R.A. per cui nessuna lavorazione è configurata. */
+  /** Tipologie presenti nella certificazione dei debiti per cui nessuna lavorazione è configurata. */
   categorieSenzaLavorazione: CategoriaSenzaLavorazione[];
-  /** Posizioni V.E.R.A. senza categoria: sezioni non mappate. Restano fuori. */
+  /** Posizioni della certificazione dei debiti senza categoria: sezioni non mappate. Restano fuori. */
   righeSenzaCategoria: number;
   /** Posizioni fuori perimetro (trattamento `ignora`): dichiarate, non elencate. */
   posizioniEscluse: PosizioniEscluse;
@@ -125,7 +125,7 @@ export interface EsitoComunicazioniVera {
 }
 
 // Un formatter solo per tutti gli importi. `toLocaleString` ne costruisce uno
-// nuovo a ogni chiamata: su un V.E.R.A. grande la differenza è di un ordine di
+// nuovo a ogni chiamata: su una certificazione dei debiti grande la differenza è di un ordine di
 // grandezza, e questa funzione gira una volta per posizione in ogni
 // comunicazione e di nuovo nel PDF. Il formato è lo stesso.
 const FORMATTER_EURO = new Intl.NumberFormat('it-IT', {
@@ -192,7 +192,7 @@ export interface InputRaggruppamento {
 }
 
 /**
- * Righe del V.E.R.A. raggruppate per DESTINATARIO (il reparto o il collega che
+ * Righe della certificazione dei debiti raggruppate per DESTINATARIO (il reparto o il collega che
  * deve lavorare il debito).
  *
  * Le regole, in un posto solo: la lavorazione spenta, la categoria vuota e la
@@ -354,7 +354,7 @@ export function componiComunicazioniVera(
         )}: non si contabilizzano finché la sospensione è in essere e non entrano nel totale. Non richiedono un intervento ora; sono dichiarate perché il loro importo va ritrovato quando la sospensione cade.`
       : null;
   // Ciò che è già in contabilità non si chiede a nessuno: si dichiara, perché
-  // il totale del documento non è il totale del V.E.R.A. e chi confronta i due
+  // il totale del documento non è il totale della certificazione dei debiti e chi confronta i due
   // numeri deve trovare la spiegazione lì, non doverla dedurre.
   const notaContabilizzate = testiContabilizzate(resto, formattaImportoEuro).collegiale;
   const comunicazioni: ComunicazioneStandard[] = gruppiOrdinati.map((g) => {
@@ -370,7 +370,9 @@ export function componiComunicazioniVera(
     const elencoRighe = righe
       .map((r) => {
         const periodo = r.periodo ? ` (periodo ${r.periodo})` : '';
-        const stato = r.stato.trim() ? `; stato V.E.R.A.: ${r.stato.trim()}` : '';
+        const stato = r.stato.trim()
+          ? `; stato della certificazione dei debiti: ${r.stato.trim()}`
+          : '';
         return `- ${r.sezione} — ${r.voce}${periodo}: ${formattaImportoEuro(r.importo)}; ${
           ETICHETTE_TRATTAMENTO[r.trattamento] ?? r.trattamento
         }${stato}`;

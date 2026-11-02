@@ -2,7 +2,7 @@
 //
 // Riscontri normativi DETERMINISTICI a valle dello screening: individua gli
 // articoli e le soglie «movimentati» dall'analisi partendo ESCLUSIVAMENTE dai
-// numeri reali (bilancio XBRL, posizione ente, VERA). Nessuna inferenza
+// numeri reali (bilancio XBRL, posizione ente, certificazione dei debiti). Nessuna inferenza
 // dell'AI: solo aritmetica sulle soglie di legge, cosi il risultato e
 // verificabile e inattaccabile.
 //
@@ -93,7 +93,7 @@ export interface InputRiscontri {
   dimensioniPerAnno?: { anno: number | null; totaleAttivo: number; ricavi: number }[];
   /** Esposizione totale verso l'ente (posizione debitoria di dettaglio), saldo. */
   esposizioneEnte?: number | null;
-  /** Esposizione totale VERA (contabilizzato + da contabilizzare). */
+  /** Esposizione totale della certificazione dei debiti (contabilizzato + da contabilizzare). */
   esposizioneVera?: number | null;
 }
 
@@ -198,7 +198,7 @@ export function calcolaRiscontri(input: InputRiscontri): Riscontri {
   // --- Art. 25-novies: NON si valuta qui (0.109.84) -----------------------
   // Fino alla 0.109.83 questa funzione confrontava con le soglie dell'art.
   // 25-novies i debiti previdenziali e tributari del BILANCIO e l'esposizione
-  // V.E.R.A. Era un secondo motore, rimasto fuori dalla riscrittura delle
+  // certificazione dei debiti Era un secondo motore, rimasto fuori dalla riscrittura delle
   // soglie (0.109.78-79), e violava due principi fissati da Ercole: l'XBRL
   // serve solo al quadro generale, mai alle soglie (la voce D.13 somma INPS e
   // INAIL); un credito passato a ruolo esce dalla lettera a). L'unico motore

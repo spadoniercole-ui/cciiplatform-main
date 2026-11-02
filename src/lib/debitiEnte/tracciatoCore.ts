@@ -250,7 +250,7 @@ export interface SezioneConTitolo extends SezioneEstratta {
 }
 
 /**
- * Estrae TUTTE le sezioni-dati di un foglio (per il file VERA): ogni sezione è
+ * Estrae TUTTE le sezioni-dati di un foglio (per il file della certificazione dei debiti): ogni sezione è
  * un blocco «titolo → header → righe fino al salto». Salta il rumore (righe
  * "SEZIONE F24", "Non riscontrate irregolarità", "Totale gestione:") che non è
  * seguito da un header vero. Ogni sezione porta il suo titolo, con cui poi si

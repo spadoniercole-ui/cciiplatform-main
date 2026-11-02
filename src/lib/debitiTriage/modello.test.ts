@@ -198,27 +198,27 @@ describe('sovrapposizioni fra documenti', () => {
   });
 });
 
-describe('V.E.R.A. insieme agli elenchi dell’Istituto', () => {
+describe('certificazione dei debiti insieme agli elenchi dell’Istituto', () => {
   // Fino alla 0.109.76 non era segnalato: gli elenchi finivano nel non
-  // versato, letto prima del V.E.R.A., e il V.E.R.A. spariva in silenzio.
-  it('V.E.R.A. + inadempienze: si chiede di scegliere', async () => {
+  // versato, letto prima della certificazione dei debiti, e la certificazione dei debiti spariva in silenzio.
+  it('certificazione dei debiti + inadempienze: si chiede di scegliere', async () => {
     const { trovaSovrapposizioni } = await import('./modello');
     const s = trovaSovrapposizioni([], [], ['VERA', 'INADEMPIENZE']);
     expect(s.some((x) => x.chiave === 'vera:elenchi')).toBe(true);
   });
 
-  it('V.E.R.A. + ruoli: si chiede di scegliere', async () => {
+  it('certificazione dei debiti + ruoli: si chiede di scegliere', async () => {
     const { trovaSovrapposizioni } = await import('./modello');
     const s = trovaSovrapposizioni([], [], ['VERA', 'RUOLI']);
     expect(s.some((x) => x.chiave === 'vera:elenchi')).toBe(true);
   });
 
-  it('il solo V.E.R.A. non richiede scelte', async () => {
+  it('la sola certificazione dei debiti non richiede scelte', async () => {
     const { trovaSovrapposizioni } = await import('./modello');
     expect(trovaSovrapposizioni([], [], ['VERA'])).toHaveLength(0);
   });
 
-  it('inadempienze + ruoli senza V.E.R.A.: si riconciliano da soli, nessuna scelta', async () => {
+  it('inadempienze + ruoli senza la certificazione dei debiti: si riconciliano da soli, nessuna scelta', async () => {
     const { trovaSovrapposizioni } = await import('./modello');
     const s = trovaSovrapposizioni([], [], ['INADEMPIENZE', 'RUOLI']);
     expect(s.some((x) => x.chiave === 'vera:elenchi')).toBe(false);

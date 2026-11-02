@@ -1,20 +1,20 @@
 'use server';
 
-// IL CATALOGO DELLE TL, LE ASSOCIAZIONI DELLE MATERIE, IL RIALLINEAMENTO (0.159.0).
+// IL CATALOGO DELLE TS, LE ASSOCIAZIONI DELLE MATERIE, IL RIALLINEAMENTO (0.159.0).
 //
 // Lo schema è semplice, e in tre passi:
 //
-//   1. `tl` — il catalogo: codice, descrizione, flag per la check list. Una TL
+//   1. `tl` — il catalogo: codice, descrizione, flag per la check list. Una TS
 //      esiste una volta sola, non una volta per prodotto.
 //   2. `materia_tl` — la materia mutua la coppia direttrice/prodotto e porta il
-//      processo (ufficio, passi, esito). È qui che la TL diventa una lavorazione
+//      processo (ufficio, passi, esito). È qui che la TS diventa una lavorazione
 //      concreta, ed è da qui che nascono il report per unità operativa e le
 //      comunicazioni.
-//   3. `titoli_ente` — il codice di partita mette insieme TL, direttrice e
+//   3. `titoli_ente` — il codice di partita mette insieme TS, direttrice e
 //      prodotto: è la vestizione legale, cioè il presupposto su cui l'ente fonda
 //      la richiesta.
 //
-// Prima la TL stava dentro il prodotto (`prodotti_tl`): la stessa TL era
+// Prima la TS stava dentro il prodotto (`prodotti_tl`): la stessa TS era
 // scritta tante volte quanti erano i prodotti che la usavano, e ogni copia
 // portava il suo ufficio. La migrazione in `src/db/provision.ts` porta i dati
 // nel nuovo schema; `prodotti_tl` resta come storico e non viene più letta.
@@ -149,7 +149,7 @@ function daRigaLavorazione(r: Record<string, unknown>): LavorazioneMateria {
 }
 
 /**
- * Le TL che una materia applica, nella forma che tutte le letture conoscono.
+ * Le TS che una materia applica, nella forma che tutte le letture conoscono.
  *
  * L'ordine è quello della materia (poi quello del catalogo): è la sequenza in
  * cui l'ufficio le esegue, e la prima è quella che il titolo del codice
@@ -182,7 +182,7 @@ export async function ottieniLavorazioniMateria(
   }
 }
 
-/** Il catalogo completo, con quante materie usano ogni TL. */
+/** Il catalogo completo, con quante materie usano ogni TS. */
 export async function ottieniCatalogoTl(
   nomeSchema: string
 ): Promise<{ success: boolean; tl: Tl[]; error?: string }> {
@@ -203,12 +203,12 @@ export async function ottieniCatalogoTl(
     return {
       success: false,
       tl: [],
-      error: `Impossibile leggere il catalogo delle TL: ${(error as Error).message || error}`,
+      error: `Impossibile leggere il catalogo delle TS: ${(error as Error).message || error}`,
     };
   }
 }
 
-/** Crea o aggiorna una TL del catalogo. */
+/** Crea o aggiorna una TS del catalogo. */
 export async function salvaTlAction(
   nomeSchema: string,
   input: InputTl
@@ -221,7 +221,7 @@ export async function salvaTlAction(
     const dato = normalizzaTl(input);
     await assicuraTabelleTl(nomeSchema);
 
-    // Lo stesso codice non può esistere due volte: è l'identità della TL nei
+    // Lo stesso codice non può esistere due volte: è l'identità della TS nei
     // documenti, e due righe con lo stesso codice sarebbero due lavorazioni
     // diverse chiamate allo stesso modo.
     const doppia = await pool.query(
@@ -232,12 +232,12 @@ export async function salvaTlAction(
     if ((doppia.rowCount ?? 0) > 0)
       return {
         success: false,
-        error: `Esiste già una TL con il codice «${dato.codice}».`,
+        error: `Esiste già una TS con il codice «${dato.codice}».`,
       };
 
     if (dato.id != null) {
       if (!Number.isInteger(dato.id) || dato.id <= 0)
-        return { success: false, error: 'TL non valida.' };
+        return { success: false, error: 'TS non valida.' };
       const r = await pool.query(
         `UPDATE "${nomeSchema}".tl
             SET codice = $2, descrizione = $3, check_list = $4,
@@ -246,7 +246,7 @@ export async function salvaTlAction(
           RETURNING id`,
         [dato.id, dato.codice, dato.descrizione, dato.checkList === true, dato.versoCheckList]
       );
-      if ((r.rowCount ?? 0) === 0) return { success: false, error: 'TL non trovata.' };
+      if ((r.rowCount ?? 0) === 0) return { success: false, error: 'TS non trovata.' };
       return { success: true, id: dato.id };
     }
 
@@ -277,11 +277,11 @@ export async function salvaTlAction(
 }
 
 /**
- * Toglie una TL dal catalogo, con le associazioni alle materie e i collegamenti
+ * Toglie una TS dal catalogo, con le associazioni alle materie e i collegamenti
  * alle categorie di debito.
  *
  * Le risposte della check di perimetro restano dove sono: una risposta orfana
- * non blocca nulla — il triage legge solo le TL esistenti.
+ * non blocca nulla — il triage legge solo le TS esistenti.
  */
 export async function eliminaTlAction(
   nomeSchema: string,
@@ -290,7 +290,7 @@ export async function eliminaTlAction(
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    if (!Number.isInteger(id) || id <= 0) return { success: false, error: 'TL non valida.' };
+    if (!Number.isInteger(id) || id <= 0) return { success: false, error: 'TS non valida.' };
     await assicuraTabelleTl(nomeSchema);
 
     const client = await pool.connect();
@@ -303,7 +303,7 @@ export async function eliminaTlAction(
       ]);
       if ((r.rowCount ?? 0) === 0) {
         await client.query('ROLLBACK');
-        return { success: false, error: 'TL non trovata.' };
+        return { success: false, error: 'TS non trovata.' };
       }
       await client.query('COMMIT');
     } catch (errore) {
@@ -323,8 +323,8 @@ export async function eliminaTlAction(
 }
 
 /**
- * La materia applica una TL a una direttrice e a un prodotto, con il processo
- * dell'ufficio. Crea l'associazione o la aggiorna: la coppia (materia, TL) è
+ * La materia applica una TS a una direttrice e a un prodotto, con il processo
+ * dell'ufficio. Crea l'associazione o la aggiorna: la coppia (materia, TS) è
  * la chiave.
  *
  * Il nome dell'ufficio viene ricondotto alla grafia configurata: due nomi per
@@ -348,7 +348,7 @@ export async function salvaAssociazioneTlAction(
     if ((materia.rowCount ?? 0) === 0)
       return { success: false, error: 'Materia non riconosciuta.' };
     const tl = await pool.query(`SELECT 1 FROM "${nomeSchema}".tl WHERE id = $1`, [dato.tlId]);
-    if ((tl.rowCount ?? 0) === 0) return { success: false, error: 'TL non riconosciuta.' };
+    if ((tl.rowCount ?? 0) === 0) return { success: false, error: 'TS non riconosciuta.' };
 
     const dipendenza = await ufficioCanonico(nomeSchema, dato.dipendenza, null);
 
@@ -404,7 +404,7 @@ export async function salvaAssociazioneTlAction(
   }
 }
 
-/** La materia smette di applicare una TL. La TL resta nel catalogo. */
+/** La materia smette di applicare una TS. La TS resta nel catalogo. */
 export async function scollegaTlMateriaAction(
   nomeSchema: string,
   materiaId: number,
@@ -414,7 +414,7 @@ export async function scollegaTlMateriaAction(
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!Number.isInteger(materiaId) || materiaId <= 0 || !Number.isInteger(tlId) || tlId <= 0)
-      return { success: false, error: 'Materia o TL non valida.' };
+      return { success: false, error: 'Materia o TS non valida.' };
     await assicuraTabelleTl(nomeSchema);
     await pool.query(
       `DELETE FROM "${nomeSchema}".materia_tl WHERE materia_id = $1 AND tl_id = $2`,

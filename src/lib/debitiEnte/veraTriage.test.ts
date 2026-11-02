@@ -24,7 +24,7 @@ const sezioni = [
   },
 ];
 
-describe('import V.E.R.A. in modalità triage', () => {
+describe('import della certificazione dei debiti in modalità triage', () => {
   it('senza mappature il comportamento normale scarta TUTTO', () => {
     const { righe } = estraiRigheVera(sezioni as never, {}, {});
     expect(righe).toHaveLength(0);
@@ -86,7 +86,7 @@ describe('import V.E.R.A. in modalità triage', () => {
   });
 });
 
-describe('V.E.R.A.: versamenti e cartelle sospese', () => {
+describe('certificazione dei debiti: versamenti e cartelle sospese', () => {
   it('la Sezione F24 (versamenti) non è una sezione di debito', () => {
     expect(
       eSezioneVersamenti(['Posizione', 'Tipo Versamento', 'Data Versamento', 'Importo a Debito'])
@@ -110,7 +110,7 @@ describe('V.E.R.A.: versamenti e cartelle sospese', () => {
   });
 });
 
-describe('V.E.R.A.: ambito della sezione e destinazione degli importi', () => {
+describe('certificazione dei debiti: ambito della sezione e destinazione degli importi', () => {
   it('riconosce le cartelle dell’Agente dalle intestazioni, non solo dal titolo', () => {
     expect(
       eSezioneAgenteRiscossione('SEZIONE SENZA NOME', ['Gestione', 'Estremi cartella / Avviso'])
@@ -160,7 +160,7 @@ describe('V.E.R.A.: ambito della sezione e destinazione degli importi', () => {
   });
 });
 
-describe('V.E.R.A.: ritardo oltre 90 giorni dai periodi', () => {
+describe('certificazione dei debiti: ritardo oltre 90 giorni dai periodi', () => {
   const sez = [
     {
       titolo: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
@@ -191,7 +191,7 @@ describe('V.E.R.A.: ritardo oltre 90 giorni dai periodi', () => {
 // soltanto nel «Totale debito» (o nel «Totale credito»). Leggere quel vuoto
 // come «già contabilizzato» faceva sparire la posizione dai documenti per gli
 // uffici: né elencata, né da lavorare. Queste righe devono arrivare all'ufficio.
-describe('V.E.R.A.: la riga con la cifra solo nel totale', () => {
+describe('certificazione dei debiti: la riga con la cifra solo nel totale', () => {
   const conTotaleSolo = [
     {
       titolo: 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',

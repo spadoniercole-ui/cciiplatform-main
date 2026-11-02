@@ -56,7 +56,7 @@ export function contestoRelazioneRicevente(i: IngressoContestoRicevente): string
   }
   if (i.debitoEnteVera !== null) {
     parti.push(
-      `DEBITO VERSO L'ENTE (V.E.R.A., contabilizzato e da contabilizzare): ${euro(i.debitoEnteVera)}.`
+      `DEBITO VERSO L'ENTE (certificazione dei debiti, contabilizzato e da contabilizzare): ${euro(i.debitoEnteVera)}.`
     );
   }
   if (i.posizioneAggiornata && i.ultimoBilancio) {

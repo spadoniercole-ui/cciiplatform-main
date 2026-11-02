@@ -10,7 +10,7 @@ import {
 
 // IL DEBITO CHE C'È ANCHE SE IL «TOTALE DEBITO» È VUOTO.
 //
-// Nel V.E.R.A. delle gestioni contributive le righe «F24 non presentato»
+// Nella certificazione dei debiti delle gestioni contributive le righe «F24 non presentato»
 // portano la cifra nelle colonne «Contributi» e «Sanzioni» e lasciano vuoto
 // il totale. Lette come totale, valevano zero: la posizione finiva fra quelle
 // «a importo ignoto» e il ritardo di oltre 90 giorni — che è un requisito
@@ -107,7 +107,7 @@ function fileVera(): File {
   return new File([buf], 'F24.xlsx');
 }
 
-describe('V.E.R.A.: l’importo delle righe con «Totale debito» vuoto', () => {
+describe('certificazione dei debiti: l’importo delle righe con «Totale debito» vuoto', () => {
   it('legge il debito dalle colonne di dettaglio invece di dichiararlo ignoto', async () => {
     const a = await analizzaVera(fileVera());
     const [sezione] = a.sezioni;

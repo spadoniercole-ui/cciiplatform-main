@@ -24,9 +24,9 @@
 // ---------------------------------------------------------------------------
 // SU COSA GIRA IL TEST: sul CONTRIBUTO, non sul contributo piu' sanzioni
 //
-// Il delta fra Posizione V.E.R.A. e contabilizzato e', nella prassi, il
+// Il delta fra Certificazione dei debiti e contabilizzato e', nella prassi, il
 // calcolo delle SANZIONI: la contabilita' dell'ente non le espone perche'
-// vanno determinate al momento del pagamento; VERA le propone su una
+// vanno determinate al momento del pagamento; la certificazione dei debiti le propone su una
 // presunzione, che la piattaforma acquisisce come tale.
 //
 // Le sanzioni civili sono un accessorio e possono valere il 40-60% del
@@ -104,11 +104,11 @@ export interface DatiSoglie {
   /** Totale contributi DOVUTI nell'anno precedente. Base del 30%. */
   contributiDovutiAnnoPrecedente: number | null;
   annoContributiDovuti: number | null;
-  /** Sanzioni presunte dal file V.E.R.A. Mostrate, mai nel test. */
+  /** Sanzioni presunte dal file della certificazione dei debiti Mostrate, mai nel test. */
   sanzioniPresunte: number | null;
-  /** Voci V.E.R.A. a importo non noto: con almeno una, «sotto soglia» vale solo sui dati quantificati. */
+  /** Voci della certificazione dei debiti a importo non noto: con almeno una, «sotto soglia» vale solo sui dati quantificati. */
   vociImportoIgnoto?: number;
-  /** Esposizione V.E.R.A. quantificata (contabilizzato + da contabilizzare), per la riconciliazione. */
+  /** Esposizione della certificazione dei debiti quantificata (contabilizzato + da contabilizzare), per la riconciliazione. */
   esposizioneVera?: number | null;
   /** Premi assicurativi non versati (INAIL). */
   premiInail: number | null;
@@ -364,14 +364,14 @@ export function calcolaSoglie25Novies(
     ));
     // Riconciliazione (analisi giuridica del 24/09/2026): dire QUALE importo
     // e' stato confrontato, da dove viene e che cosa esclude, e come si
-    // rapporta all'esposizione V.E.R.A., che comprende sanzioni presunte
+    // rapporta all'esposizione della certificazione dei debiti, che comprende sanzioni presunte
     // estranee alla soglia (art. 25-novies, c. 1, lett. a: debito per contributi).
     if (contributi !== null) {
       const vera = dati.esposizioneVera ?? null;
       motivo +=
         ` Importo confrontato: contributi previdenziali scaduti dai valori per le soglie, ${euro(contributi)}, al netto di sanzioni e interessi, che non concorrono alla soglia.` +
         (vera !== null
-          ? ` L’esposizione V.E.R.A. quantificata è ${euro(vera)}${sanzioni > 0 ? `, di cui sanzioni presunte ${euro(sanzioni)}` : ''}: ${Math.abs(vera - contributi) > 0.5 ? 'i due importi non coincidono e la differenza va riconciliata prima di ogni conclusione sui presupposti' : 'coincide con l’importo confrontato'}.`
+          ? ` L’esposizione della certificazione dei debiti quantificata è ${euro(vera)}${sanzioni > 0 ? `, di cui sanzioni presunte ${euro(sanzioni)}` : ''}: ${Math.abs(vera - contributi) > 0.5 ? 'i due importi non coincidono e la differenza va riconciliata prima di ogni conclusione sui presupposti' : 'coincide con l’importo confrontato'}.`
           : '');
     }
     if (esito === 'sopra')
@@ -437,7 +437,7 @@ export function calcolaSoglie25Novies(
   }
   if (sanzioni > 0) {
     datiMancanti.push(
-      'Le sanzioni indicate dalla Posizione V.E.R.A. sono una PRESUNZIONE: si determinano al momento del pagamento. Restano fuori dal test, che si misura sui soli contributi.'
+      'Le sanzioni indicate dalla Certificazione dei debiti sono una PRESUNZIONE: si determinano al momento del pagamento. Restano fuori dal test, che si misura sui soli contributi.'
     );
   }
 

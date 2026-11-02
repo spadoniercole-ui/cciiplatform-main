@@ -1,4 +1,4 @@
-// Import del file VERA (INPS "DettaglioRichiesta"): legge TUTTE le sezioni
+// Import del file della certificazione dei debiti (INPS "DettaglioRichiesta"): legge TUTTE le sezioni
 // del foglio indicato, ognuna con la sua natura data dal TITOLO di sezione
 // (l'escamotage della colonna-guida applicato al titolo). Browser-safe.
 //
@@ -39,7 +39,7 @@ function indiceCredito(intestazioni: string[]): number {
 
 function indiceVoce(intestazioni: string[]): number {
   const norm = intestazioni.map(normalizzaEtichetta);
-  // La "voce" per VERA è la NATURA dell'omissione (F24 Non presentato, 18 -
+  // La "voce" per la certificazione dei debiti è la NATURA dell'omissione (F24 Non presentato, 18 -
   // Verbale Evasione, Denunce non trasmesse…): è ciò che conta per la catena
   // Natura+Stato. Ha PRIORITÀ su Posizione/Gestione, che sono solo identificativi.
   let i = norm.findIndex((h) => /(natura|omission|tipolog)/.test(h));
@@ -48,10 +48,10 @@ function indiceVoce(intestazioni: string[]): number {
   return i >= 0 ? i : 0;
 }
 
-// Colonna "Stato": la dicitura distingue, DENTRO VERA, i debiti già
+// Colonna "Stato": la dicitura distingue, DENTRO la certificazione dei debiti, i debiti già
 // contabilizzati (cella vuota) da quelli NON contabilizzati (cella valorizzata
 // — certi ma non ancora esigibili, da lavorare). La dicitura non cambia tra i
-// file VERA. Se la colonna manca (es. ADR, Gestione Separata) tutte le righe
+// file della certificazione dei debiti. Se la colonna manca (es. ADR, Gestione Separata) tutte le righe
 // sono contabilizzate.
 function indiceStato(intestazioni: string[]): number {
   const norm = intestazioni.map(normalizzaEtichetta);
@@ -59,7 +59,7 @@ function indiceStato(intestazioni: string[]): number {
 }
 
 /**
- * Sezione dei VERSAMENTI (la «Sezione F24» del VERA): elenca i pagamenti
+ * Sezione dei VERSAMENTI (la «Sezione F24» della certificazione dei debiti): elenca i pagamenti
  * fatti, non debiti. Letta come debito produceva righe «voce <matricola>»
  * a importo zero, cioè posizioni potenziali inesistenti.
  */
@@ -119,7 +119,7 @@ function indiciDettaglio(intestazioni: string[]): number[] {
  * a un'impresa il cui debito INPS era sotto, e lasciava vuota la soglia
  * dell'Agente pur avendo i numeri nel file.
  *
- * Si riconosce dalle INTESTAZIONI (il V.E.R.A. cambia titolo di sezione tra un
+ * Si riconosce dalle INTESTAZIONI (la certificazione dei debiti cambia titolo di sezione tra un
  * export e l'altro) e, in seconda battuta, dal titolo.
  */
 export type AmbitoVera = 'INPS' | 'AGENTE_RISCOSSIONE';
@@ -273,7 +273,7 @@ function sezioneVeraDa(s: SezioneConTitolo): SezioneVera {
   };
 }
 
-/** Analizza il file VERA: sezioni e titoli distinti. */
+/** Analizza il file della certificazione dei debiti: sezioni e titoli distinti. */
 export async function analizzaVera(file: File, foglio?: string): Promise<AnalisiVera> {
   const fogli = await elencoFogli(file);
   const foglioScelto =
@@ -376,7 +376,7 @@ export interface RigaVera {
 }
 
 /**
- * TOTALI del V.E.R.A., separati per DESTINAZIONE: le due grandezze non sono
+ * TOTALI della certificazione dei debiti, separati per DESTINAZIONE: le due grandezze non sono
  * intercambiabili e non vanno sommate nella stessa base.
  *
  * - `contributiInps`: contributi delle sezioni contributive, al netto delle
@@ -477,7 +477,7 @@ export function estraiRigheVera(
    * l'operatore mappava, e i documenti restavano vuoti perché il
    * raggruppamento guardava altrove. Se la sezione ha una materia, non è
    * «non mappata»: le righe entrano con la categoria vuota e la materia si
-   * ricava dalla voce, come già fa la posizione V.E.R.A. dell'azienda.
+   * ricava dalla voce, come già fa la posizione della certificazione dei debiti dell'azienda.
    */
   haMateria?: (sezione: string, voce: string) => boolean
 ): {
@@ -522,7 +522,7 @@ export function estraiRigheVera(
       }
       // UNA CIFRA CHE STA SOLO NEL TOTALE È UN DEBITO ANCORA DA CONTABILIZZARE.
       //
-      // La regola generale del V.E.R.A. è che la colonna «Stato» vuota significhi
+      // La regola generale della certificazione dei debiti è che la colonna «Stato» vuota significhi
       // «già contabilizzato». Ma una riga che porta l'importo soltanto nel totale
       // — nessun contributo, nessuna sanzione, nessun residuo — non ha una
       // composizione in contabilità: è un debito che l'ente deve ancora iscrivere,
@@ -550,9 +550,9 @@ export function estraiRigheVera(
 }
 
 /**
- * RITARDO OLTRE 90 GIORNI dal V.E.R.A. (art. 25-novies, comma 1, lett. a).
+ * RITARDO OLTRE 90 GIORNI dalla certificazione dei debiti (art. 25-novies, comma 1, lett. a).
  *
- * Le sezioni di gestione del V.E.R.A. riportano, partita per partita, il
+ * Le sezioni di gestione della certificazione dei debiti riportano, partita per partita, il
  * PERIODO di competenza del contributo non versato («202506 - 202506»). Il
  * contributo di un periodo scade il 16 del mese successivo: se alla data di
  * riferimento sono passati più di 90 giorni, la partita è in ritardo.
@@ -602,7 +602,7 @@ export function ritardoDaVera(
 }
 
 /**
- * PERIODO DI COMPETENZA di una riga, nelle forme in cui il V.E.R.A. lo scrive.
+ * PERIODO DI COMPETENZA di una riga, nelle forme in cui la certificazione dei debiti lo scrive.
  *
  * Non è un dettaglio di formato: dal periodo dipende la scadenza (il 16 del
  * mese successivo) e quindi il ritardo di oltre 90 giorni, che è un requisito

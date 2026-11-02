@@ -165,8 +165,9 @@ export function RiscontriNormativi({
 
       <p className="text-[11px] text-slate-500 mb-4">
         Articoli e soglie «movimentati» dall’analisi, individuati in modo{' '}
-        <strong>deterministico</strong> sui dati reali (bilancio XBRL, posizione ente, V.E.R.A.):
-        nessuna inferenza dell’AI, solo aritmetica sulle soglie di legge.
+        <strong>deterministico</strong> sui dati reali (bilancio XBRL, posizione ente,
+        certificazione dei debiti): nessuna inferenza dell’AI, solo aritmetica sulle soglie di
+        legge.
       </p>
 
       {caricamento && (

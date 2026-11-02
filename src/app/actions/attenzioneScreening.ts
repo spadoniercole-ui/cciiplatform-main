@@ -70,8 +70,8 @@ export async function ottieniAttenzioneScreeningAction(
     const a = az.rows[0] ?? {};
     const dati: DatiSoglie = lettura.dati;
     // L'importo che il motore confronta DAVVERO: prima le posizioni del
-    // triage, poi la scheda, poi il V.E.R.A. (fonti.ts). Prima si passava il
-    // solo valore manuale/V.E.R.A., così un'azienda con i contributi nelle
+    // triage, poi la scheda, poi la certificazione dei debiti (fonti.ts). Prima si passava il
+    // solo valore manuale/certificazione dei debiti, così un'azienda con i contributi nelle
     // posizioni e il resto vuoto arrivava all'indicatore con esposizione
     // nulla — e il semaforo non poteva dichiarare l'importo che stava
     // valutando.

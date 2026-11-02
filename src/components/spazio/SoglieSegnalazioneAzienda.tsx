@@ -2,7 +2,7 @@
 
 // Scheda "Soglie di segnalazione" — art. 25-novies CCII.
 //
-// Vive a livello AZIENDA, accanto alla Posizione V.E.R.A., perche' il debito
+// Vive a livello AZIENDA, accanto alla Certificazione dei debiti, perche' il debito
 // e' il punto di partenza di ogni analisi e non cambia da uno scenario
 // all'altro: si compila una volta e viene riportato in ogni scenario.
 //
@@ -80,7 +80,7 @@ const numero = (v: string): number | null => (v.trim() === '' ? null : Number(v)
 
 /**
  * Che cosa usa davvero il calcolo per questo campo, quando non è il valore
- * scritto qui: il campo vuoto non è un dato mancante se c'è il V.E.R.A., e
+ * scritto qui: il campo vuoto non è un dato mancante se c'è la certificazione dei debiti, e
  * le posizioni del triage prevalgono sul valore scritto a mano.
  */
 function NotaValoreUsato({ usato, scritto }: { usato?: ValoreUsato; scritto: number | null }) {
@@ -90,7 +90,7 @@ function NotaValoreUsato({ usato, scritto }: { usato?: ValoreUsato; scritto: num
       ? 'dalle posizioni caricate nel triage'
       : usato.fonte === 'file'
         ? 'dai file INPS caricati (DM10 per i dovuti, lista inadempienze per gli scaduti)'
-        : 'dal V.E.R.A. caricato (partite contabilizzate e da contabilizzare)';
+        : 'dalla certificazione dei debiti caricata (partite contabilizzate e da contabilizzare)';
   return (
     <p className="text-[10px] mt-1 leading-snug text-sky-800 bg-sky-50 border border-sky-100 rounded px-2 py-1">
       {scritto === null ? (
@@ -273,7 +273,7 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <CampoEuro
               etichetta="Contributi scaduti e non versati"
-              fonte="Dai flussi UNIEMENS inviati all'istituto, o dal file V.E.R.A. richiesto all'INPS."
+              fonte="Dai flussi UNIEMENS inviati all'istituto, o dal file della certificazione dei debiti richiesto all'INPS."
               valore={valori.contributiScaduti}
               usato={usati.contributiScaduti}
               onCambia={(v) => setValori({ ...valori, contributiScaduti: v })}
@@ -304,8 +304,8 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
               <p className="text-[10px] text-slate-400 mt-1">Anno cui si riferisce il totale.</p>
             </div>
             <CampoEuro
-              etichetta="Sanzioni presunte (V.E.R.A.)"
-              fonte="Da leggere nel file V.E.R.A. e scrivere qui: la piattaforma non le ricava da sola. Sono una presunzione — si determinano al pagamento — e restano FUORI dal test di soglia, che si misura sui soli contributi."
+              etichetta="Sanzioni presunte (certificazione dei debiti)"
+              fonte="Da leggere nel file della certificazione dei debiti e scrivere qui: la piattaforma non le ricava da sola. Sono una presunzione — si determinano al pagamento — e restano FUORI dal test di soglia, che si misura sui soli contributi."
               valore={valori.sanzioniPresunteVera}
               onCambia={(v) => setValori({ ...valori, sanzioniPresunteVera: v })}
             />
@@ -474,8 +474,8 @@ export function SoglieSegnalazioneAzienda({ nomeSchema, aziendaId, tipoSpazio }:
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
               <p className="leading-relaxed">
                 I contributi restano sotto la soglia applicabile. Il superamento comparirebbe solo
-                sommando le sanzioni presunte dal file V.E.R.A.: non fondano da sole la
-                segnalazione, vanno quantificate sugli atti dell&apos;ente.
+                sommando le sanzioni presunte dal file della certificazione dei debiti: non fondano
+                da sole la segnalazione, vanno quantificate sugli atti dell&apos;ente.
               </p>
             </div>
           )}

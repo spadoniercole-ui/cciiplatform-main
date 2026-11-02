@@ -53,7 +53,7 @@ function riga(over: Partial<RigaInstradabile> = {}): RigaInstradabile {
   };
 }
 
-describe('instradamento delle posizioni V.E.R.A. per materia', () => {
+describe('instradamento delle posizioni della certificazione dei debiti per materia', () => {
   it('manda la posizione all’ufficio della materia, con le sue lavorazioni', () => {
     const esito = instradaPerMateria([riga()], {
       titoli: TITOLI,

@@ -66,12 +66,12 @@ export interface TitoloEnte {
   /** Materia in cui il codice cade (0.109.98); null = da assegnare. */
   materiaId?: number | null;
   /**
-   * La TL con cui l'ente lavora questo codice (0.159.0): il catalogo è piatto,
-   * e il titolo mette insieme TL, direttrice (`dipendenza`) e prodotto per
+   * La TS con cui l'ente lavora questo codice (0.159.0): il catalogo è piatto,
+   * e il titolo mette insieme TS, direttrice (`dipendenza`) e prodotto per
    * costruire la vestizione legale — atto, presupposto, riferimento interno.
    */
   tlId?: number | null;
-  /** Il prodotto su cui il titolo applica la TL: è la terza gamba della vestizione. */
+  /** Il prodotto su cui il titolo applica la TS: è la terza gamba della vestizione. */
   prodotto?: string | null;
 }
 

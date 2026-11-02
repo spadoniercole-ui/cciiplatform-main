@@ -25,11 +25,11 @@ export default async function PosizioneEnteAziendaPage({
 
   // Aperta a ENTRAMBI i percorsi, con contenuti diversi.
   //
-  // ENTE: Anagrafica Ente, Situazione Debitoria, Posizione V.E.R.A. e Soglie
+  // ENTE: Anagrafica Ente, Situazione Debitoria, Certificazione dei debiti e Soglie
   // di segnalazione — l'ente dichiara cio' che sa dell'impresa.
   //
   // NON_ENTE: la sola scheda Soglie di segnalazione. Il professionista quei
-  // valori li ha: o ha richiesto il file V.E.R.A. all'istituto, o li ricava
+  // valori li ha: o ha richiesto il file della certificazione dei debiti all'istituto, o li ricava
   // dai flussi UNIEMENS inviati, da cui prende il totale annuo. Le altre tre
   // schede restano fuori, perche' un redigente non ha un ente che dichiara
   // qualcosa su di se'.

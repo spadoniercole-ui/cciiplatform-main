@@ -55,9 +55,9 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
             href: `/spazio/${codice}/parametri/tl`,
             icon: ClipboardList,
             passo: 1,
-            titolo: 'Catalogo delle TL',
+            titolo: 'Catalogo delle TS',
             descrizione:
-              'Codice, descrizione e flag per la check list: la TL si scrive una volta sola, non una volta per prodotto.',
+              'Codice, descrizione e flag per la check list: la TS si scrive una volta sola, non una volta per prodotto.',
           },
           {
             href: `/spazio/${codice}/parametri/direttrici-ente`,
@@ -73,7 +73,7 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
             passo: 3,
             titolo: 'Lavorazioni delle materie',
             descrizione:
-              'Per ogni materia: quale TL applica, su quale direttrice e prodotto, con quale ufficio, quali passi e quale esito. È il processo che finisce nel report per unità operativa.',
+              'Per ogni materia: quale TS applica, su quale direttrice e prodotto, con quale ufficio, quali passi e quale esito. È il processo che finisce nel report per unità operativa.',
           },
           {
             href: `/spazio/${codice}/parametri/titoli-ente`,
@@ -81,7 +81,7 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
             passo: 4,
             titolo: 'Titoli di credito dell’ente',
             descrizione:
-              'Per ogni codice di partita: TL, direttrice e prodotto che compongono la vestizione legale — atto, presupposto giuridico e circolare, riscontrati sulle fonti ufficiali.',
+              'Per ogni codice di partita: TS, direttrice e prodotto che compongono la vestizione legale — atto, presupposto giuridico e circolare, riscontrati sulle fonti ufficiali.',
           },
         ]
       : []),
@@ -136,7 +136,7 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
       icon: ClipboardList,
       titolo: 'Lavorazioni per tipo di debito',
       descrizione:
-        'Per ogni categoria di debito, quale TL del catalogo la lavora. Ufficio e procedura si scrivono una volta sola, dentro il prodotto, e il triage li usa per preparare le comunicazioni sul file V.E.R.A.',
+        'Per ogni categoria di debito, quale TS del catalogo la lavora. Ufficio e procedura si scrivono una volta sola, dentro il prodotto, e il triage li usa per preparare le comunicazioni sul file della certificazione dei debiti',
     },
     {
       href: `/spazio/${codice}/parametri/scenari`,
@@ -148,9 +148,9 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
     {
       href: `/spazio/${codice}/parametri/triage`,
       icon: Stethoscope,
-      titolo: 'Triage: file V.E.R.A.',
+      titolo: 'Triage: file della certificazione dei debiti',
       descrizione:
-        'Se il V.E.R.A. è il presupposto del triage: obbligatorio per l’INPS, facoltativo per gli enti che non lo emettono.',
+        'Se la certificazione dei debiti è il presupposto del triage: obbligatoria per l’INPS, facoltativa per gli enti che non la emettono.',
     },
     {
       href: `/spazio/${codice}/parametri/tab-xbrl`,

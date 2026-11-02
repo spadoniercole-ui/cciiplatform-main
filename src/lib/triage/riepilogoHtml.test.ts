@@ -8,7 +8,9 @@ const base = {
   sede: 'Siracusa',
   dataVerifica: '2026-09-21',
   perimetro: 'Perimetro di prova',
-  documenti: [{ nome: 'DettaglioRichiesta.xlsx', tipo: 'Posizione V.E.R.A.', esito: 'Usato' }],
+  documenti: [
+    { nome: 'DettaglioRichiesta.xlsx', tipo: 'Certificazione dei debiti', esito: 'Usato' },
+  ],
   note: ['Ritardo oltre 90 giorni: 7 periodi.'],
   valori: {
     conLavoratori: true,

@@ -198,7 +198,7 @@ interface Props {
    */
   tipoSpazio: 'ENTE' | 'NON_ENTE';
   /**
-   * Se il V.E.R.A. è il presupposto del triage in questo spazio.
+   * Se la certificazione dei debiti è il presupposto del triage in questo spazio.
    *
    * Non è uguale per tutti: per l'INPS il file è l'unico documento che elenca
    * le posizioni da lavorare, mentre un ente che non lo emette non ha modo di
@@ -258,7 +258,7 @@ export function VerificaSaluteAzienda({
   const [attenzione, setAttenzione] = useState<Attenzione | null>(null);
   // Un solo punto di caricamento per la posizione debitoria: N file di
   // qualunque natura, riconosciuti dalle intestazioni al momento della
-  // conferma. Sostituisce i campi fissi — V.E.R.A. e tre fogli INPS — che
+  // conferma. Sostituisce i campi fissi — certificazione dei debiti e tre fogli INPS — che
   // presentavano come presupposto quello che è documentazione a corredo.
   const [fileProspetti, setFileProspetti] = useState<File[]>([]);
   // Le posizioni della tabella e le strutture mappate vivono qui finché
@@ -266,7 +266,7 @@ export function VerificaSaluteAzienda({
   // restavano solo sullo schermo, e il pulsante di salvataggio diceva di
   // confermare prima i dati — cioè di perderle.
   const [righeDebiti, setRigheDebiti] = useState<RigaDebitoTriage[]>([]);
-  // Le scelte fatte sulle sovrapposizioni. Quella fra V.E.R.A. ed elenchi
+  // Le scelte fatte sulle sovrapposizioni. Quella fra la certificazione dei debiti ed elenchi
   // decide cosa si salva come non versato: la applica questa pagina.
   const [scelteFonti, setScelteFonti] = useState<Record<string, string>>({});
   // Una sovrapposizione fra documenti non risolta blocca la conferma: si
@@ -279,14 +279,14 @@ export function VerificaSaluteAzienda({
   // come documento di partenza.
   const [fileVisura, setFileVisura] = useState<File | null>(null);
   // Valori che la soglia INPS richiede e che nessun documento porta: i
-  // contributi DOVUTI vengono dai flussi UNIEMENS, non dal file V.E.R.A.
+  // contributi DOVUTI vengono dai flussi UNIEMENS, non dal file della certificazione dei debiti
   const [conLavoratori, setConLavoratori] = useState<'' | 'si' | 'no'>('');
   const [contributiDovuti, setContributiDovuti] = useState('');
   // I tre fogli INPS. `null` = non ancora scelto; il flag "non disponibile"
   // dice che il documento non c'è e va escluso dalle verifiche, invece di
   // lasciare l'indicatore in attesa di qualcosa che non arriverà.
   const [esitoFogli, setEsitoFogli] = useState<string[]>([]);
-  // La scelta sulla doppia scrittura del V.E.R.A. (F24 e denunce dello stesso
+  // La scelta sulla doppia scrittura della certificazione dei debiti (F24 e denunce dello stesso
   // periodo): si registra sulla riga denunce, insieme alla posizione. L'id
   // della riga in corso di salvataggio serve solo a spegnere il pulsante.
   const [rigaInSalvataggio, setRigaInSalvataggio] = useState<number | null>(null);
@@ -305,14 +305,14 @@ export function VerificaSaluteAzienda({
   const [esitoSoglie, setEsitoSoglie] = useState<EsitoSoglie | null>(null);
   const [erroreSoglie, setErroreSoglie] = useState<string | null>(null);
   /**
-   * Il V.E.R.A. è il presupposto del triage: senza, non si parte.
+   * La certificazione dei debiti è il presupposto del triage: senza, non si parte.
    * `tipiProspetti` è il riconoscimento fatto da DebitiTriage sui file
    * caricati; `haVera` guarda solo i file ancora presenti, così togliere il
-   * V.E.R.A. richiude il passaggio.
+   * certificazione dei debiti richiude il passaggio.
    */
   const [tipiProspetti, setTipiProspetti] = useState<Record<string, TipoProspetto>>({});
   const [righeVera, setRigheVera] = useState<RigaVera[]>([]);
-  /** Il giorno in cui le righe del V.E.R.A. sono state lette dal prospetto. */
+  /** Il giorno in cui le righe della certificazione dei debiti sono state lette dal prospetto. */
   const [veraCaricataIl, setVeraCaricataIl] = useState<string | null>(null);
   const [lavorazioni, setLavorazioni] = useState<LavorazioneTipoDebito[]>([]);
   const [etichetteCategorie, setEtichetteCategorie] = useState<Record<string, string>>({});
@@ -332,9 +332,9 @@ export function VerificaSaluteAzienda({
   >([]);
   const [lavorazioniUo, setLavorazioniUo] = useState<LavorazioneMateria[]>([]);
   const [erroreUo, setErroreUo] = useState<string | null>(null);
-  // La finestra che mappa le sezioni V.E.R.A. non riconosciute. La mappatura
+  // La finestra che mappa le sezioni della certificazione dei debiti non riconosciute. La mappatura
   // è un dato dello SPAZIO, non dell'azienda: si fa qui, senza uscire dal
-  // triage e senza aspettare che l'anagrafica sblocchi la scheda V.E.R.A.
+  // triage e senza aspettare che l'anagrafica sblocchi la scheda della certificazione dei debiti
   const [mostraMappaturaVera, setMostraMappaturaVera] = useState(false);
   // La finestra che cambia la MATERIA di una voce: è il posto da correggere
   // quando la mappatura della sezione non sposta niente, perché le voci si
@@ -396,7 +396,7 @@ export function VerificaSaluteAzienda({
    * modificare si va nella scheda, ma solo se lo si sceglie.
    */
   const [mostraSoglie, setMostraSoglie] = useState(false);
-  // La check di perimetro è obbligatoria: il triage non si chiude se una TL
+  // La check di perimetro è obbligatoria: il triage non si chiude se una TS
   // rilevante non ha risposta. Lo stato serve al pulsante «Procedi», che
   // altrimenti porterebbe avanti un'azienda senza la verifica qualificata.
   const [perimetroEsito, setPerimetroEsito] = useState<{
@@ -406,7 +406,7 @@ export function VerificaSaluteAzienda({
   /**
    * IL TRIAGE SI CHIUDE SULLA CHECK VERIFICATA, NON SULLA SUA ASSENZA.
    *
-   * Si guardano le MANCANZE e non `completa`: uno spazio senza TL rilevanti
+   * Si guardano le MANCANZE e non `completa`: uno spazio senza TS rilevanti
    * non ha voci da rispondere, e l'azione dichiara `completa: false` per
    * definizione. Contano le voci rimaste senza risposta.
    */
@@ -615,12 +615,12 @@ export function VerificaSaluteAzienda({
       setDataVerifica(v.dataVerifica);
       await caricaConfigurazioni();
 
-      setAvanzamento('Lettura delle posizioni V.E.R.A....');
+      setAvanzamento('Lettura delle posizioni della certificazione dei debiti...');
       const debiti = await ottieniDebitiVera(nomeSchema, id);
       if (debiti.success) {
         setRigheVera(debiti.righe);
         setVeraCaricataIl(debiti.documentiCaricatiIl ?? null);
-      } else setErrore(debiti.error ?? 'Posizioni V.E.R.A. non leggibili.');
+      } else setErrore(debiti.error ?? 'Posizioni della certificazione dei debiti non leggibili.');
 
       setAvanzamento('Ricalcolo dell’indicatore...');
       // SENZA IL BILANCIO: la verifica riaperta è sempre un triage, e in
@@ -688,28 +688,28 @@ export function VerificaSaluteAzienda({
     setLavorazioni([]);
     setEtichetteCategorie({});
     try {
-      // ---- Presupposto: il V.E.R.A. --------------------------------------
+      // ---- Presupposto: la certificazione dei debiti --------------------------------------
       // Non basta che il file sia nell'elenco: deve essere riconosciuto e
       // leggibile. Il controllo si fa PRIMA di creare l'azienda, così un
-      // triage senza V.E.R.A. non lascia una pratica a metà.
+      // triage senza la certificazione dei debiti non lascia una pratica a metà.
       const tipi = await Promise.all(fileProspetti.map((f) => riconosciProspetto(f)));
       const indiceVera = tipi.indexOf('VERA');
-      // Il V.E.R.A. è un presupposto, non una condizione di esistenza del
+      // La certificazione dei debiti è un presupposto, non una condizione di esistenza del
       // triage: dove lo spazio lo richiede senza file non si parte; dove è
       // facoltativo la visita si fa lo stesso, e mancano le posizioni.
       if (indiceVera < 0 && veraObbligatorio) {
         setErrore(
-          'Il file V.E.R.A. è obbligatorio in questo spazio: senza, il triage non parte. Caricalo tra i prospetti e attendi che compaia «Posizione V.E.R.A.».'
+          'Il file della certificazione dei debiti è obbligatorio in questo spazio: senza, il triage non parte. Caricalo tra i prospetti e attendi che compaia «Certificazione dei debiti».'
         );
         return;
       }
       let analisiVera: Awaited<ReturnType<typeof analizzaVera>> | null = null;
       if (indiceVera >= 0) {
-        setAvanzamento('Lettura del file V.E.R.A....');
+        setAvanzamento('Lettura del file della certificazione dei debiti...');
         try {
           analisiVera = await analizzaVera(fileProspetti[indiceVera]);
         } catch (e) {
-          setErrore(`File V.E.R.A. non leggibile: ${String(e)}`);
+          setErrore(`File della certificazione dei debiti non leggibile: ${String(e)}`);
           return;
         }
       }
@@ -748,7 +748,7 @@ export function VerificaSaluteAzienda({
       // tipo come prima riceveva i campi fissi.
       const note: string[] = [];
       // ---- Tipologie e lavorazioni per le comunicazioni -------------------
-      // Servono a dare un destinatario alle posizioni V.E.R.A. Se una delle
+      // Servono a dare un destinatario alle posizioni della certificazione dei debiti Se una delle
       // letture fallisce il triage prosegue: le comunicazioni mancheranno,
       // ma l'esito non si perde.
       const { mappatura: mappaturaTitoli, scelteVoci } = await caricaConfigurazioni();
@@ -759,7 +759,7 @@ export function VerificaSaluteAzienda({
       let fileInadempienze: File | null = null;
       let fileRuoli: File | null = null;
       const ETICHETTA_PROSPETTO: Record<string, string> = {
-        VERA: 'Posizione V.E.R.A.',
+        VERA: 'Certificazione dei debiti',
         DENUNCE: 'Elenco denunce (DM10/UniEmens)',
         DELEGHE: 'Elenco deleghe F24 per periodo',
         F24_AGGREGATO: 'F24 aggregato per anno',
@@ -821,7 +821,7 @@ export function VerificaSaluteAzienda({
         );
       }
 
-      // Ritardo misurato sui periodi del V.E.R.A.: ripiego quando manca la
+      // Ritardo misurato sui periodi della certificazione dei debiti: ripiego quando manca la
       // Lista Inadempienze (che resta la fonte prioritaria).
       let ritardoVera: ReturnType<typeof ritardoDaVera> = null;
       // Il debito che concorre alla soglia INPS, separato per anzianità (vedi
@@ -829,7 +829,7 @@ export function VerificaSaluteAzienda({
       // giorni.
       let sogliaVera: BaseInpsVera | null = null;
       if (fileVera && analisiVera) {
-        setAvanzamento('Lettura della Posizione V.E.R.A....');
+        setAvanzamento('Lettura della Certificazione dei debiti...');
         try {
           ritardoVera = ritardoDaVera(analisiVera.sezioni, new Date(`${dataVerifica}T12:00:00Z`));
           // In triage non si chiede di classificare i trattamenti, ma la
@@ -844,7 +844,7 @@ export function VerificaSaluteAzienda({
               materiaId: scelteVoci[chiaveVoceVera(r.sezione, r.voce)] ?? null,
             }))
           );
-          // Le poste del V.E.R.A. non vanno tutte nella stessa base: dirlo qui
+          // Le poste della certificazione dei debiti non vanno tutte nella stessa base: dirlo qui
           // evita che l'operatore si chieda perché la soglia INPS non usa il
           // totale del file.
           const totVera = totaliVera(righe);
@@ -858,17 +858,17 @@ export function VerificaSaluteAzienda({
             const importi =
               doppie.righe === 1 ? 'un importo compare' : `${doppie.righe} importi compaiono`;
             note.push(
-              `V.E.R.A.: ${importi} due volte — come «F24 non presentato» e come «Denunce non trasmesse», nello stesso periodo (${doppie.periodi.join(', ')}) e per lo stesso importo (${Math.round(doppie.totale).toLocaleString('it-IT')} €). È la stessa obbligazione descritta due volte: l’esposizione la conta una volta sola. La riga «Denunce non trasmesse» resta in elenco perché dice una cosa che l’altra non dice — la denuncia va trasmessa — ma la sua cifra non si somma a quella del F24.`
+              `certificazione dei debiti: ${importi} due volte — come «F24 non presentato» e come «Denunce non trasmesse», nello stesso periodo (${doppie.periodi.join(', ')}) e per lo stesso importo (${Math.round(doppie.totale).toLocaleString('it-IT')} €). È la stessa obbligazione descritta due volte: l’esposizione la conta una volta sola. La riga «Denunce non trasmesse» resta in elenco perché dice una cosa che l’altra non dice — la denuncia va trasmessa — ma la sua cifra non si somma a quella del F24.`
             );
           }
           if (totVera.creditiAgente > 0) {
             note.push(
-              `V.E.R.A.: ${Math.round(totVera.creditiAgente).toLocaleString('it-IT')} € sono crediti già affidati all’Agente della Riscossione (cartelle, al netto delle partite sospese). Contano per la soglia dell’Agente (art. 25-novies, comma 1, lett. d), non per quella INPS.`
+              `certificazione dei debiti: ${Math.round(totVera.creditiAgente).toLocaleString('it-IT')} € sono crediti già affidati all’Agente della Riscossione (cartelle, al netto delle partite sospese). Contano per la soglia dell’Agente (art. 25-novies, comma 1, lett. d), non per quella INPS.`
             );
           }
           if (totVera.sanzioni > 0) {
             note.push(
-              `V.E.R.A.: ${Math.round(totVera.sanzioni).toLocaleString('it-IT')} € sono sanzioni presunte. Restano fuori dalla soglia INPS, che riguarda i contributi: la base confrontata è ${Math.round(totVera.contributiInps).toLocaleString('it-IT')} €.`
+              `certificazione dei debiti: ${Math.round(totVera.sanzioni).toLocaleString('it-IT')} € sono sanzioni presunte. Restano fuori dalla soglia INPS, che riguarda i contributi: la base confrontata è ${Math.round(totVera.contributiInps).toLocaleString('it-IT')} €.`
             );
           }
           if (righe.length > 0) {
@@ -895,7 +895,7 @@ export function VerificaSaluteAzienda({
             }
           }
         } catch (e) {
-          setErrore(`File V.E.R.A. non leggibile: ${String(e)}`);
+          setErrore(`File della certificazione dei debiti non leggibile: ${String(e)}`);
         }
       }
 
@@ -1026,7 +1026,7 @@ export function VerificaSaluteAzienda({
           // che la correggeva.
           note.push(
             scelteFonti['vera:elenchi'] === 'VERA'
-              ? `Lista Inadempienze: ${Math.round(nonVersato).toLocaleString('it-IT')} € — non usati come debito: la fonte scelta è il V.E.R.A., che li comprende.`
+              ? `Lista Inadempienze: ${Math.round(nonVersato).toLocaleString('it-IT')} € — non usati come debito: la fonte scelta è la certificazione dei debiti, che li comprende.`
               : `Lista Inadempienze, partite rimaste all’INPS e scadute da oltre 90 giorni — quelle che contano per la soglia INPS: ${Math.round(nonVersato).toLocaleString('it-IT')} €. Il ritardo è misurato su queste stesse partite.`
           );
           if (b.esclusePerRuolo.righe > 0) {
@@ -1103,15 +1103,15 @@ export function VerificaSaluteAzienda({
       }
 
       // Né Lista Inadempienze né Elenco Deleghe utilizzabile: il ritardo si
-      // misura sui periodi delle partite del V.E.R.A. Prima restava «non
+      // misura sui periodi delle partite della certificazione dei debiti Prima restava «non
       // determinabile» pur avendo nel file, riga per riga, periodo e importo.
       if (ritardo90 === null && ritardoVera) {
         ritardo90 = ritardoVera.partite > 0;
         periodiRitardo = ritardoVera.periodi.length;
         note.push(
           ritardoVera.partite > 0
-            ? `Ritardo oltre 90 giorni misurato sul V.E.R.A.: ${ritardoVera.partite} partite contabilizzate (${ritardoVera.periodi.length} periodi, dal ${[...ritardoVera.periodi].sort()[0]} al ${[...ritardoVera.periodi].sort().pop()}) per ${Math.round(ritardoVera.importo).toLocaleString('it-IT')} €, scadute — il 16 del mese successivo al periodo — da oltre 90 giorni alla data della verifica.`
-            : 'Ritardo oltre 90 giorni misurato sul V.E.R.A.: nessuna partita contabilizzata scaduta da oltre 90 giorni alla data della verifica.'
+            ? `Ritardo oltre 90 giorni misurato sulla certificazione dei debiti: ${ritardoVera.partite} partite contabilizzate (${ritardoVera.periodi.length} periodi, dal ${[...ritardoVera.periodi].sort()[0]} al ${[...ritardoVera.periodi].sort().pop()}) per ${Math.round(ritardoVera.importo).toLocaleString('it-IT')} €, scadute — il 16 del mese successivo al periodo — da oltre 90 giorni alla data della verifica.`
+            : 'Ritardo oltre 90 giorni misurato sulla certificazione dei debiti: nessuna partita contabilizzata scaduta da oltre 90 giorni alla data della verifica.'
         );
       }
 
@@ -1132,7 +1132,7 @@ export function VerificaSaluteAzienda({
           periodiRitardo = sogliaVera.periodiOltre90.length;
         }
         note.push(
-          `Soglia INPS misurata sul V.E.R.A.: concorrono solo i contributi scaduti da oltre ${GIORNI_RITARDO_SOGLIA_INPS} giorni, ${eu(sogliaVera.scadutiOltre90)} € su ${sogliaVera.partiteOltre90} ${
+          `Soglia INPS misurata sulla certificazione dei debiti: concorrono solo i contributi scaduti da oltre ${GIORNI_RITARDO_SOGLIA_INPS} giorni, ${eu(sogliaVera.scadutiOltre90)} € su ${sogliaVera.partiteOltre90} ${
             sogliaVera.partiteOltre90 === 1 ? 'partita' : 'partite'
           }${
             sogliaVera.periodiOltre90.length > 0
@@ -1156,11 +1156,11 @@ export function VerificaSaluteAzienda({
 
       if (scelteFonti['vera:elenchi'] === 'VERA') {
         note.push(
-          'Fonte del debito: il V.E.R.A., per scelta. Inadempienze e ruoli non sono stati sommati, perché già compresi.'
+          'Fonte del debito: la certificazione dei debiti, per scelta. Inadempienze e ruoli non sono stati sommati, perché già compresi.'
         );
       } else if (scelteFonti['vera:elenchi'] === 'ELENCHI') {
         note.push(
-          'Fonte del debito: inadempienze e ruoli, per scelta. Il V.E.R.A. non è stato sommato: resta consultabile nella sua scheda.'
+          'Fonte del debito: inadempienze e ruoli, per scelta. La certificazione dei debiti non è stato sommato: resta consultabile nella sua scheda.'
         );
       }
       setEsitoFogli(note);
@@ -1193,11 +1193,11 @@ export function VerificaSaluteAzienda({
             (contributiDovuti.trim() === '' ? undefined : Number(contributiDovuti)),
           annoContributiDovuti:
             dovutoAnnoPrec !== null || contributiDovuti.trim() !== '' ? annoPrec : undefined,
-          // Scelto il V.E.R.A., il non versato degli elenchi NON si salva:
-          // l'indicatore userà l'esposizione del V.E.R.A., che li comprende.
-          // Prima gli elenchi vincevano sempre, e il V.E.R.A. spariva in
+          // Scelto la certificazione dei debiti, il non versato degli elenchi NON si salva:
+          // l'indicatore userà l'esposizione della certificazione dei debiti, che li comprende.
+          // Prima gli elenchi vincevano sempre, e la certificazione dei debiti spariva in
           // silenzio anche quando era la fonte che si voleva usare.
-          // Con il V.E.R.A. come fonte il valore è la parte scaduta da oltre 90
+          // Con la certificazione dei debiti come fonte il valore è la parte scaduta da oltre 90
           // giorni, non l'esposizione intera: è quella che la norma confronta.
           contributiScaduti:
             scelteFonti['vera:elenchi'] === 'VERA'
@@ -1589,7 +1589,7 @@ export function VerificaSaluteAzienda({
 
   const riepilogoSoglie = esitoSoglie ? riepilogaSoglieTriage(esitoSoglie) : null;
 
-  // Il V.E.R.A. è presente solo se il file che lo rappresenta è ancora
+  // La certificazione dei debiti è presente solo se il file che lo rappresenta è ancora
   // nell'elenco: toglierlo richiude il passaggio alla conferma.
   const haVera = fileProspetti.some((f) => tipiProspetti[f.name] === 'VERA');
 
@@ -1598,12 +1598,12 @@ export function VerificaSaluteAzienda({
   // Prima erano due chiamate nel corpo del componente e ognuna rifaceva il
   // proprio raggruppamento: ogni cambio di stato della scheda (la data della
   // verifica, una nota digitata, il messaggio «copiato» che si spegne dopo due
-  // secondi) ripassava tutto il V.E.R.A. due volte. Con `useMemo` il lavoro si
+  // secondi) ripassava tutto la certificazione dei debiti due volte. Con `useMemo` il lavoro si
   // fa quando cambia qualcosa che conta davvero, e il raggruppamento è uno:
   // le due uscite non possono partire da due letture diverse degli stessi dati.
   // CHI LAVORA IL DEBITO: prima la MATERIA, poi la vecchia categoria.
   //
-  // Le posizioni arrivano dal file V.E.R.A. con la categoria della sezione, se
+  // Le posizioni arrivano dal file della certificazione dei debiti con la categoria della sezione, se
   // qualcuno l'ha mappata nella vecchia tabella. Ma la configurazione viva è
   // quella delle materie: ognuna porta i presupposti legali e le lavorazioni,
   // e ogni lavorazione dice l'ufficio che la esegue. Instradare solo per
@@ -1733,7 +1733,7 @@ export function VerificaSaluteAzienda({
   // Serve alla correzione: quando una mappatura di sezione non sposta niente, il
   // posto da sistemare è la voce. Si elencano le voci delle sezioni inerti e
   // quelle su cui una scelta è già stata presa (per poterla togliere) — non
-  // tutte quelle del file, che sarebbero un secondo elenco del V.E.R.A.
+  // tutte quelle del file, che sarebbero un secondo elenco della certificazione dei debiti
   const vociDaRimappare = useMemo<VoceDaRimappare[]>(() => {
     const sezioniInerti = new Set(
       reportUo.mappatureSenzaEffetto.map((m) => normalizzaEtichetta(m.sezione))
@@ -2105,11 +2105,12 @@ export function VerificaSaluteAzienda({
             {veraObbligatorio && !haVera && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-1">
                 <p className="text-[11px] font-bold text-amber-900">
-                  Il file V.E.R.A. è obbligatorio
+                  Il file della certificazione dei debiti è obbligatorio
                 </p>
                 <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Senza il V.E.R.A. il triage non parte: caricalo tra i prospetti qui sotto e
-                  attendi che compaia «Posizione V.E.R.A.» accanto al nome del file.
+                  Senza la certificazione dei debiti il triage non parte: caricalo tra i prospetti
+                  qui sotto e attendi che compaia «Certificazione dei debiti» accanto al nome del
+                  file.
                 </p>
               </div>
             )}
@@ -2117,7 +2118,7 @@ export function VerificaSaluteAzienda({
             {!veraObbligatorio && !haVera && (
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
                 <p className="text-[11px] font-bold text-slate-700">
-                  Il V.E.R.A. non è richiesto in questo spazio
+                  La certificazione dei debiti non è richiesto in questo spazio
                 </p>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
                   Il triage parte anche senza il file. Senza, però, restano fuori le posizioni
@@ -2205,7 +2206,7 @@ export function VerificaSaluteAzienda({
               title={
                 haVera || !veraObbligatorio
                   ? undefined
-                  : 'Carica il file V.E.R.A.: è obbligatorio in questo spazio per eseguire il triage.'
+                  : 'Carica il file della certificazione dei debiti: è obbligatorio in questo spazio per eseguire il triage.'
               }
               className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-slate-800 disabled:bg-slate-300"
             >
@@ -2380,8 +2381,9 @@ export function VerificaSaluteAzienda({
                       Sono trascorsi {eta.giorni} giorni dalla verifica: la finestra dei trenta
                       giorni per il ricontrollo si è chiusa il{' '}
                       {eta.riverifica.split('-').reverse().join('/')} e i numeri qui sotto sono
-                      quelli letti allora. Prima di decidere ricontrolla i prospetti — V.E.R.A. e
-                      fogli dell&apos;ente — e ricarica ciò che è cambiato.
+                      quelli letti allora. Prima di decidere ricontrolla i prospetti —
+                      certificazione dei debiti e fogli dell&apos;ente — e ricarica ciò che è
+                      cambiato.
                     </p>
                   );
                 })()}
@@ -2422,7 +2424,7 @@ export function VerificaSaluteAzienda({
           {coppieVera.length > 0 && (
             <div className="bg-white border border-amber-200 rounded-xl p-5">
               <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-                La stessa cifra scritta due volte nel V.E.R.A.
+                La stessa cifra scritta due volte nella certificazione dei debiti
               </h3>
               <p className="text-[11px] text-slate-600 leading-relaxed mt-2">
                 Il file descrive la stessa obbligazione due volte — il versamento non eseguito («F24
@@ -2454,9 +2456,10 @@ export function VerificaSaluteAzienda({
                         periodo {c.periodo}
                       </div>
                       <div className="text-[10px] text-slate-500 mt-1 leading-relaxed">
-                        {rigaF24?.sezione ?? 'V.E.R.A.'}: {rigaF24?.voce ?? 'riga F24'}
+                        {rigaF24?.sezione ?? 'certificazione dei debiti'}:{' '}
+                        {rigaF24?.voce ?? 'riga F24'}
                         {rigaF24?.periodo ? ` (${rigaF24.periodo})` : ''} ↔{' '}
-                        {rigaDenunce?.sezione ?? 'V.E.R.A.'}:{' '}
+                        {rigaDenunce?.sezione ?? 'certificazione dei debiti'}:{' '}
                         {rigaDenunce?.voce ?? 'riga della denuncia'}
                         {rigaDenunce?.periodo ? ` (${rigaDenunce.periodo})` : ''}
                       </div>
@@ -2504,8 +2507,9 @@ export function VerificaSaluteAzienda({
               <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
                 La scelta vale da subito nei totali e nei documenti; il conteggio letto dai fogli
                 resta quello del momento della lettura del file. Le due righe restano entrambe in
-                elenco: la denuncia non trasmessa è comunque lavoro da fare. Un nuovo import del
-                V.E.R.A. ricostruisce la posizione e riparte dal riconoscimento automatico.
+                elenco: la denuncia non trasmessa è comunque lavoro da fare. Un nuovo import della
+                certificazione dei debiti ricostruisce la posizione e riparte dal riconoscimento
+                automatico.
               </p>
             </div>
           )}
@@ -2636,8 +2640,8 @@ export function VerificaSaluteAzienda({
                   </p>
                   <ul className="space-y-1 text-[11px] text-slate-700 leading-relaxed">
                     <li>
-                      <span className="font-bold">V.E.R.A.</span> — i debiti certi e in divenire: è
-                      l’esposizione che si confronta con le soglie di importo.
+                      <span className="font-bold">certificazione dei debiti</span> — i debiti certi
+                      e in divenire: è l’esposizione che si confronta con le soglie di importo.
                     </li>
                     <li>
                       <span className="font-bold">Denunce e flussi inviati</span> — il dovuto
@@ -2718,10 +2722,10 @@ export function VerificaSaluteAzienda({
                 )}
 
                 <p className="text-[10px] text-slate-500 leading-relaxed">
-                  Gli importi vengono dai documenti letti nel triage (V.E.R.A., denunce, deleghe,
-                  ruoli) e dai valori salvati per l’azienda. Per cambiarli si apre la scheda
-                  dell’azienda, in «Soglie di segnalazione» — da qui non si esce e non si modifica
-                  nulla.
+                  Gli importi vengono dai documenti letti nel triage (certificazione dei debiti,
+                  denunce, deleghe, ruoli) e dai valori salvati per l’azienda. Per cambiarli si apre
+                  la scheda dell’azienda, in «Soglie di segnalazione» — da qui non si esce e non si
+                  modifica nulla.
                 </p>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
@@ -2911,7 +2915,7 @@ export function VerificaSaluteAzienda({
                 ? 'non c’è ancora una lavorazione configurata con il suo ufficio'
                 : materieDaCompletare.length > 0
                   ? 'manca l’ufficio o la lavorazione alle materie elencate qui sotto'
-                  : 'nessuna posizione V.E.R.A. di questa verifica arriva a un ufficio'
+                  : 'nessuna posizione della certificazione dei debiti di questa verifica arriva a un ufficio'
               : null;
             return (
               <div
@@ -3014,7 +3018,7 @@ export function VerificaSaluteAzienda({
               <p className="text-[11px] text-slate-500 leading-relaxed">
                 {titoliUo.length === 0
                   ? 'Nessun codice dell’ente configurato: senza il titolo del codice non si sa in quale materia cada, né quale ufficio lo lavori. I titoli si configurano nei Parametri di Spazio.'
-                  : 'Nessuna posizione V.E.R.A. ha una materia con una dipendenza configurata: qui non c’è un ufficio a cui indirizzare il report.'}
+                  : 'Nessuna posizione della certificazione dei debiti ha una materia con una dipendenza configurata: qui non c’è un ufficio a cui indirizzare il report.'}
               </p>
             ) : (
               <ul className="space-y-2">
@@ -3028,7 +3032,7 @@ export function VerificaSaluteAzienda({
                   const chiave = chiaveConsegna('dipendenza', d.dipendenza);
                   const codiciNoti = d.codici.filter((c) => c.codice).length;
                   const vociSenzaCodice = d.codici.length - codiciNoti;
-                  // LE VOCI DEL V.E.R.A. DI QUESTO UFFICIO, e la via per cui ci
+                  // LE VOCI DELLA certificazione dei debiti DI QUESTO UFFICIO, e la via per cui ci
                   // sono arrivate: il codice, la voce stessa, il titolo della
                   // sezione, o una mappatura. È ciò che rende il report
                   // controllabile prima di scaricarlo, e distingue una
@@ -3082,7 +3086,7 @@ export function VerificaSaluteAzienda({
                       {origini.length > 0 && (
                         <div className="rounded-lg bg-slate-50 border border-slate-200 px-2 py-1.5 space-y-0.5">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                            Voci del V.E.R.A. assegnate, e perché
+                            Voci della certificazione dei debiti assegnate, e perché
                           </p>
                           {origini.map((o) => (
                             <p
@@ -3381,7 +3385,7 @@ export function VerificaSaluteAzienda({
             )}
           </div>
 
-          {/* LA CHECK OBBLIGATORIA (0.153.0): le voci sono le TL contrassegnate
+          {/* LA CHECK OBBLIGATORIA (0.153.0): le voci sono le TS contrassegnate
               nei Parametri, i codici arrivano dai titoli dell'ente. */}
           <div className="border-t border-slate-200 pt-4">
             <PerimetroTriage
@@ -3448,7 +3452,7 @@ export function VerificaSaluteAzienda({
             {perimetroIncompleto && (
               <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
                 Il triage non è completo: resta da rispondere alla check di perimetro (
-                {perimetroEsito?.mancanze?.length ?? 0} voci). Le TL rilevanti vanno verificate
+                {perimetroEsito?.mancanze?.length ?? 0} voci). Le TS rilevanti vanno verificate
                 prima di procedere — è la sola parte obbligatoria della check.
               </p>
             )}
@@ -3470,7 +3474,7 @@ export function VerificaSaluteAzienda({
                     disabled={inCorso || !aziendaId || perimetroIncompleto}
                     title={
                       perimetroIncompleto
-                        ? 'Completa la check di perimetro: le TL rilevanti devono avere una risposta.'
+                        ? 'Completa la check di perimetro: le TS rilevanti devono avere una risposta.'
                         : undefined
                     }
                     className="flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700 disabled:bg-slate-300"
@@ -3490,7 +3494,7 @@ export function VerificaSaluteAzienda({
               )}
               {/* In una verifica riaperta non si torna alla conferma: i file
                   caricati allora non esistono più, quindi il passo sarebbe un
-                  vicolo cieco (nessun V.E.R.A. da confermare). */}
+                  vicolo cieco (nessuna certificazione dei debiti da confermare). */}
               {!ripresa && (
                 <button
                   onClick={() => {

@@ -100,7 +100,7 @@ export interface DatiRiepilogoTriage {
   /**
    * QUANDO I PROSPETTI SONO STATI LETTI (AAAA-MM-GG). La data della verifica
    * dice a quando si riferiscono i conti, non quando sono stati letti: se un
-   * nuovo V.E.R.A. è stato caricato dopo, il foglio deve poterlo dire.
+   * nuova certificazione dei debiti è stato caricato dopo, il foglio deve poterlo dire.
    */
   documentiCaricatiIl?: string | null;
   note: string[];
@@ -122,7 +122,7 @@ export interface DatiRiepilogoTriage {
    * confrontare: il box non compare, invece di comparire vuoto.
    */
   scenari?: EsitoScenari | null;
-  /** La check di perimetro delle TL, se qualcuna è contrassegnata. */
+  /** La check di perimetro delle TS, se qualcuna è contrassegnata. */
   checkPerimetro?: SintesiPerimetro | null;
   /**
    * La check list dello screening con le risposte date, accanto alla check di
@@ -199,7 +199,7 @@ function avvisiRiepilogo(d: DatiRiepilogoTriage, giorni: number): AvvisoRiepilog
         `I numeri di questo foglio risalgono alla verifica del ${data(d.dataVerifica)}: sono ` +
         `trascorsi ${eta.giorni} giorni e la finestra dei ${giorni} giorni per il ricontrollo si è ` +
         `chiusa il ${data(eta.riverifica)}. Le posizioni e gli importi sono quelli letti allora. ` +
-        'Prima di decidere ricontrolla i prospetti — V.E.R.A. e fogli dell’ente — e ricarica ciò ' +
+        'Prima di decidere ricontrolla i prospetti — certificazione dei debiti e fogli dell’ente — e ricarica ciò ' +
         'che è cambiato.',
     });
   }
@@ -383,7 +383,7 @@ ${STILE_BOX}
     parti.push(`<p class="esito">${esc(c.etichetta)}</p>`);
     parti.push(`<p style="font-size:11px">${esc(c.dettaglio)}</p>`);
     parti.push(`<table><tbody>
-<tr><td>TL rilevanti verificate</td><td class="num">${c.totali}</td></tr>
+<tr><td>TS rilevanti verificate</td><td class="num">${c.totali}</td></tr>
 <tr><td>Riscontrate</td><td class="num">${c.riscontrate}</td></tr>
 <tr><td>Non riscontrate</td><td class="num">${c.nonRiscontrate}</td></tr>
 <tr><td>Non applicabili</td><td class="num">${c.nonApplicabili}</td></tr>
@@ -392,7 +392,7 @@ ${STILE_BOX}
 <tr><td>Codici da un problema momentaneo</td><td>${esc(c.codiciIncidentali.join(', ') || 'nessuno')}</td></tr>
 </tbody></table>`);
     parti.push(
-      '<p style="font-size:10px;color:#475569">Le voci nascono dalle TL contrassegnate in Parametri di Spazio → Materie e lavorazioni; i codici sono quelli che cadono nella materia della TL. La check riguarda le lavorazioni configurate, non l’intera storia dell’azienda.</p>'
+      '<p style="font-size:10px;color:#475569">Le voci nascono dalle TS contrassegnate in Parametri di Spazio → Materie e lavorazioni; i codici sono quelli che cadono nella materia della TS. La check riguarda le lavorazioni configurate, non l’intera storia dell’azienda.</p>'
     );
   }
 

@@ -1,6 +1,6 @@
 'use client';
 
-// LA MAPPATURA DELLE SEZIONI V.E.R.A. SI FA QUI, NON PASSANDO PER L'AZIENDA.
+// LA MAPPATURA DELLE SEZIONI DELLA certificazione dei debiti SI FA QUI, NON PASSANDO PER L'AZIENDA.
 //
 // Una sezione del file di verifica che non si riconduce da sola a una materia
 // resta senza destinazione: la posizione non arriva a nessun ufficio e i
@@ -8,7 +8,7 @@
 // è un dato dello SPAZIO — sezione del file → materia o categoria di debito —
 // e non dell'azienda: si scrive una volta e vale per tutti i caricamenti.
 //
-// Prima l'unico posto dove mapparla era la scheda Posizione V.E.R.A. della
+// Prima l'unico posto dove mapparla era la scheda Certificazione dei debiti della
 // singola azienda, e ci si arrivava uscendo dal triage: la scheda si apriva
 // solo con l'anagrafica compilata e l'indirizzo `?scheda=vera` non veniva
 // nemmeno letto, quindi il rimando lasciava l'operatore sull'Anagrafica. Qui
@@ -136,7 +136,7 @@ export function MappaturaSezioniVera({ nomeSchema, sezioni, onChiudi, onSalvate 
               className="flex items-center gap-2 font-bold text-slate-900 uppercase text-xs tracking-wider"
             >
               <Link2 className="w-4 h-4 text-slate-500" />
-              Mappa le sezioni V.E.R.A.
+              Mappa le sezioni della certificazione dei debiti
             </h3>
             <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
               Queste sezioni del file non si riconducono a nessuna materia: le loro posizioni non
@@ -208,8 +208,8 @@ export function MappaturaSezioniVera({ nomeSchema, sezioni, onChiudi, onSalvate 
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
           <p className="text-[10px] text-slate-400 leading-relaxed max-w-sm">
-            La mappatura si corregge anche dopo, dalla scheda Posizione V.E.R.A. dell&apos;azienda:
-            quella strada resta, questa evita di uscire dal triage.
+            La mappatura si corregge anche dopo, dalla scheda Certificazione dei debiti
+            dell&apos;azienda: quella strada resta, questa evita di uscire dal triage.
           </p>
           <div className="flex gap-2">
             <button

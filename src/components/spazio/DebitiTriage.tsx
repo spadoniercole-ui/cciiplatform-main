@@ -52,7 +52,7 @@ interface Props {
   onTogliProspetto?: (file: File) => void;
   /**
    * Le scelte fatte sulle sovrapposizioni. Alcune si applicano qui, togliendo
-   * righe dalla tabella; quella fra V.E.R.A. ed elenchi invece la deve
+   * righe dalla tabella; quella fra la certificazione dei debiti ed elenchi invece la deve
    * applicare la pagina, perché riguarda cosa si salva come non versato.
    */
   onScelte?: (scelte: Record<string, string>) => void;
@@ -66,7 +66,7 @@ interface Props {
   onRighe?: (righe: RigaDebitoTriage[]) => void;
   /**
    * Tipi riconosciuti dei file caricati. La pagina li usa per sapere se il
-   * V.E.R.A. è presente: senza quel file il triage non parte.
+   * certificazione dei debiti è presente: senza quel file il triage non parte.
    */
   onTipi?: (tipi: Record<string, TipoProspetto>) => void;
   /** Strutture da ricordare, salvate dalla pagina quando l'azienda esiste. */
@@ -125,7 +125,7 @@ export function DebitiTriage({
   const [scelte, setScelte] = useState<Record<string, string>>({});
   const [tipi, setTipi] = useState<Record<string, TipoProspetto>>({});
 
-  // Il riconoscimento resta la fonte unica anche per la pagina: il V.E.R.A.
+  // Il riconoscimento resta la fonte unica anche per la pagina: la certificazione dei debiti
   // è obbligatorio, e la pagina non deve rifare da sola la stessa lettura
   // per sapere se c'è.
   useEffect(() => {
@@ -298,8 +298,9 @@ export function DebitiTriage({
         <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
           <p className="text-[11px] leading-relaxed text-slate-600">
             Carica i prospetti che hai, di qualunque natura: la piattaforma riconosce da sola cosa
-            sono dalle intestazioni. Il V.E.R.A., le denunce, le deleghe e le inadempienze
-            dell&apos;INPS si riconoscono in entrambe le varianti — Cassetto e INPS-CPC.
+            sono dalle intestazioni. La certificazione dei debiti, le denunce, le deleghe e le
+            inadempienze dell&apos;INPS si riconoscono in entrambe le varianti — Cassetto e
+            INPS-CPC.
           </p>
           <input
             type="file"

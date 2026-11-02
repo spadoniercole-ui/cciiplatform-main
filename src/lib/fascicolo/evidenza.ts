@@ -6,7 +6,7 @@
 //
 // Prima tappa (0.109.84): il fascicolo si COMPONE AL VOLO dai dati che la
 // piattaforma ha gia' — righe della proposta, posizione debitoria dell'ente,
-// V.E.R.A. — senza duplicarli in una tabella nuova: nessuno stato da tenere
+// certificazione dei debiti — senza duplicarli in una tabella nuova: nessuno stato da tenere
 // allineato, sempre coerente con i dati correnti. Di molte righe oggi NON si
 // conosce il documento di origine (l'importazione non lo registrava): il
 // fascicolo lo dichiara, riga per riga, invece di tacerlo. Le prossime tappe
@@ -297,7 +297,7 @@ export function componiFascicolo(input: {
       ...base,
       id: idEvidenza('VERA', r.id),
       origine: 'VERA',
-      descrizione: `V.E.R.A. — ${r.sezione}: ${r.voce}`,
+      descrizione: `certificazione dei debiti — ${r.sezione}: ${r.voce}`,
       // Una voce potenziale ha importo ignoto: null, mai zero.
       importo: potenziale ? null : r.importo,
       ente: 'INPS',
@@ -332,8 +332,8 @@ export function componiFascicolo(input: {
       id: idEvidenza('CALCOLO', 'vera-totale'),
       origine: 'CALCOLO',
       descrizione: clausole.length
-        ? `V.E.R.A. — totale delle voci a importo noto (${clausole.join('; ')})`
-        : 'V.E.R.A. — totale',
+        ? `certificazione dei debiti — totale delle voci a importo noto (${clausole.join('; ')})`
+        : 'certificazione dei debiti — totale',
       importo: arrotonda(conteggiate.reduce((s, r) => s + r.importo, 0)),
       ente: 'INPS',
       stato: 'DERIVATO',

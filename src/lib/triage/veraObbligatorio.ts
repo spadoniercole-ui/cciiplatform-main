@@ -1,9 +1,9 @@
 // src/lib/triage/veraObbligatorio.ts
 //
-// IL V.E.R.A. È IL PRESUPPOSTO DEL TRIAGE SOLO DOVE ESISTE PER CHI LO FA.
+// LA certificazione dei debiti È IL PRESUPPOSTO DEL TRIAGE SOLO DOVE ESISTE PER CHI LO FA.
 //
 // La posizione debitoria dell'ente è la ragione per cui il triage esiste: per
-// l'INPS il file V.E.R.A. è l'unico documento che elenca le posizioni da
+// l'INPS il file della certificazione dei debiti è l'unico documento che elenca le posizioni da
 // lavorare, e senza di esso la visita resta senza un elenco da instradare.
 // Per un ente che quel prospetto non lo emette — o per un professionista, che
 // il file lo chiede all'istituto — la stessa regola diventa un blocco senza
@@ -27,7 +27,7 @@ export interface ObbligoVera {
   impostazione: boolean | null;
 }
 
-/** L'unico ente per cui il V.E.R.A. è la fonte delle posizioni da lavorare. */
+/** L'unico ente per cui la certificazione dei debiti è la fonte delle posizioni da lavorare. */
 export const ENTE_CON_VERA_OBBLIGATORIO = 'INPS';
 
 /** Etichette leggibili degli enti ammessi dalle soglie dell'art. 25-novies. */
@@ -69,7 +69,7 @@ export function risolviObbligoVera(impostazione: boolean | null, ente: string | 
     return { obbligatorio: impostazione, origine: 'IMPOSTAZIONE', ente, impostazione };
   }
   return {
-    // Nessun ente riconosciuto: si parte con il V.E.R.A. FACOLTATIVO. Il
+    // Nessun ente riconosciuto: si parte con la certificazione dei debiti facoltativa. Il
     // contrario — obbligatorio per tutti finché qualcuno non lo spegne —
     // rimetterebbe il blocco a ogni spazio nuovo, che è il problema da
     // risolvere. La scheda lo dichiara e l'Admin lo accende in un clic.
@@ -89,8 +89,8 @@ export function descriviObbligoVera(o: ObbligoVera): string {
   }
   if (o.origine === 'ENTE') {
     return o.obbligatorio
-      ? 'Obbligatorio: lo spazio è dell’INPS, dove il V.E.R.A. è la fonte delle posizioni da lavorare.'
-      : `Facoltativo: lo spazio è di ${etichettaEnte(o.ente) ?? 'un altro ente'}, che non emette il V.E.R.A.`;
+      ? 'Obbligatorio: lo spazio è dell’INPS, dove la certificazione dei debiti è la fonte delle posizioni da lavorare.'
+      : `Facoltativo: lo spazio è di ${etichettaEnte(o.ente) ?? 'un altro ente'}, che non emette la certificazione dei debiti`;
   }
   return 'Facoltativo: le soglie non dichiarano un solo ente, quindi l’ente dello spazio non si deduce. Se è l’INPS, accendi l’obbligo qui sopra.';
 }

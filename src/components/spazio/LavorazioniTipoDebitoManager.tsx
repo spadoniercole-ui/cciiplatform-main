@@ -3,9 +3,9 @@
 // LAVORAZIONI PER TIPOLOGIA DI DEBITO.
 //
 // Dalla 0.158.0 questa pagina non scrive una tabella propria: per ogni
-// categoria di debito sceglie quali TL del catalogo la lavorano. L'ufficio e la
+// categoria di debito sceglie quali TS del catalogo la lavorano. L'ufficio e la
 // procedura si scrivono una volta sola, nei Parametri › Direttrici, sotto il
-// prodotto a cui la TL si applica; qui resta solo il collegamento. Così non
+// prodotto a cui la TS si applica; qui resta solo il collegamento. Così non
 // esistono due elenchi di uffici da tenere allineati a mano.
 
 import React, { useEffect, useState } from 'react';
@@ -64,7 +64,7 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
     if (l.success) setLavorazioni(l.lavorazioni);
     else setErrore(l.error || 'Impossibile caricare le lavorazioni.');
     if (t.success) setCatalogo(t.tl);
-    else setErrore(t.error || 'Impossibile caricare il catalogo delle TL.');
+    else setErrore(t.error || 'Impossibile caricare il catalogo delle TS.');
     setCaricamento(false);
   };
 
@@ -103,7 +103,7 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
     setInCorso(true);
     setErrore(null);
     const r = await collegaCategoriaTlAction(nomeSchema, categoria, scelto);
-    if (!r.success) setErrore(r.error || 'Impossibile collegare la TL.');
+    if (!r.success) setErrore(r.error || 'Impossibile collegare la TS.');
     else {
       setScelte((prev) => ({ ...prev, [categoria]: '' }));
       await carica();
@@ -115,7 +115,7 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
     setInCorso(true);
     setErrore(null);
     const r = await scollegaCategoriaTlAction(nomeSchema, l.categoria, l.id);
-    if (!r.success) setErrore(r.error || 'Impossibile scollegare la TL.');
+    if (!r.success) setErrore(r.error || 'Impossibile scollegare la TS.');
     else await carica();
     setInCorso(false);
   };
@@ -135,11 +135,11 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
             Lavorazioni per tipologia di debito
           </h2>
           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-            Per ogni categoria di debito, quali TL del catalogo la lavorano. La TL — codice,
+            Per ogni categoria di debito, quali TS del catalogo la lavorano. La TS — codice,
             descrizione, flag per la check list — si scrive una volta sola nel catalogo; ufficio e
             procedura sono quelli dell’associazione della materia che la usa. Il triage legge questi
-            collegamenti per preparare le comunicazioni sul file V.E.R.A.: le comunicazioni non
-            vengono inviate automaticamente.
+            collegamenti per preparare le comunicazioni sul file della certificazione dei debiti: le
+            comunicazioni non vengono inviate automaticamente.
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
             Le categorie sono quelle di{' '}
@@ -149,21 +149,22 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
             >
               Categorie tipo debito
             </a>
-            ; le TL si scrivono nel{' '}
+            ; le TS si scrivono nel{' '}
             <a
               href={conRitorno(`/spazio/${codice}/parametri/tl`, ritorno)}
               className="font-bold text-sky-700 hover:underline"
             >
-              Catalogo delle TL
+              Catalogo delle TS
             </a>{' '}
             e si applicano alle materie in{' '}
             <a
               href={conRitorno(`/spazio/${codice}/parametri/materie-lavorazione`, ritorno)}
               className="font-bold text-sky-700 hover:underline"
             >
-              Materie e TL
+              Materie e TS
             </a>
-            . Le sezioni V.E.R.A. si mappano su queste categorie in Posizione V.E.R.A.
+            . Le sezioni della certificazione dei debiti si mappano su queste categorie in
+            Certificazione dei debiti
           </p>
         </div>
       </div>
@@ -188,18 +189,18 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
         <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed">
           {`${senzaLavorazione} ${
             senzaLavorazione === 1 ? 'categoria non ha' : 'categorie non hanno'
-          } ancora una TL: le posizioni di quelle tipologie restano fuori dai documenti del triage finché non ne colleghi una.`}
+          } ancora una TS: le posizioni di quelle tipologie restano fuori dai documenti del triage finché non ne colleghi una.`}
         </p>
       )}
 
       {catalogo.length === 0 && (
         <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded-xl p-5">
-          Il catalogo delle TL è vuoto. Scrivile prima nel{' '}
+          Il catalogo delle TS è vuoto. Scrivile prima nel{' '}
           <a
             href={conRitorno(`/spazio/${codice}/parametri/tl`, ritorno)}
             className="font-bold text-sky-700 hover:underline"
           >
-            Catalogo delle TL
+            Catalogo delle TS
           </a>
           : qui si collegano soltanto.
         </p>
@@ -226,7 +227,7 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
 
               {collegate.length === 0 ? (
                 <p className="text-[11px] text-slate-500">
-                  Nessuna TL collegata: le posizioni di questa tipologia restano fuori dai
+                  Nessuna TS collegata: le posizioni di questa tipologia restano fuori dai
                   documenti.
                 </p>
               ) : (
@@ -261,9 +262,9 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
                     value={scelte[c.codice] ?? ''}
                     onChange={(e) => setScelte({ ...scelte, [c.codice]: e.target.value })}
                     className={CLASSE}
-                    aria-label={`TL da collegare a ${c.codice}`}
+                    aria-label={`TS da collegare a ${c.codice}`}
                   >
-                    <option value="">Scegli una TL del catalogo...</option>
+                    <option value="">Scegli una TS del catalogo...</option>
                     {disponibili.map((t) => (
                       <option key={t.id} value={t.id}>
                         {descrizioneTl(t)}

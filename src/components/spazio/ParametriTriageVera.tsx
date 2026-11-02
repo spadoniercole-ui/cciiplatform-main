@@ -1,9 +1,9 @@
 'use client';
 
-// L'obbligo del file V.E.R.A. nel triage, come parametro dello spazio.
+// L'obbligo del file della certificazione dei debiti nel triage, come parametro dello spazio.
 //
 // Non è una preferenza: è la differenza fra un triage che parte e uno che
-// resta bloccato. Per l'INPS il V.E.R.A. è l'unico documento che elenca le
+// resta bloccato. Per l'INPS la certificazione dei debiti è l'unico documento che elenca le
 // posizioni da lavorare; per gli altri enti non esiste, e chiederlo
 // significa non poter cominciare. La scheda dice lo stato, da dove viene e
 // cosa cambia spegnendolo.
@@ -29,13 +29,13 @@ const OPZIONI: { valore: Scelta; titolo: string; testo: string }[] = [
     valore: 'AUTOMATICO',
     titolo: 'Automatico — secondo l’ente',
     testo:
-      'Obbligatorio se lo spazio è dell’INPS, dove il V.E.R.A. è la fonte delle posizioni; facoltativo per gli altri enti.',
+      'Obbligatorio se lo spazio è dell’INPS, dove la certificazione dei debiti è la fonte delle posizioni; facoltativo per gli altri enti.',
   },
   {
     valore: 'OBBLIGATORIO',
     titolo: 'Sempre obbligatorio',
     testo:
-      'Il triage non parte senza il file. Da scegliere quando il V.E.R.A. si ottiene comunque, anche se l’ente non è l’INPS.',
+      'Il triage non parte senza il file. Da scegliere quando la certificazione dei debiti si ottiene comunque, anche se l’ente non è l’INPS.',
   },
   {
     valore: 'FACOLTATIVO',
@@ -49,7 +49,7 @@ export function ParametriTriageVera({ nomeSchema }: Props) {
   useDichiaraContestoAssistente({
     pagina: 'parametri',
     nomeSchema,
-    sezioneParametri: 'Triage: obbligo del file V.E.R.A.',
+    sezioneParametri: 'Triage: obbligo del file della certificazione dei debiti',
   });
 
   const [obbligo, setObbligo] = useState<ObbligoVera | null>(null);
@@ -101,15 +101,16 @@ export function ParametriTriageVera({ nomeSchema }: Props) {
       <div className="flex items-center gap-2">
         <Stethoscope className="w-4 h-4 text-blue-600" />
         <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-          Triage: obbligo del file V.E.R.A.
+          Triage: obbligo del file della certificazione dei debiti
         </h2>
       </div>
 
       <p className="text-[11px] text-slate-500 leading-relaxed">
-        Il V.E.R.A. è la posizione debitoria che l’ente comunica all’azienda: da lì il triage ricava
-        le posizioni da instradare alle unità operative. Non tutte le amministrazioni lo emettono —
-        l’INPS sì, e per lui è l’unico documento che elenca le partite; un altro ente no. Per questo
-        l’obbligo non può essere lo stesso per tutti gli spazi.
+        La certificazione dei debiti è la posizione debitoria che l’ente comunica all’azienda: da lì
+        il triage ricava le posizioni da instradare alle unità operative. Non tutte le
+        amministrazioni lo emettono — l’INPS sì, e per lui è l’unico documento che elenca le
+        partite; un altro ente no. Per questo l’obbligo non può essere lo stesso per tutti gli
+        spazi.
       </p>
 
       {errore && (

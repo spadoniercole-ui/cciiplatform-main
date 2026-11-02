@@ -254,7 +254,7 @@ export function andamento(righe: RigaDebitoTriage[]): {
  * È il collegamento che mancava: la tabella è stata costruita per raccogliere
  * i numeri reali su cui si calcolano le soglie, ma fino alla 0.109.73
  * l'indicatore non la leggeva affatto — continuava a basarsi solo sul
- * V.E.R.A. e sui campi dell'anagrafica. Chi inseriva le posizioni a mano non
+ * certificazione dei debiti e sui campi dell'anagrafica. Chi inseriva le posizioni a mano non
  * vedeva cambiare nulla.
  *
  * Per ogni categoria: il debito è quello dell'anno del triage, il termine di
@@ -336,31 +336,31 @@ export function trovaSovrapposizioni(
   const prevInTabella = righe.some(
     (r) => r.categoria === 'PREVIDENZIALE' && r.importoAnnoCorrente !== null
   );
-  // 3. V.E.R.A. insieme a Lista Inadempienze o Ruoli Esattoriali.
-  //    Il V.E.R.A. è la fotografia completa della posizione e li comprende
+  // 3. certificazione dei debiti insieme a Lista Inadempienze o Ruoli Esattoriali.
+  //    La certificazione dei debiti è la fotografia completa della posizione e li comprende
   //    entrambi, senza una chiave che permetta di togliere la parte comune.
   //    Fino alla 0.109.76 questo caso NON era segnalato: gli elenchi
-  //    finivano nel non versato, che l'indicatore legge prima del V.E.R.A.,
-  //    e il V.E.R.A. veniva ignorato senza che nessuno lo sapesse — il
+  //    finivano nel non versato, che l'indicatore legge prima della certificazione dei debiti,
+  //    e la certificazione dei debiti veniva ignorato senza che nessuno lo sapesse — il
   //    default silenzioso che la regola di Ercole vieta.
   const haVera = tipiRiconosciuti.includes('VERA');
   const haElenchi = tipiRiconosciuti.includes('INADEMPIENZE') || tipiRiconosciuti.includes('RUOLI');
   if (haVera && haElenchi) {
     out.push({
       chiave: 'vera:elenchi',
-      titolo: 'Il V.E.R.A. comprende già inadempienze e ruoli',
+      titolo: 'La certificazione dei debiti comprende già inadempienze e ruoli',
       spiegazione:
-        'Il V.E.R.A. è la fotografia completa della posizione: contiene le partite della Lista Inadempienze e quelle iscritte a ruolo. Sommati, lo stesso importo verrebbe contato più volte. Scegli quale fonte rappresenta il debito.',
+        'La certificazione dei debiti è la fotografia completa della posizione: contiene le partite della Lista Inadempienze e quelle iscritte a ruolo. Sommati, lo stesso importo verrebbe contato più volte. Scegli quale fonte rappresenta il debito.',
       scelte: [
         {
           valore: 'VERA',
           etichetta:
-            'Usa il V.E.R.A. — l’esposizione complessiva; inadempienze e ruoli non si sommano',
+            'Usa la certificazione dei debiti — l’esposizione complessiva; inadempienze e ruoli non si sommano',
         },
         {
           valore: 'ELENCHI',
           etichetta:
-            'Usa inadempienze e ruoli — il dettaglio per partita, già riconciliato fra loro; il V.E.R.A. non si somma',
+            'Usa inadempienze e ruoli — il dettaglio per partita, già riconciliato fra loro; la certificazione dei debiti non si somma',
         },
       ],
     });

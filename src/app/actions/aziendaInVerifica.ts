@@ -258,7 +258,7 @@ export async function promuoviAziendaAction(
  * ricarica, un crash, uno sbalzo di tensione — le comunicazioni preparate e i
  * documenti per i reparti non erano più raggiungibili, e la videata in cui si
  * decide se procedere con l'azienda non esisteva più. I dati però c'erano già:
- * l'azienda con l'esito, le posizioni del V.E.R.A., i valori delle soglie. Qui
+ * l'azienda con l'esito, le posizioni della certificazione dei debiti, i valori delle soglie. Qui
  * si restituisce quello che serve a ricomporre la videata, e nient'altro: le
  * lavorazioni e i destinatari si rileggono dalle loro configurazioni, perché
  * una verifica riaperta oggi deve usare le regole di oggi.

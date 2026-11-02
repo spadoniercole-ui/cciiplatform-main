@@ -8,10 +8,10 @@
 //      (`aziende.contributi_per_anno`: dovuti dal DM10, scaduti dalla lista
 //      inadempienze) — così la scheda si riempie da sé anche quando il
 //      triage è stato chiuso e i campi non sono stati riscritti;
-//   4. solo per i contributi scaduti, il totale del V.E.R.A. caricato
+//   4. solo per i contributi scaduti, il totale della certificazione dei debiti caricata
 //      (partite contabilizzate e da contabilizzare).
 // La scheda Soglie mostra il valore usato e la sua fonte: prima un campo
-// vuoto sembrava «dato mancante» mentre il calcolo usava il V.E.R.A., e un
+// vuoto sembrava «dato mancante» mentre il calcolo usava la certificazione dei debiti, e un
 // valore scritto a mano veniva scavalcato dal triage senza dirlo.
 
 export type FonteValore = 'triage' | 'manuale' | 'file' | 'vera';
@@ -30,7 +30,7 @@ export function scegliValore(
   if (daPosizioni !== null && daPosizioni !== undefined)
     return { valore: daPosizioni, fonte: 'triage' };
   if (manuale !== null && manuale !== undefined) return { valore: manuale, fonte: 'manuale' };
-  // I file INPS vengono prima del V.E.R.A. perché portano la stessa grandezza
+  // I file INPS vengono prima della certificazione dei debiti perché portano la stessa grandezza
   // della norma (contributi, non esposizione) e il periodo di competenza.
   if (daFile !== null) return { valore: daFile, fonte: 'file' };
   if (ripiegoVera !== null && ripiegoVera > 0) return { valore: ripiegoVera, fonte: 'vera' };

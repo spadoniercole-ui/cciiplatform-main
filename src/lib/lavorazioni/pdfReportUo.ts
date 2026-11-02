@@ -149,7 +149,7 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
     y += 5;
   }
   // Le posizioni già contabilizzate non sono lavoro da fare: si dichiarano,
-  // perché il totale delle voci non è il totale del V.E.R.A. e chi confronta i
+  // perché il totale delle voci non è il totale della certificazione dei debiti e chi confronta i
   // due numeri deve trovare la spiegazione sul foglio.
   const notaContabilizzate = testiContabilizzate(d, formattaImportoEuro).documento;
   if (notaContabilizzate) {
@@ -192,7 +192,7 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
         y = 22;
       }
       const periodo = x.periodo ? ` (periodo ${x.periodo})` : '';
-      const stato = x.stato ? `; stato V.E.R.A.: ${x.stato}` : '';
+      const stato = x.stato ? `; stato della certificazione dei debiti: ${x.stato}` : '';
       doc.text(
         doc.splitTextToSize(
           `- ${x.sezione} — ${x.voce}${periodo}: ${formattaImportoEuro(x.importo)}${stato}`,
@@ -237,7 +237,7 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
     autoTable(doc, {
       startY: y,
       margin: { left: 14, right: 14 },
-      head: [['Posizione V.E.R.A.', 'Periodo', 'Stato', 'Natura', 'Scoperto da', 'Importo']],
+      head: [['Certificazione dei debiti', 'Periodo', 'Stato', 'Natura', 'Scoperto da', 'Importo']],
       body: c.inadempienze.map((i) => [
         `${i.sezione} — ${i.voce}`,
         i.periodo ?? '—',
@@ -405,7 +405,7 @@ export function generaPdfReportUo(d: DocumentoUo): jsPDF {
     'Il totale di ogni voce (codice di partita, o materia quando il codice non c’è) è la somma delle sue ' +
       'inadempienze: i debiti che risultano dai documenti ' +
       `dell’ente alla data della verifica (${data}). Non è l’accertamento della singola partita, che resta ` +
-      'in capo all’ufficio. Sono elencate anche le posizioni che il V.E.R.A. scrive soltanto nel totale ' +
+      'in capo all’ufficio. Sono elencate anche le posizioni che la certificazione dei debiti scrive soltanto nel totale ' +
       'debito o credito: sono debiti non ancora contabilizzati. Le posizioni già contabilizzate sono ' +
       'dichiarate in testa e non elencate; quelle ' +
       'sospese o fuori perimetro non sono elencate e non entrano nei ' +

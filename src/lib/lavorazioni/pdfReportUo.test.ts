@@ -113,7 +113,7 @@ describe('generaPdfReportUo', () => {
     expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(1);
   });
 
-  // Il totale delle voci non è il totale del V.E.R.A.: la differenza ha una
+  // Il totale delle voci non è il totale della certificazione dei debiti: la differenza ha una
   // spiegazione sul foglio, con la quota AdR.
   it('dichiara le posizioni già contabilizzate, con la quota della sola decisione AdR', () => {
     const sorgente = generaPdfReportUo(documento()).output();
@@ -274,7 +274,7 @@ describe('generaPdfReportUo', () => {
           ...d.codici[0],
           lavorazioni: [
             { tipologia: 'Verifica UNIEMENS', procedura: 'Estrarre il flusso', esito: 'Diffida' },
-            { tipologia: 'Contabilizzazione', procedura: 'Iscrivere il debito', esito: 'TL 27' },
+            { tipologia: 'Contabilizzazione', procedura: 'Iscrivere il debito', esito: 'TS 27' },
             { tipologia: 'Invio ad AdR', procedura: 'Preparare la delega', esito: 'Cartella' },
           ],
         },

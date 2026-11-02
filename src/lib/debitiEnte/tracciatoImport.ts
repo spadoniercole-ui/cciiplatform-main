@@ -83,7 +83,7 @@ export function rilevaCodiciNuovi(sezione: SezioneEstratta, tracciato: Tracciato
 
 /**
  * Versione TOLLERANTE di interpretaNumero: cella vuota o non numerica → 0.
- * Resta per chi somma importi facoltativi (es. colonna credito del file VERA);
+ * Resta per chi somma importi facoltativi (es. colonna credito del file della certificazione dei debiti);
  * l'import a tracciati usa interpretaNumero, che distingue "assente" da 0.
  */
 export function parseNumero(c: unknown): number {

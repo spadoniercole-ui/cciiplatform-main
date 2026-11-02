@@ -58,11 +58,11 @@ export function generaPdfReparto(d: DocumentoReparto): jsPDF {
     y += 5;
   }
   // Fuori perimetro: dichiarate, non elencate. Un documento che tace sulle
-  // posizioni sospese lascia credere che il V.E.R.A. ne contenesse solo
+  // posizioni sospese lascia credere che la certificazione dei debiti ne contenesse solo
   // quelle elencate, e chi confronta il PDF con la scheda trova una
   // differenza che nessuno spiega.
   // Ciò che è già in contabilità non è un debito da lavorare: si dichiara
-  // perché il totale del foglio non è il totale del V.E.R.A. Chi confronta i
+  // perché il totale del foglio non è il totale della certificazione dei debiti Chi confronta i
   // due numeri trova la spiegazione qui, invece di concludere che manchi roba.
   const notaContabilizzate = testiContabilizzate(d, formattaImportoEuro).documento;
   if (notaContabilizzate) {
@@ -100,7 +100,7 @@ export function generaPdfReparto(d: DocumentoReparto): jsPDF {
   autoTable(doc, {
     startY: y + 3,
     margin: { left: 14, right: 14 },
-    head: [['Tipologia', 'Posizione V.E.R.A.', 'Periodo', 'Natura', 'Importo']],
+    head: [['Tipologia', 'Certificazione dei debiti', 'Periodo', 'Natura', 'Importo']],
     body: d.posizioni.map((p) => [
       p.categoria,
       `${p.sezione} — ${p.voce}`,

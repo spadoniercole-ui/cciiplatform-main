@@ -24,7 +24,7 @@ const contabilizzata = (
 ) => riga({ voce, stato: '', importo, trattamento });
 
 describe('sortaRigaVera', () => {
-  it('lo stato del V.E.R.A. decide: vuoto contabilizzato, valorizzato da lavorare', () => {
+  it('lo stato della certificazione dei debiti decide: vuoto contabilizzato, valorizzato da lavorare', () => {
     expect(sortaRigaVera(riga({ stato: '', trattamento: 'contabilizzato' }))).toBe(
       'CONTABILIZZATA'
     );
@@ -49,7 +49,7 @@ describe('sortaRigaVera', () => {
   });
 
   it('la denuncia non trasmessa resta un adempimento da elencare, non un importo da contabilizzare', () => {
-    // Lo stato è vuoto — per il V.E.R.A. «contabilizzato» — ma una denuncia che
+    // Lo stato è vuoto — per la certificazione dei debiti «contabilizzato» — ma una denuncia che
     // non è partita non può essere in contabilità: lo stato dichiara che il
     // debito è iscritto (lo scrive l'F24 accanto), l'adempimento aperto è la
     // trasmissione. Resta in elenco per il suo ufficio, senza entrare fra le

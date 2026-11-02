@@ -9,14 +9,14 @@
 // scelto di stare sul mercato. Il primo caso si lavora, il secondo si presidia.
 //
 // LA QUALIFICAZIONE VIENE DAI TITOLI, NON DA UN QUESTIONARIO GENERICO. La
-// lavorazione (TL) di una materia dice già che cosa l'ente fa su quel credito:
+// lavorazione (TS) di una materia dice già che cosa l'ente fa su quel credito:
 // se quel flusso si è attivato e che esito ha avuto è una cosa che l'operatore
 // sa e che nessun documento della piattaforma contiene. Da qui la check: una
-// voce per ogni TL contrassegnata come rilevante per il perimetro, con i codici
+// voce per ogni TS contrassegnata come rilevante per il perimetro, con i codici
 // di partita che le stanno sotto.
 //
 // OBBLIGATORIA NELLA PARTE CHE CONTA. Le voci nascono dai titoli, non
-// dall'operatore: finché una TL rilevante non ha risposta, il triage non è
+// dall'operatore: finché una TS rilevante non ha risposta, il triage non è
 // completo. Le domande delle direttrici restano un'altra cosa e non bloccano
 // nulla — sono un approfondimento, non un requisito.
 //
@@ -52,7 +52,7 @@ export const ETICHETTA_NATURA: Record<NaturaProblema, string> = {
   NON_VALUTABILE: 'Non valutabile con i dati disponibili',
 };
 
-/** Una TL come è configurata nella materia, con il contrassegno di perimetro. */
+/** Una TS come è configurata nella materia, con il contrassegno di perimetro. */
 export interface LavorazionePerimetro {
   id: number;
   materiaId: number;
@@ -63,13 +63,13 @@ export interface LavorazionePerimetro {
   versoPerimetro: VersoPerimetro | null;
 }
 
-/** Il codice di partita, con la materia in cui cade: è il ponte verso la TL. */
+/** Il codice di partita, con la materia in cui cade: è il ponte verso la TS. */
 export interface TitoloPerimetro {
   codice: string;
   materiaId: number | null;
 }
 
-/** Una voce della check: la TL rilevante e la risposta dell'operatore. */
+/** Una voce della check: la TS rilevante e la risposta dell'operatore. */
 export interface VocePerimetro {
   lavorazioneId: number;
   tipologia: string;
@@ -84,11 +84,11 @@ export interface VocePerimetro {
 }
 
 /**
- * Le voci obbligatorie: una per ogni TL contrassegnata come rilevante.
+ * Le voci obbligatorie: una per ogni TS contrassegnata come rilevante.
  *
  * Non si filtrano i titoli per debito: il legame fra un codice di partita e
  * un importo del triage non è un dato che la piattaforma possiede — le
- * posizioni hanno una descrizione, non un codice. Dire «questa TL riguarda
+ * posizioni hanno una descrizione, non un codice. Dire «questa TS riguarda
  * solo i crediti con debito» sarebbe una deduzione, e per giunta sbagliata
  * quando il debito è a zero perché la pratica è stata chiusa. La voce elenca
  * i codici che la materia copre: chi risponde sa di che cosa sta parlando.
@@ -133,7 +133,7 @@ export function applicaRisposte(
 /**
  * Che cosa manca. Una voce senza stato è incompleta; una voce «non
  * riscontrata» senza natura lo è altrettanto, perché non dice che cosa è
- * successo. «Non applicabile» non chiede natura: la TL non riguarda questa
+ * successo. «Non applicabile» non chiede natura: la TS non riguarda questa
  * azienda, e chiederne la natura sarebbe una domanda senza oggetto.
  */
 export function mancanze(voci: VocePerimetro[]): string[] {
@@ -165,11 +165,11 @@ export interface SintesiPerimetro {
   nonApplicabili: number;
   /** Voci ancora senza risposta (o senza natura). */
   daCompilare: number;
-  /** Codici sotto una TL di resistenza non riscontrata: i crediti da guardare. */
+  /** Codici sotto una TS di resistenza non riscontrata: i crediti da guardare. */
   codiciDaAttenzionare: string[];
-  /** Codici sotto una TL non riscontrata per un problema momentaneo. */
+  /** Codici sotto una TS non riscontrata per un problema momentaneo. */
   codiciIncidentali: string[];
-  /** Codici sotto una TL non riscontrata come modus operandi. */
+  /** Codici sotto una TS non riscontrata come modus operandi. */
   codiciStrutturali: string[];
   etichetta: string;
   dettaglio: string;
@@ -198,10 +198,10 @@ export function sintesiPerimetro(voci: VocePerimetro[]): SintesiPerimetro {
 
   const incidentali = codici((v) => v.natura === 'MOMENTANEO');
   const strutturali = codici((v) => v.natura === 'MODUS_OPERANDI');
-  // Anche una TL di resistenza non riscontrata senza natura è da guardare: la
+  // Anche una TS di resistenza non riscontrata senza natura è da guardare: la
   // risposta manca, e il codice non può sparire dal quadro per questo. Se la
   // natura è dichiarata, però, comanda quella: un problema momentaneo sotto
-  // una TL di resistenza resta un problema momentaneo, e i due elenchi non si
+  // una TS di resistenza resta un problema momentaneo, e i due elenchi non si
   // sommano (leggeremmo lo stesso codice due volte).
   const daAttenzionare = Array.from(
     new Set(
@@ -223,7 +223,7 @@ export function sintesiPerimetro(voci: VocePerimetro[]): SintesiPerimetro {
       codiciDaAttenzionare: [],
       codiciIncidentali: [],
       codiciStrutturali: [],
-      etichetta: 'Nessuna TL rilevante per il perimetro',
+      etichetta: 'Nessuna TS rilevante per il perimetro',
       dettaglio:
         'Nessuna lavorazione delle materie è contrassegnata come rilevante per il perimetro: la check obbligatoria non ha voci. Il contrassegno si imposta in Parametri di Spazio → Materie e lavorazioni.',
     };
@@ -242,7 +242,7 @@ export function sintesiPerimetro(voci: VocePerimetro[]): SintesiPerimetro {
       etichetta: 'Check di perimetro incompleta',
       dettaglio: `${daCompilare} ${
         daCompilare === 1 ? 'voce non ha risposta' : 'voci non hanno risposta'
-      }: il triage non si considera completo finché le TL rilevanti non sono state verificate.`,
+      }: il triage non si considera completo finché le TS rilevanti non sono state verificate.`,
     };
   }
 
@@ -278,6 +278,6 @@ export function sintesiPerimetro(voci: VocePerimetro[]): SintesiPerimetro {
     dettaglio:
       pezzi.length > 0
         ? `${pezzi.join('; ')}. Il quadro non dice nulla sull’importo del debito: quello lo misurano le soglie, con i suoi valori.`
-        : 'Tutte le TL rilevanti risultano riscontrate e nessun codice è rimasto sotto una condotta di resistenza. La verifica riguarda le lavorazioni configurate, non l’intera storia dell’azienda.',
+        : 'Tutte le TS rilevanti risultano riscontrate e nessun codice è rimasto sotto una condotta di resistenza. La verifica riguarda le lavorazioni configurate, non l’intera storia dell’azienda.',
   };
 }

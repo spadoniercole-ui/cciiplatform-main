@@ -2,7 +2,7 @@
 
 // Fascicolo di evidenza — elenco degli importi su cui poggia un testo, ciascuno
 // con la propria provenienza e il proprio stato di verifica. Prima tappa: si
-// compone al volo da proposta, posizione debitoria dell'ente e V.E.R.A.
+// compone al volo da proposta, posizione debitoria dell'ente e la certificazione dei debiti
 //
 // Il pannello dichiara anche cio' che NON sa: di molte righe la piattaforma
 // non ha ancora registrato il documento di origine.
@@ -75,8 +75,8 @@ export function FascicoloEvidenza({ nomeSchema, aziendaId, scenarioId, onCaricat
           </h3>
           <p className="text-[11px] text-slate-600 mt-0.5">
             Gli importi su cui il testo può poggiare, con la loro provenienza. Oggi copre proposta,
-            posizione debitoria dell’ente, V.E.R.A. e bilanci XBRL; il revisore segnala ogni importo
-            del testo che non trova qui.
+            posizione debitoria dell’ente, certificazione dei debiti e bilanci XBRL; il revisore
+            segnala ogni importo del testo che non trova qui.
           </p>
         </div>
       </div>

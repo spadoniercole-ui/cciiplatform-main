@@ -2,7 +2,7 @@
 //
 // QUANTO SONO VECCHI I NUMERI DI UNA VERIFICA.
 //
-// Il triage produce una fotografia: le posizioni lette dal V.E.R.A., i valori
+// Il triage produce una fotografia: le posizioni lette dalla certificazione dei debiti, i valori
 // dei fogli, la data a cui si riferiscono i conti. Quella fotografia non
 // invecchia da sola — resta esattamente com'era — ma il mondo sotto di lei sì,
 // e la finestra che il foglio stesso dichiara è di trenta giorni per tornare a

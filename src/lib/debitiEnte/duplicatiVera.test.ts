@@ -6,7 +6,7 @@ import { ripartisciRigheVera, testiContabilizzate } from '@/lib/lavorazioni/daLa
 
 // LO STESSO DEBITO SCRITTO DUE VOLTE.
 //
-// Nel V.E.R.A. dell'ente la stessa obbligazione compare come «F24 non
+// Nella certificazione dei debiti dell'ente la stessa obbligazione compare come «F24 non
 // presentato» (con la cifra nelle colonne Contributi e Sanzioni) e come
 // «Denunce non trasmesse» (con la cifra nel totale), nello stesso periodo e per
 // lo stesso importo. Sommarle nell'esposizione dichiarava un debito che non

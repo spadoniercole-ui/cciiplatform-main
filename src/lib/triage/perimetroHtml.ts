@@ -2,7 +2,7 @@
 //
 // LA CHECK DI PERIMETRO DENTRO UN ELABORATO.
 //
-// La parte OBBLIGATORIA c'è sempre: ogni TL rilevante, con l'esito che
+// La parte OBBLIGATORIA c'è sempre: ogni TS rilevante, con l'esito che
 // l'operatore ha dichiarato — compresa una voce ancora senza risposta, che si
 // stampa come «da verificare» perché il documento non deve far credere che la
 // verifica sia stata fatta.

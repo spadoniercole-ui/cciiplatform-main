@@ -4,7 +4,7 @@
 // a punto e si ricarica dopo un azzeramento del database (o su un altro
 // spazio dello stesso tipo). Contiene SOLO configurazione — le pagine di
 // Parametri di Spazio, direttrici, titoli e materie dell'ente, etichette
-// dell'anagrafica ente, mappature V.E.R.A., strutture dei prospetti, stampa
+// dell'anagrafica ente, mappature della certificazione dei debiti, strutture dei prospetti, stampa
 // con il logo — mai aziende, scenari, utenti o licenze.
 //
 // Il ripristino SOSTITUISCE tabella per tabella (cancella e reinserisce in
@@ -41,9 +41,12 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
   { nome: 'limiti_ricevibilita_rango', descrizione: 'Parametri per rango' },
   { nome: 'parametri_proposta_redigente', descrizione: 'Percentuale media della proposta' },
   { nome: 'parametri_visualizzazione', descrizione: 'Visualizzazione' },
-  // 0.141.0: obbligo del file V.E.R.A. nel triage. Configurazione, non dato:
+  // 0.141.0: obbligo del file della certificazione dei debiti nel triage. Configurazione, non dato:
   // un altro spazio dello stesso ente deve poter partire con la stessa regola.
-  { nome: 'parametri_triage', descrizione: 'Triage: obbligo del file V.E.R.A.' },
+  {
+    nome: 'parametri_triage',
+    descrizione: 'Triage: obbligo del file della certificazione dei debiti',
+  },
   { nome: 'xbrl_tab_abilitate', descrizione: 'Schede XBRL' },
   { nome: 'checklist_pesi_domande', descrizione: 'Check List: pesi delle domande' },
   { nome: 'checklist_config_pesi', descrizione: 'Check List: parametri' },
@@ -58,17 +61,17 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
     nome: 'materie_lavorazione',
     descrizione: 'Lavorazioni delle materie (dipendenza e procedura)',
   },
-  // 0.159.0: il catalogo delle TL è piatto (codice, descrizione, flag per la
+  // 0.159.0: il catalogo delle TS è piatto (codice, descrizione, flag per la
   // check list); la materia le applica a una direttrice e a un prodotto in
   // `materia_tl`, con ufficio, passi ed esito. Vanno dopo le materie (gli id
   // devono esistere) e prima dei titoli, che le leggono. `prodotti_tl` non si
   // esporta più: è lo storico del modello precedente.
-  { nome: 'tl', descrizione: 'Catalogo delle TL (codice, descrizione, check list)' },
+  { nome: 'tl', descrizione: 'Catalogo delle TS (codice, descrizione, check list)' },
   {
     nome: 'materia_tl',
-    descrizione: 'TL applicate dalle materie (direttrice, prodotto, processo)',
+    descrizione: 'TS applicate dalle materie (direttrice, prodotto, processo)',
   },
-  { nome: 'categoria_tl', descrizione: 'TL per tipologia di debito' },
+  { nome: 'categoria_tl', descrizione: 'TS per tipologia di debito' },
   { nome: 'titoli_ente', descrizione: 'Titoli di credito dell’ente' },
   {
     nome: 'titoli_ente_config',
@@ -82,8 +85,8 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
   { nome: 'categorie_tipo_debito', descrizione: 'Categorie di debito' },
   { nome: 'tipo_debito_config', descrizione: 'Etichette dei tipi di debito' },
   { nome: 'lavorazioni_tipo_debito', descrizione: 'Lavorazioni per tipologia di debito (storico)' },
-  { nome: 'vera_titoli', descrizione: 'V.E.R.A.: titoli di sezione mappati' },
-  { nome: 'vera_trattamenti', descrizione: 'V.E.R.A.: trattamenti natura/stato' },
+  { nome: 'vera_titoli', descrizione: 'certificazione dei debiti: titoli di sezione mappati' },
+  { nome: 'vera_trattamenti', descrizione: 'certificazione dei debiti: trattamenti natura/stato' },
   { nome: 'strutture_prospetto', descrizione: 'Strutture dei prospetti riconosciute' },
   { nome: 'debiti_ente_tracciati', descrizione: 'Tracciati dei file dell’ente' },
 ];

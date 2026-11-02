@@ -233,7 +233,7 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
   // posizione in lavorazione.
   //
   // Nasce dalla funzione "Verifica salute azienda", che serve al triage: si
-  // caricano visura, XBRL e V.E.R.A., si ottiene l'indicatore, e SOLO se si
+  // caricano visura, XBRL e la certificazione dei debiti, si ottiene l'indicatore, e SOLO se si
   // decide di procedere l'azienda diventa attiva. Il costo di guardare una
   // posizione scende da quindici campi digitati a due o tre da confermare.
   //
@@ -278,7 +278,7 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
   // Stanno sull'AZIENDA e non sullo scenario: il debito e' il punto di
   // partenza di ogni analisi, non cambia da uno scenario all'altro. Si
   // compilano una volta nella fase di raccolta delle informazioni azienda
-  // (scheda "Soglie di segnalazione" accanto alla Posizione V.E.R.A.) e da li'
+  // (scheda "Soglie di segnalazione" accanto alla Certificazione dei debiti) e da li'
   // vengono riportati in ogni scenario.
   //
   // Tutte FACOLTATIVE: obbligatorie manderebbero in arancione l'anagrafica di
@@ -815,7 +815,7 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
 
   // Parametri del TRIAGE — un'unica riga (id=1).
   //
-  // vera_obbligatorio: se il file V.E.R.A. è il presupposto del triage in
+  // vera_obbligatorio: se il file della certificazione dei debiti è il presupposto del triage in
   // questo spazio. NULL = automatico, cioè segue l'ente (obbligatorio per
   // l'INPS, facoltativo per gli altri). La regola sta in
   // src/lib/triage/veraObbligatorio.ts: qui solo il valore scelto, così un
@@ -987,7 +987,7 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   // si chiede all'azienda il pagamento del debito. Sta accanto alla procedura
   // perché la procedura senza il destinatario non si può eseguire.
   await eseguiDdlTenant(sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS dipendenza TEXT`);
-  // LA VESTIZIONE LEGALE (0.159.0): il titolo mette insieme la TL, la
+  // LA VESTIZIONE LEGALE (0.159.0): il titolo mette insieme la TS, la
   // direttrice (la colonna `dipendenza`) e il prodotto. Il codice di partita
   // resta la chiave; questi campi dicono su quale presupposto giuridico e con
   // quale lavorazione l'ente fonda la richiesta.
@@ -1676,7 +1676,7 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
   //
   // Allora l'argomento era la STABILITÀ del dato. Oggi l'argomento è la sua
   // FUNZIONE: la fotografia stabile dell'esposizione è la Posizione
-  // V.E.R.A. — documento ufficiale dell'istituto, che comprende le partite
+  // certificazione dei debiti — documento ufficiale dell'istituto, che comprende le partite
   // in lavorazione e le sanzioni — mentre il CONTABILIZZATO è la base su cui
   // si fanno i conti quando arriva una proposta specifica, a una data
   // specifica. È legato a un evento, quindi appartiene allo scenario.
@@ -1997,7 +1997,7 @@ export async function assicuraTabellaTracciatiDebitiEnte(nomeSchema: string): Pr
 }
 
 /**
- * Posizione V.E.R.A. — il file INPS "DettaglioRichiesta" letto su TUTTE le
+ * Certificazione dei debiti — il file INPS "DettaglioRichiesta" letto su TUTTE le
  * sezioni, ognuna con la natura data dal titolo di sezione. Due tabelle:
  *  - vera_titoli: mappa (per spazio) titolo-di-sezione normalizzato → categoria;
  *  - debiti_vera: righe importate (per azienda), usate per il confronto
@@ -2054,7 +2054,7 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
   // riconoscimento automatico, 'CONFERMATO' = è lo stesso debito, 'NEGATO' =
   // sono due debiti distinti e le due cifre restano distinte. Sta sulla riga
   // denunce, insieme alla posizione: la verifica riaperta rifà i conti con la
-  // scelta già presa. Un nuovo import del V.E.R.A. ricostruisce le righe e
+  // scelta già presa. Un nuovo import della certificazione dei debiti ricostruisce le righe e
   // riparte dall'automatico.
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.debiti_vera ADD COLUMN IF NOT EXISTS duplicato_stato TEXT NOT NULL DEFAULT ''`
@@ -2131,14 +2131,14 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
   );
   // LE SOSPENSIONI GIÀ SALVATE.
   //
-  // La classificazione del V.E.R.A. metteva le posizioni con stato «Sospeso»
+  // La classificazione della certificazione dei debiti metteva le posizioni con stato «Sospeso»
   // nel trattamento «Ignora»: fuori dai totali, ma anche fuori da ogni ufficio
   // — invisibili a chi dovrà riprenderle quando il ricorso si chiude. Ora
   // l'automatico le riconosce da sole («sospeso»); le righe già salvate però
   // non si riscrivono da sole, e chiedere allo spazio di correggerle a mano
   // una per una significherebbe lasciarle invisibili finché qualcuno se ne
   // ricorda. Qui si riallineano da sé, quando lo spazio rilegge il suo
-  // V.E.R.A.: solo dove il trattamento è ancora «Ignora» — una scelta diversa
+  // certificazione dei debiti: solo dove il trattamento è ancora «Ignora» — una scelta diversa
   // fatta a mano resta com'è — e solo per le posizioni sospese.
   //
   // È idempotente: dopo il primo passaggio non c'è più nessuna riga da
@@ -2169,7 +2169,7 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
  *
  * Per ogni categoria di debito (le stesse `categorie_tipo_debito` con cui si
  * classificano le posizioni) dice che cosa va fatto e a chi va chiesto. Non è
- * una tabella di dati dell'azienda: è il ponte fra il file V.E.R.A. e le
+ * una tabella di dati dell'azienda: è il ponte fra il file della certificazione dei debiti e le
  * comunicazioni che l'operatore deve inviare ai colleghi.
  *
  * Idempotente. L'indice univoco evita che lo stesso binomio categoria +
@@ -2226,7 +2226,7 @@ export async function assicuraTabellaMaterieLavorazione(nomeSchema: string): Pro
       aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
-  // IL PERIMETRO DELLA TL (0.153.0). Non tutte le lavorazioni dicono la
+  // IL PERIMETRO DELLA TS (0.153.0). Non tutte le lavorazioni dicono la
   // stessa cosa dell'azienda: alcune sono il presidio che l'ente attiva quando
   // la condotta è elusiva. Il contrassegno dice quali entrano nella check
   // obbligatoria del triage, e il verso dice da che parte stanno. Due colonne
@@ -2247,20 +2247,20 @@ export async function assicuraTabellaMaterieLavorazione(nomeSchema: string): Pro
 }
 
 /**
- * CATALOGO DELLE TL NEI PRODOTTI (0.157.0).
+ * CATALOGO DELLE TS NEI PRODOTTI (0.157.0).
  *
- * La TL — la tipologia di lavorazione — non appartiene più alla materia: sta
+ * La TS — la tipologia di lavorazione — non appartiene più alla materia: sta
  * sotto una direttrice e un prodotto, cioè dove il lavoro si organizza. La
  * materia la EREDITA, associandola ai propri codici: \`materia_tl\` è quella
  * associazione, e i titoli di credito restano il punto in cui il codice dichiara
  * la sua materia (e, se vuole, un ufficio proprio).
  *
- * PERCHÉ DUE TABELLE E NON UNA. La stessa TL può coprire più materie — è il
+ * PERCHÉ DUE TABELLE E NON UNA. La stessa TS può coprire più materie — è il
  * caso normale di un prodotto lavorato su partite diverse — e l'ordine con cui
  * la materia la esegue è suo, non del catalogo. Tenerli separati evita di
- * duplicare la TL (e di doverla correggere due volte).
+ * duplicare la TS (e di doverla correggere due volte).
  *
- * MIGRAZIONE DELLE CONFIGURAZIONI ESISTENTI. Le TL scritte finora in
+ * MIGRAZIONE DELLE CONFIGURAZIONI ESISTENTI. Le TS scritte finora in
  * \`materie_lavorazione\` sono già lavoro fatto: si copiano una volta sola nel
  * catalogo, conservando l'id (le risposte della check di perimetro lo
  * referenziano) e come prodotto si usa la tipologia stessa, che è l'unico nome
@@ -2274,10 +2274,10 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
   const s = sql.identifier(nomeSchema);
   await assicuraTabellaMaterieLavorazione(nomeSchema);
 
-  // IL CATALOGO PIATTO DELLE TL (0.159.0). Codice, descrizione, contrassegno
+  // IL CATALOGO PIATTO DELLE TS (0.159.0). Codice, descrizione, contrassegno
   // per la check list: nient'altro. L'ufficio, i passi e l'esito sono il
   // processo con cui una materia la applica a una direttrice e a un prodotto, e
-  // stanno in `materia_tl`: la stessa TL non va riscritta per ogni prodotto.
+  // stanno in `materia_tl`: la stessa TS non va riscritta per ogni prodotto.
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.tl (
       id SERIAL PRIMARY KEY,
@@ -2295,8 +2295,8 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
   );
 
   // L'ASSOCIAZIONE: la materia mutua la coppia direttrice/prodotto e porta il
-  // processo (ufficio, passi, esito, ordine). La chiave resta (materia, TL):
-  // una materia applica una TL una volta sola, su un prodotto.
+  // processo (ufficio, passi, esito, ordine). La chiave resta (materia, TS):
+  // una materia applica una TS una volta sola, su un prodotto.
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.materia_tl (
       id SERIAL,
@@ -2312,7 +2312,7 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
     )`
   );
   // L'id dell'associazione serve ai comandi in blocco (riallineamento di un
-  // ufficio): la coppia (materia, TL) resta la chiave logica.
+  // ufficio): la coppia (materia, TS) resta la chiave logica.
   await eseguiDdlTenant(sql`ALTER TABLE ${s}.materia_tl ADD COLUMN IF NOT EXISTS id SERIAL`);
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.materia_tl ADD COLUMN IF NOT EXISTS direttrice TEXT NOT NULL DEFAULT ''`
@@ -2343,7 +2343,7 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
 
   // LA COPIA DAL VECCHIO MODELLO, UNA VOLTA SOLA.
   //
-  // Fino alla 0.158.0 la TL stava dentro il prodotto (`prodotti_tl`): la stessa
+  // Fino alla 0.158.0 la TS stava dentro il prodotto (`prodotti_tl`): la stessa
   // lavorazione era ripetuta per ogni prodotto che la usava. Qui se ne fa una
   // sola per codice, e le associazioni delle materie conservano direttrice,
   // prodotto e processo. Gli id nuovi si rimappano su `categoria_tl` e sulle
@@ -2376,7 +2376,7 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
              ON lower(btrim(t.codice)) = lower(btrim(p.tipologia))`
       );
       // Il processo passa dall'associazione: la direttrice e il prodotto che
-      // erano sulla TL diventano quelli che la materia mutua, e la TL resta
+      // erano sulla TS diventano quelli che la materia mutua, e la TS resta
       // codice + descrizione + contrassegno.
       await client.query(
         `UPDATE "${nomeSchema}".materia_tl a
@@ -2388,12 +2388,12 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
            FROM "${nomeSchema}".prodotti_tl p
           WHERE p.id = a.tl_id`
       );
-      // LA RIMMAPPATURA IN UN COLPO SOLO. Due vecchie TL con lo stesso codice
+      // LA RIMMAPPATURA IN UN COLPO SOLO. Due vecchie TS con lo stesso codice
       // diventano una sola. Spostare gli id una riga alla volta fa cascata —
       // 3 → 1 tocca anche le righe appena diventate 3 — e un UPDATE in blocco
       // viola la chiave prima di poter scartare il duplicato. Si calcola prima
       // la destinazione di ogni riga, si tiene una riga per chiave (vince
-      // quella già sulla TL che sopravvive) e si scrive una volta sola.
+      // quella già sulla TS che sopravvive) e si scrive una volta sola.
       const mappa = await client.query(`SELECT vecchio FROM mappa_tl`);
       const vecchi = mappa.rows.map((r) => Number(r.vecchio));
       const mappati = vecchi.length > 0 ? vecchi : [-1];
@@ -2438,7 +2438,7 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
          SELECT categoria, tl_id, attivo, ordine FROM categoria_tl_target`
       );
 
-      // Risposte della check di perimetro: una per azienda e TL. La tabella
+      // Risposte della check di perimetro: una per azienda e TS. La tabella
       // può non essere ancora nata (spazio che non ha mai aperto il triage):
       // in quel caso non c'è nulla da rimappare.
       const triage = await client.query(`SELECT to_regclass($1) AS tabella`, [
@@ -2475,7 +2475,7 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
       client.release();
     }
   } else if (stato.rows[0]?.vuoto && stato.rows[0]?.storico) {
-    // Spazi antichissimi, senza nemmeno `prodotti_tl`: le TL stavano nelle
+    // Spazi antichissimi, senza nemmeno `prodotti_tl`: le TS stavano nelle
     // lavorazioni delle materie. Stessa idea, sorgente diversa.
     const client = await pool.connect();
     try {
@@ -2512,7 +2512,7 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
   //
   // Prima ogni categoria di debito aveva una riga scritta a mano con la
   // lavorazione e il destinatario: la stessa procedura esisteva in due tabelle
-  // e andava tenuta allineata a mano. Qui la categoria punta a una TL di
+  // e andava tenuta allineata a mano. Qui la categoria punta a una TS di
   // `prodotti_tl`, così ufficio, passi ed esito si scrivono in un posto solo.
   //
   // La vecchia `lavorazioni_tipo_debito` resta in piedi (i documenti del
@@ -2541,9 +2541,9 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      // Le TL che la vecchia tabella citava e che il catalogo non ha ancora:
+      // Le TS che la vecchia tabella citava e che il catalogo non ha ancora:
       // la lavorazione è il codice e la descrizione, una volta sola. L'ufficio
-      // che stava nella vecchia riga non entra più nella TL: è il processo
+      // che stava nella vecchia riga non entra più nella TS: è il processo
       // dell'associazione, e qui non c'è una materia a cui appenderlo.
       await client.query(
         `INSERT INTO "${nomeSchema}".tl (codice, descrizione, ordine)
@@ -2579,8 +2579,8 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
  *
  * Quattro tabelle, ognuna con un compito solo:
  *
- *  - `triage_perimetro` — le risposte dell'operatore alle TL rilevanti, una
- *    riga per azienda e lavorazione. La chiave è la coppia: la stessa TL vale
+ *  - `triage_perimetro` — le risposte dell'operatore alle TS rilevanti, una
+ *    riga per azienda e lavorazione. La chiave è la coppia: la stessa TS vale
  *    per tutte le aziende nella configurazione, ma la risposta è di ciascuna.
  *  - `parametri_scenari` — la riga unica delle spese di procedura.
  *  - `parametri_scenari_rango` — le percentuali per rango, fissate dall'ente.

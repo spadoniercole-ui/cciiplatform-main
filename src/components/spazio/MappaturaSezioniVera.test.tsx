@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// LA FINESTRA CHE MAPPA LE SEZIONI V.E.R.A.
+// LA FINESTRA CHE MAPPA LE SEZIONI DELLA certificazione dei debiti
 //
 // La sezione del file che non si riconduce a una materia non ha un ufficio a
 // cui andare, quindi le sue posizioni restano fuori dai documenti. La scelta
@@ -71,7 +71,7 @@ afterEach(() => {
   cleanup();
 });
 
-describe('mappatura delle sezioni V.E.R.A.', () => {
+describe('mappatura delle sezioni della certificazione dei debiti', () => {
   it('salva sezione, etichetta e destinazione, e le riporta a chi ha aperto la finestra', async () => {
     const onSalvate = vi.fn();
     const onChiudi = vi.fn();

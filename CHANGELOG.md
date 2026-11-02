@@ -1,3 +1,19 @@
+## 0.160.0 — 2026-11-02
+
+**Due nomi nuovi per le stesse cose: le TL diventano TS e il V.E.R.A. diventa la certificazione
+dei debiti.** È il linguaggio con cui i nostri uffici chiamano le due cose, e la piattaforma ora
+lo usa in ogni pagina, nei documenti generati e nei messaggi di errore.
+
+- **Catalogo delle TS** (`tl`): codice, descrizione, flag per la check list. Cambiano la pagina
+  Parametri › Catalogo delle TS, il passo «Materie e TS», il collegamento per categoria di debito
+  e le etichette nei titoli di credito, nella check di perimetro e nei documenti.
+- **Certificazione dei debiti al posto di «V.E.R.A.»**: la scheda della posizione dell'ente, la
+  mappatura delle sezioni, l'obbligo nel triage, il report per unità operativa, i PDF, le
+  comunicazioni ai reparti e la verifica di salute leggono il nuovo nome.
+- **Nessuna migrazione.** Cambiano le etichette, non i dati: tabelle (`tl`, `materia_tl`,
+  `categoria_tl`, `debiti_vera`), colonne ed enumerazioni restano quelle di prima, così gli spazi
+  già configurati continuano a leggere le stesse righe senza passaggi a mano.
+
 ## 0.159.0 — 2026-11-02
 
 **Le TL tornano a essere semplici: codice, descrizione, flag per la check list.**

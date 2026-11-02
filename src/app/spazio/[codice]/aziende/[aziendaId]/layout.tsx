@@ -96,8 +96,8 @@ export default async function AziendaLayout({
   // aveva fatto tutto il necessario e vedeva il passo restare aperto.
   //
   // Quel che serve a questo livello è l'Anagrafica Ente compilata (chi è
-  // l'ente per questa azienda) e, se c'è, la Posizione V.E.R.A. — che è la
-  // fotografia certificata dell'esposizione. La V.E.R.A. resta facoltativa:
+  // l'ente per questa azienda) e, se c'è, la Certificazione dei debiti — che è la
+  // fotografia certificata dell'esposizione. La certificazione dei debiti resta facoltativa:
   // la sua assenza la dichiara l'indicatore di attenzione, non un blocco che
   // impedisce di proseguire.
   const posizioneEnteCompleta = anagraficaEnteCompilata;

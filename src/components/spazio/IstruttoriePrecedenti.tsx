@@ -42,8 +42,8 @@ export function IstruttoriePrecedenti({
               {c.screeningDel && <> · screening del {data(c.screeningDel)}</>}
               <span className="text-slate-500">
                 {' '}
-                · {c.partiteVera} partite V.E.R.A. · {c.posizioniTriage} posizioni del triage ·{' '}
-                {c.risposteChecklist} risposte di Check List
+                · {c.partiteVera} partite della certificazione dei debiti · {c.posizioniTriage}{' '}
+                posizioni del triage · {c.risposteChecklist} risposte di Check List
               </span>
             </summary>
             {c.relazioneScreening ? (

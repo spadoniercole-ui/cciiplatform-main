@@ -8,13 +8,13 @@ const CLASSE =
 /**
  * IL CONTRASSEGNO DI PERIMETRO (0.153.0).
  *
- * Non tutte le TL dicono qualcosa della condotta dell'azienda: alcune sono il
+ * Non tutte le TS dicono qualcosa della condotta dell'azienda: alcune sono il
  * presidio che l'ente attiva quando la condotta è elusiva, altre accompagnano
  * un adempimento. Solo le prime generano una voce obbligatoria nel triage.
  * Il verso è obbligatorio col contrassegno: senza, la sintesi del triage non
  * sa dire se i codici stanno sotto una condotta o sotto una collaborazione.
  *
- * Vive in un componente suo perché la TL si scrive nel prodotto (0.157.0) e
+ * Vive in un componente suo perché la TS si scrive nel prodotto (0.157.0) e
  * prima stava nella materia: ora la stessa casella serve un posto solo, ma non
  * deve divergere se un domani ne servisse un altro.
  */
@@ -48,7 +48,7 @@ export function CampoPerimetroTl({
           className="mt-0.5"
         />
         <span>
-          Questa TL entra nella check obbligatoria del triage: senza risposta il triage non si
+          Questa TS entra nella check obbligatoria del triage: senza risposta il triage non si
           chiude.
         </span>
       </label>

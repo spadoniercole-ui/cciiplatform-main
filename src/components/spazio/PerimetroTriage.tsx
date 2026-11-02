@@ -2,10 +2,10 @@
 
 // LA CHECK DI PERIMETRO DEL TRIAGE — dove l'operatore risponde.
 //
-// Le voci non si scrivono qui: arrivano dai titoli dell'ente. Ogni TL
+// Le voci non si scrivono qui: arrivano dai titoli dell'ente. Ogni TS
 // contrassegnata come rilevante è una riga, con i codici che la materia copre
 // e l'ufficio che la lavora. La risposta è obbligatoria; la natura lo è solo
-// quando la TL non è stata riscontrata, perché è lì che serve distinguere un
+// quando la TS non è stata riscontrata, perché è lì che serve distinguere un
 // incidente da un modus operandi.
 //
 // IL SALVATAGGIO NON CHIUDE NULLA. Si salva anche una check a metà: il triage
@@ -101,7 +101,7 @@ export function PerimetroTriage({ nomeSchema, aziendaId, onEsito }: Props) {
     if (r.success) {
       setEsito(
         r.completa
-          ? 'Check salvata: tutte le TL rilevanti hanno una risposta.'
+          ? 'Check salvata: tutte le TS rilevanti hanno una risposta.'
           : 'Check salvata, ma restano voci da completare.'
       );
     }
@@ -154,7 +154,7 @@ export function PerimetroTriage({ nomeSchema, aziendaId, onEsito }: Props) {
       {voci.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <p className="text-xs text-slate-600">
-            Nessuna TL è contrassegnata come rilevante per il perimetro. La check non ha voci e non
+            Nessuna TS è contrassegnata come rilevante per il perimetro. La check non ha voci e non
             blocca il triage: il contrassegno si imposta in{' '}
             <b>Parametri di Spazio → Materie e lavorazioni</b>.
           </p>
@@ -250,7 +250,7 @@ export function PerimetroTriage({ nomeSchema, aziendaId, onEsito }: Props) {
               {v.stato === 'NON_RISCONTRATA' && (
                 <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
                   {v.verso === 'RESISTENZA'
-                    ? 'TL di resistenza non riscontrata: i codici restano da attenzionare finché la natura non è dichiarata.'
+                    ? 'TS di resistenza non riscontrata: i codici restano da attenzionare finché la natura non è dichiarata.'
                     : 'Indica la natura: un problema momentaneo e un modus operandi portano a decisioni diverse.'}
                   {v.verso && ` ${ETICHETTA_VERSO[v.verso]}.`}
                 </p>

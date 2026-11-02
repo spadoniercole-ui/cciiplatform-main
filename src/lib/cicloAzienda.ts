@@ -13,7 +13,7 @@
 //   - lo screening (relazione, sezioni, fatti della visura) e le risposte
 //     alla sua Check List;
 //   - la Check List ministeriale dell'azienda;
-//   - le posizioni debitorie del triage e il V.E.R.A.;
+//   - le posizioni debitorie del triage e la certificazione dei debiti;
 //   - i valori della scheda Soglie di segnalazione.
 // Che cosa resta: l'anagrafica dell'azienda e quella presso l'ente, i bilanci
 // XBRL (sono fatti per esercizio, non lavoro dell'istruttoria), gli scenari

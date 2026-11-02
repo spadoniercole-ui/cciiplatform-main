@@ -234,7 +234,7 @@ export async function leggiListaInadempienze(file: File): Promise<EsitoLettura<R
 //
 // Il triage ha un solo punto di caricamento per la posizione debitoria: si
 // portano N file di qualunque natura, e il sistema capisce da solo cosa
-// sono. Prima c'erano campi fissi — uno per il V.E.R.A., tre per i fogli
+// sono. Prima c'erano campi fissi — uno per la certificazione dei debiti, tre per i fogli
 // INPS — che mostravano come presupposto quello che è invece documentazione a
 // corredo, e convivevano sulla stessa pagina con l'inserimento manuale.
 //
@@ -273,7 +273,7 @@ export async function riconosciProspetto(file: File): Promise<TipoProspetto> {
   if (trovaIntestazione(aoa, COL_DELEGHE)) return 'DELEGHE';
   if (trovaIntestazione(aoa, COL_INADEMPIENZE)) return 'INADEMPIENZE';
 
-  // Il V.E.R.A. non ha una riga di intestazione unica: è organizzato in
+  // La certificazione dei debiti non ha una riga di intestazione unica: è organizzato in
   // sezioni con titolo. Lo si riconosce dalla parola che le sezioni portano.
   const testo = aoa
     .slice(0, 40)
@@ -291,7 +291,7 @@ export const ETICHETTA_PROSPETTO: Record<TipoProspetto, string> = {
   DELEGHE: 'Elenco deleghe (F24 per periodo)',
   F24_AGGREGATO: 'F24 aggregato per anno',
   INADEMPIENZE: 'Lista inadempienze',
-  VERA: 'Posizione V.E.R.A.',
+  VERA: 'Certificazione dei debiti',
   SCONOSCIUTO: 'Struttura non riconosciuta',
 };
 

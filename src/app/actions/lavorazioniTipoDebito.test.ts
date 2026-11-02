@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// I COLLEGAMENTI FRA CATEGORIE DI DEBITO E CATALOGO DELLE TL.
+// I COLLEGAMENTI FRA CATEGORIE DI DEBITO E CATALOGO DELLE TS.
 //
 // Dalla 0.159.0 la pagina non scrive più una tabella propria: collega una
-// categoria di debito a una TL del catalogo piatto (`tl`). Le due server action
+// categoria di debito a una TS del catalogo piatto (`tl`). Le due server action
 // sono endpoint pubblici, quindi le si chiama direttamente, come farebbe un
 // browser manomesso, e si verifica che cosa arriva al database.
 
@@ -39,7 +39,7 @@ beforeEach(() => {
   richiediAccessoSchema.mockClear();
 });
 
-describe('collegamento categoria → TL', () => {
+describe('collegamento categoria → TS', () => {
   it('una categoria che non esiste non viene collegata', async () => {
     const esito = await collegaCategoriaTlAction(SCHEMA, 'INVENTATA', 12);
 
@@ -51,14 +51,14 @@ describe('collegamento categoria → TL', () => {
     expect(richiediAccessoSchema).toHaveBeenCalledWith(SCHEMA, { soloAdmin: true });
   });
 
-  it('una TL che non è nel catalogo non viene collegata', async () => {
-    // Prima la categoria esiste, poi la TL no.
+  it('una TS che non è nel catalogo non viene collegata', async () => {
+    // Prima la categoria esiste, poi la TS no.
     query.mockResolvedValueOnce(unaRiga);
 
     const esito = await collegaCategoriaTlAction(SCHEMA, 'DEBITO', 999);
 
     expect(esito.success).toBe(false);
-    expect(esito.error).toBe('TL non trovata nel catalogo.');
+    expect(esito.error).toBe('TS non trovata nel catalogo.');
     expect(scritte()).toHaveLength(0);
   });
 
@@ -66,11 +66,11 @@ describe('collegamento categoria → TL', () => {
     const esito = await collegaCategoriaTlAction(SCHEMA, 'DEBITO', 0);
 
     expect(esito.success).toBe(false);
-    expect(esito.error).toBe('TL non valida.');
+    expect(esito.error).toBe('TS non valida.');
     expect(query).not.toHaveBeenCalled();
   });
 
-  it('il collegamento si scrive su `categoria_tl` con la coppia categoria + TL', async () => {
+  it('il collegamento si scrive su `categoria_tl` con la coppia categoria + TS', async () => {
     query.mockResolvedValue(unaRiga);
 
     const esito = await collegaCategoriaTlAction(SCHEMA, ' DEBITO ', 12);
@@ -84,7 +84,7 @@ describe('collegamento categoria → TL', () => {
   });
 });
 
-describe('scollegamento categoria → TL', () => {
+describe('scollegamento categoria → TS', () => {
   it('senza righe da cancellare risponde con l’errore, non con un finto successo', async () => {
     const esito = await scollegaCategoriaTlAction(SCHEMA, 'DEBITO', 7);
 

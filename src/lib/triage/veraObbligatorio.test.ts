@@ -6,7 +6,7 @@ import {
   risolviObbligoVera,
 } from './veraObbligatorio';
 
-describe('obbligo del V.E.R.A. nel triage', () => {
+describe('obbligo della certificazione dei debiti nel triage', () => {
   it('segue l’ente: obbligatorio per l’INPS, facoltativo per gli altri', () => {
     expect(risolviObbligoVera(null, 'INPS')).toMatchObject({
       obbligatorio: true,

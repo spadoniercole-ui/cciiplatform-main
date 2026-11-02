@@ -131,7 +131,7 @@ describe('bilancio nel fascicolo', () => {
   });
 });
 
-describe('lo stesso debito scritto due volte nel V.E.R.A.', () => {
+describe('lo stesso debito scritto due volte nella certificazione dei debiti', () => {
   // Il file dell'ente scrive la stessa obbligazione come «F24 non presentato» e
   // come «Denunce non trasmesse», stesso periodo e stesso importo. Il totale del
   // fascicolo non può sommarle: contraddirebbe l'esposizione della verifica.
@@ -213,7 +213,7 @@ describe('lo stesso debito scritto due volte nel V.E.R.A.', () => {
     });
     const totale = senzaPeriodo.find((e) => e.id === 'EV-CAL-vera-totale')!;
     expect(totale.importo).toBe(19_180);
-    expect(totale.descrizione).toBe('V.E.R.A. — totale');
+    expect(totale.descrizione).toBe('certificazione dei debiti — totale');
   });
 });
 
@@ -228,7 +228,7 @@ describe('riconciliazione di un testo con il fascicolo', () => {
 
   it('un importo del testo deve avere la sua evidenza; le soglie di legge non sono dati', () => {
     const testo =
-      'L’INPS vanta € 120.000, l’offerta è di 48.000 euro. Il V.E.R.A. espone € 14.914 contro la soglia di € 15.000. Il debito bancario è di € 777.000.';
+      'L’INPS vanta € 120.000, l’offerta è di 48.000 euro. La certificazione dei debiti espone € 14.914 contro la soglia di € 15.000. Il debito bancario è di € 777.000.';
     const r = riconciliaTestoConFascicolo(testo, FASCICOLO, IMPORTI_DI_LEGGE);
     expect(r.riconciliati.map((x) => x.evidenza.id)).toEqual([
       'EV-PRO-1-dovuto',

@@ -8,7 +8,7 @@ const materie: MateriaMinima[] = [
   { id: 4, nome: 'VERBALI ISPETTIVI', codiciIndicativi: null, stato: 'CONFERMATA' },
 ];
 
-describe('materia di una riga V.E.R.A.', () => {
+describe('materia di una riga della certificazione dei debiti', () => {
   it('legge il codice dalla natura', () => {
     expect(codiceDaVoceVera('TS 27 flusso Uniemens non versato')).toBe('27');
     expect(codiceDaVoceVera('18 - Verbale Evasione')).toBe('18');

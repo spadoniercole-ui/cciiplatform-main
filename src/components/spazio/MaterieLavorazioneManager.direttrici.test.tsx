@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 //
-// IL PASSO 2: LA MATERIA APPLICA UNA TL (0.159.0).
+// IL PASSO 2: LA MATERIA APPLICA UNA TS (0.159.0).
 //
-// La TL non si scrive più qui, e non sta più dentro il prodotto: vive nel
+// La TS non si scrive più qui, e non sta più dentro il prodotto: vive nel
 // catalogo (codice, descrizione, flag). La materia la applica a una direttrice
 // e a un prodotto, e scrive il processo. Il test guarda le due cose che si
 // romperebbero in silenzio: l'associazione già fatta compare con prodotto e
@@ -48,7 +48,7 @@ const materia = (id: number, nome: string) => ({
   esitoRicerca: null,
 });
 
-describe('materie e TL', () => {
+describe('materie e TS', () => {
   beforeEach(() => {
     vi.mocked(ottieniMaterieEnteAction).mockResolvedValue({
       success: true,
@@ -109,18 +109,18 @@ describe('materie e TL', () => {
     vi.clearAllMocks();
   });
 
-  it('mostra la TL applicata con prodotto e direttrice, e applica quella libera', async () => {
+  it('mostra la TS applicata con prodotto e direttrice, e applica quella libera', async () => {
     render(<MaterieLavorazioneManager nomeSchema="tenant_prova" codice="prova" />);
 
     await waitFor(() => expect(screen.getByText(/Diffida M400/)).toBeTruthy());
-    // La provenienza si legge accanto alla TL: prodotto · direttrice.
+    // La provenienza si legge accanto alla TS: prodotto · direttrice.
     expect(screen.getByText(/Diffide · Gestione del credito/)).toBeTruthy();
 
     const intestazione = screen.getByRole('heading', { name: 'Denunce Uniemens' });
     const card = intestazione.parentElement?.parentElement as HTMLElement;
-    fireEvent.click(within(card).getByRole('button', { name: /Applica una TL/ }));
+    fireEvent.click(within(card).getByRole('button', { name: /Applica una TS/ }));
 
-    const select = within(card).getByLabelText(/TL da applicare a Denunce Uniemens/);
+    const select = within(card).getByLabelText(/TS da applicare a Denunce Uniemens/);
     fireEvent.change(select, { target: { value: '2' } });
     fireEvent.change(within(card).getByLabelText('Direttrice'), {
       target: { value: 'Gestione del credito' },
@@ -143,11 +143,11 @@ describe('materie e TL', () => {
     );
   });
 
-  it('una materia senza TL lo dice, invece di restare muta', async () => {
+  it('una materia senza TS lo dice, invece di restare muta', async () => {
     vi.mocked(ottieniLavorazioniMateria).mockResolvedValue({ success: true, lavorazioni: [] });
 
     render(<MaterieLavorazioneManager nomeSchema="tenant_prova" codice="prova" />);
 
-    await waitFor(() => expect(screen.getAllByText(/Nessuna TL applicata/).length).toBe(2));
+    await waitFor(() => expect(screen.getAllByText(/Nessuna TS applicata/).length).toBe(2));
   });
 });

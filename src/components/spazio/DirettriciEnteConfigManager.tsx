@@ -164,7 +164,7 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
         pertinenti invece di generiche.
       </p>
       <p className="text-[11px] text-slate-500">
-        Qui si scrivono le aree e i fatti concreti. Le <strong>TL</strong> non stanno più sotto il
+        Qui si scrivono le aree e i fatti concreti. Le <strong>TS</strong> non stanno più sotto il
         prodotto: hanno un{' '}
         <Link
           href={conRitorno(`/spazio/${codice}/parametri/tl`, ritorno)}

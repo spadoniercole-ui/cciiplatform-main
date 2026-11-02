@@ -79,7 +79,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
       ottieniPerimetroTriageAction(nomeSchema, aziendaId),
     ]);
     // LA CHECK DI PERIMETRO ENTRA NELL'ELABORATO (0.154.0). La parte
-    // obbligatoria — le TL rilevanti con l'esito dichiarato — c'è sempre;
+    // obbligatoria — le TS rilevanti con l'esito dichiarato — c'è sempre;
     // la nota, che è facoltativa, solo quando è stata scritta. Una check
     // senza voci non stampa nulla: non è una mancanza da segnalare.
     const checkPerimetro =
@@ -511,7 +511,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               .
             </p>
             <p className="text-xs font-bold text-slate-900">
-              Vuoi aggiornare i dati della CCIAA e la Posizione V.E.R.A. prima di generare?
+              Vuoi aggiornare i dati della CCIAA e la Certificazione dei debiti prima di generare?
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -583,9 +583,9 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               <span>
                 <span className="font-bold text-amber-800">Procedi senza bilancio XBRL.</span>{' '}
                 Lancia l&apos;analisi sui soli dati disponibili (fascicolo storico, situazione
-                debitoria, Posizione VERA). L&apos;assenza del bilancio verrà acquisita ed
-                evidenziata, contestualizzandola, nella relazione — che resta preliminare finché il
-                bilancio non viene caricato.
+                debitoria, Certificazione dei debiti). L&apos;assenza del bilancio verrà acquisita
+                ed evidenziata, contestualizzandola, nella relazione — che resta preliminare finché
+                il bilancio non viene caricato.
               </span>
             </label>
           )}

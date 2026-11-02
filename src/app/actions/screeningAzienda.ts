@@ -352,7 +352,7 @@ export async function ottieniUltimiScreeningSpazio(
 
 /**
  * Riscontri normativi DETERMINISTICI per un'azienda: individua articoli e
- * soglie «movimentati» dai dati reali (bilancio XBRL, posizione ente, VERA).
+ * soglie «movimentati» dai dati reali (bilancio XBRL, posizione ente, certificazione dei debiti).
  * Ricalcolato al volo dai dati correnti — nessuna inferenza dell'AI, nessuno
  * stato memorizzato: sempre coerente con i dati del momento. La logica di
  * confronto vive nella funzione pura calcolaRiscontri (src/lib/normativa).
@@ -412,7 +412,7 @@ export async function calcolaRiscontriNormativiAzienda(
         .reduce((acc, r) => acc + saldoRigaDebitoEnte(r), 0);
     }
 
-    // Esposizione VERA: contabilizzato + da_contabilizzare (esclude potenziale).
+    // Esposizione della certificazione dei debiti: contabilizzato + da_contabilizzare (esclude potenziale).
     //
     // La stessa obbligazione può comparire due volte nel file — «F24 non
     // presentato» e «Denunce non trasmesse», stesso periodo e stesso importo —
@@ -629,9 +629,9 @@ export async function generaScreeningAziendaAction(
       );
     }
 
-    // Verifica certo-per-certo (Posizione V.E.R.A.): confronto tra quanto
+    // Verifica certo-per-certo (Certificazione dei debiti): confronto tra quanto
     // l'ente ha CONTABILIZZATO (Situazione Debitoria) e quanto risulta nel file
-    // di verifica (VERA), per categoria. Il delta è il non contabilizzato che,
+    // di verifica (certificazione dei debiti), per categoria. Il delta è il non contabilizzato che,
     // con la proposta, andrà contabilizzato — un dato chiave per la relazione.
     if (veraRis.success && veraRis.righe.length > 0) {
       const formatta = (n: number) => `€ ${n.toLocaleString('it-IT')}`;
@@ -670,18 +670,18 @@ export async function generaScreeningAziendaAction(
       const testoPerCat = perCat
         .map(
           (x) =>
-            `${etichettaCat(x.cod)}${x.neutra ? ' (neutra)' : ''}: contabilizzato ${formatta(x.contab)}, VERA ${formatta(x.vera)}${x.neutra ? '' : `, delta ${formatta(x.delta)}`}`
+            `${etichettaCat(x.cod)}${x.neutra ? ' (neutra)' : ''}: contabilizzato ${formatta(x.contab)}, certificazione dei debiti ${formatta(x.vera)}${x.neutra ? '' : `, delta ${formatta(x.delta)}`}`
         )
         .join('; ');
       const deltaTotale = perCat.filter((x) => !x.neutra).reduce((a, x) => a + x.delta, 0);
       // Senza Situazione Debitoria caricata il confronto «contabilizzato 0 vs
-      // VERA …» non è un delta: è l'assenza di uno dei due termini. Allo
+      // certificazione dei debiti …» non è un delta: è l'assenza di uno dei due termini. Allo
       // Screening è il caso normale (la Situazione Debitoria appartiene allo
       // scenario), e il PDF diceva che tutto il debito era «non contabilizzato».
       const contabCaricato = debitiRis.success && debitiRis.righe.length > 0;
       if (contabCaricato) {
         blocchiContesto.push(
-          `Verifica certo-per-certo (Posizione VERA, dal file di verifica dell'ente): ${testoPerCat}. Delta complessivo non contabilizzato: ${formatta(deltaTotale)} — è la quota che il file di verifica riporta oltre a quanto l'ente ha già contabilizzato, e che in presenza di proposta dovrà essere contabilizzata.`
+          `Verifica certo-per-certo (Certificazione dei debiti, dal file di verifica dell'ente): ${testoPerCat}. Delta complessivo non contabilizzato: ${formatta(deltaTotale)} — è la quota che il file di verifica riporta oltre a quanto l'ente ha già contabilizzato, e che in presenza di proposta dovrà essere contabilizzata.`
         );
       } else {
         blocchiContesto.push(
@@ -726,7 +726,7 @@ export async function generaScreeningAziendaAction(
           .join('; ');
         const totNonContab = nonContab.reduce((a, r) => a + r.importo, 0);
         blocchiContesto.push(
-          `Debiti non ancora contabilizzati secondo VERA (certi ma non ancora esigibili, da lavorare per renderli tali): totale ${formatta(totNonContab)}, per stato di lavorazione: ${perDicitura}.`
+          `Debiti non ancora contabilizzati secondo la certificazione dei debiti (certi ma non ancora esigibili, da lavorare per renderli tali): totale ${formatta(totNonContab)}, per stato di lavorazione: ${perDicitura}.`
         );
       }
 
@@ -743,7 +743,7 @@ export async function generaScreeningAziendaAction(
           .map(([natura, n]) => `${natura} (${n})`)
           .join('; ');
         blocchiContesto.push(
-          `Posizioni potenziali a importo IGNOTO secondo VERA (natura presente ma importo non ancora quantificato — possibili passività future da monitorare): ${perNatura}. Vanno segnalate esplicitamente come rischio non ancora quantificabile.`
+          `Posizioni potenziali a importo IGNOTO secondo la certificazione dei debiti (natura presente ma importo non ancora quantificato — possibili passività future da monitorare): ${perNatura}. Vanno segnalate esplicitamente come rischio non ancora quantificabile.`
         );
       }
     }
@@ -834,7 +834,7 @@ Peso ammesso: STRUTTURALE, RILEVANTE o DOCUMENTALE.`;
       ? `
 
 ATTENZIONE — BILANCIO XBRL ASSENTE: per questa azienda non è stato caricato alcun bilancio XBRL. Devi:
-- Aprire la relazione con un avviso esplicito che il bilancio non è disponibile e che l'analisi è quindi PRELIMINARE e PARZIALE, condotta sui soli dati a disposizione (fascicolo storico, Situazione Debitoria, Posizione VERA).
+- Aprire la relazione con un avviso esplicito che il bilancio non è disponibile e che l'analisi è quindi PRELIMINARE e PARZIALE, condotta sui soli dati a disposizione (fascicolo storico, Situazione Debitoria, Certificazione dei debiti).
 - Nel paragrafo 2 (posizione economico-patrimoniale) NON inventare numeri: dichiara che non è valutabile dai dati di bilancio in assenza dello stesso, e ricava solo ciò che è deducibile dal fascicolo storico.
 - Nel paragrafo 4 (scenario liquidatorio) segnala che l'ancoraggio quantitativo non è possibile senza bilancio e va rifatto appena disponibile.
 - Nel paragrafo 6 mettere in cima, tra ciò che manca, il caricamento del bilancio XBRL come priorità.
@@ -850,7 +850,7 @@ ${avvisoCarenzaBilancio}
 Scrivi una relazione con questi paragrafi, in prosa, non elenchi puntati:
 1. Identikit dell'impresa (dal fascicolo storico: anagrafica, oggetto, storia, stato, organi).
 2. Posizione economico-patrimoniale (dal bilancio): sintesi di conto economico e stato patrimoniale, indici essenziali.
-3. Struttura del debito: quello che emerge dal bilancio, quello che l'ente stesso ha già dichiarato di avere a credito (Situazione Debitoria contabilizzata) e, se presente, la Verifica certo-per-certo contro la Posizione VERA — commenta esplicitamente il delta per categoria (Debito, AVA), cioè il non contabilizzato che emerge dal file di verifica e che con la proposta andrà contabilizzato; segnala se i quadri sono coerenti o se qualcosa non torna.
+3. Struttura del debito: quello che emerge dal bilancio, quello che l'ente stesso ha già dichiarato di avere a credito (Situazione Debitoria contabilizzata) e, se presente, la Verifica certo-per-certo contro la Certificazione dei debiti — commenta esplicitamente il delta per categoria (Debito, AVA), cioè il non contabilizzato che emerge dal file di verifica e che con la proposta andrà contabilizzato; segnala se i quadri sono coerenti o se qualcosa non torna.
 4. Scenario liquidatorio di base — l'ancoraggio del test di convenienza (art. 63/88 CCII): cosa otterrebbe l'ente in una liquidazione, a spanne, dai soli dati di bilancio.
 5. Eventuali segnali di incoerenza da segnalare (es. continuità aziendale dichiarata in tensione con i numeri, se presente).
 6. Cosa manca e va aggiornato prima di poter valutare la proposta — il ponte esplicito verso i dati correnti che arriveranno con la proposta stessa.
@@ -996,7 +996,7 @@ Non dare un giudizio legale definitivo — è una base istruttoria per chi dovr�
         : '';
 
     const relazioneTesto = senzaBilancio
-      ? `⚠️ ANALISI PRELIMINARE — BILANCIO XBRL ASSENTE\nQuesta relazione è stata generata senza bilancio XBRL: è quindi parziale e basata sui soli dati disponibili (fascicolo storico, Situazione Debitoria, Posizione VERA). Caricare il bilancio e rigenerare per l'inquadramento economico-patrimoniale completo.\n\n${corpoRelazione}`
+      ? `⚠️ ANALISI PRELIMINARE — BILANCIO XBRL ASSENTE\nQuesta relazione è stata generata senza bilancio XBRL: è quindi parziale e basata sui soli dati disponibili (fascicolo storico, Situazione Debitoria, Certificazione dei debiti). Caricare il bilancio e rigenerare per l'inquadramento economico-patrimoniale completo.\n\n${corpoRelazione}`
       : corpoRelazione;
     // Passata correttiva del revisore: i rilievi bloccanti tornano al modello
     // per una riscrittura mirata; cio' che resta viene riportato nel PDF.

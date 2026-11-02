@@ -21,7 +21,7 @@ const DDL = `
 `;
 
 describe('nuovo ciclo di istruttoria sulla stessa azienda', () => {
-  it('archivia screening, check list, V.E.R.A. e soglie, poi li azzera', async () => {
+  it('archivia screening, check list, certificazione dei debiti e soglie, poi li azzera', async () => {
     const db = await PGlite.create();
     await db.exec(DDL);
     await db.exec(`

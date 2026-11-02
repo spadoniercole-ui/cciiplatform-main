@@ -1,8 +1,8 @@
 'use server';
 
-// L'obbligo del file V.E.R.A. nel triage, come parametro dello spazio.
+// L'obbligo del file della certificazione dei debiti nel triage, come parametro dello spazio.
 //
-// Per l'INPS il V.E.R.A. è la fonte delle posizioni da lavorare: senza, il
+// Per l'INPS la certificazione dei debiti è la fonte delle posizioni da lavorare: senza, il
 // triage non ha un elenco da instradare. Per gli altri enti — e per il
 // professionista, che il file lo chiede all'istituto — la stessa regola
 // bloccava il lavoro senza rimedio. Il default segue l'ente dello spazio; qui

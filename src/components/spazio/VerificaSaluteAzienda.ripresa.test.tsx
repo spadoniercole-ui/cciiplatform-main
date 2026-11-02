@@ -517,7 +517,7 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     expect(screen.getByRole('button', { name: /Stampa il riepilogo/i })).toBeTruthy();
 
     // E dice che cosa i documenti NON elencano: il loro totale non è quello del
-    // V.E.R.A., e la differenza ha una spiegazione, con la quota AdR.
+    // certificazione dei debiti, e la differenza ha una spiegazione, con la quota AdR.
     const avviso = screen.getByText('Puoi procedere alle comunicazioni per le unità operative')
       .parentElement!.parentElement!;
     const dichiarazione = within(avviso).getByText(
@@ -543,14 +543,14 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     apri.click();
 
     const finestra = await screen.findByRole('dialog');
-    // Il confronto si misura sui documenti caricati — il V.E.R.A. per i debiti
+    // Il confronto si misura sui documenti caricati — la certificazione dei debiti per i debiti
     // certi e in divenire, i flussi inviati per il dovuto dell'anno
     // precedente, le deleghe F24 per il ritardo di versamento. I riferimenti
     // con cui l'ente identifica l'azienda (matricola, codici CSC) NON entrano
     // nel calcolo: mostrarli qui faceva credere che senza quelli il confronto
     // non si potesse fare.
     expect(within(finestra).getByText(/Da dove vengono i numeri/i)).toBeTruthy();
-    expect(within(finestra).getAllByText(/V\.E\.R\.A\./).length).toBeGreaterThan(0);
+    expect(within(finestra).getAllByText(/certificazione dei debiti/i).length).toBeGreaterThan(0);
     expect(within(finestra).getByText(/Denunce e flussi inviati/i)).toBeTruthy();
     expect(within(finestra).getByText(/Deleghe F24 e pagamenti/i)).toBeTruthy();
     expect(within(finestra).queryByText(/Matricola INPS/)).toBeNull();
@@ -755,7 +755,7 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     );
 
     const riquadro = await waitFor(() =>
-      sezioneDi('La stessa cifra scritta due volte nel V.E.R.A.')
+      sezioneDi('La stessa cifra scritta due volte nella certificazione dei debiti')
     );
     // La coppia si vede con le due righe e la cifra in gioco.
     expect(within(riquadro).getAllByText(/F24 Non presentato/).length).toBeGreaterThan(0);
@@ -794,7 +794,7 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
   });
 
   //
-  // LA MAPPATURA V.E.R.A. SI FA QUI.
+  // LA MAPPATURA DELLA certificazione dei debiti SI FA QUI.
   //
   // La sezione che non si riconduce a una materia lascia le sue posizioni fuori
   // da ogni documento. La mappatura è un dato dello spazio, non dell'azienda:

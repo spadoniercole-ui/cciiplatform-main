@@ -1,6 +1,6 @@
 // src/lib/triage/obbligoVeraSpazio.ts
 //
-// L'impostazione dell'obbligo del V.E.R.A. vive nello schema del tenant
+// L'impostazione dell'obbligo della certificazione dei debiti vive nello schema del tenant
 // (`parametri_triage`, una riga sola) accanto agli altri parametri di spazio.
 // Qui la lettura e la scrittura, su un `Esecutore` — come il backup e la
 // configurazione di spazio: la Server Action passa un client del pool, un

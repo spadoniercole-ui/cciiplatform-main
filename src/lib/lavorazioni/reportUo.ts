@@ -71,7 +71,7 @@ import { naturaRigaVera, ripartisciRigheVera, type RiepilogoRighe } from './daLa
 // Lo stesso ufficio scritto due volte resta un documento solo (vedi dipendenze.ts).
 import { chiaveDipendenza } from './dipendenze';
 
-/** Una posizione del V.E.R.A. nella forma che serve al report. */
+/** Una posizione della certificazione dei debiti nella forma che serve al report. */
 export interface RigaVeraReportUo {
   sezione: string;
   voce: string;
@@ -151,7 +151,7 @@ export interface LavorazioneUo {
 export type MotivoInstradamento =
   'codice' | 'voce' | 'sezione' | 'mappatura' | 'categoria' | 'scelto';
 
-/** Una voce del V.E.R.A. dentro un documento, e come ci è arrivata. */
+/** Una voce della certificazione dei debiti dentro un documento, e come ci è arrivata. */
 export interface ProvenienzaVoce {
   sezione: string;
   voce: string;
@@ -181,7 +181,7 @@ export interface CodiceUo {
   /** Le lavorazioni della materia, in ordine; vuoto se non ne ha. */
   lavorazioni: LavorazioneUo[];
   /**
-   * Le voci del V.E.R.A. che compongono questa voce del documento, con il
+   * Le voci della certificazione dei debiti che compongono questa voce del documento, con il
    * motivo per cui sono arrivate qui. Una voce del file può comparire più di
    * una volta, con motivi diversi: due righe della stessa sezione possono
    * arrivare qui una per la loro descrizione e l'altra per la mappatura.
@@ -221,7 +221,7 @@ export interface DocumentoUo {
    * Già contabilizzate: fuori dall'elenco perché non c'è nulla da fare. Si
    * dichiarano — con la quota di TS 25/27/81, dove resta la sola decisione
    * dell'invio ad AdR — perché il totale delle voci non è il totale del
-   * V.E.R.A. e l'ufficio non deve chiedersi dove sia finito l'importo.
+   * certificazione dei debiti e l'ufficio non deve chiedersi dove sia finito l'importo.
    */
   contabilizzate: RiepilogoRighe;
   contabilizzateAdr: RiepilogoRighe;

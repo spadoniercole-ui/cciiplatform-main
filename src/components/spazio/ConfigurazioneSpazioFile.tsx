@@ -61,7 +61,7 @@ export function ConfigurazioneSpazioFile({ nomeSchema }: { nomeSchema: string })
       return;
     }
     const ok = await confermaApp(
-      `${riepilogo}\n\nLa configurazione attuale di questo spazio verrà SOSTITUITA da quella del file (parametri, direttrici, titoli e materie, mappature V.E.R.A., stampa). Aziende, scenari e utenti non vengono toccati.`,
+      `${riepilogo}\n\nLa configurazione attuale di questo spazio verrà SOSTITUITA da quella del file (parametri, direttrici, titoli e materie, mappature della certificazione dei debiti, stampa). Aziende, scenari e utenti non vengono toccati.`,
       {
         titolo: 'Ricaricare la configurazione?',
         etichettaConferma: 'Sostituisci',
@@ -110,9 +110,10 @@ export function ConfigurazioneSpazioFile({ nomeSchema }: { nomeSchema: string })
       <h2 className="font-bold text-slate-900 text-sm">Salva e ricarica la configurazione</h2>
       <p className="text-xs text-slate-500 leading-relaxed">
         Un file con tutta la configurazione di questo spazio: le pagine qui sotto, le direttrici,
-        titoli e materie dell’ente, le etichette dell’Anagrafica Ente, le mappature del V.E.R.A., le
-        strutture dei prospetti, la stampa con il logo. Serve a ricaricarla dopo un azzeramento del
-        database. Non contiene aziende, scenari, utenti né licenze.
+        titoli e materie dell’ente, le etichette dell’Anagrafica Ente, le mappature della
+        certificazione dei debiti, le strutture dei prospetti, la stampa con il logo. Serve a
+        ricaricarla dopo un azzeramento del database. Non contiene aziende, scenari, utenti né
+        licenze.
       </p>
       <div className="flex flex-wrap gap-2">
         <button

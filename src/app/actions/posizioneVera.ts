@@ -1,7 +1,7 @@
 'use server';
 
-// Posizione V.E.R.A. — persistenza della mappatura titoli-di-sezione →
-// categoria (per spazio) e delle righe VERA importate (per azienda). Il
+// Certificazione dei debiti — persistenza della mappatura titoli-di-sezione →
+// categoria (per spazio) e delle righe della certificazione dei debiti importate (per azienda). Il
 // confronto certo-per-certo con la Situazione Debitoria contabilizzata è
 // calcolato lato client dai due elenchi.
 
@@ -198,7 +198,7 @@ export interface RisultatoTitoliVera {
   error?: string;
 }
 
-/** Elenco completo delle sezioni VERA riconosciute (titolo + categoria) — il "catalogo" su cui agiscono Correggi/Dimentica. */
+/** Elenco completo delle sezioni della certificazione dei debiti riconosciute (titolo + categoria) — il "catalogo" su cui agiscono Correggi/Dimentica. */
 export async function ottieniTitoliVera(nomeSchema: string): Promise<RisultatoTitoliVera> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
@@ -228,14 +228,14 @@ export async function ottieniTitoliVera(nomeSchema: string): Promise<RisultatoTi
 
 export interface RisultatoCorrezioneVera {
   success: boolean;
-  /** Righe VERA già importate a cui la nuova categoria è stata ri-applicata. */
+  /** Righe della certificazione dei debiti già importate a cui la nuova categoria è stata ri-applicata. */
   righeAggiornate?: number;
   error?: string;
 }
 
 /**
  * CORREGGI (come nella Posizione Debitoria): cambia la categoria di una sezione
- * VERA e la RI-APPLICA anche alle righe già importate (in ogni azienda), senza
+ * la certificazione dei debiti e la RI-APPLICA anche alle righe già importate (in ogni azienda), senza
  * ricaricare il file. Vale per sempre: i prossimi caricamenti useranno la nuova
  * categoria.
  */
@@ -272,7 +272,7 @@ export async function aggiornaTitoloVeraAction(
 /**
  * DIMENTICA (come nella Posizione Debitoria): rimuove la mappatura della
  * sezione (così al prossimo caricamento verrà richiesta di nuovo) ed elimina le
- * righe VERA di quella sezione per QUESTA azienda.
+ * righe della certificazione dei debiti di quella sezione per QUESTA azienda.
  */
 export async function dimenticaTitoloVeraAction(
   nomeSchema: string,
@@ -600,7 +600,7 @@ export async function ottieniDebitiVera(
     return {
       success: false,
       righe: [],
-      error: `Impossibile caricare la posizione VERA: ${error.message || error}`,
+      error: `Impossibile caricare la certificazione dei debiti: ${error.message || error}`,
     };
   }
 }
@@ -649,7 +649,7 @@ export async function impostaDuplicatoVeraAction(
   }
 }
 
-/** Sostituisce integralmente le righe VERA di un'azienda (un file = una fotografia). */
+/** Sostituisce integralmente le righe della certificazione dei debiti di un'azienda (un file = una fotografia). */
 export async function sostituisciDebitiVeraAction(
   nomeSchema: string,
   aziendaId: number,
@@ -688,7 +688,7 @@ export async function sostituisciDebitiVeraAction(
     console.error('[sostituisciDebitiVeraAction] Errore:', error);
     return {
       success: false,
-      error: `Impossibile salvare la posizione VERA: ${error.message || error}`,
+      error: `Impossibile salvare la certificazione dei debiti: ${error.message || error}`,
     };
   }
 }

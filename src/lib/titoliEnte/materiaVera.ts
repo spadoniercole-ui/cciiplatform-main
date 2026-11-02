@@ -1,10 +1,10 @@
 // src/lib/titoliEnte/materiaVera.ts
 //
-// Collega una riga del V.E.R.A. alla MATERIA dell'ente (Flussi Uniemens,
+// Collega una riga della certificazione dei debiti alla MATERIA dell'ente (Flussi Uniemens,
 // Note di rettifica, Verbali, Cartelle…) — la «tipologia di credito» che
 // l'ente ha mappato con i suoi riferimenti di legge.
 //
-// Prima la riga del V.E.R.A. aveva solo la CATEGORIA DI CALCOLO, che viene
+// Prima la riga della certificazione dei debiti aveva solo la CATEGORIA DI CALCOLO, che viene
 // dal titolo di sezione: in triage non è mappata, e la tabella mostrava
 // «Non classificato» anche per un «TS 27 flusso Uniemens non versato» il cui
 // codice 27 l'ente aveva già ricondotto, con le norme, alla sua materia.
@@ -53,7 +53,7 @@ const normCodice = (c: string) =>
 
 /**
  * «sezione|voce», normalizzate: la chiave con cui si ricorda la MATERIA SCELTA
- * su una voce del V.E.R.A.
+ * su una voce della certificazione dei debiti
  *
  * La stessa voce può stare in sezioni diverse dello stesso file — e la sezione
  * fa parte dell'identità della voce, perché è il contenitore che il file le ha

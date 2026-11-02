@@ -26,7 +26,7 @@ const titolo = (codice: string, materiaId: number | null): TitoloPerimetro => ({
 });
 
 describe('voci della check di perimetro', () => {
-  it('una voce per ogni TL rilevante, con i codici della sua materia', () => {
+  it('una voce per ogni TS rilevante, con i codici della sua materia', () => {
     const voci = vociObbligatorie(
       [titolo('B02', 10), titolo('A01', 10), titolo('C03', 20), titolo('D04', null)],
       [
@@ -45,7 +45,7 @@ describe('voci della check di perimetro', () => {
       [lavorazione({ rilevantePerimetro: false })]
     );
     expect(voci).toEqual([]);
-    expect(sintesiPerimetro(voci).etichetta).toContain('Nessuna TL rilevante');
+    expect(sintesiPerimetro(voci).etichetta).toContain('Nessuna TS rilevante');
   });
 
   it('le risposte salvate si riapplicano per id, non per posizione', () => {
@@ -111,7 +111,7 @@ describe('sintesi del perimetro', () => {
     expect(s.dettaglio).toContain('modus operandi');
   });
 
-  it('una TL di resistenza non riscontrata resta da attenzionare anche senza natura', () => {
+  it('una TS di resistenza non riscontrata resta da attenzionare anche senza natura', () => {
     const voci = applicaRisposte(vociObbligatorie([titolo('A01', 10)], [lavorazione()]), [
       { lavorazioneId: 1, stato: 'NON_RISCONTRATA', natura: null, nota: null },
     ]);

@@ -11,7 +11,7 @@ import { componiCatenaDirettrici } from '@/lib/titoliEnte/direttrici';
 // la transazione — se la seconda scrittura fallisce, la prima non deve restare.
 //
 // Dalla 0.159.0 l'ufficio vive sull'associazione della materia (`materia_tl`)
-// e sui titoli: la TL è un catalogo piatto e non porta più la dipendenza.
+// e sui titoli: la TS è un catalogo piatto e non porta più la dipendenza.
 //
 // Ogni test ha il suo schema: così quello che un test scrive non decide cosa
 // deve vedere il successivo. La guardia di accesso e il DDL sono simulati (il

@@ -1,19 +1,19 @@
 'use client';
 
-// MATERIE E TL — il passo in cui la materia mutua direttrice e prodotto (0.159.0).
+// MATERIE E TS — il passo in cui la materia mutua direttrice e prodotto (0.159.0).
 //
-// La TL è un codice con una descrizione e un flag per la check list: sta nel
-// suo catalogo (Parametri › Catalogo delle TL) e non si riscrive qui. Qui la
+// La TS è un codice con una descrizione e un flag per la check list: sta nel
+// suo catalogo (Parametri › Catalogo delle TS) e non si riscrive qui. Qui la
 // materia dice su quale direttrice e su quale prodotto la applica, con quale
 // ufficio, quali passi e quale esito: è il processo che finisce nel report per
 // unità operativa e nelle comunicazioni ai reparti.
 //
-// L'ORDINE CONTA. Le TL di una materia si eseguono in sequenza: la prima è
+// L'ORDINE CONTA. Le TS di una materia si eseguono in sequenza: la prima è
 // quella che il titolo del codice eredita e che il report dell'ufficio usa come
 // procedura.
 //
-// La stessa TL può essere applicata da più materie, anche su prodotti diversi:
-// la TL resta una, cambia il processo.
+// La stessa TS può essere applicata da più materie, anche su prodotti diversi:
+// la TS resta una, cambia il processo.
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -70,7 +70,7 @@ export function MaterieLavorazioneManager({
   useDichiaraContestoAssistente({
     pagina: 'parametri',
     nomeSchema,
-    sezioneParametri: 'Materie e TL',
+    sezioneParametri: 'Materie e TS',
   });
 
   const [materie, setMaterie] = useState<MateriaEnte[]>([]);
@@ -96,7 +96,7 @@ export function MaterieLavorazioneManager({
     else setErrore(m.error || 'Impossibile caricare le materie.');
     if (l.success) setLavorazioni(l.lavorazioni);
     else setErrore(l.error || 'Impossibile caricare le lavorazioni delle materie.');
-    if (!c.success) setErrore(c.error || 'Impossibile caricare il catalogo delle TL.');
+    if (!c.success) setErrore(c.error || 'Impossibile caricare il catalogo delle TS.');
     else setCatalogo(c.tl);
     if (d.success) setDirettrici(d.direttrici);
     setCaricamento(false);
@@ -129,7 +129,7 @@ export function MaterieLavorazioneManager({
   };
 
   const scollega = async (tl: LavorazioneMateria) => {
-    if (!window.confirm(`Togliere la TL ${tl.codice} da questa materia? La TL resta nel catalogo.`))
+    if (!window.confirm(`Togliere la TS ${tl.codice} da questa materia? La TS resta nel catalogo.`))
       return;
     setInCorso(true);
     setErrore(null);
@@ -146,7 +146,7 @@ export function MaterieLavorazioneManager({
   const materieSenzaTl = materieConId.filter(
     (m) => lavorazioniDellaMateria(lavorazioni, m.id).length === 0
   );
-  /** Le TL non ancora applicate da questa materia. */
+  /** Le TS non ancora applicate da questa materia. */
   const tlDisponibili = (materiaId: number) => {
     const gia = new Set(lavorazioniDellaMateria(lavorazioni, materiaId).map((l) => l.id));
     return catalogo.filter((t) => !gia.has(t.id));
@@ -162,13 +162,13 @@ export function MaterieLavorazioneManager({
         <ClipboardList className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
         <div>
           <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-            Materie e TL
+            Materie e TS
           </h2>
           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
             Una materia raccoglie codici di partita che si lavorano allo stesso modo. Qui dice{' '}
-            <strong>quale TL applica</strong>, su <strong>quale direttrice e prodotto</strong>, con
+            <strong>quale TS applica</strong>, su <strong>quale direttrice e prodotto</strong>, con
             quale ufficio, quali passi e quale esito: è il processo che finisce nel report per unità
-            operativa. Le TL si scrivono una volta sola nel{' '}
+            operativa. Le TS si scrivono una volta sola nel{' '}
             <Link
               href={conRitorno(`/spazio/${codice}/parametri/tl`, ritorno)}
               className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
@@ -189,7 +189,7 @@ export function MaterieLavorazioneManager({
             >
               titoli di credito
             </Link>{' '}
-            mettono insieme TL, direttrice e prodotto e costruiscono la vestizione legale.
+            mettono insieme TS, direttrice e prodotto e costruiscono la vestizione legale.
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
             L’ordine è quello in cui l’ufficio le esegue: la prima è quella che il titolo eredita.
@@ -205,8 +205,8 @@ export function MaterieLavorazioneManager({
 
       {catalogo.length === 0 && (
         <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
-          Il catalogo delle TL è ancora vuoto: finché non ne scrivi una, nessuna materia ha qualcosa
-          da applicare. Le TL già configurate sono state copiate nel catalogo, con la descrizione
+          Il catalogo delle TS è ancora vuoto: finché non ne scrivi una, nessuna materia ha qualcosa
+          da applicare. Le TS già configurate sono state copiate nel catalogo, con la descrizione
           che avevano.
         </p>
       )}
@@ -220,7 +220,7 @@ export function MaterieLavorazioneManager({
           >
             titoli di credito dell’ente
           </Link>
-          : una TL senza materia non avrebbe codici da lavorare.
+          : una TS senza materia non avrebbe codici da lavorare.
         </p>
       ) : (
         <div className="space-y-3">
@@ -251,10 +251,10 @@ export function MaterieLavorazioneManager({
                   )}
                   <span className="text-[10px] text-slate-400 tabular-nums">
                     {associate.length === 0
-                      ? 'nessuna TL'
+                      ? 'nessuna TS'
                       : associate.length === 1
-                        ? '1 TL'
-                        : `${associate.length} TL`}
+                        ? '1 TS'
+                        : `${associate.length} TS`}
                   </span>
                   {!formAperto && disponibili.length > 0 && (
                     <button
@@ -263,14 +263,14 @@ export function MaterieLavorazioneManager({
                       disabled={inCorso}
                       className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-[10px] font-bold uppercase"
                     >
-                      <Link2 className="w-3 h-3" /> Applica una TL
+                      <Link2 className="w-3 h-3" /> Applica una TS
                     </button>
                   )}
                 </div>
 
                 {associate.length === 0 ? (
                   <p className="text-[11px] text-amber-800 leading-relaxed">
-                    Nessuna TL applicata: i codici di questa materia restano senza ufficio e senza
+                    Nessuna TS applicata: i codici di questa materia restano senza ufficio e senza
                     procedura.
                   </p>
                 ) : (
@@ -320,7 +320,7 @@ export function MaterieLavorazioneManager({
                             });
                           }}
                           disabled={inCorso || bozza !== null}
-                          title="Modifica il processo di questa TL"
+                          title="Modifica il processo di questa TS"
                           className="flex items-center gap-1 px-2 py-1 rounded-md border border-slate-300 text-[9px] font-bold uppercase text-slate-600 hover:text-sky-700 hover:border-sky-300 disabled:opacity-40 shrink-0"
                         >
                           <Pencil className="w-3 h-3" /> Modifica
@@ -329,7 +329,7 @@ export function MaterieLavorazioneManager({
                           type="button"
                           onClick={() => void scollega(l)}
                           disabled={inCorso}
-                          title="Togli questa TL dalla materia: la TL resta nel catalogo"
+                          title="Togli questa TS dalla materia: la TS resta nel catalogo"
                           className="flex items-center gap-1 px-2 py-1 rounded-md border border-slate-300 text-[9px] font-bold uppercase text-slate-600 hover:text-red-700 hover:border-red-300 disabled:opacity-40 shrink-0"
                         >
                           <Unlink className="w-3 h-3" /> Togli
@@ -345,7 +345,7 @@ export function MaterieLavorazioneManager({
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
                         {associate.some((l) => l.id === bozza.tlId)
                           ? 'Modifica il processo'
-                          : 'Applica una TL alla materia'}
+                          : 'Applica una TS alla materia'}
                       </p>
                       <button
                         type="button"
@@ -359,14 +359,14 @@ export function MaterieLavorazioneManager({
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
                       <label className="md:col-span-5 text-[9px] font-bold uppercase tracking-wider text-slate-600">
-                        TL
+                        TS
                         <select
                           value={bozza.tlId || ''}
                           onChange={(e) => setBozza({ ...bozza, tlId: Number(e.target.value) })}
                           className={`${CLASSE} mt-0.5`}
-                          aria-label={`TL da applicare a ${m.nome}`}
+                          aria-label={`TS da applicare a ${m.nome}`}
                         >
-                          <option value="">Scegli la TL del catalogo…</option>
+                          <option value="">Scegli la TS del catalogo…</option>
                           {catalogo
                             .filter(
                               (t) => t.id === bozza.tlId || disponibili.some((d) => d.id === t.id)
@@ -494,7 +494,7 @@ export function MaterieLavorazioneManager({
 
       {materieSenzaTl.length > 0 && (
         <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-          Senza TL: {materieSenzaTl.map((m) => m.nome).join(', ')}. I codici di queste materie
+          Senza TS: {materieSenzaTl.map((m) => m.nome).join(', ')}. I codici di queste materie
           restano fuori dal report per unità operativa finché non applicano una lavorazione.
         </p>
       )}

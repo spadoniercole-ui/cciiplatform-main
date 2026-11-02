@@ -534,7 +534,7 @@ describe('INPS con lavoratori — sanzioni presunte', () => {
   });
 });
 
-describe('INPS con lavoratori — riconciliazione con l’esposizione V.E.R.A.', () => {
+describe('INPS con lavoratori — riconciliazione con l’esposizione della certificazione dei debiti', () => {
   const base = {
     ...vuoto,
     conLavoratori: true,
@@ -552,9 +552,11 @@ describe('INPS con lavoratori — riconciliazione con l’esposizione V.E.R.A.',
     expect(motivoCon(base)).toContain('al netto di sanzioni e interessi');
   });
 
-  it('senza esposizione V.E.R.A. non parla di riconciliazione', () => {
-    expect(motivoCon(base)).not.toContain('V.E.R.A.');
-    expect(motivoCon({ ...base, esposizioneVera: null })).not.toContain('V.E.R.A.');
+  it('senza esposizione della certificazione dei debiti non parla di riconciliazione', () => {
+    expect(motivoCon(base)).not.toContain('certificazione dei debiti');
+    expect(motivoCon({ ...base, esposizioneVera: null })).not.toContain(
+      'certificazione dei debiti'
+    );
   });
 
   it('senza contributi non dichiara nessun importo confrontato', () => {
@@ -565,7 +567,7 @@ describe('INPS con lavoratori — riconciliazione con l’esposizione V.E.R.A.',
 
   it('esposizione coincidente → lo dice', () => {
     const m = motivoCon({ ...base, esposizioneVera: 10_000 });
-    expect(m).toContain('L’esposizione V.E.R.A. quantificata è');
+    expect(m).toContain('L’esposizione della certificazione dei debiti quantificata è');
     expect(m).toContain('coincide con l’importo confrontato');
     expect(m).not.toContain('va riconciliata');
   });
@@ -601,12 +603,14 @@ describe('INPS con lavoratori — riconciliazione con l’esposizione V.E.R.A.',
     expect(motivoCon({ ...base, esposizioneVera: 10_000 })).not.toContain('entro 60 giorni');
   });
 
-  // Da valutare: la riconciliazione con V.E.R.A. (calcolo.ts ~307-318) è
+  // Da valutare: la riconciliazione con la certificazione dei debiti (calcolo.ts ~307-318) è
   // aggiunta solo alla riga INPS «CON lavoratori». Per un'impresa SENZA
   // lavoratori con esposizioneVera 14.000 € e contributi 10.000 € la riga
   // applicabile non dice né quale importo è stato confrontato né che la
   // differenza va riconciliata.
-  it.todo('riga INPS SENZA lavoratori: dovrebbe riportare anche la riconciliazione V.E.R.A.');
+  it.todo(
+    'riga INPS SENZA lavoratori: dovrebbe riportare anche la riconciliazione della certificazione dei debiti'
+  );
 });
 
 describe('INPS — il 30% si legge con il suo denominatore', () => {

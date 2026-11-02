@@ -3,7 +3,7 @@
 // CHI LAVORA IL DEBITO, SECONDO LA CONFIGURAZIONE NUOVA.
 //
 // Le comunicazioni ai colleghi e i documenti per reparto sanno raggruppare le
-// posizioni del V.E.R.A. per DESTINATARIO, ma leggono la chiave che trovano
+// posizioni della certificazione dei debiti per DESTINATARIO, ma leggono la chiave che trovano
 // sulla riga: `categoria`, cioè il codice della vecchia tabella «Lavorazioni
 // per tipo di debito». Nel frattempo la configurazione si è spostata sulle
 // MATERIE: la materia porta i presupposti legali e i codici indicativi, e

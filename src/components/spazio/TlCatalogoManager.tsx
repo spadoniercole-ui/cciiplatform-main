@@ -1,14 +1,14 @@
 'use client';
 
-// IL CATALOGO DELLE TL — codice, descrizione, flag per la check list (0.159.0).
+// IL CATALOGO DELLE TS — codice, descrizione, flag per la check list (0.159.0).
 //
-// Una TL si scrive qui, una volta sola. Non sta più dentro il prodotto: la
+// Una TS si scrive qui, una volta sola. Non sta più dentro il prodotto: la
 // stessa lavorazione non va ripetuta per ogni prodotto che la usa, e l'ufficio
 // non è una sua proprietà — è il processo con cui una materia la applica a una
 // direttrice e a un prodotto (Parametri › Lavorazioni delle materie), e da lì
 // arriva al report per unità operativa.
 //
-// La colonna «check list» è il contrassegno che il triage usa: le TL marcate
+// La colonna «check list» è il contrassegno che il triage usa: le TS marcate
 // entrano nella check di perimetro obbligatoria.
 
 import React, { useEffect, useState } from 'react';
@@ -50,7 +50,7 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
   useDichiaraContestoAssistente({
     pagina: 'parametri',
     nomeSchema,
-    sezioneParametri: 'Catalogo delle TL',
+    sezioneParametri: 'Catalogo delle TS',
   });
 
   const [catalogo, setCatalogo] = useState<Tl[]>([]);
@@ -89,8 +89,8 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
     const quante = tl.materie;
     const avviso =
       quante > 0
-        ? `Eliminare la TL ${tl.codice} — ${tl.descrizione}? Verranno tolte anche le ${quante} associazioni alle materie.`
-        : `Eliminare la TL ${tl.codice} — ${tl.descrizione}?`;
+        ? `Eliminare la TS ${tl.codice} — ${tl.descrizione}? Verranno tolte anche le ${quante} associazioni alle materie.`
+        : `Eliminare la TS ${tl.codice} — ${tl.descrizione}?`;
     if (!window.confirm(avviso)) return;
     setInCorso(true);
     setErrore(null);
@@ -108,10 +108,10 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
         <ClipboardList className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
         <div>
           <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-            Catalogo delle TL
+            Catalogo delle TS
           </h2>
           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-            Una TL è un <strong>codice</strong>, una <strong>descrizione</strong> e un{' '}
+            Una TS è un <strong>codice</strong>, una <strong>descrizione</strong> e un{' '}
             <strong>flag per la check list</strong>. Nient&apos;altro: si scrive una volta sola, non
             una volta per prodotto. L&apos;ufficio e i passi sono il processo con cui una{' '}
             <Link
@@ -127,7 +127,7 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
             >
               titoli di credito
             </Link>{' '}
-            mettono insieme TL, direttrice e prodotto per costruire la vestizione legale.
+            mettono insieme TS, direttrice e prodotto per costruire la vestizione legale.
           </p>
         </div>
       </div>
@@ -141,7 +141,7 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            {catalogo.length === 0 ? 'Nessuna TL' : `${catalogo.length} TL`}
+            {catalogo.length === 0 ? 'Nessuna TS' : `${catalogo.length} TS`}
           </span>
           <button
             type="button"
@@ -149,13 +149,13 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
             disabled={bozza !== null}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase tracking-wider"
           >
-            <Plus className="w-3 h-3" /> Nuova TL
+            <Plus className="w-3 h-3" /> Nuova TS
           </button>
         </div>
 
         {catalogo.length === 0 ? (
           <p className="px-3 py-4 text-[11px] text-slate-500 leading-relaxed">
-            Il catalogo è vuoto. Scrivi la prima TL: le materie la assoceranno al prodotto e
+            Il catalogo è vuoto. Scrivi la prima TS: le materie la assoceranno al prodotto e
             all&apos;ufficio, senza riscriverla.
           </p>
         ) : (
@@ -229,7 +229,7 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
         <div className="space-y-3 border border-sky-200 bg-sky-50/40 rounded-xl p-3">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
             <label className="md:col-span-3 text-[9px] font-bold uppercase tracking-wider text-slate-600">
-              Codice TL
+              Codice TS
               <input
                 type="text"
                 value={bozza.codice}
@@ -286,7 +286,7 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
               disabled={inCorso || !bozza.codice.trim() || !bozza.descrizione.trim()}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-[10px] font-bold uppercase hover:bg-slate-800 disabled:bg-slate-300"
             >
-              <Save className="w-3 h-3" /> {inCorso ? 'Salvataggio…' : 'Salva TL'}
+              <Save className="w-3 h-3" /> {inCorso ? 'Salvataggio…' : 'Salva TS'}
             </button>
           </div>
         </div>

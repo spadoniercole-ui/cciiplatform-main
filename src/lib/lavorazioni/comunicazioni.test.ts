@@ -205,7 +205,7 @@ describe('componiComunicazioniVera', () => {
     expect(esito.comunicazioni[0].corpo).not.toContain('Già contabilizzate');
   });
 
-  // Ciò che il V.E.R.A. porta già in contabilità non è un debito da lavorare:
+  // Ciò che la certificazione dei debiti porta già in contabilità non è un debito da lavorare:
   // elencarlo nella richiesta al collega fa sembrare lavoro da fare qualcosa
   // che è già fatto, e diluisce le posizioni su cui si deve intervenire.
   it('le posizioni già contabilizzate non si elencano, ma il testo ne dichiara il totale', () => {
@@ -271,7 +271,7 @@ describe('componiComunicazioniVera', () => {
     expect(c.corpo).toContain('non cambia lo stato complessivo');
   });
 
-  // Il codice della natura non contraddice il file: se il V.E.R.A. segna
+  // Il codice della natura non contraddice il file: se la certificazione dei debiti segna
   // ancora da contabilizzare una TS 27, quella posizione si lavora.
   it('una TS 27 che il file segna da contabilizzare resta fra quelle da lavorare', () => {
     const esito = componiComunicazioniVera({

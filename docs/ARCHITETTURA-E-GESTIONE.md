@@ -47,7 +47,7 @@ Superadmin (env, fuori dal DB)
         ├── Aziende (aziende)
         │   ├── Anagrafica, anagrafica presso l'ente
         │   ├── XBRL per esercizio, indici, posizione aggiornata
-        │   ├── Triage / debiti verso l'ente / V.E.R.A. / soglie
+        │   ├── Triage / debiti verso l'ente / certificazione dei debiti / soglie
         │   ├── Screening (solo ENTE) e cicli archiviati
         │   └── Scenari (1..N)
         │       └── Proposta, Check List, piano, simulazione,
@@ -145,12 +145,12 @@ Drizzle è marginale.
    prospetti (`prospetti_triage`), posizioni (`debiti_triage`), debiti verso l'ente
    (`debiti_ente`, `debiti_ente_tracciati`, `tipo_debito_config`,
    `categorie_tipo_debito`).
-3. **V.E.R.A. (obbligatorio nel triage)**: `debiti_vera`, `vera_titoli`,
+3. **certificazione dei debiti (obbligatorio nel triage)**: `debiti_vera`, `vera_titoli`,
    `vera_trattamenti`; le sanzioni sono una *presunzione* e restano fuori dai test di
    soglia. Ogni riga porta anche l'**ambito** — contributi INPS oppure crediti già affidati
    all'Agente della Riscossione — e il riparto contributi/sanzioni: sono due lettere diverse
    dell'art. 25-novies (a e d) e non si sommano nella stessa base. Il file è un presupposto:
-   senza un V.E.R.A. riconosciuto e leggibile la conferma
+   senza una certificazione dei debiti riconosciuto e leggibile la conferma
    del triage non parte. L'importo di una riga è il suo «Totale debito»; quando il totale è
    vuoto e le colonne «Contributi»/«Sanzioni» portano la cifra — le righe «F24 non
    presentato» — l'importo è la somma di quelle: letto come sola colonna del totale, il
@@ -165,14 +165,14 @@ Drizzle è marginale.
    stesso periodo, stesso importo al centesimo, in accoppiamento uno a uno — e senza periodo
    non accoppia nulla. La cifra si conta una volta sola (si sconta la riga denunce, perché la
    base della soglia è fatta dai contributi del F24) e l'ambiguità si dichiara: nel triage,
-   nel contesto della relazione, nella scheda Posizione V.E.R.A. e in coda alla dichiarazione
+   nel contesto della relazione, nella scheda Certificazione dei debiti e in coda alla dichiarazione
    delle già contabilizzate nei documenti. La riga resta in elenco, perché la denuncia va
    comunque trasmessa: si sconta la cifra, non la posizione. Il criterio non è però una verità:
    nella verifica ogni coppia riconosciuta si può confermare o dichiarare distinta a mano, e la
    scelta si registra sulla riga denunce (`debiti_vera.duplicato_stato`) insieme alla posizione —
    la rileggono l'esposizione, i documenti e il fascicolo di evidenza, e la verifica riaperta
    rifà i conti con la decisione già presa.
-   Dalle sue righe, con le TL del catalogo (`prodotti_tl`, scelte per categoria di debito
+   Dalle sue righe, con le TS del catalogo (`prodotti_tl`, scelte per categoria di debito
    in Parametri › Lavorazioni), il triage prepara una comunicazione per collega — solo testo
    da copiare e inviare personalmente, mai un invio automatico — e, con la stessa
    configurazione, **un PDF per reparto** («Comunica ai reparti»): elenca i debiti da
@@ -182,11 +182,11 @@ Drizzle è marginale.
    Accanto c'è la seconda uscita, **un report per unità operativa**: i debiti raggruppati per
    codice di partita e, dentro ogni codice, le lavorazioni della sua materia (con passi ed
    esito) e le inadempienze che lo compongono. L'ufficio è la **dipendenza** del codice, o
-   quella della materia se il codice non ne ha una propria (`titoli_ente`; le TL stanno nel
+   quella della materia se il codice non ne ha una propria (`titoli_ente`; le TS stanno nel
    catalogo `tl`, e la materia le applica a una direttrice e a un prodotto in `materia_tl`).
 
    **I documenti chiedono solo ciò che manca.** Le tre uscite elencano le posizioni ancora da
-   contabilizzare — quelle che nel V.E.R.A. hanno uno stato nella colonna «Stato»
+   contabilizzare — quelle che nella certificazione dei debiti hanno uno stato nella colonna «Stato»
    («Calcolati», «Da Verificare», «Verificata») — più le voci di importo ignoto, che vanno
    accertate. Le righe già contabilizzate (stato vuoto) non si elencano: il documento ne
    dichiara numero e importo, e a parte la quota delle tipologie TS 25, 27 e 81, dove resta
@@ -198,7 +198,7 @@ Drizzle è marginale.
    **La verifica si riapre.** La videata di esito (comunicazioni, documenti, decisione) non
    vive più solo nella scheda del browser: l'azienda sta nell'URL
    (`/verifica-salute?azienda=<id>`) e una ricarica ricompone l'esito dai dati salvati —
-   posizioni del V.E.R.A. con il loro periodo, esito, soglie ricalcolate. Il ritorno è
+   posizioni della certificazione dei debiti con il loro periodo, esito, soglie ricalcolate. Il ritorno è
    offerto anche dalla scheda azienda e dalla dashboard. Una verifica già presa in carico,
    o archiviata, si consulta ma non si decide di nuovo. I due comandi che restano —
    **Non procedo** (archivia con il motivo, che è obbligatorio) e **Verifica un'altra
@@ -287,41 +287,41 @@ cose da accertare, quelle accessorie no, ma restano scritte perché un «nulla d
 accanto a «3 dimensioni su 4» è una frase che si smentisce da sola. Gli elenchi restano due e
 senza gerarchia: il semaforo dice la gravità, l'ordine delle azioni resta al valutatore.
 
-### La catena dell'ente: TL → materie (direttrice e prodotto) → titoli (0.159.0)
+### La catena dell'ente: TS → materie (direttrice e prodotto) → titoli (0.159.0)
 
 Lo schema è deliberatamente semplice, e in tre anelli:
 
-1. **Catalogo delle TL** (`tl`, pagina `/parametri/tl`): **codice, descrizione, flag per la
-   check list**. Nient'altro. Una TL esiste una volta sola, non una volta per prodotto: il
+1. **Catalogo delle TS** (`tl`, pagina `/parametri/tl`): **codice, descrizione, flag per la
+   check list**. Nient'altro. Una TS esiste una volta sola, non una volta per prodotto: il
    codice è la sua identità nei documenti, la descrizione è il nome della lavorazione, il flag
    (con il verso) dice se entra nella check di perimetro del triage.
 2. **Direttrici e prodotti** (`public.spazi.direttrici_ente_strutturate`, pagina
    `/parametri/direttrici-ente`): le aree scritte una volta, e sotto ognuna i fatti concreti
    su cui si lavora. Il nome della direttrice è il nome dell'ufficio; il prodotto è il fatto a
-   cui la materia applica la TL.
-3. **Materie e TL** (`materia_tl`, pagina `/parametri/materie-lavorazione`): la materia
+   cui la materia applica la TS.
+3. **Materie e TS** (`materia_tl`, pagina `/parametri/materie-lavorazione`): la materia
    **mutua** l'associazione direttrice/prodotto e porta il processo — ufficio (`dipendenza`),
-   passi (`procedura`), esito e ordine. È qui che la TL diventa una lavorazione concreta; la
-   stessa TL può essere applicata da più materie, anche su prodotti diversi, senza duplicarla.
+   passi (`procedura`), esito e ordine. È qui che la TS diventa una lavorazione concreta; la
+   stessa TS può essere applicata da più materie, anche su prodotti diversi, senza duplicarla.
    La lettura resta `LavorazioneMateria[]`, così triage, report per unità operativa e documenti
    non cambiano forma.
-4. **Titoli di credito** (`titoli_ente`): il codice mette insieme **TL + direttrice +
+4. **Titoli di credito** (`titoli_ente`): il codice mette insieme **TS + direttrice +
    prodotto** e costruisce la vestizione legale — atto, presupposto giuridico, riferimento
    interno — riscontrata sulle fonti ufficiali. La dipendenza e la procedura si ereditano dalla
    materia (`dipendenzaEffettiva`, `proceduraEffettiva`); se il codice ne ha una propria,
    quella vince e si salva con la grafia delle direttrici.
 
-`prodotti_tl` è lo storico del modello precedente (TL scritta dentro il prodotto) e non viene
+`prodotti_tl` è lo storico del modello precedente (TS scritta dentro il prodotto) e non viene
 più letta: la migrazione in `src/db/provision.ts` ne fa un catalogo per codice e porta
 processo, direttrice e prodotto sulle associazioni, rimappando gli id di `categoria_tl` e delle
 risposte della check di perimetro.
 
 Le **lavorazioni per tipologia di debito** non sono più una tabella a sé (0.158.0):
-`categoria_tl` collega ogni categoria di debito alle stesse TL del catalogo, dalla pagina
-`/parametri/lavorazioni`. La vecchia `lavorazioni_tipo_debito` si copia una volta sola — le TL
+`categoria_tl` collega ogni categoria di debito alle stesse TS del catalogo, dalla pagina
+`/parametri/lavorazioni`. La vecchia `lavorazioni_tipo_debito` si copia una volta sola — le TS
 che cita vengono create in `prodotti_tl` e collegate — e resta come storico; la configurazione
 «in sola lettura» non esiste più, perché non c'è più un secondo posto in cui scrivere l'ufficio.
-Vale anche per la sequenza: la categoria ordina le sue TL in `categoria_tl.ordine`, ma il testo
+Vale anche per la sequenza: la categoria ordina le sue TS in `categoria_tl.ordine`, ma il testo
 della lavorazione è uno solo.
 
 
@@ -530,7 +530,7 @@ la descrive.
   l’ente segue per incassarlo; in `dipendenza`, l’ufficio a cui indirizzare la comunicazione di
   pagamento all’azienda — entrambe lette da `src/lib/titoliEnte/recupero.ts`),
   `titoli_ente_config`, `materie_ente`, `tl` (il catalogo piatto: codice, descrizione, flag e
-  verso della check list), `materia_tl` (le TL applicate dalle materie, con direttrice,
+  verso della check list), `materia_tl` (le TS applicate dalle materie, con direttrice,
   prodotto, dipendenza, procedura ed esito — vedi `src/lib/titoliEnte/lavorazioniMateria.ts`),
   `prodotti_tl` e `materie_lavorazione` (storico: il modello precedente, non più letto). In `riscontro_norma` / `riscontro_interno` sta l’esito
   della ricerca sulle fonti ufficiali: `IN_CORSO` significa che la ricerca è partita col salvataggio e sta ancora lavorando

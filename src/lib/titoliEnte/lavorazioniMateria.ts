@@ -43,17 +43,17 @@ export interface LavorazioneMateria {
   id: number;
   /** La materia in cui il codice cade: è la chiave dell'associazione. */
   materiaId: number;
-  /** Il codice della TL nel catalogo: «81», «76». */
+  /** Il codice della TS nel catalogo: «81», «76». */
   codice: string;
-  /** La descrizione della TL: è il nome della lavorazione. */
+  /** La descrizione della TS: è il nome della lavorazione. */
   tipologia: string;
   /**
-   * L'ufficio a cui la materia applica la TL (0.159.0). Direttrice e prodotto
-   * non stanno nella TL: sono l'associazione che la materia «mutua» per
+   * L'ufficio a cui la materia applica la TS (0.159.0). Direttrice e prodotto
+   * non stanno nella TS: sono l'associazione che la materia «mutua» per
    * validare il processo da riportare nel report per unità operativa.
    */
   direttrice: string;
-  /** Il fatto concreto su cui la materia applica la TL: «DURC», «Diffide». */
+  /** Il fatto concreto su cui la materia applica la TS: «DURC», «Diffide». */
   prodotto: string;
   /** L'ufficio a cui indirizzare la comunicazione con cui si chiede il pagamento. */
   dipendenza: string | null;
@@ -64,7 +64,7 @@ export interface LavorazioneMateria {
   /** Ordine di lavorazione: la prima per ordine è quella che il titolo eredita. */
   ordine: number;
   /**
-   * LA TL ENTRA NELLA CHECK DI PERIMETRO DEL TRIAGE (0.153.0). Non tutte le
+   * LA TS ENTRA NELLA CHECK DI PERIMETRO DEL TRIAGE (0.153.0). Non tutte le
    * lavorazioni dicono qualcosa della condotta dell'azienda: alcune sono il
    * presidio che l'ente attiva quando la condotta è elusiva, altre
    * accompagnano un adempimento. Solo le prime generano una voce
@@ -113,7 +113,7 @@ export function validaLavorazioneMateria(input: InputLavorazioneMateria): string
   const esito = normalizzaEsito(input.esito);
   if (esito && esito.length > MASSIMO_CARATTERI_ESITO)
     return `L'esito non può superare ${MASSIMO_CARATTERI_ESITO} caratteri.`;
-  // Il verso non è un dettaglio: senza, la check del triage non sa se la TL
+  // Il verso non è un dettaglio: senza, la check del triage non sa se la TS
   // descrive una collaborazione o un presidio, e la sintesi non può dire se i
   // codici sono sotto una condotta elusiva. Si chiede insieme al contrassegno.
   if (input.rilevantePerimetro === true && !input.versoPerimetro)
@@ -122,11 +122,11 @@ export function validaLavorazioneMateria(input: InputLavorazioneMateria): string
 }
 
 /**
- * L'ASSOCIAZIONE FRA MATERIA, TL, DIRETTRICE E PRODOTTO (0.159.0).
+ * L'ASSOCIAZIONE FRA MATERIA, TS, DIRETTRICE E PRODOTTO (0.159.0).
  *
  * È qui che il processo prende forma: la materia dice su quale prodotto e per
- * quale ufficio lavora una TL del catalogo, e con quali passi ed esito. La
- * stessa TL può essere usata da più materie con processi diversi; la TL resta
+ * quale ufficio lavora una TS del catalogo, e con quali passi ed esito. La
+ * stessa TS può essere usata da più materie con processi diversi; la TS resta
  * una sola, con il suo codice e la sua descrizione.
  */
 export interface InputAssociazioneTl {
@@ -142,9 +142,9 @@ export interface InputAssociazioneTl {
 export function validaAssociazioneTl(input: InputAssociazioneTl): string | null {
   if (!Number.isInteger(input.materiaId) || input.materiaId <= 0)
     return 'Scegli la materia della lavorazione.';
-  if (!Number.isInteger(input.tlId) || input.tlId <= 0) return 'Scegli la TL del catalogo.';
-  if (!unaRiga(input.direttrice)) return 'Scegli la direttrice su cui la materia applica la TL.';
-  if (!unaRiga(input.prodotto)) return 'Indica il prodotto su cui la materia applica la TL.';
+  if (!Number.isInteger(input.tlId) || input.tlId <= 0) return 'Scegli la TS del catalogo.';
+  if (!unaRiga(input.direttrice)) return 'Scegli la direttrice su cui la materia applica la TS.';
+  if (!unaRiga(input.prodotto)) return 'Indica il prodotto su cui la materia applica la TS.';
   const esito = normalizzaEsito(input.esito);
   if (esito && esito.length > MASSIMO_CARATTERI_ESITO)
     return `L'esito non può superare ${MASSIMO_CARATTERI_ESITO} caratteri.`;

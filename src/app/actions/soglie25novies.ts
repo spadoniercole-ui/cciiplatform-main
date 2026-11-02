@@ -586,7 +586,7 @@ export interface RisultatoEsitoSoglie {
   /** Categorie dei Limiti di Ricevibilita' prive di collegamento all'ente. */
   categorieSenzaEnte?: string[];
   error?: string;
-  /** Valore usato per ciascun importo e la sua fonte (triage, scheda, V.E.R.A.). */
+  /** Valore usato per ciascun importo e la sua fonte (triage, scheda, certificazione dei debiti). */
   usati?: ValoriUsati;
 }
 
@@ -624,7 +624,7 @@ export async function valutaSoglieAction(
     await assicuraTabelleParametriSpazio(nomeSchema);
 
     // Stessa lettura dell'indicatore del triage: posizioni della tabella,
-    // anagrafica, V.E.R.A. e — soprattutto — il ritardo oltre 90 giorni che
+    // anagrafica, certificazione dei debiti e — soprattutto — il ritardo oltre 90 giorni che
     // il triage ha calcolato dalle inadempienze/deleghe. Prima qui era fisso
     // a null e lo Screening diceva «esito non esprimibile».
     const lettura = await leggiDatiSoglieAzienda(nomeSchema, aziendaId);
@@ -679,7 +679,7 @@ export async function valutaSoglieAction(
   }
 }
 
-/** Voci V.E.R.A. «potenziali» a importo non noto per l'azienda (0 se la tabella manca). */
+/** Voci della certificazione dei debiti «potenziali» a importo non noto per l'azienda (0 se la tabella manca). */
 async function contaVociVeraIgnote(nomeSchema: string, aziendaId: number): Promise<number> {
   try {
     const r = await pool.query(

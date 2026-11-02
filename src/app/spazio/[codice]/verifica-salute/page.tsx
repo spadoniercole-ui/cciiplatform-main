@@ -26,7 +26,7 @@ export default async function VerificaSalutePage({
   const id = Number(azienda);
   const aziendaDaRiprendere = Number.isInteger(id) && id > 0 ? id : null;
 
-  // Il V.E.R.A. è il presupposto del triage solo dove esiste per chi lo fa:
+  // La certificazione dei debiti è il presupposto del triage solo dove esiste per chi lo fa:
   // è un parametro dello spazio (obbligatorio di default per l'INPS,
   // facoltativo altrove). Se il parametro non si legge, la pagina non
   // allenta la regola: resta obbligatorio, e lo dichiara come prima.

@@ -5,7 +5,7 @@
 // Il contabilizzato è la base su cui si fanno i conti quando arriva una
 // proposta: è legato a un evento e a una data, quindi appartiene allo
 // scenario. La fotografia stabile dell'esposizione resta la Posizione
-// V.E.R.A., che vive a livello azienda.
+// certificazione dei debiti, che vive a livello azienda.
 //
 // Questo componente aggiunge una cosa sola al DebitiEnteScenario esistente:
 // la possibilità di RIPRENDERE la posizione caricata a livello azienda prima

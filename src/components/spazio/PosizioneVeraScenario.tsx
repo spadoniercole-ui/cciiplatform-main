@@ -1,8 +1,8 @@
 'use client';
 
-// Posizione V.E.R.A. — importa il file INPS "DettaglioRichiesta" leggendo
+// Certificazione dei debiti — importa il file INPS "DettaglioRichiesta" leggendo
 // TUTTE le sezioni del foglio, ognuna con la natura data dal titolo (mappato
-// una volta su una categoria). Mostra VERA raggruppata per categoria e la
+// una volta su una categoria). Mostra la certificazione dei debiti raggruppata per categoria e la
 // verifica CERTO-PER-CERTO contro la Situazione Debitoria contabilizzata:
 // categoria per categoria, con il delta = il non contabilizzato.
 
@@ -175,13 +175,13 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       documentoId
     );
     if (!res.success) {
-      setErrore(res.error || 'Impossibile salvare la posizione VERA.');
+      setErrore(res.error || 'Impossibile salvare la certificazione dei debiti.');
       return;
     }
     await carica();
     router.refresh();
     setEsito(
-      `Importate ${righe.length} righe VERA da ${sezioni.length} sezioni.${documentoId ? ' Documento di origine registrato nel fascicolo di evidenza.' : ''}`
+      `Importate ${righe.length} righe della certificazione dei debiti da ${sezioni.length} sezioni.${documentoId ? ' Documento di origine registrato nel fascicolo di evidenza.' : ''}`
     );
   };
 
@@ -307,7 +307,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   const dimenticaTitolo = async (t: TitoloVera) => {
     if (
       !(await confermaApp(
-        `Dimenticare la sezione «${t.titolo}»? La mappatura verrà rimossa (al prossimo caricamento la richiederò di nuovo) e le sue righe VERA di questa azienda saranno eliminate.`,
+        `Dimenticare la sezione «${t.titolo}»? La mappatura verrà rimossa (al prossimo caricamento la richiederò di nuovo) e le sue righe della certificazione dei debiti di questa azienda saranno eliminate.`,
         { distruttiva: true, etichettaConferma: 'Procedi' }
       ))
     )
@@ -352,7 +352,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   const dimenticaTratt = async (t: TrattamentoVeraRiga) => {
     if (
       !(await confermaApp(
-        `Dimenticare la combinazione «${t.natura} / ${t.stato || 'nessuno stato'}»? Verrà richiesta di nuovo al prossimo caricamento e le sue righe VERA di questa azienda saranno eliminate.`,
+        `Dimenticare la combinazione «${t.natura} / ${t.stato || 'nessuno stato'}»? Verrà richiesta di nuovo al prossimo caricamento e le sue righe della certificazione dei debiti di questa azienda saranno eliminate.`,
         { distruttiva: true, etichettaConferma: 'Procedi' }
       ))
     )
@@ -406,7 +406,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   const totContab = confronto.filter((x) => !x.neutra).reduce((a, x) => a + x.contab, 0);
   const totVera = confronto.filter((x) => !x.neutra).reduce((a, x) => a + x.vera, 0);
 
-  // VERA per categoria (solo importi noti).
+  // La certificazione dei debiti per categoria (solo importi noti).
   const veraPerCategoria = codiciPresenti
     .map((cod) => {
       const righe = righeImporto.filter((r) => r.categoria === cod);
@@ -462,13 +462,13 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
     const corpo = `
       <p style="font-size:13px"><strong>Esposizione totale verso l'ente:</strong> ${euro(espTotale)} — di cui contabilizzato ${euro(espContab)} e da contabilizzare ${euro(espDaContab)}.</p>
       <table>
-        <thead><tr><th>Categoria</th><th class="num">Contabilizzato (ente)</th><th class="num">VERA</th><th class="num">Delta (non contabilizzato)</th></tr></thead>
+        <thead><tr><th>Categoria</th><th class="num">Contabilizzato (ente)</th><th class="num">Certificazione dei debiti</th><th class="num">Delta (non contabilizzato)</th></tr></thead>
         <tbody>
           ${righeConfronto}
           <tr class="tot"><td>Totale</td><td class="num">${euro(totContab)}</td><td class="num">${euro(totVera)}</td><td class="num">${euro(totVera - totContab)}</td></tr>
         </tbody>
       </table>
-      <p class="note">«Contabilizzato» = somma della Situazione Debitoria per categoria. «VERA» = somma del «Totale debito» (al netto del credito) del file di verifica per categoria. Le categorie neutre non alimentano i totali.</p>`;
+      <p class="note">«Contabilizzato» = somma della Situazione Debitoria per categoria. «Certificazione dei debiti» = somma del «Totale debito» (al netto del credito) del file di verifica per categoria. Le categorie neutre non alimentano i totali.</p>`;
     const bloccoNonContab =
       perDicitura.length > 0
         ? `<h1 style="font-size:15px;margin-top:28px">Debiti non ancora contabilizzati (da lavorare)</h1>
@@ -494,7 +494,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       <p class="note">Righe con natura ma senza importo: debiti potenziali di entità ignota (possibili passività future da quantificare). Fuori dai totali.</p>`
         : '';
     stampaHtml(
-      'Verifica certo per certo — Posizione V.E.R.A.',
+      'Verifica certo per certo — Certificazione dei debiti',
       corpo + bloccoNonContab + bloccoPotenziali,
       `Generato il ${new Date().toLocaleString('it-IT')}`
     );
@@ -504,7 +504,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
     <div className="space-y-6">
       <div>
         <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-          Posizione V.E.R.A.
+          Certificazione dei debiti
         </h2>
         <p className="text-[11px] text-slate-500 mt-1">
           La fotografia completa (contabilizzati e non) dal file di verifica INPS. Ogni sezione del
@@ -532,8 +532,8 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
           {inElaborazione
             ? 'Elaborazione...'
             : righeVera.length > 0
-              ? 'Ricarica file VERA'
-              : 'Carica file VERA'}
+              ? 'Ricarica file della certificazione dei debiti'
+              : 'Carica file della certificazione dei debiti'}
           <input
             type="file"
             accept=".xlsx,.xls"
@@ -548,11 +548,11 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
         </label>
       )}
 
-      {/* Catalogo sezioni VERA riconosciute — Correggi / Dimentica */}
+      {/* Catalogo sezioni della certificazione dei debiti riconosciute — Correggi / Dimentica */}
       {!titoliDaMappare && !combinazioniDaMappare && titoli.length > 0 && (
         <div className="space-y-1.5">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            Sezioni VERA riconosciute
+            Sezioni della certificazione dei debiti riconosciute
           </span>
           {titoli.map((t) => (
             <div
@@ -904,7 +904,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
               <tr className="text-[10px] uppercase text-slate-500 font-bold border-b border-slate-100">
                 <th className="p-3">Categoria</th>
                 <th className="p-3">Contabilizzato (ente)</th>
-                <th className="p-3">VERA</th>
+                <th className="p-3">Certificazione dei debiti</th>
                 <th className="p-3">Delta (non contabilizzato)</th>
               </tr>
             </thead>
@@ -943,9 +943,9 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
             </tbody>
           </table>
           <p className="text-[10px] text-slate-400 p-3 border-t border-slate-100">
-            «Contabilizzato» = somma della Situazione Debitoria per categoria. «VERA» = somma del
-            «Totale debito» del file di verifica per categoria. Il delta positivo è il debito che il
-            file di verifica riporta oltre a quanto già contabilizzato.
+            «Contabilizzato» = somma della Situazione Debitoria per categoria. «Certificazione dei
+            debiti» = somma del «Totale debito» del file di verifica per categoria. Il delta
+            positivo è il debito che il file di verifica riporta oltre a quanto già contabilizzato.
           </p>
         </div>
       )}
@@ -1025,12 +1025,12 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
         </div>
       )}
 
-      {/* VERA per categoria */}
+      {/* La certificazione dei debiti per categoria */}
       {veraPerCategoria.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="p-3 border-b border-slate-100 bg-slate-50">
             <h3 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-              VERA per categoria
+              Certificazione dei debiti per categoria
             </h3>
           </div>
           <table className="w-full text-left text-xs">
@@ -1059,7 +1059,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
       {righeVera.length > 0 && (
         <details className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <summary className="p-3 bg-slate-50 text-[11px] font-bold text-slate-700 uppercase tracking-wider cursor-pointer">
-            Dettaglio righe VERA ({righeVera.length})
+            Dettaglio righe della certificazione dei debiti ({righeVera.length})
           </summary>
           <table className="w-full text-left text-xs">
             <thead>
@@ -1134,7 +1134,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
                       ) : (
                         <span
                           className="text-[10px] text-slate-500 italic"
-                          title="La categoria di calcolo viene dal titolo di sezione (Mappatura titoli V.E.R.A.), non dalla materia: mappando il titolo, si applica anche alle righe già caricate."
+                          title="La categoria di calcolo viene dal titolo di sezione (Mappatura titoli della certificazione dei debiti), non dalla materia: mappando il titolo, si applica anche alle righe già caricate."
                         >
                           titolo di sezione da mappare
                         </span>

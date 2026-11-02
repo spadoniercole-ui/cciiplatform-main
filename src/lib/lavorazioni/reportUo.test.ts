@@ -217,7 +217,7 @@ describe('componiReportUo', () => {
     expect(esito.contabilizzate).toEqual({ righe: 1, totale: 4_000 });
   });
 
-  // Il codice della natura non contraddice il file: una TS 27 che il V.E.R.A.
+  // Il codice della natura non contraddice il file: una TS 27 che la certificazione dei debiti
   // segna ancora da contabilizzare si lavora.
   it('una TS 27 da contabilizzare resta nel report', () => {
     const esito = componiReportUo({ ...base, righe: [riga()] });

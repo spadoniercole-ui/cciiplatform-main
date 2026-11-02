@@ -260,7 +260,7 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
   // volta sulla materia. Il codice che ne ha una sua la tiene; gli altri la
   // leggono da qui, senza che nessuno debba ricopiarla su ogni riga.
   const [lavorazioni, setLavorazioni] = useState<LavorazioneMateria[]>([]);
-  // Il catalogo delle TL: il titolo sceglie la TL e il prodotto, e con la
+  // Il catalogo delle TS: il titolo sceglie la TS e il prodotto, e con la
   // direttrice (`dipendenza`) compone la vestizione legale.
   const [catalogoTl, setCatalogoTl] = useState<Tl[]>([]);
   const caricaMaterie = async () => {
@@ -551,11 +551,11 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
                 placeholder="es. Denuncia Uniemens presentata e non versata"
               />
             </div>
-            {/* LA VESTIZIONE LEGALE (0.159.0): TL + direttrice (dipendenza) +
+            {/* LA VESTIZIONE LEGALE (0.159.0): TS + direttrice (dipendenza) +
                 prodotto. Il codice di partita resta la chiave. */}
             <div className="sm:col-span-3">
               <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                TL applicata
+                TS applicata
               </label>
               <select
                 value={inModifica.tlId ?? ''}
@@ -799,7 +799,7 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
                             ? etichettaTl(
                                 catalogoTl.find((x) => x.id === t.tlId) ?? {
                                   codice: '',
-                                  descrizione: `TL ${t.tlId}`,
+                                  descrizione: `TS ${t.tlId}`,
                                 }
                               )
                             : null,

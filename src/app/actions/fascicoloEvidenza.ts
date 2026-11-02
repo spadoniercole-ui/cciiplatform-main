@@ -1,7 +1,7 @@
 'use server';
 
 // Fascicolo di evidenza: compone AL VOLO le evidenze dai dati che la
-// piattaforma ha gia' (proposta, posizione debitoria dell'ente, V.E.R.A.).
+// piattaforma ha gia' (proposta, posizione debitoria dell'ente, certificazione dei debiti).
 // Nessuna tabella nuova, nessuno stato da tenere allineato. La logica e' in
 // src/lib/fascicolo/evidenza.ts; qui solo la lettura.
 

@@ -2,7 +2,7 @@
 //
 // LO STESSO DEBITO SCRITTO DUE VOLTE.
 //
-// Nel V.E.R.A. la stessa obbligazione può comparire su due righe: il versamento
+// Nella certificazione dei debiti la stessa obbligazione può comparire su due righe: il versamento
 // non eseguito («F24 non presentato», con la cifra nelle colonne Contributi e
 // Sanzioni) e la denuncia non trasmessa («Denunce non trasmesse», con il totale
 // nella colonna dell'importo). Sono due facce dello stesso inadempimento — se

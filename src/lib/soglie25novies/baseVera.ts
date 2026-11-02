@@ -1,6 +1,6 @@
 // src/lib/soglie25novies/baseVera.ts
 //
-// IL DEBITO CHE CONTA PER LA SOGLIA INPS, MISURATO SUL V.E.R.A.
+// IL DEBITO CHE CONTA PER LA SOGLIA INPS, MISURATO SULLA certificazione dei debiti
 //
 // L'art. 25-novies, comma 1, lett. a) non chiede quanto l'azienda deve
 // all'Istituto: chiede il debito per contributi SCADUTO DA OLTRE 90 GIORNI, e
@@ -11,12 +11,12 @@
 // Perché serve questo modulo. Quando la Lista Inadempienze c'è, la parte
 // scaduta da oltre 90 giorni si ricava da lì (partita per partita, con la sua
 // scadenza). Quando non c'è, la piattaforma ripiegava sull'esposizione del
-// V.E.R.A. così com'è: contributi di tutti i periodi, compresi quelli appena
+// certificazione dei debiti così com'è: contributi di tutti i periodi, compresi quelli appena
 // scaduti e quelli che scadranno. Su un'azienda con quattro anni di denunce
 // non trasmesse il numero risultava gonfiato — e un requisito che si dichiara
 // superato quando non lo è fa partire una segnalazione che non andava fatta.
 //
-// Il V.E.R.A. però il periodo lo scrive, riga per riga, e il contributo di un
+// La certificazione dei debiti però il periodo lo scrive, riga per riga, e il contributo di un
 // periodo si versa entro il 16 del mese successivo. La distanza da quel
 // termine alla data della verifica si calcola (vedi `scopertura.ts`), e da lì
 // la parte oltre i 90 giorni si separa dal resto: nessun dato in più da
@@ -37,7 +37,7 @@ import { periodoDaVera } from '@/lib/debitiEnte/veraImport';
 /** Il requisito temporale dell'art. 25-novies, comma 1, lett. a). */
 export const GIORNI_RITARDO_SOGLIA_INPS = 90;
 
-/** Il minimo che serve a misurare: la riga del V.E.R.A. come esce dal file. */
+/** Il minimo che serve a misurare: la riga della certificazione dei debiti come esce dal file. */
 export interface RigaVeraSoglia {
   voce: string;
   periodo?: string;
@@ -73,7 +73,7 @@ function baseContributiva(r: RigaVeraSoglia): number {
 }
 
 /**
- * Separa, dentro il V.E.R.A., la parte del debito scaduta da oltre 90 giorni.
+ * Separa, dentro la certificazione dei debiti, la parte del debito scaduta da oltre 90 giorni.
  *
  * `dataVerifica` è un giorno civile (AAAA-MM-GG): la stessa data che il foglio
  * dell'ufficio dichiara, così il ritardo non dipende dal fuso di chi guarda.

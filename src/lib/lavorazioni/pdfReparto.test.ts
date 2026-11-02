@@ -78,7 +78,7 @@ describe('generaPdfReparto', () => {
     expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(1);
   });
 
-  // Il totale del foglio non è il totale del V.E.R.A.: la differenza ha una
+  // Il totale del foglio non è il totale della certificazione dei debiti: la differenza ha una
   // spiegazione scritta, con l'importo e la quota che riguarda l'AdR.
   it('dichiara le posizioni già contabilizzate, con la quota della sola decisione AdR', () => {
     const sorgente = generaPdfReparto(documento()).output();

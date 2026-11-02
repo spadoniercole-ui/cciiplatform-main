@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { riconosciProspetto } from '@/lib/denunce/lettura';
 import { analizzaVera, estraiRigheVera, ritardoDaVera, totaliVera } from './veraImport';
 
-// REGRESSIONE SUL FILE V.E.R.A. REALE (export INPS «DettaglioRichiesta», foglio
+// REGRESSIONE SUL FILE DELLA certificazione dei debiti REALE (export INPS «DettaglioRichiesta», foglio
 // «Esito Verifica» + «Dettaglio Verifica»). Il file è anonimo (denominazione e
 // indirizzo di esempio) e serve a fissare tre cose che con i dati sintetici
 // non si vedono:
@@ -21,8 +21,8 @@ function fileVera(): File {
   return new File([new Uint8Array(readFileSync(PERCORSO))], 'DettaglioRichiesta-699901.xlsx');
 }
 
-describe('V.E.R.A. reale: riconoscimento e lettura', () => {
-  it('è riconosciuto come V.E.R.A. dalle intestazioni', async () => {
+describe('certificazione dei debiti reale: riconoscimento e lettura', () => {
+  it('è riconosciuto come la certificazione dei debiti dalle intestazioni', async () => {
     expect(await riconosciProspetto(fileVera())).toBe('VERA');
   });
 
@@ -57,7 +57,7 @@ describe('V.E.R.A. reale: riconoscimento e lettura', () => {
   });
 });
 
-describe('V.E.R.A. reale: destinazione degli importi', () => {
+describe('certificazione dei debiti reale: destinazione degli importi', () => {
   it('contributi, sanzioni e crediti dell’Agente restano separati', async () => {
     const a = await analizzaVera(fileVera());
     const { righe } = estraiRigheVera(a.sezioni, {}, {}, true);

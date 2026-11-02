@@ -303,7 +303,7 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
     // "valori non inseriti nella scheda dedicata" mandava chi aveva appena
     // compilato i Parametri a cercare un errore che non c'era.
     daAccertare.push(
-      'Esposizione previdenziale dell’azienda non disponibile: carica la Posizione V.E.R.A. oppure inserisci i contributi scaduti nella scheda Soglie di segnalazione dell’azienda. (Non si tratta dei Parametri di Spazio, che contengono gli importi di legge.)'
+      'Esposizione previdenziale dell’azienda non disponibile: carica la Certificazione dei debiti oppure inserisci i contributi scaduti nella scheda Soglie di segnalazione dell’azienda. (Non si tratta dei Parametri di Spazio, che contengono gli importi di legge.)'
     );
     lacunePortanti.push('Esposizione previdenziale non disponibile.');
   } else {

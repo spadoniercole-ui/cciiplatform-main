@@ -2,10 +2,10 @@
 
 // LA CHECK DI PERIMETRO DEL TRIAGE — lettura, salvataggio e rango del credito.
 //
-// La check nasce dai titoli: le voci sono le TL contrassegnate come rilevanti,
+// La check nasce dai titoli: le voci sono le TS contrassegnate come rilevanti,
 // con i codici che cadono nella loro materia. L'operatore risponde stato,
 // natura e nota; il salvataggio conserva le risposte e non cancella quelle
-// delle TL che nel frattempo hanno perso il contrassegno (restano, ma non
+// delle TS che nel frattempo hanno perso il contrassegno (restano, ma non
 // entrano più nel calcolo: se il contrassegno torna, la risposta è ancora lì).
 //
 // Solo Admin di spazio, come le altre funzioni del triage: la pagina è già
@@ -87,7 +87,7 @@ export async function ottieniPerimetroTriageAction(
         : null,
     }));
 
-    // UNA TL, UNA VOCE. La stessa TL può coprire più materie, e la query la
+    // UNA TS, UNA VOCE. La stessa TS può coprire più materie, e la query la
     // restituisce una volta per materia: la check si risponde una volta sola —
     // è la lavorazione a essere stata attivata o no, non la materia in cui il
     // codice cade. L'ufficio proprio vince su quello vuoto.

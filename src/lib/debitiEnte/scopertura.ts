@@ -2,7 +2,7 @@
 //
 // DA QUANDO IL VERSAMENTO È SCOPERTO.
 //
-// Il V.E.R.A. scrive il PERIODO di competenza di un versamento, non la data in
+// La certificazione dei debiti scrive il PERIODO di competenza di un versamento, non la data in
 // cui è scaduto: il contributo di un mese si versa entro il 16 del mese
 // successivo. La distanza fra quel termine e la data della verifica non è un
 // dato che il file dichiari, e non serve chiederla all'operatore: si calcola.

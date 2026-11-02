@@ -15,7 +15,7 @@ import {
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export const DESCRIZIONE_DIMENSIONE: Record<Dimensione, string> = {
-  A: 'presupposti dell’art. 25-novies, V.E.R.A., importi non noti, denunce Uniemens',
+  A: 'presupposti dell’art. 25-novies, certificazione dei debiti, importi non noti, denunce Uniemens',
   B: 'Z’’-score di Altman, patrimonio netto su debiti, EBITDA su ricavi',
   C: 'variazione di ricavi, risultato e patrimonio netto sull’esercizio precedente',
   D: 'quota di dati dichiarati dall’azienda, importi non noti, bilancio non disaggregato, esiti non esprimibili',

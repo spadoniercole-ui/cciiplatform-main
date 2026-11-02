@@ -754,13 +754,13 @@ export function SimulazioneRiceventeScenario({
                 </h4>
                 {debitoEnte ? (
                   <p className="text-xs text-slate-800">
-                    Dal V.E.R.A. dello screening:{' '}
+                    Dalla certificazione dei debiti dello screening:{' '}
                     <span className="font-bold">{euro(debitoEnte.totale)}</span> ({debitoEnte.righe}{' '}
                     partite contabilizzate o da contabilizzare). Non serve ricaricarla.
                   </p>
                 ) : (
                   <p className="text-xs text-slate-500">
-                    Nessun V.E.R.A. caricato per questa azienda.
+                    Nessuna certificazione dei debiti caricata per questa azienda.
                   </p>
                 )}
                 <a

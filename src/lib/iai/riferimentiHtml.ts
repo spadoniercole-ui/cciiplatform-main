@@ -52,7 +52,7 @@ const ETICHETTA_TIPO_DOC: Record<string, string> = {
   VISURA: 'Visura camerale',
   XBRL: 'Bilancio XBRL',
   POSIZIONE_ENTE: 'File dell’ente (posizione debitoria)',
-  VERA: 'Posizione V.E.R.A.',
+  VERA: 'Certificazione dei debiti',
   PROPOSTA: 'Excel della proposta',
 };
 

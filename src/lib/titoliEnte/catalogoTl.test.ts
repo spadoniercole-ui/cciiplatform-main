@@ -13,7 +13,7 @@ const voce = (p: Partial<Tl> = {}): Tl => ({
 });
 
 describe('validaTl', () => {
-  it('pretende il codice: è l’identità della TL nei documenti', () => {
+  it('pretende il codice: è l’identità della TS nei documenti', () => {
     expect(validaTl({ codice: '  ', descrizione: 'Diffida' })).toMatch(/codice/);
   });
 
@@ -21,13 +21,13 @@ describe('validaTl', () => {
     expect(validaTl({ codice: '81', descrizione: ' ' })).toMatch(/descrizione/);
   });
 
-  it('pretende il verso quando la TL entra nella check list', () => {
+  it('pretende il verso quando la TS entra nella check list', () => {
     expect(validaTl({ codice: '81', descrizione: 'Diffida', checkList: true })).toMatch(
       /collaborativa o di resistenza/
     );
   });
 
-  it('accetta una TL completa', () => {
+  it('accetta una TS completa', () => {
     expect(
       validaTl({
         codice: '81',
@@ -40,7 +40,7 @@ describe('validaTl', () => {
 });
 
 describe('normalizzaTl', () => {
-  it('compatta gli spazi e toglie il verso quando la TL non è nella check list', () => {
+  it('compatta gli spazi e toglie il verso quando la TS non è nella check list', () => {
     const n = normalizzaTl({
       codice: '  81  ',
       descrizione: '  Diffida   M400 ',
@@ -78,7 +78,7 @@ describe('rigaTl', () => {
 
 describe('chiave ed etichetta', () => {
   it('la chiave del codice non dipende dalla grafia', () => {
-    expect(chiaveTl('  TL-81 ')).toBe('tl-81');
+    expect(chiaveTl('  TS-81 ')).toBe('ts-81');
   });
 
   it('l’etichetta mette il codice davanti alla descrizione', () => {

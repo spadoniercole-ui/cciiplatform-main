@@ -3,12 +3,12 @@
 // CIÒ CHE SI SCRIVE E CIÒ CHE NON SI SCRIVE.
 //
 // La comunicazione al collega, il documento per reparto e il report per unità
-// operativa non sono l'elenco del V.E.R.A.: sono una richiesta di fare
+// operativa non sono l'elenco della certificazione dei debiti: sono una richiesta di fare
 // qualcosa. Elencare anche le posizioni già in contabilità le fa sembrare
 // lavoro da fare, allunga il foglio e — soprattutto — diluisce l'unica cosa
 // che chi legge deve vedere: le posizioni su cui si deve ancora intervenire.
 //
-// LA REGOLA È DEL FILE, NON NOSTRA. Nel V.E.R.A. la colonna «Stato» distingue
+// LA REGOLA È DEL FILE, NON NOSTRA. Nella certificazione dei debiti la colonna «Stato» distingue
 // i debiti già contabilizzati (cella vuota) da quelli certi ma non ancora
 // esigibili (cella valorizzata: «Calcolati», «Da Verificare», «Verificata»).
 // Quindi:
@@ -26,7 +26,7 @@
 // Non è quindi un intervento da chiedere all'ufficio, e va dichiarato a parte
 // perché chi legge non si chieda dove sia finito l'importo.
 //
-// L'eccezione vale solo a file concorde: se il V.E.R.A. segna una di queste
+// L'eccezione vale solo a file concorde: se la certificazione dei debiti segna una di queste
 // voci come ancora da contabilizzare, vince il file e la posizione si lavora.
 // Il codice della natura non è una scorciatoia per contraddire il documento
 // che l'ente ha prodotto.
@@ -60,10 +60,10 @@ import {
 } from '@/lib/debitiEnte/duplicatiVera';
 import { ETICHETTE_TRATTAMENTO, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 
-/** I codici «TS» che il V.E.R.A. porta già in contabilità. */
+/** I codici «TS» che la certificazione dei debiti porta già in contabilità. */
 export const CODICI_TS_CONTABILIZZATI_ADR = ['25', '27', '81'] as const;
 
-/** Il minimo che serve a decidere: la riga del V.E.R.A. e il suo stato. */
+/** Il minimo che serve a decidere: la riga della certificazione dei debiti e il suo stato. */
 export interface RigaConStatoVera {
   voce: string;
   stato: string;
@@ -89,7 +89,7 @@ export type SortaRigaVera =
   | 'FUORI_PERIMETRO';
 
 /**
- * La natura che il V.E.R.A. usa per l'adempimento, non per il debito: la
+ * La natura che la certificazione dei debiti usa per l'adempimento, non per il debito: la
  * denuncia non trasmessa. L'F24 è la sua faccia finanziaria e non rientra qui.
  */
 export function eDenunciaNonTrasmessa(voce: string): boolean {
@@ -101,7 +101,7 @@ export function eDenunciaNonTrasmessa(voce: string): boolean {
  *
  * `contabilizzato` non è un dato che si possa dedurre dall'importo: un debito
  * già in contabilità ha importo pieno quanto uno da contabilizzare. Lo dice
- * solo lo stato del V.E.R.A., ed è per questo che la classificazione parte da
+ * solo lo stato della certificazione dei debiti, ed è per questo che la classificazione parte da
  * lì.
  */
 export function sortaRigaVera(r: RigaConStatoVera): SortaRigaVera {
@@ -180,7 +180,7 @@ function aggiungi(riepilogo: RiepilogoRighe, importo: number): void {
 }
 
 /**
- * Divide le righe del V.E.R.A. fra ciò che si lavora e ciò che si dichiara.
+ * Divide le righe della certificazione dei debiti fra ciò che si lavora e ciò che si dichiara.
  *
  * Una sola funzione per tutte e tre le uscite: se ognuna decidesse per conto
  * proprio, il testo al collega, il documento per reparto e il report per unità

@@ -368,7 +368,7 @@ export async function salvaTitoloEnteAction(
     const erroreDipendenza = validaDipendenza(titolo.dipendenza);
     if (erroreDipendenza) return { success: false, error: erroreDipendenza };
     if (titolo.tlId != null && (!Number.isInteger(titolo.tlId) || titolo.tlId <= 0))
-      return { success: false, error: 'TL non valida.' };
+      return { success: false, error: 'TS non valida.' };
     if ((titolo.prodotto ?? '').trim().length > 200)
       return { success: false, error: 'Il prodotto non può superare 200 caratteri.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
@@ -409,7 +409,7 @@ export async function salvaTitoloEnteAction(
       nomeSchema,
       normalizzaDipendenza(titolo.dipendenza)
     );
-    // La vestizione legale: la TL scelta, la direttrice (dipendenza) e il
+    // La vestizione legale: la TS scelta, la direttrice (dipendenza) e il
     // prodotto. Il codice di partita resta la chiave della riga.
     const tlId = titolo.tlId ?? null;
     const prodotto = (titolo.prodotto ?? '').replace(/\s+/g, ' ').trim() || null;
@@ -716,7 +716,7 @@ export async function eliminaMateriaEnteAction(
       `UPDATE "${contesto.nomeSchema}".titoli_ente SET materia_id = NULL WHERE materia_id = $1`,
       [id]
     );
-    // La materia perde le associazioni alle TL: le TL restano nel catalogo,
+    // La materia perde le associazioni alle TS: le TS restano nel catalogo,
     // perché lo stesso prodotto si lavora su più materie (0.157.0).
     await assicuraTabelleTl(contesto.nomeSchema);
     await pool.query(`DELETE FROM "${contesto.nomeSchema}".materia_tl WHERE materia_id = $1`, [id]);

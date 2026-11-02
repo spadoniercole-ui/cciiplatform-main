@@ -22,7 +22,7 @@ describe('htmlCheckPerimetro', () => {
     expect(htmlCheckPerimetro([])).toBe('');
   });
 
-  it('stampa la parte obbligatoria: la TL e l’esito dichiarato', () => {
+  it('stampa la parte obbligatoria: la TS e l’esito dichiarato', () => {
     const html = htmlCheckPerimetro([voce({ stato: 'NON_RISCONTRATA', natura: 'MODUS_OPERANDI' })]);
     expect(html).toContain('Diffida');
     expect(html).toContain('Contributi');

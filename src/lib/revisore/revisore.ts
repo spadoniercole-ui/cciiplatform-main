@@ -171,7 +171,7 @@ const VERIFICHE: Record<string, Verifica> = {
 
   // Ogni importo del testo deve avere la sua evidenza nel fascicolo. Finche' il
   // fascicolo non copre tutte le fonti (oggi: proposta, posizione dell'ente,
-  // V.E.R.A.), un importo non riconciliato e' SEGNALATO, non bloccato: bloccare
+  // certificazione dei debiti), un importo non riconciliato e' SEGNALATO, non bloccato: bloccare
   // su una copertura parziale punirebbe i testi per un limite della piattaforma.
   'REV-010': (testo, amb) => {
     if (amb.fascicolo === null) return { esito: 'NON_VERIFICATO', rilievi: [] };

@@ -48,11 +48,11 @@ type Scheda = 'anagrafica' | 'vera' | 'soglie';
 
 // `soloEnte: false` = visibile anche al Redigente. Le Soglie di segnalazione
 // sono l'unica scheda aperta a entrambi: i valori sono a inserimento manuale
-// e il professionista li ha (file V.E.R.A. richiesto all'istituto, oppure
+// e il professionista li ha (file della certificazione dei debiti richiesto all'istituto, oppure
 // flussi UNIEMENS da cui ricava il totale annuo).
 const SCHEDE: { id: Scheda; label: string; icon: typeof IdCard; soloEnte: boolean }[] = [
   { id: 'anagrafica', label: 'Anagrafica', icon: IdCard, soloEnte: true },
-  { id: 'vera', label: 'Posizione V.E.R.A.', icon: ClipboardCheck, soloEnte: true },
+  { id: 'vera', label: 'Certificazione dei debiti', icon: ClipboardCheck, soloEnte: true },
   { id: 'soglie', label: 'Soglie di segnalazione', icon: Gauge, soloEnte: false },
 ];
 
@@ -204,7 +204,7 @@ export function PosizioneEnteScenario({
       )}
       {/* La Situazione Debitoria si e' spostata nello scenario: il
           contabilizzato e' la base dei conti al momento della proposta,
-          legato a un evento e a una data. Qui resta la Posizione V.E.R.A.,
+          legato a un evento e a una data. Qui resta la Certificazione dei debiti,
           che certifica l'esposizione complessiva e vale per tutti gli
           scenari. Le righe gia' caricate a questo livello non sono state
           toccate: ogni scenario puo' riprenderle. */}

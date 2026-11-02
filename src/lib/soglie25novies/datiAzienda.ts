@@ -6,7 +6,7 @@
 //
 // Prima le due letture erano separate e divergevano: la valutazione delle
 // soglie scriveva `ritardoOltre90Giorni: null` in modo fisso e ignorava le
-// posizioni del triage e il V.E.R.A. Il triage calcolava e salvava il ritardo
+// posizioni del triage e la certificazione dei debiti Il triage calcolava e salvava il ritardo
 // dalla lista delle inadempienze o dalle deleghe, ma lo Screening diceva
 // comunque «esito non esprimibile per dati mancanti». Ora la fonte è una.
 //
@@ -33,7 +33,7 @@ export interface DatiSoglieAzienda {
   esitoDenunceConservato: boolean;
   /**
    * Esposizione contributiva verso l'ente: valore manuale, altrimenti i
-   * contributi del V.E.R.A. (al netto di sanzioni e crediti già a ruolo).
+   * contributi della certificazione dei debiti (al netto di sanzioni e crediti già a ruolo).
    */
   esposizione: number | null;
   /** Valore effettivamente usato per ciascun importo e la sua fonte (vedi fonti.ts). */
@@ -79,7 +79,7 @@ export async function leggiDatiSoglieAzienda(
   const scadutiDaFile =
     [...contributiPerAnno].reverse().find((x) => x.scaduti !== null)?.scaduti ?? null;
 
-  // Esposizione dal V.E.R.A., solo come ripiego (vedi attenzioneScreening).
+  // Esposizione dalla certificazione dei debiti, solo come ripiego (vedi attenzioneScreening).
   //
   // Le tre poste NON si sommano: i contributi alimentano la soglia INPS
   // (lett. a), le sanzioni sono presunte e restano fuori dal test, i crediti
@@ -147,14 +147,14 @@ export async function leggiDatiSoglieAzienda(
       dovutiDaFile
     ),
     annoContributiDovuti: annoDovutiScheda ?? annoDovutiDaFile,
-    // Le sanzioni del V.E.R.A. si mostrano nella riconciliazione; il valore
+    // Le sanzioni della certificazione dei debiti si mostrano nella riconciliazione; il valore
     // manuale, se inserito, resta quello che vince.
     sanzioniPresunte: num(a.sanzioni_presunte_vera) ?? (sanzioniVera > 0 ? sanzioniVera : null),
     premiInail: scegli('premiInail', daPosizioni.premiInail, num(a.premi_inail)),
     ivaScaduta: scegli('ivaScaduta', daPosizioni.ivaScaduta, num(a.iva_scaduta)),
     volumeAffari: scegli('volumeAffari', daPosizioni.volumeAffari, num(a.volume_affari)),
     // I crediti dell'Agente della Riscossione arrivano dal file «Ruoli
-    // esattoriali» o, in mancanza, dalle cartelle dentro il V.E.R.A.
+    // esattoriali» o, in mancanza, dalle cartelle dentro la certificazione dei debiti
     creditiAffidati: num(a.crediti_affidati_aer) ?? (daVeraAgente > 0 ? daVeraAgente : null),
     formaAER: formaAERdaAnagrafica(a.forma_giuridica),
     ritardoOltre90Giorni:

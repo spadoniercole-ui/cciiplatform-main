@@ -8,7 +8,7 @@ describe('scegliValore', () => {
   it('senza triage vale il valore scritto a mano', () => {
     expect(scegliValore(null, 500, 41_993)).toEqual({ valore: 500, fonte: 'manuale' });
   });
-  it('campo vuoto: ripiego sul V.E.R.A. se positivo', () => {
+  it('campo vuoto: ripiego sulla certificazione dei debiti se positivo', () => {
     expect(scegliValore(null, null, 41_993)).toEqual({ valore: 41_993, fonte: 'vera' });
     expect(scegliValore(null, null, 0)).toBeNull();
     expect(scegliValore(undefined, null)).toBeNull();
@@ -22,7 +22,7 @@ describe('scegliValore', () => {
       fonte: 'file',
     });
   });
-  it('i file INPS prevalgono sul V.E.R.A., che misura un’altra cosa', () => {
+  it('i file INPS prevalgono sulla certificazione dei debiti, che misura un’altra cosa', () => {
     expect(scegliValore(null, null, 41_993, 16_756)?.fonte).toBe('file');
   });
 });

@@ -1,6 +1,6 @@
 // src/lib/lavorazioni/reparti.ts
 //
-// DAL V.E.R.A. AI DOCUMENTI PER I REPARTI.
+// DALLA certificazione dei debiti AI DOCUMENTI PER I REPARTI.
 //
 // Il triage finisce con i debiti dell'azienda in fila e con la domanda che
 // viene dopo: chi li deve lavorare, e che cosa deve fare perché il debito
@@ -24,7 +24,7 @@
 // risultano dai documenti dell'ente alla data della verifica. Non è un
 // accertamento della singola partita — per questo il documento dichiara la
 // data e la fonte, e non promette che il numero sia definitivo. E non è il
-// totale del V.E.R.A.: le posizioni già contabilizzate non si elencano (non
+// totale della certificazione dei debiti: le posizioni già contabilizzate non si elencano (non
 // c'è nulla da fare) e il documento ne dichiara numero e importo, con la
 // quota di TS 25/27/81 dove resta solo la decisione dell'invio ad AdR.
 // La regola sta in `daLavorare.ts`, condivisa con la comunicazione al
@@ -89,7 +89,7 @@ export interface DocumentoReparto {
    * Posizioni già contabilizzate: non si elencano, perché non c'è nulla da
    * fare. Si dichiarano — con la quota di TS 25/27/81, dove resta la sola
    * decisione dell'invio ad AdR — perché il totale del documento non è il
-   * totale del V.E.R.A. e chi confronta i due numeri deve trovare la
+   * totale della certificazione dei debiti e chi confronta i due numeri deve trovare la
    * spiegazione sul foglio, non doverla dedurre.
    */
   contabilizzate: RiepilogoRighe;
@@ -98,7 +98,7 @@ export interface DocumentoReparto {
   /**
    * Lo stesso debito scritto due volte nel file («F24 non presentato» e
    * «Denunce non trasmesse»): scontato dalla dichiarazione qui sopra, e detto
-   * sul foglio perché il conto torni a chi somma le righe del V.E.R.A.
+   * sul foglio perché il conto torni a chi somma le righe della certificazione dei debiti
    */
   duplicati?: RiepilogoRighe;
   /** Nome del file da scaricare, già sicuro per il filesystem. */
@@ -112,7 +112,7 @@ export interface DocumentoReparto {
 
 export interface EsitoDocumentiReparto {
   documenti: DocumentoReparto[];
-  /** Tipologie presenti nel V.E.R.A. senza lavorazione: nessun reparto. */
+  /** Tipologie presenti nella certificazione dei debiti senza lavorazione: nessun reparto. */
   categorieSenzaLavorazione: CategoriaSenzaLavorazione[];
   /** Posizioni senza categoria: non attribuibili, restano fuori. */
   righeSenzaCategoria: number;
