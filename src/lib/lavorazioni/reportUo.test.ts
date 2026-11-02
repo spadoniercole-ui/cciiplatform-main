@@ -16,6 +16,9 @@ const riga = (over: Partial<RigaVeraReportUo> = {}): RigaVeraReportUo => ({
 const lav = (over: Partial<LavorazioneMateria> = {}): LavorazioneMateria => ({
   id: 1,
   materiaId: 10,
+  codice: '77',
+  direttrice: 'Presidio dei flussi informativi',
+  prodotto: 'DURC',
   tipologia: 'Verifica del flusso',
   dipendenza: 'Ufficio contributi',
   procedura: 'Estrarre il flusso\nConfrontare con il versato',

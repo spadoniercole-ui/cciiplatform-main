@@ -31,6 +31,7 @@ vi.mock('@/app/actions/titoliEnte', () => ({
 
 vi.mock('@/app/actions/materieLavorazione', () => ({
   ottieniLavorazioniMateria: vi.fn(),
+  ottieniCatalogoTl: vi.fn().mockResolvedValue({ success: true, tl: [] }),
 }));
 
 vi.mock('@/components/FinestreApp', () => ({ confermaApp: vi.fn(async () => true) }));

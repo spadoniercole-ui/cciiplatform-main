@@ -9,8 +9,9 @@ import { componiCatenaDirettrici } from '@/lib/titoliEnte/direttrici';
 // che possono rompersi sono proprio quelle che una funzione pura non tocca: il
 // confronto `= ANY($1::int[])`, il valore scritto nella colonna e soprattutto
 // la transazione — se la seconda scrittura fallisce, la prima non deve restare.
-// Con due tabelle e una transazione il rischio è concreto: metà ufficio
-// spostato è peggio di un ufficio fuori elenco, perché nessuno sa più dove sta.
+//
+// Dalla 0.159.0 l'ufficio vive sull'associazione della materia (`materia_tl`)
+// e sui titoli: la TL è un catalogo piatto e non porta più la dipendenza.
 //
 // Ogni test ha il suo schema: così quello che un test scrive non decide cosa
 // deve vedere il successivo. La guardia di accesso e il DDL sono simulati (il
@@ -40,7 +41,7 @@ vi.mock('@/lib/autorizzazione', () => ({ richiediAccessoSchema }));
 // Le tabelle le crea questo test: qui ciò che conta è che esistano con le
 // colonne che le query nominano.
 vi.mock('@/db/provision', () => ({
-  assicuraTabelleProdottiTl: async () => {},
+  assicuraTabelleTl: async () => {},
   assicuraTabelleParametriSpazio: async () => {},
 }));
 
@@ -62,7 +63,7 @@ await db.exec(`
 let contatore = 0;
 
 /**
- * Uno spazio nuovo, con la stessa configurazione di partenza: due lavorazioni
+ * Uno spazio nuovo, con la stessa configurazione di partenza: due associazioni
  * che nominano l'ufficio fuori elenco con grafie diverse, una già su una
  * direttrice, una senza ufficio; e tre codici, di cui uno solo lo dichiara.
  *
@@ -79,24 +80,25 @@ async function nuovoSpazio(opzioni: { titoliBloccati?: boolean } = {}): Promise<
   await db.exec(`
     CREATE SCHEMA ${schema};
 
-    CREATE TABLE ${schema}.prodotti_tl (
+    CREATE TABLE ${schema}.tl (
       id SERIAL PRIMARY KEY,
-      direttrice TEXT NOT NULL DEFAULT '',
-      prodotto TEXT NOT NULL DEFAULT '',
-      tipologia TEXT NOT NULL DEFAULT '',
-      dipendenza TEXT,
-      procedura TEXT,
-      esito TEXT,
-      ordine INTEGER NOT NULL DEFAULT 0,
-      rilevante_perimetro BOOLEAN NOT NULL DEFAULT false,
-      verso_perimetro TEXT,
-      aggiornato_il TIMESTAMPTZ NOT NULL DEFAULT now()
+      codice TEXT NOT NULL DEFAULT '',
+      descrizione TEXT NOT NULL DEFAULT '',
+      check_list BOOLEAN NOT NULL DEFAULT false,
+      verso_check_list TEXT,
+      ordine INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE ${schema}.materia_tl (
+      id SERIAL,
       materia_id INTEGER NOT NULL,
       tl_id INTEGER NOT NULL,
       ordine INTEGER NOT NULL DEFAULT 0,
+      direttrice TEXT NOT NULL DEFAULT '',
+      prodotto TEXT NOT NULL DEFAULT '',
+      dipendenza TEXT,
+      procedura TEXT,
+      esito TEXT,
       PRIMARY KEY (materia_id, tl_id)
     );
 
@@ -112,13 +114,19 @@ async function nuovoSpazio(opzioni: { titoliBloccati?: boolean } = {}): Promise<
     INSERT INTO public.spazi (nome_schema, direttrici_ente_strutturate)
     VALUES ('${schema}', '${JSON.stringify(DIRETTRICI)}'::jsonb);
 
-    INSERT INTO ${schema}.prodotti_tl (prodotto, tipologia, dipendenza) VALUES
-      ('Emissione diffida', 'Emissione diffida', 'Ufficio Legale'),
-      ('Verifica del flusso', 'Verifica del flusso', 'ufficio legale'),
-      ('Contabilizzazione', 'Contabilizzazione', 'Gestione del credito'),
-      ('Recupero coattivo', 'Recupero coattivo', NULL);
+    INSERT INTO ${schema}.tl (codice, descrizione) VALUES
+      ('1', 'Emissione diffida'),
+      ('2', 'Verifica del flusso'),
+      ('3', 'Contabilizzazione'),
+      ('4', 'Recupero coattivo');
 
-    INSERT INTO ${schema}.materia_tl (materia_id, tl_id) VALUES (10, 1), (11, 2), (12, 3), (13, 4);
+    INSERT INTO ${schema}.materia_tl
+      (materia_id, tl_id, direttrice, prodotto, dipendenza)
+    VALUES
+      (10, 1, 'Gestione del credito', 'Diffide', 'Ufficio Legale'),
+      (11, 2, 'Gestione del credito', 'Diffide', 'ufficio legale'),
+      (12, 3, 'Gestione del credito', 'Diffide', 'Gestione del credito'),
+      (13, 4, 'Gestione del credito', 'Diffide', NULL);
 
     INSERT INTO ${schema}.titoli_ente (codice, atto, dipendenza) VALUES
       ('27', 'Flusso Uniemens', NULL),
@@ -135,7 +143,7 @@ interface Riga {
 
 /** Le dipendenze di una tabella, per id: quello che è finito davvero a database. */
 async function dipendenze(
-  tabella: 'prodotti_tl' | 'titoli_ente',
+  tabella: 'materia_tl' | 'titoli_ente',
   schema: string
 ): Promise<(string | null)[]> {
   const r = await db.query<Riga>(`SELECT id, dipendenza FROM ${schema}.${tabella} ORDER BY id`);
@@ -143,7 +151,7 @@ async function dipendenze(
 }
 
 describe('riallineare un ufficio fuori elenco a una direttrice', () => {
-  it('sposta le lavorazioni e i titoli che nominano l’ufficio, in qualunque grafia', async () => {
+  it('sposta le associazioni e i titoli che nominano l’ufficio, in qualunque grafia', async () => {
     const schema = await nuovoSpazio();
     richiediAccessoSchema.mockClear();
 
@@ -160,8 +168,8 @@ describe('riallineare un ufficio fuori elenco a una direttrice', () => {
       codici: 1,
     });
 
-    // La riga 12 era già della direttrice, la 13 non ha ufficio: non si toccano.
-    expect(await dipendenze('prodotti_tl', schema)).toEqual([
+    // La riga 3 era già della direttrice, la 4 non ha ufficio: non si toccano.
+    expect(await dipendenze('materia_tl', schema)).toEqual([
       'Gestione del credito',
       'Gestione del credito',
       'Gestione del credito',
@@ -187,12 +195,7 @@ describe('riallineare un ufficio fuori elenco a una direttrice', () => {
       id: number;
       materia_id: number;
       dipendenza: string | null;
-    }>(
-      `SELECT t.id, a.materia_id, t.dipendenza
-         FROM ${schema}.materia_tl a
-         JOIN ${schema}.prodotti_tl t ON t.id = a.tl_id
-        ORDER BY t.id`
-    );
+    }>(`SELECT id, materia_id, dipendenza FROM ${schema}.materia_tl ORDER BY id`);
     const titoli = await db.query<Riga>(
       `SELECT id, dipendenza FROM ${schema}.titoli_ente ORDER BY id`
     );
@@ -202,7 +205,10 @@ describe('riallineare un ufficio fuori elenco a una direttrice', () => {
       lavorazioni: lavorazioni.rows.map((r) => ({
         id: r.id,
         materiaId: r.materia_id,
+        codice: String(r.id),
         tipologia: 'Lavorazione',
+        direttrice: 'Gestione del credito',
+        prodotto: 'Diffide',
         dipendenza: r.dipendenza,
         procedura: null,
         esito: null,
@@ -212,7 +218,7 @@ describe('riallineare un ufficio fuori elenco a una direttrice', () => {
     });
 
     expect(catena.fuoriElenco).toEqual([]);
-    // Le tre lavorazioni dell'ufficio ora sono della direttrice, e il codice 74
+    // Le tre associazioni dell'ufficio ora sono della direttrice, e il codice 74
     // — l'unico che dichiarava un ufficio proprio — la segue.
     expect(catena.voci.find((v) => v.nome === 'Gestione del credito')).toMatchObject({
       lavorazioni: 3,
@@ -232,7 +238,7 @@ describe('riallineare un ufficio fuori elenco a una direttrice', () => {
 
     expect(esito.success).toBe(false);
     expect(esito.error).toMatch(/una delle direttrici configurate/);
-    expect(await dipendenze('prodotti_tl', schema)).toEqual([
+    expect(await dipendenze('materia_tl', schema)).toEqual([
       'Ufficio Legale',
       'ufficio legale',
       'Gestione del credito',
@@ -242,9 +248,9 @@ describe('riallineare un ufficio fuori elenco a una direttrice', () => {
 
   // Il punto della transazione: la prima scrittura è già passata quando la
   // seconda viene rifiutata dal database. Se il rollback non ci fosse, le
-  // lavorazioni sarebbero sulla direttrice e i titoli ancora sul vecchio nome —
+  // associazioni sarebbero sulla direttrice e i titoli ancora sul vecchio nome —
   // l'ufficio diviso in due, che è il guasto da evitare.
-  it('se la scrittura dei titoli fallisce, anche le lavorazioni restano com’erano', async () => {
+  it('se la scrittura dei titoli fallisce, anche le associazioni restano com’erano', async () => {
     const schema = await nuovoSpazio({ titoliBloccati: true });
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -260,7 +266,7 @@ describe('riallineare un ufficio fuori elenco a una direttrice', () => {
     // passerebbe anche se il comando si fermasse prima di toccare il database.
     expect(esito.error).toMatch(/titoli_bloccati/);
 
-    expect(await dipendenze('prodotti_tl', schema)).toEqual([
+    expect(await dipendenze('materia_tl', schema)).toEqual([
       'Ufficio Legale',
       'ufficio legale',
       'Gestione del credito',

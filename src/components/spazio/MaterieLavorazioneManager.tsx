@@ -1,40 +1,43 @@
 'use client';
 
-// MATERIE E TL — passo 2 del flusso (0.157.0).
+// MATERIE E TL — il passo in cui la materia mutua direttrice e prodotto (0.159.0).
 //
-// Qui non si scrivono più le TL: si dice quali TL del catalogo ogni materia
-// eredita. Le TL si scrivono al passo 1, dentro i prodotti delle direttrici,
-// dove il lavoro si organizza; la materia è l'associazione fra i codici di
-// partita che l'ente ha in anagrafica e le lavorazioni che li trattano.
-//
-// PERCHÉ COSÌ. Prima la TL nasceva qui, e il prodotto era solo un nome nel
-// questionario: per lavorare un DURC bisognava aspettare che una materia
-// esistesse, inventare lì la lavorazione e poi associarla ai titoli — girando
-// il flusso al contrario (prodotti vuoti, TL nella materia, associazione alla
-// fine). La stessa TL serve spesso più materie: scritta una volta, si associa.
+// La TL è un codice con una descrizione e un flag per la check list: sta nel
+// suo catalogo (Parametri › Catalogo delle TL) e non si riscrive qui. Qui la
+// materia dice su quale direttrice e su quale prodotto la applica, con quale
+// ufficio, quali passi e quale esito: è il processo che finisce nel report per
+// unità operativa e nelle comunicazioni ai reparti.
 //
 // L'ORDINE CONTA. Le TL di una materia si eseguono in sequenza: la prima è
 // quella che il titolo del codice eredita e che il report dell'ufficio usa come
-// procedura. L'associazione nuova va in fondo.
+// procedura.
+//
+// La stessa TL può essere applicata da più materie, anche su prodotti diversi:
+// la TL resta una, cambia il processo.
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, ClipboardList, Link2, Unlink } from 'lucide-react';
+import { ArrowRight, ClipboardList, Link2, Pencil, Unlink, X } from 'lucide-react';
 import { useDichiaraContestoAssistente } from '@/components/ContestoAssistenteContext';
 import { ottieniMaterieEnteAction } from '@/app/actions/titoliEnte';
+import { ottieniDirettriciEnte } from '@/app/actions/screeningAzienda';
+import type { DirettriceStrutturata } from '@/app/actions/screeningAzienda';
 import {
-  collegaTlMateriaAction,
   ottieniCatalogoTl,
   ottieniLavorazioniMateria,
+  salvaAssociazioneTlAction,
   scollegaTlMateriaAction,
 } from '@/app/actions/materieLavorazione';
 import { conRitorno } from '@/lib/navigazione/ritorno';
 import {
   lavorazioniDellaMateria,
+  type InputAssociazioneTl,
   type LavorazioneMateria,
 } from '@/lib/titoliEnte/lavorazioniMateria';
+import { etichettaTl, type Tl } from '@/lib/titoliEnte/catalogoTl';
+import { nomiDirettrici } from '@/lib/titoliEnte/direttrici';
+import { MASSIMO_CARATTERI_ATTIVITA_RECUPERO } from '@/lib/titoliEnte/recupero';
 import type { MateriaEnte } from '@/lib/titoliEnte/materie';
-import type { TlProdotto } from '@/lib/titoliEnte/prodottiTl';
 
 interface Props {
   nomeSchema: string;
@@ -46,7 +49,17 @@ interface Props {
 }
 
 const CLASSE =
-  'w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500';
+  'w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500';
+
+const vuota = (materiaId: number): InputAssociazioneTl => ({
+  materiaId,
+  tlId: 0,
+  direttrice: '',
+  prodotto: '',
+  dipendenza: null,
+  procedura: null,
+  esito: null,
+});
 
 export function MaterieLavorazioneManager({
   nomeSchema,
@@ -62,8 +75,9 @@ export function MaterieLavorazioneManager({
 
   const [materie, setMaterie] = useState<MateriaEnte[]>([]);
   const [lavorazioni, setLavorazioni] = useState<LavorazioneMateria[]>([]);
-  const [catalogo, setCatalogo] = useState<TlProdotto[]>([]);
-  const [scelta, setScelta] = useState<Record<number, number | ''>>({});
+  const [catalogo, setCatalogo] = useState<Tl[]>([]);
+  const [direttrici, setDirettrici] = useState<DirettriceStrutturata[]>([]);
+  const [bozza, setBozza] = useState<InputAssociazioneTl | null>(null);
   const [caricamento, setCaricamento] = useState(true);
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
@@ -72,10 +86,11 @@ export function MaterieLavorazioneManager({
   const carica = async () => {
     setCaricamento(true);
     setErrore(null);
-    const [m, l, c] = await Promise.all([
+    const [m, l, c, d] = await Promise.all([
       ottieniMaterieEnteAction(nomeSchema),
       ottieniLavorazioniMateria(nomeSchema),
       ottieniCatalogoTl(nomeSchema),
+      ottieniDirettriciEnte(nomeSchema),
     ]);
     if (m.success) setMaterie(m.materie);
     else setErrore(m.error || 'Impossibile caricare le materie.');
@@ -83,6 +98,7 @@ export function MaterieLavorazioneManager({
     else setErrore(l.error || 'Impossibile caricare le lavorazioni delle materie.');
     if (!c.success) setErrore(c.error || 'Impossibile caricare il catalogo delle TL.');
     else setCatalogo(c.tl);
+    if (d.success) setDirettrici(d.direttrici);
     setCaricamento(false);
   };
 
@@ -99,21 +115,22 @@ export function MaterieLavorazioneManager({
     if (blocco) blocco.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [apriMateriaId, caricamento]);
 
-  const collega = async (materiaId: number) => {
-    const tlId = scelta[materiaId];
-    if (!tlId) return;
+  const salva = async () => {
+    if (!bozza) return;
     setInCorso(true);
     setErrore(null);
-    const r = await collegaTlMateriaAction(nomeSchema, materiaId, tlId);
+    const r = await salvaAssociazioneTlAction(nomeSchema, bozza);
     if (!r.success) setErrore(r.error || 'Associazione non riuscita.');
     else {
-      setScelta((prev) => ({ ...prev, [materiaId]: '' }));
+      setBozza(null);
       await carica();
     }
     setInCorso(false);
   };
 
   const scollega = async (tl: LavorazioneMateria) => {
+    if (!window.confirm(`Togliere la TL ${tl.codice} da questa materia? La TL resta nel catalogo.`))
+      return;
     setInCorso(true);
     setErrore(null);
     const r = await scollegaTlMateriaAction(nomeSchema, tl.materiaId, tl.id);
@@ -124,15 +141,20 @@ export function MaterieLavorazioneManager({
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
 
+  const uffici = nomiDirettrici(direttrici);
   const materieConId = materie.filter((m): m is MateriaEnte & { id: number } => m.id != null);
   const materieSenzaTl = materieConId.filter(
     (m) => lavorazioniDellaMateria(lavorazioni, m.id).length === 0
   );
-  /** Le TL non ancora associate a questa materia: quelle già associate non si ripropongono. */
+  /** Le TL non ancora applicate da questa materia. */
   const tlDisponibili = (materiaId: number) => {
     const gia = new Set(lavorazioniDellaMateria(lavorazioni, materiaId).map((l) => l.id));
     return catalogo.filter((t) => !gia.has(t.id));
   };
+  const prodottiDirettrice = (nome: string) =>
+    direttrici.find((d) => d.nome.trim().toLowerCase() === nome.trim().toLowerCase())?.prodotti ??
+    [];
+  const apreBozza = (m: MateriaEnte & { id: number }) => setBozza(vuota(m.id));
 
   return (
     <div className="space-y-5">
@@ -143,24 +165,31 @@ export function MaterieLavorazioneManager({
             Materie e TL
           </h2>
           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-            Una materia raccoglie codici di partita che si lavorano allo stesso modo: qui si dice
-            <strong> quali TL del catalogo eredita</strong>. Le TL — ufficio, passi, esito e
-            contrassegno di perimetro — si scrivono dentro i{' '}
+            Una materia raccoglie codici di partita che si lavorano allo stesso modo. Qui dice{' '}
+            <strong>quale TL applica</strong>, su <strong>quale direttrice e prodotto</strong>, con
+            quale ufficio, quali passi e quale esito: è il processo che finisce nel report per unità
+            operativa. Le TL si scrivono una volta sola nel{' '}
+            <Link
+              href={conRitorno(`/spazio/${codice}/parametri/tl`, ritorno)}
+              className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
+            >
+              catalogo <ArrowRight className="w-3 h-3" />
+            </Link>
+            ; le direttrici e i loro prodotti in{' '}
             <Link
               href={conRitorno(`/spazio/${codice}/parametri/direttrici-ente`, ritorno)}
-              className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
+              className="font-bold text-sky-700 hover:underline"
             >
-              prodotti delle direttrici <ArrowRight className="w-3 h-3" />
+              Direttrici e prodotti
             </Link>
-            , una volta sola; i{' '}
+            . I{' '}
             <Link
               href={conRitorno(`/spazio/${codice}/parametri/titoli-ente`, ritorno)}
-              className="font-bold text-sky-700 hover:underline inline-flex items-center gap-0.5"
+              className="font-bold text-sky-700 hover:underline"
             >
-              titoli di credito <ArrowRight className="w-3 h-3" />
+              titoli di credito
             </Link>{' '}
-            le ereditano dalla materia, e solo un ufficio scritto sul singolo codice ha la
-            precedenza.
+            mettono insieme TL, direttrice e prodotto e costruiscono la vestizione legale.
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
             L’ordine è quello in cui l’ufficio le esegue: la prima è quella che il titolo eredita.
@@ -176,10 +205,9 @@ export function MaterieLavorazioneManager({
 
       {catalogo.length === 0 && (
         <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
-          Il catalogo delle TL è ancora vuoto: finché non ne scrivi una nei prodotti, nessuna
-          materia ha qualcosa da ereditare. Le TL già configurate prima di questa versione sono
-          state copiate nel catalogo, sotto il prodotto che porta il loro nome: rinomina il prodotto
-          dove serve.
+          Il catalogo delle TL è ancora vuoto: finché non ne scrivi una, nessuna materia ha qualcosa
+          da applicare. Le TL già configurate sono state copiate nel catalogo, con la descrizione
+          che avevano.
         </p>
       )}
 
@@ -199,6 +227,7 @@ export function MaterieLavorazioneManager({
           {materieConId.map((m) => {
             const associate = lavorazioniDellaMateria(lavorazioni, m.id);
             const disponibili = tlDisponibili(m.id);
+            const formAperto = bozza?.materiaId === m.id;
             return (
               <div
                 key={m.id}
@@ -227,89 +256,234 @@ export function MaterieLavorazioneManager({
                         ? '1 TL'
                         : `${associate.length} TL`}
                   </span>
+                  {!formAperto && disponibili.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => apreBozza(m)}
+                      disabled={inCorso}
+                      className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-[10px] font-bold uppercase"
+                    >
+                      <Link2 className="w-3 h-3" /> Applica una TL
+                    </button>
+                  )}
                 </div>
 
                 {associate.length === 0 ? (
                   <p className="text-[11px] text-amber-800 leading-relaxed">
-                    Nessuna TL associata: i codici di questa materia restano senza ufficio e senza
+                    Nessuna TL applicata: i codici di questa materia restano senza ufficio e senza
                     procedura.
                   </p>
                 ) : (
                   <ul className="space-y-1.5">
-                    {associate.map((l, indice) => {
-                      const voce = catalogo.find((t) => t.id === l.id);
-                      return (
-                        <li
-                          key={l.id}
-                          className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5"
+                    {associate.map((l, indice) => (
+                      <li
+                        key={l.id}
+                        className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5"
+                      >
+                        <span className="text-[9px] font-bold text-slate-400 tabular-nums mt-0.5 w-4 shrink-0">
+                          {indice + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-bold text-slate-800">
+                            <span className="font-mono text-slate-500">{l.codice}</span> ·{' '}
+                            {l.tipologia}
+                            {l.rilevantePerimetro && (
+                              <span
+                                className={`ml-1.5 text-[9px] font-bold uppercase rounded px-1 py-0.5 ${
+                                  l.versoPerimetro === 'RESISTENZA'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}
+                              >
+                                check list
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[10px] text-slate-500">
+                            {l.prodotto || 'prodotto non indicato'} ·{' '}
+                            {l.direttrice || 'direttrice non indicata'}
+                            {l.dipendenza ? ` · ${l.dipendenza}` : ' · senza ufficio'}
+                            {l.esito ? ` · esito: ${l.esito}` : ''}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBozza({
+                              materiaId: m.id,
+                              tlId: l.id,
+                              direttrice: l.direttrice,
+                              prodotto: l.prodotto,
+                              dipendenza: l.dipendenza,
+                              procedura: l.procedura,
+                              esito: l.esito,
+                            });
+                          }}
+                          disabled={inCorso || bozza !== null}
+                          title="Modifica il processo di questa TL"
+                          className="flex items-center gap-1 px-2 py-1 rounded-md border border-slate-300 text-[9px] font-bold uppercase text-slate-600 hover:text-sky-700 hover:border-sky-300 disabled:opacity-40 shrink-0"
                         >
-                          <span className="text-[9px] font-bold text-slate-400 tabular-nums mt-0.5 w-4 shrink-0">
-                            {indice + 1}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-bold text-slate-800">
-                              {l.tipologia}
-                              {l.rilevantePerimetro && (
-                                <span
-                                  className={`ml-1.5 text-[9px] font-bold uppercase rounded px-1 py-0.5 ${
-                                    l.versoPerimetro === 'RESISTENZA'
-                                      ? 'bg-amber-100 text-amber-800'
-                                      : 'bg-emerald-100 text-emerald-800'
-                                  }`}
-                                >
-                                  perimetro
-                                </span>
-                              )}
-                            </p>
-                            <p className="text-[10px] text-slate-500">
-                              {voce ? `${voce.prodotto} · ${voce.direttrice}` : 'TL del catalogo'}
-                              {l.dipendenza ? ` · ${l.dipendenza}` : ' · senza ufficio'}
-                              {l.esito ? ` · esito: ${l.esito}` : ''}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => void scollega(l)}
-                            disabled={inCorso}
-                            title="Togli questa TL dalla materia: la TL resta nel catalogo"
-                            className="flex items-center gap-1 px-2 py-1 rounded-md border border-slate-300 text-[9px] font-bold uppercase text-slate-600 hover:text-red-700 hover:border-red-300 disabled:opacity-40 shrink-0"
-                          >
-                            <Unlink className="w-3 h-3" /> Togli
-                          </button>
-                        </li>
-                      );
-                    })}
+                          <Pencil className="w-3 h-3" /> Modifica
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void scollega(l)}
+                          disabled={inCorso}
+                          title="Togli questa TL dalla materia: la TL resta nel catalogo"
+                          className="flex items-center gap-1 px-2 py-1 rounded-md border border-slate-300 text-[9px] font-bold uppercase text-slate-600 hover:text-red-700 hover:border-red-300 disabled:opacity-40 shrink-0"
+                        >
+                          <Unlink className="w-3 h-3" /> Togli
+                        </button>
+                      </li>
+                    ))}
                   </ul>
                 )}
 
-                {disponibili.length > 0 && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <select
-                      aria-label={`TL da associare a ${m.nome}`}
-                      value={scelta[m.id] ?? ''}
-                      onChange={(e) =>
-                        setScelta((prev) => ({
-                          ...prev,
-                          [m.id]: e.target.value ? Number(e.target.value) : '',
-                        }))
-                      }
-                      className={`${CLASSE} max-w-md`}
-                    >
-                      <option value="">Scegli una TL del catalogo…</option>
-                      {disponibili.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.direttrice} · {t.prodotto} · {t.tipologia}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => void collega(m.id)}
-                      disabled={inCorso || !scelta[m.id]}
-                      className="flex items-center gap-1 px-3 py-2 rounded-lg bg-sky-600 text-white text-[10px] font-bold uppercase hover:bg-sky-700 disabled:bg-slate-300"
-                    >
-                      <Link2 className="w-3.5 h-3.5" /> Associa
-                    </button>
+                {formAperto && bozza && (
+                  <div className="rounded-lg border border-sky-200 bg-sky-50/40 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                        {associate.some((l) => l.id === bozza.tlId)
+                          ? 'Modifica il processo'
+                          : 'Applica una TL alla materia'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setBozza(null)}
+                        disabled={inCorso}
+                        className="p-1 rounded text-slate-500 hover:text-slate-900 disabled:opacity-40"
+                        aria-label="Chiudi"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                      <label className="md:col-span-5 text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                        TL
+                        <select
+                          value={bozza.tlId || ''}
+                          onChange={(e) => setBozza({ ...bozza, tlId: Number(e.target.value) })}
+                          className={`${CLASSE} mt-0.5`}
+                          aria-label={`TL da applicare a ${m.nome}`}
+                        >
+                          <option value="">Scegli la TL del catalogo…</option>
+                          {catalogo
+                            .filter(
+                              (t) => t.id === bozza.tlId || disponibili.some((d) => d.id === t.id)
+                            )
+                            .map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {etichettaTl(t)}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label className="md:col-span-4 text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                        Direttrice
+                        <select
+                          value={bozza.direttrice}
+                          onChange={(e) =>
+                            setBozza({ ...bozza, direttrice: e.target.value, prodotto: '' })
+                          }
+                          className={`${CLASSE} mt-0.5`}
+                          aria-label="Direttrice"
+                        >
+                          <option value="">Scegli la direttrice…</option>
+                          {uffici.map((u) => (
+                            <option key={u} value={u}>
+                              {u}
+                            </option>
+                          ))}
+                          {bozza.direttrice &&
+                            !uffici.some(
+                              (u) =>
+                                u.trim().toLowerCase() === bozza.direttrice.trim().toLowerCase()
+                            ) && <option value={bozza.direttrice}>{bozza.direttrice}</option>}
+                        </select>
+                      </label>
+                      <label className="md:col-span-3 text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                        Prodotto
+                        <input
+                          type="text"
+                          list={`prodotti-${m.id}`}
+                          value={bozza.prodotto}
+                          onChange={(e) => setBozza({ ...bozza, prodotto: e.target.value })}
+                          placeholder="Es. DURC"
+                          className={`${CLASSE} mt-0.5`}
+                          aria-label="Prodotto"
+                        />
+                        <datalist id={`prodotti-${m.id}`}>
+                          {prodottiDirettrice(bozza.direttrice).map((p) => (
+                            <option key={p} value={p} />
+                          ))}
+                        </datalist>
+                      </label>
+                      <label className="md:col-span-5 text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                        Ufficio che la esegue
+                        <select
+                          value={bozza.dipendenza ?? ''}
+                          onChange={(e) =>
+                            setBozza({ ...bozza, dipendenza: e.target.value || null })
+                          }
+                          className={`${CLASSE} mt-0.5`}
+                          aria-label="Ufficio che la esegue"
+                        >
+                          <option value="">Senza ufficio</option>
+                          {uffici.map((u) => (
+                            <option key={u} value={u}>
+                              {u}
+                            </option>
+                          ))}
+                          {bozza.dipendenza &&
+                            !uffici.some(
+                              (u) =>
+                                u.trim().toLowerCase() === bozza.dipendenza!.trim().toLowerCase()
+                            ) && <option value={bozza.dipendenza}>{bozza.dipendenza}</option>}
+                        </select>
+                      </label>
+                      <label className="md:col-span-7 text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                        Esito
+                        <input
+                          type="text"
+                          value={bozza.esito ?? ''}
+                          onChange={(e) => setBozza({ ...bozza, esito: e.target.value || null })}
+                          placeholder="Es. diffida notificata"
+                          className={`${CLASSE} mt-0.5`}
+                        />
+                      </label>
+                      <label className="md:col-span-12 text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                        Passi — uno per riga
+                        <textarea
+                          value={bozza.procedura ?? ''}
+                          onChange={(e) =>
+                            setBozza({ ...bozza, procedura: e.target.value || null })
+                          }
+                          rows={4}
+                          placeholder={
+                            '1. Verificare il messaggio sul cassetto bidirezionale\n2. Acquisire la proposta'
+                          }
+                          className={`${CLASSE} mt-0.5 leading-relaxed`}
+                        />
+                        <span className="text-[9px] text-slate-400">
+                          {(bozza.procedura ?? '').length} / {MASSIMO_CARATTERI_ATTIVITA_RECUPERO}
+                        </span>
+                      </label>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void salva()}
+                        disabled={
+                          inCorso ||
+                          !bozza.tlId ||
+                          !bozza.direttrice.trim() ||
+                          !bozza.prodotto.trim()
+                        }
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-[10px] font-bold uppercase hover:bg-slate-800 disabled:bg-slate-300"
+                      >
+                        <Link2 className="w-3 h-3" /> {inCorso ? 'Salvataggio…' : 'Salva'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -321,7 +495,7 @@ export function MaterieLavorazioneManager({
       {materieSenzaTl.length > 0 && (
         <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
           Senza TL: {materieSenzaTl.map((m) => m.nome).join(', ')}. I codici di queste materie
-          restano fuori dal report per unità operativa finché non associano una lavorazione.
+          restano fuori dal report per unità operativa finché non applicano una lavorazione.
         </p>
       )}
     </div>

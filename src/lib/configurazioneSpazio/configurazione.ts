@@ -58,11 +58,16 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
     nome: 'materie_lavorazione',
     descrizione: 'Lavorazioni delle materie (dipendenza e procedura)',
   },
-  // 0.157.0-0.158.0: le TL si scrivono nei prodotti, le materie le ereditano e
-  // le categorie di debito puntano alle stesse TL. Vanno dopo le materie (gli id
-  // devono esistere) e prima dei titoli, che le leggono.
-  { nome: 'prodotti_tl', descrizione: 'TL dei prodotti (ufficio e procedura)' },
-  { nome: 'materia_tl', descrizione: 'TL ereditate dalle materie' },
+  // 0.159.0: il catalogo delle TL è piatto (codice, descrizione, flag per la
+  // check list); la materia le applica a una direttrice e a un prodotto in
+  // `materia_tl`, con ufficio, passi ed esito. Vanno dopo le materie (gli id
+  // devono esistere) e prima dei titoli, che le leggono. `prodotti_tl` non si
+  // esporta più: è lo storico del modello precedente.
+  { nome: 'tl', descrizione: 'Catalogo delle TL (codice, descrizione, check list)' },
+  {
+    nome: 'materia_tl',
+    descrizione: 'TL applicate dalle materie (direttrice, prodotto, processo)',
+  },
   { nome: 'categoria_tl', descrizione: 'TL per tipologia di debito' },
   { nome: 'titoli_ente', descrizione: 'Titoli di credito dell’ente' },
   {

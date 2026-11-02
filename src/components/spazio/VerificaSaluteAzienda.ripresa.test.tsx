@@ -379,6 +379,9 @@ beforeEach(() => {
       {
         id: 1,
         materiaId: 1,
+        codice: '81',
+        direttrice: 'Gestione del credito',
+        prodotto: 'Diffide',
         tipologia: 'Emissione diffida',
         dipendenza: 'Ufficio Recupero Crediti',
         procedura: '1. Verifica del flusso\n2. Diffida',

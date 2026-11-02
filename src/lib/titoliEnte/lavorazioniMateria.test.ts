@@ -12,6 +12,9 @@ import { RISCONTRO_VUOTO, type TitoloEnte } from './titoli';
 
 const lav = (p: Partial<LavorazioneMateria> & { id: number }): LavorazioneMateria => ({
   materiaId: 1,
+  codice: '81',
+  direttrice: 'Gestione del credito',
+  prodotto: 'Diffide',
   tipologia: 'Lavorazione',
   dipendenza: null,
   procedura: null,

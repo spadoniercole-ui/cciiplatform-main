@@ -1,3 +1,30 @@
+## 0.159.0 — 2026-11-02
+
+**Le TL tornano a essere semplici: codice, descrizione, flag per la check list.**
+La TL era scritta dentro il prodotto e portava con sé ufficio, passi ed esito: la stessa TL 81
+compariva tante volte quanti erano i prodotti che la usavano, e ogni copia andava corretta a
+parte. Lo schema ora è quello che il lavoro chiede, in tre anelli.
+
+- **Un catalogo piatto** (`tl`, pagina Parametri › Catalogo delle TL): codice, descrizione, flag
+  per la check list (con il verso, collaborativa o di resistenza). La TL si scrive una volta
+  sola e non appartiene più a un prodotto.
+- **La materia mutua l'associazione** (`materia_tl`): sceglie direttrice e prodotto e scrive il
+  processo — ufficio, passi, esito, ordine. È questo che finisce nel report per unità operativa
+  e nelle comunicazioni ai reparti. La stessa TL può essere applicata da più materie senza
+  duplicati.
+- **Il titolo compone la vestizione legale** (`titoli_ente`): TL + direttrice + prodotto, accanto
+  ad atto, presupposto giuridico e riferimento interno. La riga mostra la TL e il prodotto, e
+  dipendenza e procedura restano ereditate dalla materia salvo scelta propria del codice.
+- **La migrazione non perde lavoro.** Al primo accesso le vecchie TL di `prodotti_tl` diventano
+  una riga di catalogo per codice; direttrice, prodotto e processo passano sulle associazioni,
+  e gli id si rimappano su `categoria_tl` e sulle risposte della check di perimetro. `prodotti_tl`
+  resta come storico e non viene più letta.
+- **La scheda delle direttrici si alleggerisce.** Spariscono le tabelle TL annidate sotto ogni
+  prodotto e la rinomina in blocco dei prodotti importati; al loro posto il rimando al catalogo e
+  a Materie e TL. Le direttrici restano l'unico posto in cui si scrive il nome di un ufficio.
+- **La configurazione dello spazio esporta il catalogo.** `tl` entra nell'elenco delle tabelle di
+  configurazione al posto di `prodotti_tl`, così un ripristino non perde il catalogo.
+
 ## 0.158.0 — 2026-11-01
 
 **Un solo posto per l'ufficio: le lavorazioni per tipologia di debito entrano nel catalogo.**

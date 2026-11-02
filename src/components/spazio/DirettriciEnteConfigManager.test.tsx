@@ -66,6 +66,9 @@ describe('direttrici: la catena fino ai titoli', () => {
         {
           id: 1,
           materiaId: 10,
+          codice: '81',
+          direttrice: 'Gestione del credito',
+          prodotto: 'Diffide',
           tipologia: 'Emissione diffida',
           dipendenza: 'Gestione del credito',
           procedura: null,
@@ -75,6 +78,9 @@ describe('direttrici: la catena fino ai titoli', () => {
         {
           id: 2,
           materiaId: 11,
+          codice: '77',
+          direttrice: 'Presidio dei flussi informativi',
+          prodotto: 'DURC',
           tipologia: 'Verifica del flusso',
           dipendenza: 'Ufficio legale',
           procedura: null,
@@ -161,6 +167,9 @@ describe('direttrici: la catena fino ai titoli', () => {
         {
           id: 1,
           materiaId: 10,
+          codice: '81',
+          direttrice: 'Gestione del credito',
+          prodotto: 'Diffide',
           tipologia: 'Emissione diffida',
           dipendenza: 'Gestione del credito',
           procedura: null,
@@ -170,6 +179,9 @@ describe('direttrici: la catena fino ai titoli', () => {
         {
           id: 2,
           materiaId: 11,
+          codice: '77',
+          direttrice: 'Gestione del credito',
+          prodotto: 'DURC',
           tipologia: 'Verifica del flusso',
           dipendenza: 'Gestione del credito',
           procedura: null,
@@ -215,6 +227,9 @@ describe('direttrici: la catena fino ai titoli', () => {
         {
           id: 1,
           materiaId: 10,
+          codice: '81',
+          direttrice: 'Gestione del credito',
+          prodotto: 'Diffide',
           tipologia: 'Emissione diffida',
           dipendenza: 'Gestione del credito',
           procedura: null,
@@ -224,6 +239,9 @@ describe('direttrici: la catena fino ai titoli', () => {
         {
           id: 2,
           materiaId: 11,
+          codice: '77',
+          direttrice: 'Presidio dei flussi informativi',
+          prodotto: 'DURC',
           tipologia: 'Verifica del flusso',
           dipendenza: 'Presidio qualità flussi informativi',
           procedura: null,

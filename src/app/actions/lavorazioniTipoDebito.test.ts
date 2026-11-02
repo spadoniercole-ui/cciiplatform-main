@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // I COLLEGAMENTI FRA CATEGORIE DI DEBITO E CATALOGO DELLE TL.
 //
-// Dalla 0.158.0 la pagina non scrive più una tabella propria: collega una
-// categoria di debito a una TL di `prodotti_tl`. Le due server action sono
-// endpoint pubblici, quindi le si chiama direttamente, come farebbe un browser
-// manomesso, e si verifica che cosa arriva al database.
+// Dalla 0.159.0 la pagina non scrive più una tabella propria: collega una
+// categoria di debito a una TL del catalogo piatto (`tl`). Le due server action
+// sono endpoint pubblici, quindi le si chiama direttamente, come farebbe un
+// browser manomesso, e si verifica che cosa arriva al database.
 
 const query = vi.fn(async (..._args: unknown[]) => ({ rows: [] as unknown[], rowCount: 0 }));
 vi.mock('@/lib/db', () => ({ pool: { query: (...args: unknown[]) => query(...args) } }));
@@ -20,7 +20,7 @@ vi.mock('@/lib/autorizzazione', () => ({ richiediAccessoSchema }));
 // tabelle, e comunque nessuna tabella vera deve essere creata.
 vi.mock('@/db/provision', () => ({
   assicuraTabellaCategorieTipoDebito: async () => {},
-  assicuraTabelleProdottiTl: async () => {},
+  assicuraTabelleTl: async () => {},
   assicuraTabellaLavorazioniTipoDebito: async () => {},
 }));
 

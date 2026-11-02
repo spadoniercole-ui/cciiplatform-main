@@ -17,6 +17,9 @@ const LAVORAZIONI: LavorazioneMateria[] = [
   {
     id: 1,
     materiaId: 1,
+    codice: '81',
+    direttrice: 'Gestione del credito',
+    prodotto: 'Diffide',
     tipologia: 'Emissione diffida',
     dipendenza: 'Ufficio Recupero Crediti',
     procedura: '1. Verifica\n2. Diffida',
@@ -26,6 +29,9 @@ const LAVORAZIONI: LavorazioneMateria[] = [
   {
     id: 2,
     materiaId: 1,
+    codice: '77',
+    direttrice: 'Gestione del credito',
+    prodotto: 'Diffide',
     tipologia: 'Verifica del flusso',
     dipendenza: 'Ufficio Recupero Crediti',
     procedura: null,
@@ -95,6 +101,9 @@ describe('instradamento delle posizioni V.E.R.A. per materia', () => {
       {
         id: 3,
         materiaId: 2,
+        codice: '18',
+        direttrice: 'Vigilanza documentale',
+        prodotto: 'Verbali',
         tipologia: 'Emissione del verbale',
         dipendenza: 'Ufficio Verbali',
         procedura: null,

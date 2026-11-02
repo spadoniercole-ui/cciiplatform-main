@@ -13,7 +13,7 @@
 
 import { pool } from '@/lib/db';
 import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
-import { assicuraTabelleProdottiTl, assicuraTabelleScenariTriage } from '@/db/provision';
+import { assicuraTabelleScenariTriage, assicuraTabelleTl } from '@/db/provision';
 import {
   applicaRisposte,
   mancanze,
@@ -51,15 +51,16 @@ export async function ottieniPerimetroTriageAction(
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await richiediAccessoAzienda(nomeSchema, aziendaId);
     await assicuraTabelleScenariTriage(nomeSchema);
-    await assicuraTabelleProdottiTl(nomeSchema);
+    await assicuraTabelleTl(nomeSchema);
 
     const [lavorazioni, titoli, risposte] = await Promise.all([
       pool.query(
-        `SELECT t.id, a.materia_id, t.tipologia, t.dipendenza,
-                t.rilevante_perimetro, t.verso_perimetro,
+        `SELECT t.id, a.materia_id, a.direttrice, a.prodotto,
+                t.codice, t.descrizione AS tipologia, a.dipendenza,
+                t.check_list AS rilevante_perimetro, t.verso_check_list AS verso_perimetro,
                 m.nome AS materia
            FROM "${nomeSchema}".materia_tl a
-           JOIN "${nomeSchema}".prodotti_tl t ON t.id = a.tl_id
+           JOIN "${nomeSchema}".tl t ON t.id = a.tl_id
            LEFT JOIN "${nomeSchema}".materie_ente m ON m.id = a.materia_id
           ORDER BY m.nome, a.ordine, t.id`
       ),

@@ -22,7 +22,7 @@ import {
   type LavorazioneTipoDebito,
 } from '@/app/actions/lavorazioniTipoDebito';
 import { ottieniCatalogoTl } from '@/app/actions/materieLavorazione';
-import type { TlProdotto } from '@/lib/titoliEnte/prodottiTl';
+import { etichettaTl, type Tl } from '@/lib/titoliEnte/catalogoTl';
 import { TIPI_DEBITO_ENTE } from '@/lib/debitiEnte/tipoDebito';
 import { conRitorno } from '@/lib/navigazione/ritorno';
 
@@ -45,7 +45,7 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
 
   const [categorie, setCategorie] = useState<CategoriaTipoDebito[]>([]);
   const [lavorazioni, setLavorazioni] = useState<LavorazioneTipoDebito[]>([]);
-  const [catalogo, setCatalogo] = useState<TlProdotto[]>([]);
+  const [catalogo, setCatalogo] = useState<Tl[]>([]);
   const [scelte, setScelte] = useState<Record<string, string>>({});
   const [caricamento, setCaricamento] = useState(true);
   const [inCorso, setInCorso] = useState(false);
@@ -89,17 +89,13 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
     })),
   ];
 
-  const etichetta = (codiceCategoria: string) =>
-    opzioniCategorie.find((c) => c.codice === codiceCategoria)?.etichetta ?? codiceCategoria;
-
   const categoriaEsistente = (codiceCategoria: string) =>
     opzioniCategorie.some((c) => c.codice === codiceCategoria);
   // Un collegamento può puntare a una categoria cancellata: la riga resta e
   // non produce nulla. La si segnala invece di lasciarla indistinguibile.
   const orfane = lavorazioni.filter((l) => !categoriaEsistente(l.categoria));
 
-  const descrizioneTl = (tl: TlProdotto) =>
-    [tl.prodotto, tl.direttrice, tl.dipendenza].filter((x) => (x ?? '').trim() !== '').join(' · ');
+  const descrizioneTl = (tl: Tl) => etichettaTl(tl);
 
   const collega = async (categoria: string) => {
     const scelto = Number(scelte[categoria] ?? '');
@@ -139,11 +135,11 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
             Lavorazioni per tipologia di debito
           </h2>
           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-            Per ogni categoria di debito, quali TL del catalogo la lavorano. La TL — ufficio,
-            procedura, esito, contrassegno di perimetro — si scrive una volta sola sotto il
-            prodotto, nei Parametri › Direttrici; qui si sceglie soltanto quale usare. Il triage
-            legge questi collegamenti per preparare le comunicazioni sul file V.E.R.A.: le
-            comunicazioni non vengono inviate automaticamente.
+            Per ogni categoria di debito, quali TL del catalogo la lavorano. La TL — codice,
+            descrizione, flag per la check list — si scrive una volta sola nel catalogo; ufficio e
+            procedura sono quelli dell’associazione della materia che la usa. Il triage legge questi
+            collegamenti per preparare le comunicazioni sul file V.E.R.A.: le comunicazioni non
+            vengono inviate automaticamente.
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
             Le categorie sono quelle di{' '}
@@ -153,12 +149,19 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
             >
               Categorie tipo debito
             </a>
-            ; le TL si scrivono in{' '}
+            ; le TL si scrivono nel{' '}
             <a
-              href={conRitorno(`/spazio/${codice}/parametri/direttrici-ente`, ritorno)}
+              href={conRitorno(`/spazio/${codice}/parametri/tl`, ritorno)}
               className="font-bold text-sky-700 hover:underline"
             >
-              Direttrici e prodotti
+              Catalogo delle TL
+            </a>{' '}
+            e si applicano alle materie in{' '}
+            <a
+              href={conRitorno(`/spazio/${codice}/parametri/materie-lavorazione`, ritorno)}
+              className="font-bold text-sky-700 hover:underline"
+            >
+              Materie e TL
             </a>
             . Le sezioni V.E.R.A. si mappano su queste categorie in Posizione V.E.R.A.
           </p>
@@ -191,12 +194,12 @@ export function LavorazioniTipoDebitoManager({ nomeSchema, codice, ritorno }: Pr
 
       {catalogo.length === 0 && (
         <p className="text-xs text-slate-500 bg-white border border-slate-200 rounded-xl p-5">
-          Il catalogo delle TL è vuoto. Scrivile prima sotto il prodotto, in{' '}
+          Il catalogo delle TL è vuoto. Scrivile prima nel{' '}
           <a
-            href={conRitorno(`/spazio/${codice}/parametri/direttrici-ente`, ritorno)}
+            href={conRitorno(`/spazio/${codice}/parametri/tl`, ritorno)}
             className="font-bold text-sky-700 hover:underline"
           >
-            Direttrici e prodotti
+            Catalogo delle TL
           </a>
           : qui si collegano soltanto.
         </p>

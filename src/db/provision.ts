@@ -987,6 +987,12 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   // si chiede all'azienda il pagamento del debito. Sta accanto alla procedura
   // perché la procedura senza il destinatario non si può eseguire.
   await eseguiDdlTenant(sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS dipendenza TEXT`);
+  // LA VESTIZIONE LEGALE (0.159.0): il titolo mette insieme la TL, la
+  // direttrice (la colonna `dipendenza`) e il prodotto. Il codice di partita
+  // resta la chiave; questi campi dicono su quale presupposto giuridico e con
+  // quale lavorazione l'ente fonda la richiesta.
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS tl_id INTEGER`);
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS prodotto TEXT`);
   // Lavorazioni della materia (0.138.0): la materia porta con sé la dipendenza
   // e la procedura con cui si lavora. Un processo ha spesso più lavorazioni
   // (verifica, diffida, contabilizzazione) che finiscono nello stesso esito:
@@ -2264,68 +2270,234 @@ export async function assicuraTabellaMaterieLavorazione(nomeSchema: string): Pro
  * Idempotente: ogni spazio già attivo la riceve alla prima lettura della
  * configurazione, e la copia avviene solo se il catalogo è ancora vuoto.
  */
-export async function assicuraTabelleProdottiTl(nomeSchema: string): Promise<void> {
+export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
   const s = sql.identifier(nomeSchema);
   await assicuraTabellaMaterieLavorazione(nomeSchema);
+
+  // IL CATALOGO PIATTO DELLE TL (0.159.0). Codice, descrizione, contrassegno
+  // per la check list: nient'altro. L'ufficio, i passi e l'esito sono il
+  // processo con cui una materia la applica a una direttrice e a un prodotto, e
+  // stanno in `materia_tl`: la stessa TL non va riscritta per ogni prodotto.
   await eseguiDdlTenant(
-    sql`CREATE TABLE IF NOT EXISTS ${s}.prodotti_tl (
+    sql`CREATE TABLE IF NOT EXISTS ${s}.tl (
       id SERIAL PRIMARY KEY,
-      direttrice TEXT NOT NULL DEFAULT '',
-      prodotto TEXT NOT NULL DEFAULT '',
-      tipologia TEXT NOT NULL DEFAULT '',
-      dipendenza TEXT,
-      procedura TEXT,
-      esito TEXT,
+      codice TEXT NOT NULL DEFAULT '',
+      descrizione TEXT NOT NULL DEFAULT '',
+      check_list BOOLEAN NOT NULL DEFAULT false,
+      verso_check_list TEXT,
       ordine INTEGER NOT NULL DEFAULT 0,
-      rilevante_perimetro BOOLEAN NOT NULL DEFAULT false,
-      verso_perimetro TEXT,
       aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
   await eseguiDdlTenant(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_tl_codice
+        ON ${s}.tl (lower(btrim(codice)))`
+  );
+
+  // L'ASSOCIAZIONE: la materia mutua la coppia direttrice/prodotto e porta il
+  // processo (ufficio, passi, esito, ordine). La chiave resta (materia, TL):
+  // una materia applica una TL una volta sola, su un prodotto.
+  await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.materia_tl (
+      id SERIAL,
       materia_id INTEGER NOT NULL,
       tl_id INTEGER NOT NULL,
       ordine INTEGER NOT NULL DEFAULT 0,
+      direttrice TEXT NOT NULL DEFAULT '',
+      prodotto TEXT NOT NULL DEFAULT '',
+      dipendenza TEXT,
+      procedura TEXT,
+      esito TEXT,
       PRIMARY KEY (materia_id, tl_id)
     )`
   );
+  // L'id dell'associazione serve ai comandi in blocco (riallineamento di un
+  // ufficio): la coppia (materia, TL) resta la chiave logica.
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.materia_tl ADD COLUMN IF NOT EXISTS id SERIAL`);
   await eseguiDdlTenant(
-    sql`CREATE INDEX IF NOT EXISTS idx_prodotti_tl_prodotto
-        ON ${s}.prodotti_tl (direttrice, prodotto, ordine)`
+    sql`ALTER TABLE ${s}.materia_tl ADD COLUMN IF NOT EXISTS direttrice TEXT NOT NULL DEFAULT ''`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.materia_tl ADD COLUMN IF NOT EXISTS prodotto TEXT NOT NULL DEFAULT ''`
+  );
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.materia_tl ADD COLUMN IF NOT EXISTS dipendenza TEXT`);
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.materia_tl ADD COLUMN IF NOT EXISTS procedura TEXT`);
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.materia_tl ADD COLUMN IF NOT EXISTS esito TEXT`);
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_materia_tl_prodotto
+        ON ${s}.materia_tl (direttrice, prodotto, ordine)`
   );
 
-  // La copia una volta sola. \`FILTER\` sul catalogo vuoto: se l'ente ha già
-  // scritto TL nuove, la vecchia tabella non torna a sovrascriverle.
-  const vuoto = await pool.query(
-    `SELECT NOT EXISTS (SELECT 1 FROM "${nomeSchema}".prodotti_tl) AS vuoto,
-            EXISTS (SELECT 1 FROM "${nomeSchema}".materie_lavorazione) AS legate`
+  // Il collegamento alle categorie di debito deve esistere prima della
+  // rimappatura: in uno spazio fermo alla 0.157.0 la tabella non c'è ancora e
+  // la migrazione la nominerebbe. Crearla qui è idempotente.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.categoria_tl (
+      categoria TEXT NOT NULL,
+      tl_id INTEGER NOT NULL,
+      attivo BOOLEAN NOT NULL DEFAULT TRUE,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (categoria, tl_id)
+    )`
   );
-  if (vuoto.rows[0]?.vuoto && vuoto.rows[0]?.legate) {
+
+  // LA COPIA DAL VECCHIO MODELLO, UNA VOLTA SOLA.
+  //
+  // Fino alla 0.158.0 la TL stava dentro il prodotto (`prodotti_tl`): la stessa
+  // lavorazione era ripetuta per ogni prodotto che la usava. Qui se ne fa una
+  // sola per codice, e le associazioni delle materie conservano direttrice,
+  // prodotto e processo. Gli id nuovi si rimappano su `categoria_tl` e sulle
+  // risposte della check di perimetro, così il lavoro già fatto non si perde.
+  const stato = await pool.query(
+    `SELECT NOT EXISTS (SELECT 1 FROM "${nomeSchema}".tl) AS vuoto,
+            to_regclass('"${nomeSchema}".prodotti_tl') IS NOT NULL AS vecchio,
+            EXISTS (SELECT 1 FROM "${nomeSchema}".materie_lavorazione) AS storico`
+  );
+  if (stato.rows[0]?.vuoto && stato.rows[0]?.vecchio) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       await client.query(
-        `INSERT INTO "${nomeSchema}".prodotti_tl
-           (id, direttrice, prodotto, tipologia, dipendenza, procedura, esito, ordine,
-            rilevante_perimetro, verso_perimetro)
-         SELECT l.id, COALESCE(l.dipendenza, ''), l.tipologia, l.tipologia, l.dipendenza,
-                l.procedura, l.esito, l.ordine, l.rilevante_perimetro, l.verso_perimetro
-           FROM "${nomeSchema}".materie_lavorazione l`
+        `INSERT INTO "${nomeSchema}".tl
+           (codice, descrizione, check_list, verso_check_list, ordine)
+         SELECT DISTINCT ON (lower(btrim(tipologia)))
+                btrim(tipologia),
+                COALESCE(NULLIF(btrim(esito), ''), btrim(tipologia)),
+                rilevante_perimetro, verso_perimetro, ordine
+           FROM "${nomeSchema}".prodotti_tl
+          WHERE btrim(tipologia) <> ''
+          ORDER BY lower(btrim(tipologia)), id`
       );
       await client.query(
-        `INSERT INTO "${nomeSchema}".materia_tl (materia_id, tl_id, ordine)
-         SELECT materia_id, id, ordine FROM "${nomeSchema}".materie_lavorazione
+        `CREATE TEMP TABLE mappa_tl ON COMMIT DROP AS
+         SELECT p.id AS vecchio, t.id AS nuovo
+           FROM "${nomeSchema}".prodotti_tl p
+           JOIN "${nomeSchema}".tl t
+             ON lower(btrim(t.codice)) = lower(btrim(p.tipologia))`
+      );
+      // Il processo passa dall'associazione: la direttrice e il prodotto che
+      // erano sulla TL diventano quelli che la materia mutua, e la TL resta
+      // codice + descrizione + contrassegno.
+      await client.query(
+        `UPDATE "${nomeSchema}".materia_tl a
+            SET direttrice = COALESCE(p.direttrice, ''),
+                prodotto = COALESCE(p.prodotto, ''),
+                dipendenza = p.dipendenza,
+                procedura = p.procedura,
+                esito = p.esito
+           FROM "${nomeSchema}".prodotti_tl p
+          WHERE p.id = a.tl_id`
+      );
+      // LA RIMMAPPATURA IN UN COLPO SOLO. Due vecchie TL con lo stesso codice
+      // diventano una sola. Spostare gli id una riga alla volta fa cascata —
+      // 3 → 1 tocca anche le righe appena diventate 3 — e un UPDATE in blocco
+      // viola la chiave prima di poter scartare il duplicato. Si calcola prima
+      // la destinazione di ogni riga, si tiene una riga per chiave (vince
+      // quella già sulla TL che sopravvive) e si scrive una volta sola.
+      const mappa = await client.query(`SELECT vecchio FROM mappa_tl`);
+      const vecchi = mappa.rows.map((r) => Number(r.vecchio));
+      const mappati = vecchi.length > 0 ? vecchi : [-1];
+
+      // Associazioni delle materie: identità = id dell'associazione, così una
+      // riga scartata non porta via il processo di un'altra.
+      await client.query(
+        `CREATE TEMP TABLE materia_tl_target ON COMMIT DROP AS
+         SELECT DISTINCT ON (a.materia_id, m.nuovo)
+                a.id AS associazione_id, m.nuovo AS tl_id
+           FROM "${nomeSchema}".materia_tl a
+           JOIN mappa_tl m ON m.vecchio = a.tl_id
+          ORDER BY a.materia_id, m.nuovo, (a.tl_id = m.nuovo) DESC, a.id`
+      );
+      await client.query(
+        `DELETE FROM "${nomeSchema}".materia_tl a
+          WHERE a.tl_id = ANY($1::int[])
+            AND NOT EXISTS (
+                  SELECT 1 FROM materia_tl_target t WHERE t.associazione_id = a.id
+                )`,
+        [mappati]
+      );
+      await client.query(
+        `UPDATE "${nomeSchema}".materia_tl a
+            SET tl_id = t.tl_id
+           FROM materia_tl_target t
+          WHERE a.id = t.associazione_id`
+      );
+
+      // Collegamenti alle categorie di debito: si riscrivono dalla mappa.
+      await client.query(
+        `CREATE TEMP TABLE categoria_tl_target ON COMMIT DROP AS
+         SELECT DISTINCT ON (c.categoria, m.nuovo)
+                c.categoria, m.nuovo AS tl_id, c.attivo, c.ordine
+           FROM "${nomeSchema}".categoria_tl c
+           JOIN mappa_tl m ON m.vecchio = c.tl_id
+          ORDER BY c.categoria, m.nuovo, (c.tl_id = m.nuovo) DESC, c.tl_id`
+      );
+      await client.query(`DELETE FROM "${nomeSchema}".categoria_tl`);
+      await client.query(
+        `INSERT INTO "${nomeSchema}".categoria_tl (categoria, tl_id, attivo, ordine)
+         SELECT categoria, tl_id, attivo, ordine FROM categoria_tl_target`
+      );
+
+      // Risposte della check di perimetro: una per azienda e TL. La tabella
+      // può non essere ancora nata (spazio che non ha mai aperto il triage):
+      // in quel caso non c'è nulla da rimappare.
+      const triage = await client.query(`SELECT to_regclass($1) AS tabella`, [
+        `"${nomeSchema}".triage_perimetro`,
+      ]);
+      if (triage.rows[0]?.tabella) {
+        await client.query(
+          `CREATE TEMP TABLE triage_perimetro_target ON COMMIT DROP AS
+           SELECT DISTINCT ON (p.azienda_id, m.nuovo)
+                  p.azienda_id, m.nuovo AS lavorazione_id, p.stato, p.natura, p.nota,
+                  p.aggiornato_il
+             FROM "${nomeSchema}".triage_perimetro p
+             JOIN mappa_tl m ON m.vecchio = p.lavorazione_id
+            ORDER BY p.azienda_id, m.nuovo, (p.lavorazione_id = m.nuovo) DESC,
+                     p.lavorazione_id`
+        );
+        await client.query(
+          `DELETE FROM "${nomeSchema}".triage_perimetro p
+            WHERE p.lavorazione_id = ANY($1::int[])`,
+          [mappati]
+        );
+        await client.query(
+          `INSERT INTO "${nomeSchema}".triage_perimetro
+             (azienda_id, lavorazione_id, stato, natura, nota, aggiornato_il)
+           SELECT azienda_id, lavorazione_id, stato, natura, nota, aggiornato_il
+             FROM triage_perimetro_target`
+        );
+      }
+      await client.query('COMMIT');
+    } catch (errore) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw errore;
+    } finally {
+      client.release();
+    }
+  } else if (stato.rows[0]?.vuoto && stato.rows[0]?.storico) {
+    // Spazi antichissimi, senza nemmeno `prodotti_tl`: le TL stavano nelle
+    // lavorazioni delle materie. Stessa idea, sorgente diversa.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO "${nomeSchema}".tl
+           (codice, descrizione, check_list, verso_check_list, ordine)
+         SELECT DISTINCT ON (lower(btrim(tipologia)))
+                btrim(tipologia), btrim(tipologia), rilevante_perimetro,
+                verso_perimetro, ordine
+           FROM "${nomeSchema}".materie_lavorazione
+          WHERE btrim(tipologia) <> ''
+          ORDER BY lower(btrim(tipologia)), id`
+      );
+      await client.query(
+        `INSERT INTO "${nomeSchema}".materia_tl
+           (materia_id, tl_id, ordine, direttrice, prodotto, dipendenza, procedura, esito)
+         SELECT l.materia_id, t.id, l.ordine, COALESCE(l.dipendenza, ''), l.tipologia,
+                l.dipendenza, l.procedura, l.esito
+           FROM "${nomeSchema}".materie_lavorazione l
+           JOIN "${nomeSchema}".tl t ON lower(btrim(t.codice)) = lower(btrim(l.tipologia))
          ON CONFLICT (materia_id, tl_id) DO NOTHING`
-      );
-      // Gli id copiati sono quelli vecchi: la sequenza riparte sopra, altrimenti
-      // la prima TL nuova riuserebbe un id già risposto nel triage.
-      await client.query(
-        `SELECT setval(
-           pg_get_serial_sequence('"${nomeSchema}".prodotti_tl', 'id'),
-           COALESCE((SELECT MAX(id) FROM "${nomeSchema}".prodotti_tl), 0) + 1,
-           false
-         )`
       );
       await client.query('COMMIT');
     } catch (errore) {
@@ -2370,29 +2542,26 @@ export async function assicuraTabelleProdottiTl(nomeSchema: string): Promise<voi
     try {
       await client.query('BEGIN');
       // Le TL che la vecchia tabella citava e che il catalogo non ha ancora:
-      // stesso ufficio e stessa lavorazione, grafia a confronto senza
-      // maiuscole, altrimenti «Contributi» e «contributi» diventano due TL.
+      // la lavorazione è il codice e la descrizione, una volta sola. L'ufficio
+      // che stava nella vecchia riga non entra più nella TL: è il processo
+      // dell'associazione, e qui non c'è una materia a cui appenderlo.
       await client.query(
-        `INSERT INTO "${nomeSchema}".prodotti_tl
-           (direttrice, prodotto, tipologia, dipendenza, ordine)
-         SELECT DISTINCT ON (lower(COALESCE(l.destinatario, '')), lower(l.lavorazione))
-                COALESCE(l.destinatario, ''), l.lavorazione, l.lavorazione,
-                NULLIF(l.destinatario, ''), 0
+        `INSERT INTO "${nomeSchema}".tl (codice, descrizione, ordine)
+         SELECT DISTINCT ON (lower(btrim(l.lavorazione)))
+                btrim(l.lavorazione), btrim(l.lavorazione), 0
            FROM "${nomeSchema}".lavorazioni_tipo_debito l
-          WHERE NOT EXISTS (
-                  SELECT 1 FROM "${nomeSchema}".prodotti_tl t
-                   WHERE lower(t.tipologia) = lower(l.lavorazione)
-                     AND lower(COALESCE(t.dipendenza, '')) = lower(COALESCE(l.destinatario, ''))
+          WHERE btrim(l.lavorazione) <> ''
+            AND NOT EXISTS (
+                  SELECT 1 FROM "${nomeSchema}".tl t
+                   WHERE lower(btrim(t.codice)) = lower(btrim(l.lavorazione))
                 )
-          ORDER BY lower(COALESCE(l.destinatario, '')), lower(l.lavorazione), l.id`
+          ORDER BY lower(btrim(l.lavorazione)), l.id`
       );
       await client.query(
         `INSERT INTO "${nomeSchema}".categoria_tl (categoria, tl_id, attivo, ordine)
          SELECT l.categoria, t.id, l.attivo, l.ordine
            FROM "${nomeSchema}".lavorazioni_tipo_debito l
-           JOIN "${nomeSchema}".prodotti_tl t
-             ON lower(t.tipologia) = lower(l.lavorazione)
-            AND lower(COALESCE(t.dipendenza, '')) = lower(COALESCE(l.destinatario, ''))
+           JOIN "${nomeSchema}".tl t ON lower(btrim(t.codice)) = lower(btrim(l.lavorazione))
           ON CONFLICT (categoria, tl_id) DO NOTHING`
       );
       await client.query('COMMIT');

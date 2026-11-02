@@ -21,7 +21,7 @@ import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import Anthropic from '@anthropic-ai/sdk';
 import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { pool } from '@/lib/db';
-import { assicuraTabelleProdottiTl, assicuraTabelleParametriSpazio } from '@/db/provision';
+import { assicuraTabelleParametriSpazio, assicuraTabelleTl } from '@/db/provision';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { estraiJson } from '@/lib/visura/fatti';
 import {
@@ -102,6 +102,8 @@ function daRiga(r: Record<string, unknown>): TitoloEnte {
     riscontroNorma: (r.riscontro_norma as RiscontroFonte | null) ?? RISCONTRO_VUOTO,
     riscontroInterno: (r.riscontro_interno as RiscontroFonte | null) ?? RISCONTRO_VUOTO,
     materiaId: r.materia_id === null || r.materia_id === undefined ? null : Number(r.materia_id),
+    tlId: r.tl_id === null || r.tl_id === undefined ? null : Number(r.tl_id),
+    prodotto: (r.prodotto as string | null) ?? null,
   };
 }
 
@@ -365,7 +367,12 @@ export async function salvaTitoloEnteAction(
     if (erroreAttivita) return { success: false, error: erroreAttivita };
     const erroreDipendenza = validaDipendenza(titolo.dipendenza);
     if (erroreDipendenza) return { success: false, error: erroreDipendenza };
+    if (titolo.tlId != null && (!Number.isInteger(titolo.tlId) || titolo.tlId <= 0))
+      return { success: false, error: 'TL non valida.' };
+    if ((titolo.prodotto ?? '').trim().length > 200)
+      return { success: false, error: 'Il prodotto non può superare 200 caratteri.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
+    await assicuraTabelleTl(nomeSchema);
 
     const cfg = await pool.query(
       `SELECT dominio_ente FROM "${nomeSchema}".titoli_ente_config WHERE id = 1`
@@ -402,10 +409,14 @@ export async function salvaTitoloEnteAction(
       nomeSchema,
       normalizzaDipendenza(titolo.dipendenza)
     );
+    // La vestizione legale: la TL scelta, la direttrice (dipendenza) e il
+    // prodotto. Il codice di partita resta la chiave della riga.
+    const tlId = titolo.tlId ?? null;
+    const prodotto = (titolo.prodotto ?? '').replace(/\s+/g, ' ').trim() || null;
     const r = await pool.query(
-      `INSERT INTO "${nomeSchema}".titoli_ente (codice, atto, presupposto_giuridico, riferimento_interno, effetto_calcolo, note, riscontro_norma, riscontro_interno, attivita_recupero, dipendenza, aggiornato_il)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
-       ON CONFLICT (codice) DO UPDATE SET atto = $2, presupposto_giuridico = $3, riferimento_interno = $4, effetto_calcolo = $5, note = $6, riscontro_norma = $7, riscontro_interno = $8, attivita_recupero = $9, dipendenza = $10, aggiornato_il = now()
+      `INSERT INTO "${nomeSchema}".titoli_ente (codice, atto, presupposto_giuridico, riferimento_interno, effetto_calcolo, note, riscontro_norma, riscontro_interno, attivita_recupero, dipendenza, tl_id, prodotto, aggiornato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+       ON CONFLICT (codice) DO UPDATE SET atto = $2, presupposto_giuridico = $3, riferimento_interno = $4, effetto_calcolo = $5, note = $6, riscontro_norma = $7, riscontro_interno = $8, attivita_recupero = $9, dipendenza = $10, tl_id = $11, prodotto = $12, aggiornato_il = now()
        RETURNING *`,
       [
         titolo.codice.trim(),
@@ -418,6 +429,8 @@ export async function salvaTitoloEnteAction(
         JSON.stringify(riscontroInterno),
         attivitaRecupero,
         dipendenza,
+        tlId,
+        prodotto,
       ]
     );
     const salvato = daRiga(r.rows[0]);
@@ -705,7 +718,7 @@ export async function eliminaMateriaEnteAction(
     );
     // La materia perde le associazioni alle TL: le TL restano nel catalogo,
     // perché lo stesso prodotto si lavora su più materie (0.157.0).
-    await assicuraTabelleProdottiTl(contesto.nomeSchema);
+    await assicuraTabelleTl(contesto.nomeSchema);
     await pool.query(`DELETE FROM "${contesto.nomeSchema}".materia_tl WHERE materia_id = $1`, [id]);
     await pool.query(`DELETE FROM "${contesto.nomeSchema}".materie_ente WHERE id = $1`, [id]);
     return { success: true };

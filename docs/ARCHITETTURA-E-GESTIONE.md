@@ -182,8 +182,8 @@ Drizzle è marginale.
    Accanto c'è la seconda uscita, **un report per unità operativa**: i debiti raggruppati per
    codice di partita e, dentro ogni codice, le lavorazioni della sua materia (con passi ed
    esito) e le inadempienze che lo compongono. L'ufficio è la **dipendenza** del codice, o
-   quella della materia se il codice non ne ha una propria (`titoli_ente`; le TL la materia
-   le eredita dal prodotto in `materia_tl`).
+   quella della materia se il codice non ne ha una propria (`titoli_ente`; le TL stanno nel
+   catalogo `tl`, e la materia le applica a una direttrice e a un prodotto in `materia_tl`).
 
    **I documenti chiedono solo ciò che manca.** Le tre uscite elencano le posizioni ancora da
    contabilizzare — quelle che nel V.E.R.A. hanno uno stato nella colonna «Stato»
@@ -287,25 +287,34 @@ cose da accertare, quelle accessorie no, ma restano scritte perché un «nulla d
 accanto a «3 dimensioni su 4» è una frase che si smentisce da sola. Gli elenchi restano due e
 senza gerarchia: il semaforo dice la gravità, l'ordine delle azioni resta al valutatore.
 
-### La catena dell'ente: direttrici e prodotti → TL delle materie → titoli (0.157.0)
+### La catena dell'ente: TL → materie (direttrice e prodotto) → titoli (0.159.0)
 
-Un solo ingresso per il nome degli uffici e per il testo delle lavorazioni:
+Lo schema è deliberatamente semplice, e in tre anelli:
 
-1. **Direttrici e prodotti** (`public.spazi.direttrici_ente_strutturate`, pagina
+1. **Catalogo delle TL** (`tl`, pagina `/parametri/tl`): **codice, descrizione, flag per la
+   check list**. Nient'altro. Una TL esiste una volta sola, non una volta per prodotto: il
+   codice è la sua identità nei documenti, la descrizione è il nome della lavorazione, il flag
+   (con il verso) dice se entra nella check di perimetro del triage.
+2. **Direttrici e prodotti** (`public.spazi.direttrici_ente_strutturate`, pagina
    `/parametri/direttrici-ente`): le aree scritte una volta, e sotto ognuna i fatti concreti
-   su cui si lavora. Il nome della direttrice è il nome dell'ufficio; il prodotto è la chiave
-   del passo successivo.
-2. **TL del prodotto** (`prodotti_tl`): dentro il prodotto si scrive la lavorazione —
-   tipologia, dipendenza, procedura, esito, contrassegno di perimetro. Dalla 0.157.0 la TL si
-   scrive **solo qui**: non si crea più dalla materia, e la scheda della direttrice mostra le
-   TL di ogni prodotto. Il salvataggio riusa la grafia delle direttrici (per chiave:
-   maiuscole, accenti, spazi e punteggiatura non contano).
-3. **TL della materia** (`materia_tl`): la materia non scrive la TL, la **eredita** dal
-   prodotto (`collegaTlMateriaAction`). La lettura resta `LavorazioneMateria[]`, così i
-   consumatori non cambiano; `materie_lavorazione` è storica e non viene più letta.
-4. **Titoli di credito** (`titoli_ente`): il codice eredita dipendenza e procedura dalla sua
+   su cui si lavora. Il nome della direttrice è il nome dell'ufficio; il prodotto è il fatto a
+   cui la materia applica la TL.
+3. **Materie e TL** (`materia_tl`, pagina `/parametri/materie-lavorazione`): la materia
+   **mutua** l'associazione direttrice/prodotto e porta il processo — ufficio (`dipendenza`),
+   passi (`procedura`), esito e ordine. È qui che la TL diventa una lavorazione concreta; la
+   stessa TL può essere applicata da più materie, anche su prodotti diversi, senza duplicarla.
+   La lettura resta `LavorazioneMateria[]`, così triage, report per unità operativa e documenti
+   non cambiano forma.
+4. **Titoli di credito** (`titoli_ente`): il codice mette insieme **TL + direttrice +
+   prodotto** e costruisce la vestizione legale — atto, presupposto giuridico, riferimento
+   interno — riscontrata sulle fonti ufficiali. La dipendenza e la procedura si ereditano dalla
    materia (`dipendenzaEffettiva`, `proceduraEffettiva`); se il codice ne ha una propria,
-   quella vince e il campo del titolo si salva con la grafia delle direttrici.
+   quella vince e si salva con la grafia delle direttrici.
+
+`prodotti_tl` è lo storico del modello precedente (TL scritta dentro il prodotto) e non viene
+più letta: la migrazione in `src/db/provision.ts` ne fa un catalogo per codice e porta
+processo, direttrice e prodotto sulle associazioni, rimappando gli id di `categoria_tl` e delle
+risposte della check di perimetro.
 
 Le **lavorazioni per tipologia di debito** non sono più una tabella a sé (0.158.0):
 `categoria_tl` collega ogni categoria di debito alle stesse TL del catalogo, dalla pagina
@@ -315,10 +324,6 @@ che cita vengono create in `prodotti_tl` e collegate — e resta come storico; l
 Vale anche per la sequenza: la categoria ordina le sue TL in `categoria_tl.ordine`, ma il testo
 della lavorazione è uno solo.
 
-Le TL importate dalle vecchie lavorazioni delle materie portano il nome della lavorazione come
-prodotto (il prodotto non esisteva). La scheda delle direttrici li elenca come «prodotti del
-catalogo non configurati» e offre `rinominaProdottoTlAction`: rinomina il prodotto di tutte le
-loro TL in una volta e aggiunge il nome nuovo ai prodotti della direttrice.
 
 La logica della catena sta in `src/lib/titoliEnte/direttrici.ts` (nomi canonici e
 `componiCatenaDirettrici`: per ogni direttrice quante lavorazioni, materie e codici; gli
@@ -524,10 +529,10 @@ la descrive.
 - ente: `titoli_ente` (il titolo di un codice e, in `attivita_recupero`, la procedura che
   l’ente segue per incassarlo; in `dipendenza`, l’ufficio a cui indirizzare la comunicazione di
   pagamento all’azienda — entrambe lette da `src/lib/titoliEnte/recupero.ts`),
-  `titoli_ente_config`, `materie_ente`, `prodotti_tl` (le TL scritte nel prodotto: dipendenza,
-  procedura ed esito, con il contrassegno di perimetro), `materia_tl` (le TL che ogni materia
-  eredita — vedi `src/lib/titoliEnte/lavorazioniMateria.ts`), `materie_lavorazione` (storico:
-  la vecchia lavorazione scritta sulla materia, non più letta). In `riscontro_norma` / `riscontro_interno` sta l’esito
+  `titoli_ente_config`, `materie_ente`, `tl` (il catalogo piatto: codice, descrizione, flag e
+  verso della check list), `materia_tl` (le TL applicate dalle materie, con direttrice,
+  prodotto, dipendenza, procedura ed esito — vedi `src/lib/titoliEnte/lavorazioniMateria.ts`),
+  `prodotti_tl` e `materie_lavorazione` (storico: il modello precedente, non più letto). In `riscontro_norma` / `riscontro_interno` sta l’esito
   della ricerca sulle fonti ufficiali: `IN_CORSO` significa che la ricerca è partita col salvataggio e sta ancora lavorando
   (vedi `src/lib/titoliEnte/titoli.ts`), gli altri esiti sono il risultato. Ma il riscontro che una
   materia confermata ha già ricevuto vale anche per i codici che vi cadono: la riga legge il

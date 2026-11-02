@@ -6,18 +6,19 @@
 // la lavorazione e il destinatario: la stessa procedura esisteva in due tabelle
 // (questa e le lavorazioni delle materie) e andava tenuta allineata a mano.
 //
-// Dalla 0.158.0 la categoria **punta** a una TL del catalogo (`prodotti_tl`):
-// ufficio, procedura, esito e contrassegno di perimetro si scrivono una volta
-// sola, dentro il prodotto a cui la TL si applica, e qui si dice soltanto quale
-// di quelle TL lavora ogni categoria di debito. La vecchia tabella
-// `lavorazioni_tipo_debito` resta come storico: non si legge e non si scrive.
+// Dalla 0.159.0 la categoria **punta** a una TL del catalogo piatto (`tl`):
+// codice, descrizione e contrassegno si scrivono una volta sola, nel catalogo,
+// e qui si dice soltanto quale di quelle TL lavora ogni categoria di debito.
+// L'ufficio che firma la comunicazione è quello dell'associazione della materia
+// che usa la TL. La vecchia tabella `lavorazioni_tipo_debito` resta come
+// storico: non si legge e non si scrive.
 //
 // Le letture sono accessibili a chi ha accesso allo schema; le scritture solo
 // all'Admin di spazio, come le altre configurazioni.
 
 import { pool } from '@/lib/db';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
-import { assicuraTabellaCategorieTipoDebito, assicuraTabelleProdottiTl } from '@/db/provision';
+import { assicuraTabellaCategorieTipoDebito, assicuraTabelleTl } from '@/db/provision';
 import { TIPI_DEBITO_ENTE } from '@/lib/debitiEnte/tipoDebito';
 
 function validaSchema(nomeSchema: string): boolean {
@@ -56,12 +57,23 @@ export async function ottieniLavorazioniTipoDebito(
     if (!validaSchema(nomeSchema)) {
       return { success: false, lavorazioni: [], error: 'Nome schema non valido.' };
     }
-    await assicuraTabelleProdottiTl(nomeSchema);
+    await assicuraTabelleTl(nomeSchema);
+    // La TL del catalogo non porta più l'ufficio: il destinatario è quello
+    // dell'associazione della materia che la usa. Se più materie la usano con
+    // uffici diversi, la categoria non può scegliere al posto loro: prende il
+    // primo, e il documento dice comunque la TL.
     const r = await pool.query(
-      `SELECT t.id, c.categoria, t.tipologia AS lavorazione,
-              COALESCE(t.dipendenza, '') AS destinatario, c.attivo, c.ordine
+      `SELECT t.id, c.categoria, t.codice, t.descrizione,
+              COALESCE(
+                (SELECT a.dipendenza FROM "${nomeSchema}".materia_tl a
+                  WHERE a.tl_id = t.id AND a.dipendenza IS NOT NULL
+                    AND btrim(a.dipendenza) <> ''
+                  ORDER BY a.ordine, a.id LIMIT 1),
+                ''
+              ) AS destinatario,
+              c.attivo, c.ordine
          FROM "${nomeSchema}".categoria_tl c
-         JOIN "${nomeSchema}".prodotti_tl t ON t.id = c.tl_id
+         JOIN "${nomeSchema}".tl t ON t.id = c.tl_id
         ORDER BY c.categoria, c.ordine ASC, t.id ASC`
     );
     return {
@@ -69,7 +81,10 @@ export async function ottieniLavorazioniTipoDebito(
       lavorazioni: r.rows.map((x) => ({
         id: Number(x.id),
         categoria: String(x.categoria),
-        lavorazione: String(x.tipologia ?? x.lavorazione ?? ''),
+        lavorazione:
+          String(x.codice ?? '').trim() && String(x.descrizione ?? '').trim()
+            ? `${String(x.codice).trim()} — ${String(x.descrizione).trim()}`
+            : String(x.descrizione ?? x.codice ?? '').trim(),
         destinatario: String(x.destinatario ?? ''),
         attivo: x.attivo === true,
         ordine: Number(x.ordine ?? 0),
@@ -124,8 +139,8 @@ export async function collegaCategoriaTlAction(
     if (!(await categoriaEsiste(nomeSchema, cod)))
       return { success: false, error: `Categoria di debito «${cod}» non riconosciuta.` };
 
-    await assicuraTabelleProdottiTl(nomeSchema);
-    const tl = await pool.query(`SELECT 1 FROM "${nomeSchema}".prodotti_tl WHERE id = $1`, [tlId]);
+    await assicuraTabelleTl(nomeSchema);
+    const tl = await pool.query(`SELECT 1 FROM "${nomeSchema}".tl WHERE id = $1`, [tlId]);
     if ((tl.rowCount ?? 0) === 0) return { success: false, error: 'TL non trovata nel catalogo.' };
 
     await pool.query(
@@ -157,7 +172,7 @@ export async function scollegaCategoriaTlAction(
     const cod = String(categoria ?? '').trim();
     if (!cod) return { success: false, error: 'Indica la categoria di debito.' };
     if (!Number.isInteger(tlId) || tlId <= 0) return { success: false, error: 'TL non valida.' };
-    await assicuraTabelleProdottiTl(nomeSchema);
+    await assicuraTabelleTl(nomeSchema);
     const r = await pool.query(
       `DELETE FROM "${nomeSchema}".categoria_tl WHERE categoria = $1 AND tl_id = $2`,
       [cod, tlId]

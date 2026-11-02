@@ -52,28 +52,36 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
     ...(tipoSpazio === 'ENTE'
       ? [
           {
+            href: `/spazio/${codice}/parametri/tl`,
+            icon: ClipboardList,
+            passo: 1,
+            titolo: 'Catalogo delle TL',
+            descrizione:
+              'Codice, descrizione e flag per la check list: la TL si scrive una volta sola, non una volta per prodotto.',
+          },
+          {
             href: `/spazio/${codice}/parametri/direttrici-ente`,
             icon: Sparkles,
-            passo: 1,
-            titolo: 'Direttrici Ente',
+            passo: 2,
+            titolo: 'Direttrici e prodotti',
             descrizione:
-              'Le aree dell’ente, scritte una volta sola: il loro nome è il nome dell’ufficio che le lavorazioni scelgono come dipendenza. Alimentano anche il questionario di screening.',
+              'Le aree dell’ente e i fatti concreti su cui si lavora. Il nome della direttrice è il nome dell’ufficio che le materie scelgono come dipendenza.',
           },
           {
             href: `/spazio/${codice}/parametri/materie-lavorazione`,
             icon: ClipboardList,
-            passo: 2,
+            passo: 3,
             titolo: 'Lavorazioni delle materie',
             descrizione:
-              'Per ogni materia, l’ufficio (una delle direttrici), i passi e l’esito: si scrivono una volta e i titoli dei suoi codici li ereditano.',
+              'Per ogni materia: quale TL applica, su quale direttrice e prodotto, con quale ufficio, quali passi e quale esito. È il processo che finisce nel report per unità operativa.',
           },
           {
             href: `/spazio/${codice}/parametri/titoli-ente`,
             icon: Scale,
-            passo: 3,
+            passo: 4,
             titolo: 'Titoli di credito dell’ente',
             descrizione:
-              'Per ogni codice di partita: atto, presupposto giuridico e circolare, riscontrati sulle fonti ufficiali; ufficio e procedura arrivano dalla materia.',
+              'Per ogni codice di partita: TL, direttrice e prodotto che compongono la vestizione legale — atto, presupposto giuridico e circolare, riscontrati sulle fonti ufficiali.',
           },
         ]
       : []),

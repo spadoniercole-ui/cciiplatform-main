@@ -61,7 +61,8 @@ import {
   proceduraEffettiva,
   type LavorazioneMateria,
 } from '@/lib/titoliEnte/lavorazioniMateria';
-import { ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
+import { ottieniCatalogoTl, ottieniLavorazioniMateria } from '@/app/actions/materieLavorazione';
+import { etichettaTl, type Tl } from '@/lib/titoliEnte/catalogoTl';
 import {
   riscontroEffettivo,
   type MateriaPerRiscontro,
@@ -259,13 +260,18 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
   // volta sulla materia. Il codice che ne ha una sua la tiene; gli altri la
   // leggono da qui, senza che nessuno debba ricopiarla su ogni riga.
   const [lavorazioni, setLavorazioni] = useState<LavorazioneMateria[]>([]);
+  // Il catalogo delle TL: il titolo sceglie la TL e il prodotto, e con la
+  // direttrice (`dipendenza`) compone la vestizione legale.
+  const [catalogoTl, setCatalogoTl] = useState<Tl[]>([]);
   const caricaMaterie = async () => {
-    const [r, l] = await Promise.all([
+    const [r, l, c] = await Promise.all([
       ottieniMaterieEnteAction(nomeSchema),
       ottieniLavorazioniMateria(nomeSchema),
+      ottieniCatalogoTl(nomeSchema),
     ]);
     if (r.success) setMaterie(r.materie);
     if (l.success) setLavorazioni(l.lavorazioni);
+    if (c.success) setCatalogoTl(c.tl);
   };
 
   const carica = async () => {
@@ -545,6 +551,41 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
                 placeholder="es. Denuncia Uniemens presentata e non versata"
               />
             </div>
+            {/* LA VESTIZIONE LEGALE (0.159.0): TL + direttrice (dipendenza) +
+                prodotto. Il codice di partita resta la chiave. */}
+            <div className="sm:col-span-3">
+              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                TL applicata
+              </label>
+              <select
+                value={inModifica.tlId ?? ''}
+                onChange={(e) =>
+                  setInModifica({
+                    ...inModifica,
+                    tlId: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+                className={CLASSE_CAMPO}
+              >
+                <option value="">— nessuna —</option>
+                {catalogoTl.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {etichettaTl(t)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-1">
+              <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
+                Prodotto
+              </label>
+              <input
+                value={inModifica.prodotto ?? ''}
+                onChange={(e) => setInModifica({ ...inModifica, prodotto: e.target.value || null })}
+                className={CLASSE_CAMPO}
+                placeholder="es. DURC"
+              />
+            </div>
             <div className="sm:col-span-2">
               <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
                 Note dell’ente
@@ -751,6 +792,23 @@ export function TitoliEnteManager({ nomeSchema, codice, ritorno }: Props) {
                   <td className="px-3 py-2 font-bold text-slate-900">{t.codice}</td>
                   <td className="px-3 py-2 text-slate-800">
                     {t.atto}
+                    {(t.tlId || t.prodotto) && (
+                      <span className="block text-[10px] text-sky-700">
+                        {[
+                          t.tlId
+                            ? etichettaTl(
+                                catalogoTl.find((x) => x.id === t.tlId) ?? {
+                                  codice: '',
+                                  descrizione: `TL ${t.tlId}`,
+                                }
+                              )
+                            : null,
+                          t.prodotto,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    )}
                     {t.note && <span className="block text-[10px] text-slate-500">{t.note}</span>}
                   </td>
                   <td className="px-3 py-2">

@@ -43,8 +43,18 @@ export interface LavorazioneMateria {
   id: number;
   /** La materia in cui il codice cade: è la chiave dell'associazione. */
   materiaId: number;
-  /** Quale lavorazione del processo: «emissione diffida», «verifica del flusso». */
+  /** Il codice della TL nel catalogo: «81», «76». */
+  codice: string;
+  /** La descrizione della TL: è il nome della lavorazione. */
   tipologia: string;
+  /**
+   * L'ufficio a cui la materia applica la TL (0.159.0). Direttrice e prodotto
+   * non stanno nella TL: sono l'associazione che la materia «mutua» per
+   * validare il processo da riportare nel report per unità operativa.
+   */
+  direttrice: string;
+  /** Il fatto concreto su cui la materia applica la TL: «DURC», «Diffide». */
+  prodotto: string;
   /** L'ufficio a cui indirizzare la comunicazione con cui si chiede il pagamento. */
   dipendenza: string | null;
   /** I passi, un passo per riga, nell'ordine in cui l'ufficio li esegue. */
@@ -109,6 +119,48 @@ export function validaLavorazioneMateria(input: InputLavorazioneMateria): string
   if (input.rilevantePerimetro === true && !input.versoPerimetro)
     return 'Se la lavorazione è rilevante per il perimetro, indica se è collaborativa o di resistenza.';
   return validaDipendenza(input.dipendenza) ?? validaAttivitaRecupero(input.procedura);
+}
+
+/**
+ * L'ASSOCIAZIONE FRA MATERIA, TL, DIRETTRICE E PRODOTTO (0.159.0).
+ *
+ * È qui che il processo prende forma: la materia dice su quale prodotto e per
+ * quale ufficio lavora una TL del catalogo, e con quali passi ed esito. La
+ * stessa TL può essere usata da più materie con processi diversi; la TL resta
+ * una sola, con il suo codice e la sua descrizione.
+ */
+export interface InputAssociazioneTl {
+  materiaId: number;
+  tlId: number;
+  direttrice: string;
+  prodotto: string;
+  dipendenza: string | null;
+  procedura: string | null;
+  esito: string | null;
+}
+
+export function validaAssociazioneTl(input: InputAssociazioneTl): string | null {
+  if (!Number.isInteger(input.materiaId) || input.materiaId <= 0)
+    return 'Scegli la materia della lavorazione.';
+  if (!Number.isInteger(input.tlId) || input.tlId <= 0) return 'Scegli la TL del catalogo.';
+  if (!unaRiga(input.direttrice)) return 'Scegli la direttrice su cui la materia applica la TL.';
+  if (!unaRiga(input.prodotto)) return 'Indica il prodotto su cui la materia applica la TL.';
+  const esito = normalizzaEsito(input.esito);
+  if (esito && esito.length > MASSIMO_CARATTERI_ESITO)
+    return `L'esito non può superare ${MASSIMO_CARATTERI_ESITO} caratteri.`;
+  return validaDipendenza(input.dipendenza) ?? validaAttivitaRecupero(input.procedura);
+}
+
+export function normalizzaAssociazioneTl(input: InputAssociazioneTl): InputAssociazioneTl {
+  return {
+    materiaId: input.materiaId,
+    tlId: input.tlId,
+    direttrice: unaRiga(input.direttrice) ?? '',
+    prodotto: unaRiga(input.prodotto) ?? '',
+    dipendenza: normalizzaDipendenza(input.dipendenza),
+    procedura: normalizzaAttivitaRecupero(input.procedura),
+    esito: normalizzaEsito(input.esito),
+  };
 }
 
 export function normalizzaLavorazione(input: InputLavorazioneMateria): InputLavorazioneMateria {
