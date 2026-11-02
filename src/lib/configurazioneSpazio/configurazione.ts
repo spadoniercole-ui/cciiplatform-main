@@ -70,12 +70,7 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
   { nome: 'anagrafica_ente_config', descrizione: 'Etichette dell’Anagrafica Ente' },
   { nome: 'categorie_tipo_debito', descrizione: 'Categorie di debito' },
   { nome: 'tipo_debito_config', descrizione: 'Etichette dei tipi di debito' },
-  // 0.156.0: il catalogo delle TL sostituisce la tabella storica delle
-  // lavorazioni per tipologia di debito, che non si esporta più (il ritiro è in
-  // docs/RITIRO-LAVORAZIONI-TIPO-DEBITO.md). Un file di configurazione vecchio
-  // che la contiene la vede dichiarata fra le tabelle ignorate, con il resto
-  // intatto: le TL sono già nel catalogo dello spazio di partenza.
-  { nome: 'catalogo_tl', descrizione: 'Catalogo delle TL (codice, descrizione, ufficio)' },
+  { nome: 'lavorazioni_tipo_debito', descrizione: 'Lavorazioni per tipologia di debito' },
   { nome: 'vera_titoli', descrizione: 'V.E.R.A.: titoli di sezione mappati' },
   { nome: 'vera_trattamenti', descrizione: 'V.E.R.A.: trattamenti natura/stato' },
   { nome: 'strutture_prospetto', descrizione: 'Strutture dei prospetti riconosciute' },

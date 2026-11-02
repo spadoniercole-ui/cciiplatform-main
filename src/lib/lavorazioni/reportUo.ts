@@ -16,8 +16,7 @@
 // compongono (voce, periodo, stato, importo) e le lavorazioni configurate
 // sulla materia, nell'ordine in cui si eseguono.
 //
-// PERCHÉ NON SI RIUSA IL DESTINATARIO DELLA VECCHIA CONFIGURAZIONE PER
-// TIPOLOGIA DI DEBITO. Quella
+// PERCHÉ NON SI RIUSA IL DESTINATARIO DI `lavorazioni_tipo_debito`. Quella
 // tabella indirizza per CATEGORIA di calcolo (Contributi INPS, crediti
 // dell'Agente…): raggruppa per natura del credito, non per ufficio. La
 // dipendenza sta su `materie_lavorazione` e, in via prioritaria, sul singolo

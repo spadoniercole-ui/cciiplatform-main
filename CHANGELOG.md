@@ -1,33 +1,3 @@
-## 0.156.0 — 2026-11-02
-
-**Le lavorazioni per tipologia di debito passano nel catalogo delle TL, e la tabella storica si
-avvia al ritiro.** La configurazione che il triage usa per sapere chi lavora un debito era
-congelata in sola lettura dal 0.138.x: i destinatari continuavano a produrre documenti, ma non si
-potevano più vedere accanto alle TL della materia e una categoria cancellata lasciava righe che
-indicavano un ufficio per un debito che non esisteva più.
-
-- **Una TL la identificano un codice e una descrizione.** Il catalogo `catalogo_tl` tiene codice,
-  descrizione e ufficio; l'indice univoco è sulla coppia, non sul codice, perché sotto la stessa
-  tipologia di debito si svolgono più lavorazioni. Alla prima apertura di uno spazio configurato
-  con la vecchia tabella le righe non ancora migrate vengono copiate, una volta sola, e segnate
-  con `migrata_il`.
-- **L'ufficio si aggancia da solo.** Se il destinatario è una direttrice si salva la grafia dei
-  Parametri; se non lo è resta com'era, e il risultato lo dice. È automatico perché la categoria
-  che si sta variando è già un prodotto dentro una direttrice.
-- **Cancellare una categoria sistema i collegamenti.** Il nuovo comando elimina in una sola
-  transazione la categoria e le sue TL dal catalogo, e segna le righe storiche che la nominano:
-  la migrazione non le riporta in vita. Rinominare non richiede riscritture — il legame è il
-  codice, l'etichetta si legge dalle categorie.
-- **La tabella storica non ha più lettori.** Triage, Parametri e grafie degli uffici leggono il
-  catalogo; il provisioning non crea più la tabella; l'esportazione della configurazione porta il
-  catalogo. La legge solo la migrazione, e `ritiroLavorazioniTipoDebito.test.ts` fa fallire la CI
-  se qualcuno la reintroduce. L'eliminazione è progettata ma **non eseguita**: precondizioni,
-  procedura e rollback in `docs/RITIRO-LAVORAZIONI-TIPO-DEBITO.md`.
-
-**Resta aperto:** la configurazione resta in sola lettura (il congelamento ora protegge una
-vecchia tabella che nessuno legge), e TL per codice e lavorazioni per materia restano due
-risposte alla stessa domanda su due chiavi.
-
 ## 0.155.0 — 2026-11-01
 
 **La check list nasce anche per un'azienda nuova, si corregge dal triage e finisce nel foglio
