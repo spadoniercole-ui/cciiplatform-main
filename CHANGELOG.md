@@ -1,3 +1,22 @@
+## 0.167.0 — 2026-11-03
+
+**Il codice della TS è unico dentro il prodotto, non nello spazio.** La numerazione delle TS
+riparte per prodotto: la 81 di «Diffida M400» e la 81 di «Diffida sgravi contributivi» sono due
+lavorazioni diverse, con la loro descrizione e il loro processo, e il catalogo le rifiutava come
+doppioni. L'unica via restava rinumerare una delle due, cioè cambiare il numero che il documento
+cita.
+
+- **Stesso codice, prodotti diversi: due TS.** Scrivendo la 81 su «Diffida sgravi contributivi» il
+  catalogo accetta la riga e la tiene distinta da quella di «Diffida M400»: ognuna resta con la sua
+  descrizione e il suo processo operativo.
+- **Il doppione vero resta vietato.** Due TS con lo stesso codice sullo stesso prodotto sono la
+  stessa lavorazione scritta due volte: il salvataggio risponde ancora «esiste già», e dice su
+  quale prodotto, così si sa dove aggiungere l'associazione invece di cercarla.
+- **Le TS senza prodotto restano una per codice.** Finché non si dice dove stanno non hanno un
+  posto in cui distinguersi: il vincolo resta anche nel database, con un indice unico parziale.
+- **Nessuna migrazione da fare a mano.** L'indice unico sul solo codice diventa un indice semplice
+  e il catalogo esistente resta com'era: nessuna riga cambia numero.
+
 ## 0.166.0 — 2026-11-03
 
 **Una TS, più prodotti.** L'associazione è tanti a tanti, come il lavoro chiede: la stessa
@@ -87,6 +106,7 @@ non conteneva tutte le sezioni, e lo spazio di arrivo non aveva le tabelle per r
   dati già salvati restano nel database: non si cancella nulla.
 - **«Procedi» resta legato alla check list dei prodotti**, l'unica parte obbligatoria della
   valutazione: senza prodotti in check list non blocca nulla.
+
 ## 0.162.0 — 2026-11-03
 
 **La check list arriva subito dopo i documenti, il flag esce dalle TS e il processo diventa un’operatività.**

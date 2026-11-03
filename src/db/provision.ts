@@ -2291,9 +2291,16 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
       aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
+  // IL CODICE È UNICO DENTRO IL PRODOTTO, NON NELLO SPAZIO (0.167.0). La
+  // numerazione delle TS riparte per prodotto: la 81 di «Diffida M400» e la 81
+  // di «Diffida sgravi contributivi» sono due lavorazioni, e l'indice unico sul
+  // solo codice le rifiutava. Il vincolo vero — stesso codice sullo stesso
+  // prodotto — lo controlla il salvataggio, perché le associazioni sono un
+  // elenco jsonb; qui resta l'indice semplice, e più sotto l'unico parziale per
+  // le TS senza prodotto.
+  await eseguiDdlTenant(sql`DROP INDEX IF EXISTS ${s}.idx_tl_codice`);
   await eseguiDdlTenant(
-    sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_tl_codice
-        ON ${s}.tl (lower(btrim(codice)))`
+    sql`CREATE INDEX IF NOT EXISTS idx_tl_codice ON ${s}.tl (lower(btrim(codice)))`
   );
   // LA TS SA A QUALE PRODOTTO APPARTIENE (0.161.0). Il codice identificativo
   // si associa al prodotto e alla sua direttrice; più TS possono stare sullo
@@ -2327,6 +2334,12 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
                )
          WHERE jsonb_array_length(prodotti) = 0
            AND prodotto IS NOT NULL AND btrim(prodotto) <> ''`
+  );
+  // Senza prodotto non c'è un posto in cui distinguersi: una sola TS per codice.
+  await eseguiDdlTenant(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_tl_codice_senza_prodotto
+        ON ${s}.tl (lower(btrim(codice)))
+        WHERE jsonb_array_length(prodotti) = 0`
   );
 
   // L'ASSOCIAZIONE: la materia mutua la coppia direttrice/prodotto e porta il

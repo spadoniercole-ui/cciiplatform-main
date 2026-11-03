@@ -60,7 +60,10 @@ await db.exec(`
     prodotti JSONB NOT NULL DEFAULT '[]'::jsonb,
     aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
   );
-  CREATE UNIQUE INDEX idx_tl_codice ON ${SCHEMA}.tl (lower(btrim(codice)));
+  CREATE INDEX idx_tl_codice ON ${SCHEMA}.tl (lower(btrim(codice)));
+  CREATE UNIQUE INDEX idx_tl_codice_senza_prodotto
+    ON ${SCHEMA}.tl (lower(btrim(codice)))
+    WHERE jsonb_array_length(prodotti) = 0;
 
   CREATE TABLE ${SCHEMA}.materia_tl (
     id SERIAL,
@@ -158,16 +161,40 @@ describe('salvaTlAction con più prodotti', () => {
     expect(dopo.prodotto).toBe('Diffida sgravi');
   });
 
-  it('lo stesso codice resta una TS sola: la seconda non si può creare', async () => {
+  it('lo stesso codice su un altro prodotto è un’altra TS, con la sua descrizione', async () => {
     const esito = await salvaTlAction(SCHEMA, {
       codice: ' 81 ',
-      descrizione: 'Diffida sui contributi',
+      descrizione: 'Contabilizzazione diffida sgravi contributivi',
       prodotti: [{ direttrice: 'Vigilanza documentale', prodotto: 'Diffida contributi' }],
     });
-    expect(esito.success).toBe(false);
-    expect(esito.error).toMatch(/esiste già una TS/i);
+    expect(esito.success).toBe(true);
 
     const catalogo = await ottieniCatalogoTl(SCHEMA);
-    expect(catalogo.tl.filter((t) => t.codice.trim() === '81')).toHaveLength(1);
+    const ts81 = catalogo.tl.filter((t) => t.codice.trim() === '81');
+    expect(ts81).toHaveLength(2);
+    expect(ts81.map((t) => t.descrizione).sort()).toEqual([
+      'Contabilizzazione diffida sgravi contributivi',
+      'Diffida M400',
+    ]);
+  });
+
+  it('lo stesso codice sullo stesso prodotto resta un doppione', async () => {
+    const esito = await salvaTlAction(SCHEMA, {
+      codice: '81',
+      descrizione: 'Diffida M400',
+      prodotti: [{ direttrice: 'Vigilanza documentale', prodotto: 'Diffida sgravi' }],
+    });
+    expect(esito.success).toBe(false);
+    expect(esito.error).toMatch(/esiste già una TS con il codice «81»/i);
+    expect(esito.error).toMatch(/Diffida sgravi/i);
+  });
+
+  it('senza prodotto il codice resta uno solo', async () => {
+    const primo = await salvaTlAction(SCHEMA, { codice: 'ZZ', descrizione: 'Senza prodotto' });
+    expect(primo.success).toBe(true);
+
+    const secondo = await salvaTlAction(SCHEMA, { codice: ' zz ', descrizione: 'Doppione' });
+    expect(secondo.success).toBe(false);
+    expect(secondo.error).toMatch(/senza prodotto/i);
   });
 });

@@ -14,8 +14,14 @@
 // come passo della mora — e finché il prodotto era una colonna sola la seconda
 // associazione non si poteva scrivere: il codice risultava già usato e la TS
 // andava duplicata, tornando al problema che il catalogo piatto aveva risolto.
-// Ora le associazioni sono un elenco, e il codice resta unico: due righe con lo
-// stesso codice sarebbero due lavorazioni diverse chiamate allo stesso modo.
+//
+// IL CODICE È UNICO DENTRO IL PRODOTTO (0.167.0), non nello spazio. Nei
+// documenti la numerazione delle TS riparte per prodotto: la 81 di «Diffida
+// M400» e la 81 di «Diffida sgravi contributivi» sono due lavorazioni, con la
+// loro descrizione e il loro processo. Il doppione che resta vietato è quello
+// vero: due TS con lo stesso codice sullo stesso prodotto, che sarebbero la
+// stessa lavorazione scritta due volte. Le TS senza prodotto non hanno un posto
+// in cui distinguersi, e valgono una sola per codice.
 //
 // Prima la TS era scritta dentro il prodotto: la stessa TS 81 compariva tante
 // volte quanti erano i prodotti che la usava, e ogni copia portava con sé
@@ -237,6 +243,47 @@ export function etichettaTl(tl: Pick<Tl, 'codice' | 'descrizione'>): string {
   const descrizione = unaRiga(tl.descrizione);
   if (codice && descrizione) return `${codice} — ${descrizione}`;
   return descrizione || codice;
+}
+
+/** Una riga già in catalogo, ridotta a ciò che serve al confronto del codice. */
+export interface RigaCodiceTl {
+  id: number;
+  codice: string;
+  prodotti: ProdottoTl[];
+}
+
+/**
+ * IL CONFLITTO DEL CODICE, oppure null (0.167.0).
+ *
+ * Il codice identifica la TS dentro il prodotto: la stessa 81 può stare su due
+ * prodotti diversi con la descrizione che le è propria. Il divieto resta dove
+ * nascerebbe un doppione — stesso codice sullo stesso prodotto — e per le TS
+ * che un prodotto non ce l'hanno: senza posto non c'è modo di distinguerle.
+ */
+export function conflittoCodiceTl(
+  codice: string,
+  prodotti: ProdottoTl[],
+  altre: RigaCodiceTl[]
+): string | null {
+  const chiave = chiaveTl(codice);
+  if (!chiave) return null;
+  const stesse = altre.filter((a) => chiaveTl(a.codice) === chiave);
+  if (stesse.length === 0) return null;
+
+  const miei = new Set(prodotti.map((p) => chiaveProdottoTl(p.direttrice, p.prodotto)));
+  if (miei.size === 0) {
+    return stesse.some((a) => a.prodotti.length === 0)
+      ? `Esiste già una TS con il codice «${unaRiga(codice)}», senza prodotto: assegnale i prodotti invece di crearne un'altra.`
+      : null;
+  }
+
+  for (const altra of stesse) {
+    for (const p of altra.prodotti) {
+      if (miei.has(chiaveProdottoTl(p.direttrice, p.prodotto)))
+        return `Esiste già una TS con il codice «${unaRiga(codice)}» per «${etichettaProdottoTl(p)}»: aggiungi lì il prodotto, oppure usa un altro codice.`;
+    }
+  }
+  return null;
 }
 
 /** «VIGILANZA DOCUMENTALE · Diffida M400»: l'associazione come si legge. */

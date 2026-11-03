@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   chiaveTl,
+  conflittoCodiceTl,
   etichettaProdottoTl,
   etichettaTl,
   normalizzaTl,
@@ -190,6 +191,45 @@ describe('rigaTl', () => {
       prodotto: 'Diffida M400',
     });
     expect(t.prodotti).toEqual([{ direttrice: 'Vigilanza documentale', prodotto: 'Diffida M400' }]);
+  });
+});
+
+describe('conflittoCodiceTl', () => {
+  const altra = (codice: string, prodotti: { direttrice: string; prodotto: string }[]) => ({
+    id: 9,
+    codice,
+    prodotti,
+  });
+
+  it('lo stesso codice su un altro prodotto non è un doppione', () => {
+    expect(
+      conflittoCodiceTl(
+        '81',
+        [{ direttrice: 'Vigilanza documentale', prodotto: 'Diffida sgravi' }],
+        [altra('81', [{ direttrice: 'Vigilanza documentale', prodotto: 'Diffida M400' }])]
+      )
+    ).toBeNull();
+  });
+
+  it('lo stesso codice sullo stesso prodotto è un doppione, e dice quale', () => {
+    const errore = conflittoCodiceTl(
+      ' 81 ',
+      [{ direttrice: 'vigilanza documentale', prodotto: 'diffida m400' }],
+      [altra('81', [{ direttrice: 'Vigilanza documentale', prodotto: 'Diffida M400' }])]
+    );
+    expect(errore).toMatch(/esiste già una TS/i);
+    expect(errore).toMatch(/Diffida M400/);
+  });
+
+  it('senza prodotto il codice resta uno solo', () => {
+    expect(conflittoCodiceTl('ZZ', [], [altra('zz', [])])).toMatch(/senza prodotto/i);
+    expect(
+      conflittoCodiceTl('ZZ', [], [altra('ZZ', [{ direttrice: 'Vigilanza', prodotto: 'Diffida' }])])
+    ).toBeNull();
+  });
+
+  it('un codice nuovo non confligge con nessuno', () => {
+    expect(conflittoCodiceTl('82', [], [altra('81', [])])).toBeNull();
   });
 });
 

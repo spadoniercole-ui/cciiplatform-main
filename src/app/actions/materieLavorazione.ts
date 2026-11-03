@@ -4,8 +4,8 @@
 //
 // Lo schema è semplice, e in tre passi:
 //
-//   1. `tl` — il catalogo: codice, descrizione, flag per la check list. Una TS
-//      esiste una volta sola, non una volta per prodotto.
+//   1. `tl` — il catalogo: codice, descrizione, flag per la check list. Il
+//      codice della TS è unico dentro il prodotto, non nello spazio (0.167.0).
 //   2. `materia_tl` — la materia mutua la coppia direttrice/prodotto e porta il
 //      processo (ufficio, passi, esito). È qui che la TS diventa una lavorazione
 //      concreta, ed è da qui che nascono il report per unità operativa e le
@@ -27,6 +27,7 @@ import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { assicuraTabelleParametriSpazio, assicuraTabelleTl } from '@/db/provision';
 import {
   chiaveTl,
+  conflittoCodiceTl,
   normalizzaTl,
   rigaTl,
   validaTl,
@@ -228,20 +229,19 @@ export async function salvaTlAction(
     const prodotti = dato.prodotti ?? [];
     const primo = prodotti[0] ?? null;
 
-    // Lo stesso codice non può esistere due volte: è l'identità della TS nei
-    // documenti, e due righe con lo stesso codice sarebbero due lavorazioni
-    // diverse chiamate allo stesso modo. Più prodotti non fanno eccezione: si
-    // aggiungono alla TS che c'è, non a una seconda TS con lo stesso codice.
-    const doppia = await pool.query(
-      `SELECT 1 FROM "${nomeSchema}".tl
+    // LO STESSO CODICE VALE DENTRO UN PRODOTTO (0.167.0). La numerazione delle
+    // TS riparte per prodotto: la 81 di «Diffida M400» e la 81 di «Diffida
+    // sgravi contributivi» sono due lavorazioni, con descrizione e processo
+    // propri. Il divieto resta sul doppione vero — stesso codice sullo stesso
+    // prodotto — e sulle TS senza prodotto, che senza posto non si distinguono.
+    const stesse = await pool.query(
+      `SELECT id, codice, prodotti, direttrice, prodotto
+         FROM "${nomeSchema}".tl
         WHERE lower(btrim(codice)) = $1 AND ($2::int IS NULL OR id <> $2::int)`,
       [chiaveTl(dato.codice), dato.id ?? null]
     );
-    if ((doppia.rowCount ?? 0) > 0)
-      return {
-        success: false,
-        error: `Esiste già una TS con il codice «${dato.codice}».`,
-      };
+    const conflitto = conflittoCodiceTl(dato.codice, prodotti, stesse.rows.map(rigaTl));
+    if (conflitto) return { success: false, error: conflitto };
 
     if (dato.id != null) {
       if (!Number.isInteger(dato.id) || dato.id <= 0)

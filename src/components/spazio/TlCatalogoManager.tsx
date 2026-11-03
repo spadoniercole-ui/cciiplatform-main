@@ -1,6 +1,6 @@
 'use client';
 
-// IL CATALOGO DELLE TS — codice, descrizione, prodotto (0.159.0 → 0.162.0).
+// IL CATALOGO DELLE TS — codice, descrizione, prodotti (0.159.0 → 0.167.0).
 //
 // Una TS si scrive qui, una volta sola. Non sta più dentro il prodotto: la
 // stessa lavorazione non va ripetuta per ogni prodotto che la usa, e l'ufficio
@@ -145,7 +145,9 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
             Una TS è un <strong>codice</strong>, una <strong>descrizione</strong> e i{' '}
             <strong>prodotti</strong> che la usano: la stessa lavorazione serve più prodotti, quindi
-            si scrive una volta sola e si spunta dove serve. Il{' '}
+            si scrive una volta sola e si spunta dove serve. Lo stesso codice può ripetersi su
+            prodotti diversi — la numerazione riparte per prodotto — ma non sullo stesso prodotto.
+            Il{' '}
             <Link
               href={conRitorno(`/spazio/${codice}/parametri/prodotti`, ritorno)}
               className="font-bold text-sky-700 hover:underline"
