@@ -21,6 +21,8 @@ import {
   salvaTlAction,
 } from '@/app/actions/materieLavorazione';
 import { CampoPerimetroTl } from '@/components/spazio/CampoPerimetroTl';
+import { ottieniProdottiEnte } from '@/app/actions/prodottiEnte';
+import type { ProdottoEnte } from '@/lib/prodotti/prodotti';
 import {
   MASSIMO_CARATTERI_CODICE_TL,
   MASSIMO_CARATTERI_DESCRIZIONE_TL,
@@ -44,6 +46,8 @@ const VUOTA: InputTl = {
   descrizione: '',
   checkList: false,
   versoCheckList: null,
+  direttrice: null,
+  prodotto: null,
 };
 
 export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
@@ -54,6 +58,7 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
   });
 
   const [catalogo, setCatalogo] = useState<Tl[]>([]);
+  const [prodotti, setProdotti] = useState<ProdottoEnte[]>([]);
   const [bozza, setBozza] = useState<InputTl | null>(null);
   const [caricamento, setCaricamento] = useState(true);
   const [inCorso, setInCorso] = useState(false);
@@ -61,9 +66,13 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
 
   const carica = async () => {
     setCaricamento(true);
-    const r = await ottieniCatalogoTl(nomeSchema);
+    const [r, p] = await Promise.all([
+      ottieniCatalogoTl(nomeSchema),
+      ottieniProdottiEnte(nomeSchema),
+    ]);
     if (r.success) setCatalogo(r.tl);
     else setErrore(r.error || 'Impossibile caricare il catalogo.');
+    if (p.success) setProdotti(p.prodotti);
     setCaricamento(false);
   };
 
@@ -173,7 +182,15 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
               {catalogo.map((tl) => (
                 <tr key={tl.id} className="border-t border-slate-100 align-top">
                   <td className="px-3 py-1.5 font-mono font-bold text-slate-800">{tl.codice}</td>
-                  <td className="py-1.5 text-slate-700">{tl.descrizione}</td>
+                  <td className="py-1.5 text-slate-700">
+                    {tl.descrizione}
+                    {tl.prodotto && (
+                      <span className="block text-[10px] text-slate-500">
+                        {tl.direttrice ? `${tl.direttrice} · ` : ''}
+                        {tl.prodotto}
+                      </span>
+                    )}
+                  </td>
                   <td className="py-1.5 text-center">
                     {tl.checkList ? (
                       <span
@@ -268,6 +285,44 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
               })
             }
           />
+          {/* BLOCCO 3 (0.161.0): la TS è associata al prodotto e alla sua
+              direttrice. Il prodotto si sceglie dall'elenco dei prodotti
+              configurati; la direttrice arriva da lì, e non si riscrive. */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+            <label className="md:col-span-6 text-[9px] font-bold uppercase tracking-wider text-slate-600">
+              Prodotto a cui appartiene
+              <select
+                value={bozza.prodotto ?? ''}
+                onChange={(e) => {
+                  const scelto = prodotti.find((p) => p.nome === e.target.value);
+                  setBozza({
+                    ...bozza,
+                    prodotto: e.target.value || null,
+                    direttrice: scelto?.direttrice ?? bozza.direttrice ?? null,
+                  });
+                }}
+                className={`${CLASSE} mt-0.5`}
+                aria-label="Prodotto della TS"
+              >
+                <option value="">Nessun prodotto (TS storica)</option>
+                {prodotti.map((p) => (
+                  <option key={p.id} value={p.nome}>
+                    {p.direttrice} · {p.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="md:col-span-6 text-[9px] font-bold uppercase tracking-wider text-slate-600">
+              Direttrice
+              <input
+                type="text"
+                value={bozza.direttrice ?? ''}
+                readOnly
+                className={`${CLASSE} mt-0.5 bg-slate-50 text-slate-500`}
+                aria-label="Direttrice della TS"
+              />
+            </label>
+          </div>
           <div className="flex justify-end gap-2">
             <button
               type="button"

@@ -2,6 +2,7 @@ import { db } from './client';
 import { pool } from '@/lib/db';
 import { sql } from 'drizzle-orm';
 import { deveRinominareInLegacy } from '@/lib/migrazioni/debitiEnteLegacy';
+import { assicuraTabelleProdotti } from './provisionProdotti';
 import { sqlVincoloCheckIdempotente } from '@/lib/migrazioni/vincoloCheck';
 import { sqlChiaveEsternaIdempotente } from '@/lib/migrazioni/chiaveEsterna';
 import { eCorsaDdlBenigna } from '@/lib/migrazioni/corsaDdl';
@@ -55,7 +56,7 @@ export function dimenticaTabelleGarantite(nomeSchema?: string): void {
   }
 }
 
-async function eseguiDdlTenant(istruzione: ReturnType<typeof sql>) {
+export async function eseguiDdlTenant(istruzione: ReturnType<typeof sql>) {
   try {
     await db.execute(istruzione);
   } catch (error) {
@@ -2273,6 +2274,7 @@ export async function assicuraTabellaMaterieLavorazione(nomeSchema: string): Pro
 export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
   const s = sql.identifier(nomeSchema);
   await assicuraTabellaMaterieLavorazione(nomeSchema);
+  await assicuraTabelleProdotti(nomeSchema);
 
   // IL CATALOGO PIATTO DELLE TS (0.159.0). Codice, descrizione, contrassegno
   // per la check list: nient'altro. L'ufficio, i passi e l'esito sono il
@@ -2292,6 +2294,16 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
   await eseguiDdlTenant(
     sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_tl_codice
         ON ${s}.tl (lower(btrim(codice)))`
+  );
+  // LA TS SA A QUALE PRODOTTO APPARTIENE (0.161.0). Il codice identificativo
+  // si associa al prodotto e alla sua direttrice; più TS possono stare sullo
+  // stesso prodotto. Colonna e tabella restano quelle di prima: cambia solo
+  // che la coppia si scrive anche qui, non solo nell'associazione della
+  // materia.
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.tl ADD COLUMN IF NOT EXISTS direttrice TEXT`);
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.tl ADD COLUMN IF NOT EXISTS prodotto TEXT`);
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_tl_prodotto ON ${s}.tl (direttrice, prodotto)`
   );
 
   // L'ASSOCIAZIONE: la materia mutua la coppia direttrice/prodotto e porta il

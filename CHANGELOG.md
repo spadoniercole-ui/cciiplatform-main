@@ -1,3 +1,34 @@
+## 0.161.0 — 2026-11-03
+
+**Triage e Parametri in quattro blocchi, e la check list del triage diventa dinamica.**
+La catena ora ha un ordine esplicito: Direttrici → Prodotti → TS → Processo operativo. Prima i
+prodotti nascevano dentro le direttrici come stringhe, la TS portava con sé ufficio e passi, e il
+processo si chiamava «materia»: tre nomi per lo stesso lavoro, e nessun posto dove dire «questo
+prodotto va in check list, e con quali domande».
+
+- **Blocco 1 — Direttrici** (`/parametri/direttrici-ente`): solo i nomi delle aree e degli uffici.
+  Non si creano più prodotti qui; una direttrice senza prodotti resta salvabile, perché è una
+  direttrice da completare, non un errore.
+- **Blocco 2 — Prodotti** (`/parametri/prodotti`): il prodotto dentro una direttrice, con il flag
+  «in check list» e le domande. Per ogni domanda si sceglie la risposta chiusa Sì/No oppure il
+  testo libero, con il tetto dei 1000 caratteri applicato anche lato server.
+- **Blocco 3 — Catalogo delle TS** (`/parametri/tl`): il codice si associa al prodotto e alla sua
+  direttrice; più TS possono stare sullo stesso prodotto.
+- **Blocco 4 — Processo operativo** (`/parametri/processo-operativo`): dato il prodotto, che porta
+  con sé TS e direttrice, si descrivono le attività dell'ufficio e l'esito. La parola «materia»
+  esce dalle schermate; la tabella resta, perché i report già emessi la leggono.
+- **La check list del triage è generata dai flag.** Dopo visura, prospetti e la dichiarazione sui
+  lavoratori il sistema va in stand-by e chiede le domande dei soli prodotti accesi, con la forma
+  scelta in configurazione. «Procedi» resta spento finché una domanda è senza risposta; un prodotto
+  col flag e senza domande viene rifiutato al salvataggio.
+- **Le risposte qualificano l'operato, non misurano il debito.** Il quadro legge le domande chiuse
+  come azione sistemica, squilibrio da tavolo di trattativa o quadro misto da approfondire: è una
+  qualificazione istruttoria, che si affianca alle soglie (misurate sugli importi) e alle note
+  libere. Entra nel riepilogo stampabile con la qualificazione e le risposte.
+- **La tabella isolata resta ma non si vede.** «Lavorazioni per tipo di debito» non compare più
+  nell'indice dei Parametri: la pagina e i suoi agganci restano, per non riscrivere i punti che la
+  leggono.
+
 ## 0.160.0 — 2026-11-02
 
 **Due nomi nuovi per le stesse cose: le TL diventano TS e il V.E.R.A. diventa la certificazione

@@ -78,6 +78,8 @@ import { ottieniParametriScenariAction } from '@/app/actions/parametriScenari';
 import { ottieniScreeningAzienda } from '@/app/actions/screeningAzienda';
 import { riepilogoCheckList } from '@/lib/triage/checkListRiepilogo';
 import { PerimetroTriage } from '@/components/spazio/PerimetroTriage';
+import { ChecklistProdottiTriage } from '@/components/spazio/ChecklistProdottiTriage';
+import type { SintesiChecklistProdotti } from '@/lib/prodotti/prodotti';
 import { CheckListTriage } from '@/components/spazio/CheckListTriage';
 import { ScenariTriage } from '@/components/spazio/ScenariTriage';
 import { calcolaScenari } from '@/lib/triage/scenari';
@@ -411,6 +413,16 @@ export function VerificaSaluteAzienda({
    * definizione. Contano le voci rimaste senza risposta.
    */
   const perimetroIncompleto = (perimetroEsito?.mancanze?.length ?? 0) > 0;
+  /**
+   * LA CHECK LIST DEI PRODOTTI, come la vede il triage (0.161.0).
+   *
+   * Dopo l'acquisizione dei documenti il sistema va in stand-by: le domande dei
+   * prodotti con il flag attivo fanno parte della valutazione, e finché ne
+   * manca una la presa in carico non si chiude. Senza prodotti in check list il
+   * quadro resta `null` e non blocca nulla.
+   */
+  const [checklistProdotti, setChecklistProdotti] = useState<SintesiChecklistProdotti | null>(null);
+  const checklistProdottiIncompleta = (checklistProdotti?.mancanti ?? 0) > 0;
 
   // Lo storico rende vera la promessa fatta a schermo — "la verifica resta
   // consultabile" — che finora non lo era: esito e data stavano nel
@@ -1474,6 +1486,7 @@ export function VerificaSaluteAzienda({
         checkPerimetro:
           checkPerimetro && checkPerimetro.success ? (checkPerimetro.sintesi ?? null) : null,
         checkList,
+        checklistProdotti,
         // Le evidenze che partono per i reparti: chi riceve il riepilogo deve
         // sapere che cosa è stato mandato a chi, e quanto vale.
         uffici: reportUo.documenti.map((d) => ({
@@ -3385,6 +3398,18 @@ export function VerificaSaluteAzienda({
             )}
           </div>
 
+          {/* LA CHECK LIST DEI PRODOTTI (0.161.0): dopo l'acquisizione dei
+              documenti il sistema va in stand-by e chiede le domande scritte sui
+              prodotti con il flag attivo. È il primo elemento di valutazione
+              insieme a visura e prospetti. */}
+          <div className="border-t border-slate-200 pt-4">
+            <ChecklistProdottiTriage
+              nomeSchema={nomeSchema}
+              aziendaId={aziendaId!}
+              onEsito={setChecklistProdotti}
+            />
+          </div>
+
           {/* LA CHECK OBBLIGATORIA (0.153.0): le voci sono le TS contrassegnate
               nei Parametri, i codici arrivano dai titoli dell'ente. */}
           <div className="border-t border-slate-200 pt-4">
@@ -3449,6 +3474,14 @@ export function VerificaSaluteAzienda({
               </p>
             )}
             {avanzamento && <p className="text-[11px] font-mono text-slate-500">{avanzamento}</p>}
+            {checklistProdottiIncompleta && (
+              <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
+                Documenti acquisiti, ma la check list dei prodotti è incompleta: restano{' '}
+                {checklistProdotti?.mancanti} domande senza risposta. Finché mancano la presa in
+                carico resta sospesa — le risposte sono parte della valutazione insieme a visura e
+                prospetti.
+              </p>
+            )}
             {perimetroIncompleto && (
               <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
                 Il triage non è completo: resta da rispondere alla check di perimetro (
@@ -3471,11 +3504,15 @@ export function VerificaSaluteAzienda({
                 <>
                   <button
                     onClick={() => void procedi()}
-                    disabled={inCorso || !aziendaId || perimetroIncompleto}
+                    disabled={
+                      inCorso || !aziendaId || perimetroIncompleto || checklistProdottiIncompleta
+                    }
                     title={
-                      perimetroIncompleto
-                        ? 'Completa la check di perimetro: le TS rilevanti devono avere una risposta.'
-                        : undefined
+                      checklistProdottiIncompleta
+                        ? 'Completa la check list dei prodotti: le domande devono avere una risposta.'
+                        : perimetroIncompleto
+                          ? 'Completa la check di perimetro: le TS rilevanti devono avere una risposta.'
+                          : undefined
                     }
                     className="flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700 disabled:bg-slate-300"
                   >
@@ -3532,6 +3569,7 @@ export function VerificaSaluteAzienda({
                   setLavorazioni([]);
                   setEtichetteCategorie({});
                   setConfermaAperta(null);
+                  setChecklistProdotti(null);
                   setErroreInvio(null);
                   setAvvisoInvio(null);
                   setNoteInvio('');

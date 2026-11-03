@@ -37,7 +37,6 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
   const [direttrici, setDirettrici] = useState<DirettriceStrutturata[]>([]);
   const [lavorazioni, setLavorazioni] = useState<LavorazioneMateria[]>([]);
   const [titoli, setTitoli] = useState<TitoloEnte[]>([]);
-  const [nuovoProdotto, setNuovoProdotto] = useState<Record<number, string>>({});
   const [caricamento, setCaricamento] = useState(true);
   const [salvataggio, setSalvataggio] = useState(false);
   const [salvato, setSalvato] = useState(false);
@@ -124,24 +123,6 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
     setDirettrici(nuove);
   };
 
-  const aggiungiProdotto = (indice: number) => {
-    const prodotto = (nuovoProdotto[indice] || '').trim();
-    if (!prodotto) return;
-    const nuove = [...direttrici];
-    nuove[indice] = { ...nuove[indice], prodotti: [...nuove[indice].prodotti, prodotto] };
-    setDirettrici(nuove);
-    setNuovoProdotto({ ...nuovoProdotto, [indice]: '' });
-  };
-
-  const rimuoviProdotto = (indiceDirettrice: number, indiceProdotto: number) => {
-    const nuove = [...direttrici];
-    nuove[indiceDirettrice] = {
-      ...nuove[indiceDirettrice],
-      prodotti: nuove[indiceDirettrice].prodotti.filter((_, i) => i !== indiceProdotto),
-    };
-    setDirettrici(nuove);
-  };
-
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
 
   // La fotografia si ricalcola a ogni modifica: rinominare una direttrice si
@@ -157,11 +138,11 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
         </h2>
       </div>
       <p className="text-[11px] text-slate-500">
-        Le aree lungo cui l&apos;AI genera il questionario di screening per ogni azienda di questo
-        spazio — una sezione di domande per ciascuna direttrice. Per ogni direttrice, elenca i
-        prodotti o le procedure concreti (es. Cassa Integrazione, DURC, DICA): l&apos;AI genera
-        domande ancorate a questi, non alla direttrice in astratto — è quello che tiene le domande
-        pertinenti invece di generiche.
+        BLOCCO 1 DELLA CATENA. Qui si scrivono <strong>solo i nomi</strong> delle direttrici: ogni
+        nome è anche il nome di un ufficio, quello che i titoli di credito ereditano. I prodotti non
+        si creano più in questa schermata — hanno un blocco loro, con il flag per la check list e le
+        domande — perché il nome dell’area e il fatto concreto su cui si lavora sono due cose
+        diverse e vanno configurate in due passi.
       </p>
       <p className="text-[11px] text-slate-500">
         Qui si scrivono le aree e i fatti concreti. Le <strong>TS</strong> non stanno più sotto il
@@ -369,52 +350,38 @@ export function DirettriciEnteConfigManager({ nomeSchema, codice, ritorno }: Pro
             </div>
 
             <div className="flex flex-wrap gap-1.5">
-              {d.prodotti.map((prodotto, indiceProdotto) => (
-                <span
-                  key={indiceProdotto}
-                  className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-md"
-                >
-                  {prodotto}
-                  <button
-                    type="button"
-                    onClick={() => rimuoviProdotto(indice, indiceProdotto)}
-                    className="hover:text-red-600"
+              {d.prodotti.length === 0 ? (
+                <span className="text-[10px] text-amber-800 leading-relaxed">
+                  Nessun prodotto in questa direttrice: aggiungilo nel blocco{' '}
+                  <Link
+                    href={conRitorno(`/spazio/${codice}/parametri/prodotti`, ritorno)}
+                    className="font-bold underline"
                   >
-                    <X className="w-3 h-3" />
-                  </button>
+                    Prodotti dell’ente
+                  </Link>
+                  .
                 </span>
-              ))}
+              ) : (
+                d.prodotti.map((prodotto, indiceProdotto) => (
+                  <span
+                    key={indiceProdotto}
+                    className="px-2 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-md"
+                  >
+                    {prodotto}
+                  </span>
+                ))
+              )}
             </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={nuovoProdotto[indice] || ''}
-                onChange={(e) => setNuovoProdotto({ ...nuovoProdotto, [indice]: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    aggiungiProdotto(indice);
-                  }
-                }}
-                placeholder="Aggiungi prodotto — es. Cassa Integrazione, DURC, DICA..."
-                className="flex-1 p-2 text-xs border border-slate-200 rounded-lg text-slate-900 bg-white"
-              />
-              <button
-                type="button"
-                onClick={() => aggiungiProdotto(indice)}
-                className="flex items-center gap-1 px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg transition-colors shrink-0"
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              I prodotti di questa direttrice si configurano in{' '}
+              <Link
+                href={conRitorno(`/spazio/${codice}/parametri/prodotti`, ritorno)}
+                className="font-bold text-sky-700 hover:underline"
               >
-                <Plus className="w-3 h-3" /> Aggiungi
-              </button>
-            </div>
-
-            {d.prodotti.length === 0 && (
-              <p className="text-[10px] text-amber-800 leading-relaxed">
-                Senza almeno un prodotto o una procedura questa direttrice non si salva: serve
-                all&apos;AI per generare domande ancorate a qualcosa di concreto.
-              </p>
-            )}
+                Prodotti dell’ente
+              </Link>
+              , dove si sceglie anche se entrano nella check list e con quali domande.
+            </p>
           </div>
         ))}
 

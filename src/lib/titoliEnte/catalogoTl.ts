@@ -33,6 +33,14 @@ export interface Tl {
   descrizione: string;
   /** La TS entra nella check obbligatoria del triage. */
   checkList: boolean;
+  /**
+   * LA TS APPARTIENE A UN PRODOTTO (0.161.0). Il codice identificativo si
+   * associa al prodotto e alla sua direttrice: è il terzo blocco dei Parametri.
+   * Facoltativi perché le TS scritte prima di questa associazione restano
+   * valide finché qualcuno non dice a quale prodotto appartengono.
+   */
+  direttrice?: string | null;
+  prodotto?: string | null;
   /** Obbligatorio quando `checkList` è vero. */
   versoCheckList: VersoCheckList | null;
   ordine: number;
@@ -46,6 +54,8 @@ export interface InputTl {
   descrizione: string;
   checkList?: boolean;
   versoCheckList?: VersoCheckList | null;
+  direttrice?: string | null;
+  prodotto?: string | null;
 }
 
 /** Testo su una riga sola, senza bordi. */
@@ -77,6 +87,10 @@ export function validaTl(input: InputTl): string | null {
     return `La descrizione non può superare ${MASSIMO_CARATTERI_DESCRIZIONE_TL} caratteri.`;
   if (input.checkList === true && !input.versoCheckList)
     return 'Se la TS entra nella check list, indica se è collaborativa o di resistenza.';
+  // La TS è associata al prodotto e alla direttrice: se si dice il prodotto,
+  // la direttrice non è un dettaglio — è ciò che collega il codice all'ufficio.
+  if (unaRiga(input.prodotto ?? '') && !unaRiga(input.direttrice ?? ''))
+    return 'Scegli la direttrice del prodotto a cui appartiene questa TS.';
   return null;
 }
 
@@ -88,6 +102,8 @@ export function normalizzaTl(input: InputTl): InputTl {
     descrizione: unaRiga(input.descrizione),
     checkList,
     versoCheckList: checkList && input.versoCheckList ? input.versoCheckList : null,
+    direttrice: unaRiga(input.direttrice ?? '') || null,
+    prodotto: unaRiga(input.prodotto ?? '') || null,
   };
 }
 
@@ -102,6 +118,8 @@ export function rigaTl(r: Record<string, unknown>): Tl {
       r.verso_check_list === 'COLLABORATIVA' || r.verso_check_list === 'RESISTENZA'
         ? r.verso_check_list
         : null,
+    direttrice: (r.direttrice as string | null) ?? null,
+    prodotto: (r.prodotto as string | null) ?? null,
     ordine: Number(r.ordine ?? 0),
     materie: Number(r.materie ?? 0),
   };

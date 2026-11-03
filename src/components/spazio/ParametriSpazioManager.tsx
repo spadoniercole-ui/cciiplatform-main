@@ -46,39 +46,57 @@ interface VoceParametro {
 
 export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props) {
   const voci: VoceParametro[] = [
-    // La catena dell'ente, nell'ordine in cui si configura: le direttrici danno
-    // il nome agli uffici, le lavorazioni delle materie li scelgono, i titoli di
-    // credito li ereditano. Gli altri parametri vengono dopo.
+    // LA CATENA DELL'ENTE, NELL'ORDINE IN CUI SI CONFIGURA (0.161.0).
+    //
+    //  1. le direttrici danno il nome agli uffici;
+    //  2. i prodotti stanno dentro una direttrice, con il flag per la check
+    //     list e le domande;
+    //  3. le TS associano un codice al prodotto e alla sua direttrice;
+    //  4. il processo operativo descrive le attività per quel prodotto.
+    //
+    // Gli altri parametri vengono dopo: la catena è il passo che sblocca il
+    // resto, e mescolarla agli altri cursori faceva perdere l'ordine.
     ...(tipoSpazio === 'ENTE'
       ? [
           {
-            href: `/spazio/${codice}/parametri/tl`,
-            icon: ClipboardList,
-            passo: 1,
-            titolo: 'Catalogo delle TS',
-            descrizione:
-              'Codice, descrizione e flag per la check list: la TS si scrive una volta sola, non una volta per prodotto.',
-          },
-          {
             href: `/spazio/${codice}/parametri/direttrici-ente`,
             icon: Sparkles,
-            passo: 2,
-            titolo: 'Direttrici e prodotti',
+            passo: 1,
+            titolo: 'Direttrici dell’ente',
             descrizione:
-              'Le aree dell’ente e i fatti concreti su cui si lavora. Il nome della direttrice è il nome dell’ufficio che le materie scelgono come dipendenza.',
+              'I nomi delle aree e degli uffici. Nient’altro: i prodotti si configurano nel blocco successivo, perché il nome di un’area e il fatto concreto su cui si lavora sono due cose diverse.',
           },
           {
-            href: `/spazio/${codice}/parametri/materie-lavorazione`,
+            href: `/spazio/${codice}/parametri/prodotti`,
+            icon: ClipboardList,
+            passo: 2,
+            titolo: 'Prodotti dell’ente',
+            descrizione:
+              'Il prodotto dentro una direttrice, con il flag per la check list e le domande: risposta chiusa Sì/No oppure testo libero, entro mille caratteri.',
+          },
+          {
+            href: `/spazio/${codice}/parametri/tl`,
             icon: ClipboardList,
             passo: 3,
-            titolo: 'Lavorazioni delle materie',
+            titolo: 'Catalogo delle TS',
             descrizione:
-              'Per ogni materia: quale TS applica, su quale direttrice e prodotto, con quale ufficio, quali passi e quale esito. È il processo che finisce nel report per unità operativa.',
+              'Il codice identificativo della lavorazione, associato al prodotto e alla sua direttrice. Più TS possono stare sullo stesso prodotto.',
           },
+          {
+            href: `/spazio/${codice}/parametri/processo-operativo`,
+            icon: ClipboardList,
+            passo: 4,
+            titolo: 'Processo operativo',
+            descrizione:
+              'Dato il prodotto — che porta con sé la TS e la direttrice — le attività con cui l’ufficio lo gestisce, nell’ordine in cui le esegue.',
+          },
+        ]
+      : []),
+    ...(tipoSpazio === 'ENTE'
+      ? [
           {
             href: `/spazio/${codice}/parametri/titoli-ente`,
             icon: Scale,
-            passo: 4,
             titolo: 'Titoli di credito dell’ente',
             descrizione:
               'Per ogni codice di partita: TS, direttrice e prodotto che compongono la vestizione legale — atto, presupposto giuridico e circolare, riscontrati sulle fonti ufficiali.',
@@ -130,13 +148,6 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
       titolo: 'Soglie di segnalazione (art. 25-novies)',
       descrizione:
         'Gli importi di legge oltre cui scatta la segnalazione. Modificabili perché una riforma non imponga un aggiornamento del programma; il valore di legge resta sempre a vista.',
-    },
-    {
-      href: `/spazio/${codice}/parametri/lavorazioni`,
-      icon: ClipboardList,
-      titolo: 'Lavorazioni per tipo di debito',
-      descrizione:
-        'Per ogni categoria di debito, quale TS del catalogo la lavora. Ufficio e procedura si scrivono una volta sola, dentro il prodotto, e il triage li usa per preparare le comunicazioni sul file della certificazione dei debiti',
     },
     {
       href: `/spazio/${codice}/parametri/scenari`,

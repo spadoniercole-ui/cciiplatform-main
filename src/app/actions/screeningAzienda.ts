@@ -40,6 +40,7 @@ import { bloccoIstruzioniOperatore } from '@/lib/istruzioniOperatore';
 import { ottieniEtichetteTipoDebito } from '@/app/actions/tipoDebitoConfig';
 import { calcolaQuadroDirettrici, type QuadroDirettrici } from '@/lib/checklist/scoringDirettrici';
 import { deveEliminareVisura } from '@/lib/screening/conservazioneVisura';
+import { sincronizzaDirettriciDaProdotti } from '@/lib/prodotti/sincronizzaServer';
 import {
   leggiIdentificativiEnte,
   testoIdentificativi,
@@ -146,16 +147,17 @@ export async function aggiornaDirettriciEnteAction(
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    const pulite = direttrici
-      .map((d) => ({
-        nome: d.nome.trim(),
-        prodotti: d.prodotti.map((p) => p.trim()).filter(Boolean),
-      }))
-      .filter((d) => d.nome && d.prodotti.length > 0);
+    // IL PRIMO BLOCCO SCRIVE SOLO I NOMI (0.161.0). I prodotti non si creano
+    // più qui: hanno un blocco proprio, con il flag per la check list e le
+    // domande. Una direttrice senza prodotti non sparisce — è una direttrice da
+    // completare — e i prodotti che le appartengono si riallineano dalla loro
+    // tabella subito dopo, così lo screening vede sempre la stessa fotografia.
+    const pulite = direttrici.map((d) => ({ nome: d.nome.trim() })).filter((d) => d.nome);
     await pool.query(
       `UPDATE public.spazi SET direttrici_ente_strutturate = $1 WHERE nome_schema = $2`,
       [JSON.stringify(pulite), nomeSchema]
     );
+    await sincronizzaDirettriciDaProdotti(nomeSchema);
     return { success: true };
   } catch (error: any) {
     console.error('[aggiornaDirettriciEnteAction] Errore:', error);

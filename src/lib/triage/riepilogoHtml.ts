@@ -19,6 +19,7 @@ import { STILE_BOX } from './box';
 import type { SintesiPerimetro } from './perimetro';
 import type { EsitoScenari } from './scenari';
 import type { CheckListRiepilogo } from './checkListRiepilogo';
+import type { SintesiChecklistProdotti } from '@/lib/prodotti/prodotti';
 
 export interface DocumentoTriage {
   nome: string;
@@ -130,6 +131,14 @@ export interface DatiRiepilogoTriage {
    * foglio non annuncia una sezione che non ha contenuto.
    */
   checkList?: CheckListRiepilogo | null;
+  /**
+   * LA CHECK LIST DEI PRODOTTI (0.161.0). Le domande scritte sui prodotti con
+   * il flag attivo, con le risposte di questa azienda: è la qualificazione
+   * dell'operato che entra nel quadro insieme a visura e prospetti. `null`
+   * quando nessun prodotto è in check list — il foglio non annuncia una
+   * sezione che non ha contenuto.
+   */
+  checklistProdotti?: SintesiChecklistProdotti | null;
 }
 
 /** Il giorno entro cui tornare a verificare: la data più i giorni concessi. */
@@ -444,6 +453,31 @@ ${STILE_BOX}
     }
     parti.push(
       '<p style="font-size:10px;color:#475569">Le domande nascono dalle direttrici dell’ente e dai suoi prodotti, per questa azienda. La domanda senza risposta è una verifica non ancora compiuta: non si legge come una risposta negativa. Il questionario dice che cosa risulta verificato, non conclude nulla sulla crisi dell’impresa.</p>'
+    );
+  }
+
+  // 2-quinquies. LA CHECK LIST DEI PRODOTTI (0.161.0). Subito dopo il
+  // questionario dello screening: sono le domande dell'ente sui fatti concreti,
+  // con le risposte di questa azienda. Una domanda senza risposta si stampa
+  // come tale, e la qualificazione è una lettura istruttoria, non un responso.
+  if (d.checklistProdotti && d.checklistProdotti.totale > 0) {
+    const cp = d.checklistProdotti;
+    parti.push(titolo('Check list dei prodotti: risposte e qualificazione'));
+    parti.push(`<p class="esito">${esc(cp.etichetta)}</p>`);
+    parti.push(`<p style="font-size:11px">${esc(cp.dettaglio)}</p>`);
+    parti.push(
+      `<table><tbody>\n<tr><td>Domande in check list</td><td class="num">${cp.totale}</td></tr>\n<tr><td>Risposte date</td><td class="num">${cp.risposte}</td></tr>\n<tr><td>Domande a risposta chiusa</td><td class="num">${cp.chiuse}</td></tr>\n<tr><td>Risposte «sì»</td><td class="num">${cp.si}</td></tr>\n<tr><td>Risposte «no»</td><td class="num">${cp.no}</td></tr>\n</tbody></table>`
+    );
+    parti.push(
+      `<table><thead><tr><th>Prodotto</th><th>Domanda</th><th>Risposta</th></tr></thead><tbody>${cp.voci
+        .map(
+          (v) =>
+            `<tr><td>${esc(v.prodotto)}</td><td>${esc(v.domanda)}</td><td>${esc(v.risposta)}</td></tr>`
+        )
+        .join('')}</tbody></table>`
+    );
+    parti.push(
+      '<p style="font-size:10px;color:#475569">Le domande nascono dai prodotti contrassegnati in Parametri di Spazio → Prodotti dell’ente, con la forma scelta in configurazione (Sì/No oppure testo libero). La qualificazione dell’operato è una lettura istruttoria: non accerta la crisi e non sostituisce le soglie, che si misurano sugli importi.</p>'
     );
   }
 

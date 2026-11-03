@@ -3,6 +3,11 @@ import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { DirettriciEnteConfigManager } from '@/components/spazio/DirettriciEnteConfigManager';
 import { LinkRitorno } from '@/components/spazio/LinkRitorno';
 
+// BLOCCO 1 DELLA CATENA (0.161.0): qui si scrivono SOLO i nomi delle
+// direttrici. I prodotti hanno un blocco proprio (`/parametri/prodotti`), con il
+// flag per la check list e le domande; prima nascevano anche qui, e il nome
+// dell'ufficio e il fatto concreto su cui si lavora finivano nella stessa
+// schermata senza un ordine.
 export default async function ParametriDirettriciEntePage({
   params,
   searchParams,

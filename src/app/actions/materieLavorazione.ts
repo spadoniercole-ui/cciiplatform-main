@@ -193,6 +193,7 @@ export async function ottieniCatalogoTl(
     await assicuraTabelleTl(nomeSchema);
     const r = await pool.query(
       `SELECT t.id, t.codice, t.descrizione, t.check_list, t.verso_check_list, t.ordine,
+              t.direttrice, t.prodotto,
               (SELECT COUNT(*) FROM "${nomeSchema}".materia_tl a WHERE a.tl_id = t.id) AS materie
          FROM "${nomeSchema}".tl t
         ORDER BY t.ordine, t.codice, t.id`
@@ -241,10 +242,19 @@ export async function salvaTlAction(
       const r = await pool.query(
         `UPDATE "${nomeSchema}".tl
             SET codice = $2, descrizione = $3, check_list = $4,
-                verso_check_list = $5, aggiornato_il = now()
+                verso_check_list = $5, direttrice = $6, prodotto = $7,
+                aggiornato_il = now()
           WHERE id = $1
           RETURNING id`,
-        [dato.id, dato.codice, dato.descrizione, dato.checkList === true, dato.versoCheckList]
+        [
+          dato.id,
+          dato.codice,
+          dato.descrizione,
+          dato.checkList === true,
+          dato.versoCheckList,
+          dato.direttrice,
+          dato.prodotto,
+        ]
       );
       if ((r.rowCount ?? 0) === 0) return { success: false, error: 'TS non trovata.' };
       return { success: true, id: dato.id };
@@ -255,8 +265,8 @@ export async function salvaTlAction(
     );
     const r = await pool.query(
       `INSERT INTO "${nomeSchema}".tl
-         (codice, descrizione, check_list, verso_check_list, ordine)
-       VALUES ($1, $2, $3, $4, $5)
+         (codice, descrizione, check_list, verso_check_list, ordine, direttrice, prodotto)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
       [
         dato.codice,
@@ -264,6 +274,8 @@ export async function salvaTlAction(
         dato.checkList === true,
         dato.versoCheckList,
         Number(ordine.rows[0]?.n ?? 1),
+        dato.direttrice,
+        dato.prodotto,
       ]
     );
     return { success: true, id: Number(r.rows[0].id) };
