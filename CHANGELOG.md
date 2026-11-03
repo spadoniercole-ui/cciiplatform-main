@@ -1,3 +1,26 @@
+## 0.162.0 — 2026-11-03
+
+**La check list arriva subito dopo i documenti, il flag esce dalle TS e il processo diventa un’operatività.**
+Tre correzioni nate dall’uso della versione precedente: il questionario era nel posto giusto come contenuto e
+nel posto sbagliato come momento, il flag della check list si chiedeva due volte, e il processo costringeva a
+una TS per riga.
+
+- **La check list dei prodotti viene prima dell’esito.** Appena visura e prospetti sono letti, il triage si
+  ferma in una videata di stand-by con le domande dei prodotti accesi: la valutazione — indicatore, soglie,
+  perimetro, scenari — si apre con «Continua con la valutazione» quando ogni domanda ha una risposta. Prima il
+  questionario stava in fondo alla valutazione, dove si legge l’esito invece di concorrere a formarlo. Una
+  verifica riaperta che ha domande in sospeso ritrova il rimando per tornarci.
+- **Il flag della check list non si chiede più nella creazione della TS.** Il flag e le domande sono proprietà
+  del prodotto: la stessa direttrice può avere un prodotto presidiato e uno no. Il catalogo delle TS resta
+  codice, descrizione e prodotto; il contrassegno della check di perimetro resta valido dove era già stato
+  dato, e la check continua a non bloccare il triage quando non ha voci.
+- **Il processo operativo è un’operatività, non una riga per TS.** Si sceglie il prodotto, si spuntano le TS
+  che servono a quella operatività e si scrivono le attività: la stessa TS può comparire in due operatività —
+  la diffida come passo della sollecitazione e come passo della mora —, un’operatività può metterne insieme
+  più d’una (le M400 sul licenziamento, gli sgravi sulla vita lavorativa) e una TS può servire più prodotti.
+  Le righe salvate insieme condividono un gruppo, così modificarle le tiene allineate; i processi scritti
+  prima dei gruppi restano leggibili e modificabili uno per uno.
+
 ## 0.161.0 — 2026-11-03
 
 **Triage e Parametri in quattro blocchi, e la check list del triage diventa dinamica.**

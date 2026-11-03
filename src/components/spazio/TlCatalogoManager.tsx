@@ -1,15 +1,18 @@
 'use client';
 
-// IL CATALOGO DELLE TS — codice, descrizione, flag per la check list (0.159.0).
+// IL CATALOGO DELLE TS — codice, descrizione, prodotto (0.159.0 → 0.162.0).
 //
 // Una TS si scrive qui, una volta sola. Non sta più dentro il prodotto: la
 // stessa lavorazione non va ripetuta per ogni prodotto che la usa, e l'ufficio
-// non è una sua proprietà — è il processo con cui una materia la applica a una
-// direttrice e a un prodotto (Parametri › Lavorazioni delle materie), e da lì
-// arriva al report per unità operativa.
+// non è una sua proprietà — è il processo con cui l'ufficio la applica a una
+// direttrice e a un prodotto (Parametri › Processo operativo), e da lì arriva
+// al report per unità operativa.
 //
-// La colonna «check list» è il contrassegno che il triage usa: le TS marcate
-// entrano nella check di perimetro obbligatoria.
+// IL FLAG DELLA CHECK LIST NON STA PIÙ QUI (0.162.0). Il flag e le domande
+// sono proprietà del prodotto: la stessa direttrice può avere un prodotto
+// presidiato e uno no, e due campi per la stessa domanda erano il modo in cui
+// chi configurava finiva per compilarne uno solo. Qui resta l'identità della
+// TS: il codice, la descrizione e il prodotto in cui è nata.
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -20,7 +23,6 @@ import {
   ottieniCatalogoTl,
   salvaTlAction,
 } from '@/app/actions/materieLavorazione';
-import { CampoPerimetroTl } from '@/components/spazio/CampoPerimetroTl';
 import { ottieniProdottiEnte } from '@/app/actions/prodottiEnte';
 import type { ProdottoEnte } from '@/lib/prodotti/prodotti';
 import {
@@ -120,16 +122,17 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
             Catalogo delle TS
           </h2>
           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-            Una TS è un <strong>codice</strong>, una <strong>descrizione</strong> e un{' '}
-            <strong>flag per la check list</strong>. Nient&apos;altro: si scrive una volta sola, non
-            una volta per prodotto. L&apos;ufficio e i passi sono il processo con cui una{' '}
+            Una TS è un <strong>codice</strong>, una <strong>descrizione</strong> e il{' '}
+            <strong>prodotto</strong> a cui appartiene. Nient&apos;altro: si scrive una volta sola,
+            non una volta per prodotto. Il{' '}
             <Link
-              href={conRitorno(`/spazio/${codice}/parametri/materie-lavorazione`, ritorno)}
+              href={conRitorno(`/spazio/${codice}/parametri/prodotti`, ritorno)}
               className="font-bold text-sky-700 hover:underline"
             >
-              materia
+              flag della check list
             </Link>{' '}
-            la applica a una direttrice e a un prodotto; i{' '}
+            non sta più qui: è una proprietà del prodotto, con le sue domande. L&apos;ufficio e le
+            attività sono il processo operativo; i{' '}
             <Link
               href={conRitorno(`/spazio/${codice}/parametri/titoli-ente`, ritorno)}
               className="font-bold text-sky-700 hover:underline"
@@ -173,7 +176,6 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
               <tr className="text-[9px] uppercase tracking-wider text-slate-400 text-left">
                 <th className="px-3 py-1.5 font-bold">Codice</th>
                 <th className="py-1.5 font-bold">Descrizione</th>
-                <th className="py-1.5 font-bold text-center">Check list</th>
                 <th className="py-1.5 font-bold text-right">Materie</th>
                 <th className="px-3 py-1.5" />
               </tr>
@@ -189,21 +191,6 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
                         {tl.direttrice ? `${tl.direttrice} · ` : ''}
                         {tl.prodotto}
                       </span>
-                    )}
-                  </td>
-                  <td className="py-1.5 text-center">
-                    {tl.checkList ? (
-                      <span
-                        className={`text-[9px] font-bold uppercase rounded px-1 py-0.5 ${
-                          tl.versoCheckList === 'RESISTENZA'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-emerald-100 text-emerald-800'
-                        }`}
-                      >
-                        {tl.versoCheckList === 'RESISTENZA' ? 'Resistenza' : 'Collaborativa'}
-                      </span>
-                    ) : (
-                      <span className="text-slate-300">—</span>
                     )}
                   </td>
                   <td
@@ -273,18 +260,6 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
               </span>
             </label>
           </div>
-          <CampoPerimetroTl
-            rilevante={bozza.checkList === true}
-            verso={bozza.versoCheckList ?? null}
-            onChange={(patch) =>
-              setBozza({
-                ...bozza,
-                checkList: patch.rilevantePerimetro ?? bozza.checkList,
-                versoCheckList:
-                  patch.versoPerimetro !== undefined ? patch.versoPerimetro : bozza.versoCheckList,
-              })
-            }
-          />
           {/* BLOCCO 3 (0.161.0): la TS è associata al prodotto e alla sua
               direttrice. Il prodotto si sceglie dall'elenco dei prodotti
               configurati; la direttrice arriva da lì, e non si riscrive. */}

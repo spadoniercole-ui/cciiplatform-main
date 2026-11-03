@@ -155,8 +155,8 @@ export function PerimetroTriage({ nomeSchema, aziendaId, onEsito }: Props) {
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <p className="text-xs text-slate-600">
             Nessuna TS è contrassegnata come rilevante per il perimetro. La check non ha voci e non
-            blocca il triage: il contrassegno si imposta in{' '}
-            <b>Parametri di Spazio → Materie e lavorazioni</b>.
+            blocca il triage: il contrassegno non si imposta più nella creazione della TS, e resta
+            valido solo dove era già stato dato.
           </p>
         </div>
       ) : (

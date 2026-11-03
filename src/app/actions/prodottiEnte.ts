@@ -1,15 +1,22 @@
 'use server';
 
-// I PRODOTTI DELL'ENTE E IL PROCESSO OPERATIVO (0.161.0).
+// I PRODOTTI DELL'ENTE E IL LORO PROCESSO (0.161.0 → 0.162.0).
 //
 // Il secondo e il quarto blocco dei Parametri. Il prodotto nasce qui, con il
 // flag per la check list e le domande; la TS si associa sempre qui alla coppia
 // direttrice/prodotto; il processo — le attività dell'ufficio — vive in
 // `processo_prodotto`.
 //
+// IL PROCESSO È UN'OPERATIVITÀ, NON UNA RIGA PER TS (0.162.0). Si sceglie il
+// prodotto, si spuntano le TS che servono a quella operatività e si scrivono le
+// attività: la stessa TS può comparire in due operatività diverse dello stesso
+// prodotto, e un'operatività può mettere insieme più TS. Le righe salvate
+// insieme condividono `gruppo`, così modificarle le tiene allineate.
+//
 // Letture e scritture riservate all'Admin di spazio, come le altre voci dei
 // Parametri: sono la configurazione con cui il triage parla all'operatore.
 
+import { randomUUID } from 'node:crypto';
 import { pool } from '@/lib/db';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { assicuraTabelleTl } from '@/db/provision';
@@ -166,12 +173,18 @@ export async function eliminaProdottoEnteAction(
         return { success: false, error: 'Prodotto non trovato.' };
       }
       // Il nome era anche quello dell'associazione nella vecchia catena:
-      // senza prodotto, la TS non deve più dichiararlo.
+      // senza prodotto, la TS non deve più dichiararlo. Solo se non è usata
+      // da nessun altro processo: con le operatività la TS può servire più
+      // prodotti, e toglierle l'associazione per uno non deve rompere l'altro.
       const vecchio = r.rows[0];
       await client.query(
         `UPDATE "${nomeSchema}".tl SET direttrice = NULL, prodotto = NULL
           WHERE lower(btrim(prodotto)) = lower(btrim($1))
-            AND lower(btrim(direttrice)) = lower(btrim($2))`,
+            AND lower(btrim(direttrice)) = lower(btrim($2))
+            AND NOT EXISTS (
+              SELECT 1 FROM "${nomeSchema}".processo_prodotto pp
+               WHERE pp.tl_id = "${nomeSchema}".tl.id
+            )`,
         [String(vecchio?.nome ?? ''), String(vecchio?.direttrice ?? '')]
       );
       await client.query('COMMIT');
@@ -203,7 +216,7 @@ export async function ottieniProcessiProdotto(
       return { success: false, processi: [], error: 'Nome schema non valido.' };
     await assicuraTabelleTl(nomeSchema);
     const r = await pool.query(
-      `SELECT p.id, p.prodotto_id, p.tl_id, t.codice, t.descrizione,
+      `SELECT p.id, p.prodotto_id, p.tl_id, p.gruppo, t.codice, t.descrizione,
               p.dipendenza, p.procedura, p.esito, p.ordine
          FROM "${nomeSchema}".processo_prodotto p
          JOIN "${nomeSchema}".tl t ON t.id = p.tl_id
@@ -220,11 +233,19 @@ export async function ottieniProcessiProdotto(
   }
 }
 
-/** Crea o aggiorna il processo di un prodotto per una TS. */
+/**
+ * Crea o aggiorna un'operatività di un prodotto: una o più TS, le attività, il
+ * suo ufficio e il suo esito.
+ *
+ * Il gruppo identifica l'operatività da modificare. Senza gruppo se ne crea una
+ * nuova — anche con una TS già usata altrove: le TS non si escludono. Una riga
+ * scritta prima dei gruppi si modifica passando la sua chiave `r<id>`: viene
+ * riscritta come operatività, senza lasciare la vecchia dietro.
+ */
 export async function salvaProcessoProdottoAction(
   nomeSchema: string,
   input: InputProcessoProdotto
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; gruppo?: string; error?: string }> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
@@ -239,67 +260,96 @@ export async function salvaProcessoProdottoAction(
     );
     if ((prodotto.rowCount ?? 0) === 0)
       return { success: false, error: 'Prodotto non riconosciuto.' };
-    const tl = await pool.query(
-      `SELECT codice, descrizione, prodotto, direttrice FROM "${nomeSchema}".tl WHERE id = $1`,
-      [dato.tlId]
-    );
-    if ((tl.rowCount ?? 0) === 0) return { success: false, error: 'TS non riconosciuta.' };
 
-    const p = prodotto.rows[0];
-    const t = tl.rows[0];
-    // La TS può già essere legata a un altro prodotto: il processo è la
-    // dichiarazione che quella TS, SU QUESTO prodotto, si esegue così.
-    if (
-      t.prodotto &&
-      String(t.prodotto).trim().toLowerCase() !== String(p.nome).trim().toLowerCase()
-    )
+    // Le TS devono esistere davvero: il browser manda id, non codici.
+    const ts = await pool.query(`SELECT id FROM "${nomeSchema}".tl WHERE id = ANY($1::int[])`, [
+      dato.tlIds,
+    ]);
+    if ((ts.rowCount ?? 0) !== dato.tlIds.length)
       return {
         success: false,
-        error: `La TS ${t.codice} è già associata al prodotto «${t.prodotto}»: scegli una TS libera, o creala nel blocco delle TS per questo prodotto.`,
+        error: 'Una delle TS scelte non esiste più nel catalogo: ricarica la pagina.',
       };
 
-    // La coppia direttrice/prodotto si allinea alla TS: il processo è la fonte
-    // di verità di «quale TS lavora questo prodotto».
-    await pool.query(
-      `UPDATE "${nomeSchema}".tl
-          SET direttrice = $2, prodotto = $3
-        WHERE id = $1`,
-      [dato.tlId, p.direttrice, p.nome]
-    );
+    const p = prodotto.rows[0];
 
-    const esistente = await pool.query(
-      `SELECT id FROM "${nomeSchema}".processo_prodotto WHERE prodotto_id = $1 AND tl_id = $2`,
-      [dato.prodottoId, dato.tlId]
-    );
-    if ((esistente.rowCount ?? 0) > 0) {
-      await pool.query(
-        `UPDATE "${nomeSchema}".processo_prodotto
-            SET dipendenza = $3, procedura = $4, esito = $5, aggiornato_il = now()
-          WHERE prodotto_id = $1 AND tl_id = $2`,
-        [dato.prodottoId, dato.tlId, dato.dipendenza, dato.attivita, dato.esito]
+    const client = await pool.connect();
+    let gruppo: string = randomUUID();
+    try {
+      await client.query('BEGIN');
+
+      // La riga da modificare: un gruppo esistente, oppure una riga scritta
+      // prima dei gruppi. Il vecchio ordine si conserva, così la voce non
+      // salta in fondo all'elenco per essere stata corretta.
+      let ordine: number | null = null;
+      const chiave = dato.gruppo ?? '';
+      const legacy = /^r(\d+)$/.exec(chiave);
+      if (legacy) {
+        const vecchia = await client.query(
+          `SELECT ordine FROM "${nomeSchema}".processo_prodotto
+            WHERE id = $1 AND prodotto_id = $2`,
+          [Number(legacy[1]), dato.prodottoId]
+        );
+        if ((vecchia.rowCount ?? 0) > 0) {
+          ordine = Number(vecchia.rows[0].ordine);
+          await client.query(`DELETE FROM "${nomeSchema}".processo_prodotto WHERE id = $1`, [
+            Number(legacy[1]),
+          ]);
+        }
+      } else if (chiave) {
+        const vecchio = await client.query(
+          `SELECT MIN(ordine) AS ordine FROM "${nomeSchema}".processo_prodotto
+            WHERE prodotto_id = $1 AND gruppo = $2`,
+          [dato.prodottoId, chiave]
+        );
+        if (vecchio.rows[0]?.ordine != null) {
+          ordine = Number(vecchio.rows[0].ordine);
+          gruppo = chiave;
+          await client.query(
+            `DELETE FROM "${nomeSchema}".processo_prodotto
+              WHERE prodotto_id = $1 AND gruppo = $2`,
+            [dato.prodottoId, chiave]
+          );
+        }
+      }
+
+      if (ordine === null) {
+        const massimo = await client.query(
+          `SELECT COALESCE(MAX(ordine), 0) + 1 AS n
+             FROM "${nomeSchema}".processo_prodotto WHERE prodotto_id = $1`,
+          [dato.prodottoId]
+        );
+        ordine = Number(massimo.rows[0]?.n ?? 1);
+      }
+
+      for (const tlId of dato.tlIds) {
+        await client.query(
+          `INSERT INTO "${nomeSchema}".processo_prodotto
+             (prodotto_id, tl_id, gruppo, dipendenza, procedura, esito, ordine)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [dato.prodottoId, tlId, gruppo, dato.dipendenza, dato.attivita, dato.esito, ordine]
+        );
+      }
+
+      // La TS conserva il prodotto in cui è nata: un'operatività su un altro
+      // prodotto non glielo cambia, e non la toglie a chi la usava.
+      await client.query(
+        `UPDATE "${nomeSchema}".tl
+            SET direttrice = COALESCE(NULLIF(btrim(direttrice), ''), $2),
+                prodotto = COALESCE(NULLIF(btrim(prodotto), ''), $3)
+          WHERE id = ANY($1::int[])`,
+        [dato.tlIds, p.direttrice, p.nome]
       );
-      return { success: true };
+
+      await client.query('COMMIT');
+    } catch (errore) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw errore;
+    } finally {
+      client.release();
     }
 
-    const ordine = await pool.query(
-      `SELECT COALESCE(MAX(ordine), 0) + 1 AS n
-         FROM "${nomeSchema}".processo_prodotto WHERE prodotto_id = $1`,
-      [dato.prodottoId]
-    );
-    await pool.query(
-      `INSERT INTO "${nomeSchema}".processo_prodotto
-         (prodotto_id, tl_id, dipendenza, procedura, esito, ordine)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        dato.prodottoId,
-        dato.tlId,
-        dato.dipendenza,
-        dato.attivita,
-        dato.esito,
-        Number(ordine.rows[0]?.n ?? 1),
-      ]
-    );
-    return { success: true };
+    return { success: true, gruppo };
   } catch (error: unknown) {
     console.error('[salvaProcessoProdottoAction]', error);
     return {
@@ -309,27 +359,37 @@ export async function salvaProcessoProdottoAction(
   }
 }
 
-/** Toglie una TS dal processo di un prodotto. La TS resta nel catalogo. */
+/**
+ * Toglie un'operatività dal processo di un prodotto. Le TS restano nel
+ * catalogo: sono codici, non pezzi del prodotto.
+ */
 export async function eliminaProcessoProdottoAction(
   nomeSchema: string,
   prodottoId: number,
-  tlId: number
+  chiave: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    if (!Number.isInteger(prodottoId) || prodottoId <= 0 || !Number.isInteger(tlId) || tlId <= 0)
-      return { success: false, error: 'Prodotto o TS non valida.' };
+    if (!Number.isInteger(prodottoId) || prodottoId <= 0)
+      return { success: false, error: 'Prodotto non valido.' };
+    const gruppo = String(chiave ?? '').trim();
+    if (!gruppo) return { success: false, error: 'Operatività non valida.' };
     await assicuraTabelleTl(nomeSchema);
-    await pool.query(
-      `DELETE FROM "${nomeSchema}".processo_prodotto WHERE prodotto_id = $1 AND tl_id = $2`,
-      [prodottoId, tlId]
-    );
-    await pool.query(
-      `UPDATE "${nomeSchema}".tl SET direttrice = NULL, prodotto = NULL
-        WHERE id = $1`,
-      [tlId]
-    );
+
+    // Una riga scritta prima dei gruppi si identifica con la sua chiave `r<id>`.
+    const legacy = /^r(\d+)$/.exec(gruppo);
+    if (legacy) {
+      await pool.query(
+        `DELETE FROM "${nomeSchema}".processo_prodotto WHERE id = $1 AND prodotto_id = $2`,
+        [Number(legacy[1]), prodottoId]
+      );
+    } else {
+      await pool.query(
+        `DELETE FROM "${nomeSchema}".processo_prodotto WHERE prodotto_id = $1 AND gruppo = $2`,
+        [prodottoId, gruppo]
+      );
+    }
     return { success: true };
   } catch (error: unknown) {
     console.error('[eliminaProcessoProdottoAction]', error);

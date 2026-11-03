@@ -58,6 +58,33 @@ vi.mock('@/app/actions/visuraTriage', () => ({
   ottieniVisuraTriageAction: vi.fn().mockResolvedValue({ success: true, visura: null }),
 }));
 
+// Il quadro della check list dei prodotti si legge anche in esito (0.162.0):
+// senza il mock l'azione vera cercherebbe la sessione fuori da una richiesta.
+vi.mock('@/app/actions/checklistProdottiTriage', () => ({
+  ottieniChecklistProdottiAction: vi.fn().mockResolvedValue({
+    success: true,
+    stato: {
+      voci: [],
+      risposte: [],
+      prodotti: [],
+      sintesi: {
+        totale: 0,
+        risposte: 0,
+        mancanti: 0,
+        mancanze: [],
+        chiuse: 0,
+        si: 0,
+        no: 0,
+        qualificazione: 'NON_VALUTABILE',
+        etichetta: 'Qualificazione non misurabile',
+        dettaglio: '',
+        voci: [],
+      },
+    },
+  }),
+  salvaRispostaProdottoAction: vi.fn(),
+}));
+
 // LE TRE CHECK DELLA FASE D'ESITO (0.156.0). Prima vivevano nella conferma,
 // che dura un istante: questo test — che guarda l'esito — non le montava mai.
 // Ora si montano lì, e chiamano le loro azioni: senza il finto, React tratta

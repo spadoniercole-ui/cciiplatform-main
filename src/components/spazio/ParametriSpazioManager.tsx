@@ -80,7 +80,7 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
             passo: 3,
             titolo: 'Catalogo delle TS',
             descrizione:
-              'Il codice identificativo della lavorazione, associato al prodotto e alla sua direttrice. Più TS possono stare sullo stesso prodotto.',
+              'Il codice identificativo della lavorazione, associato al prodotto e alla sua direttrice. Qui restano il codice e la descrizione: il flag della check list sta sul prodotto.',
           },
           {
             href: `/spazio/${codice}/parametri/processo-operativo`,
@@ -88,7 +88,7 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
             passo: 4,
             titolo: 'Processo operativo',
             descrizione:
-              'Dato il prodotto — che porta con sé la TS e la direttrice — le attività con cui l’ufficio lo gestisce, nell’ordine in cui le esegue.',
+              'Dato il prodotto, l’operatività: quali TS la eseguono, le attività e l’esito. Le TS non si escludono — la stessa può servire più operatività, e una operatività può metterne insieme più d’una.',
           },
         ]
       : []),

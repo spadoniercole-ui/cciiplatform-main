@@ -1,17 +1,21 @@
 'use client';
 
-// BLOCCO 4 — IL PROCESSO OPERATIVO (0.161.0).
+// BLOCCO 4 — IL PROCESSO OPERATIVO (0.161.0 → 0.162.0).
 //
-// Dato il prodotto, la TS e la direttrice arrivano da sole: qui si scrive solo
-// che cosa fa l'ufficio per gestirlo. Il prodotto è la chiave, non la
-// «materia»: quel nome resta nella tabella che i report già leggono, ma non
-// compare più nelle schermate di configurazione. Due vocabolari per la stessa
-// cosa erano il modo in cui chi configurava si perdeva.
+// IL PROCESSO È UN'OPERATIVITÀ. Dato il prodotto — che porta con sé TS e
+// direttrice — si descrive che cosa fa l'ufficio: quali TS servono a farlo, con
+// quali attività, in quale ufficio e con quale esito. Non si compila uno schema
+// già pronto: si associa ciò che si è identificato e si salva.
 //
-// LE TS SI SCELGONO DAL PRODOTTO. Il selettore propone solo le TS libere o già
-// legate a questo prodotto: una TS legata a un altro prodotto non può essere
-// lavorata qui, perché il processo dichiara proprio «quale TS lavora questo
-// prodotto».
+// LE TS NON SI ESCLUDONO. La stessa TS può comparire in due operatività dello
+// stesso prodotto — la TS 81 descrive la diffida, e la diffida può essere un
+// passo della sollecitazione e un passo della mora — e una sola operatività può
+// metterne insieme più d'una: le M400 guardano il licenziamento, gli sgravi la
+// vita lavorativa, e servono entrambe a definire il processo.
+//
+// La parola «materia» resta nella tabella che i report leggono, non nelle
+// schermate di configurazione: due vocabolari per la stessa cosa erano il modo
+// in cui chi configurava si perdeva.
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -27,9 +31,13 @@ import { ottieniCatalogoTl } from '@/app/actions/materieLavorazione';
 import { ottieniDirettriciEnte } from '@/app/actions/screeningAzienda';
 import { confermaApp } from '@/components/FinestreApp';
 import { conRitorno } from '@/lib/navigazione/ritorno';
-import { processiDelProdotto, type ProcessoProdotto } from '@/lib/prodotti/processoProdotto';
+import {
+  operativitaDelProdotto,
+  type OperativitaProdotto,
+  type ProcessoProdotto,
+} from '@/lib/prodotti/processoProdotto';
 import type { ProdottoEnte } from '@/lib/prodotti/prodotti';
-import { etichettaTl, type Tl } from '@/lib/titoliEnte/catalogoTl';
+import type { Tl } from '@/lib/titoliEnte/catalogoTl';
 import { MASSIMO_CARATTERI_ATTIVITA_RECUPERO } from '@/lib/titoliEnte/recupero';
 
 interface Props {
@@ -43,7 +51,10 @@ const CLASSE =
 
 interface Bozza {
   prodottoId: number;
-  tlId: number;
+  /** La chiave dell'operatività da modificare; null = nuova. */
+  chiave: string | null;
+  gruppo: string | null;
+  tlIds: number[];
   dipendenza: string | null;
   attivita: string | null;
   esito: string | null;
@@ -94,44 +105,51 @@ export function ProcessoOperativoManager({ nomeSchema, codice, ritorno }: Props)
     setInCorso(true);
     setErrore(null);
     setAvviso(null);
-    const r = await salvaProcessoProdottoAction(nomeSchema, bozza);
+    const r = await salvaProcessoProdottoAction(nomeSchema, {
+      gruppo: bozza.gruppo ?? bozza.chiave,
+      prodottoId: bozza.prodottoId,
+      tlIds: bozza.tlIds,
+      dipendenza: bozza.dipendenza,
+      attivita: bozza.attivita,
+      esito: bozza.esito,
+    });
     if (!r.success) setErrore(r.error || 'Salvataggio non riuscito.');
     else {
-      setAvviso('Processo operativo salvato.');
+      setAvviso('Operatività salvata.');
       setBozza(null);
       await carica();
     }
     setInCorso(false);
   };
 
-  const elimina = async (p: ProdottoEnte, processo: ProcessoProdotto) => {
+  const elimina = async (p: ProdottoEnte, op: OperativitaProdotto) => {
     const ok = await confermaApp(
-      `Togliere la TS ${processo.codice} dal processo di «${p.nome}»? La TS resta nel catalogo delle TS.`,
-      { distruttiva: true, etichettaConferma: 'Togli la TS' }
+      `Togliere l’operatività con ${op.codici.join(', ')} dal processo di «${p.nome}»? Le TS restano nel catalogo.`,
+      { distruttiva: true, etichettaConferma: 'Togli l’operatività' }
     );
     if (!ok) return;
     setInCorso(true);
     setErrore(null);
-    const r = await eliminaProcessoProdottoAction(nomeSchema, p.id, processo.tlId);
+    const r = await eliminaProcessoProdottoAction(nomeSchema, p.id, op.chiave);
     if (!r.success) setErrore(r.error || 'Rimozione non riuscita.');
     else await carica();
     setInCorso(false);
   };
 
+  const commutaTs = (tlId: number) => {
+    if (!bozza) return;
+    setBozza({
+      ...bozza,
+      tlIds: bozza.tlIds.includes(tlId)
+        ? bozza.tlIds.filter((x) => x !== tlId)
+        : [...bozza.tlIds, tlId],
+    });
+  };
+
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
 
-  /** Le TS che si possono applicare a questo prodotto: libere o già sue. */
-  const tlDisponibili = (prodottoId: number) => {
-    const prodotto = prodotti.find((x) => x.id === prodottoId);
-    const gia = new Set(processiDelProdotto(processi, prodottoId).map((x) => x.tlId));
-    return catalogo.filter(
-      (t) =>
-        !gia.has(t.id) &&
-        (!t.prodotto ||
-          (!!prodotto &&
-            String(t.prodotto).trim().toLowerCase() === prodotto.nome.trim().toLowerCase()))
-    );
-  };
+  const tsUsateInProdotto = (prodottoId: number) =>
+    new Set(operativitaDelProdotto(processi, prodottoId).flatMap((o) => o.tlIds));
 
   return (
     <div className="space-y-5">
@@ -149,19 +167,20 @@ export function ProcessoOperativoManager({ nomeSchema, codice, ritorno }: Props)
             >
               prodotto
             </Link>
-            , che porta con sé la TS e la direttrice, si descrivono le attività di gestione. Una
-            riga per TS, nell’ordine in cui l’ufficio le esegue: la prima è quella che il documento
-            cita come procedura.
+            , si descrive l’operatività — quali TS la eseguono, con quali attività. Si associa e si
+            scrive quello che si è identificato: non c’è uno schema da compilare.
           </p>
-          <p className="text-[11px] text-slate-500 mt-1">
-            L’ufficio è il nome della direttrice del prodotto: si scrive una volta in{' '}
+          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+            Le TS non si escludono: la stessa TS può servire più operatività, e un’operatività può
+            metterne insieme più d’una. L’ufficio è il nome della direttrice del prodotto, e si
+            sceglie dall’elenco scritto in{' '}
             <Link
               href={conRitorno(`/spazio/${codice}/parametri/direttrici-ente`, ritorno)}
               className="font-bold text-sky-700 hover:underline"
             >
               Direttrici
             </Link>
-            , e qui si sceglie dall’elenco.
+            .
           </p>
         </div>
       </div>
@@ -192,8 +211,8 @@ export function ProcessoOperativoManager({ nomeSchema, codice, ritorno }: Props)
       ) : (
         <div className="space-y-3">
           {prodotti.map((p) => {
-            const suoi = processiDelProdotto(processi, p.id);
-            const disponibili = tlDisponibili(p.id);
+            const operativita = operativitaDelProdotto(processi, p.id);
+            const giaUsate = tsUsateInProdotto(p.id);
             const formAperto = bozza?.prodottoId === p.id;
             return (
               <div key={p.id} className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
@@ -203,59 +222,67 @@ export function ProcessoOperativoManager({ nomeSchema, codice, ritorno }: Props)
                   </h3>
                   <span className="text-[10px] text-slate-400">{p.direttrice}</span>
                   <span className="text-[10px] text-slate-400 tabular-nums">
-                    {suoi.length === 0
-                      ? 'nessuna TS'
-                      : suoi.length === 1
-                        ? '1 TS'
-                        : `${suoi.length} TS`}
+                    {operativita.length === 0
+                      ? 'nessuna operatività'
+                      : operativita.length === 1
+                        ? '1 operatività'
+                        : `${operativita.length} operatività`}
                   </span>
-                  {!formAperto && disponibili.length > 0 && (
+                  {!formAperto && (
                     <button
                       type="button"
                       onClick={() =>
                         setBozza({
                           prodottoId: p.id,
-                          tlId: 0,
+                          chiave: null,
+                          gruppo: null,
+                          tlIds: [],
                           dipendenza: p.direttrice,
                           attivita: null,
                           esito: null,
                         })
                       }
-                      disabled={inCorso || bozza !== null}
+                      disabled={inCorso || bozza !== null || catalogo.length === 0}
                       className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-[10px] font-bold uppercase"
                     >
-                      <Link2 className="w-3 h-3" /> Aggiungi una TS
+                      <Plus className="w-3 h-3" /> Aggiungi un’operatività
                     </button>
                   )}
                 </div>
 
-                {suoi.length === 0 ? (
+                {operativita.length === 0 ? (
                   <p className="text-[11px] text-amber-800 leading-relaxed">
-                    Nessun processo: questo prodotto non sa ancora chi lo lavora né con quali
-                    attività.
+                    Nessuna operatività: questo prodotto non sa ancora con quali TS e con quali
+                    attività l’ufficio lo lavora.
                   </p>
                 ) : (
                   <ul className="space-y-1.5">
-                    {suoi.map((x, i) => (
+                    {operativita.map((op, i) => (
                       <li
-                        key={x.id}
+                        key={op.chiave}
                         className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5"
                       >
                         <span className="text-[9px] font-bold text-slate-400 tabular-nums mt-0.5 w-4 shrink-0">
                           {i + 1}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-bold text-slate-800">
-                            <span className="font-mono text-slate-500">{x.codice}</span> ·{' '}
-                            {x.tipologia}
+                          <p className="text-[11px] font-bold text-slate-800 flex flex-wrap gap-1">
+                            {op.codici.map((c, k) => (
+                              <span
+                                key={`${c}-${k}`}
+                                className="font-mono rounded bg-white border border-slate-200 px-1 text-slate-600"
+                              >
+                                {c}
+                              </span>
+                            ))}
                           </p>
                           <p className="text-[10px] text-slate-500">
-                            {x.dipendenza || 'senza ufficio'}
-                            {x.esito ? ` · esito: ${x.esito}` : ''}
+                            {op.dipendenza || 'senza ufficio'}
+                            {op.esito ? ` · esito: ${op.esito}` : ''}
                           </p>
-                          {x.attivita && (
+                          {op.attivita && (
                             <p className="text-[10px] text-slate-600 whitespace-pre-line mt-0.5">
-                              {x.attivita}
+                              {op.attivita}
                             </p>
                           )}
                         </div>
@@ -264,10 +291,12 @@ export function ProcessoOperativoManager({ nomeSchema, codice, ritorno }: Props)
                           onClick={() =>
                             setBozza({
                               prodottoId: p.id,
-                              tlId: x.tlId,
-                              dipendenza: x.dipendenza,
-                              attivita: x.attivita,
-                              esito: x.esito,
+                              chiave: op.chiave,
+                              gruppo: op.gruppo,
+                              tlIds: op.tlIds,
+                              dipendenza: op.dipendenza,
+                              attivita: op.attivita,
+                              esito: op.esito,
                             })
                           }
                           disabled={inCorso || bozza !== null}
@@ -277,10 +306,10 @@ export function ProcessoOperativoManager({ nomeSchema, codice, ritorno }: Props)
                         </button>
                         <button
                           type="button"
-                          onClick={() => void elimina(p, x)}
+                          onClick={() => void elimina(p, op)}
                           disabled={inCorso}
                           className="p-1 rounded text-slate-400 hover:text-red-700 hover:bg-red-50 disabled:opacity-40 shrink-0"
-                          aria-label={`Togli la TS ${x.codice} da ${p.nome}`}
+                          aria-label={`Togli l’operatività ${op.codici.join(', ')} da ${p.nome}`}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -293,9 +322,7 @@ export function ProcessoOperativoManager({ nomeSchema, codice, ritorno }: Props)
                   <div className="rounded-lg border border-sky-200 bg-sky-50/40 p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                        {suoi.some((x) => x.tlId === bozza.tlId)
-                          ? 'Modifica il processo'
-                          : 'Aggiungi una TS al processo'}
+                        {bozza.chiave ? 'Modifica l’operatività' : 'Nuova operatività'}
                       </p>
                       <button
                         type="button"
@@ -307,29 +334,55 @@ export function ProcessoOperativoManager({ nomeSchema, codice, ritorno }: Props)
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
+
+                    <fieldset className="space-y-1">
+                      <legend className="text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                        TS che la eseguono ({bozza.tlIds.length} scelte)
+                      </legend>
+                      <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 space-y-1">
+                        {catalogo.map((t) => {
+                          const scelta = bozza.tlIds.includes(t.id);
+                          const altrove = giaUsate.has(t.id) && !scelta;
+                          return (
+                            <label
+                              key={t.id}
+                              className={`flex items-start gap-2 text-[11px] leading-snug rounded px-1 py-0.5 ${
+                                scelta ? 'bg-sky-50 text-slate-900' : 'text-slate-700'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={scelta}
+                                onChange={() => commutaTs(t.id)}
+                                className="mt-0.5"
+                              />
+                              <span className="min-w-0">
+                                <span className="font-mono">{t.codice}</span> · {t.descrizione}
+                                {altrove && (
+                                  <span className="block text-[9px] text-slate-400">
+                                    già in un’altra operatività di questo prodotto
+                                  </span>
+                                )}
+                                {t.prodotto &&
+                                  t.prodotto.trim().toLowerCase() !==
+                                    p.nome.trim().toLowerCase() && (
+                                    <span className="block text-[9px] text-slate-400">
+                                      nata sul prodotto: {t.prodotto}
+                                    </span>
+                                  )}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[9px] text-slate-400 leading-relaxed">
+                        Una TS può stare in più operatività: spuntarla qui non la toglie a un’altra.
+                      </p>
+                    </fieldset>
+
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
                       <label className="md:col-span-5 text-[9px] font-bold uppercase tracking-wider text-slate-600">
-                        TS
-                        <select
-                          value={bozza.tlId || ''}
-                          onChange={(e) => setBozza({ ...bozza, tlId: Number(e.target.value) })}
-                          className={`${CLASSE} mt-0.5`}
-                          aria-label={`TS del processo di ${p.nome}`}
-                        >
-                          <option value="">Scegli la TS…</option>
-                          {catalogo
-                            .filter(
-                              (t) => t.id === bozza.tlId || disponibili.some((d) => d.id === t.id)
-                            )
-                            .map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {etichettaTl(t)}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                      <label className="md:col-span-4 text-[9px] font-bold uppercase tracking-wider text-slate-600">
-                        Ufficio che lo esegue
+                        Ufficio che la esegue
                         <select
                           value={bozza.dipendenza ?? ''}
                           onChange={(e) =>
@@ -346,7 +399,7 @@ export function ProcessoOperativoManager({ nomeSchema, codice, ritorno }: Props)
                           ))}
                         </select>
                       </label>
-                      <label className="md:col-span-3 text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                      <label className="md:col-span-7 text-[9px] font-bold uppercase tracking-wider text-slate-600">
                         Esito
                         <input
                           type="text"
@@ -377,7 +430,11 @@ export function ProcessoOperativoManager({ nomeSchema, codice, ritorno }: Props)
                       <button
                         type="button"
                         onClick={() => void salva()}
-                        disabled={inCorso || !bozza.tlId}
+                        disabled={
+                          inCorso ||
+                          bozza.tlIds.length === 0 ||
+                          (bozza.attivita ?? '').trim() === ''
+                        }
                         className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-[10px] font-bold uppercase hover:bg-slate-800 disabled:bg-slate-300"
                       >
                         <Save className="w-3 h-3" /> {inCorso ? 'Salvataggio…' : 'Salva'}
@@ -400,8 +457,14 @@ export function ProcessoOperativoManager({ nomeSchema, codice, ritorno }: Props)
             className="font-bold underline"
           >
             Catalogo delle TS
-          </Link>
-          .
+          </Link>{' '}
+          (il pulsante lo trovi qui sopra, appena c’è una TS da spuntare).
+        </p>
+      )}
+      {catalogo.length === 0 && (
+        <p className="text-[10px] text-slate-400 flex items-center gap-1">
+          <Link2 className="w-3 h-3" /> Le TS si scrivono una volta sola nel catalogo e si riusano
+          qui.
         </p>
       )}
     </div>

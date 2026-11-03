@@ -67,9 +67,21 @@ export async function assicuraTabelleProdotti(nomeSchema: string): Promise<void>
       aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
+  // IL GRUPPO TIENE INSIEME LE TS DI UNA STESSA OPERATIVITÀ (0.162.0).
+  // Le righe restano una per TS perché i report le leggono così; il gruppo
+  // permette di modificarle insieme. La colonna si aggiunge anche agli spazi
+  // già attivi, e le righe scritte prima restano senza gruppo: ognuna è
+  // un'operatività di sé.
   await eseguiDdlTenant(
-    sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_processo_prodotto_unico
-        ON ${s}.processo_prodotto (prodotto_id, tl_id)`
+    sql`ALTER TABLE ${s}.processo_prodotto ADD COLUMN IF NOT EXISTS gruppo TEXT`
+  );
+  // La stessa TS non è più esclusiva di un prodotto: può servire due
+  // operatività dello stesso prodotto (una diffida che è anche un passo della
+  // mora) e prodotti diversi. Il vecchio indice unico lo impediva.
+  await eseguiDdlTenant(sql`DROP INDEX IF EXISTS ${s}.idx_processo_prodotto_unico`);
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_processo_prodotto_gruppo
+        ON ${s}.processo_prodotto (prodotto_id, gruppo)`
   );
 
   await eseguiDdlTenant(

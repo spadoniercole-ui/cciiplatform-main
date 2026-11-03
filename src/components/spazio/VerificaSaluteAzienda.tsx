@@ -78,6 +78,7 @@ import { ottieniParametriScenariAction } from '@/app/actions/parametriScenari';
 import { ottieniScreeningAzienda } from '@/app/actions/screeningAzienda';
 import { riepilogoCheckList } from '@/lib/triage/checkListRiepilogo';
 import { PerimetroTriage } from '@/components/spazio/PerimetroTriage';
+import { ottieniChecklistProdottiAction } from '@/app/actions/checklistProdottiTriage';
 import { ChecklistProdottiTriage } from '@/components/spazio/ChecklistProdottiTriage';
 import type { SintesiChecklistProdotti } from '@/lib/prodotti/prodotti';
 import { CheckListTriage } from '@/components/spazio/CheckListTriage';
@@ -220,7 +221,7 @@ interface Props {
   aziendaDaRiprendere?: number | null;
 }
 
-type Fase = 'caricamento' | 'conferma' | 'esito' | 'presa_in_carico';
+type Fase = 'caricamento' | 'conferma' | 'checklist' | 'esito' | 'presa_in_carico';
 
 const CAMPI: { chiave: keyof AnagraficaEstratta; label: string; numerico?: boolean }[] = [
   { chiave: 'ragioneSociale', label: 'Ragione sociale' },
@@ -423,6 +424,26 @@ export function VerificaSaluteAzienda({
    */
   const [checklistProdotti, setChecklistProdotti] = useState<SintesiChecklistProdotti | null>(null);
   const checklistProdottiIncompleta = (checklistProdotti?.mancanti ?? 0) > 0;
+
+  /**
+   * IL QUADRO DELLA CHECK LIST SI CONOSCE ANCHE IN ESITO (0.162.0).
+   *
+   * Il questionario si compila subito dopo l'acquisizione dei documenti, nella
+   * fase sua; qui serve il quadro, perché «Procedi» non deve chiudere una
+   * posizione con domande lasciate in sospeso — e una verifica riaperta, che
+   * salta la fase, deve comunque vedere ciò che manca.
+   */
+  useEffect(() => {
+    if (!aziendaId || fase !== 'esito') return;
+    let annullato = false;
+    void ottieniChecklistProdottiAction(nomeSchema, aziendaId).then((r) => {
+      if (annullato || !r.success) return;
+      setChecklistProdotti(r.stato.sintesi);
+    });
+    return () => {
+      annullato = true;
+    };
+  }, [nomeSchema, aziendaId, fase]);
 
   // Lo storico rende vera la promessa fatta a schermo — "la verifica resta
   // consultabile" — che finora non lo era: esito e data stavano nel
@@ -695,6 +716,7 @@ export function VerificaSaluteAzienda({
     setEsitoSoglie(null);
     // L'esito della check è dell'azienda appena creata, non della precedente.
     setPerimetroEsito(null);
+    setChecklistProdotti(null);
     setErroreSoglie(null);
     setRigheVera([]);
     setLavorazioni([]);
@@ -1319,7 +1341,10 @@ export function VerificaSaluteAzienda({
         url.searchParams.set('azienda', String(c.aziendaId));
         window.history.replaceState(null, '', url.toString());
       }
-      setFase('esito');
+      // I DOCUMENTI SONO ACQUISITI: LA CHECK LIST VIENE PRIMA DELL'ESITO
+      // (0.162.0). Il sistema resta in stand-by e chiede le domande dei
+      // prodotti accesi; la valutazione si apre quando hanno una risposta.
+      setFase('checklist');
     } catch (e) {
       setErrore(String(e));
     } finally {
@@ -2344,6 +2369,55 @@ export function VerificaSaluteAzienda({
             <ArrowRight className="w-3.5 h-3.5" />
             Vai alla scheda azienda
           </a>
+        </div>
+      )}
+
+      {fase === 'checklist' && aziendaId && (
+        <div className="space-y-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <div>
+              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                Documenti acquisiti — check list dei prodotti
+              </h3>
+              <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                Visura e prospetti sono stati letti. Il sistema resta in stand-by finché le domande
+                scritte nei Parametri sui prodotti con il flag attivo non hanno una risposta: le
+                risposte entrano nel quadro di valutazione insieme all’elaborazione dei prospetti.
+                Se nessun prodotto è in check list non c’è nulla da chiedere, e la valutazione si
+                apre subito.
+              </p>
+            </div>
+            <ChecklistProdottiTriage
+              nomeSchema={nomeSchema}
+              aziendaId={aziendaId}
+              onEsito={setChecklistProdotti}
+            />
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={() => setFase('esito')}
+                disabled={inCorso || checklistProdotti === null || checklistProdottiIncompleta}
+                title={
+                  checklistProdottiIncompleta
+                    ? 'Completa la check list: le domande devono avere una risposta.'
+                    : undefined
+                }
+                className="flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700 disabled:bg-slate-300"
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
+                {checklistProdotti === null
+                  ? 'Lettura della check list…'
+                  : checklistProdottiIncompleta
+                    ? 'Rispondi a tutte le domande'
+                    : 'Continua con la valutazione'}
+              </button>
+              {checklistProdottiIncompleta && (
+                <p className="text-[11px] text-amber-900 leading-relaxed">
+                  Restano {checklistProdotti?.mancanti} domande senza risposta.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -3398,17 +3472,27 @@ export function VerificaSaluteAzienda({
             )}
           </div>
 
-          {/* LA CHECK LIST DEI PRODOTTI (0.161.0): dopo l'acquisizione dei
-              documenti il sistema va in stand-by e chiede le domande scritte sui
-              prodotti con il flag attivo. È il primo elemento di valutazione
-              insieme a visura e prospetti. */}
-          <div className="border-t border-slate-200 pt-4">
-            <ChecklistProdottiTriage
-              nomeSchema={nomeSchema}
-              aziendaId={aziendaId!}
-              onEsito={setChecklistProdotti}
-            />
-          </div>
+          {/* LA CHECK LIST SI COMPILA PRIMA DELL'ESITO (0.162.0). Qui se ne
+              legge il quadro: la valutazione la cita accanto alle soglie, e se
+              una domanda è rimasta senza risposta si torna alla fase sua. */}
+          {checklistProdotti && checklistProdotti.totale > 0 && (
+            <div className="border-t border-slate-200 pt-4">
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                <span className="font-bold">Check list dei prodotti:</span>{' '}
+                {checklistProdotti.etichetta.toLowerCase()} — {checklistProdotti.risposte} risposte
+                su {checklistProdotti.totale} domande.{' '}
+                {checklistProdottiIncompleta && (
+                  <button
+                    type="button"
+                    onClick={() => setFase('checklist')}
+                    className="font-bold text-sky-700 hover:underline"
+                  >
+                    Rispondi alle domande che mancano
+                  </button>
+                )}
+              </p>
+            </div>
+          )}
 
           {/* LA CHECK OBBLIGATORIA (0.153.0): le voci sono le TS contrassegnate
               nei Parametri, i codici arrivano dai titoli dell'ente. */}
@@ -3479,7 +3563,14 @@ export function VerificaSaluteAzienda({
                 Documenti acquisiti, ma la check list dei prodotti è incompleta: restano{' '}
                 {checklistProdotti?.mancanti} domande senza risposta. Finché mancano la presa in
                 carico resta sospesa — le risposte sono parte della valutazione insieme a visura e
-                prospetti.
+                prospetti.{' '}
+                <button
+                  type="button"
+                  onClick={() => setFase('checklist')}
+                  className="font-bold underline"
+                >
+                  Torna alla check list
+                </button>
               </p>
             )}
             {perimetroIncompleto && (
