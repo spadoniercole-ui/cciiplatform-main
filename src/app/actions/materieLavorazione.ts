@@ -193,7 +193,7 @@ export async function ottieniCatalogoTl(
     await assicuraTabelleTl(nomeSchema);
     const r = await pool.query(
       `SELECT t.id, t.codice, t.descrizione, t.check_list, t.verso_check_list, t.ordine,
-              t.direttrice, t.prodotto,
+              t.direttrice, t.prodotto, t.prodotti,
               (SELECT COUNT(*) FROM "${nomeSchema}".materia_tl a WHERE a.tl_id = t.id) AS materie
          FROM "${nomeSchema}".tl t
         ORDER BY t.ordine, t.codice, t.id`
@@ -222,9 +222,16 @@ export async function salvaTlAction(
     const dato = normalizzaTl(input);
     await assicuraTabelleTl(nomeSchema);
 
+    // UNA TS, PIÙ PRODOTTI (0.166.0). Le associazioni vivono nell'elenco; la
+    // coppia singola resta scritta con la prima, perché le letture che ne
+    // mostrano una sola la trovano senza dover leggere il jsonb.
+    const prodotti = dato.prodotti ?? [];
+    const primo = prodotti[0] ?? null;
+
     // Lo stesso codice non può esistere due volte: è l'identità della TS nei
     // documenti, e due righe con lo stesso codice sarebbero due lavorazioni
-    // diverse chiamate allo stesso modo.
+    // diverse chiamate allo stesso modo. Più prodotti non fanno eccezione: si
+    // aggiungono alla TS che c'è, non a una seconda TS con lo stesso codice.
     const doppia = await pool.query(
       `SELECT 1 FROM "${nomeSchema}".tl
         WHERE lower(btrim(codice)) = $1 AND ($2::int IS NULL OR id <> $2::int)`,
@@ -243,7 +250,7 @@ export async function salvaTlAction(
         `UPDATE "${nomeSchema}".tl
             SET codice = $2, descrizione = $3, check_list = $4,
                 verso_check_list = $5, direttrice = $6, prodotto = $7,
-                aggiornato_il = now()
+                prodotti = $8::jsonb, aggiornato_il = now()
           WHERE id = $1
           RETURNING id`,
         [
@@ -252,8 +259,9 @@ export async function salvaTlAction(
           dato.descrizione,
           dato.checkList === true,
           dato.versoCheckList,
-          dato.direttrice,
-          dato.prodotto,
+          primo?.direttrice ?? null,
+          primo?.prodotto ?? null,
+          JSON.stringify(prodotti),
         ]
       );
       if ((r.rowCount ?? 0) === 0) return { success: false, error: 'TS non trovata.' };
@@ -265,8 +273,8 @@ export async function salvaTlAction(
     );
     const r = await pool.query(
       `INSERT INTO "${nomeSchema}".tl
-         (codice, descrizione, check_list, verso_check_list, ordine, direttrice, prodotto)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (codice, descrizione, check_list, verso_check_list, ordine, direttrice, prodotto, prodotti)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
        RETURNING id`,
       [
         dato.codice,
@@ -274,8 +282,9 @@ export async function salvaTlAction(
         dato.checkList === true,
         dato.versoCheckList,
         Number(ordine.rows[0]?.n ?? 1),
-        dato.direttrice,
-        dato.prodotto,
+        primo?.direttrice ?? null,
+        primo?.prodotto ?? null,
+        JSON.stringify(prodotti),
       ]
     );
     return { success: true, id: Number(r.rows[0].id) };

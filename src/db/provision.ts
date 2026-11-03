@@ -2305,6 +2305,29 @@ export async function assicuraTabelleTl(nomeSchema: string): Promise<void> {
   await eseguiDdlTenant(
     sql`CREATE INDEX IF NOT EXISTS idx_tl_prodotto ON ${s}.tl (direttrice, prodotto)`
   );
+  // UNA TS, PIÙ PRODOTTI (0.166.0). L'associazione è tanti a tanti: la stessa
+  // lavorazione serve più prodotti, e con una colonna sola la seconda non si
+  // poteva scrivere — il codice risultava già usato e la TS andava duplicata.
+  // Le associazioni stanno in un elenco jsonb; `direttrice` e `prodotto`
+  // restano e portano la prima, perché il processo operativo continua a
+  // leggerle per dire su quale prodotto la TS è nata.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.tl ADD COLUMN IF NOT EXISTS prodotti JSONB NOT NULL DEFAULT '[]'::jsonb`
+  );
+  // Gli spazi già configurati hanno la coppia singola: diventa la prima
+  // associazione. Si fa solo dove l'elenco è ancora vuoto, così riavviare non
+  // riscrive le scelte fatte dopo.
+  await eseguiDdlTenant(
+    sql`UPDATE ${s}.tl
+           SET prodotti = jsonb_build_array(
+                 jsonb_build_object(
+                   'direttrice', COALESCE(direttrice, ''),
+                   'prodotto', btrim(prodotto)
+                 )
+               )
+         WHERE jsonb_array_length(prodotti) = 0
+           AND prodotto IS NOT NULL AND btrim(prodotto) <> ''`
+  );
 
   // L'ASSOCIAZIONE: la materia mutua la coppia direttrice/prodotto e porta il
   // processo (ufficio, passi, esito, ordine). La chiave resta (materia, TS):

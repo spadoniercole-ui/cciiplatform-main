@@ -26,6 +26,8 @@ import {
 import { ottieniProdottiEnte } from '@/app/actions/prodottiEnte';
 import type { ProdottoEnte } from '@/lib/prodotti/prodotti';
 import {
+  chiaveProdottoTl,
+  etichettaProdottoTl,
   MASSIMO_CARATTERI_CODICE_TL,
   MASSIMO_CARATTERI_DESCRIZIONE_TL,
   type InputTl,
@@ -48,6 +50,7 @@ const VUOTA: InputTl = {
   descrizione: '',
   checkList: false,
   versoCheckList: null,
+  prodotti: [],
   direttrice: null,
   prodotto: null,
 };
@@ -82,6 +85,24 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
     void carica();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema]);
+
+  /**
+   * UN PRODOTTO IN PIÙ O IN MENO (0.166.0). L'associazione è tanti a tanti:
+   * spuntare un prodotto non toglie la TS agli altri, e la direttrice arriva
+   * dal prodotto — non si riscrive a mano.
+   */
+  const commutaProdotto = (prodotto: ProdottoEnte) => {
+    if (!bozza) return;
+    const scelti = bozza.prodotti ?? [];
+    const chiave = chiaveProdottoTl(prodotto.direttrice, prodotto.nome);
+    const gia = scelti.some((p) => chiaveProdottoTl(p.direttrice, p.prodotto) === chiave);
+    setBozza({
+      ...bozza,
+      prodotti: gia
+        ? scelti.filter((p) => chiaveProdottoTl(p.direttrice, p.prodotto) !== chiave)
+        : [...scelti, { direttrice: prodotto.direttrice, prodotto: prodotto.nome }],
+    });
+  };
 
   const salva = async () => {
     if (!bozza) return;
@@ -122,9 +143,9 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
             Catalogo delle TS
           </h2>
           <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-            Una TS è un <strong>codice</strong>, una <strong>descrizione</strong> e il{' '}
-            <strong>prodotto</strong> a cui appartiene. Nient&apos;altro: si scrive una volta sola,
-            non una volta per prodotto. Il{' '}
+            Una TS è un <strong>codice</strong>, una <strong>descrizione</strong> e i{' '}
+            <strong>prodotti</strong> che la usano: la stessa lavorazione serve più prodotti, quindi
+            si scrive una volta sola e si spunta dove serve. Il{' '}
             <Link
               href={conRitorno(`/spazio/${codice}/parametri/prodotti`, ritorno)}
               className="font-bold text-sky-700 hover:underline"
@@ -186,12 +207,14 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
                   <td className="px-3 py-1.5 font-mono font-bold text-slate-800">{tl.codice}</td>
                   <td className="py-1.5 text-slate-700">
                     {tl.descrizione}
-                    {tl.prodotto && (
-                      <span className="block text-[10px] text-slate-500">
-                        {tl.direttrice ? `${tl.direttrice} · ` : ''}
-                        {tl.prodotto}
+                    {tl.prodotti.map((p, i) => (
+                      <span
+                        key={`${p.direttrice}|${p.prodotto}|${i}`}
+                        className="block text-[10px] text-slate-500"
+                      >
+                        {etichettaProdottoTl(p)}
                       </span>
-                    )}
+                    ))}
                   </td>
                   <td
                     className={`py-1.5 text-right tabular-nums ${
@@ -260,44 +283,51 @@ export function TlCatalogoManager({ nomeSchema, codice, ritorno }: Props) {
               </span>
             </label>
           </div>
-          {/* BLOCCO 3 (0.161.0): la TS è associata al prodotto e alla sua
-              direttrice. Il prodotto si sceglie dall'elenco dei prodotti
-              configurati; la direttrice arriva da lì, e non si riscrive. */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-            <label className="md:col-span-6 text-[9px] font-bold uppercase tracking-wider text-slate-600">
-              Prodotto a cui appartiene
-              <select
-                value={bozza.prodotto ?? ''}
-                onChange={(e) => {
-                  const scelto = prodotti.find((p) => p.nome === e.target.value);
-                  setBozza({
-                    ...bozza,
-                    prodotto: e.target.value || null,
-                    direttrice: scelto?.direttrice ?? bozza.direttrice ?? null,
-                  });
-                }}
-                className={`${CLASSE} mt-0.5`}
-                aria-label="Prodotto della TS"
-              >
-                <option value="">Nessun prodotto (TS storica)</option>
-                {prodotti.map((p) => (
-                  <option key={p.id} value={p.nome}>
-                    {p.direttrice} · {p.nome}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="md:col-span-6 text-[9px] font-bold uppercase tracking-wider text-slate-600">
-              Direttrice
-              <input
-                type="text"
-                value={bozza.direttrice ?? ''}
-                readOnly
-                className={`${CLASSE} mt-0.5 bg-slate-50 text-slate-500`}
-                aria-label="Direttrice della TS"
-              />
-            </label>
-          </div>
+          {/* BLOCCO 3 (0.161.0 → 0.166.0): la TS è associata ai prodotti e
+              alle loro direttrici, e le associazioni sono più d'una. Il
+              prodotto si sceglie dall'elenco dei prodotti configurati; la
+              direttrice arriva da lì, e non si riscrive. */}
+          <fieldset className="space-y-1">
+            <legend className="text-[9px] font-bold uppercase tracking-wider text-slate-600">
+              Prodotti a cui appartiene ({(bozza.prodotti ?? []).length} scelti)
+            </legend>
+            <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 space-y-1">
+              {prodotti.length === 0 && (
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  Nessun prodotto configurato: la TS resta «storica» finché i prodotti non ci sono.
+                </p>
+              )}
+              {prodotti.map((p) => {
+                const chiave = chiaveProdottoTl(p.direttrice, p.nome);
+                const scelta = (bozza.prodotti ?? []).some(
+                  (x) => chiaveProdottoTl(x.direttrice, x.prodotto) === chiave
+                );
+                return (
+                  <label
+                    key={p.id}
+                    className={`flex items-start gap-2 text-[11px] leading-snug rounded px-1 py-0.5 ${
+                      scelta ? 'bg-sky-50 text-slate-900' : 'text-slate-700'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={scelta}
+                      onChange={() => commutaProdotto(p)}
+                      className="mt-0.5"
+                    />
+                    <span className="min-w-0">
+                      {p.nome}
+                      <span className="block text-[9px] text-slate-400">{p.direttrice}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className="text-[9px] text-slate-400 leading-relaxed">
+              Una TS può appartenere a più prodotti, e un prodotto a più TS: spuntarla qui non la
+              toglie agli altri.
+            </p>
+          </fieldset>
           <div className="flex justify-end gap-2">
             <button
               type="button"

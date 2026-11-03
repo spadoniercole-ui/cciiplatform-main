@@ -1,3 +1,24 @@
+## 0.166.0 — 2026-11-03
+
+**Una TS, più prodotti.** L'associazione è tanti a tanti, come il lavoro chiede: la stessa
+lavorazione serve la sollecitazione e la mora, una direttrice e l'altra, e finché il prodotto era
+una colonna sola la seconda associazione non si poteva scrivere.
+
+- **Il codice resta unico, i prodotti no.** Il catalogo era già un codice con la sua descrizione,
+  ma portava un solo prodotto: provare ad associare la stessa TS a un secondo prodotto rispondeva
+  «esiste già una TS con il codice 81», e l'unica via era duplicare la TS — cioè tornare al
+  problema che il catalogo piatto aveva risolto. Ora si modifica la TS e si spuntano i prodotti
+  che la usano, quanti servono.
+- **La direttrice arriva dal prodotto.** Ogni associazione porta con sé la sua direttrice, presa
+  dall'elenco dei prodotti configurati: il nome dell'ufficio non si riscrive e non si può
+  sbagliare.
+- **Nessuna migrazione da fare a mano.** Al primo accesso il prodotto già scritto sulla TS diventa
+  la sua prima associazione; le TS che non ne hanno nessuna restano «storiche» e valgono come
+  prima. Il processo operativo continua a trovare la coppia singola, perché la prima associazione
+  resta scritta anche lì.
+- **Una TS per codice, non due.** Due righe con lo stesso codice restano un errore: sono due
+  lavorazioni diverse chiamate allo stesso modo, e nei documenti il codice è quello che si cita.
+
 ## 0.165.0 — 2026-11-03
 
 **I prodotti e le loro domande si mantengono in blocco, con un foglio Excel che si può

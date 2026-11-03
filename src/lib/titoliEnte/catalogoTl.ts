@@ -1,16 +1,24 @@
 // src/lib/titoliEnte/catalogoTl.ts
 //
-// IL CATALOGO DELLE TS — codice, descrizione, flag per la check list (0.159.0).
+// IL CATALOGO DELLE TS — codice, descrizione, prodotti a cui appartiene (0.159.0 → 0.166.0).
 //
-// Lo schema è questo, e non un altro: una TS è un codice, una descrizione e un
-// contrassegno. Nient'altro. L'ufficio, i passi e l'esito non stanno qui: sono
-// il processo con cui una materia lavora quella TS su una direttrice e un
-// prodotto, e vivono nell'associazione (`materia_tl`). I titoli di credito
-// mettono insieme TS, direttrice e prodotto e costruiscono la vestizione
-// legale — atto, presupposto, riferimento interno.
+// Lo schema è questo, e non un altro: una TS è un codice, una descrizione e
+// l'elenco dei prodotti che la usano. L'ufficio, i passi e l'esito non stanno
+// qui: sono il processo con cui una materia lavora quella TS su una direttrice
+// e un prodotto (`materia_tl`). I titoli di credito mettono insieme TS,
+// direttrice e prodotto e costruiscono la vestizione legale — atto, presupposto,
+// riferimento interno.
+//
+// UNA TS, PIÙ PRODOTTI (0.166.0). L'associazione è tanti a tanti: la stessa
+// lavorazione serve più prodotti — la diffida come passo della sollecitazione e
+// come passo della mora — e finché il prodotto era una colonna sola la seconda
+// associazione non si poteva scrivere: il codice risultava già usato e la TS
+// andava duplicata, tornando al problema che il catalogo piatto aveva risolto.
+// Ora le associazioni sono un elenco, e il codice resta unico: due righe con lo
+// stesso codice sarebbero due lavorazioni diverse chiamate allo stesso modo.
 //
 // Prima la TS era scritta dentro il prodotto: la stessa TS 81 compariva tante
-// volte quanti erano i prodotti che la usavano, e ogni copia portava con sé
+// volte quanti erano i prodotti che la usava, e ogni copia portava con sé
 // ufficio, passi ed esito. Il risultato era che la stessa lavorazione andava
 // corretta in quattro punti, e che il prodotto sembrava definire la TS invece
 // di essere il fatto su cui la materia la applica.
@@ -26,7 +34,17 @@ export const MASSIMO_CARATTERI_CODICE_TL = 24;
 /** La descrizione è il nome della lavorazione: «Diffida M400». */
 export const MASSIMO_CARATTERI_DESCRIZIONE_TL = 200;
 
-/** Una TS del catalogo: codice, descrizione, contrassegno per la check list. */
+/**
+ * Un prodotto a cui la TS appartiene, con la sua direttrice. La coppia è
+ * l'identità dell'associazione: il prodotto da solo non basta, perché lo stesso
+ * nome può esistere sotto due uffici.
+ */
+export interface ProdottoTl {
+  direttrice: string;
+  prodotto: string;
+}
+
+/** Una TS del catalogo: codice, descrizione, prodotti, contrassegno per la check list. */
 export interface Tl {
   id: number;
   codice: string;
@@ -34,10 +52,14 @@ export interface Tl {
   /** La TS entra nella check obbligatoria del triage. */
   checkList: boolean;
   /**
-   * LA TS APPARTIENE A UN PRODOTTO (0.161.0). Il codice identificativo si
-   * associa al prodotto e alla sua direttrice: è il terzo blocco dei Parametri.
-   * Facoltativi perché le TS scritte prima di questa associazione restano
-   * valide finché qualcuno non dice a quale prodotto appartengono.
+   * I prodotti che la usano (0.166.0). Può essere vuoto: le TS scritte prima
+   * di questa associazione restano valide finché qualcuno non dice dove stanno.
+   */
+  prodotti: ProdottoTl[];
+  /**
+   * La prima associazione, per le letture che ne mostrano una sola (il
+   * processo operativo dice su quale prodotto la TS è «nata»). È una copia di
+   * `prodotti[0]`, non un secondo dato da tenere allineato a mano.
    */
   direttrice?: string | null;
   prodotto?: string | null;
@@ -54,6 +76,9 @@ export interface InputTl {
   descrizione: string;
   checkList?: boolean;
   versoCheckList?: VersoCheckList | null;
+  /** I prodotti scelti: quanti se ne vogliono, anche nessuno. */
+  prodotti?: ProdottoTl[];
+  /** La coppia singola resta accettata: chi manda una sola associazione. */
   direttrice?: string | null;
   prodotto?: string | null;
 }
@@ -68,6 +93,25 @@ export function chiaveTl(codice: string | null | undefined): string {
   return unaRiga(codice).toLowerCase();
 }
 
+/** La chiave dell'associazione: la coppia direttrice/prodotto, senza grafia. */
+export function chiaveProdottoTl(
+  direttrice: string | null | undefined,
+  prodotto: string | null | undefined
+): string {
+  return `${unaRiga(direttrice).toLowerCase()}|${unaRiga(prodotto).toLowerCase()}`;
+}
+
+/**
+ * Le associazioni richieste, comunque siano arrivate. Chi manda solo la coppia
+ * singola — una schermata vecchia, un backup — non resta senza prodotto.
+ */
+export function prodottiDelInput(input: InputTl): ProdottoTl[] {
+  const elenco = Array.isArray(input.prodotti) ? input.prodotti : [];
+  if (elenco.length > 0) return elenco;
+  const prodotto = unaRiga(input.prodotto ?? '');
+  return prodotto ? [{ direttrice: unaRiga(input.direttrice ?? ''), prodotto }] : [];
+}
+
 /**
  * ERRORE DA MOSTRARE, oppure null.
  *
@@ -75,6 +119,10 @@ export function chiaveTl(codice: string | null | undefined): string {
  * senza codice non si cita in un documento, senza descrizione non si sa che
  * cosa si sta lavorando. Il verso è obbligatorio col contrassegno, come nella
  * check del triage: senza, la sintesi non sa dire da che parte sta la TS.
+ *
+ * Ogni associazione porta la sua direttrice — è ciò che collega il codice
+ * all'ufficio — e la stessa coppia non può comparire due volte: sarebbe la
+ * stessa associazione scritta in due righe.
  */
 export function validaTl(input: InputTl): string | null {
   const codice = unaRiga(input.codice);
@@ -87,28 +135,85 @@ export function validaTl(input: InputTl): string | null {
     return `La descrizione non può superare ${MASSIMO_CARATTERI_DESCRIZIONE_TL} caratteri.`;
   if (input.checkList === true && !input.versoCheckList)
     return 'Se la TS entra nella check list, indica se è collaborativa o di resistenza.';
-  // La TS è associata al prodotto e alla direttrice: se si dice il prodotto,
-  // la direttrice non è un dettaglio — è ciò che collega il codice all'ufficio.
-  if (unaRiga(input.prodotto ?? '') && !unaRiga(input.direttrice ?? ''))
+  const prodotti = prodottiDelInput(input);
+  if (prodotti.some((p) => !unaRiga(p.prodotto)))
+    return 'Scegli il prodotto: un’associazione senza prodotto non dice dove si lavora.';
+  if (prodotti.some((p) => !unaRiga(p.direttrice)))
     return 'Scegli la direttrice del prodotto a cui appartiene questa TS.';
+  const viste = new Set<string>();
+  for (const p of prodotti) {
+    const chiave = chiaveProdottoTl(p.direttrice, p.prodotto);
+    if (viste.has(chiave)) return 'Lo stesso prodotto è associato due volte a questa TS.';
+    viste.add(chiave);
+  }
   return null;
 }
 
 export function normalizzaTl(input: InputTl): InputTl {
   const checkList = input.checkList === true;
+  const viste = new Set<string>();
+  const prodotti: ProdottoTl[] = [];
+  for (const p of prodottiDelInput(input)) {
+    const direttrice = unaRiga(p.direttrice);
+    const prodotto = unaRiga(p.prodotto);
+    if (!prodotto) continue;
+    const chiave = chiaveProdottoTl(direttrice, prodotto);
+    if (viste.has(chiave)) continue;
+    viste.add(chiave);
+    prodotti.push({ direttrice, prodotto });
+  }
+  const primo = prodotti[0] ?? null;
   return {
     id: input.id ?? null,
     codice: unaRiga(input.codice),
     descrizione: unaRiga(input.descrizione),
     checkList,
     versoCheckList: checkList && input.versoCheckList ? input.versoCheckList : null,
-    direttrice: unaRiga(input.direttrice ?? '') || null,
-    prodotto: unaRiga(input.prodotto ?? '') || null,
+    prodotti,
+    direttrice: primo?.direttrice ?? null,
+    prodotto: primo?.prodotto ?? null,
   };
+}
+
+/**
+ * Le associazioni della riga: dal jsonb `prodotti`, altrimenti — per gli spazi
+ * non ancora migrati o per un backup vecchio — dalla coppia singola.
+ */
+function prodottiDaRiga(r: Record<string, unknown>): ProdottoTl[] {
+  let elenco: unknown[] = [];
+  if (Array.isArray(r.prodotti)) elenco = r.prodotti;
+  else if (typeof r.prodotti === 'string' && r.prodotti.trim()) {
+    try {
+      const letto: unknown = JSON.parse(r.prodotti);
+      if (Array.isArray(letto)) elenco = letto;
+    } catch {
+      elenco = [];
+    }
+  }
+  const prodotti: ProdottoTl[] = [];
+  const viste = new Set<string>();
+  for (const voce of elenco) {
+    if (!voce || typeof voce !== 'object') continue;
+    const v = voce as Record<string, unknown>;
+    const prodotto = unaRiga(typeof v.prodotto === 'string' ? v.prodotto : '');
+    if (!prodotto) continue;
+    const direttrice = unaRiga(typeof v.direttrice === 'string' ? v.direttrice : '');
+    const chiave = chiaveProdottoTl(direttrice, prodotto);
+    if (viste.has(chiave)) continue;
+    viste.add(chiave);
+    prodotti.push({ direttrice, prodotto });
+  }
+  if (prodotti.length > 0) return prodotti;
+  const prodotto = unaRiga(typeof r.prodotto === 'string' ? r.prodotto : '');
+  return prodotto
+    ? [{ direttrice: unaRiga(typeof r.direttrice === 'string' ? r.direttrice : ''), prodotto }]
+    : [];
 }
 
 /** Una riga del database nella forma del catalogo. */
 export function rigaTl(r: Record<string, unknown>): Tl {
+  const prodotti = prodottiDaRiga(r);
+  const primo = prodotti[0] ?? null;
   return {
     id: Number(r.id),
     codice: String(r.codice ?? ''),
@@ -118,8 +223,9 @@ export function rigaTl(r: Record<string, unknown>): Tl {
       r.verso_check_list === 'COLLABORATIVA' || r.verso_check_list === 'RESISTENZA'
         ? r.verso_check_list
         : null,
-    direttrice: (r.direttrice as string | null) ?? null,
-    prodotto: (r.prodotto as string | null) ?? null,
+    prodotti,
+    direttrice: primo?.direttrice ?? (r.direttrice as string | null) ?? null,
+    prodotto: primo?.prodotto ?? (r.prodotto as string | null) ?? null,
     ordine: Number(r.ordine ?? 0),
     materie: Number(r.materie ?? 0),
   };
@@ -131,4 +237,11 @@ export function etichettaTl(tl: Pick<Tl, 'codice' | 'descrizione'>): string {
   const descrizione = unaRiga(tl.descrizione);
   if (codice && descrizione) return `${codice} — ${descrizione}`;
   return descrizione || codice;
+}
+
+/** «VIGILANZA DOCUMENTALE · Diffida M400»: l'associazione come si legge. */
+export function etichettaProdottoTl(p: ProdottoTl): string {
+  const direttrice = unaRiga(p.direttrice);
+  const prodotto = unaRiga(p.prodotto);
+  return direttrice ? `${direttrice} · ${prodotto}` : prodotto;
 }

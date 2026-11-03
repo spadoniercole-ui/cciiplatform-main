@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { chiaveTl, etichettaTl, normalizzaTl, rigaTl, validaTl, type Tl } from './catalogoTl';
+import {
+  chiaveTl,
+  etichettaProdottoTl,
+  etichettaTl,
+  normalizzaTl,
+  rigaTl,
+  validaTl,
+  type Tl,
+} from './catalogoTl';
 
 const voce = (p: Partial<Tl> = {}): Tl => ({
   id: 1,
@@ -7,6 +15,7 @@ const voce = (p: Partial<Tl> = {}): Tl => ({
   descrizione: 'Diffida M400',
   checkList: false,
   versoCheckList: null,
+  prodotti: [],
   ordine: 1,
   materie: 0,
   ...p,
@@ -37,6 +46,52 @@ describe('validaTl', () => {
       })
     ).toBeNull();
   });
+
+  it('accetta più prodotti sulla stessa TS: è un’associazione tanti a tanti', () => {
+    expect(
+      validaTl({
+        codice: '81',
+        descrizione: 'Diffida M400',
+        prodotti: [
+          { direttrice: 'Vigilanza documentale', prodotto: 'Diffida M400' },
+          { direttrice: 'Vigilanza documentale', prodotto: 'Diffida sgravi' },
+        ],
+      })
+    ).toBeNull();
+  });
+
+  it('rifiuta un’associazione senza prodotto', () => {
+    expect(
+      validaTl({
+        codice: '81',
+        descrizione: 'Diffida',
+        prodotti: [{ direttrice: 'Vigilanza documentale', prodotto: ' ' }],
+      })
+    ).toMatch(/prodotto/);
+  });
+
+  it('rifiuta un prodotto senza la sua direttrice', () => {
+    expect(
+      validaTl({
+        codice: '81',
+        descrizione: 'Diffida',
+        prodotti: [{ direttrice: '', prodotto: 'Diffida M400' }],
+      })
+    ).toMatch(/direttrice/);
+  });
+
+  it('rifiuta la stessa coppia scritta due volte, anche con grafia diversa', () => {
+    expect(
+      validaTl({
+        codice: '81',
+        descrizione: 'Diffida',
+        prodotti: [
+          { direttrice: 'Vigilanza', prodotto: 'Diffida M400' },
+          { direttrice: '  vigilanza ', prodotto: 'diffida   m400' },
+        ],
+      })
+    ).toMatch(/due volte/);
+  });
 });
 
 describe('normalizzaTl', () => {
@@ -50,6 +105,35 @@ describe('normalizzaTl', () => {
     expect(n.codice).toBe('81');
     expect(n.descrizione).toBe('Diffida M400');
     expect(n.versoCheckList).toBeNull();
+  });
+
+  it('compatta i prodotti, toglie i vuoti e i doppioni, e ne tiene il primo per la lettura singola', () => {
+    const n = normalizzaTl({
+      codice: '81',
+      descrizione: 'Diffida',
+      prodotti: [
+        { direttrice: ' Vigilanza  documentale ', prodotto: ' Diffida   M400 ' },
+        { direttrice: '', prodotto: ' ' },
+        { direttrice: 'vigilanza documentale', prodotto: 'diffida m400' },
+        { direttrice: 'Vigilanza documentale', prodotto: 'Diffida sgravi' },
+      ],
+    });
+    expect(n.prodotti).toEqual([
+      { direttrice: 'Vigilanza documentale', prodotto: 'Diffida M400' },
+      { direttrice: 'Vigilanza documentale', prodotto: 'Diffida sgravi' },
+    ]);
+    expect(n.direttrice).toBe('Vigilanza documentale');
+    expect(n.prodotto).toBe('Diffida M400');
+  });
+
+  it('accetta ancora la coppia singola, per chi manda una sola associazione', () => {
+    const n = normalizzaTl({
+      codice: '81',
+      descrizione: 'Diffida',
+      direttrice: 'Vigilanza documentale',
+      prodotto: 'Diffida M400',
+    });
+    expect(n.prodotti).toEqual([{ direttrice: 'Vigilanza documentale', prodotto: 'Diffida M400' }]);
   });
 });
 
@@ -74,9 +158,42 @@ describe('rigaTl', () => {
       materie: 2,
     });
   });
+
+  it('legge i prodotti dal jsonb, anche se arriva come testo', () => {
+    const t = rigaTl({
+      id: 1,
+      codice: '81',
+      descrizione: 'Diffida',
+      prodotti: [
+        { direttrice: 'Vigilanza documentale', prodotto: 'Diffida M400' },
+        { direttrice: 'Vigilanza documentale', prodotto: 'Diffida sgravi' },
+      ],
+    });
+    expect(t.prodotti).toHaveLength(2);
+    expect(t.prodotto).toBe('Diffida M400');
+
+    const daTesto = rigaTl({
+      id: 1,
+      codice: '81',
+      descrizione: 'Diffida',
+      prodotti: '[{"direttrice":"Vigilanza","prodotto":"Diffida"}]',
+    });
+    expect(daTesto.prodotti).toEqual([{ direttrice: 'Vigilanza', prodotto: 'Diffida' }]);
+  });
+
+  it('legge la coppia singola degli spazi non ancora migrati', () => {
+    const t = rigaTl({
+      id: 1,
+      codice: '81',
+      descrizione: 'Diffida',
+      direttrice: 'Vigilanza documentale',
+      prodotto: 'Diffida M400',
+    });
+    expect(t.prodotti).toEqual([{ direttrice: 'Vigilanza documentale', prodotto: 'Diffida M400' }]);
+  });
 });
 
-describe('chiave ed etichetta', () => {
+describe('chiave ed etichette', () => {
   it('la chiave del codice non dipende dalla grafia', () => {
     expect(chiaveTl('  TS-81 ')).toBe('ts-81');
   });
@@ -84,5 +201,12 @@ describe('chiave ed etichetta', () => {
   it('l’etichetta mette il codice davanti alla descrizione', () => {
     expect(etichettaTl(voce())).toBe('81 — Diffida M400');
     expect(etichettaTl({ codice: '', descrizione: 'Diffida M400' })).toBe('Diffida M400');
+  });
+
+  it('l’etichetta del prodotto porta la direttrice davanti', () => {
+    expect(etichettaProdottoTl({ direttrice: 'Vigilanza', prodotto: 'Diffida' })).toBe(
+      'Vigilanza · Diffida'
+    );
+    expect(etichettaProdottoTl({ direttrice: '', prodotto: 'Diffida' })).toBe('Diffida');
   });
 });
