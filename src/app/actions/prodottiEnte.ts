@@ -21,12 +21,15 @@ import { pool } from '@/lib/db';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { assicuraTabelleTl } from '@/db/provision';
 import {
+  chiaveProdotto,
   normalizzaProdotto,
   rigaProdotto,
   validaProdotto,
   type InputProdottoEnte,
   type ProdottoEnte,
 } from '@/lib/prodotti/prodotti';
+import type { EsitoImportProdotti } from '@/lib/prodotti/prodottiExcel';
+import { unaRiga } from '@/lib/titoliEnte/catalogoTl';
 import {
   normalizzaProcesso,
   rigaProcesso,
@@ -397,5 +400,189 @@ export async function eliminaProcessoProdottoAction(
       success: false,
       error: `Rimozione non riuscita: ${(error as Error).message || error}`,
     };
+  }
+}
+
+/** Quanti prodotti un solo import può portare: un foglio enorme non è un import. */
+const MASSIMO_PRODOTTI_PER_IMPORT = 500;
+
+/**
+ * Importa in blocco i prodotti e le loro domande (0.165.0).
+ *
+ * L'identità è la stessa del salvataggio singolo — direttrice + nome, senza
+ * maiuscole e spazi — quindi reimportare lo stesso foglio aggiorna e non
+ * duplica. Le domande già risposte che il foglio non nomina più restano al
+ * loro posto: toglierle staccherebbe le risposte del triage dal loro soggetto,
+ * e il riepilogo dice quante sono state conservate.
+ *
+ * Tutto in una transazione, con la sincronizzazione delle direttrici una volta
+ * sola alla fine: cento salvataggi singoli riscriverebbero cento volte la
+ * struttura che lo screening legge.
+ */
+export async function importaProdottiEnteAction(
+  nomeSchema: string,
+  prodotti: InputProdottoEnte[]
+): Promise<EsitoImportProdotti> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (!Array.isArray(prodotti) || prodotti.length === 0)
+      return { success: false, error: 'Il foglio non contiene prodotti da importare.' };
+    if (prodotti.length > MASSIMO_PRODOTTI_PER_IMPORT)
+      return {
+        success: false,
+        error: `Un solo import porta al massimo ${MASSIMO_PRODOTTI_PER_IMPORT} prodotti: dividi il foglio.`,
+      };
+
+    // Il browser manda dati, non garanzie: si rivalida tutto con le stesse
+    // regole della schermata, e se una riga non va non si scrive niente.
+    const errori: { riga: number; motivo: string }[] = [];
+    const validi: InputProdottoEnte[] = [];
+    const viste = new Set<string>();
+    for (const [i, grezzo] of prodotti.entries()) {
+      const direttrice = unaRiga(grezzo?.direttrice ?? '');
+      const nome = unaRiga(grezzo?.nome ?? '');
+      const etichetta = `${direttrice || '—'} / ${nome || `prodotto ${i + 1}`}`;
+      const errore = validaProdotto(grezzo);
+      if (errore) {
+        errori.push({ riga: i + 1, motivo: `${etichetta}: ${errore}` });
+        continue;
+      }
+      const chiave = chiaveProdotto(direttrice, nome);
+      if (viste.has(chiave)) {
+        errori.push({ riga: i + 1, motivo: `${etichetta}: compare due volte nel foglio.` });
+        continue;
+      }
+      viste.add(chiave);
+      validi.push(normalizzaProdotto({ ...grezzo, id: null, direttrice, nome }));
+    }
+    if (errori.length > 0)
+      return {
+        success: false,
+        errori,
+        error: 'Nessun prodotto importato: correggi le righe in errore.',
+      };
+
+    await assicuraTabelleTl(nomeSchema);
+
+    const client = await pool.connect();
+    let creati = 0;
+    let aggiornati = 0;
+    let invariati = 0;
+    let domandeAggiunte = 0;
+    let domandeRimosse = 0;
+    let domandeConservate = 0;
+    try {
+      await client.query('BEGIN');
+
+      const esistenti = await client.query(
+        `SELECT id, direttrice, nome, in_checklist, domande, ordine
+           FROM "${nomeSchema}".prodotti_ente`
+      );
+      const perChiave = new Map<string, ProdottoEnte>();
+      let ordine = 0;
+      for (const riga of esistenti.rows) {
+        const p = rigaProdotto(riga);
+        perChiave.set(chiaveProdotto(p.direttrice, p.nome), p);
+        ordine = Math.max(ordine, p.ordine);
+      }
+
+      // Le risposte già date decidono che cosa non si può togliere.
+      const risposte = await client.query(
+        `SELECT prodotto_id, domanda_id
+           FROM "${nomeSchema}".checklist_prodotti_risposte
+          GROUP BY prodotto_id, domanda_id`
+      );
+      const conRisposte = new Set<string>();
+      for (const r of risposte.rows)
+        conRisposte.add(`${Number(r.prodotto_id)}|${String(r.domanda_id)}`);
+
+      for (const dato of validi) {
+        const esistente = perChiave.get(chiaveProdotto(dato.direttrice, dato.nome));
+
+        if (!esistente) {
+          ordine += 1;
+          await client.query(
+            `INSERT INTO "${nomeSchema}".prodotti_ente
+               (direttrice, nome, in_checklist, domande, ordine)
+             VALUES ($1, $2, $3, $4::jsonb, $5)`,
+            [dato.direttrice, dato.nome, dato.inChecklist, JSON.stringify(dato.domande), ordine]
+          );
+          creati += 1;
+          domandeAggiunte += dato.domande.length;
+          continue;
+        }
+
+        const nelFile = new Set(dato.domande.map((d) => d.id));
+        const mantenute = esistente.domande.filter(
+          (d) => !nelFile.has(d.id) && conRisposte.has(`${esistente.id}|${d.id}`)
+        );
+        const tolte = esistente.domande.filter(
+          (d) => !nelFile.has(d.id) && !conRisposte.has(`${esistente.id}|${d.id}`)
+        );
+        domandeConservate += mantenute.length;
+        domandeRimosse += tolte.length;
+        domandeAggiunte += dato.domande.filter(
+          (d) => !esistente.domande.some((e) => e.id === d.id)
+        ).length;
+
+        // Le domande conservate vanno in fondo: l'ordine del foglio resta
+        // quello scritto, e ciò che qualcuno ha già risposto non si perde.
+        const domande = [...dato.domande, ...mantenute];
+        const uguale =
+          esistente.inChecklist === dato.inChecklist &&
+          esistente.direttrice === dato.direttrice &&
+          esistente.nome === dato.nome &&
+          domande.length === esistente.domande.length &&
+          domande.every((d, i) => {
+            const e = esistente.domande[i];
+            return (
+              !!e &&
+              e.id === d.id &&
+              e.testo === d.testo &&
+              e.tipo === d.tipo &&
+              (e.maxCaratteri ?? null) === (d.maxCaratteri ?? null)
+            );
+          });
+
+        if (uguale) {
+          invariati += 1;
+          continue;
+        }
+
+        await client.query(
+          `UPDATE "${nomeSchema}".prodotti_ente
+              SET direttrice = $2, nome = $3, in_checklist = $4, domande = $5::jsonb,
+                  aggiornato_il = now()
+            WHERE id = $1`,
+          [esistente.id, dato.direttrice, dato.nome, dato.inChecklist, JSON.stringify(domande)]
+        );
+        aggiornati += 1;
+      }
+
+      await client.query('COMMIT');
+    } catch (errore) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw errore;
+    } finally {
+      client.release();
+    }
+
+    // La struttura letta dallo screening segue i prodotti: una volta sola,
+    // dopo il commit, come nel salvataggio singolo.
+    await sincronizzaDirettriciDaProdotti(nomeSchema);
+
+    return {
+      success: true,
+      creati,
+      aggiornati,
+      invariati,
+      domandeAggiunte,
+      domandeRimosse,
+      domandeConservate,
+    };
+  } catch (error: unknown) {
+    console.error('[importaProdottiEnteAction]', error);
+    return { success: false, error: `Import non riuscito: ${(error as Error).message || error}` };
   }
 }

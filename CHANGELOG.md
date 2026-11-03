@@ -1,3 +1,33 @@
+## 0.165.0 — 2026-11-03
+
+**I prodotti e le loro domande si mantengono in blocco, con un foglio Excel che si può
+riportare dentro.** Centinaia di campi compilati uno alla volta sono una manutenzione che
+non si fa: si lascia com'è, e il triage continua a chiedere quello che era stato scritto
+anni prima.
+
+- **Un foglio, una riga per domanda.** Direttrice, prodotto, flag per la check list, id e
+  testo della domanda, tipo di risposta e tetto dei caratteri. Le righe con la stessa
+  coppia direttrice/prodotto sono lo stesso prodotto: la stessa identità del salvataggio
+  singolo, quindi reimportare aggiorna e non duplica.
+- **Si scarica ciò che c'è, non solo il modello vuoto.** Con i prodotti configurati il
+  foglio è la configurazione attuale, da correggere in Excel e rileggere; le direttrici
+  ancora senza prodotti restano come righe da completare, così un blocco non finito non
+  sparisce dal foglio.
+- **Anteprima prima di scrivere.** Nuovo, aggiorna o invariato per ogni prodotto, con le
+  domande aggiunte, modificate e tolte, e le righe in errore con il loro numero: finché
+  c'è un errore non si importa niente. La validazione è quella della schermata
+  (`validaProdotto`), non una seconda copia più permissiva: un flag acceso senza domande
+  resta un errore, come nel salvataggio singolo.
+- **L'id della domanda non si rigenera.** Le risposte del triage sono agganciate a
+  prodotto + id: un id nuovo è una domanda nuova, e la risposta già data resterebbe
+  orfana. Se la colonna è vuota l'id si ricava dalla posizione (`q1`, `q2`, …), quindi lo
+  stesso file riletto due volte produce gli stessi id; un id tolto dal foglio non porta
+  via la domanda se qualcuno ha già risposto — il riepilogo dice quante sono state
+  conservate per questo.
+- **Una transazione sola.** L'import scrive tutti i prodotti insieme e riallinea le
+  direttrici una volta, alla fine, invece di riscrivere la struttura letta dallo screening
+  a ogni prodotto.
+
 ## 0.164.0 — 2026-11-03
 
 **L'export della configurazione porta anche le tabelle rimaste fuori, e il ripristino le prepara.**

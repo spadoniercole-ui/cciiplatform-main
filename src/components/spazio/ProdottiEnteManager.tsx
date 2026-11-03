@@ -19,10 +19,21 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Check, Package, Plus, Save, Trash2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Download,
+  Package,
+  Plus,
+  Save,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 import { useDichiaraContestoAssistente } from '@/components/ContestoAssistenteContext';
 import {
   eliminaProdottoEnteAction,
+  importaProdottiEnteAction,
   ottieniProdottiEnte,
   salvaProdottoEnteAction,
 } from '@/app/actions/prodottiEnte';
@@ -40,6 +51,12 @@ import {
   type ProdottoEnte,
   type TipoDomanda,
 } from '@/lib/prodotti/prodotti';
+import {
+  confrontaImport,
+  esportaProdottiExcel,
+  leggiProdottiDaExcel,
+  type ConfrontoImport,
+} from '@/lib/prodotti/prodottiExcel';
 
 interface Props {
   nomeSchema: string;
@@ -80,6 +97,12 @@ export function ProdottiEnteManager({ nomeSchema, codice, ritorno }: Props) {
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [avviso, setAvviso] = useState<string | null>(null);
+  const [importPronto, setImportPronto] = useState<{
+    prodotti: InputProdottoEnte[];
+    confronto: ConfrontoImport;
+    errori: { riga: number; motivo: string }[];
+  } | null>(null);
+  const [nomeFileImport, setNomeFileImport] = useState('');
 
   const carica = async () => {
     setCaricamento(true);
@@ -124,6 +147,58 @@ export function ProdottiEnteManager({ nomeSchema, codice, ritorno }: Props) {
     const r = await eliminaProdottoEnteAction(nomeSchema, p.id);
     if (!r.success) setErrore(r.error || 'Eliminazione non riuscita.');
     else await carica();
+    setInCorso(false);
+  };
+
+  // Il foglio si scarica sempre: con i prodotti dentro è la configurazione
+  // attuale da correggere, senza è il modello da riempire.
+  const scaricaFoglio = () => {
+    esportaProdottiExcel(codice, prodotti, direttrici);
+  };
+
+  // La lettura non scrive niente: si vede cosa cambierebbe e si conferma dopo.
+  const leggiImport = async (file: File) => {
+    setInCorso(true);
+    setErrore(null);
+    setAvviso(null);
+    try {
+      const letto = await leggiProdottiDaExcel(file);
+      setNomeFileImport(file.name);
+      setImportPronto({
+        prodotti: letto.prodotti,
+        confronto: confrontaImport(prodotti, letto.prodotti),
+        errori: letto.righeConErrore,
+      });
+    } catch (errore) {
+      setErrore(`Lettura non riuscita: ${(errore as Error).message || errore}`);
+    }
+    setInCorso(false);
+  };
+
+  const confermaImport = async () => {
+    if (!importPronto) return;
+    setInCorso(true);
+    setErrore(null);
+    setAvviso(null);
+    const r = await importaProdottiEnteAction(nomeSchema, importPronto.prodotti);
+    if (!r.success) {
+      setErrore(r.error || 'Import non riuscito.');
+      if (r.errori?.length) setImportPronto({ ...importPronto, errori: r.errori });
+    } else {
+      const pezzi = [
+        `${r.creati ?? 0} ${(r.creati ?? 0) === 1 ? 'prodotto nuovo' : 'prodotti nuovi'}`,
+        `${r.aggiornati ?? 0} ${(r.aggiornati ?? 0) === 1 ? 'aggiornato' : 'aggiornati'}`,
+      ];
+      if (r.invariati) pezzi.push(`${r.invariati} già allineati`);
+      if (r.domandeAggiunte) pezzi.push(`${r.domandeAggiunte} domande aggiunte`);
+      if (r.domandeRimosse) pezzi.push(`${r.domandeRimosse} tolte`);
+      if (r.domandeConservate)
+        pezzi.push(`${r.domandeConservate} conservate perché avevano risposte`);
+      setAvviso(`Import completato: ${pezzi.join(', ')}.`);
+      setImportPronto(null);
+      setNomeFileImport('');
+      await carica();
+    }
     setInCorso(false);
   };
 
@@ -189,6 +264,159 @@ export function ProdottiEnteManager({ nomeSchema, codice, ritorno }: Props) {
           <span>{avviso}</span>
         </p>
       )}
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+              Manutenzione in blocco
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+              Un foglio con una riga per domanda: le righe con la stessa direttrice e lo stesso
+              prodotto sono lo stesso prodotto, quindi reimportarlo aggiorna e non duplica.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={scaricaFoglio}
+              disabled={inCorso}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-slate-300 text-slate-700 text-[10px] font-bold uppercase rounded-lg hover:border-sky-300 hover:text-sky-700 disabled:opacity-40"
+            >
+              <Download className="w-3 h-3" />
+              {prodotti.length > 0 ? 'Scarica i prodotti' : 'Scarica il modello'}
+            </button>
+            <label
+              className={`flex items-center gap-1 px-2.5 py-1.5 text-white text-[10px] font-bold uppercase rounded-lg cursor-pointer ${
+                inCorso ? 'bg-slate-300' : 'bg-slate-900 hover:bg-slate-800'
+              }`}
+            >
+              <Upload className="w-3 h-3" /> Importa
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                disabled={inCorso}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void leggiImport(file);
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {importPronto && (
+          <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                {nomeFileImport} ·{' '}
+                {importPronto.prodotti.length === 1
+                  ? '1 prodotto nel file'
+                  : `${importPronto.prodotti.length} prodotti nel file`}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setImportPronto(null);
+                  setNomeFileImport('');
+                }}
+                disabled={inCorso}
+                className="p-1 rounded text-slate-500 hover:text-slate-900 disabled:opacity-40"
+                aria-label="Chiudi l’anteprima"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {importPronto.errori.length > 0 && (
+              <div className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg p-2 space-y-1">
+                <p className="flex items-center gap-1.5 font-bold">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  {importPronto.errori.length === 1
+                    ? 'Una riga da correggere'
+                    : `${importPronto.errori.length} righe da correggere`}
+                </p>
+                <ul className="space-y-0.5">
+                  {importPronto.errori.slice(0, 10).map((e, i) => (
+                    <li key={i}>
+                      Riga {e.riga}: {e.motivo}
+                    </li>
+                  ))}
+                </ul>
+                {importPronto.errori.length > 10 && (
+                  <p>…e altre {importPronto.errori.length - 10}.</p>
+                )}
+              </div>
+            )}
+
+            {importPronto.confronto.voci.length === 0 ? (
+              <p className="text-[11px] text-slate-500">Il file non contiene prodotti.</p>
+            ) : (
+              <ul className="max-h-64 overflow-auto space-y-1">
+                {importPronto.confronto.voci.map((v) => (
+                  <li key={v.chiave} className="text-[10px] text-slate-700 leading-relaxed">
+                    <span
+                      className={`font-bold uppercase mr-1 ${
+                        v.stato === 'NUOVO'
+                          ? 'text-emerald-700'
+                          : v.stato === 'AGGIORNATO'
+                            ? 'text-amber-700'
+                            : 'text-slate-400'
+                      }`}
+                    >
+                      {v.stato === 'NUOVO'
+                        ? 'nuovo'
+                        : v.stato === 'AGGIORNATO'
+                          ? 'aggiorna'
+                          : 'invariato'}
+                    </span>
+                    <span className="font-bold">{v.nome}</span>{' '}
+                    <span className="text-slate-400">({v.direttrice})</span>
+                    {v.domandeAggiunte.length > 0 && (
+                      <span className="text-emerald-700">
+                        {' '}
+                        · {v.domandeAggiunte.length} domande nuove
+                      </span>
+                    )}
+                    {v.domandeModificate.length > 0 && (
+                      <span className="text-amber-700">
+                        {' '}
+                        · {v.domandeModificate.length} modificate
+                      </span>
+                    )}
+                    {v.domandeRimosse.length > 0 && (
+                      <span className="text-red-700">
+                        {' '}
+                        · {v.domandeRimosse.join(', ')} tolte (restano se hanno risposte)
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2">
+              <p className="text-[10px] text-slate-500">
+                {importPronto.errori.length > 0
+                  ? 'Correggi le righe in errore e ricarica il file: finché ci sono, non si importa nulla.'
+                  : 'Nessun prodotto viene toccato finché non confermi.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => void confermaImport()}
+                disabled={
+                  inCorso || importPronto.errori.length > 0 || importPronto.prodotti.length === 0
+                }
+                className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-bold uppercase rounded-lg hover:bg-slate-800 disabled:bg-slate-300"
+              >
+                <Check className="w-3 h-3" /> {inCorso ? 'Importazione…' : 'Conferma import'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {direttrici.length === 0 && (
         <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
