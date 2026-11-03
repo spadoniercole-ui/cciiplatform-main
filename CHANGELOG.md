@@ -1,3 +1,24 @@
+## 0.164.0 — 2026-11-03
+
+**L'export della configurazione porta anche le tabelle rimaste fuori, e il ripristino le prepara.**
+Un ripristino «riuscito» poteva lasciare il triage senza le domande della check list: il file
+non conteneva tutte le sezioni, e lo spazio di arrivo non aveva le tabelle per riceverle.
+
+- **Scenari del triage nell'export.** `parametri_scenari` (spese di procedura) e
+  `parametri_scenari_rango` (percentuali per rango) sono parametri dell'ente, non dati
+  d'azienda: senza di loro un ripristino riapriva il triage con le ipotesi «non calcolabili»,
+  come se nessuno avesse mai scritto i numeri.
+- **Voci della certificazione dei debiti nell'export.** `vera_voci` è la materia scelta una
+  volta per voce dello spazio: fuori dal file, il ripristino la riportava sulla deduzione
+  automatica.
+- **Il ripristino crea le tabelle della catena.** Prima non venivano preparate: su uno spazio
+  appena creato il file conteneva i prodotti con le domande, ma le tabelle `tl`, `materia_tl`,
+  `prodotti_ente`, `processo_prodotto`, `categoria_tl` e gli scenari non esistevano, e la
+  sezione si saltava in silenzio.
+- **Il riepilogo dice cosa il file non contiene.** Le sezioni che il file non porta restano
+  com'erano e vengono elencate: un file anteriore a questa parte della piattaforma non si
+  riconosce più dal solo «ripristino riuscito».
+
 ## 0.163.0 — 2026-11-03
 
 **La check di perimetro esce dal triage, e i prodotti tornano dall'export.**

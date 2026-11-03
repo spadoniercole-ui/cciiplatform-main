@@ -101,6 +101,13 @@ export function ConfigurazioneSpazioFile({ nomeSchema }: { nomeSchema: string })
             ]
           : []),
         ...(e.tabelleIgnorate.length ? [`Sezioni ignorate: ${e.tabelleIgnorate.join(', ')}`] : []),
+        ...(e.sezioniAssenti.length
+          ? [
+              `Sezioni che il file non contiene, lasciate come sono: ${e.sezioniAssenti
+                .map((s) => s.descrizione)
+                .join('; ')}`,
+            ]
+          : []),
       ],
     });
   };
@@ -109,11 +116,12 @@ export function ConfigurazioneSpazioFile({ nomeSchema }: { nomeSchema: string })
     <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
       <h2 className="font-bold text-slate-900 text-sm">Salva e ricarica la configurazione</h2>
       <p className="text-xs text-slate-500 leading-relaxed">
-        Un file con tutta la configurazione di questo spazio: le pagine qui sotto, le direttrici,
-        titoli e materie dell’ente, le etichette dell’Anagrafica Ente, le mappature della
+        Un file con tutta la configurazione di questo spazio: le pagine qui sotto, le direttrici, i
+        prodotti dell’ente con le domande della check list e il processo operativo, titoli e materie
+        dell’ente, gli scenari del triage, le etichette dell’Anagrafica Ente, le mappature della
         certificazione dei debiti, le strutture dei prospetti, la stampa con il logo. Serve a
-        ricaricarla dopo un azzeramento del database. Non contiene aziende, scenari, utenti né
-        licenze.
+        ricaricarla dopo un azzeramento del database. Non contiene aziende, scenari delle aziende,
+        utenti né licenze.
       </p>
       <div className="flex flex-wrap gap-2">
         <button

@@ -16,6 +16,8 @@ import {
   assicuraTabellaTracciatiDebitiEnte,
   assicuraTabelleAnagraficaEnte,
   assicuraTabelleParametriSpazio,
+  assicuraTabelleScenariTriage,
+  assicuraTabelleTl,
   assicuraTabelleVera,
 } from '@/db/provision';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
@@ -41,6 +43,17 @@ async function assicuraTutte(nomeSchema: string) {
   await assicuraTabellaDebitiEnte(nomeSchema);
   await assicuraTabellaTracciatiDebitiEnte(nomeSchema);
   await assicuraTabelleVera(nomeSchema);
+  // 0.164.0: LA CATENA DEI PRODOTTI E GLI SCENARI SI PREPARANO QUI.
+  //
+  // Prima queste tabelle non erano previste, e su uno spazio appena creato il
+  // ripristino le saltava in silenzio: il file poteva contenere i prodotti con
+  // le domande, ma il database non aveva dove scriverli, e il triage si fermava
+  // davanti a una check list senza domande. `assicuraTabelleTl` crea il
+  // catalogo delle TS, le associazioni delle materie, i prodotti e il processo
+  // operativo; `assicuraTabelleScenariTriage` crea le percentuali per rango e
+  // le spese di procedura. Idempotenti, come tutte le altre.
+  await assicuraTabelleTl(nomeSchema);
+  await assicuraTabelleScenariTriage(nomeSchema);
 }
 
 async function datiSpazio(nomeSchema: string) {

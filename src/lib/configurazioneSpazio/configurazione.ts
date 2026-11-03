@@ -42,6 +42,14 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
   { nome: 'limiti_ricevibilita_rango', descrizione: 'Parametri per rango' },
   { nome: 'parametri_proposta_redigente', descrizione: 'Percentuale media della proposta' },
   { nome: 'parametri_visualizzazione', descrizione: 'Visualizzazione' },
+  // 0.164.0: gli scenari del triage sono parametri dell'ente — le percentuali
+  // di realizzo in liquidazione e di soddisfacimento nel cram down per rango,
+  // più le spese di procedura — non dati di una singola azienda. Fuori
+  // dall'export, un ripristino riaprirebbe il triage con le ipotesi «non
+  // calcolabili»: il report direbbe che quei numeri non li ha scritti nessuno,
+  // mentre a perderli sarebbe stato il file.
+  { nome: 'parametri_scenari', descrizione: 'Scenari del triage: spese di procedura' },
+  { nome: 'parametri_scenari_rango', descrizione: 'Scenari del triage: percentuali per rango' },
   // 0.141.0: obbligo del file della certificazione dei debiti nel triage. Configurazione, non dato:
   // un altro spazio dello stesso ente deve poter partire con la stessa regola.
   {
@@ -101,6 +109,10 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
   { nome: 'lavorazioni_tipo_debito', descrizione: 'Lavorazioni per tipologia di debito (storico)' },
   { nome: 'vera_titoli', descrizione: 'certificazione dei debiti: titoli di sezione mappati' },
   { nome: 'vera_trattamenti', descrizione: 'certificazione dei debiti: trattamenti natura/stato' },
+  // 0.164.0: la materia scelta sulla singola voce vale per lo spazio intero,
+  // non per l'azienda. È configurazione: senza, un ripristino riporta le voci
+  // sulla deduzione automatica e la scelta fatta una volta per voce si perde.
+  { nome: 'vera_voci', descrizione: 'certificazione dei debiti: materia scelta sulle voci' },
   { nome: 'strutture_prospetto', descrizione: 'Strutture dei prospetti riconosciute' },
   { nome: 'debiti_ente_tracciati', descrizione: 'Tracciati dei file dell’ente' },
 ];
@@ -186,6 +198,14 @@ export interface EsitoRipristino {
   colonneIgnorate: string[];
   /** Tabelle del file sconosciute a questa versione (ignorate). */
   tabelleIgnorate: string[];
+  /**
+   * Sezioni di configurazione che questa versione conosce e il file non
+   * contiene: restano come sono nello spazio. È il modo per accorgersi che il
+   * file salvato è anteriore a una parte della piattaforma (per esempio che non
+   * porta i prodotti dell'ente con le domande della check list), invece di
+   * scoprirlo da un triage che non trova nulla da chiedere.
+   */
+  sezioniAssenti: { nome: string; descrizione: string }[];
 }
 
 /**
@@ -197,10 +217,21 @@ export async function ripristinaConfigurazione(
   schema: string,
   file: FileConfigurazione
 ): Promise<EsitoRipristino> {
-  const esito: EsitoRipristino = { tabelle: [], colonneIgnorate: [], tabelleIgnorate: [] };
+  const esito: EsitoRipristino = {
+    tabelle: [],
+    colonneIgnorate: [],
+    tabelleIgnorate: [],
+    sezioniAssenti: [],
+  };
   const note = new Set(TABELLE_CONFIGURAZIONE.map((t) => t.nome));
   for (const nome of Object.keys(file.tabelle))
     if (!note.has(nome)) esito.tabelleIgnorate.push(nome);
+  // Il file non sostituisce ciò che non contiene: una sezione assente resta
+  // com'è. Va però dichiarata, altrimenti «ripristino riuscito» direbbe che è
+  // tornato tutto mentre una parte non è mai arrivata.
+  for (const t of TABELLE_CONFIGURAZIONE)
+    if (!file.tabelle[t.nome])
+      esito.sezioniAssenti.push({ nome: t.nome, descrizione: t.descrizione });
 
   for (const t of TABELLE_CONFIGURAZIONE) {
     const dati = file.tabelle[t.nome];

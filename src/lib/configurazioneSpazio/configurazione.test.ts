@@ -24,6 +24,9 @@ const DDL = `
   CREATE TABLE tenant_x.checklist_modelli (id SERIAL PRIMARY KEY, nome TEXT, sezioni JSONB);
   CREATE TABLE tenant_x.prodotti_ente (id SERIAL PRIMARY KEY, direttrice TEXT NOT NULL DEFAULT '', nome TEXT NOT NULL DEFAULT '', in_checklist BOOLEAN NOT NULL DEFAULT false, domande JSONB NOT NULL DEFAULT '[]'::jsonb, ordine INTEGER NOT NULL DEFAULT 0);
   CREATE TABLE tenant_x.processo_prodotto (id SERIAL PRIMARY KEY, prodotto_id INTEGER NOT NULL, tl_id INTEGER NOT NULL, esito TEXT, gruppo TEXT, ordine INTEGER NOT NULL DEFAULT 0);
+  CREATE TABLE tenant_x.parametri_scenari (id INTEGER PRIMARY KEY DEFAULT 1, costi_procedura_pct NUMERIC);
+  CREATE TABLE tenant_x.parametri_scenari_rango (rango TEXT PRIMARY KEY, tasso_liquidazione_pct NUMERIC, cram_down_pct NUMERIC);
+  CREATE TABLE tenant_x.vera_voci (sezione_norm TEXT NOT NULL, voce_norm TEXT NOT NULL, sezione TEXT NOT NULL, voce TEXT NOT NULL, materia_id INTEGER NOT NULL, PRIMARY KEY (sezione_norm, voce_norm));
 `;
 
 describe('configurazione dello spazio: esporta e ripristina', () => {
@@ -130,6 +133,48 @@ describe('configurazione dello spazio: esporta e ripristina', () => {
       { tl_id: 81, gruppo: 'g1' },
       { tl_id: 82, gruppo: 'g1' },
     ]);
+  }, 60_000);
+
+  it('porta gli scenari del triage e le voci della certificazione, e dichiara le sezioni assenti', async () => {
+    const a = await PGlite.create();
+    await a.exec(DDL);
+    await a.exec(`
+      INSERT INTO tenant_x.parametri_scenari (id, costi_procedura_pct) VALUES (1, 1.5);
+      INSERT INTO tenant_x.parametri_scenari_rango (rango, tasso_liquidazione_pct, cram_down_pct)
+        VALUES ('CHIROGRAFARIO', 12.5, 20);
+      INSERT INTO tenant_x.vera_voci (sezione_norm, voce_norm, sezione, voce, materia_id)
+        VALUES ('contributi', 'contributi a ruolo', 'Contributi', 'Contributi a ruolo', 3);
+    `);
+    const file = JSON.parse(
+      JSON.stringify(
+        await esportaConfigurazione(esecutore(a), 'tenant_x', {
+          codice: 'X',
+          tipoSpazio: 'ENTE',
+          appVersion: '0.164.0',
+          direttriciEnteStrutturate: null,
+        })
+      )
+    );
+    // Le sezioni che il database non ha non finiscono nel file: è il caso del
+    // file salvato con una versione anteriore, e va dichiarato al ripristino.
+    expect(Object.keys(file.tabelle)).not.toContain('tl');
+
+    const b = await PGlite.create();
+    await b.exec(DDL);
+    const ex = esecutore(b);
+    await ex('BEGIN');
+    const esito = await ripristinaConfigurazione(ex, 'tenant_x', file);
+    await ex('COMMIT');
+
+    const scenari = await ex(`SELECT costi_procedura_pct FROM tenant_x.parametri_scenari`);
+    expect(Number(scenari[0].costi_procedura_pct)).toBe(1.5);
+    const ranghi = await ex(
+      `SELECT rango, tasso_liquidazione_pct, cram_down_pct FROM tenant_x.parametri_scenari_rango`
+    );
+    expect(ranghi).toHaveLength(1);
+    expect(Number(ranghi[0].cram_down_pct)).toBe(20);
+    expect(await ex(`SELECT materia_id FROM tenant_x.vera_voci`)).toEqual([{ materia_id: 3 }]);
+    expect(esito.sezioniAssenti.map((s) => s.nome)).toContain('tl');
   }, 60_000);
 
   it('rifiuta file estranei o di versioni future', () => {
