@@ -4,8 +4,9 @@
 // a punto e si ricarica dopo un azzeramento del database (o su un altro
 // spazio dello stesso tipo). Contiene SOLO configurazione — le pagine di
 // Parametri di Spazio, direttrici, titoli e materie dell'ente, etichette
-// dell'anagrafica ente, mappature della certificazione dei debiti, strutture dei prospetti, stampa
-// con il logo — mai aziende, scenari, utenti o licenze.
+// dell'anagrafica ente, mappature della certificazione dei debiti, strutture dei prospetti,
+// prodotti dell'ente con le domande della check list, processo operativo, stampa con il logo —
+// mai aziende, scenari, utenti o licenze.
 //
 // Il ripristino SOSTITUISCE tabella per tabella (cancella e reinserisce in
 // una sola transazione): è una fotografia, non un'unione. Gli id vengono
@@ -66,10 +67,23 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
   // `materia_tl`, con ufficio, passi ed esito. Vanno dopo le materie (gli id
   // devono esistere) e prima dei titoli, che le leggono. `prodotti_tl` non si
   // esporta più: è lo storico del modello precedente.
-  { nome: 'tl', descrizione: 'Catalogo delle TS (codice, descrizione, check list)' },
+  { nome: 'tl', descrizione: 'Catalogo delle TS (codice, descrizione)' },
   {
     nome: 'materia_tl',
     descrizione: 'TS applicate dalle materie (direttrice, prodotto, processo)',
+  },
+  // 0.163.0: i prodotti dell'ente e il processo operativo sono
+  // CONFIGURAZIONE, non dati d'azienda — e senza di loro un ripristino lascia
+  // il triage senza le domande della check list. `prodotti_ente` sta prima del
+  // processo, che lo referenzia. Le risposte delle aziende non si esportano,
+  // come le aziende stesse.
+  {
+    nome: 'prodotti_ente',
+    descrizione: 'Prodotti dell’ente (flag check list e domande)',
+  },
+  {
+    nome: 'processo_prodotto',
+    descrizione: 'Processo operativo dei prodotti (operatività e TS)',
   },
   { nome: 'categoria_tl', descrizione: 'TS per tipologia di debito' },
   { nome: 'titoli_ente', descrizione: 'Titoli di credito dell’ente' },

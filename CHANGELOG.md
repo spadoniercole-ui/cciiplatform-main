@@ -1,3 +1,20 @@
+## 0.163.0 — 2026-11-03
+
+**La check di perimetro esce dal triage, e i prodotti tornano dall'export.**
+
+- **Export dei parametri completo.** Il file di configurazione non conteneva `prodotti_ente` né
+  `processo_prodotto`: un ripristino riportava materie, TS e titoli ma non i prodotti con le
+  domande della check list, e il triage andava in stand-by senza domande da porre. Ora le due
+  tabelle si esportano e si ripristinano con il flag della check list, le domande e i gruppi
+  delle operatività; le risposte delle aziende restano fuori, come le aziende.
+- **La check di perimetro dei crediti è ritirata.** Le sue voci nascevano dai contrassegni
+  `check_list`/`verso_check_list` delle materie, che non si impostano più: restavano visibili
+  solo dove erano stati dati prima, e chiedevano una risposta obbligatoria su un perimetro che
+  nessuno poteva più configurare. Spariscono il riquadro del triage, il blocco del riepilogo
+  stampabile, la sezione dell'elaborato di Screening e il vincolo sul pulsante «Procedi». I
+  dati già salvati restano nel database: non si cancella nulla.
+- **«Procedi» resta legato alla check list dei prodotti**, l'unica parte obbligatoria della
+  valutazione: senza prodotti in check list non blocca nulla.
 ## 0.162.0 — 2026-11-03
 
 **La check list arriva subito dopo i documenti, il flag esce dalle TS e il processo diventa un’operatività.**

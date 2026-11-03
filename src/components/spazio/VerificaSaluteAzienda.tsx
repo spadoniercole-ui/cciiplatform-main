@@ -70,14 +70,10 @@ import { accumulaFile, togliFile } from '@/lib/file/accumula';
 import type { RigaDebitoTriage } from '@/lib/debitiTriage/modello';
 import type { MappaturaProspetto } from '@/lib/debitiTriage/mappatura';
 import { salvaTutteDebitiTriageAction } from '@/app/actions/debitiTriage';
-import {
-  ottieniPerimetroTriageAction,
-  ottieniRangoCreditoAction,
-} from '@/app/actions/triagePerimetro';
+import { ottieniRangoCreditoAction } from '@/app/actions/triagePerimetro';
 import { ottieniParametriScenariAction } from '@/app/actions/parametriScenari';
 import { ottieniScreeningAzienda } from '@/app/actions/screeningAzienda';
 import { riepilogoCheckList } from '@/lib/triage/checkListRiepilogo';
-import { PerimetroTriage } from '@/components/spazio/PerimetroTriage';
 import { ottieniChecklistProdottiAction } from '@/app/actions/checklistProdottiTriage';
 import { ChecklistProdottiTriage } from '@/components/spazio/ChecklistProdottiTriage';
 import type { SintesiChecklistProdotti } from '@/lib/prodotti/prodotti';
@@ -399,21 +395,6 @@ export function VerificaSaluteAzienda({
    * modificare si va nella scheda, ma solo se lo si sceglie.
    */
   const [mostraSoglie, setMostraSoglie] = useState(false);
-  // La check di perimetro è obbligatoria: il triage non si chiude se una TS
-  // rilevante non ha risposta. Lo stato serve al pulsante «Procedi», che
-  // altrimenti porterebbe avanti un'azienda senza la verifica qualificata.
-  const [perimetroEsito, setPerimetroEsito] = useState<{
-    completa?: boolean;
-    mancanze?: string[];
-  } | null>(null);
-  /**
-   * IL TRIAGE SI CHIUDE SULLA CHECK VERIFICATA, NON SULLA SUA ASSENZA.
-   *
-   * Si guardano le MANCANZE e non `completa`: uno spazio senza TS rilevanti
-   * non ha voci da rispondere, e l'azione dichiara `completa: false` per
-   * definizione. Contano le voci rimaste senza risposta.
-   */
-  const perimetroIncompleto = (perimetroEsito?.mancanze?.length ?? 0) > 0;
   /**
    * LA CHECK LIST DEI PRODOTTI, come la vede il triage (0.161.0).
    *
@@ -714,8 +695,6 @@ export function VerificaSaluteAzienda({
     setInCorso(true);
     setErrore(null);
     setEsitoSoglie(null);
-    // L'esito della check è dell'azienda appena creata, non della precedente.
-    setPerimetroEsito(null);
     setChecklistProdotti(null);
     setErroreSoglie(null);
     setRigheVera([]);
@@ -1409,19 +1388,13 @@ export function VerificaSaluteAzienda({
           .filter(Boolean)
           .join(' ')
       : null;
-    // Le due cose che il riepilogo deve portare oltre alle soglie: la check
-    // obbligatoria e il confronto con gli scenari. Si leggono qui, al momento
-    // della stampa, così il foglio non può divergere da ciò che è salvato.
+    // Il confronto con gli scenari si legge qui, al momento della stampa, così
+    // il foglio non può divergere da ciò che è salvato.
     const parametriScenari = await ottieniParametriScenariAction(nomeSchema);
     const rangoCredito = aziendaId ? await ottieniRangoCreditoAction(nomeSchema, aziendaId) : null;
-    const checkPerimetro = aziendaId
-      ? await ottieniPerimetroTriageAction(nomeSchema, aziendaId)
-      : null;
-    // LA CHECK LIST CON LE RISPOSTE (0.155.0). Accanto alla check di perimetro:
-    // il perimetro dice come l'azienda si muove sui crediti, il questionario
-    // dice che cosa è stato verificato sui documenti. Si legge al momento
-    // della stampa, come il perimetro, così il foglio non diverge da ciò che è
-    // salvato.
+    // LA CHECK LIST CON LE RISPOSTE (0.155.0). Il questionario dice che cosa è
+    // stato verificato sui documenti; si legge al momento della stampa, così il
+    // foglio non diverge da ciò che è salvato.
     const screening = aziendaId ? await ottieniScreeningAzienda(nomeSchema, aziendaId) : null;
     const checkList =
       screening && screening.success && screening.stato.esiste
@@ -1508,8 +1481,6 @@ export function VerificaSaluteAzienda({
             ? { titolo: riepilogoSoglie.titolo, dettaglio: riepilogoSoglie.dettaglio }
             : null,
         scenari,
-        checkPerimetro:
-          checkPerimetro && checkPerimetro.success ? (checkPerimetro.sintesi ?? null) : null,
         checkList,
         checklistProdotti,
         // Le evidenze che partono per i reparti: chi riceve il riepilogo deve
@@ -2183,15 +2154,15 @@ export function VerificaSaluteAzienda({
               />
             </div>
 
-            {/* LE TRE CHECK SI APRONO DOPO LA VALUTAZIONE.
+            {/* LE CHECK SI APRONO DOPO LA VALUTAZIONE.
                 Stavano qui, montate appena l'azienda esisteva: cioè per
                 l'istante fra la creazione e il passaggio alla fase d'esito.
                 Comparivano e sparivano subito, e l'esito — rimasto senza le
                 check — dichiarava il triage incompleto e spegneva «Procedi»
                 senza che esistesse un punto in cui rispondere. */}
             <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
-              La check di perimetro, la check list dello screening e gli scenari si aprono al
-              termine della valutazione, quando l&apos;azienda è stata riconosciuta.
+              La check list dello screening e gli scenari si aprono al termine della valutazione,
+              quando l&apos;azienda è stata riconosciuta.
             </p>
 
             <div className="border-t border-slate-100 pt-4">
@@ -3494,16 +3465,6 @@ export function VerificaSaluteAzienda({
             </div>
           )}
 
-          {/* LA CHECK OBBLIGATORIA (0.153.0): le voci sono le TS contrassegnate
-              nei Parametri, i codici arrivano dai titoli dell'ente. */}
-          <div className="border-t border-slate-200 pt-4">
-            <PerimetroTriage
-              nomeSchema={nomeSchema}
-              aziendaId={aziendaId!}
-              onEsito={setPerimetroEsito}
-            />
-          </div>
-
           {/* LA CHECK LIST DELLO SCREENING (0.154.0): si genera e si risponde qui. */}
           <div className="border-t border-slate-200 pt-4">
             <CheckListTriage
@@ -3573,13 +3534,6 @@ export function VerificaSaluteAzienda({
                 </button>
               </p>
             )}
-            {perimetroIncompleto && (
-              <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
-                Il triage non è completo: resta da rispondere alla check di perimetro (
-                {perimetroEsito?.mancanze?.length ?? 0} voci). Le TS rilevanti vanno verificate
-                prima di procedere — è la sola parte obbligatoria della check.
-              </p>
-            )}
             <div className="flex flex-wrap gap-3">
               {/* La decisione si ripropone solo se è ancora da prendere. Una
                   verifica riaperta su un'azienda già presa in carico non deve
@@ -3595,15 +3549,11 @@ export function VerificaSaluteAzienda({
                 <>
                   <button
                     onClick={() => void procedi()}
-                    disabled={
-                      inCorso || !aziendaId || perimetroIncompleto || checklistProdottiIncompleta
-                    }
+                    disabled={inCorso || !aziendaId || checklistProdottiIncompleta}
                     title={
                       checklistProdottiIncompleta
                         ? 'Completa la check list dei prodotti: le domande devono avere una risposta.'
-                        : perimetroIncompleto
-                          ? 'Completa la check di perimetro: le TS rilevanti devono avere una risposta.'
-                          : undefined
+                        : undefined
                     }
                     className="flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700 disabled:bg-slate-300"
                   >
@@ -3651,7 +3601,6 @@ export function VerificaSaluteAzienda({
                   setDati(null);
                   setAttenzione(null);
                   setAziendaId(null);
-                  setPerimetroEsito(null);
                   setNonTrovati([]);
                   setEsitoSoglie(null);
                   setErroreSoglie(null);

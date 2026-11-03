@@ -2,10 +2,9 @@
 //
 // LA CHECK LIST CON LE RISPOSTE, PER IL FOGLIO STAMPATO.
 //
-// Il riepilogo del triage porta la check di perimetro — come l'azienda si sta
-// muovendo sui crediti — e accanto deve portare il questionario con le
-// risposte date: sono la stessa verifica guardata da due lati. Senza le
-// domande, chi riceve il foglio legge un esito («attenzione», un punteggio)
+// Il riepilogo del triage porta il questionario con le risposte date, accanto
+// alle soglie: senza le domande, chi riceve il foglio legge un esito
+// («attenzione», un punteggio)
 // senza poter vedere su che cosa è stato costruito, e per controllarlo deve
 // riaprire la piattaforma — che il foglio esiste proprio per non doverlo fare.
 //

@@ -16,7 +16,6 @@
 import type { Attenzione } from '@/lib/screening/indicatore';
 import { etaVerifica } from './etaVerifica';
 import { STILE_BOX } from './box';
-import type { SintesiPerimetro } from './perimetro';
 import type { EsitoScenari } from './scenari';
 import type { CheckListRiepilogo } from './checkListRiepilogo';
 import type { SintesiChecklistProdotti } from '@/lib/prodotti/prodotti';
@@ -123,8 +122,6 @@ export interface DatiRiepilogoTriage {
    * confrontare: il box non compare, invece di comparire vuoto.
    */
   scenari?: EsitoScenari | null;
-  /** La check di perimetro delle TS, se qualcuna è contrassegnata. */
-  checkPerimetro?: SintesiPerimetro | null;
   /**
    * La check list dello screening con le risposte date, accanto alla check di
    * perimetro. `null` quando il questionario non è mai stato generato: il
@@ -383,33 +380,9 @@ ${STILE_BOX}
     );
   }
 
-  // 2-ter. LA CHECK DI PERIMETRO (0.153.0). Non è un giudizio sul debito: dice
-  // sotto quale condotta stanno i codici, che è ciò che le soglie non possono
-  // dire.
-  if (d.checkPerimetro) {
-    const c = d.checkPerimetro;
-    parti.push(titolo('Check di perimetro dei crediti'));
-    parti.push(`<p class="esito">${esc(c.etichetta)}</p>`);
-    parti.push(`<p style="font-size:11px">${esc(c.dettaglio)}</p>`);
-    parti.push(`<table><tbody>
-<tr><td>TS rilevanti verificate</td><td class="num">${c.totali}</td></tr>
-<tr><td>Riscontrate</td><td class="num">${c.riscontrate}</td></tr>
-<tr><td>Non riscontrate</td><td class="num">${c.nonRiscontrate}</td></tr>
-<tr><td>Non applicabili</td><td class="num">${c.nonApplicabili}</td></tr>
-<tr><td>Voci ancora da compilare</td><td class="num">${c.daCompilare}</td></tr>
-<tr><td>Codici sotto un modus operandi</td><td>${esc(c.codiciStrutturali.join(', ') || 'nessuno')}</td></tr>
-<tr><td>Codici da un problema momentaneo</td><td>${esc(c.codiciIncidentali.join(', ') || 'nessuno')}</td></tr>
-</tbody></table>`);
-    parti.push(
-      '<p style="font-size:10px;color:#475569">Le voci nascono dalle TS contrassegnate in Parametri di Spazio → Materie e lavorazioni; i codici sono quelli che cadono nella materia della TS. La check riguarda le lavorazioni configurate, non l’intera storia dell’azienda.</p>'
-    );
-  }
-
-  // 2-quater. LA CHECK LIST CON LE RISPOSTE, accanto alla check di perimetro.
-  // Il perimetro dice come l'azienda si sta muovendo sui crediti, il
-  // questionario dice che cosa è stato verificato sui suoi documenti: sono la
-  // stessa verifica guardata da due lati e si leggono una dopo l'altra. Una
-  // domanda senza risposta si stampa come tale — «non ho ancora guardato» non
+  // 2-quater. LA CHECK LIST CON LE RISPOSTE.
+  // Il questionario dice che cosa è stato verificato sui documenti
+  // dell'azienda: una domanda senza risposta si stampa come tale — «non ho ancora guardato» non
   // è un «no», e confonderli cambierebbe il senso dell'esito.
   if (d.checkList) {
     const cl = d.checkList;

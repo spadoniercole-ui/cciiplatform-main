@@ -41,8 +41,6 @@ import { FascicoloEvidenza } from '@/components/spazio/FascicoloEvidenza';
 import type { Evidenza } from '@/lib/fascicolo/evidenza';
 import { improntaFile } from '@/lib/fascicolo/impronta';
 import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
-import { ottieniPerimetroTriageAction } from '@/app/actions/triagePerimetro';
-import { htmlCheckPerimetro } from '@/lib/triage/perimetroHtml';
 
 interface Props {
   nomeSchema: string;
@@ -73,19 +71,10 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
     const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const testo = stato.relazioneTesto;
     const revisione = revisionaTesto(testo, 'RELAZIONE_SCREENING', { fascicolo });
-    const [ris, s25, perimetro] = await Promise.all([
+    const [ris, s25] = await Promise.all([
       calcolaRiscontriNormativiAzienda(nomeSchema, aziendaId),
       valutaSoglieAction(nomeSchema, aziendaId, tipoSpazio),
-      ottieniPerimetroTriageAction(nomeSchema, aziendaId),
     ]);
-    // LA CHECK DI PERIMETRO ENTRA NELL'ELABORATO (0.154.0). La parte
-    // obbligatoria — le TS rilevanti con l'esito dichiarato — c'è sempre;
-    // la nota, che è facoltativa, solo quando è stata scritta. Una check
-    // senza voci non stampa nulla: non è una mancanza da segnalare.
-    const checkPerimetro =
-      perimetro.success && perimetro.voci && perimetro.voci.length > 0
-        ? htmlCheckPerimetro(perimetro.voci)
-        : '';
     const riscontri =
       ris.success && ris.riscontri
         ? corpoRiscontriHtml(
@@ -122,9 +111,6 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
       }) +
         salto +
         `<h2 style="font-size:14px">Relazione di Screening</h2><div class="md" style="font-size:12px;line-height:1.5">${markdownInHtml(corpo)}</div>` +
-        (checkPerimetro
-          ? salto + `<h2 style="font-size:14px">Check di perimetro</h2>${checkPerimetro}`
-          : '') +
         salto +
         `<h2 style="font-size:14px">Riscontri normativi</h2>${riscontri}` +
         (allegato ? salto + allegato : ''),
@@ -386,7 +372,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               questionario mirato alle direttrici di questo ente e una relazione di inquadramento —
               basati solo su quello che è già pubblico o nei tuoi sistemi, non su
               un&apos;interazione con l&apos;azienda. Le domande generate si rispondono nel{' '}
-              <span className="font-bold">triage</span>, insieme alla check di perimetro.
+              <span className="font-bold">triage</span>.
             </>
           )}
         </p>

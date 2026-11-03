@@ -22,6 +22,8 @@ const DDL = `
   CREATE TABLE tenant_x.limiti_ricevibilita (id SERIAL PRIMARY KEY, categoria_creditore TEXT UNIQUE, percentuale_minima NUMERIC, alias TEXT[] NOT NULL DEFAULT '{}');
   CREATE TABLE tenant_x.titoli_ente_config (id INTEGER PRIMARY KEY, dominio_ente TEXT, lotto_ricerca_id TEXT);
   CREATE TABLE tenant_x.checklist_modelli (id SERIAL PRIMARY KEY, nome TEXT, sezioni JSONB);
+  CREATE TABLE tenant_x.prodotti_ente (id SERIAL PRIMARY KEY, direttrice TEXT NOT NULL DEFAULT '', nome TEXT NOT NULL DEFAULT '', in_checklist BOOLEAN NOT NULL DEFAULT false, domande JSONB NOT NULL DEFAULT '[]'::jsonb, ordine INTEGER NOT NULL DEFAULT 0);
+  CREATE TABLE tenant_x.processo_prodotto (id SERIAL PRIMARY KEY, prodotto_id INTEGER NOT NULL, tl_id INTEGER NOT NULL, esito TEXT, gruppo TEXT, ordine INTEGER NOT NULL DEFAULT 0);
 `;
 
 describe('configurazione dello spazio: esporta e ripristina', () => {
@@ -79,6 +81,55 @@ describe('configurazione dello spazio: esporta e ripristina', () => {
       await ex(`INSERT INTO tenant_x.materie_ente (nome) VALUES ('DIFFIDE') RETURNING id`)
     )[0];
     expect(nuovo.id).toBe(4);
+  }, 60_000);
+
+  it('porta i prodotti con le domande e il processo operativo, gruppi compresi', async () => {
+    const a = await PGlite.create();
+    await a.exec(DDL);
+    await a.exec(`
+      INSERT INTO tenant_x.prodotti_ente (direttrice, nome, in_checklist, domande, ordine)
+        VALUES ('RECUPERO CREDITO', 'DIFFIDA', true, '[{"id":"d1","testo":"La diffida è stata ricevuta?"}]', 0),
+               ('RECUPERO CREDITO', 'VISURA', false, '[]', 1);
+      INSERT INTO tenant_x.processo_prodotto (prodotto_id, tl_id, esito, gruppo, ordine)
+        VALUES (1, 81, 'Sì', 'g1', 0), (1, 82, 'Sì', 'g1', 1);
+    `);
+    const file = JSON.parse(
+      JSON.stringify(
+        await esportaConfigurazione(esecutore(a), 'tenant_x', {
+          codice: 'X',
+          tipoSpazio: 'ENTE',
+          appVersion: '0.163.0',
+          direttriciEnteStrutturate: null,
+        })
+      )
+    );
+    expect(file.tabelle.prodotti_ente.righe).toHaveLength(2);
+
+    const b = await PGlite.create();
+    await b.exec(DDL);
+    const ex = esecutore(b);
+    await ex('BEGIN');
+    await ripristinaConfigurazione(ex, 'tenant_x', file);
+    await ex('COMMIT');
+
+    const prodotti = await ex(
+      `SELECT nome, in_checklist, domande FROM tenant_x.prodotti_ente ORDER BY id`
+    );
+    expect(prodotti).toEqual([
+      {
+        nome: 'DIFFIDA',
+        in_checklist: true,
+        domande: [{ id: 'd1', testo: 'La diffida è stata ricevuta?' }],
+      },
+      { nome: 'VISURA', in_checklist: false, domande: [] },
+    ]);
+    const processo = await ex(
+      `SELECT tl_id, gruppo FROM tenant_x.processo_prodotto ORDER BY tl_id`
+    );
+    expect(processo).toEqual([
+      { tl_id: 81, gruppo: 'g1' },
+      { tl_id: 82, gruppo: 'g1' },
+    ]);
   }, 60_000);
 
   it('rifiuta file estranei o di versioni future', () => {

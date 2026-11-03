@@ -103,13 +103,6 @@ vi.mock('@/app/actions/screeningAzienda', () => ({
 }));
 
 vi.mock('@/app/actions/triagePerimetro', () => ({
-  ottieniPerimetroTriageAction: vi.fn().mockResolvedValue({
-    success: true,
-    voci: [],
-    completa: false,
-    mancanze: [],
-  }),
-  salvaPerimetroTriageAction: vi.fn(),
   ottieniRangoCreditoAction: vi.fn().mockResolvedValue({ success: true, rango: null }),
   salvaRangoCreditoAction: vi.fn(),
 }));
@@ -967,7 +960,7 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
 // qui non c'era più: il triage dichiarava di non potersi chiudere e il lavoro
 // da fare non era raggiungibile da nessun punto della videata.
 describe('Verifica salute azienda — le check nella fase d’esito', () => {
-  it('apre la check di perimetro e la check list dentro una verifica riaperta', async () => {
+  it('apre la check list dentro una verifica riaperta, senza la check di perimetro', async () => {
     render(
       <VerificaSaluteAzienda
         nomeSchema={SCHEMA}
@@ -978,10 +971,9 @@ describe('Verifica salute azienda — le check nella fase d’esito', () => {
     );
 
     await waitFor(() => expect(screen.getByText('Verifica riaperta')).toBeTruthy());
-    expect(
-      await screen.findByRole('heading', { name: 'Check di perimetro dei crediti' })
-    ).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'Check list dello screening' })).toBeTruthy();
+    // La check di perimetro è stata ritirata: non deve tornare per sbaglio.
+    expect(screen.queryByRole('heading', { name: 'Check di perimetro dei crediti' })).toBeNull();
   });
 
   it('dalla verifica si torna alla dashboard del triage', async () => {
