@@ -1,3 +1,23 @@
+## 0.171.0 — 2026-11-04
+
+**Due set demo per provare il percorso del provvedimento, senza inventare documenti a mano.**
+
+- **Sei aziende, due percorsi.** Tre per la liquidazione giudiziale e tre per il cram down, ognuna
+  con una posizione debitoria dell'ente, uno scenario già aperto sul tipo di atto corretto e un
+  confronto già calcolato. Si caricano dalla pagina Scenari con un pulsante, solo per l'Admin di
+  Spazio di un ente.
+- **PDF verosimili ma dichiarati.** Decreto o dispositivo, stato passivo o attestazione, relazione
+  dell'ausiliario o piano: ogni documento è generato con jsPDF, porta la filigrana «DEMO» e
+  l'intestazione «non valido ai fini di legge», e usa tribunali, nomi e numeri di ruolo marcati
+  come esempio. Nessun atto reale, nessuna azienda reale.
+- **Numeri coerenti per costruzione.** Le righe della posizione debitoria, i crediti del
+  provvedimento e il testo dei PDF nascono dallo stesso dato: le difformità sono volute e
+  dichiarate, non un effetto collaterale di due elenchi scritti separatamente. Un caso del cram down
+  è interamente conforme, per mostrare che il percorso sa dire anche «nessuna contestazione».
+- **Caricamento idempotente.** Un'azienda già presente non viene duplicata e i PDF caricati per lei
+  vengono eliminati, così un secondo clic non lascia file orfani. Il confronto si apre senza
+  chiamare l'AI; l'analisi critica resta il passo successivo, quando la chiave è configurata.
+
 ## 0.170.0 — 2026-11-04
 
 **Decreto di liquidazione e cram down: non una proposta da valutare, un atto da riscontrare.**

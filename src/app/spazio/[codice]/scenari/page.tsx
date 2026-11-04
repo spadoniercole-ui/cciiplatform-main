@@ -13,6 +13,7 @@ export default async function ScenariPage({ params }: { params: Promise<{ codice
       nomeSchema={contesto.nomeSchema}
       aziendeConsentite={contesto.modalita === 'OPERATORE' ? contesto.aziendeConsentite : undefined}
       tipoSpazio={contesto.tipoSpazio}
+      eAdminSpazio={contesto.modalita === 'ADMIN_SPAZIO' || contesto.modalita === 'SALVAGENTE'}
     />
   );
 }

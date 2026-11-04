@@ -17,6 +17,7 @@ import {
   type Scenario,
 } from '@/app/actions/scenari';
 import { ORIGINI_PER_TIPO, type TipoProposta } from '@/lib/origineProposta';
+import { CaricaSetDemo } from '@/components/spazio/CaricaSetDemo';
 
 interface Props {
   codiceSpazio: string;
@@ -25,6 +26,8 @@ interface Props {
   aziendeConsentite?: number[];
   /** ENTE non redige mai proposte, le riceve sempre — condiziona la scelta di default in creazione, vedi sotto. */
   tipoSpazio: 'ENTE' | 'NON_ENTE';
+  /** Solo l'Admin di Spazio vede e può usare il caricamento dei set demo. */
+  eAdminSpazio: boolean;
 }
 
 /** Timeout esplicito: stesso principio già applicato in ChecklistManager —
@@ -37,7 +40,13 @@ function conTimeout<T>(promessa: Promise<T>, secondi: number, messaggio: string)
   ]);
 }
 
-export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, tipoSpazio }: Props) {
+export function ScenariManager({
+  codiceSpazio,
+  nomeSchema,
+  aziendeConsentite,
+  tipoSpazio,
+  eAdminSpazio,
+}: Props) {
   const router = useRouter();
   const [aziende, setAziende] = useState<Azienda[]>([]);
   const [aziendaSelezionata, setAziendaSelezionata] = useState<number | null>(null);
@@ -58,29 +67,31 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
   const [confermaNome, setConfermaNome] = useState('');
   const [azioneInCorso, setAzioneInCorso] = useState<number | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const risultato = await conTimeout(
-          ottieniAziende(nomeSchema),
-          15,
-          'Richiesta delle aziende scaduta: verifica la connessione e riprova.'
+  const caricaAziende = async () => {
+    try {
+      const risultato = await conTimeout(
+        ottieniAziende(nomeSchema),
+        15,
+        'Richiesta delle aziende scaduta: verifica la connessione e riprova.'
+      );
+      if (risultato.success) {
+        setAziende(
+          aziendeConsentite
+            ? risultato.aziende.filter((a) => aziendeConsentite.includes(a.id))
+            : risultato.aziende
         );
-        if (risultato.success) {
-          setAziende(
-            aziendeConsentite
-              ? risultato.aziende.filter((a) => aziendeConsentite.includes(a.id))
-              : risultato.aziende
-          );
-        } else {
-          setErrore(risultato.error || 'Impossibile caricare le aziende.');
-        }
-      } catch (err: any) {
-        setErrore(`Errore imprevisto durante il caricamento: ${err.message || err}`);
-      } finally {
-        setCaricamento(false);
+      } else {
+        setErrore(risultato.error || 'Impossibile caricare le aziende.');
       }
-    })();
+    } catch (err: any) {
+      setErrore(`Errore imprevisto durante il caricamento: ${err.message || err}`);
+    } finally {
+      setCaricamento(false);
+    }
+  };
+
+  useEffect(() => {
+    void caricaAziende();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema]);
 
@@ -180,6 +191,14 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
           Indici, XBRL e Report di quell&apos;analisi specifica.
         </p>
       </div>
+
+      <CaricaSetDemo
+        nomeSchema={nomeSchema}
+        codice={codiceSpazio}
+        tipoSpazio={tipoSpazio}
+        eAdminSpazio={eAdminSpazio}
+        onCaricato={caricaAziende}
+      />
 
       {errore && (
         <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
