@@ -374,6 +374,32 @@ export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> 
     sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS origine_proposta TEXT NOT NULL DEFAULT 'Studio'`
   );
 
+  // Che cosa ha in mano l'azienda (0.170.0): proposta, decreto di
+  // liquidazione giudiziale o dispositivo di cram down. Gli scenari che
+  // esistevano prima restano PROPOSTA e non ricevono la domanda; solo i
+  // nuovi nascono 'DA_CHIEDERE' e la vedono una volta sola.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS tipo_istruttoria TEXT NOT NULL DEFAULT 'PROPOSTA'`
+  );
+
+  // Istruttoria del provvedimento del giudice: una riga per scenario.
+  // I documenti si conservano fino alla generazione dell'analisi critica,
+  // poi i file vengono eliminati e resta ciò che è stato letto e calcolato.
+  // La tabella è separata da simulazione_ricevente perché qui non c'è una
+  // proposta da valutare: ci sono un atto del giudice e un confronto.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.istruttoria_giudice (
+      id SERIAL PRIMARY KEY,
+      scenario_id INTEGER NOT NULL UNIQUE REFERENCES ${s}.scenari(id) ON DELETE CASCADE,
+      documenti JSONB NOT NULL DEFAULT '[]'::jsonb,
+      lettura JSONB,
+      confronto JSONB,
+      relazione TEXT,
+      lettura_il TIMESTAMP,
+      generata_il TIMESTAMP
+    )`
+  );
+
   // Blocco della riga rilevante (Proposta): senza questo, il confronto
   // con la Posizione Debitoria dell'Ente perderebbe stabilità ad ogni
   // click (un ente che "diventa" un altro ente cambiando selezione).

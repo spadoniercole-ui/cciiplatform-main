@@ -113,6 +113,10 @@ export function getTabelleTenant(nomeSchema: string) {
         .notNull()
         .default('DA_DEFINIRE'),
       origineProposta: text('origine_proposta').notNull().default('Studio'),
+      // Che cosa ha in mano l'azienda (0.170.0): proposta, decreto di
+      // liquidazione giudiziale o dispositivo di cram down. 'DA_CHIEDERE'
+      // solo sugli scenari nuovi, finché la domanda non ha risposta.
+      tipoIstruttoria: text('tipo_istruttoria').notNull().default('PROPOSTA'),
       // Blocca la scelta della riga "rilevante per l'ente" (Proposta), in
       // modo che il confronto con la Posizione Debitoria dell'Ente resti
       // stabile — cambiare selezione dopo il blocco richiede uno sblocco

@@ -13,6 +13,7 @@
 import { richiediAccessoAzienda, richiediAccessoScenario } from '@/lib/autorizzazione';
 import { assicuraTabelleScenari } from '@/db/provision';
 import { type TipoProposta, ORIGINI_PER_TIPO } from '@/lib/origineProposta';
+import type { TipoIstruttoria } from '@/lib/giudice/lettura';
 
 export type StatoScenario = 'BOZZA' | 'IN_CORSO' | 'COMPLETATO';
 export type { TipoProposta };
@@ -24,6 +25,8 @@ export interface Scenario {
   stato: StatoScenario;
   tipoProposta: TipoProposta;
   origineProposta: string;
+  /** Che cosa ha in mano l'azienda. Assente sugli scenari anteriori alla 0.170.0: vale PROPOSTA. */
+  tipoIstruttoria?: TipoIstruttoria;
   rigaRilevanteBloccata: boolean;
   archiviato: boolean;
   /** Ricevente (ENTE): abilita il passo «Piano di sviluppo» (confronto con il piano dell'azienda, ipotesi dell'AI) su questo scenario. Scelto alla creazione. Per il Redigente il piano è sempre disponibile, quindi questo flag è ininfluente lì. */
@@ -65,6 +68,7 @@ export async function ottieniScenari(
         stato: r.stato as StatoScenario,
         tipoProposta: r.tipoProposta as TipoProposta,
         origineProposta: r.origineProposta,
+        tipoIstruttoria: r.tipoIstruttoria as TipoIstruttoria,
         rigaRilevanteBloccata: r.rigaRilevanteBloccata,
         archiviato: r.archiviato,
         simulazioneAttiva: r.simulazioneAttiva,
@@ -112,6 +116,7 @@ export async function ottieniScenarioPerId(
         stato: tabelle.scenari.stato,
         tipoProposta: tabelle.scenari.tipoProposta,
         origineProposta: tabelle.scenari.origineProposta,
+        tipoIstruttoria: tabelle.scenari.tipoIstruttoria,
         rigaRilevanteBloccata: tabelle.scenari.rigaRilevanteBloccata,
         archiviato: tabelle.scenari.archiviato,
         simulazioneAttiva: tabelle.scenari.simulazioneAttiva,
@@ -138,6 +143,7 @@ export async function ottieniScenarioPerId(
         stato: r.stato as StatoScenario,
         tipoProposta: r.tipoProposta as TipoProposta,
         origineProposta: r.origineProposta,
+        tipoIstruttoria: r.tipoIstruttoria as TipoIstruttoria,
         rigaRilevanteBloccata: r.rigaRilevanteBloccata,
         archiviato: r.archiviato,
         simulazioneAttiva: r.simulazioneAttiva,
@@ -200,7 +206,17 @@ export async function creaScenarioAction(
 
     const inserito = await db
       .insert(tabelle.scenari)
-      .values({ aziendaId, nome: nome.trim(), tipoProposta, origineProposta, simulazioneAttiva })
+      .values({
+        aziendaId,
+        nome: nome.trim(),
+        tipoProposta,
+        origineProposta,
+        // Solo lo spazio ENTE riceve: il nuovo scenario si apre chiedendo
+        // che cosa ha in mano l'azienda. Il Redigente redige una proposta,
+        // quindi la domanda non ha senso per lui.
+        tipoIstruttoria: spazioRis.rows[0]?.tipo_spazio === 'ENTE' ? 'DA_CHIEDERE' : 'PROPOSTA',
+        simulazioneAttiva,
+      })
       .returning({ id: tabelle.scenari.id });
 
     const nuovoScenarioId = inserito[0].id;

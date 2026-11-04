@@ -1,3 +1,23 @@
+## 0.170.0 — 2026-11-04
+
+**Decreto di liquidazione e cram down: non una proposta da valutare, un atto da riscontrare.**
+
+- **La prima domanda, appena creato lo scenario.** Uno scenario ricevuto si apre chiedendo che cosa
+  ha in mano l'azienda: una proposta, un decreto di liquidazione giudiziale o un dispositivo di cram
+  down. La scelta decide il percorso e resta modificabile finché non si caricano documenti. Gli
+  scenari già esistenti restano sulla proposta e non ricevono la domanda.
+- **Il provvedimento si legge, non si interpreta.** Si caricano il decreto o il dispositivo e gli
+  allegati (stato passivo, perizia, relazione del commissario, piano). La lettura estrae solo ciò che
+  è scritto: crediti, rango, percentuali, spese e tempi. Se un dato manca resta vuoto.
+- **Il confronto è aritmetico, non affidato all'AI.** Ogni credito a ruolo dell'ente viene abbinato
+  al credito corrispondente del provvedimento; si vedono le differenze voce per voce, i totali per
+  rango, la minore ammissione, il recupero atteso e la perdita. Se il provvedimento non indica una
+  percentuale, il recupero e la perdita si dichiarano non calcolabili: nessuna stima di comodo.
+- **L'analisi critica dice dove guardare.** Il testo spiega le difformità, la perdita e gli elementi
+  che possono fondare una contestazione, senza citare articoli o rimedi: la qualificazione giuridica
+  resta al legale dell'ente. I documenti vengono eliminati dopo la generazione; lettura e confronto
+  restano, così l'analisi si può rigenerare.
+
 ## 0.169.0 — 2026-11-04
 
 **La check list prima delle criticità, e la ricerca web che non si ferma al dato ufficiale.**

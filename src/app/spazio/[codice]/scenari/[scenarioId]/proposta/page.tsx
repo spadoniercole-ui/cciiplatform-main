@@ -4,6 +4,8 @@ import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { PropostaScenario } from '@/components/spazio/PropostaScenario';
 import { ottieniFunzioniPlusSpazio } from '@/app/actions/funzioniPlus';
 import { LavorazioneRedigente } from '@/components/spazio/LavorazioneRedigente';
+import { SceltaIstruttoria } from '@/components/spazio/SceltaIstruttoria';
+import { IstruttoriaProvvedimento } from '@/components/spazio/IstruttoriaProvvedimento';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottienePosizioneAggiornata } from '@/app/actions/posizioneAggiornata';
 import { ottieniRisposteChecklist } from '@/app/actions/checklist';
@@ -127,6 +129,36 @@ export default async function PropostaScenarioPage({
           bloccatoIl: scenario.bloccatoIl,
         }}
       />
+    );
+  }
+
+  // Che cosa ha in mano l'azienda (0.170.0). Lo scenario nuovo nasce con la
+  // domanda ancora aperta: finché non risponde, non si mostra il percorso
+  // della proposta, che sarebbe quello sbagliato per un decreto o un cram down.
+  const tipoIstruttoria = scenario.tipoIstruttoria ?? 'PROPOSTA';
+  if (scenario.tipoProposta === 'RICEVUTA' && tipoIstruttoria === 'DA_CHIEDERE') {
+    return (
+      <SceltaIstruttoria
+        nomeSchema={contesto.nomeSchema}
+        scenarioId={Number(scenarioId)}
+        nomeScenario={scenario.nome}
+        ragioneSociale={scenario.ragioneSocialeAzienda}
+      />
+    );
+  }
+  if (
+    scenario.tipoProposta === 'RICEVUTA' &&
+    (tipoIstruttoria === 'DECRETO_LIQUIDAZIONE' || tipoIstruttoria === 'CRAM_DOWN')
+  ) {
+    return (
+      <div className="space-y-10">
+        <IstruttoriaProvvedimento
+          nomeSchema={contesto.nomeSchema}
+          scenarioId={Number(scenarioId)}
+          codice={codice}
+          tipoAtto={tipoIstruttoria}
+        />
+      </div>
     );
   }
 
