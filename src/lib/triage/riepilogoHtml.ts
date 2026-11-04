@@ -19,6 +19,7 @@ import { STILE_BOX } from './box';
 import type { SintesiPerimetro } from './perimetro';
 import type { EsitoScenari } from './scenari';
 import type { CheckListRiepilogo } from './checkListRiepilogo';
+import type { RapportoEnte } from './rapportoEnte';
 
 export interface DocumentoTriage {
   nome: string;
@@ -124,6 +125,13 @@ export interface DatiRiepilogoTriage {
   scenari?: EsitoScenari | null;
   /** La check di perimetro delle TL, se qualcuna è contrassegnata. */
   checkPerimetro?: SintesiPerimetro | null;
+  /**
+   * IL PARAMETRO ATTESO DALL'ENTE (0.159.0): le categorie di debito dell'ente,
+   * la quota che l'ente considera dovuta e le due righe — X in liquidazione,
+   * Y in cram down — con lo scostamento. È il confronto che resta nel foglio:
+   * a video non c'è nessuna levetta da muovere.
+   */
+  rapportoEnte?: RapportoEnte | null;
   /**
    * La check list dello screening con le risposte date, accanto alla check di
    * perimetro. `null` quando il questionario non è mai stato generato: il
@@ -371,6 +379,54 @@ ${STILE_BOX}
     );
     parti.push(
       '<p style="font-size:10px;color:#92400e">Il confronto applica al credito dell’ente le percentuali configurate: non stima l’attivo dell’azienda e non è un giudizio di convenienza su una proposta.</p>'
+    );
+  }
+
+  // 2-bis. IL RAPPORTO CON L'ENTE (0.159.0). Non un giocchino a video: la
+  // quota che l'ente considera dovuta e le due righe — X in liquidazione, Y in
+  // cram down — accanto all'esposizione, categoria per categoria. È qui che il
+  // numero resta, perché il foglio è ciò che si consegna.
+  if (d.rapportoEnte) {
+    const r = d.rapportoEnte;
+    parti.push(titolo('Parametro atteso dall’ente: liquidazione e cram down'));
+    parti.push(
+      `<p style="font-size:11px">Quota che l’ente considera dovuta sul proprio credito: ${
+        r.percentualeAttesa === null ? '<i>non impostata</i>' : `<b>${r.percentualeAttesa}%</b>`
+      }. Le due colonne dicono quanto l’ente incasserebbe, sullo stesso credito, nelle due ipotesi.</p>`
+    );
+    parti.push(
+      `<table><thead><tr><th>Categoria di debito</th><th>Rango</th><th>Dovuto</th><th>Atteso</th><th>Liquidazione</th><th>Cram down</th><th>Scostamento</th></tr></thead><tbody>${r.righe
+        .map(
+          (x) =>
+            `<tr><td>${esc(x.categoria)}</td><td>${esc(x.rango ?? 'non indicato')}</td><td class="num">${euro(
+              x.dovuto
+            )}</td><td class="num">${euro(x.atteso)}</td><td class="num">${euro(
+              x.liquidazione
+            )}</td><td class="num">${euro(x.cramDown)}</td><td class="num">${euro(
+              x.scostamentoLiquidazione
+            )}</td></tr>`
+        )
+        .join('')}</tbody></table>`
+    );
+    if (r.totaleAtteso !== null || r.totaleLiquidazione !== null) {
+      parti.push(
+        `<p style="font-size:11px">Totale dovuto <b>${euro(r.totaleDovuto)}</b> — atteso <b>${euro(
+          r.totaleAtteso
+        )}</b>, liquidazione <b>${euro(r.totaleLiquidazione)}</b>, cram down <b>${euro(
+          r.totaleCramDown
+        )}</b>. Scostamento: liquidazione <b>${euro(
+          r.scostamentoLiquidazione
+        )}</b>, cram down <b>${euro(r.scostamentoCramDown)}</b>.</p>`
+      );
+    }
+    if (r.mancanti.length)
+      parti.push(
+        `<p class="lacune" style="font-size:11px">Per completare la tabella manca: ${esc(
+          r.mancanti.join('; ')
+        )}.</p>`
+      );
+    parti.push(
+      '<p style="font-size:10px;color:#475569">La tabella misura solo il credito dell’ente: non chiede la composizione dei crediti degli altri e non stima l’attivo dell’azienda. Gli importi sono calcolati sulle percentuali configurate, al netto delle spese di procedura per la liquidazione.</p>'
     );
   }
 

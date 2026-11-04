@@ -128,6 +128,7 @@ export function getTabelleTenant(nomeSchema: string) {
       // Solo percorso Ricevente — valorizzato quando la Relazione
       // finale è generata, da quel momento lo scenario è sola lettura
       // permanente. Sempre null per il Redigente.
+      variante: text('variante'),
       bloccatoIl: timestamp('bloccato_il'),
       // Inquadramento della proposta: strumento, data di deposito
       // (AAAA-MM-GG) e correzione a mano della quota degli altri aderenti

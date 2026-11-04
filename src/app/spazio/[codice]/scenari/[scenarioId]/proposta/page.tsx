@@ -4,6 +4,9 @@ import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { PropostaScenario } from '@/components/spazio/PropostaScenario';
 import { ottieniFunzioniPlusSpazio } from '@/app/actions/funzioniPlus';
 import { LavorazioneRedigente } from '@/components/spazio/LavorazioneRedigente';
+import { VarianteScenarioPanel } from '@/components/spazio/VarianteScenarioPanel';
+import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
+import { saldoRigaDebitoEnte } from '@/lib/debitiEnte/tipoDebito';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottienePosizioneAggiornata } from '@/app/actions/posizioneAggiornata';
 import { ottieniRisposteChecklist } from '@/app/actions/checklist';
@@ -135,6 +138,14 @@ export default async function PropostaScenarioPage({
     scenario.tipoProposta === 'RICEVUTA'
       ? await ottieniFunzioniPlusSpazio(contesto.nomeSchema)
       : null;
+  // Il credito dell'ente è il termine di confronto del provvedimento: senza,
+  // il numero del tribunale non dice nulla.
+  const debitiEnte = await ottieniDebitiEnte(contesto.nomeSchema, scenario.aziendaId);
+  const creditoEnte =
+    debitiEnte.success && debitiEnte.righe.length > 0
+      ? debitiEnte.righe.reduce((a, r) => a + saldoRigaDebitoEnte(r), 0)
+      : null;
+
   const chiusura =
     scenario.tipoProposta === 'RICEVUTA' && plus
       ? {
@@ -149,6 +160,13 @@ export default async function PropostaScenarioPage({
 
   return (
     <div className="space-y-10">
+      <VarianteScenarioPanel
+        nomeSchema={contesto.nomeSchema}
+        scenarioId={Number(scenarioId)}
+        codice={codice}
+        variante={scenario.variante}
+        creditoEnte={creditoEnte}
+      />
       <PropostaScenario
         nomeSchema={contesto.nomeSchema}
         scenarioId={Number(scenarioId)}

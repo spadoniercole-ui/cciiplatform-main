@@ -53,6 +53,26 @@ vi.mock('@/app/actions/checklistMinisterialeAzienda', () => ({
   generaPreCompilazioneMinisterialeAction: vi.fn(),
 }));
 
+// La check list dei prodotti (0.159.0) ha preso il posto di quella dello
+// screening: nel test è vuota, ma la sezione deve comparire.
+vi.mock('@/app/actions/checklistProdotti', () => ({
+  ottieniChecklistProdottiAction: vi.fn().mockResolvedValue({
+    success: true,
+    righe: [],
+    sintesi: {
+      sezioni: [],
+      totale: 0,
+      risposte: 0,
+      criticita: 0,
+      senzaRisposta: [],
+      completa: false,
+    },
+    generataIl: null,
+  }),
+  generaChecklistProdottiAction: vi.fn(),
+  salvaRispostaChecklistProdottoAction: vi.fn(),
+}));
+
 vi.mock('@/app/actions/visuraTriage', () => ({
   registraVisuraTriageAction: vi.fn(),
   ottieniVisuraTriageAction: vi.fn().mockResolvedValue({ success: true, visura: null }),
@@ -937,7 +957,7 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
 // qui non c'era più: il triage dichiarava di non potersi chiudere e il lavoro
 // da fare non era raggiungibile da nessun punto della videata.
 describe('Verifica salute azienda — le check nella fase d’esito', () => {
-  it('apre la check di perimetro e la check list dentro una verifica riaperta', async () => {
+  it('apre la check di perimetro e la check list dei prodotti dentro una verifica riaperta', async () => {
     render(
       <VerificaSaluteAzienda
         nomeSchema={SCHEMA}
@@ -951,7 +971,7 @@ describe('Verifica salute azienda — le check nella fase d’esito', () => {
     expect(
       await screen.findByRole('heading', { name: 'Check di perimetro dei crediti' })
     ).toBeTruthy();
-    expect(await screen.findByRole('heading', { name: 'Check list dello screening' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Check list dei prodotti' })).toBeTruthy();
   });
 
   it('dalla verifica si torna alla dashboard del triage', async () => {

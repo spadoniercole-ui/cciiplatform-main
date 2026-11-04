@@ -20,18 +20,22 @@ export interface Esecutore {
   query(testo: string, parametri?: unknown[]): Promise<{ rows: any[] }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export type FunzioneAi = 'VISURA' | 'RISCONTRO';
+export type FunzioneAi = 'VISURA' | 'RISCONTRO' | 'SCENARI' | 'PROVVEDIMENTO';
 
 /** Come si chiama, a schermo, ciò che si conta. */
 const CONTEGGIO: Record<FunzioneAi, string> = {
   VISURA: 'estrazioni automatiche',
   RISCONTRO: 'verifiche sulle fonti',
+  SCENARI: 'ricerche sui parametri degli scenari',
+  PROVVEDIMENTO: 'letture di provvedimenti',
 };
 
 /** Cosa può fare chi ha esaurito il tetto. */
 const CONSIGLIO: Record<FunzioneAi, string> = {
   VISURA: 'Riprova più tardi o compila i campi a mano.',
   RISCONTRO: 'Riprova più tardi: la riga resta «da riscontrare».',
+  SCENARI: 'Riprova più tardi o inserisci le percentuali a mano.',
+  PROVVEDIMENTO: 'Riprova più tardi: il provvedimento resta da leggere.',
 };
 
 interface Limiti {
@@ -50,6 +54,16 @@ export function limitiAi(funzione: FunzioneAi, env: NodeJS.ProcessEnv = process.
       return {
         perUtenteOra: numeroDaEnv(env.AI_VISURE_PER_UTENTE_ORA, 30),
         perSpazioGiorno: numeroDaEnv(env.AI_VISURE_PER_SPAZIO_GIORNO, 300),
+      };
+    case 'SCENARI':
+      return {
+        perUtenteOra: numeroDaEnv(env.AI_SCENARI_PER_UTENTE_ORA, 20),
+        perSpazioGiorno: numeroDaEnv(env.AI_SCENARI_PER_SPAZIO_GIORNO, 100),
+      };
+    case 'PROVVEDIMENTO':
+      return {
+        perUtenteOra: numeroDaEnv(env.AI_PROVVEDIMENTI_PER_UTENTE_ORA, 20),
+        perSpazioGiorno: numeroDaEnv(env.AI_PROVVEDIMENTI_PER_SPAZIO_GIORNO, 100),
       };
     case 'RISCONTRO':
       // Un riscontro accompagna ogni salvataggio della parte giuridica: il

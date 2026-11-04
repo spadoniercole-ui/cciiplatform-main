@@ -421,6 +421,27 @@ export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> 
     sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS quota_altri_aderenti_manuale NUMERIC`
   );
 
+  // LA VARIANTE DELLO SCENARIO (0.159.0): proposta dell'azienda, cram down
+  // disposto dal tribunale, decreto di liquidazione. NULL = non ancora scelta:
+  // uno scenario esistente non riceve una variante che nessuno ha dichiarato.
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS variante TEXT`);
+
+  // Il provvedimento caricato per cram down o decreto: il testo letto, i
+  // riferimenti all'ente trovati e gli importi riconosciuti. Una riga per
+  // scenario — l'analisi si rifà sopra la stessa, la precedente non serve.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.provvedimento_scenario (
+      scenario_id INTEGER PRIMARY KEY REFERENCES ${s}.scenari(id) ON DELETE CASCADE,
+      tipo TEXT NOT NULL,
+      nome_file TEXT,
+      url TEXT,
+      testo TEXT,
+      importi JSONB,
+      errore TEXT,
+      generato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+
   // Ogni generazione della Relazione è una riga a sé, mai sovrascritta
   // — anche dopo uno sblocco e una rigenerazione, la versione
   // precedente resta consultabile. Senza questo, sbloccare per
@@ -2451,6 +2472,29 @@ export async function assicuraTabelleScenariTriage(nomeSchema: string): Promise<
       aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
+
+  // LA QUOTA CHE L'ENTE CONSIDERA DOVUTA (0.159.0). Per l'INPS è il 100% del
+  // proprio credito: è il termine con cui il report misura lo scostamento delle
+  // due ipotesi. NULL = non dichiarata, e il report lo scrive invece di
+  // assumerla come regola.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.parametri_scenari ADD COLUMN IF NOT EXISTS soddisfazione_attesa_pct NUMERIC`
+  );
+
+  // I VALORI PROPOSTI DALLA RICERCA WEB (0.159.0) — distinti da quelli
+  // confermati: un suggerimento non entra nel calcolo finché l'Admin non lo
+  // salva. Resta con le sue fonti e la sua data, così si può dire da dove
+  // viene ogni numero.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_scenari_suggerimento (
+      chiave TEXT PRIMARY KEY,
+      tasso_liquidazione_pct NUMERIC,
+      cram_down_pct NUMERIC,
+      fonti JSONB,
+      nota TEXT,
+      generato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.triage_scenario (
       azienda_id INTEGER PRIMARY KEY REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
@@ -2686,4 +2730,32 @@ export async function popolaDatiMasterSpazio(
       await tx.insert(tabelle.indici_master).values(indice).onConflictDoNothing();
     }
   });
+}
+
+/**
+ * LA CHECK LIST DEI PRODOTTI (0.159.0) — le domande generate dal catalogo
+ * delle TL, una riga per domanda con la risposta data. Vive accanto
+ * all'azienda, come la check di perimetro: si compila prima dell'elaborazione
+ * del triage e non serve a uno scenario in particolare.
+ */
+export async function assicuraTabellaChecklistProdotti(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaAziende(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.checklist_prodotti (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      prodotto TEXT NOT NULL,
+      direttrice TEXT,
+      domanda TEXT NOT NULL,
+      risposta BOOLEAN,
+      note TEXT,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      generato_il TIMESTAMP NOT NULL DEFAULT now(),
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_checklist_prodotti_azienda ON ${s}.checklist_prodotti (azienda_id)`
+  );
 }

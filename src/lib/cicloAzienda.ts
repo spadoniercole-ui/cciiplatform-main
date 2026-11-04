@@ -32,6 +32,7 @@ export const TABELLE_CICLO = [
   'azienda_checklist_ministeriale_risposte',
   'debiti_triage',
   'debiti_vera',
+  'checklist_prodotti',
 ] as const;
 
 /** Colonne della scheda Soglie, sulla riga dell'azienda. */

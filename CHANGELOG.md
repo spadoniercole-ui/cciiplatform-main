@@ -1,3 +1,33 @@
+## 0.159.0 — 2026-11-04
+
+**Il triage dice quello che l'ente deve sapere: quanto incassa, in due ipotesi, e quanto manca.**
+Il confronto con la liquidazione e il cram down era una scheda a levette: numeri da muovere a
+video e niente che restasse nel foglio consegnato. Le domande del triage venivano dallo
+screening, che nel frattempo è diventato una lettura storica. E le percentuali le digitava
+l'operatore, senza una fonte.
+
+- **La check list dei prodotti sostituisce quella dello screening.** Le domande nascono dal
+  catalogo delle TL — un prodotto, le sue lavorazioni — e si compilano nel triage subito prima
+  dell'elaborazione. La check list dello screening non si mostra più e non si legge più: il
+  codice resta, ma non entra nel flusso. Senza AI le domande di base si ricavano dal catalogo,
+  quindi il triage si chiude comunque.
+- **Due righe nel report, non un giocchino a video.** La scheda delle levette non c'è più: nel
+  riepilogo (e nel PDF) c'è una tabella con le categorie di debito dell'ente, la quota che l'ente
+  considera dovuta, X in liquidazione, Y in cram down e lo scostamento. Si misura solo il credito
+  dell'ente: la composizione dei crediti degli altri non cambia quel numero.
+- **Le percentuali si propongono con la ricerca web e si confermano.** In Parametri → Scenari un
+  comando cerca tassi di recupero, spese di procedura ed evidenze sui cram down, cita le fonti e
+  salva il risultato come *suggerimento*: entra nel calcolo solo quando l'Admin lo applica e
+  salva. Suggerito e confermato restano distinti, con data e fonti.
+- **La quota attesa dall'ente** (per l'INPS il 100%) è un parametro: è il termine con cui si
+  misura lo scostamento. Se manca, il report lo dice invece di assumerlo.
+- **Le tre varianti dello scenario.** Aprendo uno scenario si dichiara che cosa si esamina: la
+  proposta dell'azienda, un cram down disposto dal tribunale o un decreto di liquidazione. Nelle
+  ultime due si carica il provvedimento, si cercano i riferimenti all'ente e si confronta quanto
+  riconosciuto con quanto l'ente detiene. La trattativa resta com'è.
+- **Bilanci e indici restano fuori dal triage.** Il triage è documentale — visura, prospetti,
+  V.E.R.A., parametri dell'ente — e i bilanci si chiedono dopo «Procedi con questa azienda».
+
 ## 0.158.0 — 2026-11-01
 
 **Un solo posto per l'ufficio: le lavorazioni per tipologia di debito entrano nel catalogo.**

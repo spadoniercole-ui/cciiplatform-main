@@ -13,6 +13,7 @@
 import { richiediAccessoAzienda, richiediAccessoScenario } from '@/lib/autorizzazione';
 import { assicuraTabelleScenari } from '@/db/provision';
 import { type TipoProposta, ORIGINI_PER_TIPO } from '@/lib/origineProposta';
+import { varianteValida, type VarianteScenario } from '@/lib/scenario/variante';
 
 export type StatoScenario = 'BOZZA' | 'IN_CORSO' | 'COMPLETATO';
 export type { TipoProposta };
@@ -28,6 +29,12 @@ export interface Scenario {
   archiviato: boolean;
   /** Ricevente (ENTE): abilita il passo «Piano di sviluppo» (confronto con il piano dell'azienda, ipotesi dell'AI) su questo scenario. Scelto alla creazione. Per il Redigente il piano è sempre disponibile, quindi questo flag è ininfluente lì. */
   simulazioneAttiva: boolean;
+  /**
+   * Che cosa si sta esaminando: la proposta dell'azienda, un cram down
+   * disposto dal tribunale o un decreto di liquidazione. null = non ancora
+   * dichiarato (gli scenari aperti prima della 0.159.0).
+   */
+  variante: VarianteScenario | null;
   /** Solo percorso Ricevente — valorizzato quando la Relazione finale è stata generata. Da quel momento lo scenario è sola lettura permanente. */
   bloccatoIl: string | null;
   createdAt: string;
@@ -68,6 +75,7 @@ export async function ottieniScenari(
         rigaRilevanteBloccata: r.rigaRilevanteBloccata,
         archiviato: r.archiviato,
         simulazioneAttiva: r.simulazioneAttiva,
+        variante: varianteValida(r.variante) ? r.variante : null,
         bloccatoIl: r.bloccatoIl ? r.bloccatoIl.toString() : null,
         createdAt: r.createdAt.toString(),
       })),
@@ -115,6 +123,7 @@ export async function ottieniScenarioPerId(
         rigaRilevanteBloccata: tabelle.scenari.rigaRilevanteBloccata,
         archiviato: tabelle.scenari.archiviato,
         simulazioneAttiva: tabelle.scenari.simulazioneAttiva,
+        variante: tabelle.scenari.variante,
         bloccatoIl: tabelle.scenari.bloccatoIl,
         createdAt: tabelle.scenari.createdAt,
         ragioneSocialeAzienda: tabelle.aziende.ragioneSociale,
@@ -141,6 +150,7 @@ export async function ottieniScenarioPerId(
         rigaRilevanteBloccata: r.rigaRilevanteBloccata,
         archiviato: r.archiviato,
         simulazioneAttiva: r.simulazioneAttiva,
+        variante: varianteValida(r.variante) ? r.variante : null,
         bloccatoIl: r.bloccatoIl ? r.bloccatoIl.toString() : null,
         createdAt: r.createdAt.toString(),
         ragioneSocialeAzienda: r.ragioneSocialeAzienda,
@@ -411,5 +421,40 @@ export async function attivaPianoSviluppoAction(
   } catch (error: unknown) {
     console.error('[attivaPianoSviluppoAction] Errore:', error);
     return { success: false, error: `Impossibile attivare il piano: ${(error as Error).message}` };
+  }
+}
+
+/**
+ * LA VARIANTE (0.159.0). Si dichiara aprendo lo scenario, e si può cambiare
+ * finché lo scenario non è chiuso: non è un legame esclusivo con i campi
+ * indice, e i dati già inseriti non si perdono. Cambiare variante non cancella
+ * nulla — il percorso di trattativa resta lì anche se per ora si esamina un
+ * decreto.
+ */
+export async function impostaVarianteScenarioAction(
+  nomeSchema: string,
+  scenarioId: number,
+  variante: VarianteScenario
+): Promise<RisultatoOperazioneScenario> {
+  try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
+    if (!varianteValida(variante)) return { success: false, error: 'Variante non riconosciuta.' };
+    const bloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
+    if (bloccato) return { success: false, error: bloccato };
+    const { db } = await import('@/db/client');
+    const { getTabelleTenant } = await import('@/db/schema');
+    const { eq } = await import('drizzle-orm');
+    const tabelle = getTabelleTenant(nomeSchema);
+    await db.update(tabelle.scenari).set({ variante }).where(eq(tabelle.scenari.id, scenarioId));
+    return { success: true, scenarioId };
+  } catch (error: any) {
+    console.error('[impostaVarianteScenarioAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile salvare la variante: ${error.message || error}`,
+    };
   }
 }

@@ -75,11 +75,9 @@ import {
   ottieniRangoCreditoAction,
 } from '@/app/actions/triagePerimetro';
 import { ottieniParametriScenariAction } from '@/app/actions/parametriScenari';
-import { ottieniScreeningAzienda } from '@/app/actions/screeningAzienda';
-import { riepilogoCheckList } from '@/lib/triage/checkListRiepilogo';
 import { PerimetroTriage } from '@/components/spazio/PerimetroTriage';
-import { CheckListTriage } from '@/components/spazio/CheckListTriage';
-import { ScenariTriage } from '@/components/spazio/ScenariTriage';
+import { CheckListProdottiTriage } from '@/components/spazio/CheckListProdottiTriage';
+import { rapportoEnte } from '@/lib/triage/rapportoEnte';
 import { calcolaScenari } from '@/lib/triage/scenari';
 import { salvaStrutturaProspettoAction } from '@/app/actions/struttureProspetto';
 import {
@@ -1385,19 +1383,22 @@ export function VerificaSaluteAzienda({
     // dice che cosa è stato verificato sui documenti. Si legge al momento
     // della stampa, come il perimetro, così il foglio non diverge da ciò che è
     // salvato.
-    const screening = aziendaId ? await ottieniScreeningAzienda(nomeSchema, aziendaId) : null;
-    const checkList =
-      screening && screening.success && screening.stato.esiste
-        ? riepilogoCheckList({
-            sezioni: screening.stato.sezioni,
-            risposte: screening.stato.risposte,
-            esito: screening.stato.quadro
-              ? {
-                  etichetta: screening.stato.quadro.etichetta,
-                  punteggio: screening.stato.quadro.punteggio,
-                }
-              : null,
-            generatoIl: screening.stato.generatoIl,
+    // IL RAPPORTO CON L'ENTE (0.159.0). Al posto della check list dello
+    // screening — che non si usa più e non si legge più — la tabella che il
+    // report deve portare: le categorie di debito dell'ente, la quota che
+    // l'ente considera dovuta e le due ipotesi, con lo scostamento.
+    const rapporto =
+      aziendaId && esitoSoglie && parametriScenari.success && parametriScenari.parametri
+        ? rapportoEnte({
+            righe: esitoSoglie.righe
+              .filter((r) => r.applicabile && r.esposizione !== null)
+              .map((r) => ({
+                categoria: r.ambito,
+                dovuto: r.esposizione as number,
+                rango: rangoCredito?.success ? (rangoCredito.rango ?? null) : null,
+              })),
+            parametri: parametriScenari.parametri,
+            percentualeAttesaPct: parametriScenari.soddisfazioneAttesaPct ?? null,
           })
         : null;
     const creditoScenari =
@@ -1473,7 +1474,7 @@ export function VerificaSaluteAzienda({
         scenari,
         checkPerimetro:
           checkPerimetro && checkPerimetro.success ? (checkPerimetro.sintesi ?? null) : null,
-        checkList,
+        rapportoEnte: rapporto,
         // Le evidenze che partono per i reparti: chi riceve il riepilogo deve
         // sapere che cosa è stato mandato a chi, e quanto vale.
         uffici: reportUo.documenti.map((d) => ({
@@ -3391,31 +3392,13 @@ export function VerificaSaluteAzienda({
             />
           </div>
 
-          {/* LA CHECK LIST DELLO SCREENING (0.154.0): si genera e si risponde qui. */}
+          {/* LA CHECK LIST DEI PRODOTTI (0.159.0). Sostituisce quella dello
+              screening: le domande nascono dal catalogo delle TL e si compilano
+              qui, subito prima dell'elaborazione del triage. Il confronto con
+              gli scenari non è più una scheda a levette: le due righe X e Y
+              stanno nel report, dove restano. */}
           <div className="border-t border-slate-200 pt-4">
-            <CheckListTriage
-              nomeSchema={nomeSchema}
-              aziendaId={aziendaId!}
-              codice={codice}
-              visuraSessione={fileVisura}
-            />
-          </div>
-
-          {/* GLI SCENARI (0.153.0): il credito misurato dalle soglie, con i due
-              termini di paragone. */}
-          <div className="border-t border-slate-200 pt-4">
-            <ScenariTriage
-              nomeSchema={nomeSchema}
-              aziendaId={aziendaId!}
-              codice={codice}
-              credito={
-                esitoSoglie && esitoSoglie.righe.some((r) => r.applicabile)
-                  ? esitoSoglie.righe
-                      .filter((r) => r.applicabile && r.esposizione !== null)
-                      .reduce((a, r) => a + (r.esposizione ?? 0), 0)
-                  : null
-              }
-            />
+            <CheckListProdottiTriage nomeSchema={nomeSchema} aziendaId={aziendaId!} />
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">

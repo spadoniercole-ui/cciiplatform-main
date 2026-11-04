@@ -230,6 +230,41 @@ Drizzle è marginale.
 6. **Nuovo ciclo** (`src/lib/cicloAzienda.ts`): archivia e azzera il lavoro istruttorio,
    conserva i fatti.
 
+### Il triage, dopo la 0.159.0
+
+Il triage è un'analisi documentale: visura storica, prospetti dell'ente, V.E.R.A. e parametri
+dell'ente. Non chiede bilanci — quelli si chiedono dopo «Procedi con questa azienda», dove
+scattano indici e screening con il dato dell'ente sempre in evidenza. Nel triage restano due
+domande distinte:
+
+1. **Che cosa l'azienda ha attivato, prodotto per prodotto.** È la *check list dei prodotti*
+   (`azienda_checklist_prodotti`, azione `checklistProdotti.ts`): le domande nascono dal catalogo
+   delle TL, un prodotto con le sue lavorazioni, e si compilano subito prima dell'elaborazione.
+   Senza AI le domande di base si ricavano dal catalogo, quindi il triage si chiude comunque.
+2. **Quanto l'ente incassa, e quanto manca.** Le percentuali di liquidazione e cram down stanno in
+   `parametri_scenari` e `parametri_scenari_rango`, con la quota attesa dall'ente
+   (`soddisfazione_attesa_pct`, per l'INPS 100%). La ricerca web (`suggerisciParametriScenariAction`)
+   propone i valori con le fonti in `parametri_scenari_suggerimento`: un suggerimento non entra nel
+   calcolo finché l'Admin non lo salva.
+
+Il confronto non è più una scheda a levette: `src/lib/triage/rapportoEnte.ts` produce per ogni
+categoria di debito dell'ente la riga con dovuto, atteso, X in liquidazione, Y in cram down e
+scostamento, e `htmlRiepilogoTriage` la stampa nel report (HTML e PDF). Si misura solo il credito
+dell'ente: la composizione dei crediti degli altri non cambia quel numero.
+
+La vecchia *check list dello screening* (`CheckListTriage.tsx`, `azienda_screening_risposte`)
+resta nel codice come lettura storica, ma non si mostra più e il triage non la legge: le è
+subentrata quella dei prodotti. I componenti `CheckListTriage` e `ScenariTriage` non sono montati.
+
+### Le varianti dello scenario (0.159.0)
+
+Aprendo uno scenario si dichiara che cosa si esamina (`scenari.variante`, `src/lib/scenario/variante.ts`):
+`PROPOSTA_AZIENDA`, `CRAM_DOWN`, `DECRETO_LIQUIDAZIONE`. La variante non è un legame esclusivo
+con i campi indice e si può cambiare finché lo scenario non è chiuso. Nelle ultime due si carica il
+provvedimento (`provvedimento_scenario`, azione `provvedimentoScenario.ts`): l'AI legge il PDF,
+estrae i riferimenti all'ente e l'importo riconosciuto, e la scheda mostra il confronto
+differenziale con il credito dell'ente. Nella trattativa non cambia nulla.
+
 ### Fase 3 — Lo scenario
 
 Lo scenario nasce dalla classificazione della proposta: `RICEVUTA` (da Ente o Tribunale) o
