@@ -29,6 +29,7 @@ export default async function ParametriChecklistPage({
 
       <ChecklistParametriTabs
         nomeSchema={contesto.nomeSchema}
+        codice={codice}
         apriModelloId={modello ? Number(modello) : undefined}
         tipoSpazio={contesto.tipoSpazio}
       />

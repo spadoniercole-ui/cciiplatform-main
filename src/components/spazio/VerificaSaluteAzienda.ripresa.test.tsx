@@ -195,6 +195,7 @@ import { ottieniConsegneRepartiAction } from '@/app/actions/consegneReparti';
 import { ottieniValoriSoglieAction, valutaSoglieAction } from '@/app/actions/soglie25novies';
 import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { ottieniEtichetteAnagraficaEnte } from '@/app/actions/anagraficaEnteConfig';
+import { ottieniChecklistProdottiAction } from '@/app/actions/checklistProdottiTriage';
 import { RISCONTRO_VUOTO } from '@/lib/titoliEnte/titoli';
 import { VerificaSaluteAzienda } from './VerificaSaluteAzienda';
 
@@ -960,7 +961,7 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
 // qui non c'era più: il triage dichiarava di non potersi chiudere e il lavoro
 // da fare non era raggiungibile da nessun punto della videata.
 describe('Verifica salute azienda — le check nella fase d’esito', () => {
-  it('apre la check list dentro una verifica riaperta, senza la check di perimetro', async () => {
+  it('monta la check list dei prodotti dentro una verifica riaperta, senza quella dello screening', async () => {
     render(
       <VerificaSaluteAzienda
         nomeSchema={SCHEMA}
@@ -971,8 +972,10 @@ describe('Verifica salute azienda — le check nella fase d’esito', () => {
     );
 
     await waitFor(() => expect(screen.getByText('Verifica riaperta')).toBeTruthy());
-    expect(await screen.findByRole('heading', { name: 'Check list dello screening' })).toBeTruthy();
-    // La check di perimetro è stata ritirata: non deve tornare per sbaglio.
+    // La check list dei prodotti è l'unica: si legge dai prodotti dell'ente.
+    await waitFor(() => expect(ottieniChecklistProdottiAction).toHaveBeenCalled());
+    // Quelle ritirate non devono tornare per sbaglio.
+    expect(screen.queryByRole('heading', { name: 'Check list dello screening' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Check di perimetro dei crediti' })).toBeNull();
   });
 

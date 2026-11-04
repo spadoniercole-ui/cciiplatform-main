@@ -17,7 +17,6 @@ import type { Attenzione } from '@/lib/screening/indicatore';
 import { etaVerifica } from './etaVerifica';
 import { STILE_BOX } from './box';
 import type { EsitoScenari } from './scenari';
-import type { CheckListRiepilogo } from './checkListRiepilogo';
 import type { SintesiChecklistProdotti } from '@/lib/prodotti/prodotti';
 
 export interface DocumentoTriage {
@@ -122,12 +121,6 @@ export interface DatiRiepilogoTriage {
    * confrontare: il box non compare, invece di comparire vuoto.
    */
   scenari?: EsitoScenari | null;
-  /**
-   * La check list dello screening con le risposte date, accanto alla check di
-   * perimetro. `null` quando il questionario non è mai stato generato: il
-   * foglio non annuncia una sezione che non ha contenuto.
-   */
-  checkList?: CheckListRiepilogo | null;
   /**
    * LA CHECK LIST DEI PRODOTTI (0.161.0). Le domande scritte sui prodotti con
    * il flag attivo, con le risposte di questa azienda: è la qualificazione
@@ -380,62 +373,13 @@ ${STILE_BOX}
     );
   }
 
-  // 2-quater. LA CHECK LIST CON LE RISPOSTE.
-  // Il questionario dice che cosa è stato verificato sui documenti
-  // dell'azienda: una domanda senza risposta si stampa come tale — «non ho ancora guardato» non
-  // è un «no», e confonderli cambierebbe il senso dell'esito.
-  if (d.checkList) {
-    const cl = d.checkList;
-    parti.push(titolo('Check list dello screening: domande e risposte'));
-    if (cl.esito) {
-      parti.push(
-        `<p class="esito">${esc(cl.esito.etichetta)}${
-          cl.esito.punteggio !== null
-            ? ` — punteggio ${cl.esito.punteggio > 0 ? '+' : ''}${cl.esito.punteggio.toFixed(1)}`
-            : ''
-        }</p>`
-      );
-    }
-    parti.push(
-      `<p style="font-size:11px">${cl.risposte} ${
-        cl.risposte === 1 ? 'risposta data' : 'risposte date'
-      } su ${cl.totali} ${cl.totali === 1 ? 'domanda' : 'domande'}${
-        cl.generataIl ? ` — questionario generato il ${esc(quando(cl.generataIl))}` : ''
-      }. Un «Sì» è sempre la risposta favorevole all’azienda, un «No» sempre una criticità: la regola vale per costruzione, non per interpretazione.</p>`
-    );
-    for (const sez of cl.sezioni) {
-      parti.push(
-        `<h3 style="font-size:12px;margin:10px 0 4px">${esc(
-          sez.numero ? `${sez.numero}. ${sez.titolo}` : sez.titolo
-        )}</h3>`
-      );
-      parti.push(
-        `<table><thead><tr><th>Domanda</th><th>Risposta</th></tr></thead><tbody>${sez.domande
-          .map(
-            (x) =>
-              `<tr><td>${esc(x.testo)}</td><td>${
-                x.risposta === true
-                  ? '<b>Sì</b>'
-                  : x.risposta === false
-                    ? '<b>No</b>'
-                    : '<i>senza risposta</i>'
-              }</td></tr>`
-          )
-          .join('')}</tbody></table>`
-      );
-    }
-    parti.push(
-      '<p style="font-size:10px;color:#475569">Le domande nascono dalle direttrici dell’ente e dai suoi prodotti, per questa azienda. La domanda senza risposta è una verifica non ancora compiuta: non si legge come una risposta negativa. Il questionario dice che cosa risulta verificato, non conclude nulla sulla crisi dell’impresa.</p>'
-    );
-  }
-
-  // 2-quinquies. LA CHECK LIST DEI PRODOTTI (0.161.0). Subito dopo il
-  // questionario dello screening: sono le domande dell'ente sui fatti concreti,
-  // con le risposte di questa azienda. Una domanda senza risposta si stampa
-  // come tale, e la qualificazione è una lettura istruttoria, non un responso.
+  // 2-quater. LA CHECK LIST DEI PRODOTTI (0.161.0 → 0.168.0). È l'unica check
+  // list del foglio: le domande dell'ente sui fatti concreti, con le risposte di
+  // questa azienda. Una domanda senza risposta si stampa come tale, e la
+  // qualificazione è una lettura istruttoria, non un responso.
   if (d.checklistProdotti && d.checklistProdotti.totale > 0) {
     const cp = d.checklistProdotti;
-    parti.push(titolo('Check list dei prodotti: risposte e qualificazione'));
+    parti.push(titolo('Check list dei prodotti: analisi qualitativa dell’azienda'));
     parti.push(`<p class="esito">${esc(cp.etichetta)}</p>`);
     parti.push(`<p style="font-size:11px">${esc(cp.dettaglio)}</p>`);
     parti.push(

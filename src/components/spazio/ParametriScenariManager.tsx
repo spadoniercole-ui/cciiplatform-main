@@ -12,10 +12,12 @@
 // piattaforma.
 
 import React, { useEffect, useState } from 'react';
-import { Save, Loader2, Info } from 'lucide-react';
+import { Save, Loader2, Info, Search } from 'lucide-react';
 import {
+  cercaParametriScenariWebAction,
   ottieniParametriScenariAction,
   salvaParametriScenariAction,
+  type SuggerimentoScenari,
 } from '@/app/actions/parametriScenari';
 import {
   PARAMETRI_VUOTI,
@@ -35,6 +37,8 @@ export function ParametriScenariManager({ nomeSchema }: { nomeSchema: string }) 
   const [salvataggio, setSalvataggio] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [avviso, setAvviso] = useState<string | null>(null);
+  const [ricercaWeb, setRicercaWeb] = useState(false);
+  const [suggerimento, setSuggerimento] = useState<SuggerimentoScenari | null>(null);
 
   useEffect(() => {
     let annullato = false;
@@ -74,6 +78,24 @@ export function ParametriScenariManager({ nomeSchema }: { nomeSchema: string }) 
     if (r.success) setAvviso('Parametri salvati.');
     else setErrore(r.error ?? 'Salvataggio non riuscito.');
     setSalvataggio(false);
+  };
+
+  const cercaSulWeb = async () => {
+    setRicercaWeb(true);
+    setErrore(null);
+    setAvviso(null);
+    setSuggerimento(null);
+    const r = await cercaParametriScenariWebAction(nomeSchema);
+    if (r.success && r.suggerimento) {
+      setParametri(r.suggerimento.parametri);
+      setSuggerimento(r.suggerimento);
+      setAvviso(
+        'Percentuali proposte dalla ricerca web: controllale e salvale solo se le condividi.'
+      );
+    } else {
+      setErrore(r.error ?? 'Ricerca web non riuscita.');
+    }
+    setRicercaWeb(false);
   };
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento…</p>;
@@ -170,6 +192,32 @@ export function ParametriScenariManager({ nomeSchema }: { nomeSchema: string }) 
         dello spazio.
       </p>
 
+      {suggerimento && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 space-y-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-sky-900">
+            Proposta della ricerca web — da verificare
+          </p>
+          <p className="text-[11px] text-sky-900 leading-relaxed">
+            {suggerimento.note || 'La ricerca non ha aggiunto note.'}
+          </p>
+          {suggerimento.fonti.length > 0 && (
+            <ul className="space-y-0.5">
+              {suggerimento.fonti.map((f, i) => (
+                <li key={`${f.url}-${i}`} className="text-[10px] text-sky-800">
+                  <a href={f.url} target="_blank" rel="noreferrer" className="underline">
+                    {f.titolo || f.url}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-[10px] text-sky-700">
+            I campi sono stati compilati ma non salvati: controlla i valori e premi «Salva
+            parametri».
+          </p>
+        </div>
+      )}
+
       {errore && (
         <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
           {errore}
@@ -181,19 +229,35 @@ export function ParametriScenariManager({ nomeSchema }: { nomeSchema: string }) 
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={() => void salva()}
-        disabled={salvataggio}
-        className="flex items-center gap-1.5 bg-slate-900 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 disabled:bg-slate-300"
-      >
-        {salvataggio ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : (
-          <Save className="w-3.5 h-3.5" />
-        )}
-        Salva parametri
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void salva()}
+          disabled={salvataggio || ricercaWeb}
+          className="flex items-center gap-1.5 bg-slate-900 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 disabled:bg-slate-300"
+        >
+          {salvataggio ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Save className="w-3.5 h-3.5" />
+          )}
+          Salva parametri
+        </button>
+        <button
+          type="button"
+          onClick={() => void cercaSulWeb()}
+          disabled={ricercaWeb || salvataggio}
+          title="Cerca sul web tassi di recupero e valori di riferimento: i campi restano modificabili"
+          className="flex items-center gap-1.5 border border-slate-300 bg-white text-slate-700 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:border-sky-300 hover:text-sky-700 disabled:opacity-40"
+        >
+          {ricercaWeb ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Search className="w-3.5 h-3.5" />
+          )}
+          {ricercaWeb ? 'Ricerca in corso…' : 'Cerca sul web'}
+        </button>
+      </div>
     </div>
   );
 }

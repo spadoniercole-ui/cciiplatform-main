@@ -175,15 +175,19 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
       titolo: 'Indici',
       descrizione: 'Quali dei 9 indici calcolati usare in questo spazio.',
     },
-    {
-      href: `/spazio/${codice}/parametri/checklist`,
-      icon: ListChecks,
-      titolo: 'Check List',
-      descrizione:
-        tipoSpazio === 'ENTE'
-          ? 'Pesi della Check List generata dallo Screening.'
-          : 'Pesi della Check List Ministeriale (56 domande, Sezione II del decreto).',
-    },
+    // Per l'ente la check list non ha parametri: nasce dai prodotti, e il suo
+    // posto è la pagina Prodotti. La voce resta solo per il RED, che pesa la
+    // Check List Ministeriale.
+    ...(tipoSpazio === 'NON_ENTE'
+      ? [
+          {
+            href: `/spazio/${codice}/parametri/checklist`,
+            icon: ListChecks,
+            titolo: 'Check List',
+            descrizione: 'Pesi della Check List Ministeriale (56 domande, Sezione II del decreto).',
+          },
+        ]
+      : []),
     ...(tipoSpazio === 'ENTE'
       ? [
           {

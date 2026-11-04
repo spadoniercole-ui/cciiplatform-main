@@ -169,6 +169,34 @@ describe('selezioni', () => {
       tipo: 'SI_NO',
     });
   });
+
+  it('usa TUTTE le domande di tutti i prodotti in check list, senza scartarne nessuna', () => {
+    const voci = vociChecklistProdotti([
+      prodotto({
+        id: 10,
+        nome: 'DURC',
+        inChecklist: true,
+        domande: [
+          { id: 'q1', testo: 'Prima?', tipo: 'SI_NO', maxCaratteri: null },
+          { id: 'q2', testo: 'Seconda?', tipo: 'TESTO_LIBERO', maxCaratteri: 300 },
+        ],
+      }),
+      prodotto({
+        id: 11,
+        nome: 'Uniemens',
+        inChecklist: true,
+        domande: [{ id: 'q1', testo: 'Terza?', tipo: 'SI_NO', maxCaratteri: null }],
+      }),
+      // Flag spento: le sue domande non entrano nella check list.
+      prodotto({
+        id: 12,
+        nome: 'DICA',
+        inChecklist: false,
+        domande: [{ id: 'q1', testo: 'Fuori?', tipo: 'SI_NO', maxCaratteri: null }],
+      }),
+    ]);
+    expect(voci.map((v) => v.domanda)).toEqual(['Prima?', 'Seconda?', 'Terza?']);
+  });
 });
 
 describe('sintesi della check list', () => {

@@ -1,3 +1,27 @@
+## 0.168.0 — 2026-11-04
+
+**Una sola check list: quella dei prodotti.** La parte ricevente aveva due questionari sullo
+stesso fatto — quello generato dallo screening, con i pesi delle direttrici, e quello dei prodotti —
+e il primo copriva il secondo. Resta il secondo, e diventa la lettura qualitativa dell'azienda:
+sempre prima dell'elaborato di triage, di cui è parte integrante.
+
+- **Le domande sono quelle salvate sui prodotti.** Ogni prodotto agganciato alla direttrice porta il
+  flag «in check list» e le sue domande: entrano tutte, una per una, nell'ordine prodotto → domanda.
+  Un test lo blocca, perché una domanda dimenticata sarebbe una verifica che nessuno sa di dover
+  fare.
+- **La check list dello screening è stata eliminata.** Spariscono il questionario con le risposte nel
+  triage, la sua sezione nel foglio di riepilogo, la pagina dei pesi delle direttrici e il codice che
+  la preparava. Per l'ente la voce «Check List» nei Parametri non c'è più: chi arriva da un vecchio
+  link trova l'indirizzo ai Prodotti dell'ente. La Check List Ministeriale resta al RED, che è la sua
+  parte.
+- **La Relazione del Ricevente cita il quadro dei prodotti.** Il blocco qualitativo della proposta
+  non legge più il questionario dello screening: usa le stesse risposte del triage, con le domande
+  senza risposta dichiarate come verifiche non ancora compiute.
+- **La ricerca web nei parametri degli scenari.** Nella pagina Parametri › Scenari c'è il pulsante
+  «Cerca sul web»: propone, rango per rango, il tasso di realizzo in liquidazione e la percentuale
+  di cram down, con le fonti. Non salva nulla — i campi si compilano e restano modificabili — e se
+  non trova un dato documentato lo dice, invece di restituire zeri.
+
 ## 0.167.0 — 2026-11-03
 
 **Il codice della TS è unico dentro il prodotto, non nello spazio.** La numerazione delle TS

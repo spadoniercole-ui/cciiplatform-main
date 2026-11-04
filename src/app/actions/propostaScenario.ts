@@ -875,27 +875,23 @@ ${righeProposta
         }. Usa SOLO questo nome per lo strumento, nel titolo e nel testo.\n`
       : '\nINQUADRAMENTO: strumento non ancora confermato — non attribuire alla proposta uno strumento specifico.\n';
 
-    // Quadro qualitativo dell'ENTE: la Check List generata dallo Screening
-    // (direttrici dell'ente), non la Check List Ministeriale, che per un
-    // ente non è lo strumento di lavoro.
+    // QUADRO QUALITATIVO DELL'ENTE: LA CHECK LIST DEI PRODOTTI (0.168.0).
+    // È l'unica check list della parte ricevente: le domande sono quelle
+    // scritte sui prodotti con il flag attivo, le risposte sono di questa
+    // azienda. La vecchia check list generata dallo screening non si legge più:
+    // due questionari sullo stesso fatto davano due letture diverse.
     let bloccoQualitativoEnte = '';
     if (isRicevuta) {
-      const { ottieniScreeningAzienda } = await import('@/app/actions/screeningAzienda');
-      const scr = await ottieniScreeningAzienda(nomeSchema, scenario.aziendaId);
-      const totali = scr.success ? scr.stato.sezioni.reduce((a, x) => a + x.domande.length, 0) : 0;
-      const risposte = scr.success
-        ? scr.stato.risposte.filter((r) => r.risposta !== null).length
-        : 0;
+      const { leggiChecklistProdottiAzienda } = await import('@/lib/prodotti/checklistAzienda');
+      const sintesi = await leggiChecklistProdottiAzienda(nomeSchema, scenario.aziendaId);
       bloccoQualitativoEnte =
-        !scr.success || !scr.stato.esiste
-          ? 'QUADRO QUALITATIVO (CHECK LIST DELLO SCREENING): screening non disponibile per questa azienda.'
-          : scr.stato.quadro
-            ? `QUADRO QUALITATIVO (CHECK LIST DELLO SCREENING, direttrici dell'ente): ${scr.stato.quadro.etichetta}${
-                scr.stato.quadro.punteggio !== null
-                  ? ` (punteggio ${scr.stato.quadro.punteggio}/100)`
-                  : ''
-              }, ${risposte} risposte su ${totali} domande.`
-            : `QUADRO QUALITATIVO (CHECK LIST DELLO SCREENING, direttrici dell'ente): ${risposte} risposte su ${totali} domande — quadro non ancora completo, dichiaralo senza trarne conclusioni.`;
+        !sintesi || sintesi.totale === 0
+          ? 'QUADRO QUALITATIVO (CHECK LIST DEI PRODOTTI): nessun prodotto è in check list per questa azienda — non inventare un quadro qualitativo.'
+          : `QUADRO QUALITATIVO (CHECK LIST DEI PRODOTTI): ${sintesi.etichetta} — ${sintesi.risposte} risposte su ${sintesi.totale} domande, ${sintesi.si} «sì» e ${sintesi.no} «no» sulle domande a risposta chiusa. ${sintesi.dettaglio}${
+              sintesi.mancanti > 0
+                ? ` Restano ${sintesi.mancanti} domande senza risposta: dichiarale come verifiche non ancora compiute, non come risposte negative.`
+                : ''
+            }`;
     }
 
     // Relazione di chiusura del Ricevente: il contesto di ciò che è cambiato

@@ -72,12 +72,9 @@ import type { MappaturaProspetto } from '@/lib/debitiTriage/mappatura';
 import { salvaTutteDebitiTriageAction } from '@/app/actions/debitiTriage';
 import { ottieniRangoCreditoAction } from '@/app/actions/triagePerimetro';
 import { ottieniParametriScenariAction } from '@/app/actions/parametriScenari';
-import { ottieniScreeningAzienda } from '@/app/actions/screeningAzienda';
-import { riepilogoCheckList } from '@/lib/triage/checkListRiepilogo';
 import { ottieniChecklistProdottiAction } from '@/app/actions/checklistProdottiTriage';
 import { ChecklistProdottiTriage } from '@/components/spazio/ChecklistProdottiTriage';
 import type { SintesiChecklistProdotti } from '@/lib/prodotti/prodotti';
-import { CheckListTriage } from '@/components/spazio/CheckListTriage';
 import { ScenariTriage } from '@/components/spazio/ScenariTriage';
 import { calcolaScenari } from '@/lib/triage/scenari';
 import { salvaStrutturaProspettoAction } from '@/app/actions/struttureProspetto';
@@ -1392,24 +1389,6 @@ export function VerificaSaluteAzienda({
     // il foglio non può divergere da ciò che è salvato.
     const parametriScenari = await ottieniParametriScenariAction(nomeSchema);
     const rangoCredito = aziendaId ? await ottieniRangoCreditoAction(nomeSchema, aziendaId) : null;
-    // LA CHECK LIST CON LE RISPOSTE (0.155.0). Il questionario dice che cosa è
-    // stato verificato sui documenti; si legge al momento della stampa, così il
-    // foglio non diverge da ciò che è salvato.
-    const screening = aziendaId ? await ottieniScreeningAzienda(nomeSchema, aziendaId) : null;
-    const checkList =
-      screening && screening.success && screening.stato.esiste
-        ? riepilogoCheckList({
-            sezioni: screening.stato.sezioni,
-            risposte: screening.stato.risposte,
-            esito: screening.stato.quadro
-              ? {
-                  etichetta: screening.stato.quadro.etichetta,
-                  punteggio: screening.stato.quadro.punteggio,
-                }
-              : null,
-            generatoIl: screening.stato.generatoIl,
-          })
-        : null;
     const creditoScenari =
       esitoSoglie && esitoSoglie.righe.some((r) => r.applicabile)
         ? esitoSoglie.righe
@@ -1481,7 +1460,6 @@ export function VerificaSaluteAzienda({
             ? { titolo: riepilogoSoglie.titolo, dettaglio: riepilogoSoglie.dettaglio }
             : null,
         scenari,
-        checkList,
         checklistProdotti,
         // Le evidenze che partono per i reparti: chi riceve il riepilogo deve
         // sapere che cosa è stato mandato a chi, e quanto vale.
@@ -3464,16 +3442,6 @@ export function VerificaSaluteAzienda({
               </p>
             </div>
           )}
-
-          {/* LA CHECK LIST DELLO SCREENING (0.154.0): si genera e si risponde qui. */}
-          <div className="border-t border-slate-200 pt-4">
-            <CheckListTriage
-              nomeSchema={nomeSchema}
-              aziendaId={aziendaId!}
-              codice={codice}
-              visuraSessione={fileVisura}
-            />
-          </div>
 
           {/* GLI SCENARI (0.153.0): il credito misurato dalle soglie, con i due
               termini di paragone. */}
