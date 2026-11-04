@@ -22,6 +22,14 @@ import {
   type ParametriScenari,
   type RangoCredito,
 } from '@/lib/triage/scenari';
+import {
+  haPercentuali,
+  leggiSuggerimento,
+  type FonteSuggerimento,
+  type SuggerimentoScenari,
+} from '@/lib/triage/suggerimentoScenari';
+
+export type { FonteSuggerimento, SuggerimentoScenari };
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 const num = (v: unknown): number | null =>
@@ -120,19 +128,8 @@ export async function salvaParametriScenariAction(
   }
 }
 
-export interface FonteSuggerimento {
-  titolo: string;
-  url: string;
-}
-
-export interface SuggerimentoScenari {
-  parametri: ParametriScenari;
-  note: string;
-  fonti: FonteSuggerimento[];
-}
-
 /**
- * RICERCA WEB SUI PARAMETRI DEGLI SCENARI (0.168.0).
+ * RICERCA WEB SUI PARAMETRI DEGLI SCENARI (0.168.0 → 0.169.0).
  *
  * Il pulsante «Cerca sul web» non salva nulla: propone, rango per rango, i
  * valori che la ricerca riesce a documentare e lascia all'ente la decisione.
@@ -141,8 +138,16 @@ export interface SuggerimentoScenari {
  * di nessuno. Per questo i campi si compilano ma restano modificabili, e la
  * risposta porta le fonti.
  *
- * Se la ricerca non trova nulla di utilizzabile lo dice, invece di restituire
- * zeri: uno zero è un'ipotesi («recupero nullo»), non un'assenza di dato.
+ * DUE LIVELLI, NON UNO. Prima si cercano i dati ufficiali (ISTAT, Banca
+ * d'Italia, Ministero della Giustizia, statistiche dei tribunali). Quando la
+ * statistica non esiste o non copre un rango, la ricerca non si ferma: cerca
+ * casistiche e best practice — omologazioni, relazioni dei commissari,
+ * osservatori, prassi dei tribunali — e ne ricava un valore tipico. Il numero
+ * che ne esce è una stima, e viene dichiarato come tale: meglio una stima
+ * difendibile con la sua fonte che un campo vuoto che blocca lo scenario.
+ *
+ * Se anche la casistica manca, il valore resta null. Uno zero sarebbe
+ * un'ipotesi («recupero nullo»), non un'assenza di dato.
  */
 export async function cercaParametriScenariWebAction(
   nomeSchema: string
@@ -154,33 +159,40 @@ export async function cercaParametriScenariWebAction(
 
     const elencoRanghi = RANGHI.map((r) => `- ${r.codice} (${r.etichetta}): ${r.aiuto}`).join('\n');
 
-    const prompt = `Sei un analista della crisi d'impresa. Devi proporre a un ente creditore italiano, con una ricerca web, i valori di due parametri operativi usati nel triage: il tasso di realizzo in una liquidazione giudiziale e la percentuale di soddisfacimento in un cram down omologato, per rango del credito. Cerca fonti italiane autorevoli e recenti: rapporti ISTAT, Banca d'Italia, Ministero della Giustizia, Ordini professionali, osservatori sui fallimenti, prassi dei tribunali. Non inventare e non usare la memoria del modello: ogni valore deve essere riconducibile a una fonte che hai letto.
+    const prompt = `Sei un analista della crisi d'impresa. Devi proporre a un ente creditore italiano, con una ricerca web, i valori di due parametri operativi usati nel triage: il tasso di realizzo in una liquidazione giudiziale e la percentuale di soddisfacimento in un cram down omologato, per rango del credito.
+
+LA RICERCA È A DUE LIVELLI, NELL'ORDINE:
+1. DATI UFFICIALI. Cerca rapporti ISTAT, Banca d'Italia, Ministero della Giustizia, statistiche dei tribunali fallimentari, osservatori pubblici. Sono la base preferibile: un dato osservato batte una stima.
+2. CASE HISTORY E BEST PRACTICE. Se il dato ufficiale non esiste, non è aggiornato o non copre un rango, NON fermarti: cerca casi concreti e prassi — provvedimenti di omologazione del cram down, decreti di liquidazione, relazioni dei commissari e dei curatori, osservatori privati (per esempio OCI o Cerved), studi di Ordini professionali, linee guida e prassi dei tribunali — e ricava da più casi un valore tipico o mediano. Dichiara che è una stima da casistica, non un dato osservato. L'ente ha bisogno di un numero difendibile anche quando la statistica non c'è.
+3. Se anche la casistica manca, scrivi null per quel valore: non inventare, non stimare per simmetria e non copiare il valore di un altro rango.
 
 RANGHI DEL CREDITO (usa esattamente questi codici, tutti, anche quelli senza dato):
 ${elencoRanghi}
 
 REGOLE:
 - Esprimi le percentuali come numeri fra 0 e 100, non come frazioni.
-- Se per un rango non trovi un valore documentato, scrivi null: non stimare per simmetria e non copiare il valore di un altro rango.
+- Ogni valore proposto deve avere almeno una fonte che hai letto: niente numeri presi dalla memoria del modello.
+- Dichiara la base complessiva della proposta con "base": DATO_UFFICIALE se tutti i valori vengono da statistiche ufficiali, CASISTICA se vengono da casi, PRASSI se vengono da best practice o linee guida, MISTA se convivono.
+- Nella nota indica, per ogni rango compilato, se il valore è ufficiale, da casistica o da prassi, e quanto è prudente. Se un valore è una stima, dillo con parole esplicite.
 - Le spese di procedura sono una percentuale sul realizzo lordo; se non le trovi, null.
-- Distingui ciò che è un dato osservato da ciò che è una prassi: dillo nella nota.
 
 Rispondi SOLO con un oggetto JSON valido, senza testo prima o dopo:
 {
+  "base": "DATO_UFFICIALE" | "CASISTICA" | "PRASSI" | "MISTA",
   "costiProceduraPct": number | null,
   "ranghi": [
     { "rango": "PREDEDUCIBILE", "tassoLiquidazionePct": number | null, "cramDownPct": number | null }
   ],
-  "note": "2-4 frasi: su quali fonti si basano i valori, quali sono prudenziali e quali mancano",
+  "note": "2-5 frasi: da dove viene ogni valore, quali sono ufficiali, quali stimati da casistica, quali prudenziali e quali mancano",
   "fonti": [ { "titolo": "...", "url": "https://..." } ]
 }`;
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-5',
-      max_tokens: 2500,
+      max_tokens: 3000,
       thinking: { type: 'disabled' },
       messages: [{ role: 'user', content: prompt }],
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8 }],
     });
 
     const testo = response.content
@@ -210,64 +222,16 @@ Rispondi SOLO con un oggetto JSON valido, senza testo prima o dopo:
       };
     }
 
-    const percentuale = (v: unknown): number | null => {
-      const n =
-        typeof v === 'number'
-          ? v
-          : typeof v === 'string' && v.trim() !== ''
-            ? Number(v.replace(',', '.'))
-            : Number.NaN;
-      if (!Number.isFinite(n) || n < 0 || n > 100) return null;
-      return Math.round(n * 100) / 100;
-    };
-
-    const righe = Array.isArray(grezzo.ranghi) ? (grezzo.ranghi as Record<string, unknown>[]) : [];
-    const parametri: ParametriScenari = {
-      costiProceduraPct: percentuale(grezzo.costiProceduraPct),
-      ranghi: RANGHI.map((r) => {
-        const trovata = righe.find(
-          (x) =>
-            String(x.rango ?? '')
-              .trim()
-              .toUpperCase() === r.codice
-        );
-        return {
-          rango: r.codice,
-          tassoLiquidazionePct: percentuale(trovata?.tassoLiquidazionePct),
-          cramDownPct: percentuale(trovata?.cramDownPct),
-        };
-      }),
-    };
-
-    const conDato = parametri.ranghi.filter(
-      (r) => r.tassoLiquidazionePct !== null || r.cramDownPct !== null
-    ).length;
-    if (conDato === 0 && parametri.costiProceduraPct === null) {
+    const suggerimento = leggiSuggerimento(grezzo);
+    if (!haPercentuali(suggerimento)) {
       return {
         success: false,
         error:
-          'La ricerca web non ha trovato percentuali utilizzabili per questo profilo: nessun campo è stato compilato. I valori restano quelli che hai scritto.',
+          'La ricerca web non ha trovato percentuali utilizzabili: né un dato ufficiale né una casistica sufficiente per questo profilo. Nessun campo è stato compilato; i valori restano quelli che hai scritto.',
       };
     }
 
-    const fonti: FonteSuggerimento[] = Array.isArray(grezzo.fonti)
-      ? (grezzo.fonti as Record<string, unknown>[])
-          .map((f) => ({
-            titolo: String(f.titolo ?? '').trim(),
-            url: String(f.url ?? '').trim(),
-          }))
-          .filter((f) => /^https?:\/\//i.test(f.url))
-          .slice(0, 8)
-      : [];
-
-    return {
-      success: true,
-      suggerimento: {
-        parametri,
-        note: String(grezzo.note ?? '').trim(),
-        fonti,
-      },
-    };
+    return { success: true, suggerimento };
   } catch (error: unknown) {
     console.error('[cercaParametriScenariWebAction] Errore:', error);
     return {

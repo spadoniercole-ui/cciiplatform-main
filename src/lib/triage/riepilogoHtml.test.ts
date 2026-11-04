@@ -36,6 +36,30 @@ describe('riepilogo del triage', () => {
     expect(h).toMatch(/Denunce non presentate<\/td><td>nessuna/);
   });
 
+  it('stampa la check list dei prodotti prima delle criticità', () => {
+    const h = htmlRiepilogoTriage({
+      ...base,
+      checklistProdotti: {
+        totale: 1,
+        risposte: 1,
+        mancanti: 0,
+        mancanze: [],
+        chiuse: 1,
+        si: 1,
+        no: 0,
+        qualificazione: 'SISTEMICA',
+        etichetta: 'Azione sistemica e voluta',
+        dettaglio: 'Tutte le domande a risposta chiusa sono state riscontrate.',
+        voci: [{ prodotto: 'DURC', domanda: 'Il DURC è regolare?', tipo: 'SI_NO', risposta: 'Sì' }],
+      },
+    });
+    // Il quadro qualitativo precede il giudizio: chi legge incontra prima le
+    // risposte e poi le criticità che ne tengono conto.
+    expect(h.indexOf('Check list dei prodotti')).toBeGreaterThan(-1);
+    expect(h.indexOf('Check list dei prodotti')).toBeLessThan(h.indexOf('Indicazione del triage'));
+    expect(h).toContain('Il DURC è regolare?');
+  });
+
   it('la ristampa dichiara in testa di essere una ricostruzione, con le due date', () => {
     const h = htmlRiepilogoTriage({
       ...base,
@@ -51,7 +75,7 @@ describe('riepilogo del triage', () => {
     expect(h).toContain('Verifica riferita al <b>21/09/2026</b>');
     expect(h).toMatch(/ristampata il <b>\d{2}\/\d{2}\/2026/);
     // In testa, non in coda: prima della prima sezione numerata.
-    expect(h.indexOf('Copia ricostruita')).toBeLessThan(h.indexOf('1. Indicazione del triage'));
+    expect(h.indexOf('Copia ricostruita')).toBeLessThan(h.indexOf('Indicazione del triage'));
     // Un triage appena eseguito non è una ricostruzione e non lo dichiara.
     expect(htmlRiepilogoTriage(base)).not.toContain('Copia ricostruita');
     // Senza la data di caricamento la frase resta leggibile, senza un «il»
@@ -163,7 +187,7 @@ describe('riepilogo: avvisi in testa', () => {
     // In testa, prima della prima sezione numerata: un avviso in coda arriva a
     // chi legge dopo che si è già fatto un'idea.
     expect(h.indexOf('sono trascorsi 200 giorni')).toBeLessThan(
-      h.indexOf('1. Indicazione del triage')
+      h.indexOf('Indicazione del triage')
     );
   });
 

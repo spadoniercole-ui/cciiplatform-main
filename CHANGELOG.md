@@ -1,3 +1,19 @@
+## 0.169.0 — 2026-11-04
+
+**La check list prima delle criticità, e la ricerca web che non si ferma al dato ufficiale.**
+
+- **Il quadro qualitativo viene prima del giudizio.** Nel triage e nel foglio di riepilogo la check
+  list dei prodotti si legge subito prima delle criticità: le risposte diventano lo strumento con
+  cui si interpretano le soglie, non un allegato in fondo alla pagina. Nel riepilogo è la prima
+  sezione, e il giudizio la segue citandola.
+- **La ricerca web cerca anche casistiche e best practice.** Quando ISTAT, Banca d'Italia o le
+  statistiche dei tribunali non coprono un rango, la ricerca non restituisce più un campo vuoto:
+  cerca omologazioni, relazioni dei commissari, osservatori, prassi e linee guida, e propone un
+  valore tipico dichiarando che è una stima. La proposta porta con sé la base (dato ufficiale,
+  casistica, prassi o mista) e le fonti lette; l'ente resta libero di correggerla e salvarla.
+- **Nessun numero inventato.** Se manca anche la casistica il valore resta vuoto e l'ipotesi si
+  dichiara non calcolabile: una stima dichiarata è utile, un numero senza fonte no.
+
 ## 0.168.0 — 2026-11-04
 
 **Una sola check list: quella dei prodotti.** La parte ricevente aveva due questionari sullo

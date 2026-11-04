@@ -282,6 +282,34 @@ ${STILE_BOX}
     );
   }
 
+  // 1. LA CHECK LIST DEI PRODOTTI, PRIMA DELLE CRITICITÀ (0.169.0). È l'unica
+  // check list del foglio: le domande dell'ente sui fatti concreti, con le
+  // risposte di questa azienda. Sta qui, e non dopo le soglie, perché è lo
+  // strumento con cui si leggono le criticità che seguono: prima il quadro
+  // qualitativo, poi il giudizio che ne tiene conto. Una domanda senza
+  // risposta si stampa come tale, e la qualificazione è una lettura
+  // istruttoria, non un responso.
+  if (d.checklistProdotti && d.checklistProdotti.totale > 0) {
+    const cp = d.checklistProdotti;
+    parti.push(titolo('Check list dei prodotti: analisi qualitativa dell’azienda'));
+    parti.push(`<p class="esito">${esc(cp.etichetta)}</p>`);
+    parti.push(`<p style="font-size:11px">${esc(cp.dettaglio)}</p>`);
+    parti.push(
+      `<table><tbody>\n<tr><td>Domande in check list</td><td class="num">${cp.totale}</td></tr>\n<tr><td>Risposte date</td><td class="num">${cp.risposte}</td></tr>\n<tr><td>Domande a risposta chiusa</td><td class="num">${cp.chiuse}</td></tr>\n<tr><td>Risposte «sì»</td><td class="num">${cp.si}</td></tr>\n<tr><td>Risposte «no»</td><td class="num">${cp.no}</td></tr>\n</tbody></table>`
+    );
+    parti.push(
+      `<table><thead><tr><th>Prodotto</th><th>Domanda</th><th>Risposta</th></tr></thead><tbody>${cp.voci
+        .map(
+          (v) =>
+            `<tr><td>${esc(v.prodotto)}</td><td>${esc(v.domanda)}</td><td>${esc(v.risposta)}</td></tr>`
+        )
+        .join('')}</tbody></table>`
+    );
+    parti.push(
+      '<p style="font-size:10px;color:#475569">Le domande nascono dai prodotti contrassegnati in Parametri di Spazio → Prodotti dell’ente, con la forma scelta in configurazione (Sì/No oppure testo libero). La qualificazione dell’operato è una lettura istruttoria: non accerta la crisi e non sostituisce le soglie, che si misurano sugli importi. È la base qualitativa su cui si leggono le criticità e le soglie che seguono.</p>'
+    );
+  }
+
   // 1. Esito
   parti.push(titolo('Indicazione del triage'));
   if (d.attenzione) {
@@ -370,31 +398,6 @@ ${STILE_BOX}
     );
     parti.push(
       '<p style="font-size:10px;color:#92400e">Il confronto applica al credito dell’ente le percentuali configurate: non stima l’attivo dell’azienda e non è un giudizio di convenienza su una proposta.</p>'
-    );
-  }
-
-  // 2-quater. LA CHECK LIST DEI PRODOTTI (0.161.0 → 0.168.0). È l'unica check
-  // list del foglio: le domande dell'ente sui fatti concreti, con le risposte di
-  // questa azienda. Una domanda senza risposta si stampa come tale, e la
-  // qualificazione è una lettura istruttoria, non un responso.
-  if (d.checklistProdotti && d.checklistProdotti.totale > 0) {
-    const cp = d.checklistProdotti;
-    parti.push(titolo('Check list dei prodotti: analisi qualitativa dell’azienda'));
-    parti.push(`<p class="esito">${esc(cp.etichetta)}</p>`);
-    parti.push(`<p style="font-size:11px">${esc(cp.dettaglio)}</p>`);
-    parti.push(
-      `<table><tbody>\n<tr><td>Domande in check list</td><td class="num">${cp.totale}</td></tr>\n<tr><td>Risposte date</td><td class="num">${cp.risposte}</td></tr>\n<tr><td>Domande a risposta chiusa</td><td class="num">${cp.chiuse}</td></tr>\n<tr><td>Risposte «sì»</td><td class="num">${cp.si}</td></tr>\n<tr><td>Risposte «no»</td><td class="num">${cp.no}</td></tr>\n</tbody></table>`
-    );
-    parti.push(
-      `<table><thead><tr><th>Prodotto</th><th>Domanda</th><th>Risposta</th></tr></thead><tbody>${cp.voci
-        .map(
-          (v) =>
-            `<tr><td>${esc(v.prodotto)}</td><td>${esc(v.domanda)}</td><td>${esc(v.risposta)}</td></tr>`
-        )
-        .join('')}</tbody></table>`
-    );
-    parti.push(
-      '<p style="font-size:10px;color:#475569">Le domande nascono dai prodotti contrassegnati in Parametri di Spazio → Prodotti dell’ente, con la forma scelta in configurazione (Sì/No oppure testo libero). La qualificazione dell’operato è una lettura istruttoria: non accerta la crisi e non sostituisce le soglie, che si misurano sugli importi.</p>'
     );
   }
 

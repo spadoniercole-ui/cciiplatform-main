@@ -25,6 +25,7 @@ import {
   validaParametri,
   type ParametriScenari,
 } from '@/lib/triage/scenari';
+import { ETICHETTA_BASE, baseDaValidare } from '@/lib/triage/suggerimentoScenari';
 
 const CLASSE =
   'w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500';
@@ -197,6 +198,16 @@ export function ParametriScenariManager({ nomeSchema }: { nomeSchema: string }) 
           <p className="text-[10px] font-bold uppercase tracking-wider text-sky-900">
             Proposta della ricerca web — da verificare
           </p>
+          <p
+            className={`text-[10px] font-bold ${
+              baseDaValidare(suggerimento.base) ? 'text-amber-900' : 'text-emerald-900'
+            }`}
+          >
+            {ETICHETTA_BASE[suggerimento.base]}
+            {baseDaValidare(suggerimento.base)
+              ? ' — sono stime: vanno validate prima del salvataggio'
+              : ' — valori da statistiche ufficiali'}
+          </p>
           <p className="text-[11px] text-sky-900 leading-relaxed">
             {suggerimento.note || 'La ricerca non ha aggiunto note.'}
           </p>
@@ -211,9 +222,10 @@ export function ParametriScenariManager({ nomeSchema }: { nomeSchema: string }) 
               ))}
             </ul>
           )}
-          <p className="text-[10px] text-sky-700">
+          <p className="text-[10px] text-sky-700 leading-relaxed">
             I campi sono stati compilati ma non salvati: controlla i valori e premi «Salva
-            parametri».
+            parametri». Le percentuali ricavate da casistica o prassi sono stime dichiarate, non
+            dati osservati: vanno validate sulle posizioni del tuo ente.
           </p>
         </div>
       )}

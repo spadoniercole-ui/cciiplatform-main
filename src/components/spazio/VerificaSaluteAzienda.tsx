@@ -2549,6 +2549,72 @@ export function VerificaSaluteAzienda({
               </p>
             </div>
           )}
+          {/* LA CHECK LIST VIENE PRIMA DELLE CRITICITÀ (0.169.0). Le risposte
+              sono lo strumento di analisi: si leggono qui, subito prima del
+              giudizio, e non in fondo alla pagina. */}
+          {checklistProdotti && checklistProdotti.totale > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+              <div>
+                <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                  Check list dei prodotti — analisi qualitativa
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                  Le risposte alle domande dei prodotti si leggono prima delle criticità: sono il
+                  quadro qualitativo su cui il giudizio si appoggia, insieme alle soglie.
+                </p>
+              </div>
+              <p className="text-sm font-bold text-slate-900">{checklistProdotti.etichetta}</p>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                {checklistProdotti.dettaglio}
+              </p>
+              <p className="text-[10px] text-slate-400 tabular-nums">
+                {checklistProdotti.risposte} risposte su {checklistProdotti.totale} domande ·{' '}
+                {checklistProdotti.si} «sì» e {checklistProdotti.no} «no» sulle{' '}
+                {checklistProdotti.chiuse} domande a risposta chiusa
+              </p>
+              {checklistProdotti.voci.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-xs">
+                    <thead>
+                      <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
+                        <th className="border-b border-slate-200 px-2 py-2">Prodotto</th>
+                        <th className="border-b border-slate-200 px-2 py-2">Domanda</th>
+                        <th className="border-b border-slate-200 px-2 py-2">Risposta</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {checklistProdotti.voci.map((v, i) => (
+                        <tr key={`${v.prodotto}-${v.domanda}-${i}`}>
+                          <td className="border-b border-slate-100 px-2 py-1.5 text-slate-700">
+                            {v.prodotto}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1.5 text-slate-700">
+                            {v.domanda}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1.5 font-bold text-slate-900">
+                            {v.risposta}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {checklistProdottiIncompleta && (
+                <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
+                  Restano {checklistProdotti.mancanti} domande senza risposta.{' '}
+                  <button
+                    type="button"
+                    onClick={() => setFase('checklist')}
+                    className="font-bold underline"
+                  >
+                    Torna alla check list
+                  </button>
+                </p>
+              )}
+            </div>
+          )}
+
           {attenzione ? (
             <SemaforoAttenzione attenzione={attenzione} />
           ) : (
@@ -3420,28 +3486,6 @@ export function VerificaSaluteAzienda({
               </a>
             )}
           </div>
-
-          {/* LA CHECK LIST SI COMPILA PRIMA DELL'ESITO (0.162.0). Qui se ne
-              legge il quadro: la valutazione la cita accanto alle soglie, e se
-              una domanda è rimasta senza risposta si torna alla fase sua. */}
-          {checklistProdotti && checklistProdotti.totale > 0 && (
-            <div className="border-t border-slate-200 pt-4">
-              <p className="text-[11px] text-slate-600 leading-relaxed">
-                <span className="font-bold">Check list dei prodotti:</span>{' '}
-                {checklistProdotti.etichetta.toLowerCase()} — {checklistProdotti.risposte} risposte
-                su {checklistProdotti.totale} domande.{' '}
-                {checklistProdottiIncompleta && (
-                  <button
-                    type="button"
-                    onClick={() => setFase('checklist')}
-                    className="font-bold text-sky-700 hover:underline"
-                  >
-                    Rispondi alle domande che mancano
-                  </button>
-                )}
-              </p>
-            </div>
-          )}
 
           {/* GLI SCENARI (0.153.0): il credito misurato dalle soglie, con i due
               termini di paragone. */}
