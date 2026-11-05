@@ -1,3 +1,15 @@
+## 0.173.2 — 2026-11-05
+
+**L'attivazione demo è dove la stai cercando.**
+
+- Nello spazio ENTE, il Superadmin in ispezione vede un banner «Spazio demo non attivo» con il
+  pulsante **Attiva demo** in tutte le pagine dello spazio, anagrafica compresa. Non serve più
+  passare da Manutenzione Spazi per trovare il flag.
+- Nella creazione dello spazio il flag **Spazio demo** non è più disabilitato quando è scelto
+  «Non Ente»: selezionarlo porta automaticamente il tipo a ENTE e il minimo a tre aziende.
+- L'attivazione carica le tre posizioni e i parametri dell'export, poi rimuove il vecchio set
+  demo e CROWDOWN S.R.L.; le altre aziende restano intatte.
+
 ## 0.173.1 — 2026-11-05
 
 **La prova Cram down non resta accanto al percorso demo.**

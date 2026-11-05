@@ -1,6 +1,6 @@
 {
   "name": "cciiplatform",
-  "version": "0.173.1",
+  "version": "0.173.2",
   "type": "module",
   "private": true,
   "engines": {

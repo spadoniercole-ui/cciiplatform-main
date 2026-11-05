@@ -368,27 +368,26 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
           </label>
 
           <div className="border-t border-slate-100 pt-2 mt-1">
-            <label
-              className={`flex items-start gap-2 text-xs ${
-                tipoSpazio === 'ENTE' ? 'text-slate-700' : 'text-slate-400'
-              }`}
-            >
+            <label className="flex items-start gap-2 text-xs text-slate-700">
               <input
                 type="checkbox"
                 className="mt-0.5"
                 checked={demo}
-                disabled={tipoSpazio !== 'ENTE'}
                 onChange={(e) => {
-                  setDemo(e.target.checked);
-                  if (e.target.checked) setMaxAziende((v) => Math.max(v, 3));
+                  const attivo = e.target.checked;
+                  setDemo(attivo);
+                  if (attivo) {
+                    setTipoSpazio('ENTE');
+                    setMaxAziende((v) => Math.max(v, 3));
+                  }
                 }}
               />
               <span>
                 <b>Spazio demo</b> — precarica tre posizioni complete con i parametri di soglie,
                 riscontro e scenari: triage, screening e scenario senza PDF.
                 <span className="block text-[10px] text-slate-400 mt-0.5">
-                  Disponibile per gli spazi ENTE e con almeno 3 aziende. Senza questo flag il
-                  database nasce vuoto.
+                  Selezionandola, il tipo passa a ENTE. Servono almeno 3 aziende. Senza questo flag
+                  il database nasce vuoto.
                 </span>
               </span>
             </label>

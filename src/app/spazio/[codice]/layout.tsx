@@ -6,6 +6,7 @@ import { TopStatusBar } from '@/components/brand/TopStatusBar';
 import { ChatbotAiuto } from '@/components/ChatbotAiuto';
 import { ContestoAssistenteProvider } from '@/components/ContestoAssistenteContext';
 import { ShieldAlert } from 'lucide-react';
+import { BannerAttivaDemo } from '@/components/spazio/BannerAttivaDemo';
 
 // Layout del Pannello Spazio: un solo punto di controllo d'accesso, valido
 // sia per il superadmin in modalità salvagente sia per un vero Admin di
@@ -78,6 +79,15 @@ export default async function LayoutSpazio({
 
           <main className="flex-1 overflow-y-auto p-6">
             <ParametriStampaLoader nomeSchema={contesto.nomeSchema} />
+            {contesto.modalita === 'SALVAGENTE' &&
+              contesto.tipoSpazio === 'ENTE' &&
+              !contesto.demo && (
+                <BannerAttivaDemo
+                  spazioId={contesto.spazioId}
+                  codice={contesto.codice}
+                  descrizione={contesto.descrizione}
+                />
+              )}
             {children}
           </main>
         </div>

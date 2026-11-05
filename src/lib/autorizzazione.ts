@@ -69,6 +69,8 @@ export interface ContestoAccessoSpazio {
   tipoSpazio: 'ENTE' | 'NON_ENTE';
   /** Predisposto, non ancora operativo altrove nel codice. */
   giudicante: boolean;
+  /** Spazio con il percorso demo già caricato o attivabile dal banner. */
+  demo?: boolean;
 }
 
 export interface RequisitiAccesso {
@@ -145,6 +147,7 @@ interface RigaSpazio {
   schema_provisionato: boolean;
   tipo_spazio: 'ENTE' | 'NON_ENTE' | null;
   giudicante: boolean | null;
+  demo?: boolean | null;
 }
 
 async function caricaSpazio(
@@ -152,7 +155,7 @@ async function caricaSpazio(
   valore: string | number
 ): Promise<RigaSpazio | null> {
   const ris = await pool.query(
-    `SELECT id, codice, descrizione, nome_schema, schema_provisionato, tipo_spazio, giudicante
+    `SELECT id, codice, descrizione, nome_schema, schema_provisionato, tipo_spazio, giudicante, demo
      FROM spazi WHERE ${campo} = $1`,
     [valore]
   );
@@ -168,6 +171,7 @@ function contestoSalvagente(spazio: RigaSpazio): ContestoAccessoSpazio {
     modalita: 'SALVAGENTE',
     tipoSpazio: spazio.tipo_spazio || 'NON_ENTE',
     giudicante: spazio.giudicante || false,
+    demo: spazio.demo || false,
   };
 }
 
@@ -251,6 +255,7 @@ async function contestoUtenteSpazio(
     nomeSchema,
     tipoSpazio: spazio.tipo_spazio || 'NON_ENTE',
     giudicante: spazio.giudicante || false,
+    demo: spazio.demo || false,
   } as const;
 
   // Identità della sessione: username (chiave di login dalla 0.109). Le
