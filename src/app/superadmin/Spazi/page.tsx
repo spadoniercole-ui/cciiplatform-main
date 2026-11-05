@@ -384,7 +384,8 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
                 }}
               />
               <span>
-                <b>Spazio demo</b> — precarica tre posizioni complete: triage, screening e scenario.
+                <b>Spazio demo</b> — precarica tre posizioni complete con i parametri di soglie,
+                riscontro e scenari: triage, screening e scenario senza PDF.
                 <span className="block text-[10px] text-slate-400 mt-0.5">
                   Disponibile per gli spazi ENTE e con almeno 3 aziende. Senza questo flag il
                   database nasce vuoto.

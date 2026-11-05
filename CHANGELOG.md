@@ -1,3 +1,24 @@
+## 0.173.0 — 2026-11-05
+
+**Un solo spazio demo, che nasce già con i parametri giusti.**
+
+- **Il flag si attiva anche dopo la creazione.** Uno spazio ENTE già esistente può essere
+  trasformato in demo da Manutenzione Spazi: vengono caricate le tre posizioni complete e i
+  parametri, senza dover eliminare e ricreare lo spazio. Il flag resta spento per tutti gli
+  altri spazi.
+- **I parametri arrivano dall'export dello spazio demo.** Soglie art. 25-novies, riscontro
+  della proposta, percentuale delle spese di procedura, ipotesi di realizzo e cram down per
+  rango, schede XBRL: sono gli stessi valori della configurazione esportata, non valori
+  inventati nel codice. Le direttrici e le domande dello screening restano quelle del
+  percorso demo.
+- **Niente doppio binario.** Il vecchio set «provvedimenti del giudice» non è più caricabile
+  dalla pagina Scenari e non genera più PDF. All'attivazione del flag le sei aziende di quel
+  set, se presenti, vengono rimosse per nome esatto: le altre aziende non vengono toccate.
+- **Meno vincoli INPS nell'interfaccia.** La voce «Contributi per anno» sparisce dalla
+  sidebar e la tabella dei contributi sparisce dalla scheda Indici. Le soglie previdenziali
+  restano dove servono — nel triage e nella verifica di salute — ma non occupano più una
+  pagina di analisi a sé.
+
 ## 0.172.0 — 2026-11-05
 
 **Spazio demo: il percorso completo parte dal triage, non dal provvedimento già emesso.**

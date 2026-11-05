@@ -31,12 +31,14 @@ import {
   assicuraTabelleScenariTriage,
   assicuraTabelleScreeningAzienda,
 } from '@/db/provision';
+import { ripristinaConfigurazione } from '@/lib/configurazioneSpazio/configurazione';
 import {
   DIRETTRICI_DEMO,
   PERCORSO_DEMO,
   bundleDemo,
   type AziendaPercorsoDemo,
 } from './percorsoEnte';
+import { PARAMETRI_DEMO } from './parametriEnte';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -47,6 +49,35 @@ type Esecutore = {
 export interface EsitoPercorsoDemo {
   creati: number;
   esistenti: number;
+}
+
+/**
+ * Applica i parametri dello spazio demo in una sola transazione.
+ *
+ * `ripristinaConfigurazione` sostituisce le tabelle che il file contiene:
+ * è voluto, perché la demo deve nascere con le soglie e le ipotesi di
+ * scenario dell'export, non con valori casuali ereditati. Le tabelle non
+ * incluse nel file restano invece intatte.
+ */
+async function applicaParametriDemo(nomeSchema: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const esito = await ripristinaConfigurazione(
+      async (sql, params) => (await client.query(sql, params)).rows,
+      nomeSchema,
+      PARAMETRI_DEMO
+    );
+    if (esito.tabelle.length === 0) {
+      throw new Error('Nessuna tabella di parametri demo applicata.');
+    }
+    await client.query('COMMIT');
+  } catch (errore) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw errore;
+  } finally {
+    client.release();
+  }
 }
 
 async function inserisciAzienda(
@@ -215,6 +246,11 @@ export async function caricaPercorsoDemoEnte(nomeSchema: string): Promise<EsitoP
   await assicuraTabelleScenariTriage(nomeSchema);
   await assicuraTabelleParametriSpazio(nomeSchema);
 
+  // I parametri che fanno funzionare triage, screening e scenario: soglie,
+  // riscontro della proposta, ipotesi per rango e schede XBRL. Vengono
+  // applicati prima delle aziende, così la fotografia nasce già leggibile.
+  await applicaParametriDemo(nomeSchema);
+
   // Le direttrici dello spazio: senza, lo screening si aprirebbe con le
   // domande ma senza il quadro che le pesa. Si scrivono solo se lo spazio non
   // ne ha già (uno spazio demo nasce vuoto, ma la regola vale anche in caso
@@ -225,20 +261,6 @@ export async function caricaPercorsoDemoEnte(nomeSchema: string): Promise<EsitoP
         AND (direttrici_ente_strutturate IS NULL
              OR direttrici_ente_strutturate = '[]'::jsonb)`,
     [JSON.stringify(DIRETTRICI_DEMO), nomeSchema]
-  );
-
-  // La soglia dell'ente di riferimento: senza una riga con `ente_25novies`,
-  // il triage non sa quale soglia applicare e ogni posizione finirebbe in
-  // «approfondimenti necessari». La riga INPS è quella che rende leggibile il
-  // semaforo; non sovrascrive una configurazione già presente.
-  await pool.query(
-    `INSERT INTO "${nomeSchema}".limiti_ricevibilita
-       (categoria_creditore, percentuale_minima, unica_soluzione_ammessa,
-        rateizzazione_ammessa, ente_25novies, note)
-     VALUES ('INPS', 0, TRUE, TRUE, 'INPS', $1)
-     ON CONFLICT (categoria_creditore) DO UPDATE
-       SET ente_25novies = COALESCE("${nomeSchema}".limiti_ricevibilita.ente_25novies, EXCLUDED.ente_25novies)`,
-    ['Configurazione demo: soglia di segnalazione dell’ente di riferimento.']
   );
 
   const nomi = PERCORSO_DEMO.map((a) => a.ragioneSociale);

@@ -9,11 +9,12 @@
 // resta con la propria sessione/navigazione qui, senza perderla.
 
 import React, { useEffect, useState } from 'react';
-import { Building2, ShieldAlert, RefreshCw, Copy, Trash2 } from 'lucide-react';
+import { Building2, ShieldAlert, RefreshCw, Copy, Trash2, Sparkles } from 'lucide-react';
 import {
   ottieniSpaziAction,
   riprovaProvisioningAction,
   entraComeSalvagenteAction,
+  attivaDemoSpazioAction,
   type SpazioConLicenza,
 } from '@/app/actions/spazi';
 import { aggiornaFunzioniPlusAction, type FunzioniPlus } from '@/app/actions/funzioniPlus';
@@ -36,6 +37,7 @@ export default function ManutenzioneSpaziPage() {
   const [spazioInEliminazione, setSpazioInEliminazione] = useState<SpazioConLicenza | null>(null);
   const [confermaEliminazione, setConfermaEliminazione] = useState('');
   const [eliminazioneInCorso, setEliminazioneInCorso] = useState(false);
+  const [demoInCorsoId, setDemoInCorsoId] = useState<number | null>(null);
 
   const handleEliminaSpazio = async () => {
     if (!spazioInEliminazione || confermaEliminazione !== spazioInEliminazione.codice) return;
@@ -132,6 +134,32 @@ export default function ManutenzioneSpaziPage() {
       await caricaSpazi();
     } finally {
       setAzioneInCorsoId(null);
+    }
+  };
+
+  const handleAttivaDemo = async (spazio: SpazioConLicenza) => {
+    const conferma = await confermaApp(
+      `Attivo il percorso demo di ${spazio.descrizione}.\n\nVengono caricate tre posizioni complete (triage, screening, scenario) e i parametri di soglie, riscontro e scenari. Se presenti, le sei aziende del vecchio set «provvedimenti del giudice» vengono rimosse; le altre aziende non vengono toccate.`,
+      {
+        titolo: 'Attiva spazio demo',
+        etichettaConferma: 'Attiva demo',
+        distruttiva: true,
+      }
+    );
+    if (!conferma) return;
+    setDemoInCorsoId(spazio.id);
+    try {
+      const esito = await attivaDemoSpazioAction(spazio.id);
+      if (!esito.success) {
+        await avvisoApp(esito.error || 'Attivazione demo non riuscita.');
+        return;
+      }
+      setSpazi((prev) => prev.map((s) => (s.id === spazio.id ? { ...s, demo: true } : s)));
+      await avvisoApp(
+        `Percorso demo caricato: ${esito.creati ?? 0} nuove posizioni, ${esito.esistenti ?? 0} già presenti.`
+      );
+    } finally {
+      setDemoInCorsoId(null);
     }
   };
 
@@ -265,6 +293,11 @@ export default function ManutenzioneSpaziPage() {
                       Giudicante
                     </span>
                   )}
+                  {s.demo && (
+                    <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-100 text-amber-800">
+                      Demo
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleApriAnagrafica(s)}
@@ -295,6 +328,23 @@ export default function ManutenzioneSpaziPage() {
                   >
                     <RefreshCw className="w-3 h-3" />
                     Riprova
+                  </button>
+                )}
+
+                {s.schemaProvisionato && s.tipoSpazio === 'ENTE' && (
+                  <button
+                    type="button"
+                    onClick={() => handleAttivaDemo(s)}
+                    disabled={demoInCorsoId === s.id || azioneInCorsoId === s.id}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-300 text-white font-bold text-[9px] uppercase rounded-md transition-colors"
+                    title="Carica tre posizioni e i parametri demo; rimuove solo il vecchio set provvedimenti"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    {demoInCorsoId === s.id
+                      ? 'Caricamento…'
+                      : s.demo
+                        ? 'Ricarica demo'
+                        : 'Attiva demo'}
                   </button>
                 )}
 

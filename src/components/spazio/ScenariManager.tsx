@@ -17,7 +17,6 @@ import {
   type Scenario,
 } from '@/app/actions/scenari';
 import { ORIGINI_PER_TIPO, type TipoProposta } from '@/lib/origineProposta';
-import { CaricaSetDemo } from '@/components/spazio/CaricaSetDemo';
 
 interface Props {
   codiceSpazio: string;
@@ -26,8 +25,6 @@ interface Props {
   aziendeConsentite?: number[];
   /** ENTE non redige mai proposte, le riceve sempre — condiziona la scelta di default in creazione, vedi sotto. */
   tipoSpazio: 'ENTE' | 'NON_ENTE';
-  /** Solo l'Admin di Spazio vede e può usare il caricamento dei set demo. */
-  eAdminSpazio: boolean;
 }
 
 /** Timeout esplicito: stesso principio già applicato in ChecklistManager —
@@ -40,13 +37,7 @@ function conTimeout<T>(promessa: Promise<T>, secondi: number, messaggio: string)
   ]);
 }
 
-export function ScenariManager({
-  codiceSpazio,
-  nomeSchema,
-  aziendeConsentite,
-  tipoSpazio,
-  eAdminSpazio,
-}: Props) {
+export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, tipoSpazio }: Props) {
   const router = useRouter();
   const [aziende, setAziende] = useState<Azienda[]>([]);
   const [aziendaSelezionata, setAziendaSelezionata] = useState<number | null>(null);
@@ -191,14 +182,6 @@ export function ScenariManager({
           Indici, XBRL e Report di quell&apos;analisi specifica.
         </p>
       </div>
-
-      <CaricaSetDemo
-        nomeSchema={nomeSchema}
-        codice={codiceSpazio}
-        tipoSpazio={tipoSpazio}
-        eAdminSpazio={eAdminSpazio}
-        onCaricato={caricaAziende}
-      />
 
       {errore && (
         <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">

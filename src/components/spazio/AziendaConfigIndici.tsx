@@ -16,11 +16,8 @@ import {
 } from '@/app/actions/aziendaConfig';
 import { segnaVistaAnalisiBilancioAction } from '@/app/actions/analisiBilancioStep';
 import { ottieniStoricoXbrlAzienda, type BilancioStoricoAzienda } from '@/app/actions/xbrlAzienda';
-import { ottieniContributiPerAnnoAction } from '@/app/actions/soglie25novies';
 import type { IndiceCcii } from '@/lib/xbrl/types';
 import { calcolaQuoteDebitoPubblico } from '@/lib/xbrl/indici';
-import { rapportiPerAnno, type RapportoAnno } from '@/lib/soglie25novies/rapportoAnni';
-import { etichettaFonte } from '@/lib/soglie25novies/vistaSpazio';
 
 interface Props {
   nomeSchema: string;
@@ -34,30 +31,16 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
   const [errore, setErrore] = useState<string | null>(null);
   const [erroreSalvataggio, setErroreSalvataggio] = useState<string | null>(null);
   const [storico, setStorico] = useState<BilancioStoricoAzienda[]>([]);
-  const [contributiAnni, setContributiAnni] = useState<RapportoAnno[]>([]);
-  // Da dove viene la serie quando non e' la lettura dei file: dichiararlo
-  // nella scheda e' parte del dato.
-  const [origineContributi, setOrigineContributi] = useState<
-    'file' | 'posizioni' | 'valori' | null
-  >(null);
-  const [ricostruitaIl, setRicostruitaIl] = useState<string | null>(null);
-
   useEffect(() => {
     (async () => {
       setCaricamento(true);
-      const [risultato, st, contributi] = await Promise.all([
+      const [risultato, st] = await Promise.all([
         ottieniIndiciAzienda(nomeSchema, aziendaId),
         ottieniStoricoXbrlAzienda(nomeSchema, aziendaId),
-        ottieniContributiPerAnnoAction(nomeSchema, aziendaId),
       ]);
       if (risultato.success) setIndici(risultato.indici);
       else setErrore(risultato.error || 'Impossibile caricare gli indici.');
       if (st.success) setStorico(st.storico);
-      if (contributi.success) {
-        setContributiAnni(rapportiPerAnno(contributi.anni ?? []));
-        setOrigineContributi(contributi.origine ?? null);
-        setRicostruitaIl(contributi.ricostruitaIl ?? null);
-      }
       setCaricamento(false);
     })();
   }, [nomeSchema, aziendaId]);
@@ -120,21 +103,6 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
   const sogliaDi = (codice: string) =>
     perAnno.map((a) => a.mappa.get(codice)?.soglia).find((x) => !!x) ?? '—';
 
-  // Il rapporto della soglia INPS, allineato agli anni del bilancio: stesse
-  // colonne della tabella degli indici, così si vede in quale esercizio il
-  // rapporto si è acceso — che è la domanda che il solo ultimo dato non
-  // risponde. Gli anni vengono dai file INPS (DM10 e lista inadempienze),
-  // quindi può mancare il più vecchio: in quel caso la cella resta vuota
-  // invece di mostrare uno zero che non esiste.
-  const inpsPerAnno = new Map(contributiAnni.map((r) => [r.anno, r]));
-  const contributiDi = (anno: number | null) => (anno === null ? undefined : inpsPerAnno.get(anno));
-  const euro = (v: number | null | undefined) =>
-    v === null || v === undefined ? '—' : `${Math.round(v).toLocaleString('it-IT')} €`;
-  const quota = (q: number | null | undefined) =>
-    q === null || q === undefined
-      ? '—'
-      : `${(q * 100).toLocaleString('it-IT', { maximumFractionDigits: 1 })}%`;
-
   return (
     // Affiancati: a sinistra i calcoli, a destra le scelte — senza scorrere.
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] items-start">
@@ -196,10 +164,7 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
                     </tr>
                   );
                   // C5 somma debito tributario e previdenziale: sotto la sua
-                  // riga le due quote restano distinte, perché hanno presidi
-                  // normativi diversi — la soglia INPS dell'art. 25-novies si
-                  // misura sui contributi scaduti rispetto ai contributi
-                  // DOVUTI, non sul totale dei debiti.
+                  // riga le due quote restano distinte.
                   if (ind.codice !== 'C5') return riga;
                   const quota = (chiave: 'quotaTributari' | 'quotaPrevidenziali') => (
                     <tr>
@@ -229,159 +194,12 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
                   );
                 })}
               </tbody>
-              {/* La soglia INPS nelle stesse colonne degli indici: il rapporto
-                  scaduti / dovuti dell'esercizio in cui C5 scatta. */}
-              <tbody className="divide-y divide-slate-100 border-t border-slate-200">
-                <tr>
-                  <td
-                    colSpan={2}
-                    className="p-2 pt-3 text-[10px] font-bold uppercase tracking-wider text-slate-500"
-                  >
-                    Contributi INPS — art. 25-novies, lett. a)
-                  </td>
-                </tr>
-                {contributiAnni.length === 0 ? (
-                  <tr>
-                    <td colSpan={perAnno.length + 2} className="p-2 text-[11px] text-slate-400">
-                      Nessun contributo per anno conservato: si popola caricando DM10 e Lista
-                      Inadempienze nel triage.
-                    </td>
-                  </tr>
-                ) : (
-                  <>
-                    <tr>
-                      <td className="p-2 pl-6 text-[11px] text-slate-500">
-                        Contributi dovuti (DM10)
-                      </td>
-                      <td className="p-2 text-[11px] text-slate-400">saldo delle denunce</td>
-                      {perAnno.map((a, k) => (
-                        <td key={k} className="p-2 text-right tabular-nums text-slate-600">
-                          {euro(contributiDi(a.anno)?.dovuti)}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr>
-                      <td className="p-2 pl-6 text-[11px] text-slate-500">
-                        Contributi scaduti (inadempienze)
-                      </td>
-                      <td className="p-2 text-[11px] text-slate-400">non versati, per anno</td>
-                      {perAnno.map((a, k) => (
-                        <td key={k} className="p-2 text-right tabular-nums text-slate-600">
-                          {euro(contributiDi(a.anno)?.scaduti)}
-                        </td>
-                      ))}
-                    </tr>
-                    <tr>
-                      <td className="p-2 pl-6 text-[11px] text-slate-500">
-                        di cui scaduti da oltre 90 giorni
-                      </td>
-                      <td className="p-2 text-[11px] text-slate-400">
-                        requisito temporale, alla data della verifica
-                      </td>
-                      {perAnno.map((a, k) => {
-                        const r = contributiDi(a.anno);
-                        return (
-                          <td
-                            key={k}
-                            className={`p-2 text-right tabular-nums ${
-                              r?.ritardoOltre90 ? 'text-amber-700 font-semibold' : 'text-slate-600'
-                            }`}
-                            title={
-                              r?.oltre90 == null
-                                ? 'Ritardo non misurato per questo esercizio: la serie viene dalle posizioni del triage o dai valori conservati, che non portano il ritardo'
-                                : 'Contributi di questo esercizio gia’ scaduti da oltre 90 giorni alla data della verifica: e’ il terzo requisito della lett. a)'
-                            }
-                          >
-                            {euro(r?.oltre90)}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                    <tr>
-                      <td className="p-2 pl-6 text-[11px] text-slate-500">
-                        Rapporto scaduti / dovuti
-                      </td>
-                      <td className="p-2 text-[11px] text-slate-400">quota del 30%</td>
-                      {perAnno.map((a, k) => {
-                        const r = contributiDi(a.anno);
-                        const cls =
-                          r?.oltreQuota === true
-                            ? 'text-red-700 font-bold'
-                            : r?.quota != null
-                              ? 'text-emerald-700'
-                              : 'text-slate-400';
-                        return (
-                          <td
-                            key={k}
-                            className={`p-2 text-right tabular-nums ${cls}`}
-                            title={
-                              r?.quota == null
-                                ? 'Rapporto non calcolabile: manca il dovuto o lo scaduto di questo anno'
-                                : 'Quota oltre il 30%: non è ancora la soglia, che richiede anche il ritardo oltre 90 giorni (e 15.000 € con lavoratori)'
-                            }
-                          >
-                            {quota(r?.quota)}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  </>
-                )}
-              </tbody>
             </table>
-            {origineContributi && origineContributi !== 'file' && contributiAnni.length > 0 && (
-              <p className="text-[10px] text-amber-700 mt-2 leading-relaxed">
-                {origineContributi === 'posizioni'
-                  ? 'Serie ricostruita dalle posizioni del triage'
-                  : 'Serie ricostruita dai valori conservati nell’ultima verifica'}
-                {ricostruitaIl
-                  ? ` del ${new Date(`${ricostruitaIl}T00:00:00Z`).toLocaleDateString('it-IT')}`
-                  : ''}
-                : non e’ la lettura dei file, e non porta il ritardo oltre 90 giorni. Ricaricando
-                DM10 e Lista Inadempienze arriva l’andamento per esercizio.
-              </p>
-            )}
-            {/* La scheda e la vista d'insieme devono dire la stessa cosa della
-                stessa serie: una sola funzione produce l'etichetta, così non
-                possono divergere. Prima la scheda taceva la fonte quando i
-                file c'erano, e «DM10 / inadempienze» restava vero anche con
-                un solo file letto. */}
-            {origineContributi && contributiAnni.length > 0 && (
-              <p
-                className={`text-[10px] mt-1 leading-relaxed ${
-                  origineContributi === 'file' ? 'text-slate-500' : 'text-amber-700'
-                }`}
-              >
-                Fonte della serie:{' '}
-                <span className="font-semibold">
-                  {etichettaFonte({
-                    origine: origineContributi,
-                    ricostruitaIl,
-                    anni: contributiAnni,
-                  })}
-                </span>
-                {origineContributi === 'file'
-                  ? ' — nomina solo i file che hanno davvero dato un anno.'
-                  : ' — la stessa etichetta della vista d’insieme.'}
-              </p>
-            )}
             <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
               Valori del bilancio depositato (in rosso oltre la soglia). Strumenti operativi di
               lettura, non parametri normativi: il sistema di indici dell’originario art. 13 CCII è
               abrogato. Nello scenario gli stessi indici sono ricalcolati anche sulla Posizione
               Aggiornata, con i dati attualizzati.
-            </p>
-            <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
-              «Di cui scaduti da oltre 90 giorni» misura il ritardo alla data della verifica: dice
-              quali esercizi compongono il debito che soddisfa il requisito temporale, non quando ci
-              sono arrivati. Va letto accanto al rapporto: la quota del 30% senza il ritardo di
-              oltre 90 giorni non integra la fattispecie della lett. a).
-            </p>
-            <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
-              C5 somma le due voci; le righe «di cui» le tengono separate. Serve perché un debito
-              fiscale che cresce porta C5 oltre 0,30 senza che la soglia previdenziale sia toccata:
-              l&apos;art. 25-novies, comma 1, lett. a), misura i contributi scaduti sui contributi
-              dovuti dell&apos;anno precedente, non sul totale dei debiti.
             </p>
           </div>
         )}

@@ -32,6 +32,7 @@ import {
 } from '@/lib/autorizzazione';
 import { cookieSicuro } from '@/lib/cookieSicuro';
 import { caricaPercorsoDemoEnte } from '@/lib/demo/caricaPercorsoEnte';
+import { AZIENDE_VECCHIO_SET_DEMO } from '@/lib/demo/legacy';
 import { AZIENDE_PERCORSO_DEMO } from '@/lib/demo/percorsoEnte';
 
 export interface ActionResult {
@@ -84,6 +85,8 @@ export interface SpazioConLicenza {
   plusRelazioneAi: boolean;
   tipoSpazio: 'ENTE' | 'NON_ENTE';
   giudicante: boolean;
+  /** Spazio nato (o attivato) con il percorso demo già caricato. */
+  demo: boolean;
 }
 
 /**
@@ -471,7 +474,7 @@ export async function ottieniSpaziAction(): Promise<RisultatoElencoSpazi> {
     const risultato = await pool.query(`
       SELECT
         s.id, s.codice, s.descrizione, s.stato, s.created_at,
-        s.nome_schema, s.schema_provisionato, s.tipo_spazio, s.giudicante,
+        s.nome_schema, s.schema_provisionato, s.tipo_spazio, s.giudicante, s.demo,
         l.chiave_licenza, l.licenza_commerciale_id, l.tier, l.stato AS stato_licenza,
         l.max_utenti, l.max_aziende, l.data_scadenza,
         l.plus_dati_settore, l.plus_simulazione, l.plus_relazione_ai,
@@ -492,6 +495,7 @@ export async function ottieniSpaziAction(): Promise<RisultatoElencoSpazi> {
       schemaProvisionato: r.schema_provisionato,
       tipoSpazio: r.tipo_spazio || 'NON_ENTE',
       giudicante: r.giudicante || false,
+      demo: r.demo || false,
       chiaveLicenza: r.chiave_licenza,
       licenzaCommercialeId: r.licenza_commerciale_id,
       ragioneSocialeLicenzaCommerciale: r.ragione_sociale_licenza_commerciale,
@@ -512,6 +516,75 @@ export async function ottieniSpaziAction(): Promise<RisultatoElencoSpazi> {
       success: false,
       spazi: [],
       error: `Impossibile caricare l'elenco degli spazi: ${error.message || error}`,
+    };
+  }
+}
+
+export interface EsitoDemoSpazio {
+  success: boolean;
+  creati?: number;
+  esistenti?: number;
+  error?: string;
+}
+
+/**
+ * Attiva il percorso demo su uno spazio già creato.
+ *
+ * Serve perché il flag non esisteva quando sono nati gli spazi precedenti:
+ * senza questa azione l'unico modo sarebbe eliminare e ricreare lo spazio.
+ * Carica le tre posizioni e i parametri dell'export, poi rimuove le sei
+ * aziende del vecchio set «provvedimenti del giudice» — solo quelle, per
+ * nome esatto. Le altre aziende non vengono toccate.
+ */
+export async function attivaDemoSpazioAction(spazioId: number): Promise<EsitoDemoSpazio> {
+  try {
+    await richiediSuperadmin();
+    const risultato = await pool.query(
+      `SELECT s.nome_schema, s.tipo_spazio, l.max_aziende
+         FROM spazi s
+         LEFT JOIN licenze_spazio l ON l.spazio_id = s.id
+        WHERE s.id = $1`,
+      [spazioId]
+    );
+    if (risultato.rows.length === 0) {
+      return { success: false, error: 'Spazio non trovato.' };
+    }
+    const spazio = risultato.rows[0];
+    const nomeSchema = String(spazio.nome_schema || '');
+    if (!/^[a-z0-9_]+$/.test(nomeSchema)) {
+      return { success: false, error: 'Lo spazio non ha uno schema valido.' };
+    }
+    if (spazio.tipo_spazio !== 'ENTE') {
+      return {
+        success: false,
+        error: 'Il percorso demo è disponibile solo per uno spazio ENTE.',
+      };
+    }
+    if (Number(spazio.max_aziende) < AZIENDE_PERCORSO_DEMO) {
+      return {
+        success: false,
+        error: `Il percorso demo carica ${AZIENDE_PERCORSO_DEMO} aziende: porta il limite dello spazio ad almeno ${AZIENDE_PERCORSO_DEMO}.`,
+      };
+    }
+
+    const esito = await caricaPercorsoDemoEnte(nomeSchema);
+
+    // I sei nomi sono quelli del set 0.171.0: la cancellazione è circoscritta
+    // e le altre aziende restano. Se il vecchio set non c'è, non cambia nulla.
+    await pool.query(
+      `DELETE FROM "${nomeSchema}".aziende WHERE ragione_sociale = ANY($1::text[])`,
+      [AZIENDE_VECCHIO_SET_DEMO]
+    );
+
+    await pool.query(`UPDATE spazi SET demo = TRUE WHERE id = $1`, [spazioId]);
+    revalidatePath('/superadmin/Spazi');
+    revalidatePath('/superadmin/ManutenzioneSpazi');
+    return { success: true, creati: esito.creati, esistenti: esito.esistenti };
+  } catch (error: unknown) {
+    console.error('[attivaDemoSpazioAction]', error);
+    return {
+      success: false,
+      error: `Impossibile attivare il percorso demo: ${(error as Error).message}`,
     };
   }
 }

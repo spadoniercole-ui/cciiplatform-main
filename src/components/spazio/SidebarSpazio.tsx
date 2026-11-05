@@ -19,7 +19,6 @@ import {
   Settings2,
   BookOpen,
   Stethoscope,
-  TrendingUp,
 } from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
 
@@ -60,13 +59,6 @@ const VOCI_MENU: {
     soloAdmin: true,
   },
   { id: 'aziende', label: 'Aziende', icon: Building2, stato: 'pronta', soloAdmin: true },
-  {
-    id: 'contributi',
-    label: 'Contributi per anno',
-    icon: TrendingUp,
-    stato: 'pronta',
-    soloAdmin: true,
-  },
   {
     id: 'scenari',
     label: 'Scenari',
