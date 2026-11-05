@@ -41,7 +41,7 @@ import {
 import { PARAMETRI_DEMO } from './parametriEnte';
 import { documentiProvvedimentoDemo } from './documenti';
 import { confrontaProvvedimento } from '@/lib/giudice/confronto';
-import type { LetturaProvvedimento } from '@/lib/giudice/lettura';
+import type { LetturaProvvedimento, TipoAttoGiudice } from '@/lib/giudice/lettura';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -257,42 +257,54 @@ async function aggiornaScenarioDemo(
   const id = Number(trovato.rows[0].id);
   await esegui.query(
     `UPDATE "${nomeSchema}".scenari
-        SET nome = $2, tipo_istruttoria = $3, data_deposito_proposta = $4
+        SET nome = $2,
+            tipo_istruttoria = CASE WHEN $5 THEN tipo_istruttoria ELSE $3 END,
+            data_deposito_proposta = $4
       WHERE id = $1`,
-    [id, a.scenario, a.tipoIstruttoria, a.dataDepositoProposta]
+    [id, a.scenario, a.tipoIstruttoria, a.dataDepositoProposta, Boolean(a.aperta)]
   );
   return id;
 }
 
-function letturaProvvedimentoDemo(a: AziendaPercorsoDemo): LetturaProvvedimento {
-  const chirografario = a.tipoIstruttoria === 'CRAM_DOWN';
-  const file = chirografario
-    ? 'dispositivo-cram-down-logistica-padana.pdf'
-    : 'decreto-liquidazione-tessitura-lario.pdf';
+function letturaProvvedimentoDemo(
+  a: AziendaPercorsoDemo,
+  tipo: 'DECRETO_LIQUIDAZIONE' | 'CRAM_DOWN'
+): LetturaProvvedimento {
+  const chirografario = tipo === 'CRAM_DOWN';
+  const cantieri = a.ragioneSociale === 'Cantieri Brianza Demo S.r.l.';
+  const file = cantieri
+    ? chirografario
+      ? 'dispositivo-cram-down-cantieri-brianza.pdf'
+      : 'decreto-liquidazione-cantieri-brianza.pdf'
+    : chirografario
+      ? 'dispositivo-cram-down-logistica-padana.pdf'
+      : 'decreto-liquidazione-tessitura-lario.pdf';
+  const contributi = cantieri ? (chirografario ? 51_000 : 48_000) : chirografario ? 10_000 : 72_000;
+  const sanzioni = cantieri ? (chirografario ? 8_500 : 8_000) : chirografario ? 1_000 : 8_000;
   return {
     crediti: [
       {
         voce: 'Contributi previdenziali scaduti',
-        importo: chirografario ? 10_000 : 72_000,
+        importo: contributi,
         rango: 'PRIVILEGIATO',
         privilegio: 'Privilegio generale previdenziale',
-        percentualeRealizzo: chirografario ? 50 : 30.5,
+        percentualeRealizzo: cantieri ? (chirografario ? 85 : 32) : chirografario ? 50 : 30.5,
         documento: file,
         passo: 'Crediti ammessi',
       },
       {
         voce: 'Sanzioni civili contributive',
-        importo: chirografario ? 1_000 : 8_000,
+        importo: sanzioni,
         rango: 'CHIROGRAFARIO',
         privilegio: null,
-        percentualeRealizzo: chirografario ? 20 : 6.4,
+        percentualeRealizzo: cantieri ? (chirografario ? 85 : 8) : chirografario ? 20 : 6.4,
         documento: file,
         passo: 'Crediti ammessi',
       },
     ],
-    speseProceduraPct: chirografario ? 15 : 20,
-    tempiMesi: chirografario ? 24 : 36,
-    dataAtto: chirografario ? '2026-10-30' : '2026-10-20',
+    speseProceduraPct: cantieri ? (chirografario ? 12 : 18) : chirografario ? 15 : 20,
+    tempiMesi: cantieri ? (chirografario ? 18 : 30) : chirografario ? 24 : 36,
+    dataAtto: cantieri ? '2026-11-03' : chirografario ? '2026-10-30' : '2026-10-20',
     note: [
       'Documento dimostrativo: crediti, percentuali e tempi sono fittizi.',
       'La lettura è già predisposta nella demo e non richiede una chiamata AI.',
@@ -304,22 +316,25 @@ async function inserisciIstruttoriaDemo(
   esegui: Esecutore,
   nomeSchema: string,
   scenarioId: number,
-  a: AziendaPercorsoDemo
+  a: AziendaPercorsoDemo,
+  tipoAtto?: 'DECRETO_LIQUIDAZIONE' | 'CRAM_DOWN'
 ): Promise<void> {
-  if (a.tipoIstruttoria === 'PROPOSTA') return;
-  const documenti = documentiProvvedimentoDemo(a.codiceFiscale).map((d) => ({
+  const tipo = tipoAtto ?? a.tipoIstruttoria;
+  if (tipo !== 'DECRETO_LIQUIDAZIONE' && tipo !== 'CRAM_DOWN') return;
+  const documenti = documentiProvvedimentoDemo(a.codiceFiscale, tipo).map((d) => ({
     nome: d.nome,
     url: d.percorso,
   }));
   if (documenti.length === 0) return;
-  const lettura = letturaProvvedimentoDemo(a);
+  const lettura = letturaProvvedimentoDemo(a, tipo);
   const confronto = confrontaProvvedimento(
     a.debiti.map((d) => ({ voce: d.voce, importo: d.importo })),
     lettura,
-    a.tipoIstruttoria
+    tipo
   );
-  const relazione =
-    a.tipoIstruttoria === 'DECRETO_LIQUIDAZIONE'
+  const relazione = a.aperta
+    ? `La variante ${tipo === 'DECRETO_LIQUIDAZIONE' ? 'della liquidazione giudiziale' : 'del cram down'} riconosce all'ente ${lettura.crediti[0].importo.toLocaleString('it-IT')} euro sui ${a.debiti[0].importo.toLocaleString('it-IT')} a ruolo per i contributi previdenziali e ${lettura.crediti[1].importo.toLocaleString('it-IT')} euro sui ${a.debiti[1].importo.toLocaleString('it-IT')} per le sanzioni. È una lettura dimostrativa: la scelta del percorso resta aperta e va confermata sui documenti che l'azienda depositerà.`
+    : tipo === 'DECRETO_LIQUIDAZIONE'
       ? `Il decreto di liquidazione giudiziale riconosce all'ente 72.000 euro sui 80.000 a ruolo per i contributi previdenziali e 8.000 euro sui 12.000 per le sanzioni, con realizzo previsto rispettivamente del 30,5% e del 6,4%. La minore ammissione è di 12.000 euro; la perdita complessiva, al netto del recupero atteso e delle spese di procedura, resta un elemento da verificare. Le difformità segnalate riguardano l'importo ammesso e il rango del credito per sanzioni: sono elementi che possono fondare un approfondimento, non una qualificazione giuridica.`
       : `Il dispositivo di cram down riconosce all'ente 10.000 euro sui 12.000 a ruolo per i contributi previdenziali e 1.000 euro sugli 1.500 per le sanzioni, con soddisfacimento rispettivamente del 50% e del 20%. La minore ammissione è di 2.500 euro; il recupero atteso e la perdita sono calcolati sui dati del dispositivo. Le difformità sono contenute, ma il credito per sanzioni merita una verifica sul rango e sulla percentuale applicata. Questa è un'analisi tecnica dimostrativa, non un parere legale.`;
   await esegui.query(
@@ -345,7 +360,10 @@ async function inserisciIstruttoriaDemo(
  * Restituisce quante aziende sono state create e quante erano già presenti.
  * Non cancella mai righe esistenti.
  */
-export async function caricaPercorsoDemoEnte(nomeSchema: string): Promise<EsitoPercorsoDemo> {
+export async function caricaPercorsoDemoEnte(
+  nomeSchema: string,
+  opzioni: { soloPercorsi?: boolean } = {}
+): Promise<EsitoPercorsoDemo> {
   if (!schemaOk(nomeSchema)) throw new Error('Nome schema non valido.');
 
   // Le tabelle nascono a runtime come per qualunque spazio: qui si portano
@@ -356,24 +374,30 @@ export async function caricaPercorsoDemoEnte(nomeSchema: string): Promise<EsitoP
   await assicuraTabellaDebitiEnte(nomeSchema);
   await assicuraTabelleScenari(nomeSchema);
   await assicuraTabelleScenariTriage(nomeSchema);
-  await assicuraTabelleParametriSpazio(nomeSchema);
 
-  // I parametri che fanno funzionare triage, screening e scenario: soglie,
-  // riscontro della proposta, ipotesi per rango e schede XBRL. Vengono
-  // applicati prima delle aziende, così la fotografia nasce già leggibile.
-  await applicaParametriDemo(nomeSchema);
+  // Il riallineamento dei soli percorsi (usato quando si apre la pagina
+  // Scenari di una demo già attiva) non deve riscrivere i parametri che
+  // l'utente può aver modificato: aggiorna nomi, tipi e la quarta azienda.
+  if (!opzioni.soloPercorsi) {
+    await assicuraTabelleParametriSpazio(nomeSchema);
 
-  // Le direttrici dello spazio: senza, lo screening si aprirebbe con le
-  // domande ma senza il quadro che le pesa. Si scrivono solo se lo spazio non
-  // ne ha già (uno spazio demo nasce vuoto, ma la regola vale anche in caso
-  // di riesecuzione).
-  await pool.query(
-    `UPDATE public.spazi SET direttrici_ente_strutturate = $1::jsonb
-      WHERE nome_schema = $2
-        AND (direttrici_ente_strutturate IS NULL
-             OR direttrici_ente_strutturate = '[]'::jsonb)`,
-    [JSON.stringify(DIRETTRICI_DEMO), nomeSchema]
-  );
+    // I parametri che fanno funzionare triage, screening e scenario: soglie,
+    // riscontro della proposta, ipotesi per rango e schede XBRL. Vengono
+    // applicati prima delle aziende, così la fotografia nasce già leggibile.
+    await applicaParametriDemo(nomeSchema);
+
+    // Le direttrici dello spazio: senza, lo screening si aprirebbe con le
+    // domande ma senza il quadro che le pesa. Si scrivono solo se lo spazio non
+    // ne ha già (uno spazio demo nasce vuoto, ma la regola vale anche in caso
+    // di riesecuzione).
+    await pool.query(
+      `UPDATE public.spazi SET direttrici_ente_strutturate = $1::jsonb
+        WHERE nome_schema = $2
+          AND (direttrici_ente_strutturate IS NULL
+               OR direttrici_ente_strutturate = '[]'::jsonb)`,
+      [JSON.stringify(DIRETTRICI_DEMO), nomeSchema]
+    );
+  }
 
   const nomi = PERCORSO_DEMO.map((a) => a.ragioneSociale);
   const presenti = await pool.query(
@@ -418,4 +442,49 @@ export async function caricaPercorsoDemoEnte(nomeSchema: string): Promise<EsitoP
   }
 
   return { creati, esistenti };
+}
+
+/**
+ * Prepara la valutazione della quarta azienda dopo che l'utente ha scelto il
+ * percorso. La scelta è il gesto che rende «aperta» la demo: fino a quel
+ * momento non esiste un'istruttoria preconfezionata, poi la piattaforma
+ * costruisce il confronto adatto all'atto scelto.
+ *
+ * Restituisce false quando lo scenario non è quello aperto: il chiamante può
+ * continuare con il comportamento normale senza trattare il caso demo.
+ */
+export async function preparaValutazioneApertaDemo(
+  nomeSchema: string,
+  scenarioId: number,
+  tipo: TipoAttoGiudice
+): Promise<boolean> {
+  if (!schemaOk(nomeSchema)) return false;
+  const r = await pool.query(
+    `SELECT a.ragione_sociale, sp.demo
+       FROM "${nomeSchema}".scenari s
+       JOIN "${nomeSchema}".aziende a ON a.id = s.azienda_id
+       JOIN public.spazi sp ON sp.nome_schema = $1
+      WHERE s.id = $2`,
+    [nomeSchema, scenarioId]
+  );
+  if (!r.rows[0]?.demo) return false;
+  const a = PERCORSO_DEMO.find(
+    (x) => x.aperta && x.ragioneSociale === String(r.rows[0].ragione_sociale)
+  );
+  if (!a) return false;
+  if (tipo === 'PROPOSTA') return true;
+  if (tipo !== 'DECRETO_LIQUIDAZIONE' && tipo !== 'CRAM_DOWN') return true;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await inserisciIstruttoriaDemo(client, nomeSchema, scenarioId, a, tipo);
+    await client.query('COMMIT');
+  } catch (errore) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw errore;
+  } finally {
+    client.release();
+  }
+  return true;
 }

@@ -1,3 +1,22 @@
+## 0.174.2 — 2026-11-05
+
+**La demo sceglie i documenti giusti, e sa restare aperta.**
+
+- **La schermata di acquisizione non mescola più le aziende.** Aprendo il caricamento dalla
+  scheda di un’azienda o di uno scenario si vedono solo i suoi documenti: la proposta di
+  Meccanica non convive con il decreto di Tessitura o il dispositivo di Logistica.
+- **I documenti sono selezionabili e il criterio è visibile.** Ogni campo dichiara i ruoli
+  pertinenti (fascicolo, bilancio, certificazione, proposta, provvedimento, stato passivo): quelli
+  partono già spuntati, gli altri documenti della stessa azienda restano disponibili. Si può
+  aggiungere o togliere un file prima di confermare l’acquisizione simulata.
+- **Tre percorsi distinti e una valutazione aperta.** Meccanica segue proposta e concordato,
+  Tessitura la liquidazione giudiziale, Logistica il cram down. Cantieri Brianza è la quarta
+  posizione, volutamente senza percorso precostituito: la scelta tra proposta, liquidazione e cram
+  down resta all’operatore e la piattaforma prepara la lettura e il confronto della variante scelta.
+- **Le demo già attive si riallineano senza duplicati.** Aprendo Scenari vengono aggiornati nomi e
+  tipi degli scenari demo, compare la quarta azienda e la scelta già fatta sulla valutazione aperta
+  non viene sovrascritta.
+
 ## 0.174.1 — 2026-11-05
 
 **Anche il trascinamento resta dentro la simulazione.**

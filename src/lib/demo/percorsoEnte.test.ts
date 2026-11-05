@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { AZIENDE_PERCORSO_DEMO, DIRETTRICI_DEMO, PERCORSO_DEMO, bundleDemo } from './percorsoEnte';
 
 describe('percorso demo dell’ente', () => {
-  it('contiene tre aziende distinte, riconoscibili come demo', () => {
-    expect(PERCORSO_DEMO).toHaveLength(3);
-    expect(AZIENDE_PERCORSO_DEMO).toBe(3);
-    expect(new Set(PERCORSO_DEMO.map((a) => a.ragioneSociale)).size).toBe(3);
-    expect(new Set(PERCORSO_DEMO.map((a) => a.codiceFiscale)).size).toBe(3);
+  it('contiene quattro aziende distinte, riconoscibili come demo', () => {
+    expect(PERCORSO_DEMO).toHaveLength(4);
+    expect(AZIENDE_PERCORSO_DEMO).toBe(4);
+    expect(new Set(PERCORSO_DEMO.map((a) => a.ragioneSociale)).size).toBe(4);
+    expect(new Set(PERCORSO_DEMO.map((a) => a.codiceFiscale)).size).toBe(4);
     for (const a of PERCORSO_DEMO) {
       expect(a.ragioneSociale).toContain('Demo');
       expect(a.pec).toContain('esempio.it');
@@ -14,7 +14,7 @@ describe('percorso demo dell’ente', () => {
   });
 
   it('copre i tre esiti del semaforo con bilanci coerenti', () => {
-    const esiti = PERCORSO_DEMO.map((a) => bundleDemo(a, 'corrente').severity);
+    const esiti = PERCORSO_DEMO.slice(0, 3).map((a) => bundleDemo(a, 'corrente').severity);
     expect(esiti).toEqual(['RED', 'YELLOW', 'GREEN']);
   });
 
@@ -50,21 +50,24 @@ describe('percorso demo dell’ente', () => {
   });
 
   it('gli scenari hanno nomi distinti e una data di deposito valida', () => {
-    expect(new Set(PERCORSO_DEMO.map((a) => a.scenario)).size).toBe(3);
+    expect(new Set(PERCORSO_DEMO.map((a) => a.scenario)).size).toBe(4);
     for (const a of PERCORSO_DEMO) {
       expect(a.scenario).toContain('Demo');
       expect(a.dataDepositoProposta).toMatch(/^2026-\d{2}-\d{2}$/);
     }
   });
 
-  it('differenzia i tre percorsi: proposta, liquidazione e cram down', () => {
+  it('differenzia i tre percorsi fissi e lascia aperta la quarta azienda', () => {
     expect(PERCORSO_DEMO.map((a) => a.tipoIstruttoria)).toEqual([
       'PROPOSTA',
       'DECRETO_LIQUIDAZIONE',
       'CRAM_DOWN',
+      'DA_CHIEDERE',
     ]);
     expect(PERCORSO_DEMO[1].scenario).toContain('Decreto di liquidazione');
     expect(PERCORSO_DEMO[2].scenario).toContain('Cram down');
+    expect(PERCORSO_DEMO[3].scenario).toContain('Valutazione aperta');
+    expect(PERCORSO_DEMO[3].aperta).toBe(true);
   });
 
   it('il confronto con l’anno precedente mostra il peggioramento dei primi due profili', () => {

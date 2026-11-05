@@ -194,9 +194,10 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
 
       {demo && (
         <p className="text-[11px] text-sky-900 bg-sky-50 border border-sky-200 rounded-lg p-3 leading-relaxed">
-          <span className="font-bold">Ambiente demo.</span> I tre scenari sono già predisposti, uno
-          per percorso: proposta, decreto di liquidazione e cram down. Non si creano nuovi scenari,
-          perché non ci sarebbero documenti demo da associare.
+          <span className="font-bold">Ambiente demo.</span> Tre aziende hanno un percorso già
+          costruito — proposta/concordato, liquidazione giudiziale e cram down — e una quarta è
+          lasciata aperta: si sceglie lì che cosa ha in mano l&apos;azienda. Non si creano nuovi
+          scenari, perché non ci sarebbero documenti demo da associare.
         </p>
       )}
 

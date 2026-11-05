@@ -514,6 +514,7 @@ export function SimulazioneRiceventeScenario({
                 type="file"
                 multiple
                 accept="application/pdf,.pdf"
+                data-demo-ruoli="FASCICOLO,PROPOSTA"
                 className="hidden"
                 onChange={(e) => {
                   handleScegli(e.target.files);

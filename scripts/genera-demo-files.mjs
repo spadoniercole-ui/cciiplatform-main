@@ -56,6 +56,20 @@ const aziende = [
     addetti: 31,
     oggetto: 'Trasporto merci conto terzi e gestione di magazzini.',
   },
+  {
+    chiave: 'cantieri-brianza',
+    nome: 'Cantieri Brianza Demo S.r.l.',
+    cf: '00000000104',
+    piva: '00000000104',
+    rea: 'MB-001104',
+    forma: 'Società a responsabilità limitata',
+    sede: 'Via del Lambro 22, 20900 Monza (MB)',
+    pec: 'cantieri.brianza.demo@pec.esempio.it',
+    ateco: '41.20.00',
+    amministratore: 'Marco Esempio, Amministratore unico',
+    addetti: 38,
+    oggetto: 'Costruzione di edifici residenziali e commerciali.',
+  },
 ];
 
 function pdf({ file, titolo, sottotitolo, righe }) {
@@ -285,6 +299,61 @@ for (const a of aziende) {
     });
   }
 
+  if (a.chiave === 'cantieri-brianza') {
+    pdf({
+      file: 'proposta-cantieri-brianza.pdf',
+      titolo: 'Proposta depositata — variante aperta',
+      sottotitolo: a.nome,
+      righe: [
+        '## Proposta ricevuta dall’ente',
+        'La società ha depositato una proposta di ristrutturazione, ma il percorso non è ancora qualificato: la demo lascia aperta la scelta tra proposta, liquidazione e cram down.',
+        '---',
+        '## Condizioni dichiarate',
+        'Continuità aziendale e pagamento dei creditori secondo il piano allegato. Il documento è una variante dimostrativa, non un atto reale.',
+      ],
+    });
+    pdf({
+      file: 'decreto-liquidazione-cantieri-brianza.pdf',
+      titolo: 'Decreto di liquidazione giudiziale — variante',
+      sottotitolo: 'Tribunale di Monza — Sezione crisi d’impresa · procedura demo',
+      righe: [
+        '## Il Tribunale',
+        'Dichiara aperta la liquidazione giudiziale della società Cantieri Brianza Demo S.r.l. e nomina il giudice delegato e il curatore.',
+        '---',
+        '## Crediti ammessi',
+        'Contributi previdenziali scaduti: ammesso 48.000,00 euro, rango privilegiato, realizzo previsto 32%.',
+        'Sanzioni civili contributive: ammesso 8.000,00 euro, rango chirografario, realizzo previsto 8%.',
+        '---',
+        '## Spese e tempi',
+        'Spese di procedura: 18% del realizzo lordo.',
+        'Durata stimata: 30 mesi.',
+        '---',
+        '## Avvertenza',
+        'Atto dimostrativo: la variante serve a mostrare che il percorso può essere scelto anche su un’azienda non precostituita.',
+      ],
+    });
+    pdf({
+      file: 'dispositivo-cram-down-cantieri-brianza.pdf',
+      titolo: 'Dispositivo di cram down — variante',
+      sottotitolo: 'Tribunale di Monza — Sezione crisi d’impresa · procedura demo',
+      righe: [
+        '## Il Tribunale',
+        'Omologa il piano di ristrutturazione e dispone il cram down nei confronti dei creditori dissenzienti.',
+        '---',
+        '## Crediti riconosciuti',
+        'Contributi previdenziali scaduti: riconosciuto 51.000,00 euro, rango privilegiato, soddisfacimento 85%.',
+        'Sanzioni civili contributive: riconosciuto 8.500,00 euro, rango chirografario, soddisfacimento 85%.',
+        '---',
+        '## Spese e tempi',
+        'Spese di procedura: 12% del realizzo lordo.',
+        'Durata stimata: 18 mesi.',
+        '---',
+        '## Avvertenza',
+        'Dispositivo dimostrativo della variante cram down.',
+      ],
+    });
+  }
+
   excel({
     file: `certificazione-debiti-${a.chiave}.xlsx`,
     titolo: 'Certificazione dei debiti',
@@ -293,19 +362,37 @@ for (const a of aziende) {
       ['Voce', 'Importo', 'Tipo', 'Nota'],
       [
         'Contributi previdenziali scaduti',
-        a.chiave === 'meccanica-valsesia' ? 210000 : a.chiave === 'tessitura-lario' ? 80000 : 12000,
+        a.chiave === 'meccanica-valsesia'
+          ? 210000
+          : a.chiave === 'tessitura-lario'
+            ? 80000
+            : a.chiave === 'logistica-padana'
+              ? 12000
+              : 60000,
         'DEBITO',
         'Dato fittizio',
       ],
       [
         'Sanzioni civili contributive',
-        a.chiave === 'meccanica-valsesia' ? 35000 : a.chiave === 'tessitura-lario' ? 12000 : 1500,
+        a.chiave === 'meccanica-valsesia'
+          ? 35000
+          : a.chiave === 'tessitura-lario'
+            ? 12000
+            : a.chiave === 'logistica-padana'
+              ? 1500
+              : 10000,
         'DEBITO',
         'Dato fittizio',
       ],
       [
         'Totale',
-        a.chiave === 'meccanica-valsesia' ? 245000 : a.chiave === 'tessitura-lario' ? 92000 : 13500,
+        a.chiave === 'meccanica-valsesia'
+          ? 245000
+          : a.chiave === 'tessitura-lario'
+            ? 92000
+            : a.chiave === 'logistica-padana'
+              ? 13500
+              : 70000,
         '',
         'Somma delle voci demo',
       ],

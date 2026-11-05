@@ -1988,6 +1988,7 @@ export function VerificaSaluteAzienda({
           <input
             type="file"
             accept=".pdf"
+            data-demo-ruoli="FASCICOLO"
             disabled={inCorso}
             onChange={(e) => void caricaVisura(e.target.files?.[0] ?? null)}
             className="w-full text-xs font-mono text-slate-900 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white file:font-bold file:uppercase file:text-[10px]"

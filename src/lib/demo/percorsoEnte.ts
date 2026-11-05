@@ -31,7 +31,7 @@ import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
 import type { SezioneChecklist, PesoDomanda } from '@/lib/checklist/ministeriale';
 import type { FattiVisura } from '@/lib/visura/fatti';
 import type { RangoCredito } from '@/lib/triage/scenari';
-import type { TipoAttoGiudice } from '@/lib/giudice/lettura';
+import type { TipoIstruttoria } from '@/lib/giudice/lettura';
 import { costruisciBundleIndici } from '@/lib/xbrl/indici';
 
 export type ProfiloDemo = 'ROSSO' | 'GIALLO' | 'ATTENZIONE_MINIMA';
@@ -107,8 +107,10 @@ export interface AziendaPercorsoDemo {
   screening: ScreeningPercorsoDemo;
   visura: FattiVisura;
   rango: RangoCredito;
-  /** Percorso dello scenario: proposta, decreto di liquidazione o cram down. */
-  tipoIstruttoria: TipoAttoGiudice;
+  /** Percorso dello scenario: proposta, decreto di liquidazione, cram down o ancora da scegliere. */
+  tipoIstruttoria: TipoIstruttoria;
+  /** La quarta azienda resta volutamente senza percorso precostituito. */
+  aperta?: boolean;
   scenario: string;
   /** Nome usato prima della 0.174.0, per rinominare senza duplicare. */
   scenarioPrecedente?: string;
@@ -700,6 +702,171 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
     scenario: 'Cram down — Logistica Padana Demo',
     scenarioPrecedente: 'Proposta di accordo di ristrutturazione — Logistica Padana Demo',
     dataDepositoProposta: '2026-10-21',
+  },
+  {
+    // La quarta posizione è quella che l'utente ha chiesto: un'azienda
+    // completa nei dati ma senza un percorso già deciso. Serve a mostrare
+    // che la piattaforma non riconosce solo i tre casi preparati: chiede
+    // che cosa ha in mano l'azienda e si adatta alla risposta.
+    ragioneSociale: 'Cantieri Brianza Demo S.r.l.',
+    codiceFiscale: '00000000104',
+    partitaIva: '00000000104',
+    codiceAteco: '41.20.00',
+    formaGiuridica: 'Società a responsabilità limitata',
+    indirizzo: 'Via del Lambro 22',
+    citta: 'Monza',
+    provincia: 'MB',
+    cap: '20900',
+    capitaleSociale: 200_000,
+    rappresentante: 'Marco Esempio',
+    ruoloRappresentante: 'Amministratore unico',
+    numeroRea: 'MB-001104',
+    pec: 'cantieri.brianza.demo@pec.esempio.it',
+    annoCostituzione: 2011,
+    dataVerifica: '2026-11-02',
+    profilo: 'GIALLO',
+    finanziario: {
+      anno: 2025,
+      corrente: dati({
+        ricaviVendite: 1_600_000,
+        valoreProduzione: 1_750_000,
+        costiProduzione: 1_680_000,
+        ebit: 70_000,
+        ammortamenti: 40_000,
+        ebitda: 110_000,
+        oneriFinanziari: 45_000,
+        utileEsercizio: 10_000,
+        totaleAttivo: 1_300_000,
+        attivoCircolante: 700_000,
+        disponibilitaLiquide: 25_000,
+        immobilizzazioni: 600_000,
+        patrimonioNetto: 120_000,
+        totaleDebiti: 1_180_000,
+        debitiBanche: 500_000,
+        debitiFornitori: 450_000,
+        debitiTributari: 90_000,
+        debitiPrevidenziali: 140_000,
+        passivoCorrente: 800_000,
+        creditiClienti: 450_000,
+      }),
+      precedente: dati({
+        ricaviVendite: 1_720_000,
+        valoreProduzione: 1_880_000,
+        costiProduzione: 1_780_000,
+        ebit: 100_000,
+        ammortamenti: 38_000,
+        ebitda: 138_000,
+        oneriFinanziari: 42_000,
+        utileEsercizio: 30_000,
+        totaleAttivo: 1_350_000,
+        attivoCircolante: 740_000,
+        disponibilitaLiquide: 60_000,
+        immobilizzazioni: 610_000,
+        patrimonioNetto: 150_000,
+        totaleDebiti: 1_200_000,
+        debitiBanche: 480_000,
+        debitiFornitori: 470_000,
+        debitiTributari: 85_000,
+        debitiPrevidenziali: 135_000,
+        passivoCorrente: 810_000,
+        creditiClienti: 480_000,
+      }),
+    },
+    debiti: [
+      {
+        voce: 'Contributi previdenziali scaduti',
+        importo: 60_000,
+        tipo: 'DEBITO',
+        nota: 'Posizione dimostrativa del triage',
+      },
+      {
+        voce: 'Sanzioni civili contributive',
+        importo: 10_000,
+        tipo: 'DEBITO',
+        nota: 'Posizione dimostrativa del triage',
+      },
+    ],
+    soglie: {
+      conLavoratori: true,
+      contributiScaduti: 60_000,
+      contributiDovutiAnnoPrecedente: 350_000,
+      annoContributiDovuti: 2025,
+      volumeAffari: 1_750_000,
+      ritardoOltre90Giorni: false,
+      periodiInRitardo: 0,
+    },
+    screening: screening(
+      [
+        {
+          numero: '1',
+          titolo: 'Gestione del credito',
+          domande: [
+            {
+              id: 'D1.1',
+              domanda:
+                'L’impresa ha definito un piano di rientro per la posizione debitoria verso l’ente?',
+              risposta: true,
+            },
+            {
+              id: 'D1.2',
+              domanda: 'Le rate scadute sono state versate nei termini?',
+              risposta: false,
+              nota: 'Una rata è stata versata in ritardo, senza superare i 90 giorni.',
+            },
+            {
+              id: 'D1.3',
+              domanda: 'La posizione debitoria è stata riconciliata con l’ente?',
+              risposta: true,
+            },
+          ],
+        },
+        {
+          numero: '2',
+          titolo: 'Vigilanza documentale',
+          domande: [
+            {
+              id: 'D2.1',
+              domanda: 'I bilanci degli ultimi tre esercizi risultano depositati?',
+              risposta: true,
+            },
+            {
+              id: 'D2.2',
+              domanda: 'La visura non riporta procedure concorsuali in corso?',
+              risposta: true,
+            },
+            {
+              id: 'D2.3',
+              domanda: 'Le comunicazioni verso l’ente risultano aggiornate?',
+              risposta: false,
+              nota: 'L’ultima comunicazione documentata risale al primo semestre 2026.',
+            },
+          ],
+        },
+      ],
+      `L’impresa edile presenta un’esposizione contributiva di 60.000 euro, sotto la soglia di segnalazione applicabile, e un ritardo non superiore a 90 giorni. Il bilancio 2025 mostra un patrimonio netto di 120.000 euro in riduzione rispetto all’esercizio precedente e un indice diagnostico oltre la soglia di riferimento.\n\nNon risultano procedure concorsuali in corso. La posizione è ancora aperta: la documentazione disponibile non basta a dire se l’azienda stia seguendo una proposta, una liquidazione o un’altra soluzione. Il percorso va chiesto e verificato con i documenti che l’azienda depositerà.`
+    ),
+    visura: visura(
+      {
+        ragioneSociale: 'Cantieri Brianza Demo S.r.l.',
+        codiceFiscale: '00000000104',
+        formaGiuridica: 'Società a responsabilità limitata',
+        indirizzo: 'Via del Lambro 22',
+        citta: 'Monza',
+        provincia: 'MB',
+        cap: '20900',
+        capitaleSociale: 200_000,
+        annoCostituzione: 2011,
+        rappresentante: 'Marco Esempio',
+        ruoloRappresentante: 'Amministratore unico',
+      },
+      'Costruzione di edifici residenziali e commerciali.',
+      38
+    ),
+    rango: 'CHIROGRAFARIO',
+    tipoIstruttoria: 'DA_CHIEDERE',
+    scenario: 'Valutazione aperta — Cantieri Brianza Demo',
+    dataDepositoProposta: '2026-11-02',
+    aperta: true,
   },
 ];
 

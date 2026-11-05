@@ -251,6 +251,7 @@ export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoA
                 type="file"
                 multiple
                 accept="application/pdf,.pdf"
+                data-demo-ruoli="PROVVEDIMENTO,STATO_PASSIVO"
                 className="hidden"
                 onChange={(e) => {
                   handleScegli(e.target.files);

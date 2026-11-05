@@ -270,6 +270,7 @@ export function ConfrontoPianoAziendale({
         <input
           type="file"
           accept=".xlsx,.xls,.ods,.csv"
+          data-demo-ruoli="PROPOSTA"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -283,6 +284,7 @@ export function ConfrontoPianoAziendale({
         <input
           type="file"
           accept="application/pdf,.pdf"
+          data-demo-ruoli="FASCICOLO,PROPOSTA"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];

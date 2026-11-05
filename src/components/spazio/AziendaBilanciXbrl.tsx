@@ -185,6 +185,7 @@ export function AziendaBilanciXbrl({ nomeSchema, aziendaId, hrefConfigurazione }
         )}
 
         <div
+          data-demo-ruoli="BILANCIO"
           className="border-2 border-dashed border-slate-200 rounded-xl p-5 text-center space-y-2 bg-slate-50/50"
           onDragOver={(e) => {
             e.preventDefault();
@@ -221,6 +222,7 @@ export function AziendaBilanciXbrl({ nomeSchema, aziendaId, hrefConfigurazione }
               ref={inputRef}
               type="file"
               accept=".xbrl,.xml"
+              data-demo-ruoli="BILANCIO"
               multiple
               className="hidden"
               disabled={caricamentoFile}

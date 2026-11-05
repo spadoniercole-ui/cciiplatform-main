@@ -25,6 +25,7 @@ import { richiediAccessoScenario, verificaFileDelloSpazio } from '@/lib/autorizz
 import { del, get } from '@/lib/blobStore';
 import { assicuraTabellaDebitiEnte, assicuraTabelleScenari } from '@/db/provision';
 import { verificaScenarioNonBloccato, ottieniScenarioPerId } from '@/app/actions/scenari';
+import { PERCORSO_DEMO } from '@/lib/demo/percorsoEnte';
 import { ottieniLimitiRicevibilita } from '@/app/actions/parametriSpazio';
 import { consumaQuotaAi } from '@/lib/limiteAi';
 import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
@@ -220,7 +221,25 @@ export async function impostaTipoIstruttoriaAction(
     if (bloccato) return { success: false, error: bloccato };
     await assicuraTabelleScenari(nomeSchema);
     const stato = await rigaEsistente(nomeSchema, scenarioId);
-    if (stato && stato.documenti.length > 0) {
+    // Nella valutazione aperta la scelta è il gesto centrale della demo:
+    // si può cambiare percorso anche dopo la prima lettura, perché la
+    // piattaforma deve mostrare di saper assorbire la variante. Sugli altri
+    // scenari resta il blocco: cambiare atto dopo aver letto i documenti
+    // renderebbe falso il confronto già calcolato.
+    const info = await pool.query(
+      `SELECT a.ragione_sociale, sp.demo
+         FROM "${nomeSchema}".scenari s
+         JOIN "${nomeSchema}".aziende a ON a.id = s.azienda_id
+         JOIN public.spazi sp ON sp.nome_schema = $1
+        WHERE s.id = $2`,
+      [nomeSchema, scenarioId]
+    );
+    const aperta =
+      Boolean(info.rows[0]?.demo) &&
+      PERCORSO_DEMO.some(
+        (a) => a.aperta && a.ragioneSociale === String(info.rows[0]?.ragione_sociale ?? '')
+      );
+    if (stato && stato.documenti.length > 0 && !aperta) {
       return {
         success: false,
         error:
@@ -231,6 +250,10 @@ export async function impostaTipoIstruttoriaAction(
       scenarioId,
       tipo,
     ]);
+    if (aperta) {
+      const { preparaValutazioneApertaDemo } = await import('@/lib/demo/caricaPercorsoEnte');
+      await preparaValutazioneApertaDemo(nomeSchema, scenarioId, tipo);
+    }
     return { success: true };
   } catch (error: any) {
     console.error('[impostaTipoIstruttoriaAction] Errore:', error);

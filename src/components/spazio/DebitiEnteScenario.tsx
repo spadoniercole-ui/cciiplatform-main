@@ -860,6 +860,7 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
               <input
                 type="file"
                 accept=".xlsx,.xls"
+                data-demo-ruoli="CERTIFICAZIONE"
                 className="hidden"
                 disabled={inElaborazione}
                 onChange={(e) => {

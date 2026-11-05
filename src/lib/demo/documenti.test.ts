@@ -2,20 +2,25 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  AZIENDA_CANTIERI,
+  AZIENDA_MECCANICA,
+  AZIENDA_TESSITURA,
   DOCUMENTI_DEMO,
   PACCHETTO_DOCUMENTI_DEMO,
   bilancioDemoPerCodiceFiscale,
   documentiDemoPerAccettazione,
+  documentiDemoPerAzienda,
+  documentiDemoSelezionati,
   documentiProvvedimentoDemo,
   fascicoloDemoPerCodiceFiscale,
 } from './documenti';
 
 describe('documenti del percorso demo', () => {
-  it('porta tutti i file necessari, nelle tre aziende', () => {
-    expect(DOCUMENTI_DEMO.length).toBeGreaterThanOrEqual(13);
-    expect(new Set(DOCUMENTI_DEMO.map((d) => d.azienda)).size).toBe(3);
-    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'PDF').length).toBeGreaterThanOrEqual(7);
-    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'EXCEL').length).toBeGreaterThanOrEqual(6);
+  it('porta tutti i file necessari, nelle quattro aziende', () => {
+    expect(DOCUMENTI_DEMO.length).toBeGreaterThanOrEqual(19);
+    expect(new Set(DOCUMENTI_DEMO.map((d) => d.azienda)).size).toBe(4);
+    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'PDF').length).toBeGreaterThanOrEqual(10);
+    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'EXCEL').length).toBeGreaterThanOrEqual(8);
   });
 
   it('i file esistono davvero in public/demo, compreso il pacchetto', () => {
@@ -28,7 +33,7 @@ describe('documenti del percorso demo', () => {
   });
 
   it('ogni azienda ha il fascicolo storico e il prospetto di bilancio', () => {
-    for (const codiceFiscale of ['00000000101', '00000000102', '00000000103']) {
+    for (const codiceFiscale of ['00000000101', '00000000102', '00000000103', '00000000104']) {
       expect(fascicoloDemoPerCodiceFiscale(codiceFiscale)?.formato).toBe('PDF');
       expect(bilancioDemoPerCodiceFiscale(codiceFiscale)?.formato).toBe('EXCEL');
     }
@@ -46,6 +51,16 @@ describe('documenti del percorso demo', () => {
     expect(documentiProvvedimentoDemo('00000000101')).toHaveLength(0);
   });
 
+  it('la valutazione aperta può ricevere entrambe le varianti del provvedimento', () => {
+    expect(
+      documentiProvvedimentoDemo('00000000104', 'DECRETO_LIQUIDAZIONE').map((d) => d.nome)
+    ).toEqual(['decreto-liquidazione-cantieri-brianza.pdf']);
+    expect(documentiProvvedimentoDemo('00000000104', 'CRAM_DOWN').map((d) => d.nome)).toEqual([
+      'dispositivo-cram-down-cantieri-brianza.pdf',
+    ]);
+    expect(documentiProvvedimentoDemo('00000000104')).toHaveLength(2);
+  });
+
   it('il caricamento simulato mostra il tipo di file giusto', () => {
     expect(
       documentiDemoPerAccettazione('.xbrl,.xml').every((d) => d.nome.startsWith('bilancio-'))
@@ -56,5 +71,26 @@ describe('documenti del percorso demo', () => {
         (d) => d.formato === 'EXCEL' && !d.nome.startsWith('bilancio-')
       )
     ).toBe(true);
+  });
+
+  it('filtra per azienda: nel caricamento di Meccanica non compaiono i documenti di Tessitura', () => {
+    const meccanica = documentiDemoPerAzienda(AZIENDA_MECCANICA, '.pdf');
+    expect(meccanica.some((d) => d.azienda === AZIENDA_TESSITURA)).toBe(false);
+    expect(meccanica.every((d) => d.azienda === AZIENDA_MECCANICA)).toBe(true);
+    expect(documentiDemoPerAzienda(null, '.pdf')).toEqual([]);
+  });
+
+  it('preseleziona i ruoli del campo e lascia scegliere gli altri documenti dell’azienda', () => {
+    const scelti = documentiDemoSelezionati(
+      AZIENDA_TESSITURA,
+      '.pdf',
+      'PROVVEDIMENTO,STATO_PASSIVO'
+    );
+    expect(scelti.map((d) => d.ruolo)).toEqual(['PROVVEDIMENTO', 'STATO_PASSIVO']);
+    const tutti = documentiDemoPerAzienda(AZIENDA_TESSITURA, '.pdf');
+    expect(tutti.map((d) => d.ruolo)).toContain('FASCICOLO');
+    expect(
+      documentiDemoSelezionati(AZIENDA_CANTIERI, '.pdf', 'PROPOSTA').map((d) => d.ruolo)
+    ).toEqual(['PROPOSTA']);
   });
 });

@@ -7,6 +7,7 @@ import { leggiRiferimentoAzienda } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
 import { etichettaIstruttoria } from '@/lib/giudice/lettura';
+import { DemoAziendaScope } from '@/components/spazio/DemoUploadProvider';
 
 export default async function ScenarioLayout({
   children,
@@ -41,51 +42,55 @@ export default async function ScenarioLayout({
   );
 
   return (
-    <div className="max-w-5xl space-y-4">
-      <Link
-        href={`/spazio/${codice}/scenari`}
-        className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-blue-600 font-bold uppercase tracking-wider"
-      >
-        <ArrowLeft className="w-3.5 h-3.5" /> Torna agli scenari
-      </Link>
+    <DemoAziendaScope azienda={scenario.ragioneSocialeAzienda}>
+      <div className="max-w-5xl space-y-4">
+        <Link
+          href={`/spazio/${codice}/scenari`}
+          className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-blue-600 font-bold uppercase tracking-wider"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Torna agli scenari
+        </Link>
 
-      <div className="bg-white border border-slate-200 rounded-xl p-5">
-        <div className="flex items-start justify-between flex-wrap gap-2">
-          <div>
-            <h1 className="text-lg font-bold text-slate-900">{scenario.nome}</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {scenario.ragioneSocialeAzienda} — {etichettaIstruttoria(scenario.tipoIstruttoria)} ·
-              origine: {scenario.origineProposta}
-            </p>
-            {riferimento && (
-              <p className="mt-1">
-                <IdentificativiEnte
-                  identificativi={riferimento.identificativi}
-                  partitaIva={riferimento.partitaIva}
-                  codiceFiscale={riferimento.codiceFiscale}
-                  compatto
-                />
+        <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <div className="flex items-start justify-between flex-wrap gap-2">
+            <div>
+              <h1 className="text-lg font-bold text-slate-900">{scenario.nome}</h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {scenario.ragioneSocialeAzienda} — {etichettaIstruttoria(scenario.tipoIstruttoria)}{' '}
+                · origine: {scenario.origineProposta}
               </p>
-            )}
-            {riferimento && <RiferimentoAziendaStampa {...riferimento} />}
+              {riferimento && (
+                <p className="mt-1">
+                  <IdentificativiEnte
+                    identificativi={riferimento.identificativi}
+                    partitaIva={riferimento.partitaIva}
+                    codiceFiscale={riferimento.codiceFiscale}
+                    compatto
+                  />
+                </p>
+              )}
+              {riferimento && <RiferimentoAziendaStampa {...riferimento} />}
+            </div>
+            <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-600">
+              {scenario.stato}
+            </span>
           </div>
-          <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-600">
-            {scenario.stato}
-          </span>
         </div>
-      </div>
 
-      {/* Lo scenario si lavora su una pagina sola: da ogni pagina di
+        {/* Lo scenario si lavora su una pagina sola: da ogni pagina di
           servizio questo link riporta lì. */}
-      <Link
-        href={`${base}/proposta`}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-blue-600 transition-colors"
-      >
-        <LayoutGrid className="w-3.5 h-3.5" />{' '}
-        {scenario.tipoProposta === 'RICEVUTA' ? 'Torna all’istruttoria' : 'Torna alla lavorazione'}
-      </Link>
+        <Link
+          href={`${base}/proposta`}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-slate-500 hover:text-blue-600 transition-colors"
+        >
+          <LayoutGrid className="w-3.5 h-3.5" />{' '}
+          {scenario.tipoProposta === 'RICEVUTA'
+            ? 'Torna all’istruttoria'
+            : 'Torna alla lavorazione'}
+        </Link>
 
-      {children}
-    </div>
+        {children}
+      </div>
+    </DemoAziendaScope>
   );
 }

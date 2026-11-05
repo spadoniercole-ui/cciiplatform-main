@@ -306,6 +306,7 @@ export function DebitiTriage({
             type="file"
             multiple
             accept=".xls,.xlsx,.csv"
+            data-demo-ruoli="CERTIFICAZIONE"
             onChange={async (e) => {
               const campo = e.target;
               const scelti = Array.from(campo.files ?? []);

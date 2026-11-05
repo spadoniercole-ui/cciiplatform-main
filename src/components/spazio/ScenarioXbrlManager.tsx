@@ -416,6 +416,7 @@ export function ScenarioXbrlManager({ nomeSchema, aziendaId, scenarioId }: Props
           <input
             type="file"
             accept=".xbrl,.xml"
+            data-demo-ruoli="BILANCIO"
             className="hidden"
             disabled={caricamentoFile}
             onChange={(e) => {

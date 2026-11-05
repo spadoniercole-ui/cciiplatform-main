@@ -436,6 +436,7 @@ export function PosizioneAggiornataScenario({
             <input
               type="file"
               accept=".xlsx,.xls"
+              data-demo-ruoli="CERTIFICAZIONE"
               className="hidden"
               disabled={importazioneInCorso}
               onChange={(e) => {
@@ -451,6 +452,7 @@ export function PosizioneAggiornataScenario({
             <input
               type="file"
               accept="application/pdf,.pdf"
+              data-demo-ruoli="FASCICOLO"
               className="hidden"
               disabled={letturaPdfInCorso}
               onChange={(e) => {
@@ -466,6 +468,7 @@ export function PosizioneAggiornataScenario({
             <input
               type="file"
               accept=".xlsx,.xls,.csv,.ods"
+              data-demo-ruoli="CERTIFICAZIONE"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
