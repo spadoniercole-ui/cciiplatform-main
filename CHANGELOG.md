@@ -1,3 +1,11 @@
+## 0.174.1 — 2026-11-05
+
+**Anche il trascinamento resta dentro la simulazione.**
+
+- Nelle aree di caricamento libere — come «Trascina qui i file» dei bilanci XBRL — il drop non
+  è più un varco: qualsiasi file trascinato nell’area demo apre la schermata con i documenti
+  già selezionati e non viene letto dal disco. I testi trascinati restano intatti.
+
 ## 0.174.0 — 2026-11-05
 
 **La demo mostra l’acquisizione dei documenti, senza chiedere file veri.**

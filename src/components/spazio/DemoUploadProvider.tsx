@@ -68,11 +68,11 @@ export function DemoUploadProvider({
     };
 
     // Anche il trascinamento è un caricamento reale: nella demo si ferma e
-    // si apre la stessa schermata. I testi trascinati restano intatti.
+    // si apre la stessa schermata. Non basta limitarlo alle etichette: alcune
+    // aree di drop (per esempio i bilanci XBRL) sono div liberi che
+    // accetterebbero il file. I testi trascinati restano intatti.
     const sulDrop = (evento: DragEvent) => {
       if (!evento.dataTransfer?.files?.length) return;
-      const target = evento.target as HTMLElement | null;
-      if (!target?.closest('label, input[type="file"], [data-demo-caricamento]')) return;
       evento.preventDefault();
       evento.stopPropagation();
       apri('');
