@@ -1,3 +1,19 @@
+## 0.174.4 — 2026-11-05
+
+**L’acquisizione demo arriva al prospetto, non solo al modale.**
+
+- **La certificazione compila la Posizione Debitoria.** Quando si conferma l’acquisizione
+  demo della certificazione dei debiti, le righe del percorso vengono copiate nel prospetto
+  dello scenario: la tabella mostra contributi e sanzioni con i rispettivi importi, invece di
+  restare vuota dopo la barra di caricamento.
+- **La tabella si vede subito.** Dopo la conferma la pagina porta in vista il prospetto e
+  mostra un riepilogo dell’acquisizione (righe e totale), così il gesto non finisce dietro il
+  modale o sotto il fold.
+- **Nessun duplicato.** Se lo scenario ha già una posizione, l’acquisizione lo dichiara e non
+  ricopia le righe; le righe restano anche a livello azienda, per un altro scenario.
+- **Vale per tutti i percorsi demo.** Meccanica, Tessitura, Logistica e Cantieri usano la
+  stessa acquisizione, ciascuna con i propri importi e la propria certificazione.
+
 ## 0.174.3 — 2026-11-05
 
 **La selezione demo arriva alla pagina, e lo scenario si riallinea da solo.**

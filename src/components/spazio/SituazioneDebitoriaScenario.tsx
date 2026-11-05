@@ -14,7 +14,7 @@
 // Copiate e non spostate, così un secondo scenario sulla stessa azienda può
 // riprenderle a sua volta.
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Download, AlertTriangle } from 'lucide-react';
 import { DebitiEnteScenario } from '@/components/spazio/DebitiEnteScenario';
 import {
@@ -42,15 +42,27 @@ export function SituazioneDebitoriaScenario({
   const [messaggio, setMessaggio] = useState<string | null>(null);
   const [chiave, setChiave] = useState(0);
 
-  useEffect(() => {
-    void contaDebitiAziendaNonAttribuitiAction(nomeSchema, aziendaId).then((r) => {
+  const aggiornaNonAttribuite = useCallback(() => {
+    void contaDebitiAziendaNonAttribuitiAction(nomeSchema, aziendaId, scenarioId).then((r) => {
       if (r.success && (r.righe ?? 0) > 0) {
         setNonAttribuite({ righe: r.righe ?? 0, totale: r.totale ?? 0 });
       } else {
         setNonAttribuite(null);
       }
     });
-  }, [nomeSchema, aziendaId, chiave]);
+  }, [nomeSchema, aziendaId, scenarioId]);
+
+  useEffect(() => {
+    aggiornaNonAttribuite();
+  }, [aggiornaNonAttribuite, chiave]);
+
+  // Dopo l'acquisizione demo nello scenario le righe non sono più «non
+  // attribuite»: il banner va spento senza ricaricare la pagina a mano.
+  useEffect(() => {
+    const handler = () => aggiornaNonAttribuite();
+    window.addEventListener('assistente:dati-aggiornati', handler);
+    return () => window.removeEventListener('assistente:dati-aggiornati', handler);
+  }, [aggiornaNonAttribuite]);
 
   const riprendi = async () => {
     setInCorso(true);

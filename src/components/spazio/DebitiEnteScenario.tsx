@@ -100,6 +100,13 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
   const [caricamento, setCaricamento] = useState(true);
   const [errore, setErrore] = useState<string | null>(null);
   const [esito, setEsito] = useState<string | null>(null);
+  const [acquisizioneDemo, setAcquisizioneDemo] = useState<{
+    righe: number;
+    totale: number;
+    giaPresenti: boolean;
+  } | null>(null);
+  const tabellaRif = React.useRef<HTMLDivElement | null>(null);
+  const [scorrereAllaTabella, setScorrereAllaTabella] = useState(false);
   const [inElaborazione, setInElaborazione] = useState(false);
 
   // Form inserimento/modifica manuale.
@@ -205,11 +212,37 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
   }, [nomeSchema, aziendaId]);
 
   useEffect(() => {
-    const handler = () => carica();
+    const handler = (evento: Event) => {
+      const dettaglio = (
+        evento as CustomEvent<{
+          righe?: number;
+          totale?: number;
+          giaPresenti?: boolean;
+        }>
+      ).detail;
+      if (dettaglio && typeof dettaglio.righe === 'number') {
+        setAcquisizioneDemo({
+          righe: dettaglio.righe,
+          totale: dettaglio.totale ?? 0,
+          giaPresenti: Boolean(dettaglio.giaPresenti),
+        });
+        setScorrereAllaTabella(true);
+      }
+      carica();
+    };
     window.addEventListener('assistente:dati-aggiornati', handler);
     return () => window.removeEventListener('assistente:dati-aggiornati', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, aziendaId]);
+
+  // Dopo l'acquisizione la tabella è più in basso del modale: portala in
+  // vista appena le righe sono state caricate, altrimenti sembra che il
+  // caricamento non abbia prodotto nulla.
+  useEffect(() => {
+    if (!scorrereAllaTabella || righe.length === 0) return;
+    tabellaRif.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setScorrereAllaTabella(false);
+  }, [scorrereAllaTabella, righe.length]);
 
   // ---------------------------------------------------------------- manuale
   const handleSalvaManuale = async (e: React.FormEvent) => {
@@ -712,6 +745,14 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
           {esito}
         </div>
       )}
+      {acquisizioneDemo && (
+        <div className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3 leading-relaxed">
+          <span className="font-bold">Acquisizione demo completata.</span>{' '}
+          {acquisizioneDemo.giaPresenti
+            ? `La posizione dello scenario conteneva già ${acquisizioneDemo.righe} ${acquisizioneDemo.righe === 1 ? 'riga' : 'righe'}: nessun duplicato è stato aggiunto.`
+            : `${acquisizioneDemo.righe} ${acquisizioneDemo.righe === 1 ? 'riga' : 'righe'} per € ${acquisizioneDemo.totale.toLocaleString('it-IT')} sono ora nella tabella, dalla certificazione dei debiti.`}
+        </div>
+      )}
 
       {/* ---- Inserimento / modifica manuale ---- */}
       <form
@@ -861,6 +902,10 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
                 type="file"
                 accept=".xlsx,.xls"
                 data-demo-ruoli="CERTIFICAZIONE"
+                data-demo-applica={scenarioId === undefined ? undefined : 'posizione'}
+                data-demo-schema={nomeSchema}
+                data-demo-azienda={String(aziendaId)}
+                data-demo-scenario={scenarioId === undefined ? undefined : String(scenarioId)}
                 className="hidden"
                 disabled={inElaborazione}
                 onChange={(e) => {
@@ -1294,7 +1339,10 @@ export function DebitiEnteScenario({ nomeSchema, aziendaId, nomeAzienda, scenari
 
       {/* ---- Tabella righe ---- */}
       {righe.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div
+          ref={tabellaRif}
+          className="bg-white border border-slate-200 rounded-xl overflow-hidden"
+        >
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase text-slate-500 font-bold">

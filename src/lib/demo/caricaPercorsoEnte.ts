@@ -488,3 +488,122 @@ export async function preparaValutazioneApertaDemo(
   }
   return true;
 }
+
+/**
+ * Acquisisce nel prospetto dello SCENARIO le righe della certificazione dei
+ * debiti demo.
+ *
+ * PERCHÉ SERVE. Il caricamento simulato applicava il file al campo, ma la
+ * pagina della Posizione Debitoria restava vuota: le righe del percorso demo
+ * erano ferme a livello azienda e nessuno le portava nello scenario. La
+ * schermata mostrava la fine del caricamento e poi il nulla, che è peggio di
+ * una simulazione dichiarata.
+ *
+ * Le righe vengono COPIATE, non spostate: l'azienda conserva la sua
+ * certificazione e un altro scenario può riprenderla. Se lo scenario ha già
+ * una posizione, l'operazione non aggiunge duplicati e lo dichiara.
+ *
+ * La funzione è riservata agli spazi demo: il chiamante verifica comunque
+ * l'accesso all'azienda e allo scenario nella server action.
+ */
+export interface EsitoAcquisizionePosizioneDemo {
+  righe: number;
+  totale: number;
+  giaPresenti: boolean;
+}
+
+export async function acquisisciPosizioneDebitoriaDemoEnte(
+  nomeSchema: string,
+  aziendaId: number,
+  scenarioId: number
+): Promise<EsitoAcquisizionePosizioneDemo> {
+  if (!schemaOk(nomeSchema)) throw new Error('Nome schema non valido.');
+
+  const contesto = await pool.query(
+    `SELECT a.ragione_sociale, sp.demo
+       FROM "${nomeSchema}".scenari s
+       JOIN "${nomeSchema}".aziende a ON a.id = s.azienda_id
+       JOIN public.spazi sp ON sp.nome_schema = $1
+      WHERE s.id = $2 AND a.id = $3`,
+    [nomeSchema, scenarioId, aziendaId]
+  );
+  const riga = contesto.rows[0];
+  if (!riga) throw new Error('Scenario non trovato per questa azienda.');
+  if (!riga.demo) {
+    throw new Error('L’acquisizione demo è disponibile solo negli spazi demo.');
+  }
+  const azienda = PERCORSO_DEMO.find((a) => a.ragioneSociale === String(riga.ragione_sociale));
+  if (!azienda) throw new Error('Questa azienda non fa parte del percorso demo.');
+
+  await assicuraTabellaDebitiEnte(nomeSchema);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const esistenti = await client.query(
+      `SELECT count(*)::int AS n, COALESCE(SUM(importo), 0) AS totale
+         FROM "${nomeSchema}".debiti_ente
+        WHERE scenario_id = $1 AND azienda_id = $2`,
+      [scenarioId, aziendaId]
+    );
+    const gia = Number(esistenti.rows[0]?.n ?? 0);
+    if (gia > 0) {
+      await client.query('COMMIT');
+      return {
+        righe: gia,
+        totale: Number(esistenti.rows[0]?.totale ?? 0),
+        giaPresenti: true,
+      };
+    }
+
+    // Prima scelta: le righe che il percorso demo ha già caricato a livello
+    // azienda (conservano eventuali note e correzioni). Se non ci sono,
+    // perché uno scenario precedente le ha già riprese, si ricostruisce la
+    // certificazione dai dati demo.
+    const copiate = await client.query(
+      `INSERT INTO "${nomeSchema}".debiti_ente
+         (azienda_id, scenario_id, voce, importo, importo_versato, tipo, note, data,
+          dati_extra, tracciato_id, codice_guida, documento_id)
+       SELECT azienda_id, $2, voce, importo, importo_versato, tipo, note, data,
+              dati_extra, tracciato_id, codice_guida, documento_id
+         FROM "${nomeSchema}".debiti_ente
+        WHERE azienda_id = $1 AND scenario_id IS NULL
+        ORDER BY id ASC
+       RETURNING importo`,
+      [aziendaId, scenarioId]
+    );
+    // `RETURNING` è la fonte del conteggio: `rowCount` non è uguale in tutti
+    // i driver Postgres, mentre le righe restituite ci sono sempre.
+    let righe = copiate.rows.length;
+    let totale = copiate.rows.reduce((somma, r) => somma + Number(r.importo), 0);
+
+    if (righe === 0) {
+      for (const d of azienda.debiti) {
+        await client.query(
+          `INSERT INTO "${nomeSchema}".debiti_ente
+             (azienda_id, scenario_id, voce, importo, tipo, note)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [
+            aziendaId,
+            scenarioId,
+            d.voce,
+            d.importo,
+            d.tipo,
+            'Certificazione demo dei debiti — dato fittizio',
+          ]
+        );
+        righe += 1;
+        totale += d.importo;
+      }
+    }
+
+    await client.query('COMMIT');
+    return { righe, totale, giaPresenti: false };
+  } catch (errore) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw errore;
+  } finally {
+    client.release();
+  }
+}

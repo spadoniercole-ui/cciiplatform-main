@@ -16,6 +16,7 @@ import {
   type ContestoAccessoSpazio,
 } from '@/lib/autorizzazione';
 import { assicuraTabellaDebitiEnte } from '@/db/provision';
+import { acquisisciPosizioneDebitoriaDemoEnte } from '@/lib/demo/caricaPercorsoEnte';
 
 function validaSchema(nomeSchema: string): boolean {
   return /^[a-z0-9_]+$/.test(nomeSchema);
@@ -326,12 +327,28 @@ export async function riprendiDebitiAziendaInScenarioAction(
 /** Quante righe non attribuite esistono per questa azienda. */
 export async function contaDebitiAziendaNonAttribuitiAction(
   nomeSchema: string,
-  aziendaId: number
+  aziendaId: number,
+  scenarioId?: number
 ): Promise<{ success: boolean; righe?: number; totale?: number; error?: string }> {
   try {
     await richiediAccessoAzienda(nomeSchema, aziendaId);
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaDebitiEnte(nomeSchema);
+
+    // Se lo scenario ha già il suo prospetto, non c'è nulla da riprendere:
+    // il banner delle righe non attribuite non deve restare aperto dopo
+    // l'acquisizione demo (o dopo un "Riprendi").
+    if (scenarioId !== undefined) {
+      const scenario = await pool.query(
+        `SELECT count(*)::int AS n FROM "${nomeSchema}".debiti_ente
+          WHERE scenario_id = $1 AND azienda_id = $2`,
+        [scenarioId, aziendaId]
+      );
+      if (Number(scenario.rows[0]?.n ?? 0) > 0) {
+        return { success: true, righe: 0, totale: 0 };
+      }
+    }
+
     const r = await pool.query(
       `SELECT count(*)::int AS n, COALESCE(SUM(importo), 0) AS tot
          FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1 AND scenario_id IS NULL`,
@@ -344,5 +361,41 @@ export async function contaDebitiAziendaNonAttribuitiAction(
     };
   } catch (error: unknown) {
     return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
+  }
+}
+
+/**
+ * Acquisizione demo della certificazione dei debiti nello scenario.
+ *
+ * Il file scelto nel modale non deve passare dal wizard dei tracciati: è una
+ * simulazione, e la pagina deve mostrare subito le righe del prospetto. La
+ * funzione di dominio copia le righe già associate all'azienda (o le ricostruisce
+ * dai dati del percorso demo) e non duplica una posizione esistente.
+ */
+export interface RisultatoAcquisizionePosizioneDemo {
+  success: boolean;
+  righe?: number;
+  totale?: number;
+  giaPresenti?: boolean;
+  error?: string;
+}
+
+export async function caricaPosizioneDebitoriaDemoAction(
+  nomeSchema: string,
+  aziendaId: number,
+  scenarioId: number
+): Promise<RisultatoAcquisizionePosizioneDemo> {
+  try {
+    const contesto = await richiediAccessoAzienda(nomeSchema, aziendaId, SCRITTURA_SCENARI);
+    await verificaScenarioDellAzienda(contesto, aziendaId, scenarioId);
+    if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    const esito = await acquisisciPosizioneDebitoriaDemoEnte(nomeSchema, aziendaId, scenarioId);
+    return { success: true, ...esito };
+  } catch (error: unknown) {
+    console.error('[caricaPosizioneDebitoriaDemoAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile acquisire la posizione debitoria demo: ${(error as Error).message}`,
+    };
   }
 }

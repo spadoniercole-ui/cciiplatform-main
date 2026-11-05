@@ -22,10 +22,13 @@
 // LA CONFERMA ARRIVA ALLA PAGINA. Nei campi che hanno un pulsante esplicito
 // «Carica e leggi» (`data-demo-applica="file"`) i documenti scelti vengono
 // preparati come File demo e applicati al campo: la pagina mostra esattamente
-// quelli e si predispone alla lettura. Negli altri campi i dati demo sono già
-// nel database e la conferma resta una simulazione del gesto.
+// quelli e si predispone alla lettura. Nei campi della Posizione Debitoria
+// (`data-demo-applica="posizione"`) la conferma copia nel prospetto dello
+// scenario le righe della certificazione: il caricamento finisce nella
+// tabella, non solo nel modale. Negli altri campi i dati demo sono già nel
+// database e la conferma resta una simulazione del gesto.
 //
-// La simulazione non scrive nulla nel database e non legge file dal disco.
+// La simulazione non legge file dal disco e non inventa documenti reali.
 
 import React, {
   createContext,
@@ -44,6 +47,7 @@ import {
   type DocumentoDemo,
 } from '@/lib/demo/documenti';
 import { APP_VERSION } from '@/lib/appVersion';
+import { caricaPosizioneDebitoriaDemoAction } from '@/app/actions/debitiEnte';
 
 const DemoContext = createContext(false);
 const DemoAziendaContext = createContext<(azienda: string | null) => void>(() => undefined);
@@ -97,6 +101,11 @@ export function DemoUploadProvider({
   const [progresso, setProgresso] = useState(0);
   const [erroreAcquisizione, setErroreAcquisizione] = useState<string | null>(null);
   const [applicatiAllaPagina, setApplicatiAllaPagina] = useState(false);
+  const [esitoPosizione, setEsitoPosizione] = useState<{
+    righe: number;
+    totale: number;
+    giaPresenti: boolean;
+  } | null>(null);
   const inputRif = useRef<HTMLInputElement | null>(null);
 
   const impostaAzienda = useCallback((valore: string | null) => setAzienda(valore), []);
@@ -113,6 +122,7 @@ export function DemoUploadProvider({
       setProgresso(0);
       setErroreAcquisizione(null);
       setApplicatiAllaPagina(false);
+      setEsitoPosizione(null);
       setAperto(true);
     },
     [azienda]
@@ -174,24 +184,51 @@ export function DemoUploadProvider({
   };
 
   /**
-   * Prepara i documenti scelti come File demo e li applica al campo che ha
-   * aperto il modale, solo se il campo lo richiede (`data-demo-applica`).
-   * Il `change` è quello nativo: il componente di pagina fa la sua normale
-   * validazione e mostra i file, senza che il provider conosca quel flusso.
+   * Consegna la scelta alla pagina che ha aperto il modale.
+   *
+   * - `file`: prepara i File demo e li applica al campo, lasciando al
+   *   componente la sua normale validazione (`change` nativo);
+   * - `posizione`: chiama l'azione demo che copia la certificazione nel
+   *   prospetto dello scenario e sveglia la tabella con l'evento di
+   *   aggiornamento;
+   * - senza modalità: la conferma resta la sola simulazione del gesto.
    */
   const avviaAcquisizione = async () => {
     const scelti = candidati.filter((d) => selezionati.has(d.percorso));
     if (scelti.length === 0) return;
     const input = inputRif.current;
-    const applicaAllaPagina = Boolean(input?.dataset.demoApplica === 'file');
+    const modalita = input?.dataset.demoApplica;
+    const applicaAllaPagina = modalita === 'file';
+    const caricaPosizione = modalita === 'posizione';
     setErroreAcquisizione(null);
+    setEsitoPosizione(null);
     setProgresso(0);
     setFase('caricamento');
     const timer = setInterval(() => {
       setProgresso((valore) => Math.min(90, valore + 10));
     }, 120);
     try {
-      if (applicaAllaPagina && input) {
+      if (caricaPosizione && input) {
+        const schema = input.dataset.demoSchema;
+        const aziendaId = Number(input.dataset.demoAzienda);
+        const scenarioId = Number(input.dataset.demoScenario);
+        if (!schema || !Number.isFinite(aziendaId) || !Number.isFinite(scenarioId)) {
+          throw new Error('La pagina non ha indicato quale posizione debitoria acquisire.');
+        }
+        const esito = await caricaPosizioneDebitoriaDemoAction(schema, aziendaId, scenarioId);
+        if (!esito.success) {
+          throw new Error(esito.error || 'Non è stato possibile caricare la posizione demo.');
+        }
+        const righe = esito.righe ?? 0;
+        const totale = esito.totale ?? 0;
+        const giaPresenti = Boolean(esito.giaPresenti);
+        setEsitoPosizione({ righe, totale, giaPresenti });
+        window.dispatchEvent(
+          new CustomEvent('assistente:dati-aggiornati', {
+            detail: { righe, totale, giaPresenti },
+          })
+        );
+      } else if (applicaAllaPagina && input) {
         const files = await Promise.all(
           scelti.map(async (d) => {
             const risposta = await fetch(d.percorso);
@@ -210,7 +247,9 @@ export function DemoUploadProvider({
         input.files = trasferimento.files;
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
-      await new Promise((resolve) => setTimeout(resolve, applicaAllaPagina ? 500 : 900));
+      await new Promise((resolve) =>
+        setTimeout(resolve, caricaPosizione ? 700 : applicaAllaPagina ? 500 : 900)
+      );
       setProgresso(100);
       setApplicatiAllaPagina(applicaAllaPagina);
       setFase('fatto');
@@ -267,7 +306,8 @@ export function DemoUploadProvider({
                     In produzione qui si sceglierebbero file reali dal computer. Nella demo
                     l&apos;applicativo ha già associato i documenti a questa azienda: nessun file
                     viene letto dal disco. Seleziona quelli pertinenti e conferma: la scelta arriva
-                    al campo della pagina e prepara la lettura.
+                    al campo della pagina o, per la posizione debitoria, direttamente alla tabella
+                    del prospetto.
                   </p>
                 </div>
                 <button
@@ -407,9 +447,13 @@ export function DemoUploadProvider({
                   <p className="flex items-start gap-2 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
                     <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                     <span>
-                      {applicatiAllaPagina
-                        ? `${selezionati.size} ${selezionati.size === 1 ? 'documento applicato' : 'documenti applicati'} al campo della pagina. Chiudi e prosegui con «Carica e leggi»: i file sono quelli che hai scelto.`
-                        : `${selezionati.size} ${selezionati.size === 1 ? 'documento acquisito' : 'documenti acquisiti'} nella simulazione. I dati sono già presenti nel percorso demo: puoi chiudere e continuare a leggere screening, indici e scenario.`}
+                      {esitoPosizione
+                        ? esitoPosizione.giaPresenti
+                          ? `La posizione dello scenario conteneva già ${esitoPosizione.righe} ${esitoPosizione.righe === 1 ? 'riga' : 'righe'}: non è stato aggiunto nessun duplicato. Chiudi e controlla la tabella.`
+                          : `Certificazione demo acquisita: ${esitoPosizione.righe} ${esitoPosizione.righe === 1 ? 'riga' : 'righe'} e € ${esitoPosizione.totale.toLocaleString('it-IT')} sono ora nella Posizione debitoria dello scenario. Chiudi: la tabella è già aggiornata.`
+                        : applicatiAllaPagina
+                          ? `${selezionati.size} ${selezionati.size === 1 ? 'documento applicato' : 'documenti applicati'} al campo della pagina. Chiudi e prosegui con «Carica e leggi»: i file sono quelli che hai scelto.`
+                          : `${selezionati.size} ${selezionati.size === 1 ? 'documento acquisito' : 'documenti acquisiti'} nella simulazione. I dati sono già presenti nel percorso demo: puoi chiudere e continuare a leggere screening, indici e scenario.`}
                     </span>
                   </p>
                 )}
