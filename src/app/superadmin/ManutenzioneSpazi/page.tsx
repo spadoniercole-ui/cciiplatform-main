@@ -139,7 +139,7 @@ export default function ManutenzioneSpaziPage() {
 
   const handleAttivaDemo = async (spazio: SpazioConLicenza) => {
     const conferma = await confermaApp(
-      `Attivo il percorso demo di ${spazio.descrizione}.\n\nVengono caricate tre posizioni complete (triage, screening, scenario) e i parametri di soglie, riscontro e scenari. Se presenti, le sei aziende del vecchio set «provvedimenti del giudice» vengono rimosse; le altre aziende non vengono toccate.`,
+      `Attivo il percorso demo di ${spazio.descrizione}.\n\nVengono caricate tre posizioni complete (triage, screening, scenario) e i parametri di soglie, riscontro e scenari. Se presenti, le aziende del vecchio set demo e la prova Cram down (CROWDOWN S.R.L.) vengono rimosse; le altre aziende non vengono toccate.`,
       {
         titolo: 'Attiva spazio demo',
         etichettaConferma: 'Attiva demo',

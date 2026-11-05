@@ -1,3 +1,12 @@
+## 0.173.1 — 2026-11-05
+
+**La prova Cram down non resta accanto al percorso demo.**
+
+- All'attivazione dello spazio demo viene rimossa anche `CROWDOWN S.R.L.`, la posizione creata
+  a mano per la verifica di salute «Cram down»: era l'ultima metà del vecchio ambiente e
+  teneva in vita un report PDF separato. La rimozione resta circoscritta ai nomi demo noti;
+  le altre aziende non vengono toccate.
+
 ## 0.173.0 — 2026-11-05
 
 **Un solo spazio demo, che nasce già con i parametri giusti.**

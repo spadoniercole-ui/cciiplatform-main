@@ -532,9 +532,9 @@ export interface EsitoDemoSpazio {
  *
  * Serve perché il flag non esisteva quando sono nati gli spazi precedenti:
  * senza questa azione l'unico modo sarebbe eliminare e ricreare lo spazio.
- * Carica le tre posizioni e i parametri dell'export, poi rimuove le sei
- * aziende del vecchio set «provvedimenti del giudice» — solo quelle, per
- * nome esatto. Le altre aziende non vengono toccate.
+ * Carica le tre posizioni e i parametri dell'export, poi rimuove le aziende
+ * del vecchio set «provvedimenti del giudice» e la prova Cram down — solo
+ * quelle, per nome esatto. Le altre aziende non vengono toccate.
  */
 export async function attivaDemoSpazioAction(spazioId: number): Promise<EsitoDemoSpazio> {
   try {
@@ -569,8 +569,9 @@ export async function attivaDemoSpazioAction(spazioId: number): Promise<EsitoDem
 
     const esito = await caricaPercorsoDemoEnte(nomeSchema);
 
-    // I sei nomi sono quelli del set 0.171.0: la cancellazione è circoscritta
-    // e le altre aziende restano. Se il vecchio set non c'è, non cambia nulla.
+    // I nomi sono quelli del set 0.171.0 e della prova Cram down: la
+    // cancellazione è circoscritta e le altre aziende restano. Se non ci
+    // sono, non cambia nulla.
     await pool.query(
       `DELETE FROM "${nomeSchema}".aziende WHERE ragione_sociale = ANY($1::text[])`,
       [AZIENDE_VECCHIO_SET_DEMO]
