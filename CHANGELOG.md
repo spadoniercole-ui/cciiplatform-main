@@ -1,3 +1,19 @@
+## 0.174.3 — 2026-11-05
+
+**La selezione demo arriva alla pagina, e lo scenario si riallinea da solo.**
+
+- **La conferma non resta nel modale.** Nei flussi con «Carica e leggi» i documenti scelti
+  vengono applicati al campo della pagina: si vedono esattamente i file selezionati e il
+  pulsante di lettura si predispone, senza aprire il selettore del computer.
+- **Mai una selezione vuota per un ruolo assente.** Se il campo chiede un documento che
+  l’azienda non ha (per esempio una proposta su Tessitura, che segue la liquidazione), la demo
+  preseleziona i documenti disponibili invece di aprire il modale con zero file.
+- **Il riallineamento non dipende più da Scenari.** Aprendo direttamente uno scenario demo
+  vengono aggiornati nomi e tipi: Tessitura mostra la liquidazione giudiziale, Logistica il cram
+  down, Cantieri la valutazione aperta, anche senza passare dall’elenco.
+- **La versione è visibile nel modale.** Il piè di pagina indica la versione demo attiva, così
+  una pagina servita da una build precedente si riconosce subito.
+
 ## 0.174.2 — 2026-11-05
 
 **La demo sceglie i documenti giusti, e sa restare aperta.**

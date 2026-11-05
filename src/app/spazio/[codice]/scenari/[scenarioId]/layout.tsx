@@ -20,6 +20,17 @@ export default async function ScenarioLayout({
   const contesto = await ottieniContestoAccessoSpazio(codice);
   if (!contesto) redirect('/');
 
+  // La demo può essere già attiva da una versione precedente. Il riallineamento
+  // non può dipendere dall'aver aperto Scenari: chi arriva da un collegamento
+  // diretto allo scenario deve vedere subito il percorso aggiornato (per
+  // esempio Tessitura come liquidazione, non più come proposta).
+  if (contesto.demo) {
+    const { caricaPercorsoDemoEnte } = await import('@/lib/demo/caricaPercorsoEnte');
+    await caricaPercorsoDemoEnte(contesto.nomeSchema, { soloPercorsi: true }).catch((errore) => {
+      console.error('[ScenarioLayout] Riallineamento demo non riuscito:', errore);
+    });
+  }
+
   const risultato = await ottieniScenarioPerId(contesto.nomeSchema, Number(scenarioId));
   if (!risultato.success || !risultato.scenario) {
     redirect(`/spazio/${codice}/scenari`);

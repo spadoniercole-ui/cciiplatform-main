@@ -314,6 +314,11 @@ export function documentiDemoPerAzienda(
  * I documenti che il campo file propone come già spuntati, in base al ruolo
  * dichiarato dal campo (`data-demo-ruoli`). Se il campo non dichiara ruoli,
  * sono proposti tutti i documenti compatibili dell'azienda.
+ *
+ * Se il ruolo richiesto non esiste per quell'azienda — per esempio un campo
+ * «proposta» aperto su Tessitura, che nella demo segue la liquidazione — non
+ * si apre un modale con zero file: si propongono i documenti disponibili,
+ * così l'operatore vede il criterio e può correggerlo.
  */
 export function documentiDemoSelezionati(
   azienda: string | null | undefined,
@@ -328,5 +333,6 @@ export function documentiDemoSelezionati(
       .filter(Boolean)
   );
   if (richiesti.size === 0) return candidati;
-  return candidati.filter((d) => richiesti.has(d.ruolo));
+  const pertinenti = candidati.filter((d) => richiesti.has(d.ruolo));
+  return pertinenti.length > 0 ? pertinenti : candidati;
 }

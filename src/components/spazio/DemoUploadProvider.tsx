@@ -1,6 +1,6 @@
 'use client';
 
-// L'ACQUISIZIONE DEI DOCUMENTI NELLA DEMO (0.174.2).
+// L'ACQUISIZIONE DEI DOCUMENTI NELLA DEMO (0.174.3).
 //
 // In uno spazio demo nessun file deve partire dal computer dell'operatore:
 // sarebbe un documento vero letto fuori dal contesto della simulazione. Qui
@@ -19,16 +19,31 @@
 //      aggiungere o togliere. Il sistema non finge di sapere tutto: mostra
 //      il criterio e lascia confermare.
 //
-// La simulazione non scrive nulla: i dati demo sono già nel database. Mostra
-// il gesto che in produzione sarebbe reale, con i file demo pronti da aprire.
+// LA CONFERMA ARRIVA ALLA PAGINA. Nei campi che hanno un pulsante esplicito
+// «Carica e leggi» (`data-demo-applica="file"`) i documenti scelti vengono
+// preparati come File demo e applicati al campo: la pagina mostra esattamente
+// quelli e si predispone alla lettura. Negli altri campi i dati demo sono già
+// nel database e la conferma resta una simulazione del gesto.
+//
+// La simulazione non scrive nulla nel database e non legge file dal disco.
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, FileText, Upload, X } from 'lucide-react';
 import {
   PACCHETTO_DOCUMENTI_DEMO,
   documentiDemoPerAzienda,
+  documentiDemoSelezionati,
   type DocumentoDemo,
 } from '@/lib/demo/documenti';
+import { APP_VERSION } from '@/lib/appVersion';
 
 const DemoContext = createContext(false);
 const DemoAziendaContext = createContext<(azienda: string | null) => void>(() => undefined);
@@ -80,6 +95,9 @@ export function DemoUploadProvider({
   const [selezionati, setSelezionati] = useState<Set<string>>(new Set());
   const [fase, setFase] = useState<'documenti' | 'caricamento' | 'fatto'>('documenti');
   const [progresso, setProgresso] = useState(0);
+  const [erroreAcquisizione, setErroreAcquisizione] = useState<string | null>(null);
+  const [applicatiAllaPagina, setApplicatiAllaPagina] = useState(false);
+  const inputRif = useRef<HTMLInputElement | null>(null);
 
   const impostaAzienda = useCallback((valore: string | null) => setAzienda(valore), []);
   const candidati = useMemo(() => documentiDemoPerAzienda(azienda, accetta), [azienda, accetta]);
@@ -89,15 +107,12 @@ export function DemoUploadProvider({
     (accept: string | null | undefined, ruoliCampo: string | null | undefined) => {
       setAccetta(accept ?? '');
       setRuoli(ruoliCampo ?? '');
-      const proposti = documentiDemoPerAzienda(azienda, accept);
-      const daPreselezionare = ruoliRichiesti(ruoliCampo);
-      const scelti =
-        daPreselezionare.size === 0
-          ? proposti
-          : proposti.filter((d) => daPreselezionare.has(d.ruolo));
+      const scelti = documentiDemoSelezionati(azienda, accept, ruoliCampo);
       setSelezionati(new Set(scelti.map((d) => d.percorso)));
       setFase('documenti');
       setProgresso(0);
+      setErroreAcquisizione(null);
+      setApplicatiAllaPagina(false);
       setAperto(true);
     },
     [azienda]
@@ -122,6 +137,7 @@ export function DemoUploadProvider({
       if (!eDocumento) return;
       evento.preventDefault();
       evento.stopPropagation();
+      inputRif.current = input;
       apri(input.accept, input.dataset.demoRuoli);
     };
 
@@ -133,9 +149,15 @@ export function DemoUploadProvider({
       if (!evento.dataTransfer?.files?.length) return;
       const target = evento.target as HTMLElement | null;
       const area = target?.closest('[data-demo-ruoli]') as HTMLElement | null;
+      if (!area) return;
+      const input =
+        area instanceof HTMLInputElement
+          ? area
+          : (area.querySelector('input[type="file"]') as HTMLInputElement | null);
       evento.preventDefault();
       evento.stopPropagation();
-      apri('', area?.dataset.demoRuoli ?? '');
+      inputRif.current = input;
+      apri(input?.accept ?? '', area.dataset.demoRuoli ?? '');
     };
 
     document.addEventListener('click', sulClick, true);
@@ -146,24 +168,61 @@ export function DemoUploadProvider({
     };
   }, [attivo, apri]);
 
-  useEffect(() => {
-    if (fase !== 'caricamento') return;
-    const timer = setInterval(() => {
-      setProgresso((valore) => {
-        const prossimo = Math.min(100, valore + 10);
-        if (prossimo >= 100) {
-          clearInterval(timer);
-          setFase('fatto');
-        }
-        return prossimo;
-      });
-    }, 180);
-    return () => clearInterval(timer);
-  }, [fase]);
-
   const chiudi = () => {
     if (fase === 'caricamento') return;
     setAperto(false);
+  };
+
+  /**
+   * Prepara i documenti scelti come File demo e li applica al campo che ha
+   * aperto il modale, solo se il campo lo richiede (`data-demo-applica`).
+   * Il `change` è quello nativo: il componente di pagina fa la sua normale
+   * validazione e mostra i file, senza che il provider conosca quel flusso.
+   */
+  const avviaAcquisizione = async () => {
+    const scelti = candidati.filter((d) => selezionati.has(d.percorso));
+    if (scelti.length === 0) return;
+    const input = inputRif.current;
+    const applicaAllaPagina = Boolean(input?.dataset.demoApplica === 'file');
+    setErroreAcquisizione(null);
+    setProgresso(0);
+    setFase('caricamento');
+    const timer = setInterval(() => {
+      setProgresso((valore) => Math.min(90, valore + 10));
+    }, 120);
+    try {
+      if (applicaAllaPagina && input) {
+        const files = await Promise.all(
+          scelti.map(async (d) => {
+            const risposta = await fetch(d.percorso);
+            if (!risposta.ok) throw new Error(`Impossibile preparare «${d.nome}».`);
+            const contenuto = await risposta.blob();
+            return new File([contenuto], d.nome, {
+              type:
+                d.formato === 'PDF'
+                  ? 'application/pdf'
+                  : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            });
+          })
+        );
+        const trasferimento = new DataTransfer();
+        for (const file of files) trasferimento.items.add(file);
+        input.files = trasferimento.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      await new Promise((resolve) => setTimeout(resolve, applicaAllaPagina ? 500 : 900));
+      setProgresso(100);
+      setApplicatiAllaPagina(applicaAllaPagina);
+      setFase('fatto');
+    } catch (errore) {
+      setErroreAcquisizione(
+        (errore as Error).message ||
+          'Non è stato possibile preparare i documenti demo. Riprova o apri il singolo file.'
+      );
+      setFase('documenti');
+    } finally {
+      clearInterval(timer);
+    }
   };
 
   const alterna = (percorso: string) => {
@@ -207,7 +266,8 @@ export function DemoUploadProvider({
                   <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
                     In produzione qui si sceglierebbero file reali dal computer. Nella demo
                     l&apos;applicativo ha già associato i documenti a questa azienda: nessun file
-                    viene letto dal disco. Seleziona quelli pertinenti e conferma.
+                    viene letto dal disco. Seleziona quelli pertinenti e conferma: la scelta arriva
+                    al campo della pagina e prepara la lettura.
                   </p>
                 </div>
                 <button
@@ -249,6 +309,13 @@ export function DemoUploadProvider({
                     </a>
                   </div>
                 </div>
+
+                {erroreAcquisizione && (
+                  <p className="flex items-start gap-2 text-[11px] text-red-800 bg-red-50 border border-red-200 rounded-lg p-2.5">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span>{erroreAcquisizione}</span>
+                  </p>
+                )}
 
                 {candidati.length === 0 ? (
                   <div className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
@@ -340,10 +407,9 @@ export function DemoUploadProvider({
                   <p className="flex items-start gap-2 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
                     <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                     <span>
-                      {selezionati.size}{' '}
-                      {selezionati.size === 1 ? 'documento acquisito' : 'documenti acquisiti'} nella
-                      simulazione. I dati sono già presenti nel percorso demo: puoi chiudere e
-                      continuare a leggere screening, indici e scenario.
+                      {applicatiAllaPagina
+                        ? `${selezionati.size} ${selezionati.size === 1 ? 'documento applicato' : 'documenti applicati'} al campo della pagina. Chiudi e prosegui con «Carica e leggi»: i file sono quelli che hai scelto.`
+                        : `${selezionati.size} ${selezionati.size === 1 ? 'documento acquisito' : 'documenti acquisiti'} nella simulazione. I dati sono già presenti nel percorso demo: puoi chiudere e continuare a leggere screening, indici e scenario.`}
                     </span>
                   </p>
                 )}
@@ -359,6 +425,9 @@ export function DemoUploadProvider({
               </div>
 
               <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-100 bg-slate-50">
+                <span className="mr-auto text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  Demo {APP_VERSION} · solo documenti dell&apos;azienda corrente
+                </span>
                 {fase === 'documenti' && (
                   <>
                     <button
@@ -371,10 +440,7 @@ export function DemoUploadProvider({
                     <button
                       type="button"
                       disabled={selezionati.size === 0}
-                      onClick={() => {
-                        setProgresso(0);
-                        setFase('caricamento');
-                      }}
+                      onClick={() => void avviaAcquisizione()}
                       className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
                     >
                       <Upload className="w-3.5 h-3.5" /> Avvia acquisizione demo ({selezionati.size}

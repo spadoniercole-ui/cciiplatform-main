@@ -93,4 +93,12 @@ describe('documenti del percorso demo', () => {
       documentiDemoSelezionati(AZIENDA_CANTIERI, '.pdf', 'PROPOSTA').map((d) => d.ruolo)
     ).toEqual(['PROPOSTA']);
   });
+
+  it('se il ruolo richiesto manca, preseleziona i documenti disponibili invece di zero file', () => {
+    // Tessitura segue la liquidazione: un campo «proposta» non deve aprire il
+    // modale con la selezione vuota e il pulsante disabilitato.
+    expect(
+      documentiDemoSelezionati(AZIENDA_TESSITURA, '.pdf', 'PROPOSTA').map((d) => d.ruolo)
+    ).toEqual(['FASCICOLO', 'PROVVEDIMENTO', 'STATO_PASSIVO']);
+  });
 });
