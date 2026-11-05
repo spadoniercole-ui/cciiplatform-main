@@ -1,3 +1,25 @@
+## 0.172.0 — 2026-11-05
+
+**Spazio demo: il percorso completo parte dal triage, non dal provvedimento già emesso.**
+
+- **Un flag alla creazione, non dati sparsi in produzione.** Creando uno spazio ENTE si può
+  attivare «Spazio demo»: la piattaforma carica tre posizioni complete e il database non resta un
+  foglio bianco. Senza il flag non viene scritto nulla, come per ogni altro spazio. Il flag è
+  riservato agli spazi ENTE e richiede almeno tre aziende, perché lo screening è un passaggio del
+  percorso dell’ente creditore.
+- **La storia nell’ordine in cui la vede il funzionario.** Le tre aziende hanno anagrafica,
+  posizione debitoria, scheda soglie, bilancio XBRL con due esercizi, screening già risposto e
+  scenario aperto. La verifica di salute si riapre dallo storico del triage; lo screening mostra
+  domande, risposte e relazione; lo scenario è nella pagina Scenari come quelli creati a mano.
+- **Tre profili diversi, per mostrare tre risposte.** La prima posizione supera la soglia di
+  segnalazione e ha tre indici oltre parametro (rosso); la seconda resta sotto soglia con un solo
+  indice fuori parametro (giallo); la terza non ha criticità rilevabili con i dati disponibili
+  (attenzione minima). I numeri di debito, soglie e bilancio vengono da un’unica fonte, così la
+  fotografia non si contraddice.
+- **Caricamento idempotente e non distruttivo.** Un’azienda già presente non viene duplicata e non
+  viene toccata; un secondo caricamento non crea doppioni. Se il caricamento fallisce, lo spazio
+  esiste comunque e l’errore viene dichiarato, senza perdere le credenziali appena generate.
+
 ## 0.171.0 — 2026-11-04
 
 **Due set demo per provare il percorso del provvedimento, senza inventare documenti a mano.**

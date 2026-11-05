@@ -205,6 +205,9 @@ export async function assicuraTabelleSpazi(): Promise<void> {
     `ALTER TABLE public.spazi ADD COLUMN IF NOT EXISTS schema_provisionato BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE public.spazi ADD COLUMN IF NOT EXISTS tipo_spazio VARCHAR(20) NOT NULL DEFAULT 'NON_ENTE'`,
     `ALTER TABLE public.spazi ADD COLUMN IF NOT EXISTS giudicante BOOLEAN NOT NULL DEFAULT FALSE`,
+    // Spazio demo: alla creazione vengono caricate tre posizioni complete
+    // (triage, screening e scenario). Senza il flag il database nasce vuoto.
+    `ALTER TABLE public.spazi ADD COLUMN IF NOT EXISTS demo BOOLEAN NOT NULL DEFAULT FALSE`,
     // Le direttrici lungo cui l'ente vuole che lo Screening generi le
     // domande della Check List (es. "vigilanza documentale, gestione
     // del credito, contenzioso amministrativo, contenzioso

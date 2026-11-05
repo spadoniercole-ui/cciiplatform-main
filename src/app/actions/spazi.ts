@@ -31,6 +31,8 @@ import {
   type ContestoAccessoSpazio,
 } from '@/lib/autorizzazione';
 import { cookieSicuro } from '@/lib/cookieSicuro';
+import { caricaPercorsoDemoEnte } from '@/lib/demo/caricaPercorsoEnte';
+import { AZIENDE_PERCORSO_DEMO } from '@/lib/demo/percorsoEnte';
 
 export interface ActionResult {
   success: boolean;
@@ -47,6 +49,11 @@ export interface CreaSpazioInput {
   /** Funzioni plus, non incluse nella licenza base — partono tutte false se non specificate. */
   tipoSpazio?: 'ENTE' | 'NON_ENTE';
   giudicante?: boolean;
+  /**
+   * Spazio demo: alla creazione carica tre posizioni complete, dal triage allo
+   * scenario. Senza il flag il database resta vuoto, come per ogni spazio.
+   */
+  demo?: boolean;
   admin: {
     nome: string;
     cognome: string;
@@ -145,6 +152,21 @@ export async function creaSpazioAction(
       return { success: false, error: 'Il numero massimo di aziende deve essere almeno 1.' };
     }
 
+    const tipoSpazio = data.tipoSpazio || 'NON_ENTE';
+    if (data.demo && tipoSpazio !== 'ENTE') {
+      return {
+        success: false,
+        error:
+          'Il percorso demo è disponibile solo per uno spazio ENTE: lo screening è un passaggio del percorso dell’ente creditore.',
+      };
+    }
+    if (data.demo && data.maxAziende < AZIENDE_PERCORSO_DEMO) {
+      return {
+        success: false,
+        error: `Il percorso demo carica ${AZIENDE_PERCORSO_DEMO} aziende: porta il numero massimo di aziende ad almeno ${AZIENDE_PERCORSO_DEMO}.`,
+      };
+    }
+
     // Funzioni plus: non più una scelta diretta alla creazione dello
     // spazio — ereditate dalla licenza commerciale scelta, nel momento
     // in cui la si sceglie. Restano modificabili sul singolo spazio dopo
@@ -216,8 +238,8 @@ export async function creaSpazioAction(
       await client.query('BEGIN');
 
       const spazioInserito = await client.query(
-        `INSERT INTO spazi (codice, descrizione, tipo_spazio, giudicante) VALUES ($1, $2, $3, $4) RETURNING id`,
-        [codice, descrizione, data.tipoSpazio || 'NON_ENTE', data.giudicante || false]
+        `INSERT INTO spazi (codice, descrizione, tipo_spazio, giudicante, demo) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [codice, descrizione, tipoSpazio, data.giudicante || false, data.demo || false]
       );
       const spazioId = spazioInserito.rows[0].id;
 
@@ -281,8 +303,33 @@ export async function creaSpazioAction(
           [usernameAdmin, (admin.email || '').trim().toLowerCase(), nomeSchema, spazioId, codice]
         );
 
+        // Il percorso demo si carica DOPO admin e indice: se qualcosa va
+        // storto lo spazio esiste già e va dichiarato, non perso. Il flag
+        // resta sul database e il seed è idempotente, quindi un secondo
+        // tentativo non duplica nulla.
+        let avvisoDemo: string | undefined;
+        if (data.demo) {
+          try {
+            await caricaPercorsoDemoEnte(nomeSchema);
+          } catch (erroreDemo: unknown) {
+            console.error(
+              '[creaSpazioAction] Spazio creato ma percorso demo non caricato:',
+              erroreDemo
+            );
+            const messaggioDemo =
+              erroreDemo instanceof Error ? erroreDemo.message : String(erroreDemo);
+            avvisoDemo = `Spazio creato, ma il percorso demo non è stato caricato: ${messaggioDemo}. Puoi ripetere il caricamento senza duplicare le aziende già presenti.`;
+          }
+        }
+
         revalidatePath('/superadmin/Spazi');
-        return { success: true, codice, passwordTemporanea, username: usernameAdmin };
+        return {
+          success: true,
+          codice,
+          passwordTemporanea,
+          username: usernameAdmin,
+          error: avvisoDemo,
+        };
       } catch (erroreProvisioning: any) {
         console.error(
           '[creaSpazioAction] Spazio creato ma provisioning schema/admin fallito:',

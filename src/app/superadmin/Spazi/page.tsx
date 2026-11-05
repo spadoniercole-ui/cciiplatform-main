@@ -33,6 +33,7 @@ export default function SpaziPage() {
   const [dataScadenza, setDataScadenza] = useState('');
   const [tipoSpazio, setTipoSpazio] = useState<'ENTE' | 'NON_ENTE'>('NON_ENTE');
   const [giudicante, setGiudicante] = useState(false);
+  const [demo, setDemo] = useState(false);
 
   const [adminNome, setAdminNome] = useState('');
   const [adminCognome, setAdminCognome] = useState('');
@@ -98,6 +99,7 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
         dataScadenza: dataScadenza || null,
         tipoSpazio,
         giudicante,
+        demo,
         admin: {
           nome: adminNome,
           cognome: adminCognome,
@@ -131,6 +133,7 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
       setMaxUtenti(5);
       setMaxAziende(1);
       setDataScadenza('');
+      setDemo(false);
       setAdminNome('');
       setAdminCognome('');
       setAdminEmail('');
@@ -339,7 +342,10 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
               <input
                 type="radio"
                 checked={tipoSpazio === 'NON_ENTE'}
-                onChange={() => setTipoSpazio('NON_ENTE')}
+                onChange={() => {
+                  setTipoSpazio('NON_ENTE');
+                  setDemo(false);
+                }}
               />
               Non Ente (redige proposte)
             </label>
@@ -360,6 +366,32 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
             />
             Giudicante — predisposto per un futuro sviluppo, non ancora operativo
           </label>
+
+          <div className="border-t border-slate-100 pt-2 mt-1">
+            <label
+              className={`flex items-start gap-2 text-xs ${
+                tipoSpazio === 'ENTE' ? 'text-slate-700' : 'text-slate-400'
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={demo}
+                disabled={tipoSpazio !== 'ENTE'}
+                onChange={(e) => {
+                  setDemo(e.target.checked);
+                  if (e.target.checked) setMaxAziende((v) => Math.max(v, 3));
+                }}
+              />
+              <span>
+                <b>Spazio demo</b> — precarica tre posizioni complete: triage, screening e scenario.
+                <span className="block text-[10px] text-slate-400 mt-0.5">
+                  Disponibile per gli spazi ENTE e con almeno 3 aziende. Senza questo flag il
+                  database nasce vuoto.
+                </span>
+              </span>
+            </label>
+          </div>
         </div>
 
         <div className="border border-blue-100 bg-blue-50/40 rounded-lg p-3 space-y-2">
