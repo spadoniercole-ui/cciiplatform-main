@@ -41,6 +41,8 @@ import { FascicoloEvidenza } from '@/components/spazio/FascicoloEvidenza';
 import type { Evidenza } from '@/lib/fascicolo/evidenza';
 import { improntaFile } from '@/lib/fascicolo/impronta';
 import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
+import { useDemo } from '@/components/spazio/DemoUploadProvider';
+import { bilancioDemoPerCodiceFiscale, fascicoloDemoPerCodiceFiscale } from '@/lib/demo/documenti';
 
 interface Props {
   nomeSchema: string;
@@ -51,6 +53,7 @@ interface Props {
 
 export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSpazio }: Props) {
   const router = useRouter();
+  const demo = useDemo();
   const [stato, setStato] = useState<StatoScreeningAzienda | null>(null);
   const [attenzione, setAttenzione] = useState<Attenzione | null>(null);
   const [numeroXbrl, setNumeroXbrl] = useState(0);
@@ -237,6 +240,16 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   };
 
   const handleGenera = async () => {
+    // Nella demo non si consuma AI e non si legge un file reale: lo screening
+    // è già stato prodotto sui documenti demo. Il pulsante resta visibile per
+    // mostrare il gesto, ma il risultato è la simulazione.
+    if (demo) {
+      setErrore(null);
+      setEsitoPreCompilazione(
+        'Screening demo: i documenti sono già acquisiti e la relazione è già stata generata. La rigenerazione è simulata e non consuma chiamate AI.'
+      );
+      return;
+    }
     // La visura trattenuta dal triage vale quanto una appena caricata: è lo
     // stesso documento, fornito poche schermate prima. Richiederla di nuovo
     // sarebbe chiedere due volte lo stesso file nello stesso percorso.
@@ -352,6 +365,19 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   };
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
+
+  const documentoFascicoloDemo = demo
+    ? fascicoloDemoPerCodiceFiscale(stato?.visuraFatti?.codiceFiscale)
+    : null;
+  const bilancioDemo = demo
+    ? bilancioDemoPerCodiceFiscale(stato?.visuraFatti?.codiceFiscale)
+    : null;
+  const haFascicolo = Boolean(visuraFile || visuraTriage || documentoFascicoloDemo);
+  const statoDocumenti = statoRichiestaDocumenti(
+    Boolean(visuraTriage || documentoFascicoloDemo),
+    numeroXbrl,
+    vuoleAggiornare
+  );
 
   return (
     <div className="space-y-6">
@@ -470,22 +496,57 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           Documenti di partenza
         </h3>
 
+        {demo && (
+          <div className="text-[11px] text-sky-900 bg-sky-50 border border-sky-200 rounded-lg p-3 leading-relaxed space-y-1">
+            <p>
+              <span className="font-bold">Documenti demo già acquisiti.</span> Il fascicolo storico,
+              i bilanci XBRL e la certificazione dei debiti sono già associati all&apos;azienda: in
+              produzione si sceglierebbero dal disco, qui la scelta è già fatta
+              dall&apos;applicativo.
+            </p>
+            <p className="flex flex-wrap gap-x-4 gap-y-1">
+              {documentoFascicoloDemo && (
+                <a
+                  href={documentoFascicoloDemo.percorso}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-bold text-sky-700 hover:underline"
+                >
+                  Apri il fascicolo storico demo (PDF)
+                </a>
+              )}
+              {bilancioDemo && (
+                <a
+                  href={bilancioDemo.percorso}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-bold text-sky-700 hover:underline"
+                >
+                  Apri il prospetto di bilancio demo (Excel)
+                </a>
+              )}
+            </p>
+          </div>
+        )}
+
         {/* Quando i documenti ci sono già, chiederli di nuovo è una richiesta
             che non ha senso. Si chiede invece SE aggiornarli: al "no" si
             genera con quello che c'è, e i caricamenti restano nascosti. */}
-        {statoRichiestaDocumenti(!!visuraTriage, numeroXbrl, vuoleAggiornare) ===
-          'chiedi_se_aggiornare' && (
+        {statoDocumenti === 'chiedi_se_aggiornare' && (
           <div className="border border-sky-200 bg-sky-50 rounded-xl p-4 space-y-3">
             <p className="text-xs text-slate-700 leading-relaxed">
               Per questa azienda ci sono già i documenti raccolti nella verifica:
-              {visuraTriage && (
+              {(visuraTriage || documentoFascicoloDemo) && (
                 <>
                   {' '}
-                  <span className="font-bold">visura camerale</span> ({visuraTriage.nome}, del{' '}
-                  {new Date(visuraTriage.caricataIl).toLocaleDateString('it-IT')})
+                  <span className="font-bold">visura camerale</span> (
+                  {visuraTriage
+                    ? `${visuraTriage.nome}, del ${new Date(visuraTriage.caricataIl).toLocaleDateString('it-IT')}`
+                    : `${documentoFascicoloDemo?.nome} — documento demo già acquisito`}
+                  )
                 </>
               )}
-              {visuraTriage && numeroXbrl > 0 && ' e'}
+              {(visuraTriage || documentoFascicoloDemo) && numeroXbrl > 0 && ' e'}
               {numeroXbrl > 0 && (
                 <>
                   {' '}
@@ -516,8 +577,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           </div>
         )}
 
-        {statoRichiestaDocumenti(!!visuraTriage, numeroXbrl, vuoleAggiornare) ===
-          'procedi_con_esistenti' && (
+        {statoDocumenti === 'procedi_con_esistenti' && (
           <p className="text-[11px] text-slate-500">
             Si procede con i documenti già raccolti.{' '}
             <button
@@ -531,9 +591,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
 
         <div
           className={
-            ['chiedi_documenti', 'mostra_caricamenti'].includes(
-              statoRichiestaDocumenti(!!visuraTriage, numeroXbrl, vuoleAggiornare)
-            )
+            ['chiedi_documenti', 'mostra_caricamenti'].includes(statoDocumenti)
               ? undefined
               : 'hidden'
           }
@@ -586,9 +644,21 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
                 ? `selezionato: ${visuraFile.name}`
                 : visuraTriage
                   ? `disponibile: ${visuraTriage.nome} (trattenuta, non serve ricaricarla)`
-                  : stato?.nomeFileVisura
-                    ? `usata nell’ultimo screening: ${stato.nomeFileVisura} — non più disponibile: per rigenerare va ricaricata`
-                    : 'nessuno ancora — obbligatorio per generare'}
+                  : documentoFascicoloDemo
+                    ? `documento demo già acquisito: ${documentoFascicoloDemo.nome}`
+                    : stato?.nomeFileVisura
+                      ? `usata nell’ultimo screening: ${stato.nomeFileVisura} — non più disponibile: per rigenerare va ricaricata`
+                      : 'nessuno ancora — obbligatorio per generare'}
+              {documentoFascicoloDemo && (
+                <a
+                  href={documentoFascicoloDemo.percorso}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-2 text-sky-700 font-bold hover:underline"
+                >
+                  Apri PDF demo
+                </a>
+              )}
             </span>
             <label className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg transition-colors cursor-pointer">
               <Upload className="w-3.5 h-3.5" />
@@ -620,7 +690,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           </p>
         </div>
 
-        {!visuraFile && !visuraTriage && !generazioneInCorso && (
+        {!haFascicolo && !generazioneInCorso && (
           <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-start gap-2">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>
@@ -634,12 +704,10 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           onClick={handleGenera}
           disabled={
             generazioneInCorso ||
-            (!visuraFile && !visuraTriage) ||
+            !haFascicolo ||
             (tipoSpazio !== 'NON_ENTE' && (stato?.identificativiEnte.length ?? 0) === 0)
           }
-          title={
-            !visuraFile && !visuraTriage ? 'Carica prima il fascicolo storico (PDF)' : undefined
-          }
+          title={!haFascicolo ? 'Carica prima il fascicolo storico (PDF)' : undefined}
           className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold uppercase tracking-wider rounded-lg text-xs transition-colors"
         >
           {generazioneInCorso ? (
@@ -649,7 +717,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           )}
           {generazioneInCorso
             ? `Analisi in corso… ${secondiGenerazione}s`
-            : !visuraFile && !visuraTriage
+            : !haFascicolo
               ? 'Carica il fascicolo storico per generare'
               : tipoSpazio === 'NON_ENTE'
                 ? 'Pre-compila Check List Ministeriale'

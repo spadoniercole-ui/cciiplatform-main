@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  etichettaIstruttoria,
   normalizzaLettura,
   numeroDaTesto,
   promptLetturaProvvedimento,
@@ -70,5 +71,13 @@ describe('lettura del provvedimento del giudice', () => {
     expect(tipoAttoValido('CRAM_DOWN')).toBe(true);
     expect(tipoAttoValido('DA_CHIEDERE')).toBe(false);
     expect(tipoAttoValido('altro')).toBe(false);
+  });
+
+  it('dà un’etichetta leggibile al percorso, anche quando è ancora da scegliere', () => {
+    expect(etichettaIstruttoria('PROPOSTA')).toBe('Proposta');
+    expect(etichettaIstruttoria('DECRETO_LIQUIDAZIONE')).toBe('Decreto di liquidazione giudiziale');
+    expect(etichettaIstruttoria('CRAM_DOWN')).toBe('Dispositivo di cram down');
+    expect(etichettaIstruttoria('DA_CHIEDERE')).toBe('Percorso da definire');
+    expect(etichettaIstruttoria(null)).toBe('Percorso da definire');
   });
 });

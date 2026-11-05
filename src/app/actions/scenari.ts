@@ -189,9 +189,16 @@ export async function creaScenarioAction(
     // anche qui, come ovunque nel progetto.
     const { pool } = await import('@/lib/db');
     const spazioRis = await pool.query(
-      `SELECT tipo_spazio FROM public.spazi WHERE nome_schema = $1`,
+      `SELECT tipo_spazio, demo FROM public.spazi WHERE nome_schema = $1`,
       [nomeSchema]
     );
+    if (spazioRis.rows[0]?.demo) {
+      return {
+        success: false,
+        error:
+          'Nell’ambiente demo gli scenari sono già predisposti: non si creano nuovi scenari senza documenti.',
+      };
+    }
     if (spazioRis.rows[0]?.tipo_spazio === 'ENTE' && tipoProposta !== 'RICEVUTA') {
       return {
         success: false,

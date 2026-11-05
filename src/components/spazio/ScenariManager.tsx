@@ -17,6 +17,8 @@ import {
   type Scenario,
 } from '@/app/actions/scenari';
 import { ORIGINI_PER_TIPO, type TipoProposta } from '@/lib/origineProposta';
+import { etichettaIstruttoria } from '@/lib/giudice/lettura';
+import { useDemo } from '@/components/spazio/DemoUploadProvider';
 
 interface Props {
   codiceSpazio: string;
@@ -39,6 +41,7 @@ function conTimeout<T>(promessa: Promise<T>, secondi: number, messaggio: string)
 
 export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, tipoSpazio }: Props) {
   const router = useRouter();
+  const demo = useDemo();
   const [aziende, setAziende] = useState<Azienda[]>([]);
   const [aziendaSelezionata, setAziendaSelezionata] = useState<number | null>(null);
   const [scenari, setScenari] = useState<Scenario[]>([]);
@@ -115,6 +118,12 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
   };
 
   const handleCreaScenario = async () => {
+    if (demo) {
+      setErrore(
+        'Nell’ambiente demo gli scenari sono già predisposti: non si creano nuovi scenari senza documenti.'
+      );
+      return;
+    }
     if (!aziendaSelezionata || !nomeNuovo.trim()) return;
     setErrore(null);
     const risultato = await creaScenarioAction(
@@ -183,6 +192,14 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
         </p>
       </div>
 
+      {demo && (
+        <p className="text-[11px] text-sky-900 bg-sky-50 border border-sky-200 rounded-lg p-3 leading-relaxed">
+          <span className="font-bold">Ambiente demo.</span> I tre scenari sono già predisposti, uno
+          per percorso: proposta, decreto di liquidazione e cram down. Non si creano nuovi scenari,
+          perché non ci sarebbero documenti demo da associare.
+        </p>
+      )}
+
       {errore && (
         <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
           {errore}
@@ -235,13 +252,19 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                 Scenari ({scenari.filter((s) => !s.archiviato).length})
               </h2>
             </div>
-            <button
-              type="button"
-              onClick={() => setMostraForm((v) => !v)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] uppercase tracking-wider rounded-lg transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" /> Nuovo Scenario
-            </button>
+            {demo ? (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Scenari demo già predisposti
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setMostraForm((v) => !v)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] uppercase tracking-wider rounded-lg transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Nuovo Scenario
+              </button>
+            )}
           </div>
 
           {mostraForm && (
@@ -364,8 +387,8 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                       >
                         <div className="font-bold text-slate-900 text-xs">{s.nome}</div>
                         <div className="text-[10px] text-slate-500 mt-0.5">
-                          {s.tipoProposta === 'RICEVUTA' ? 'Ricevuta da' : 'Da definire —'}{' '}
-                          {s.origineProposta} · Stato: {s.stato}
+                          {etichettaIstruttoria(s.tipoIstruttoria)} — origine: {s.origineProposta} ·
+                          Stato: {s.stato}
                         </div>
                       </button>
                       <div className="flex items-center gap-1 shrink-0">

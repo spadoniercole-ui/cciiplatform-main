@@ -57,6 +57,16 @@ describe('percorso demo dell’ente', () => {
     }
   });
 
+  it('differenzia i tre percorsi: proposta, liquidazione e cram down', () => {
+    expect(PERCORSO_DEMO.map((a) => a.tipoIstruttoria)).toEqual([
+      'PROPOSTA',
+      'DECRETO_LIQUIDAZIONE',
+      'CRAM_DOWN',
+    ]);
+    expect(PERCORSO_DEMO[1].scenario).toContain('Decreto di liquidazione');
+    expect(PERCORSO_DEMO[2].scenario).toContain('Cram down');
+  });
+
   it('il confronto con l’anno precedente mostra il peggioramento dei primi due profili', () => {
     expect(bundleDemo(PERCORSO_DEMO[0], 'precedente').severity).not.toBe('RED');
     expect(bundleDemo(PERCORSO_DEMO[1], 'precedente').severity).toBe('GREEN');

@@ -26,6 +26,11 @@ export const ETICHETTA_ATTO: Record<TipoAttoGiudice, string> = {
   CRAM_DOWN: 'Dispositivo di cram down',
 };
 
+export function etichettaIstruttoria(tipo?: TipoIstruttoria | null): string {
+  if (!tipo || tipo === 'DA_CHIEDERE') return 'Percorso da definire';
+  return ETICHETTA_ATTO[tipo];
+}
+
 export const DESCRIZIONE_ATTO: Record<TipoAttoGiudice, string> = {
   PROPOSTA:
     "L'azienda ha presentato una proposta: si valuta nel merito, si riscontra con i parametri dell'ente e si genera la relazione.",

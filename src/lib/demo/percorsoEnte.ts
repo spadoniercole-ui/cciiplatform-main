@@ -31,6 +31,7 @@ import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
 import type { SezioneChecklist, PesoDomanda } from '@/lib/checklist/ministeriale';
 import type { FattiVisura } from '@/lib/visura/fatti';
 import type { RangoCredito } from '@/lib/triage/scenari';
+import type { TipoAttoGiudice } from '@/lib/giudice/lettura';
 import { costruisciBundleIndici } from '@/lib/xbrl/indici';
 
 export type ProfiloDemo = 'ROSSO' | 'GIALLO' | 'ATTENZIONE_MINIMA';
@@ -106,7 +107,11 @@ export interface AziendaPercorsoDemo {
   screening: ScreeningPercorsoDemo;
   visura: FattiVisura;
   rango: RangoCredito;
+  /** Percorso dello scenario: proposta, decreto di liquidazione o cram down. */
+  tipoIstruttoria: TipoAttoGiudice;
   scenario: string;
+  /** Nome usato prima della 0.174.0, per rinominare senza duplicare. */
+  scenarioPrecedente?: string;
   dataDepositoProposta: string;
 }
 
@@ -373,6 +378,7 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
       24
     ),
     rango: 'PRIVILEGIATO',
+    tipoIstruttoria: 'PROPOSTA',
     scenario: 'Proposta di concordato — Meccanica Valsesia Demo',
     dataDepositoProposta: '2026-09-18',
   },
@@ -531,7 +537,9 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
       62
     ),
     rango: 'CHIROGRAFARIO',
-    scenario: 'Proposta di piano attestato — Tessitura Lario Demo',
+    tipoIstruttoria: 'DECRETO_LIQUIDAZIONE',
+    scenario: 'Decreto di liquidazione — Tessitura Lario Demo',
+    scenarioPrecedente: 'Proposta di piano attestato — Tessitura Lario Demo',
     dataDepositoProposta: '2026-10-06',
   },
   {
@@ -688,7 +696,9 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
       31
     ),
     rango: 'PRIVILEGIATO',
-    scenario: 'Proposta di accordo di ristrutturazione — Logistica Padana Demo',
+    tipoIstruttoria: 'CRAM_DOWN',
+    scenario: 'Cram down — Logistica Padana Demo',
+    scenarioPrecedente: 'Proposta di accordo di ristrutturazione — Logistica Padana Demo',
     dataDepositoProposta: '2026-10-21',
   },
 ];

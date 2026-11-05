@@ -39,6 +39,9 @@ import {
   type AziendaPercorsoDemo,
 } from './percorsoEnte';
 import { PARAMETRI_DEMO } from './parametriEnte';
+import { documentiProvvedimentoDemo } from './documenti';
+import { confrontaProvvedimento } from '@/lib/giudice/confronto';
+import type { LetturaProvvedimento } from '@/lib/giudice/lettura';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -217,13 +220,122 @@ async function inserisciScenario(
   nomeSchema: string,
   aziendaId: number,
   a: AziendaPercorsoDemo
-): Promise<void> {
-  await esegui.query(
+): Promise<number> {
+  const r = await esegui.query(
     `INSERT INTO "${nomeSchema}".scenari
        (azienda_id, nome, stato, tipo_proposta, origine_proposta,
         tipo_istruttoria, data_deposito_proposta)
-     VALUES ($1,$2,'IN_CORSO','RICEVUTA','Ente','PROPOSTA',$3)`,
-    [aziendaId, a.scenario, a.dataDepositoProposta]
+     VALUES ($1,$2,'IN_CORSO','RICEVUTA','Ente',$3,$4)
+     RETURNING id`,
+    [aziendaId, a.scenario, a.tipoIstruttoria, a.dataDepositoProposta]
+  );
+  return Number(r.rows[0].id);
+}
+
+/**
+ * Aggiorna lo scenario demo già esistente, senza duplicarlo.
+ *
+ * La 0.173.x lo aveva creato sempre come «proposta»; ora i tre percorsi sono
+ * distinti. Si riconosce il vecchio nome e lo si rinomina: uno scenario
+ * creato a mano dall'utente con un altro nome non viene toccato, e se non
+ * esiste alcuno scenario demo se ne crea uno.
+ */
+async function aggiornaScenarioDemo(
+  esegui: Esecutore,
+  nomeSchema: string,
+  aziendaId: number,
+  a: AziendaPercorsoDemo
+): Promise<number> {
+  const vecchio = a.scenarioPrecedente ?? a.scenario;
+  const trovato = await esegui.query(
+    `SELECT id FROM "${nomeSchema}".scenari
+      WHERE azienda_id = $1 AND nome IN ($2, $3)
+      ORDER BY id ASC LIMIT 1`,
+    [aziendaId, a.scenario, vecchio]
+  );
+  if (trovato.rows.length === 0) return inserisciScenario(esegui, nomeSchema, aziendaId, a);
+  const id = Number(trovato.rows[0].id);
+  await esegui.query(
+    `UPDATE "${nomeSchema}".scenari
+        SET nome = $2, tipo_istruttoria = $3, data_deposito_proposta = $4
+      WHERE id = $1`,
+    [id, a.scenario, a.tipoIstruttoria, a.dataDepositoProposta]
+  );
+  return id;
+}
+
+function letturaProvvedimentoDemo(a: AziendaPercorsoDemo): LetturaProvvedimento {
+  const chirografario = a.tipoIstruttoria === 'CRAM_DOWN';
+  const file = chirografario
+    ? 'dispositivo-cram-down-logistica-padana.pdf'
+    : 'decreto-liquidazione-tessitura-lario.pdf';
+  return {
+    crediti: [
+      {
+        voce: 'Contributi previdenziali scaduti',
+        importo: chirografario ? 10_000 : 72_000,
+        rango: 'PRIVILEGIATO',
+        privilegio: 'Privilegio generale previdenziale',
+        percentualeRealizzo: chirografario ? 50 : 30.5,
+        documento: file,
+        passo: 'Crediti ammessi',
+      },
+      {
+        voce: 'Sanzioni civili contributive',
+        importo: chirografario ? 1_000 : 8_000,
+        rango: 'CHIROGRAFARIO',
+        privilegio: null,
+        percentualeRealizzo: chirografario ? 20 : 6.4,
+        documento: file,
+        passo: 'Crediti ammessi',
+      },
+    ],
+    speseProceduraPct: chirografario ? 15 : 20,
+    tempiMesi: chirografario ? 24 : 36,
+    dataAtto: chirografario ? '2026-10-30' : '2026-10-20',
+    note: [
+      'Documento dimostrativo: crediti, percentuali e tempi sono fittizi.',
+      'La lettura è già predisposta nella demo e non richiede una chiamata AI.',
+    ],
+  };
+}
+
+async function inserisciIstruttoriaDemo(
+  esegui: Esecutore,
+  nomeSchema: string,
+  scenarioId: number,
+  a: AziendaPercorsoDemo
+): Promise<void> {
+  if (a.tipoIstruttoria === 'PROPOSTA') return;
+  const documenti = documentiProvvedimentoDemo(a.codiceFiscale).map((d) => ({
+    nome: d.nome,
+    url: d.percorso,
+  }));
+  if (documenti.length === 0) return;
+  const lettura = letturaProvvedimentoDemo(a);
+  const confronto = confrontaProvvedimento(
+    a.debiti.map((d) => ({ voce: d.voce, importo: d.importo })),
+    lettura,
+    a.tipoIstruttoria
+  );
+  const relazione =
+    a.tipoIstruttoria === 'DECRETO_LIQUIDAZIONE'
+      ? `Il decreto di liquidazione giudiziale riconosce all'ente 72.000 euro sui 80.000 a ruolo per i contributi previdenziali e 8.000 euro sui 12.000 per le sanzioni, con realizzo previsto rispettivamente del 30,5% e del 6,4%. La minore ammissione è di 12.000 euro; la perdita complessiva, al netto del recupero atteso e delle spese di procedura, resta un elemento da verificare. Le difformità segnalate riguardano l'importo ammesso e il rango del credito per sanzioni: sono elementi che possono fondare un approfondimento, non una qualificazione giuridica.`
+      : `Il dispositivo di cram down riconosce all'ente 10.000 euro sui 12.000 a ruolo per i contributi previdenziali e 1.000 euro sugli 1.500 per le sanzioni, con soddisfacimento rispettivamente del 50% e del 20%. La minore ammissione è di 2.500 euro; il recupero atteso e la perdita sono calcolati sui dati del dispositivo. Le difformità sono contenute, ma il credito per sanzioni merita una verifica sul rango e sulla percentuale applicata. Questa è un'analisi tecnica dimostrativa, non un parere legale.`;
+  await esegui.query(
+    `INSERT INTO "${nomeSchema}".istruttoria_giudice
+       (scenario_id, documenti, lettura, confronto, relazione, lettura_il, generata_il)
+     VALUES ($1,$2,$3,$4,$5, now(), now())
+     ON CONFLICT (scenario_id) DO UPDATE SET
+       documenti = $2, lettura = $3, confronto = $4, relazione = $5,
+       lettura_il = now(), generata_il = now()`,
+    [
+      scenarioId,
+      JSON.stringify(documenti),
+      JSON.stringify(lettura),
+      JSON.stringify(confronto),
+      relazione,
+    ]
   );
 }
 
@@ -265,28 +377,37 @@ export async function caricaPercorsoDemoEnte(nomeSchema: string): Promise<EsitoP
 
   const nomi = PERCORSO_DEMO.map((a) => a.ragioneSociale);
   const presenti = await pool.query(
-    `SELECT ragione_sociale FROM "${nomeSchema}".aziende WHERE ragione_sociale = ANY($1::text[])`,
+    `SELECT id, ragione_sociale FROM "${nomeSchema}".aziende WHERE ragione_sociale = ANY($1::text[])`,
     [nomi]
   );
-  const esistenti = new Set(presenti.rows.map((r) => String(r.ragione_sociale)));
-  const mancanti = PERCORSO_DEMO.filter((a) => !esistenti.has(a.ragioneSociale));
-
-  if (mancanti.length === 0) {
-    return { creati: 0, esistenti: esistenti.size };
-  }
+  const perNome = new Map(
+    presenti.rows.map((r) => [String(r.ragione_sociale), Number(r.id)] as const)
+  );
+  const esistenti = perNome.size;
 
   const client = await pool.connect();
   let creati = 0;
   try {
     await client.query('BEGIN');
-    for (const a of mancanti) {
-      const aziendaId = await inserisciAzienda(client, nomeSchema, a);
-      await inserisciBilancio(client, nomeSchema, aziendaId, a, 'corrente');
-      await inserisciBilancio(client, nomeSchema, aziendaId, a, 'precedente');
-      await inserisciScreening(client, nomeSchema, aziendaId, a);
-      await inserisciPosizioni(client, nomeSchema, aziendaId, a);
-      await inserisciScenario(client, nomeSchema, aziendaId, a);
-      creati += 1;
+    for (const a of PERCORSO_DEMO) {
+      let aziendaId = perNome.get(a.ragioneSociale);
+      if (!aziendaId) {
+        aziendaId = await inserisciAzienda(client, nomeSchema, a);
+        await inserisciBilancio(client, nomeSchema, aziendaId, a, 'corrente');
+        await inserisciBilancio(client, nomeSchema, aziendaId, a, 'precedente');
+        await inserisciScreening(client, nomeSchema, aziendaId, a);
+        await inserisciPosizioni(client, nomeSchema, aziendaId, a);
+        creati += 1;
+      }
+      // Anche sulle aziende già presenti si riallinea lo scenario: la demo
+      // della 0.173.x ne aveva uno solo, sempre «proposta». Riapplicare il
+      // percorso deve aggiornare il tipo senza duplicare lo scenario né
+      // toccare le aziende estranee al set demo.
+      const scenarioId =
+        aziendaId && perNome.has(a.ragioneSociale)
+          ? await aggiornaScenarioDemo(client, nomeSchema, aziendaId, a)
+          : await inserisciScenario(client, nomeSchema, aziendaId!, a);
+      await inserisciIstruttoriaDemo(client, nomeSchema, scenarioId, a);
     }
     await client.query('COMMIT');
   } catch (errore) {
@@ -296,5 +417,5 @@ export async function caricaPercorsoDemoEnte(nomeSchema: string): Promise<EsitoP
     client.release();
   }
 
-  return { creati, esistenti: esistenti.size };
+  return { creati, esistenti };
 }

@@ -1,3 +1,24 @@
+## 0.174.0 — 2026-11-05
+
+**La demo mostra l’acquisizione dei documenti, senza chiedere file veri.**
+
+- **Il caricamento è una simulazione, non un file picker.** In tutti i punti dell’area demo —
+  screening, XBRL, posizione aggiornata, provvedimento, proposta, certificazione dei debiti,
+  check list — il click su «Scegli file» apre una schermata di acquisizione con i documenti già
+  selezionati dall’applicativo. Nessun documento reale viene letto dal computer dell’operatore
+  o caricato fuori contesto.
+- **Tre percorsi distinti per le tre aziende.** Meccanica Valsesia va verso la proposta e la sua
+  cascata; Tessitura Lario verso il decreto di liquidazione, con stato passivo e confronto già
+  predisposti; Logistica Padana verso il cram down, con dispositivo e analisi demo. Riapplicare
+  la demo aggiorna gli scenari esistenti senza duplicarli.
+- **Niente nuovi scenari nella demo.** Il pulsante è sostituito da un avviso: senza documenti da
+  associare, uno scenario nuovo sarebbe una schermata vuota e pericolosa. La regola è anche nel
+  server action, non solo nell’interfaccia.
+- **Documenti PDF ed Excel con filigrana DEMO.** Fascicoli storici, prospetti di bilancio,
+  certificazioni dei debiti, proposta, decreto, stato passivo e dispositivo di cram down: i file
+  sono in `public/demo`, scaricabili anche in un pacchetto unico, e dichiarano su ogni pagina o
+  foglio di essere fittizi.
+
 ## 0.173.2 — 2026-11-05
 
 **L'attivazione demo è dove la stai cercando.**

@@ -29,6 +29,7 @@ import {
   type StatoIstruttoriaGiudice,
 } from '@/app/actions/istruttoriaGiudice';
 import { ETICHETTA_ATTO, type TipoAttoGiudice } from '@/lib/giudice/lettura';
+import { useDemo } from '@/components/spazio/DemoUploadProvider';
 import type { ConfrontoProvvedimento as Confronto } from '@/lib/giudice/confronto';
 
 const euro = (n: number | null) =>
@@ -61,6 +62,7 @@ interface Props {
 }
 
 export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoAtto }: Props) {
+  const demo = useDemo();
   const [stato, setStato] = useState<StatoIstruttoriaGiudice | null>(null);
   const [caricamento, setCaricamento] = useState(true);
   const [fileScelti, setFileScelti] = useState<File[]>([]);
@@ -164,6 +166,13 @@ export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoA
           perdita; l’analisi critica spiega quei numeri. Qui non si valuta una proposta e non si
           esprime un parere legale.
         </p>
+        {demo && (
+          <p className="text-[11px] text-sky-900 bg-sky-50 border border-sky-200 rounded-lg p-3 mt-2 leading-relaxed">
+            <span className="font-bold">Percorso demo.</span> Il provvedimento, la lettura dei
+            crediti e il confronto sono già predisposti: non serve caricare file reali e l’analisi
+            critica è già scritta.
+          </p>
+        )}
       </div>
 
       {errore && (
@@ -208,7 +217,18 @@ export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoA
               {stato?.documenti?.map((d) => (
                 <li key={d.url}>
                   <FileText className="w-3.5 h-3.5 text-slate-400 inline mr-1" />
-                  {d.nome}
+                  {demo ? (
+                    <a
+                      href={d.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-bold text-sky-700 hover:underline"
+                    >
+                      {d.nome}
+                    </a>
+                  ) : (
+                    d.nome
+                  )}
                 </li>
               ))}
             </ul>
@@ -502,14 +522,20 @@ export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoA
               <div className="text-xs text-slate-800 whitespace-pre-wrap leading-relaxed border border-slate-100 rounded-lg p-4 bg-slate-50">
                 {stato.relazione}
               </div>
-              <button
-                type="button"
-                onClick={handleGenera}
-                disabled={generazioneInCorso}
-                className="text-[10px] font-bold uppercase text-sky-700 hover:underline disabled:text-slate-400"
-              >
-                Rigenera l’analisi
-              </button>
+              {demo ? (
+                <p className="text-[10px] font-bold uppercase text-emerald-700">
+                  Analisi demo già predisposta
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleGenera}
+                  disabled={generazioneInCorso}
+                  className="text-[10px] font-bold uppercase text-sky-700 hover:underline disabled:text-slate-400"
+                >
+                  Rigenera l’analisi
+                </button>
+              )}
             </>
           ) : (
             <>

@@ -6,6 +6,7 @@ import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { leggiRiferimentoAzienda } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
+import { etichettaIstruttoria } from '@/lib/giudice/lettura';
 
 export default async function ScenarioLayout({
   children,
@@ -53,11 +54,8 @@ export default async function ScenarioLayout({
           <div>
             <h1 className="text-lg font-bold text-slate-900">{scenario.nome}</h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              {scenario.ragioneSocialeAzienda} —{' '}
-              {scenario.tipoProposta === 'RICEVUTA'
-                ? 'Proposta ricevuta da'
-                : 'Proposta da definire —'}{' '}
-              {scenario.origineProposta}
+              {scenario.ragioneSocialeAzienda} — {etichettaIstruttoria(scenario.tipoIstruttoria)} ·
+              origine: {scenario.origineProposta}
             </p>
             {riferimento && (
               <p className="mt-1">

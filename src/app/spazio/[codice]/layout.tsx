@@ -7,6 +7,7 @@ import { ChatbotAiuto } from '@/components/ChatbotAiuto';
 import { ContestoAssistenteProvider } from '@/components/ContestoAssistenteContext';
 import { ShieldAlert } from 'lucide-react';
 import { BannerAttivaDemo } from '@/components/spazio/BannerAttivaDemo';
+import { DemoUploadProvider } from '@/components/spazio/DemoUploadProvider';
 
 // Layout del Pannello Spazio: un solo punto di controllo d'accesso, valido
 // sia per il superadmin in modalità salvagente sia per un vero Admin di
@@ -37,62 +38,64 @@ export default async function LayoutSpazio({
 
   return (
     <ContestoAssistenteProvider>
-      <div className="flex h-screen bg-slate-50">
-        <SidebarSpazio
-          codice={contesto.codice}
-          descrizione={contesto.descrizione}
-          modalita={contesto.modalita}
-          permessi={contesto.permessi}
-        />
+      <DemoUploadProvider attivo={Boolean(contesto.demo)}>
+        <div className="flex h-screen bg-slate-50">
+          <SidebarSpazio
+            codice={contesto.codice}
+            descrizione={contesto.descrizione}
+            modalita={contesto.modalita}
+            permessi={contesto.permessi}
+          />
 
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {contesto.modalita === 'SALVAGENTE' && (
-            <div className="bg-amber-50 border-b border-amber-200 text-amber-800 px-6 py-2 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="w-3.5 h-3.5" />
-                <span className="font-bold uppercase tracking-wider">Modalità Ispezione</span>
-                <span>— stai operando come rete di sicurezza, non come l&apos;admin reale.</span>
-              </div>
-              <form
-                action={async () => {
-                  'use server';
-                  await esciDaSalvagenteAction();
-                  redirect('/superadmin/Spazi');
-                }}
-              >
-                <button
-                  type="submit"
-                  className="text-amber-800 hover:text-amber-900 font-bold uppercase text-[10px] underline"
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {contesto.modalita === 'SALVAGENTE' && (
+              <div className="bg-amber-50 border-b border-amber-200 text-amber-800 px-6 py-2 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span className="font-bold uppercase tracking-wider">Modalità Ispezione</span>
+                  <span>— stai operando come rete di sicurezza, non come l&apos;admin reale.</span>
+                </div>
+                <form
+                  action={async () => {
+                    'use server';
+                    await esciDaSalvagenteAction();
+                    redirect('/superadmin/Spazi');
+                  }}
                 >
-                  Esci dall&apos;ispezione
-                </button>
-              </form>
-            </div>
-          )}
+                  <button
+                    type="submit"
+                    className="text-amber-800 hover:text-amber-900 font-bold uppercase text-[10px] underline"
+                  >
+                    Esci dall&apos;ispezione
+                  </button>
+                </form>
+              </div>
+            )}
 
-          {(contesto.modalita === 'ADMIN_SPAZIO' || contesto.modalita === 'OPERATORE') && (
-            <TopStatusBar
-              nomeUtente={contesto.descrizione}
-              ruolo={contesto.modalita === 'ADMIN_SPAZIO' ? 'Admin di Spazio' : 'Operatore'}
-            />
-          )}
+            {(contesto.modalita === 'ADMIN_SPAZIO' || contesto.modalita === 'OPERATORE') && (
+              <TopStatusBar
+                nomeUtente={contesto.descrizione}
+                ruolo={contesto.modalita === 'ADMIN_SPAZIO' ? 'Admin di Spazio' : 'Operatore'}
+              />
+            )}
 
-          <main className="flex-1 overflow-y-auto p-6">
-            <ParametriStampaLoader nomeSchema={contesto.nomeSchema} />
-            {contesto.modalita === 'SALVAGENTE' &&
-              contesto.tipoSpazio === 'ENTE' &&
-              !contesto.demo && (
-                <BannerAttivaDemo
-                  spazioId={contesto.spazioId}
-                  codice={contesto.codice}
-                  descrizione={contesto.descrizione}
-                />
-              )}
-            {children}
-          </main>
+            <main className="flex-1 overflow-y-auto p-6">
+              <ParametriStampaLoader nomeSchema={contesto.nomeSchema} />
+              {contesto.modalita === 'SALVAGENTE' &&
+                contesto.tipoSpazio === 'ENTE' &&
+                !contesto.demo && (
+                  <BannerAttivaDemo
+                    spazioId={contesto.spazioId}
+                    codice={contesto.codice}
+                    descrizione={contesto.descrizione}
+                  />
+                )}
+              {children}
+            </main>
+          </div>
+          <ChatbotAiuto />
         </div>
-        <ChatbotAiuto />
-      </div>
+      </DemoUploadProvider>
     </ContestoAssistenteProvider>
   );
 }
