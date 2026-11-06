@@ -36,6 +36,18 @@ describe('lista di controllo prima della valutazione', () => {
         .pronta
     ).toBe(true);
   });
+  it('dopo il tentativo fallito il settore dichiarato assente non blocca più', () => {
+    const e = valutaListaControllo({
+      ...BASE,
+      settore: { applicabile: true, aggiornatoIl: null },
+      settoreNonDisponibileDichiarato: true,
+    });
+    expect(e.pronta).toBe(true);
+    expect(e.mancanti).not.toContain('Dati di settore ISTAT');
+    const voce = e.voci.find((v) => v.id === 'settore')!;
+    expect(voce.informativa).toBe(true);
+    expect(voce.dettaglio).toContain('senza il confronto ISTAT');
+  });
   it('proposta obbligatoria; documenti facoltativi da caricare o dichiarare assenti; posizione idem', () => {
     expect(valutaListaControllo({ ...BASE, propostaSelezionata: false }).mancanti).toContain(
       'Proposta (PDF)'

@@ -41,6 +41,8 @@ const MESSAGGI = {
     chiave:
       "Funzione AI non disponibile: la chiave API Anthropic non è valida o è stata revocata. Verificare la chiave configurata sul server (nell'edizione portable, il file apikey.txt).",
     sovraccarico: 'Servizio AI momentaneamente sovraccarico, riprova tra qualche minuto.',
+    credito:
+      'Funzione AI non disponibile: il credito dell’API Anthropic è esaurito. Le altre funzioni della piattaforma funzionano normalmente.',
   },
   ISTAT: {
     offline:
@@ -50,6 +52,7 @@ const MESSAGGI = {
     chiave: null,
     sovraccarico:
       'Dati di settore momentaneamente non disponibili: il servizio ISTAT è sovraccarico, riprova tra qualche minuto.',
+    credito: null,
   },
 } as const;
 
@@ -58,7 +61,7 @@ export function messaggioChiaveAiMancante(): string {
   return "Funzione AI non disponibile: la chiave API Anthropic (ANTHROPIC_API_KEY) non è configurata sul server. Nell'edizione portable, inserire la chiave nel file apikey.txt accanto al programma di avvio e riavviare. Le altre funzioni della piattaforma funzionano normalmente.";
 }
 
-type Categoria = 'offline' | 'timeout' | 'chiave' | 'sovraccarico';
+type Categoria = 'offline' | 'timeout' | 'chiave' | 'sovraccarico' | 'credito';
 
 function nomeClasse(e: object): string {
   const nome = (e as { name?: unknown }).name;
@@ -91,6 +94,14 @@ function classificaLivello(e: unknown): Categoria | null {
   ) {
     return 'sovraccarico';
   }
+  const messaggio = (e as { message?: unknown }).message;
+  if (
+    status === 400 &&
+    typeof messaggio === 'string' &&
+    /credit balance is too low|plans\s*&\s*billing|purchase credits/i.test(messaggio)
+  ) {
+    return 'credito';
+  }
   if (e instanceof APIError && typeof status === 'number') return null;
 
   const codice = (e as { code?: unknown }).code;
@@ -100,7 +111,6 @@ function classificaLivello(e: unknown): Categoria | null {
   // Timeout di fetch con AbortSignal.timeout(): DOMException "TimeoutError".
   if ((e as { name?: unknown }).name === 'TimeoutError') return 'timeout';
 
-  const messaggio = (e as { message?: unknown }).message;
   if (typeof messaggio === 'string' && /^fetch failed$/i.test(messaggio.trim())) return 'offline';
   return null;
 }

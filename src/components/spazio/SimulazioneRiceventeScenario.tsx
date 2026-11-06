@@ -129,6 +129,7 @@ export function SimulazioneRiceventeScenario({
   const [stato, setStato] = useState<StatoValutazione | null>(null);
   const [dichiarazioni, setDichiarazioni] = useState<DichiarazioniValutazione>({});
   const [settoreInCorso, setSettoreInCorso] = useState(false);
+  const [settoreNonDisponibile, setSettoreNonDisponibile] = useState(false);
   const settoreAvviato = useRef(false);
 
   const caricaStato = async () => {
@@ -152,7 +153,12 @@ export function SimulazioneRiceventeScenario({
     setSettoreInCorso(true);
     setErrore(null);
     const ris = await aggiornaDatiSettoreAction(nomeSchema, aziendaId);
-    if (!ris.success) setErrore(ris.error || 'Aggiornamento dei dati di settore non riuscito.');
+    if (!ris.success) {
+      setSettoreNonDisponibile(true);
+      setErrore(ris.error || 'Aggiornamento dei dati di settore non riuscito.');
+    } else {
+      setSettoreNonDisponibile(false);
+    }
     await caricaStato();
     setSettoreInCorso(false);
   };
@@ -364,6 +370,7 @@ export function SimulazioneRiceventeScenario({
         posizioniAggiornate: stato.posizioniAggiornate,
         posizioneNonPervenutaDichiarata: Boolean(dichiarazioni.posizioneNonPervenuta),
         settore: stato.settore,
+        settoreNonDisponibileDichiarato: settoreNonDisponibile,
         pianoSviluppoAttivo: stato.pianoSviluppoAttivo,
         oggi: new Date().toISOString(),
       })
@@ -837,13 +844,23 @@ export function SimulazioneRiceventeScenario({
                         className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-[10px] uppercase rounded"
                       >
                         <RefreshCw className={`w-3 h-3 ${settoreInCorso ? 'animate-spin' : ''}`} />
-                        {settoreInCorso ? 'Aggiornamento ISTAT…' : 'Riprova'}
+                        {settoreInCorso
+                          ? 'Aggiornamento ISTAT…'
+                          : settoreNonDisponibile
+                            ? 'Riprova ancora'
+                            : 'Riprova'}
                       </button>
                     )}
                   </div>
                 </li>
               ))}
             </ul>
+          )}
+          {settoreNonDisponibile && stato?.settore.applicabile && (
+            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+              I dati ISTAT non sono arrivati dopo il tentativo. Puoi avviare comunque la
+              valutazione: il confronto con il settore resterà assente e la lista lo dichiara.
+            </p>
           )}
           {!inquadramentoConfermato && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">

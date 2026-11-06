@@ -325,12 +325,13 @@ export async function caricaDocumentiRiceventeAction(
     };
   } catch (error: unknown) {
     console.error('[caricaDocumentiRiceventeAction] Prima lettura:', error);
+    const messaggio = erroreServizioEsterno(error, 'AI');
     return {
       success: true,
       documenti: pubblici(elenco),
-      erroreLettura:
-        erroreServizioEsterno(error, 'AI') ??
-        `Prima lettura non riuscita: ${(error as Error).message}. Compila l’inquadramento a mano.`,
+      erroreLettura: messaggio
+        ? `${messaggio} Compila l’inquadramento a mano.`
+        : `Prima lettura non riuscita: ${(error as Error).message}. Compila l’inquadramento a mano.`,
     };
   }
 }

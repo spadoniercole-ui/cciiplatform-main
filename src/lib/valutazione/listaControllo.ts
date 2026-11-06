@@ -23,6 +23,8 @@ export interface InputListaControllo {
   /** null = funzione Dati di Settore non attiva o ATECO assente: voce non applicabile. */
   settore:
     { applicabile: false; motivo: string } | { applicabile: true; aggiornatoIl: string | null };
+  /** true = dopo un tentativo fallito l'operatore prosegue senza il confronto ISTAT. */
+  settoreNonDisponibileDichiarato?: boolean;
   pianoSviluppoAttivo: boolean;
   oggi: string; // ISO
   sogliaGiorniSettore?: number;
@@ -116,21 +118,36 @@ export function valutaListaControllo(i: InputListaControllo): EsitoListaControll
     const agg = i.settore.aggiornatoIl;
     const eta = agg ? giorni(agg, i.oggi) : null;
     const ok = eta !== null && eta <= soglia;
-    voci.push({
-      id: 'settore',
-      etichetta: 'Dati di settore ISTAT',
-      ok,
-      informativa: false,
-      dettaglio:
-        agg === null
-          ? 'Mai scaricati per il settore di questa azienda.'
-          : ok
-            ? `Aggiornati il ${new Date(agg).toLocaleDateString('it-IT')}.`
-            : `Aggiornati il ${new Date(agg).toLocaleDateString('it-IT')}, ${eta} giorni fa: vanno aggiornati (oltre ${soglia} giorni).`,
-      percorso: ok
-        ? null
-        : '«Aggiorna ora» qui accanto, oppure Scenari › questo scenario › passo «Dati di Settore»',
-    });
+    if (!ok && i.settoreNonDisponibileDichiarato) {
+      // L'aggiornamento è stato tentato e non è riuscito: il settore manca,
+      // ma non deve impedire la valutazione. La voce resta visibile e
+      // «Riprova» resta a disposizione; semplicemente non è più bloccante.
+      voci.push({
+        id: 'settore',
+        etichetta: 'Dati di settore ISTAT',
+        ok: false,
+        informativa: true,
+        dettaglio:
+          'Non disponibile dopo il tentativo di aggiornamento: si prosegue senza il confronto ISTAT. «Riprova» resta disponibile.',
+        percorso: null,
+      });
+    } else {
+      voci.push({
+        id: 'settore',
+        etichetta: 'Dati di settore ISTAT',
+        ok,
+        informativa: false,
+        dettaglio:
+          agg === null
+            ? 'Mai scaricati per il settore di questa azienda.'
+            : ok
+              ? `Aggiornati il ${new Date(agg).toLocaleDateString('it-IT')}.`
+              : `Aggiornati il ${new Date(agg).toLocaleDateString('it-IT')}, ${eta} giorni fa: vanno aggiornati (oltre ${soglia} giorni).`,
+        percorso: ok
+          ? null
+          : '«Aggiorna ora» qui accanto, oppure Scenari › questo scenario › passo «Dati di Settore»',
+      });
+    }
   }
 
   voci.push({

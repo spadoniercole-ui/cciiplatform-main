@@ -1,3 +1,15 @@
+## 0.174.5 — 2026-11-06
+
+**La valutazione può chiudersi anche quando ISTAT non risponde, e la prima lettura non mostra più il JSON del provider.**
+
+- **Dopo il tentativo fallito si prosegue.** Se «Riprova» non porta i dati di settore, la lista
+  di controllo dichiara l’assenza e sblocca la valutazione: il confronto ISTAT resta fuori, le
+  altre verifiche e la Relazione di chiusura restano disponibili. «Riprova ancora» resta a
+  disposizione.
+- **La prima lettura AI degrada in modo leggibile.** Un errore del provider — per esempio il
+  credito API esaurito — non viene più stampato come JSON grezzo: si legge cosa è successo e si
+  può compilare l’inquadramento a mano.
+
 ## 0.174.4 — 2026-11-05
 
 **L’acquisizione demo arriva al prospetto, non solo al modale.**

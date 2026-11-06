@@ -118,6 +118,19 @@ describe('erroreServizioEsterno — chiave e sovraccarico', () => {
   it('per ISTAT il 401 non produce un messaggio di chiave', () => {
     expect(erroreServizioEsterno({ status: 401 }, 'ISTAT')).toBeNull();
   });
+
+  it('credito API esaurito (400) → messaggio leggibile, senza il JSON del provider', () => {
+    const e = new BadRequestError(
+      400,
+      undefined,
+      'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.',
+      new Headers()
+    );
+    const msg = erroreServizioEsterno(e, 'AI');
+    expect(msg).toContain('credito dell’API Anthropic è esaurito');
+    expect(msg).not.toContain('request_id');
+    expect(msg).not.toContain('{');
+  });
 });
 
 describe('erroreServizioEsterno — altri errori restano invariati', () => {
