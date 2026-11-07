@@ -1,3 +1,20 @@
+## 0.174.7 — 2026-11-07
+
+**La quinta azienda compare anche nelle demo già attive, e il triage demo mostra acquisizione documenti e check list.**
+
+- **Il seed parte dalla dashboard.** Le demo create prima della 0.174.6 non passano da «Crea spazio»:
+  all’apertura della dashboard il caricamento idempotente assicura la quinta posizione senza
+  toccare le altre quattro. Il conteggio delle aziende da verificare passa così da 0 a 1.
+- **Documenti demo dedicati al triage.** Impianti Adriatica ha visura, certificazione dei debiti,
+  elenco denunce DM10 e deleghe F24: sono file fittizi con filigrana DEMO e restano separati dai
+  documenti delle aziende già arrivate allo scenario.
+- **Acquisizione simulata prima della valutazione.** Riaprendo la posizione in demo si vede il
+  gesto di acquisizione dei quattro documenti, con avanzamento e riscontri, senza leggere file
+  dal computer dell’operatore.
+- **Check list in popup.** Subito dopo l’acquisizione si apre la check list dei prodotti; le
+  risposte restano obbligatorie e il quadro qualitativo entra nella valutazione insieme ai dati
+  quantitativi già presenti nel percorso.
+
 ## 0.174.6 — 2026-11-07
 
 **La demo lascia un’azienda al Triage, così il passaggio prima dello screening si vede.**

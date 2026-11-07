@@ -5,6 +5,7 @@ import { ottieniAziende } from '@/app/actions/aziende';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { ottieniScenari } from '@/app/actions/scenari';
 import { ottieniUltimiScreeningSpazio } from '@/app/actions/screeningAzienda';
+import { caricaPercorsoDemoEnte } from '@/lib/demo/caricaPercorsoEnte';
 import {
   DashboardPannelli,
   type RigaAzienda,
@@ -26,6 +27,17 @@ export default async function DashboardSpazioPage({
   const { codice } = await params;
   const contesto = await ottieniContestoAccessoSpazio(codice);
   if (!contesto) redirect('/');
+
+  // La demo già attiva non passa da «Crea spazio»: senza questo seed la
+  // quinta azienda restava fuori dalle dashboard create prima della 0.174.6.
+  // L'operazione è idempotente e tocca solo la posizione ferma al triage.
+  if (contesto.demo) {
+    try {
+      await caricaPercorsoDemoEnte(contesto.nomeSchema, { soloTriage: true });
+    } catch (errore) {
+      console.error('[DashboardSpazioPage] seed del triage demo non riuscito', errore);
+    }
+  }
 
   const [risultatoAdmin, risultatoAziende, verificheRis] = await Promise.all([
     ottieniAdminSpazio(contesto.nomeSchema),

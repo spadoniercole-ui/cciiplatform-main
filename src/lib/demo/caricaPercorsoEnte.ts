@@ -34,6 +34,7 @@ import {
   assicuraTabelleVera,
 } from '@/db/provision';
 import { ripristinaConfigurazione } from '@/lib/configurazioneSpazio/configurazione';
+import { assicuraTabelleProdotti } from '@/db/provisionProdotti';
 import {
   DIRETTRICI_DEMO,
   PERCORSO_DEMO,
@@ -42,7 +43,7 @@ import {
   type AziendaPercorsoDemo,
   type AziendaTriageDemo,
 } from './percorsoEnte';
-import { PARAMETRI_DEMO } from './parametriEnte';
+import { PARAMETRI_DEMO, PRODOTTI_DEMO } from './parametriEnte';
 import { documentiProvvedimentoDemo } from './documenti';
 import { confrontaProvvedimento } from '@/lib/giudice/confronto';
 import type { LetturaProvvedimento, TipoAttoGiudice } from '@/lib/giudice/lettura';
@@ -56,6 +57,29 @@ type Esecutore = {
 export interface EsitoPercorsoDemo {
   creati: number;
   esistenti: number;
+}
+
+/**
+ * I prodotti demo della check list, solo se lo spazio non ne ha ancora.
+ *
+ * Le demo create prima della 0.174.7 hanno il triage ma nessun prodotto in
+ * check list: il popup si aprirebbe vuoto. Il seed non sostituisce una
+ * configurazione esistente, quindi una demo già personalizzata resta intatta.
+ */
+async function assicuraProdottiDemo(nomeSchema: string): Promise<void> {
+  await assicuraTabelleProdotti(nomeSchema);
+  const presenti = await pool.query(`SELECT COUNT(*)::int AS n FROM "${nomeSchema}".prodotti_ente`);
+  if (Number(presenti.rows[0]?.n ?? 0) > 0) return;
+
+  for (const p of PRODOTTI_DEMO) {
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".prodotti_ente
+         (direttrice, nome, in_checklist, domande, ordine)
+       VALUES ($1, $2, $3, $4::jsonb, $5)
+       ON CONFLICT DO NOTHING`,
+      [p.direttrice, p.nome, p.inChecklist, JSON.stringify(p.domande), p.ordine]
+    );
+  }
 }
 
 /**
@@ -410,7 +434,7 @@ async function inserisciIstruttoriaDemo(
  */
 export async function caricaPercorsoDemoEnte(
   nomeSchema: string,
-  opzioni: { soloPercorsi?: boolean } = {}
+  opzioni: { soloPercorsi?: boolean; soloTriage?: boolean } = {}
 ): Promise<EsitoPercorsoDemo> {
   if (!schemaOk(nomeSchema)) throw new Error('Nome schema non valido.');
 
@@ -423,11 +447,14 @@ export async function caricaPercorsoDemoEnte(
   await assicuraTabelleScenari(nomeSchema);
   await assicuraTabelleScenariTriage(nomeSchema);
   await assicuraTabelleVera(nomeSchema);
+  await assicuraProdottiDemo(nomeSchema);
 
   // Il riallineamento dei soli percorsi (usato quando si apre la pagina
   // Scenari di una demo già attiva) non deve riscrivere i parametri che
   // l'utente può aver modificato: aggiorna nomi, tipi e la quarta azienda.
-  if (!opzioni.soloPercorsi) {
+  // `soloTriage` serve alla dashboard: deve solo assicurare la quinta
+  // azienda, senza toccare scenari o parametri delle altre quattro.
+  if (!opzioni.soloPercorsi && !opzioni.soloTriage) {
     await assicuraTabelleParametriSpazio(nomeSchema);
 
     // I parametri che fanno funzionare triage, screening e scenario: soglie,
@@ -462,25 +489,27 @@ export async function caricaPercorsoDemoEnte(
   let creati = 0;
   try {
     await client.query('BEGIN');
-    for (const a of PERCORSO_DEMO) {
-      let aziendaId = perNome.get(a.ragioneSociale);
-      if (!aziendaId) {
-        aziendaId = await inserisciAzienda(client, nomeSchema, a);
-        await inserisciBilancio(client, nomeSchema, aziendaId, a, 'corrente');
-        await inserisciBilancio(client, nomeSchema, aziendaId, a, 'precedente');
-        await inserisciScreening(client, nomeSchema, aziendaId, a);
-        await inserisciPosizioni(client, nomeSchema, aziendaId, a);
-        creati += 1;
+    if (!opzioni.soloTriage) {
+      for (const a of PERCORSO_DEMO) {
+        let aziendaId = perNome.get(a.ragioneSociale);
+        if (!aziendaId) {
+          aziendaId = await inserisciAzienda(client, nomeSchema, a);
+          await inserisciBilancio(client, nomeSchema, aziendaId, a, 'corrente');
+          await inserisciBilancio(client, nomeSchema, aziendaId, a, 'precedente');
+          await inserisciScreening(client, nomeSchema, aziendaId, a);
+          await inserisciPosizioni(client, nomeSchema, aziendaId, a);
+          creati += 1;
+        }
+        // Anche sulle aziende già presenti si riallinea lo scenario: la demo
+        // della 0.173.x ne aveva uno solo, sempre «proposta». Riapplicare il
+        // percorso deve aggiornare il tipo senza duplicare lo scenario né
+        // toccare le aziende estranee al set demo.
+        const scenarioId =
+          aziendaId && perNome.has(a.ragioneSociale)
+            ? await aggiornaScenarioDemo(client, nomeSchema, aziendaId, a)
+            : await inserisciScenario(client, nomeSchema, aziendaId!, a);
+        await inserisciIstruttoriaDemo(client, nomeSchema, scenarioId, a);
       }
-      // Anche sulle aziende già presenti si riallinea lo scenario: la demo
-      // della 0.173.x ne aveva uno solo, sempre «proposta». Riapplicare il
-      // percorso deve aggiornare il tipo senza duplicare lo scenario né
-      // toccare le aziende estranee al set demo.
-      const scenarioId =
-        aziendaId && perNome.has(a.ragioneSociale)
-          ? await aggiornaScenarioDemo(client, nomeSchema, aziendaId, a)
-          : await inserisciScenario(client, nomeSchema, aziendaId!, a);
-      await inserisciIstruttoriaDemo(client, nomeSchema, scenarioId, a);
     }
 
     // La quinta posizione resta al triage: niente screening, niente bilancio,

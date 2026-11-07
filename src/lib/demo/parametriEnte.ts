@@ -9,9 +9,10 @@
 // screening e scenario appena creato lo spazio.
 //
 // Il file è volutamente ridotto alle tabelle che servono al percorso demo.
-// Le altre sezioni dell'export (Check List ministeriale, prodotti, testi)
-// restano quelle che lo spazio crea da sé: importarle qui vorrebbe dire
-// sostituire configurazioni che l'utente può aver già personalizzato.
+// Le altre sezioni dell'export (Check List ministeriale, testi) restano quelle
+// che lo spazio crea da sé. I prodotti non si importano da qui: il percorso
+// demo li crea solo quando la tabella è vuota (vedi `assicuraProdottiDemo`),
+// così una configurazione già personalizzata non viene sovrascritta.
 
 import { APP_VERSION } from '@/lib/appVersion';
 import {
@@ -19,6 +20,7 @@ import {
   VERSIONE_FORMATO,
   type FileConfigurazione,
 } from '@/lib/configurazioneSpazio/configurazione';
+import type { DomandaProdotto } from '@/lib/prodotti/prodotti';
 
 export const PARAMETRI_DEMO: FileConfigurazione = {
   formato: FORMATO_CONFIGURAZIONE,
@@ -164,3 +166,69 @@ export const PARAMETRI_DEMO: FileConfigurazione = {
     },
   },
 };
+
+/**
+ * I prodotti demo con le domande della check list (0.174.7).
+ *
+ * Non sono configurazione dell'export: sono un set minimo che rende visibile
+ * il passaggio «documenti acquisiti → check list → valutazione» anche in una
+ * demo già creata. Il seed li inserisce solo se `prodotti_ente` è vuota.
+ */
+export interface ProdottoDemoParametri {
+  direttrice: string;
+  nome: string;
+  inChecklist: boolean;
+  domande: DomandaProdotto[];
+  ordine: number;
+}
+
+export const PRODOTTI_DEMO: ProdottoDemoParametri[] = [
+  {
+    direttrice: 'Gestione del credito',
+    nome: 'Rateizzazione',
+    inChecklist: true,
+    ordine: 10,
+    domande: [
+      {
+        id: 'rateizzazione-richiesta',
+        testo: 'L’azienda ha presentato una richiesta di rateizzazione prima dell’avviso?',
+        tipo: 'SI_NO',
+        maxCaratteri: null,
+      },
+      {
+        id: 'rateizzazione-misure',
+        testo: 'Quali misure ha adottato per ridurre la posizione debitoria?',
+        tipo: 'TESTO_LIBERO',
+        maxCaratteri: 600,
+      },
+    ],
+  },
+  {
+    direttrice: 'Vigilanza documentale',
+    nome: 'DURC',
+    inChecklist: true,
+    ordine: 20,
+    domande: [
+      {
+        id: 'durc-regolare',
+        testo: 'Il DURC risultava regolare alla data della verifica?',
+        tipo: 'SI_NO',
+        maxCaratteri: null,
+      },
+    ],
+  },
+  {
+    direttrice: 'Vigilanza documentale',
+    nome: 'Bilanci',
+    inChecklist: true,
+    ordine: 30,
+    domande: [
+      {
+        id: 'bilanci-depositati',
+        testo: 'I bilanci degli ultimi due esercizi sono stati depositati?',
+        tipo: 'SI_NO',
+        maxCaratteri: null,
+      },
+    ],
+  },
+];

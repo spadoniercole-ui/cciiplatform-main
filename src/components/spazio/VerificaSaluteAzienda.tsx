@@ -45,6 +45,7 @@ import {
   Printer,
   Info,
   FileDown,
+  FileText,
   Send,
   Layers,
   RotateCcw,
@@ -162,6 +163,8 @@ import { DebitiTriage } from '@/components/spazio/DebitiTriage';
 import type { Attenzione } from '@/lib/screening/indicatore';
 import { improntaFile } from '@/lib/fascicolo/impronta';
 import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
+import { useDemo } from './DemoUploadProvider';
+import { AZIENDA_IMPIANTI, documentiDemoPerAzienda } from '@/lib/demo/documenti';
 
 /** «21/10/2026, 15:42» — data e ora locali della consegna. */
 function dataOraConsegna(iso: string): string {
@@ -214,7 +217,10 @@ interface Props {
   aziendaDaRiprendere?: number | null;
 }
 
-type Fase = 'caricamento' | 'conferma' | 'checklist' | 'esito' | 'presa_in_carico';
+type Fase = 'caricamento' | 'conferma' | 'checklist' | 'esito' | 'presa_in_carico' | 'demo';
+
+/** I documenti che il triage demo acquisisce prima della check list. */
+const DOCUMENTI_TRIAGE_DEMO = documentiDemoPerAzienda(AZIENDA_IMPIANTI, null);
 
 const CAMPI: { chiave: keyof AnagraficaEstratta; label: string; numerico?: boolean }[] = [
   { chiave: 'ragioneSociale', label: 'Ragione sociale' },
@@ -244,8 +250,11 @@ export function VerificaSaluteAzienda({
   aziendaDaRiprendere = null,
   veraObbligatorio = true,
 }: Props) {
+  const demo = useDemo();
   const [fase, setFase] = useState<Fase>('caricamento');
   const [inCorso, setInCorso] = useState(false);
+  const [demoInCorso, setDemoInCorso] = useState(false);
+  const [demoPasso, setDemoPasso] = useState(0);
   const [errore, setErrore] = useState<string | null>(null);
   const [avvisoCiclo, setAvvisoCiclo] = useState<string | null>(null);
   const [nonTrovati, setNonTrovati] = useState<string[]>([]);
@@ -670,11 +679,30 @@ export function VerificaSaluteAzienda({
         });
       }
 
-      setFase('esito');
+      setFase(demo && v.inVerifica ? 'demo' : 'esito');
     } finally {
       setInCorso(false);
       setAvanzamento(null);
     }
+  };
+
+  /**
+   * Nella demo il triage mostra l'acquisizione fittizia dei quattro documenti
+   * prima della valutazione. I dati sono gia' nel percorso demo: qui si
+   * rappresenta il gesto, non si leggono file veri dal computer.
+   */
+  const avviaElaborazioneDemo = async () => {
+    if (demoInCorso) return;
+    setDemoInCorso(true);
+    setDemoPasso(0);
+    setErrore(null);
+    for (let i = 1; i <= DOCUMENTI_TRIAGE_DEMO.length; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      setDemoPasso(i);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    setDemoInCorso(false);
+    setFase('checklist');
   };
 
   // La riapertura si tenta una volta sola, all'apertura della pagina: un
@@ -2322,50 +2350,143 @@ export function VerificaSaluteAzienda({
         </div>
       )}
 
-      {fase === 'checklist' && aziendaId && (
-        <div className="space-y-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+      {fase === 'demo' && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-                Documenti acquisiti — check list dei prodotti
+                Acquisizione demo — documenti del triage
               </h3>
               <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                Visura e prospetti sono stati letti. Il sistema resta in stand-by finché le domande
-                scritte nei Parametri sui prodotti con il flag attivo non hanno una risposta: le
-                risposte entrano nel quadro di valutazione insieme all’elaborazione dei prospetti.
-                Se nessun prodotto è in check list non c’è nulla da chiedere, e la valutazione si
-                apre subito.
+                La demo acquisisce la visura, la certificazione dei debiti, l&apos;elenco delle
+                denunce DM10 e le deleghe di pagamento. I file sono fittizi e i dati sono già nel
+                percorso: qui si vede il gesto che precede la check list e la valutazione.
               </p>
             </div>
-            <ChecklistProdottiTriage
-              nomeSchema={nomeSchema}
-              aziendaId={aziendaId}
-              onEsito={setChecklistProdotti}
-            />
-            <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
-              <button
-                type="button"
-                onClick={() => setFase('esito')}
-                disabled={inCorso || checklistProdotti === null || checklistProdottiIncompleta}
-                title={
-                  checklistProdottiIncompleta
-                    ? 'Completa la check list: le domande devono avere una risposta.'
-                    : undefined
+            <span className="shrink-0 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-amber-700">
+              Demo
+            </span>
+          </div>
+
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {DOCUMENTI_TRIAGE_DEMO.map((documento, indice) => (
+              <li
+                key={documento.percorso}
+                className={
+                  'flex items-start gap-2 rounded-lg border p-3 ' +
+                  (demoPasso > indice
+                    ? 'border-emerald-200 bg-emerald-50'
+                    : 'border-slate-200 bg-slate-50')
                 }
-                className="flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700 disabled:bg-slate-300"
               >
-                <ArrowRight className="w-3.5 h-3.5" />
-                {checklistProdotti === null
-                  ? 'Lettura della check list…'
-                  : checklistProdottiIncompleta
-                    ? 'Rispondi a tutte le domande'
-                    : 'Continua con la valutazione'}
-              </button>
-              {checklistProdottiIncompleta && (
-                <p className="text-[11px] text-amber-900 leading-relaxed">
-                  Restano {checklistProdotti?.mancanti} domande senza risposta.
+                <FileText className="w-4 h-4 mt-0.5 shrink-0 text-slate-500" />
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-bold text-slate-900">
+                    {documento.descrizione}
+                  </span>
+                  <span className="block text-[10px] font-mono text-slate-400 truncate">
+                    {documento.nome}
+                  </span>
+                </span>
+                {demoPasso > indice && (
+                  <Check className="w-3.5 h-3.5 ml-auto shrink-0 text-emerald-600" />
+                )}
+              </li>
+            ))}
+          </ul>
+
+          {demoInCorso && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] font-bold text-slate-600">
+                <span>Acquisizione e lettura dei documenti demo…</span>
+                <span>
+                  {Math.round((demoPasso / Math.max(1, DOCUMENTI_TRIAGE_DEMO.length)) * 100)}%
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                <div
+                  className="h-full bg-sky-600 transition-all duration-150"
+                  style={{
+                    width:
+                      Math.round((demoPasso / Math.max(1, DOCUMENTI_TRIAGE_DEMO.length)) * 100) +
+                      '%',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
+            <p className="mr-auto text-[10px] text-slate-500 leading-relaxed">
+              Documenti fittizi con filigrana DEMO. La check list dei prodotti si apre subito dopo,
+              prima della valutazione quali-quantitativa.
+            </p>
+            <button
+              type="button"
+              disabled={demoInCorso}
+              onClick={() => void avviaElaborazioneDemo()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              {demoInCorso ? 'Elaborazione in corso…' : 'Avvia elaborazione demo'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {fase === 'checklist' && aziendaId && (
+        <div
+          className={
+            demo ? 'fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 p-4 sm:p-8' : 'space-y-4'
+          }
+          role={demo ? 'dialog' : undefined}
+          aria-modal={demo ? true : undefined}
+          aria-label={demo ? 'Check list dei prodotti' : undefined}
+        >
+          <div className={demo ? 'mx-auto max-w-3xl' : ''}>
+            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+              <div>
+                <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                  Documenti acquisiti — check list dei prodotti
+                </h3>
+                <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                  Visura e prospetti sono stati letti. Il sistema resta in stand-by finché le
+                  domande scritte nei Parametri sui prodotti con il flag attivo non hanno una
+                  risposta: le risposte entrano nel quadro di valutazione insieme all’elaborazione
+                  dei prospetti. Se nessun prodotto è in check list non c’è nulla da chiedere, e la
+                  valutazione si apre subito.
                 </p>
-              )}
+              </div>
+              <ChecklistProdottiTriage
+                nomeSchema={nomeSchema}
+                aziendaId={aziendaId}
+                onEsito={setChecklistProdotti}
+              />
+              <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setFase('esito')}
+                  disabled={inCorso || checklistProdotti === null || checklistProdottiIncompleta}
+                  title={
+                    checklistProdottiIncompleta
+                      ? 'Completa la check list: le domande devono avere una risposta.'
+                      : undefined
+                  }
+                  className="flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700 disabled:bg-slate-300"
+                >
+                  <ArrowRight className="w-3.5 h-3.5" />
+                  {checklistProdotti === null
+                    ? 'Lettura della check list…'
+                    : checklistProdottiIncompleta
+                      ? 'Rispondi a tutte le domande'
+                      : 'Continua con la valutazione'}
+                </button>
+                {checklistProdottiIncompleta && (
+                  <p className="text-[11px] text-amber-900 leading-relaxed">
+                    Restano {checklistProdotti?.mancanti} domande senza risposta.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>

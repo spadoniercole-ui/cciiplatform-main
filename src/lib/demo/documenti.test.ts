@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   AZIENDA_CANTIERI,
+  AZIENDA_IMPIANTI,
   AZIENDA_MECCANICA,
   AZIENDA_TESSITURA,
   DOCUMENTI_DEMO,
@@ -16,11 +17,11 @@ import {
 } from './documenti';
 
 describe('documenti del percorso demo', () => {
-  it('porta tutti i file necessari, nelle quattro aziende', () => {
-    expect(DOCUMENTI_DEMO.length).toBeGreaterThanOrEqual(19);
-    expect(new Set(DOCUMENTI_DEMO.map((d) => d.azienda)).size).toBe(4);
-    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'PDF').length).toBeGreaterThanOrEqual(10);
-    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'EXCEL').length).toBeGreaterThanOrEqual(8);
+  it('porta tutti i file necessari, nelle cinque aziende', () => {
+    expect(DOCUMENTI_DEMO.length).toBeGreaterThanOrEqual(23);
+    expect(new Set(DOCUMENTI_DEMO.map((d) => d.azienda)).size).toBe(5);
+    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'PDF').length).toBeGreaterThanOrEqual(12);
+    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'EXCEL').length).toBeGreaterThanOrEqual(11);
   });
 
   it('i file esistono davvero in public/demo, compreso il pacchetto', () => {
@@ -37,7 +38,26 @@ describe('documenti del percorso demo', () => {
       expect(fascicoloDemoPerCodiceFiscale(codiceFiscale)?.formato).toBe('PDF');
       expect(bilancioDemoPerCodiceFiscale(codiceFiscale)?.formato).toBe('EXCEL');
     }
+    expect(fascicoloDemoPerCodiceFiscale('00000000105')?.formato).toBe('PDF');
     expect(fascicoloDemoPerCodiceFiscale('non-esiste')).toBeNull();
+  });
+
+  it('la posizione ferma al triage ha visura, certificazione, DM10 e deleghe', () => {
+    const documenti = documentiDemoPerAzienda(AZIENDA_IMPIANTI, null);
+    expect(documenti.map((d) => d.ruolo).sort()).toEqual([
+      'CERTIFICAZIONE',
+      'DELEGHE',
+      'DENUNCE',
+      'FASCICOLO',
+    ]);
+    expect(bilancioDemoPerCodiceFiscale('00000000105')).toBeNull();
+    expect(
+      documentiDemoSelezionati(
+        AZIENDA_IMPIANTI,
+        '.pdf,.xlsx',
+        'FASCICOLO,CERTIFICAZIONE,DENUNCE,DELEGHE'
+      )
+    ).toHaveLength(4);
   });
 
   it('la liquidazione ha decreto e stato passivo, il cram down il dispositivo', () => {

@@ -21,7 +21,14 @@
 export type FormatoDocumentoDemo = 'PDF' | 'XBRL' | 'EXCEL';
 
 export type RuoloDocumentoDemo =
-  'FASCICOLO' | 'BILANCIO' | 'CERTIFICAZIONE' | 'PROPOSTA' | 'PROVVEDIMENTO' | 'STATO_PASSIVO';
+  | 'FASCICOLO'
+  | 'BILANCIO'
+  | 'CERTIFICAZIONE'
+  | 'PROPOSTA'
+  | 'PROVVEDIMENTO'
+  | 'STATO_PASSIVO'
+  | 'DENUNCE'
+  | 'DELEGHE';
 
 export interface DocumentoDemo {
   nome: string;
@@ -36,6 +43,7 @@ export const AZIENDA_MECCANICA = 'Meccanica Valsesia Demo S.r.l.';
 export const AZIENDA_TESSITURA = 'Tessitura Lario Demo S.p.A.';
 export const AZIENDA_LOGISTICA = 'Logistica Padana Demo S.r.l.';
 export const AZIENDA_CANTIERI = 'Cantieri Brianza Demo S.r.l.';
+export const AZIENDA_IMPIANTI = 'Impianti Adriatica Demo S.r.l.';
 
 export const PACCHETTO_DOCUMENTI_DEMO = '/demo/documenti-demo.zip';
 
@@ -195,6 +203,38 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
     'Dispositivo di cram down — variante demo',
     'PROVVEDIMENTO'
   ),
+
+  // Impianti Adriatica — la posizione ferma al triage: visura, certificazione,
+  // denunce DM10 e deleghe di pagamento. Non ci sono bilancio, proposta o
+  // provvedimento, perché il percorso non è ancora arrivato allo scenario.
+  documento(
+    AZIENDA_IMPIANTI,
+    'fascicolo-storico-impianti-adriatica.pdf',
+    'PDF',
+    'Fascicolo storico e visura camerale',
+    'FASCICOLO'
+  ),
+  documento(
+    AZIENDA_IMPIANTI,
+    'certificazione-debiti-impianti-adriatica.xlsx',
+    'EXCEL',
+    'Certificazione dei debiti',
+    'CERTIFICAZIONE'
+  ),
+  documento(
+    AZIENDA_IMPIANTI,
+    'elenco-denunce-dm10-impianti-adriatica.xlsx',
+    'EXCEL',
+    'Elenco denunce DM10',
+    'DENUNCE'
+  ),
+  documento(
+    AZIENDA_IMPIANTI,
+    'elenco-deleghe-f24-impianti-adriatica.xlsx',
+    'EXCEL',
+    'Elenco deleghe di pagamento F24',
+    'DELEGHE'
+  ),
 ];
 
 const normalizza = (valore: string) => valore.trim().toLocaleLowerCase('it-IT');
@@ -217,7 +257,9 @@ export function fascicoloDemoPerCodiceFiscale(codiceFiscale: string | null | und
           ? AZIENDA_LOGISTICA
           : codiceFiscale === '00000000104'
             ? AZIENDA_CANTIERI
-            : null;
+            : codiceFiscale === '00000000105'
+              ? AZIENDA_IMPIANTI
+              : null;
   if (!azienda) return null;
   const nome =
     azienda === AZIENDA_MECCANICA
@@ -226,7 +268,9 @@ export function fascicoloDemoPerCodiceFiscale(codiceFiscale: string | null | und
         ? 'fascicolo-storico-tessitura-lario.pdf'
         : azienda === AZIENDA_LOGISTICA
           ? 'fascicolo-storico-logistica-padana.pdf'
-          : 'fascicolo-storico-cantieri-brianza.pdf';
+          : azienda === AZIENDA_CANTIERI
+            ? 'fascicolo-storico-cantieri-brianza.pdf'
+            : 'fascicolo-storico-impianti-adriatica.pdf';
   return perAzienda(azienda, nome);
 }
 
@@ -281,16 +325,23 @@ export function documentiProvvedimentoDemo(
  */
 export function documentiDemoPerAccettazione(accept: string | null | undefined): DocumentoDemo[] {
   const a = (accept ?? '').toLowerCase();
-  if (a.includes('xbrl') || a.includes('xml')) {
+  const estensioni = a
+    .split(/[\s,]+/)
+    .map((e) => e.trim())
+    .filter(Boolean);
+  if (estensioni.some((e) => e.includes('xbrl') || e.includes('xml'))) {
     return DOCUMENTI_DEMO.filter((d) => d.nome.startsWith('bilancio-'));
   }
-  if (a.includes('pdf')) {
-    return DOCUMENTI_DEMO.filter((d) => d.formato === 'PDF');
-  }
-  if (a.includes('xls') || a.includes('csv') || a.includes('ods') || a.includes('excel')) {
-    return DOCUMENTI_DEMO.filter((d) => d.formato === 'EXCEL' && !d.nome.startsWith('bilancio-'));
-  }
-  return DOCUMENTI_DEMO;
+  const pdf = estensioni.some((e) => e.includes('pdf'))
+    ? DOCUMENTI_DEMO.filter((d) => d.formato === 'PDF')
+    : [];
+  const excel = estensioni.some(
+    (e) => e.includes('xls') || e.includes('csv') || e.includes('ods') || e.includes('excel')
+  )
+    ? DOCUMENTI_DEMO.filter((d) => d.formato === 'EXCEL' && !d.nome.startsWith('bilancio-'))
+    : [];
+  const compatibili = [...pdf, ...excel];
+  return compatibili.length > 0 ? compatibili : DOCUMENTI_DEMO;
 }
 
 /**

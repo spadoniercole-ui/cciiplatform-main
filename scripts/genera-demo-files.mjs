@@ -70,6 +70,20 @@ const aziende = [
     addetti: 38,
     oggetto: 'Costruzione di edifici residenziali e commerciali.',
   },
+  {
+    chiave: 'impianti-adriatica',
+    nome: 'Impianti Adriatica Demo S.r.l.',
+    cf: '00000000105',
+    piva: '00000000105',
+    rea: 'PE-001105',
+    forma: 'Società a responsabilità limitata',
+    sede: 'Via dell’Industria 14, 65129 Pescara (PE)',
+    pec: 'impianti.adriatica.demo@pec.esempio.it',
+    ateco: '43.21.01',
+    amministratore: 'Giulia Esempio, Amministratrice unica',
+    addetti: 18,
+    oggetto: 'Installazione e manutenzione di impianti elettrici e tecnologici.',
+  },
 ];
 
 function pdf({ file, titolo, sottotitolo, righe }) {
@@ -196,24 +210,26 @@ for (const a of aziende) {
     ],
   });
 
-  excel({
-    file: `bilancio-${a.chiave}-2025.xlsx`,
-    titolo: 'Bilancio 2025 — prospetto dimostrativo',
-    azienda: a.nome,
-    righe: [
-      ['Voce', '2025', '2024', 'Nota'],
-      ['Ricavi delle vendite', 1200000, 1350000, 'Dati fittizi'],
-      ['Valore della produzione', 1350000, 1500000, 'Dati fittizi'],
-      ['Costi della produzione', 1290000, 1420000, 'Dati fittizi'],
-      ['EBITDA', 100000, 125000, 'Dati fittizi'],
-      ['EBIT', 60000, 80000, 'Dati fittizi'],
-      ['Oneri finanziari', 55000, 50000, 'Dati fittizi'],
-      ['Utile (perdita) dell’esercizio', 5000, 15000, 'Dati fittizi'],
-      ['Totale attivo', 1100000, 1200000, 'Dati fittizi'],
-      ['Patrimonio netto', 55000, 100000, 'Dati fittizi'],
-      ['Totale debiti', 900000, 880000, 'Dati fittizi'],
-    ],
-  });
+  if (a.chiave !== 'impianti-adriatica') {
+    excel({
+      file: `bilancio-${a.chiave}-2025.xlsx`,
+      titolo: 'Bilancio 2025 — prospetto dimostrativo',
+      azienda: a.nome,
+      righe: [
+        ['Voce', '2025', '2024', 'Nota'],
+        ['Ricavi delle vendite', 1200000, 1350000, 'Dati fittizi'],
+        ['Valore della produzione', 1350000, 1500000, 'Dati fittizi'],
+        ['Costi della produzione', 1290000, 1420000, 'Dati fittizi'],
+        ['EBITDA', 100000, 125000, 'Dati fittizi'],
+        ['EBIT', 60000, 80000, 'Dati fittizi'],
+        ['Oneri finanziari', 55000, 50000, 'Dati fittizi'],
+        ['Utile (perdita) dell’esercizio', 5000, 15000, 'Dati fittizi'],
+        ['Totale attivo', 1100000, 1200000, 'Dati fittizi'],
+        ['Patrimonio netto', 55000, 100000, 'Dati fittizi'],
+        ['Totale debiti', 900000, 880000, 'Dati fittizi'],
+      ],
+    });
+  }
 
   if (a.chiave === 'meccanica-valsesia') {
     pdf({
@@ -368,7 +384,9 @@ for (const a of aziende) {
             ? 80000
             : a.chiave === 'logistica-padana'
               ? 12000
-              : 60000,
+              : a.chiave === 'cantieri-brianza'
+                ? 60000
+                : 45000,
         'DEBITO',
         'Dato fittizio',
       ],
@@ -380,7 +398,9 @@ for (const a of aziende) {
             ? 12000
             : a.chiave === 'logistica-padana'
               ? 1500
-              : 10000,
+              : a.chiave === 'cantieri-brianza'
+                ? 10000
+                : 6000,
         'DEBITO',
         'Dato fittizio',
       ],
@@ -392,12 +412,39 @@ for (const a of aziende) {
             ? 92000
             : a.chiave === 'logistica-padana'
               ? 13500
-              : 70000,
+              : a.chiave === 'cantieri-brianza'
+                ? 70000
+                : 51000,
         '',
         'Somma delle voci demo',
       ],
     ],
   });
+
+  if (a.chiave === 'impianti-adriatica') {
+    excel({
+      file: `elenco-denunce-dm10-${a.chiave}.xlsx`,
+      titolo: 'Elenco denunce DM10',
+      azienda: a.nome,
+      righe: [
+        ['Periodo', 'Matricola', 'Importo', 'Nota'],
+        ['2026-07', 'DEMO-018', 18000, 'Denuncia trasmessa'],
+        ['2026-08', 'DEMO-018', 18000, 'Denuncia trasmessa'],
+        ['2026-09', 'DEMO-018', 9000, 'Denuncia non trasmessa'],
+      ],
+    });
+    excel({
+      file: `elenco-deleghe-f24-${a.chiave}.xlsx`,
+      titolo: 'Elenco deleghe di pagamento F24',
+      azienda: a.nome,
+      righe: [
+        ['Delega', 'Periodo', 'Importo', 'Stato'],
+        ['F24-DEMO-001', '2026-07', 18000, 'Pagata'],
+        ['F24-DEMO-002', '2026-08', 18000, 'Pagata'],
+        ['F24-DEMO-003', '2026-09', 9000, 'Non presentata'],
+      ],
+    });
+  }
 }
 
 // Il pacchetto unico: comodo per chi vuole vedere tutti i file senza passare

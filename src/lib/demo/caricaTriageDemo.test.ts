@@ -30,6 +30,10 @@ vi.mock('@/db/provision', () => ({
   assicuraTabelleVera: async () => undefined,
 }));
 
+vi.mock('@/db/provisionProdotti', () => ({
+  assicuraTabelleProdotti: async () => undefined,
+}));
+
 vi.mock('./percorsoEnte', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./percorsoEnte')>();
   return { ...actual, PERCORSO_DEMO: [] };
@@ -94,6 +98,15 @@ beforeEach(async () => {
       contributi NUMERIC,
       sanzioni NUMERIC,
       ambito TEXT NOT NULL DEFAULT 'INPS'
+    );
+    CREATE TABLE ${SCHEMA}.prodotti_ente (
+      id SERIAL PRIMARY KEY,
+      direttrice TEXT NOT NULL DEFAULT '',
+      nome TEXT NOT NULL DEFAULT '',
+      in_checklist BOOLEAN NOT NULL DEFAULT false,
+      domande JSONB NOT NULL DEFAULT '[]'::jsonb,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
     );
   `);
 });
@@ -163,6 +176,11 @@ describe('caricamento demo — quinta azienda al triage', () => {
         ambito: 'INPS',
       },
     ]);
+
+    const prodotti = await db.query<{ n: number }>(
+      `SELECT COUNT(*)::int AS n FROM ${SCHEMA}.prodotti_ente`
+    );
+    expect(prodotti.rows[0].n).toBe(3);
   });
 
   it('non duplica la quinta azienda se il percorso viene ricaricato', async () => {
@@ -178,5 +196,22 @@ describe('caricamento demo — quinta azienda al triage', () => {
     );
     expect(aziende.rows[0].n).toBe(1);
     expect(posizioni.rows[0].n).toBe(2);
+
+    const prodotti = await db.query<{ n: number }>(
+      `SELECT COUNT(*)::int AS n FROM ${SCHEMA}.prodotti_ente`
+    );
+    expect(prodotti.rows[0].n).toBe(3);
+  });
+
+  it('con soloTriage assicura la quinta posizione senza duplicarla', async () => {
+    const primo = await caricaPercorsoDemoEnte(SCHEMA, { soloTriage: true });
+    const secondo = await caricaPercorsoDemoEnte(SCHEMA, { soloTriage: true });
+
+    expect(primo.creati).toBe(1);
+    expect(secondo.creati).toBe(0);
+    const aziende = await db.query<{ n: number }>(
+      `SELECT COUNT(*)::int AS n FROM ${SCHEMA}.aziende`
+    );
+    expect(aziende.rows[0].n).toBe(1);
   });
 });
