@@ -43,6 +43,7 @@ vi.mock('@/db/provision', () => ({
   assicuraTabelleParametriSpazio: async () => undefined,
   assicuraTabelleScenari: async () => undefined,
   assicuraTabelleScenariTriage: async () => undefined,
+  assicuraTabelleVera: async () => undefined,
 }));
 
 const { acquisisciPosizioneDebitoriaDemoEnte } = await import('./caricaPercorsoEnte');

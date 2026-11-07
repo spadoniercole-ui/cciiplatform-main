@@ -139,7 +139,7 @@ export default function ManutenzioneSpaziPage() {
 
   const handleAttivaDemo = async (spazio: SpazioConLicenza) => {
     const conferma = await confermaApp(
-      `Attivo il percorso demo di ${spazio.descrizione}.\n\nVengono caricate tre posizioni complete (triage, screening, scenario) e i parametri di soglie, riscontro e scenari. Se presenti, le aziende del vecchio set demo e la prova Cram down (CROWDOWN S.R.L.) vengono rimosse; le altre aziende non vengono toccate.`,
+      `Attivo il percorso demo di ${spazio.descrizione}.\n\nVengono caricati quattro percorsi completi (triage, screening, scenario) e una quinta posizione ferma al triage, senza screening né scenario, più i parametri di soglie, riscontro e scenari. Se presenti, le aziende del vecchio set demo e la prova Cram down (CROWDOWN S.R.L.) vengono rimosse; le altre aziende non vengono toccate.`,
       {
         titolo: 'Attiva spazio demo',
         etichettaConferma: 'Attiva demo',
@@ -337,7 +337,7 @@ export default function ManutenzioneSpaziPage() {
                     onClick={() => handleAttivaDemo(s)}
                     disabled={demoInCorsoId === s.id || azioneInCorsoId === s.id}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-300 text-white font-bold text-[9px] uppercase rounded-md transition-colors"
-                    title="Carica tre posizioni e i parametri demo; rimuove solo il vecchio set provvedimenti"
+                    title="Carica quattro percorsi completi, una posizione ferma al triage e i parametri demo; rimuove solo il vecchio set provvedimenti"
                   >
                     <Sparkles className="w-3 h-3" />
                     {demoInCorsoId === s.id

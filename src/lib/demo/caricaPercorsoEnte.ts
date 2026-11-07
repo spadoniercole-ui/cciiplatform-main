@@ -2,11 +2,12 @@
 //
 // CARICAMENTO DEL PERCORSO DEMO (0.172.0).
 //
-// Scrive nel database di uno spazio appena creato le tre posizioni descritte
-// in percorsoEnte.ts: anagrafica, posizione debitoria, scheda soglie,
-// bilancio XBRL, screening già risposto e scenario aperto. È il percorso
-// completo che l'utente vede, non un riempitivo: ogni riga è quella che il
-// prodotto leggerebbe se il lavoro fosse stato fatto a mano.
+// Scrive nel database di uno spazio appena creato i percorsi descritti in
+// percorsoEnte.ts: anagrafica, posizione debitoria, scheda soglie, bilancio
+// XBRL, screening già risposto e scenario aperto. La quinta azienda si ferma
+// invece al triage: anagrafica e posizioni, senza screening né scenario. È il
+// percorso completo che l'utente vede, non un riempitivo: ogni riga è quella
+// che il prodotto leggerebbe se il lavoro fosse stato fatto a mano.
 //
 // PERCHÉ QUI E NON IN UNA SERVER ACTION. Il caricamento avviene dentro
 // creaSpazioAction, quando non esiste ancora una sessione di spazio: non c'è
@@ -30,13 +31,16 @@ import {
   assicuraTabelleScenari,
   assicuraTabelleScenariTriage,
   assicuraTabelleScreeningAzienda,
+  assicuraTabelleVera,
 } from '@/db/provision';
 import { ripristinaConfigurazione } from '@/lib/configurazioneSpazio/configurazione';
 import {
   DIRETTRICI_DEMO,
   PERCORSO_DEMO,
+  TRIAGE_DEMO,
   bundleDemo,
   type AziendaPercorsoDemo,
+  type AziendaTriageDemo,
 } from './percorsoEnte';
 import { PARAMETRI_DEMO } from './parametriEnte';
 import { documentiProvvedimentoDemo } from './documenti';
@@ -86,8 +90,10 @@ async function applicaParametriDemo(nomeSchema: string): Promise<void> {
 async function inserisciAzienda(
   esegui: Esecutore,
   nomeSchema: string,
-  a: AziendaPercorsoDemo
+  a: AziendaPercorsoDemo | AziendaTriageDemo,
+  opzioni: { triage?: boolean } = {}
 ): Promise<number> {
+  const triage = opzioni.triage === true;
   const r = await esegui.query(
     `INSERT INTO "${nomeSchema}".aziende
        (ragione_sociale, codice_fiscale, partita_iva, codice_ateco, forma_giuridica,
@@ -98,7 +104,7 @@ async function inserisciAzienda(
         contributi_dovuti_anno_precedente, anno_contributi_dovuti, volume_affari,
         ritardo_oltre_90_giorni, periodi_in_ritardo, soglie_aggiornate_al)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-             FALSE, 'PROSEGUI', now(), $16, $17, $18, $19, $20, $21, $22, $23, $16)
+             $16, $17, COALESCE($18::timestamp, now()), $19, $20, $21, $22, $23, $24, $25, $26, $27)
      RETURNING id`,
     [
       a.ragioneSociale,
@@ -116,6 +122,9 @@ async function inserisciAzienda(
       a.numeroRea,
       a.pec,
       a.annoCostituzione,
+      triage,
+      triage ? a.profilo : 'PROSEGUI',
+      triage ? a.dataVerifica : null,
       a.dataVerifica,
       a.soglie.conLavoratori,
       a.soglie.contributiScaduti,
@@ -124,9 +133,48 @@ async function inserisciAzienda(
       a.soglie.volumeAffari,
       a.soglie.ritardoOltre90Giorni,
       a.soglie.periodiInRitardo,
+      a.dataVerifica,
     ]
   );
   return Number(r.rows[0].id);
+}
+
+/**
+ * Le posizioni della quinta azienda, nelle due letture che servono al triage:
+ * `debiti_ente` per la posizione dell'ente e `debiti_vera` per le righe della
+ * certificazione che la verifica riaperta rilegge.
+ */
+async function inserisciPosizioniTriage(
+  esegui: Esecutore,
+  nomeSchema: string,
+  aziendaId: number,
+  a: AziendaTriageDemo
+): Promise<void> {
+  for (const d of a.debiti) {
+    await esegui.query(
+      `INSERT INTO "${nomeSchema}".debiti_ente
+         (azienda_id, voce, importo, tipo, note)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [aziendaId, d.voce, d.importo, d.tipo, d.nota ?? 'posizione del percorso demo']
+    );
+
+    const sanzione = /sanzi/i.test(d.voce);
+    await esegui.query(
+      `INSERT INTO "${nomeSchema}".debiti_vera
+         (azienda_id, sezione, voce, importo, categoria, stato, trattamento, periodo,
+          contributi, sanzioni, ambito)
+       VALUES ($1,$2,$3,$4,'',$5,'contabilizzato','',$6,$7,'INPS')`,
+      [
+        aziendaId,
+        'Certificazione demo — verifica di salute',
+        d.voce,
+        d.importo,
+        '',
+        sanzione ? null : d.importo,
+        sanzione ? d.importo : null,
+      ]
+    );
+  }
 }
 
 async function inserisciBilancio(
@@ -374,6 +422,7 @@ export async function caricaPercorsoDemoEnte(
   await assicuraTabellaDebitiEnte(nomeSchema);
   await assicuraTabelleScenari(nomeSchema);
   await assicuraTabelleScenariTriage(nomeSchema);
+  await assicuraTabelleVera(nomeSchema);
 
   // Il riallineamento dei soli percorsi (usato quando si apre la pagina
   // Scenari di una demo già attiva) non deve riscrivere i parametri che
@@ -399,7 +448,7 @@ export async function caricaPercorsoDemoEnte(
     );
   }
 
-  const nomi = PERCORSO_DEMO.map((a) => a.ragioneSociale);
+  const nomi = [...PERCORSO_DEMO.map((a) => a.ragioneSociale), TRIAGE_DEMO.ragioneSociale];
   const presenti = await pool.query(
     `SELECT id, ragione_sociale FROM "${nomeSchema}".aziende WHERE ragione_sociale = ANY($1::text[])`,
     [nomi]
@@ -432,6 +481,15 @@ export async function caricaPercorsoDemoEnte(
           ? await aggiornaScenarioDemo(client, nomeSchema, aziendaId, a)
           : await inserisciScenario(client, nomeSchema, aziendaId!, a);
       await inserisciIstruttoriaDemo(client, nomeSchema, scenarioId, a);
+    }
+
+    // La quinta posizione resta al triage: niente screening, niente bilancio,
+    // niente scenario. Se esiste già non la si tocca, perché potrebbe essere
+    // stata promossa o lavorata dopo il primo caricamento.
+    if (!perNome.has(TRIAGE_DEMO.ragioneSociale)) {
+      const triageId = await inserisciAzienda(client, nomeSchema, TRIAGE_DEMO, { triage: true });
+      await inserisciPosizioniTriage(client, nomeSchema, triageId, TRIAGE_DEMO);
+      creati += 1;
     }
     await client.query('COMMIT');
   } catch (errore) {

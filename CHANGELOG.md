@@ -1,3 +1,17 @@
+## 0.174.6 — 2026-11-07
+
+**La demo lascia un’azienda al Triage, così il passaggio prima dello screening si vede.**
+
+- **Una quinta posizione resta in verifica.** Impianti Adriatica Demo S.r.l. ha anagrafica,
+  soglie e posizioni, ma non screening né scenario: la dashboard la mostra tra le «Aziende da
+  verificare» con l’etichetta «Triage — da decidere», e da lì si riapre la verifica di salute con
+  la scelta se procedere o archiviare ancora aperta.
+- **Le altre quattro restano complete.** Meccanica, Tessitura, Logistica e Cantieri conservano i
+  rispettivi percorsi; il caricamento demo crea la quinta solo se manca e non tocca ciò che è già
+  stato lavorato.
+- **La capienza richiesta sale a cinque aziende.** Il form di creazione, i messaggi di
+  attivazione e i test del set demo sono allineati al nuovo conteggio.
+
 ## 0.174.5 — 2026-11-06
 
 **La valutazione può chiudersi anche quando ISTAT non risponde, e la prima lettura non mostra più il JSON del provider.**

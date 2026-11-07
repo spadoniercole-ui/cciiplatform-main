@@ -202,6 +202,11 @@ export function DashboardPannelli({
                       P.IVA {v.partitaIva}
                     </span>
                   )}
+                  {!v.presaInCarico && !v.archiviata && (
+                    <span className="mt-0.5 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-700">
+                      Triage — da decidere
+                    </span>
+                  )}
                 </span>
                 {v.esito && (
                   <span

@@ -378,15 +378,16 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
                   setDemo(attivo);
                   if (attivo) {
                     setTipoSpazio('ENTE');
-                    setMaxAziende((v) => Math.max(v, 3));
+                    setMaxAziende((v) => Math.max(v, 5));
                   }
                 }}
               />
               <span>
-                <b>Spazio demo</b> — precarica tre posizioni complete con i parametri di soglie,
-                riscontro e scenari: triage, screening e scenario senza PDF.
+                <b>Spazio demo</b> — precarica quattro percorsi completi e una quinta posizione
+                ferma al triage, con i parametri di soglie, riscontro e scenari: triage, screening e
+                scenario senza PDF.
                 <span className="block text-[10px] text-slate-400 mt-0.5">
-                  Selezionandola, il tipo passa a ENTE. Servono almeno 3 aziende. Senza questo flag
+                  Selezionandola, il tipo passa a ENTE. Servono almeno 5 aziende. Senza questo flag
                   il database nasce vuoto.
                 </span>
               </span>

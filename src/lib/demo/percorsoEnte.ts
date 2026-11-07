@@ -1,7 +1,7 @@
 // src/lib/demo/percorsoEnte.ts
 //
-// IL PERCORSO DEMO DI UNO SPAZIO ENTE (0.172.0): tre posizioni complete, dal
-// triage allo scenario.
+// IL PERCORSO DEMO DI UNO SPAZIO ENTE (0.172.0): quattro percorsi completi,
+// dal triage allo scenario, e una quinta posizione ferma al triage.
 //
 // PERCHÉ PARTE DAL TRIAGE E NON DAL PROVVEDIMENTO. Il set della 0.171.0
 // mostrava la fine della storia: un decreto già emesso e i documenti allegati.
@@ -117,6 +117,41 @@ export interface AziendaPercorsoDemo {
   dataDepositoProposta: string;
 }
 
+/**
+ * La quinta posizione del set demo: resta ferma al TRIAGE.
+ *
+ * Non è una posizione incompleta per caso. È il punto che rende visibile il
+ * passaggio prima dello screening: anagrafica, soglie e posizioni ci sono, ma
+ * non c'è ancora né lo screening né lo scenario. La dashboard la mostra fra le
+ * «Aziende da verificare» e da lì si riapre la verifica di salute, con la
+ * decisione (procedere o archiviare) ancora da prendere.
+ *
+ * Il tipo è un sottoinsieme di `AziendaPercorsoDemo`: chi la carica non deve
+ * poterla spacciare per un percorso già concluso.
+ */
+export type AziendaTriageDemo = Pick<
+  AziendaPercorsoDemo,
+  | 'ragioneSociale'
+  | 'codiceFiscale'
+  | 'partitaIva'
+  | 'codiceAteco'
+  | 'formaGiuridica'
+  | 'indirizzo'
+  | 'citta'
+  | 'provincia'
+  | 'cap'
+  | 'capitaleSociale'
+  | 'rappresentante'
+  | 'ruoloRappresentante'
+  | 'numeroRea'
+  | 'pec'
+  | 'annoCostituzione'
+  | 'dataVerifica'
+  | 'profilo'
+  | 'debiti'
+  | 'soglie'
+>;
+
 /** Le direttrici su cui lo spazio demo genera le domande dello screening. */
 export const DIRETTRICI_DEMO: DirettricePercorsoDemo[] = [
   { nome: 'Gestione del credito', prodotti: ['DURC', 'Rateizzazione'] },
@@ -219,7 +254,7 @@ function visura(
 }
 
 // ---------------------------------------------------------------------------
-// LE TRE POSIZIONI
+// I QUATTRO PERCORSI COMPLETI
 // ---------------------------------------------------------------------------
 
 export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
@@ -870,8 +905,59 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
   },
 ];
 
+/**
+ * La quinta azienda del set demo, ferma alla verifica di salute.
+ *
+ * I dati bastano a riaprire il triage e a leggere l'indicatore: anagrafica
+ * completa, contributi e sanzioni, soglie dichiarate. Mancano di proposito lo
+ * screening, il bilancio XBRL e lo scenario — sono i passi che l'operatore deve
+ * ancora decidere se affrontare.
+ */
+export const TRIAGE_DEMO: AziendaTriageDemo = {
+  ragioneSociale: 'Impianti Adriatica Demo S.r.l.',
+  codiceFiscale: '00000000105',
+  partitaIva: '00000000105',
+  codiceAteco: '43.21.01',
+  formaGiuridica: 'Società a responsabilità limitata',
+  indirizzo: 'Via del Porto 12',
+  citta: 'Pescara',
+  provincia: 'PE',
+  cap: '65122',
+  capitaleSociale: 80_000,
+  rappresentante: 'Giulia Esempio',
+  ruoloRappresentante: 'Amministratrice unica',
+  numeroRea: 'PE-001105',
+  pec: 'impianti.adriatica.demo@pec.esempio.it',
+  annoCostituzione: 2013,
+  dataVerifica: '2026-11-05',
+  profilo: 'ATTENZIONE_MINIMA',
+  debiti: [
+    {
+      voce: 'Contributi previdenziali scaduti',
+      importo: 45_000,
+      tipo: 'DEBITO',
+      nota: 'Posizione dimostrativa del triage',
+    },
+    {
+      voce: 'Sanzioni civili contributive',
+      importo: 6_000,
+      tipo: 'DEBITO',
+      nota: 'Posizione dimostrativa del triage',
+    },
+  ],
+  soglie: {
+    conLavoratori: true,
+    contributiScaduti: 45_000,
+    contributiDovutiAnnoPrecedente: 280_000,
+    annoContributiDovuti: 2025,
+    volumeAffari: 1_050_000,
+    ritardoOltre90Giorni: false,
+    periodiInRitardo: 0,
+  },
+};
+
 /** Quante aziende servono, come minimo, perché il set demo sia completo. */
-export const AZIENDE_PERCORSO_DEMO = PERCORSO_DEMO.length;
+export const AZIENDE_PERCORSO_DEMO = PERCORSO_DEMO.length + 1;
 
 /** Il bundle di indici di un periodo: usato dai test e dal caricamento. */
 export function bundleDemo(azienda: AziendaPercorsoDemo, periodo: 'corrente' | 'precedente') {

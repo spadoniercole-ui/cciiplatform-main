@@ -21,7 +21,7 @@ export function BannerAttivaDemo({ spazioId, codice, descrizione }: Props) {
 
   const attiva = async () => {
     const conferma = await confermaApp(
-      `Attivo il percorso demo di ${descrizione} (${codice}).\n\nVengono caricate tre posizioni complete (triage, screening e scenario) e i parametri di soglie, riscontro e scenari. Le aziende del vecchio set demo e la prova CROWDOWN S.R.L., se presenti, vengono rimosse: le altre aziende non vengono toccate.`,
+      `Attivo il percorso demo di ${descrizione} (${codice}).\n\nVengono caricati quattro percorsi completi (triage, screening e scenario) e una quinta posizione ferma al triage, senza screening né scenario, più i parametri di soglie, riscontro e scenari. Le aziende del vecchio set demo e la prova CROWDOWN S.R.L., se presenti, vengono rimosse: le altre aziende non vengono toccate.`,
       {
         titolo: 'Attiva spazio demo',
         etichettaConferma: 'Attiva demo',
@@ -54,9 +54,9 @@ export function BannerAttivaDemo({ spazioId, codice, descrizione }: Props) {
           <div>
             <p className="text-xs font-bold uppercase tracking-wider">Spazio demo non attivo</p>
             <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-amber-800">
-              Questo spazio ENTE non ha ancora il percorso demo. Attivalo per caricare tre posizioni
-              complete e i parametri dell&apos;export: il vecchio set demo, compresa CROWDOWN
-              S.R.L., viene rimosso.
+              Questo spazio ENTE non ha ancora il percorso demo. Attivalo per caricare quattro
+              percorsi completi, una posizione ferma al triage e i parametri dell&apos;export: il
+              vecchio set demo, compresa CROWDOWN S.R.L., viene rimosso.
             </p>
           </div>
         </div>

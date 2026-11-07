@@ -1,16 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { AZIENDE_PERCORSO_DEMO, DIRETTRICI_DEMO, PERCORSO_DEMO, bundleDemo } from './percorsoEnte';
+import {
+  AZIENDE_PERCORSO_DEMO,
+  DIRETTRICI_DEMO,
+  PERCORSO_DEMO,
+  TRIAGE_DEMO,
+  bundleDemo,
+} from './percorsoEnte';
 
 describe('percorso demo dell’ente', () => {
-  it('contiene quattro aziende distinte, riconoscibili come demo', () => {
+  it('contiene quattro percorsi completi e una quinta azienda in triage', () => {
     expect(PERCORSO_DEMO).toHaveLength(4);
-    expect(AZIENDE_PERCORSO_DEMO).toBe(4);
-    expect(new Set(PERCORSO_DEMO.map((a) => a.ragioneSociale)).size).toBe(4);
-    expect(new Set(PERCORSO_DEMO.map((a) => a.codiceFiscale)).size).toBe(4);
-    for (const a of PERCORSO_DEMO) {
+    expect(AZIENDE_PERCORSO_DEMO).toBe(5);
+    const tutte = [...PERCORSO_DEMO, TRIAGE_DEMO];
+    expect(new Set(tutte.map((a) => a.ragioneSociale)).size).toBe(5);
+    expect(new Set(tutte.map((a) => a.codiceFiscale)).size).toBe(5);
+    for (const a of tutte) {
       expect(a.ragioneSociale).toContain('Demo');
       expect(a.pec).toContain('esempio.it');
     }
+  });
+
+  it('la quinta azienda è ferma al triage: niente screening né scenario', () => {
+    expect(TRIAGE_DEMO.ragioneSociale).toBe('Impianti Adriatica Demo S.r.l.');
+    expect(TRIAGE_DEMO.profilo).toBe('ATTENZIONE_MINIMA');
+    expect(TRIAGE_DEMO.dataVerifica).toMatch(/^2026-\d{2}-\d{2}$/);
+    expect('screening' in TRIAGE_DEMO).toBe(false);
+    expect('scenario' in TRIAGE_DEMO).toBe(false);
+    expect(TRIAGE_DEMO.debiti.length).toBeGreaterThan(0);
   });
 
   it('copre i tre esiti del semaforo con bilanci coerenti', () => {
@@ -57,7 +73,7 @@ describe('percorso demo dell’ente', () => {
     }
   });
 
-  it('differenzia i tre percorsi fissi e lascia aperta la quarta azienda', () => {
+  it('differenzia i percorsi fissi e lascia aperta la quarta azienda', () => {
     expect(PERCORSO_DEMO.map((a) => a.tipoIstruttoria)).toEqual([
       'PROPOSTA',
       'DECRETO_LIQUIDAZIONE',

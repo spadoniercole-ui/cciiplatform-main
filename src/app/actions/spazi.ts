@@ -51,8 +51,9 @@ export interface CreaSpazioInput {
   tipoSpazio?: 'ENTE' | 'NON_ENTE';
   giudicante?: boolean;
   /**
-   * Spazio demo: alla creazione carica tre posizioni complete, dal triage allo
-   * scenario. Senza il flag il database resta vuoto, come per ogni spazio.
+   * Spazio demo: alla creazione carica quattro percorsi completi, dal triage allo
+   * scenario, e una quinta posizione ferma al triage. Senza il flag il database
+   * resta vuoto, come per ogni spazio.
    */
   demo?: boolean;
   admin: {
@@ -532,9 +533,10 @@ export interface EsitoDemoSpazio {
  *
  * Serve perché il flag non esisteva quando sono nati gli spazi precedenti:
  * senza questa azione l'unico modo sarebbe eliminare e ricreare lo spazio.
- * Carica le tre posizioni e i parametri dell'export, poi rimuove le aziende
- * del vecchio set «provvedimenti del giudice» e la prova Cram down — solo
- * quelle, per nome esatto. Le altre aziende non vengono toccate.
+ * Carica quattro percorsi completi, una posizione ferma al triage e i parametri
+ * dell'export, poi rimuove le aziende del vecchio set «provvedimenti del
+ * giudice» e la prova Cram down — solo quelle, per nome esatto. Le altre
+ * aziende non vengono toccate.
  */
 export async function attivaDemoSpazioAction(spazioId: number): Promise<EsitoDemoSpazio> {
   try {
