@@ -16,7 +16,7 @@
 import type { Attenzione } from '@/lib/screening/indicatore';
 import { etaVerifica } from './etaVerifica';
 import { STILE_BOX } from './box';
-import type { EsitoScenari } from './scenari';
+import { RANGHI, type EsitoScenari } from './scenari';
 import type { SintesiChecklistProdotti } from '@/lib/prodotti/prodotti';
 
 export interface DocumentoTriage {
@@ -120,7 +120,7 @@ export interface DatiRiepilogoTriage {
    * down, sulle percentuali dell'ente. `null` quando non c'è nulla da
    * confrontare: il box non compare, invece di comparire vuoto.
    */
-  scenari?: EsitoScenari | null;
+  scenari?: EsitoScenari[] | null;
   /**
    * LA CHECK LIST DEI PRODOTTI (0.161.0). Le domande scritte sui prodotti con
    * il flag attivo, con le risposte di questa azienda: è la qualificazione
@@ -295,13 +295,15 @@ ${STILE_BOX}
     parti.push(`<p class="esito">${esc(cp.etichetta)}</p>`);
     parti.push(`<p style="font-size:11px">${esc(cp.dettaglio)}</p>`);
     parti.push(
-      `<table><tbody>\n<tr><td>Domande in check list</td><td class="num">${cp.totale}</td></tr>\n<tr><td>Risposte date</td><td class="num">${cp.risposte}</td></tr>\n<tr><td>Domande a risposta chiusa</td><td class="num">${cp.chiuse}</td></tr>\n<tr><td>Risposte «sì»</td><td class="num">${cp.si}</td></tr>\n<tr><td>Risposte «no»</td><td class="num">${cp.no}</td></tr>\n</tbody></table>`
+      `<table><tbody>\n<tr><td>Domande in check list</td><td class="num">${cp.totale}</td></tr>\n<tr><td>Risposte date</td><td class="num">${cp.risposte}</td></tr>\n<tr><td>Domande a risposta chiusa</td><td class="num">${cp.chiuse}</td></tr>\n<tr><td>Risposte positive</td><td class="num">${cp.positive}</td></tr>\n<tr><td>Risposte negative</td><td class="num">${cp.negative}</td></tr>\n</tbody></table>`
     );
     parti.push(
-      `<table><thead><tr><th>Prodotto</th><th>Domanda</th><th>Risposta</th></tr></thead><tbody>${cp.voci
+      `<table><thead><tr><th>Prodotto</th><th>Domanda</th><th>Risposta</th><th>Lettura</th></tr></thead><tbody>${cp.voci
         .map(
           (v) =>
-            `<tr><td>${esc(v.prodotto)}</td><td>${esc(v.domanda)}</td><td>${esc(v.risposta)}</td></tr>`
+            `<tr><td>${esc(v.prodotto)}</td><td>${esc(v.domanda)}</td><td>${esc(v.risposta)}</td><td>${
+              v.lettura === 'POSITIVA' ? 'Positiva' : v.lettura === 'NEGATIVA' ? 'Negativa' : '—'
+            }</td></tr>`
         )
         .join('')}</tbody></table>`
     );
@@ -357,40 +359,44 @@ ${STILE_BOX}
 
   // 2-bis. IL CONFRONTO CON LE DUE IPOTESI (0.153.0). Subito dopo le soglie:
   // il numero misurato e il suo contesto si leggono uno dopo l'altro, non a
-  // distanza di pagine. Ciò che non è calcolabile lo dice, con il dato che
-  // manca: un'ipotesi vuota non si stampa come zero.
-  if (d.scenari) {
-    const s = d.scenari;
+  // distanza di pagine. La tabella mostra tutti i ranghi: il foglio non deve
+  // dipendere da una scelta fatta a video, e ciò che non è calcolabile lo dice
+  // con il dato che manca. Un'ipotesi vuota non si stampa come zero.
+  if (d.scenari?.length) {
+    const scenari = d.scenari;
+    const credito = scenari[0]?.credito ?? null;
+    const mancanti = Array.from(new Set(scenari.flatMap((s) => s.mancanti)));
     parti.push(titolo('Confronto con gli scenari: liquidazione giudiziale e cram down'));
-    parti.push('<table><tbody>');
     parti.push(
-      `<tr><td>Credito dell’ente confrontato</td><td class="num">${euro(s.credito)}</td></tr>`
+      `<p style="font-size:11px"><b>Credito dell’ente confrontato:</b> ${euro(credito)}</p>`
     );
     parti.push(
-      `<tr><td>Rango del credito</td><td>${
-        s.rango ? esc(s.rango) : '<i>non indicato</i>'
-      }</td></tr>`
+      '<table><thead><tr><th>Rango del credito</th><th>Liquidazione giudiziale</th><th>Cram down omologato</th><th>Differenza</th></tr></thead><tbody>'
     );
-    parti.push(
-      `<tr><td>Liquidazione giudiziale</td><td class="num">${euro(s.liquidazione.netto)}</td><td>${
-        s.liquidazione.calcolabile
-          ? `${s.liquidazione.percentuale}% al netto delle spese`
-          : esc(s.liquidazione.motivo ?? 'non calcolabile')
-      }</td></tr>`
-    );
-    parti.push(
-      `<tr><td>Cram down omologato</td><td class="num">${euro(s.cramDown.netto)}</td><td>${
-        s.cramDown.calcolabile
-          ? `${s.cramDown.percentuale}% del credito`
-          : esc(s.cramDown.motivo ?? 'non calcolabile')
-      }</td></tr>`
-    );
+    for (const s of scenari) {
+      const rango = s.rango
+        ? (RANGHI.find((r) => r.codice === s.rango)?.etichetta ?? s.rango)
+        : '—';
+      const liq = s.liquidazione.calcolabile
+        ? `${euro(s.liquidazione.netto)} <span style="font-size:10px;color:#475569">(${s.liquidazione.percentuale}% al netto delle spese)</span>`
+        : `<i>non calcolabile</i> <span style="font-size:10px;color:#92400e">${esc(
+            s.liquidazione.motivo ?? 'parametri incompleti'
+          )}</span>`;
+      const cram = s.cramDown.calcolabile
+        ? `${euro(s.cramDown.netto)} <span style="font-size:10px;color:#475569">(${s.cramDown.percentuale}% del credito)</span>`
+        : `<i>non calcolabile</i> <span style="font-size:10px;color:#92400e">${esc(
+            s.cramDown.motivo ?? 'parametri incompleti'
+          )}</span>`;
+      const diff = s.confronto ? euro(s.confronto.differenza) : '—';
+      parti.push(
+        `<tr><td>${esc(rango)}</td><td class="num">${liq}</td><td class="num">${cram}</td><td class="num">${diff}</td></tr>`
+      );
+    }
     parti.push('</tbody></table>');
-    if (s.confronto) parti.push(`<p style="font-size:11px">${esc(s.confronto.testo)}</p>`);
-    if (s.mancanti.length)
+    if (mancanti.length)
       parti.push(
         `<p class="lacune" style="font-size:11px">Per completare il confronto manca: ${esc(
-          s.mancanti.join('; ')
+          mancanti.join('; ')
         )}. I parametri si impostano in Parametri di Spazio → Scenari: la piattaforma non ne propone nessuno.</p>`
       );
     parti.push(

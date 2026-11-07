@@ -90,6 +90,16 @@ describe('normalizzazione', () => {
     expect(d.maxCaratteri).toBeNull();
   });
 
+  it('la risposta negativa predefinita è «No» e quella scelta viene conservata', () => {
+    expect(normalizzaDomanda({ testo: 'Risulta?', tipo: 'SI_NO' }, 0).rispostaNegativa).toBe('NO');
+    expect(
+      normalizzaDomanda(
+        { testo: 'La diffida è stata gestita?', tipo: 'SI_NO', rispostaNegativa: 'SI' },
+        0
+      ).rispostaNegativa
+    ).toBe('SI');
+  });
+
   it('scarta le domande senza testo e i doppioni di id', () => {
     const p = normalizzaProdotto({
       direttrice: ' Credito ',
@@ -237,6 +247,41 @@ describe('sintesi della check list', () => {
       { prodottoId: 1, domandaId: 'q2', siNo: null, testo: 'Nessuna misura' },
     ]);
     expect(s.qualificazione).toBe('SQUILIBRIO');
+  });
+
+  it('legge la risposta secondo la polarità scelta in configurazione', () => {
+    const vociPolarizzate = vociChecklistProdotti([
+      prodotto({
+        id: 3,
+        nome: 'Diffide',
+        inChecklist: true,
+        domande: [
+          {
+            id: 'q1',
+            testo: 'La diffida è stata gestita?',
+            tipo: 'SI_NO',
+            maxCaratteri: null,
+            rispostaNegativa: 'SI',
+          },
+        ],
+      }),
+    ]);
+
+    const negativa = sintesiChecklistProdotti(vociPolarizzate, [
+      { prodottoId: 3, domandaId: 'q1', siNo: true, testo: null },
+    ]);
+    expect(negativa.negative).toBe(1);
+    expect(negativa.positive).toBe(0);
+    expect(negativa.qualificazione).toBe('SQUILIBRIO');
+    expect(negativa.voci[0].lettura).toBe('NEGATIVA');
+
+    const positiva = sintesiChecklistProdotti(vociPolarizzate, [
+      { prodottoId: 3, domandaId: 'q1', siNo: false, testo: null },
+    ]);
+    expect(positiva.positive).toBe(1);
+    expect(positiva.negative).toBe(0);
+    expect(positiva.qualificazione).toBe('SISTEMICA');
+    expect(positiva.voci[0].lettura).toBe('POSITIVA');
   });
 
   it('senza domande chiuse la qualificazione non è misurabile', () => {

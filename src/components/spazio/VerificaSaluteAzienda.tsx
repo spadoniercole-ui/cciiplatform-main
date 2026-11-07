@@ -71,13 +71,12 @@ import { accumulaFile, togliFile } from '@/lib/file/accumula';
 import type { RigaDebitoTriage } from '@/lib/debitiTriage/modello';
 import type { MappaturaProspetto } from '@/lib/debitiTriage/mappatura';
 import { salvaTutteDebitiTriageAction } from '@/app/actions/debitiTriage';
-import { ottieniRangoCreditoAction } from '@/app/actions/triagePerimetro';
 import { ottieniParametriScenariAction } from '@/app/actions/parametriScenari';
 import { ottieniChecklistProdottiAction } from '@/app/actions/checklistProdottiTriage';
 import { ChecklistProdottiTriage } from '@/components/spazio/ChecklistProdottiTriage';
 import type { SintesiChecklistProdotti } from '@/lib/prodotti/prodotti';
 import { ScenariTriage } from '@/components/spazio/ScenariTriage';
-import { calcolaScenari } from '@/lib/triage/scenari';
+import { calcolaScenari, RANGHI } from '@/lib/triage/scenari';
 import { salvaStrutturaProspettoAction } from '@/app/actions/struttureProspetto';
 import {
   leggiElencoDenunce,
@@ -1416,21 +1415,16 @@ export function VerificaSaluteAzienda({
     // Il confronto con gli scenari si legge qui, al momento della stampa, così
     // il foglio non può divergere da ciò che è salvato.
     const parametriScenari = await ottieniParametriScenariAction(nomeSchema);
-    const rangoCredito = aziendaId ? await ottieniRangoCreditoAction(nomeSchema, aziendaId) : null;
     const creditoScenari =
       esitoSoglie && esitoSoglie.righe.some((r) => r.applicabile)
         ? esitoSoglie.righe
             .filter((r) => r.applicabile && r.esposizione !== null)
             .reduce((a, r) => a + (r.esposizione ?? 0), 0)
         : null;
-    const scenari =
-      parametriScenari.success && parametriScenari.parametri
-        ? calcolaScenari({
-            credito: creditoScenari,
-            rango: rangoCredito?.success ? (rangoCredito.rango ?? null) : null,
-            parametri: parametriScenari.parametri,
-          })
-        : null;
+    const parametri = parametriScenari.success ? parametriScenari.parametri : null;
+    const scenari = parametri
+      ? RANGHI.map((r) => calcolaScenari({ credito: creditoScenari, rango: r.codice, parametri }))
+      : null;
 
     stampaHtml(
       `Riepilogo del triage — ${dati?.ragioneSociale ?? 'azienda'}`,
@@ -2691,7 +2685,7 @@ export function VerificaSaluteAzienda({
               </p>
               <p className="text-[10px] text-slate-400 tabular-nums">
                 {checklistProdotti.risposte} risposte su {checklistProdotti.totale} domande ·{' '}
-                {checklistProdotti.si} «sì» e {checklistProdotti.no} «no» sulle{' '}
+                {checklistProdotti.positive} positive e {checklistProdotti.negative} negative sulle{' '}
                 {checklistProdotti.chiuse} domande a risposta chiusa
               </p>
               {checklistProdotti.voci.length > 0 && (
@@ -2702,6 +2696,7 @@ export function VerificaSaluteAzienda({
                         <th className="border-b border-slate-200 px-2 py-2">Prodotto</th>
                         <th className="border-b border-slate-200 px-2 py-2">Domanda</th>
                         <th className="border-b border-slate-200 px-2 py-2">Risposta</th>
+                        <th className="border-b border-slate-200 px-2 py-2">Lettura</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2715,6 +2710,13 @@ export function VerificaSaluteAzienda({
                           </td>
                           <td className="border-b border-slate-100 px-2 py-1.5 font-bold text-slate-900">
                             {v.risposta}
+                          </td>
+                          <td className="border-b border-slate-100 px-2 py-1.5 text-slate-600">
+                            {v.lettura === 'POSITIVA'
+                              ? 'Positiva'
+                              : v.lettura === 'NEGATIVA'
+                                ? 'Negativa'
+                                : '—'}
                           </td>
                         </tr>
                       ))}
@@ -3614,7 +3616,6 @@ export function VerificaSaluteAzienda({
           <div className="border-t border-slate-200 pt-4">
             <ScenariTriage
               nomeSchema={nomeSchema}
-              aziendaId={aziendaId!}
               codice={codice}
               credito={
                 esitoSoglie && esitoSoglie.righe.some((r) => r.applicabile)

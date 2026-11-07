@@ -247,7 +247,7 @@ export function ChecklistProdottiTriage({ nomeSchema, aziendaId, onEsito }: Prop
                             disabled={inCorso === chiave}
                             className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors disabled:opacity-50 ${
                               r?.siNo === true
-                                ? 'bg-emerald-600 text-white'
+                                ? 'bg-slate-900 text-white'
                                 : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                             }`}
                           >
@@ -266,7 +266,7 @@ export function ChecklistProdottiTriage({ nomeSchema, aziendaId, onEsito }: Prop
                             disabled={inCorso === chiave}
                             className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors disabled:opacity-50 ${
                               r?.siNo === false
-                                ? 'bg-red-600 text-white'
+                                ? 'bg-slate-900 text-white'
                                 : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                             }`}
                           >
@@ -295,8 +295,9 @@ export function ChecklistProdottiTriage({ nomeSchema, aziendaId, onEsito }: Prop
               <p className="text-sm font-bold text-slate-900">{sintesi.etichetta}</p>
               <p className="text-[11px] text-slate-600 leading-relaxed">{sintesi.dettaglio}</p>
               <p className="text-[10px] text-slate-400 tabular-nums">
-                {sintesi.risposte} risposte su {sintesi.totale} domande · {sintesi.si} «sì» e{' '}
-                {sintesi.no} «no» sulle {sintesi.chiuse} domande a risposta chiusa.
+                {sintesi.risposte} risposte su {sintesi.totale} domande · {sintesi.positive}{' '}
+                positive e {sintesi.negative} negative sulle {sintesi.chiuse} domande a risposta
+                chiusa.
               </p>
             </div>
           )}

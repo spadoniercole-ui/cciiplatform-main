@@ -49,6 +49,7 @@ const INTESTAZIONI = [
   'Id domanda',
   'Domanda',
   'Risposta',
+  'Risposta negativa',
   'Max caratteri',
 ];
 
@@ -61,12 +62,19 @@ describe('foglio dei prodotti: andata e ritorno', () => {
       inChecklist: true,
       ordine: 1,
       domande: [
-        { id: 'q1', testo: 'Il versamento risulta regolare?', tipo: 'SI_NO', maxCaratteri: null },
+        {
+          id: 'q1',
+          testo: 'Il versamento risulta regolare?',
+          tipo: 'SI_NO',
+          maxCaratteri: null,
+          rispostaNegativa: 'SI',
+        },
         {
           id: 'q2',
           testo: 'Quali misure ha adottato l’azienda?',
           tipo: 'TESTO_LIBERO',
           maxCaratteri: 800,
+          rispostaNegativa: 'NO',
         },
       ],
     },
@@ -99,8 +107,8 @@ describe('foglio dei prodotti: andata e ritorno', () => {
         foglioDa([
           ['Una riga per domanda.'],
           INTESTAZIONI,
-          ['Entrate', 'DURC', 'Sì', '', 'Il versamento risulta regolare?', 'Sì/No', ''],
-          ['Entrate', 'DURC', '', '', 'Quali misure ha adottato?', 'Testo libero', 700],
+          ['Entrate', 'DURC', 'Sì', '', 'Il versamento risulta regolare?', 'Sì/No', '', ''],
+          ['Entrate', 'DURC', '', '', 'Quali misure ha adottato?', 'Testo libero', '', 700],
         ]),
         'prodotti.xlsx'
       )
@@ -108,8 +116,20 @@ describe('foglio dei prodotti: andata e ritorno', () => {
     expect(esito.righeConErrore).toEqual([]);
     expect(esito.prodotti).toHaveLength(1);
     expect(esito.prodotti[0].domande).toEqual([
-      { id: 'q1', testo: 'Il versamento risulta regolare?', tipo: 'SI_NO', maxCaratteri: null },
-      { id: 'q2', testo: 'Quali misure ha adottato?', tipo: 'TESTO_LIBERO', maxCaratteri: 700 },
+      {
+        id: 'q1',
+        testo: 'Il versamento risulta regolare?',
+        tipo: 'SI_NO',
+        maxCaratteri: null,
+        rispostaNegativa: 'NO',
+      },
+      {
+        id: 'q2',
+        testo: 'Quali misure ha adottato?',
+        tipo: 'TESTO_LIBERO',
+        maxCaratteri: 700,
+        rispostaNegativa: 'NO',
+      },
     ]);
   });
 
@@ -118,8 +138,8 @@ describe('foglio dei prodotti: andata e ritorno', () => {
       comeFile(
         foglioDa([
           INTESTAZIONI,
-          ['Entrate', 'Cassa integrazione', 'Sì', '', '', '', ''],
-          ['Entrate', 'Solleciti', 'No', '', 'Un sollecito è partito?', 'Boh', ''],
+          ['Entrate', 'Cassa integrazione', 'Sì', '', '', '', '', ''],
+          ['Entrate', 'Solleciti', 'No', '', 'Un sollecito è partito?', 'Boh', '', ''],
         ]),
         'prodotti.xlsx'
       )
@@ -140,12 +160,19 @@ describe('anteprima dell’import', () => {
       inChecklist: true,
       ordine: 1,
       domande: [
-        { id: 'q1', testo: 'Il versamento risulta regolare?', tipo: 'SI_NO', maxCaratteri: null },
+        {
+          id: 'q1',
+          testo: 'Il versamento risulta regolare?',
+          tipo: 'SI_NO',
+          maxCaratteri: null,
+          rispostaNegativa: 'NO',
+        },
         {
           id: 'q2',
           testo: 'Quali misure ha adottato?',
           tipo: 'TESTO_LIBERO',
           maxCaratteri: 800,
+          rispostaNegativa: 'NO',
         },
       ],
     },

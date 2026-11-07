@@ -35,6 +35,23 @@ import { unaRiga } from '@/lib/titoliEnte/catalogoTl';
 /** Come si risponde a una domanda della check list. */
 export type TipoDomanda = 'SI_NO' | 'TESTO_LIBERO';
 
+/** Quale delle due risposte chiuse è quella negativa per questa domanda. */
+export type RispostaNegativa = 'SI' | 'NO';
+
+/**
+ * La polarità non è la stessa per tutte le domande: «il versamento risulta?»
+ * ha il «no» negativo, «sono state gestite le diffide?» ha il «sì» positivo.
+ * Chi configura la domanda sceglie quale risposta il triage deve leggere come
+ * negativa; senza una scelta esplicita vale «No», la forma più frequente e
+ * quella delle configurazioni scritte prima di questa versione.
+ */
+export const RISPOSTA_NEGATIVA_PREDEFINITA: RispostaNegativa = 'NO';
+
+export const ETICHETTA_RISPOSTA_NEGATIVA: Record<RispostaNegativa, string> = {
+  SI: 'Sì',
+  NO: 'No',
+};
+
 /** Il tetto del campo libero: una risposta sintetica, non una relazione. */
 export const MASSIMO_CARATTERI_RISPOSTA_LIBERA = 1000;
 
@@ -60,6 +77,11 @@ export interface DomandaProdotto {
   tipo: TipoDomanda;
   /** Solo per TESTO_LIBERO: il tetto del campo. null per SI_NO. */
   maxCaratteri: number | null;
+  /**
+   * Solo per SI_NO: la risposta che il triage legge come negativa. Nelle
+   * configurazioni precedenti il campo manca e vale «No».
+   */
+  rispostaNegativa?: RispostaNegativa;
 }
 
 export interface ProdottoEnte {
@@ -100,7 +122,15 @@ export function normalizzaDomanda(
           Math.max(1, Number(domanda?.maxCaratteri) || MASSIMO_CARATTERI_RISPOSTA_LIBERA)
         )
       : null;
-  return { id, testo: unaRiga(domanda?.testo ?? ''), tipo, maxCaratteri: max };
+  const rispostaNegativa: RispostaNegativa =
+    domanda?.rispostaNegativa === 'SI' ? 'SI' : RISPOSTA_NEGATIVA_PREDEFINITA;
+  return {
+    id,
+    testo: unaRiga(domanda?.testo ?? ''),
+    tipo,
+    maxCaratteri: max,
+    rispostaNegativa,
+  };
 }
 
 export function normalizzaProdotto(input: InputProdottoEnte): InputProdottoEnte {
@@ -200,6 +230,8 @@ export interface VoceChecklistProdotto {
   domanda: string;
   tipo: TipoDomanda;
   maxCaratteri: number | null;
+  /** Quale risposta chiusa è negativa per questa domanda. */
+  rispostaNegativa: RispostaNegativa;
 }
 
 export function vociChecklistProdotti(prodotti: ProdottoEnte[]): VoceChecklistProdotto[] {
@@ -212,6 +244,7 @@ export function vociChecklistProdotti(prodotti: ProdottoEnte[]): VoceChecklistPr
       domanda: d.testo,
       tipo: d.tipo,
       maxCaratteri: d.maxCaratteri,
+      rispostaNegativa: d.rispostaNegativa ?? RISPOSTA_NEGATIVA_PREDEFINITA,
     }))
   );
 }
@@ -260,8 +293,12 @@ export interface SintesiChecklistProdotti {
   mancanze: string[];
   /** Solo le domande a risposta chiusa: sono quelle che si possono contare. */
   chiuse: number;
+  /** I conteggi grezzi delle parole «sì» e «no», utili solo come statistica. */
   si: number;
   no: number;
+  /** Le risposte chiuse lette secondo la polarità scelta in configurazione. */
+  positive: number;
+  negative: number;
   qualificazione: QualificazioneChecklist;
   etichetta: string;
   dettaglio: string;
@@ -270,14 +307,15 @@ export interface SintesiChecklistProdotti {
     domanda: string;
     tipo: TipoDomanda;
     risposta: string;
+    lettura: 'POSITIVA' | 'NEGATIVA' | null;
   }[];
 }
 
 /**
  * Il quadro della check list dei prodotti.
  *
- * LA QUALIFICAZIONE È DELL'OPERATORE, NON DELLA LEGGE. Il conteggio dei sì/no
- * serve a leggere in un colpo d'occhio se la storia dell'azienda racconta
+ * LA QUALIFICAZIONE È DELL'OPERATORE, NON DELLA LEGGE. Il conteggio delle
+ * risposte positive e negative serve a leggere in un colpo d'occhio se la storia dell'azienda racconta
  * un'azione voluta o uno squilibrio, ma resta una qualificazione istruttoria:
  * non è un accertamento di crisi e non sostituisce le soglie, che si misurano
  * sugli importi. Le domande a testo libero non entrano nel conteggio — non
@@ -301,28 +339,41 @@ export function sintesiChecklistProdotti(
   ).length;
   const risposteDate = voci.filter((v) => rispostaData(v, risposte)).length;
 
+  // LA PAROLA NON È IL GIUDIZIO. La stessa risposta «Sì» può essere positiva
+  // in una domanda e negativa in un'altra: qui si applica la polarità scelta
+  // in configurazione, non si contano i «sì» come se fossero tutti uguali.
+  const risposteChiuse = chiuseVoci.flatMap((v) => {
+    const r = risposte.find((x) => x.prodottoId === v.prodottoId && x.domandaId === v.domandaId);
+    if (!r || (r.siNo !== true && r.siNo !== false)) return [];
+    return [{ voce: v, siNo: r.siNo }];
+  });
+  const negative = risposteChiuse.filter(({ voce, siNo }) =>
+    voce.rispostaNegativa === 'SI' ? siNo === true : siNo === false
+  ).length;
+  const positive = risposteChiuse.length - negative;
+
   let qualificazione: QualificazioneChecklist = 'NON_VALUTABILE';
   if (chiuseVoci.length > 0 && risposteDate > 0) {
-    if (no === 0 && si > 0) qualificazione = 'SISTEMICA';
-    else if (si === 0 && no > 0) qualificazione = 'SQUILIBRIO';
-    else if (si > 0 || no > 0) qualificazione = 'DA_APPROFONDIRE';
+    if (negative === 0 && positive > 0) qualificazione = 'SISTEMICA';
+    else if (positive === 0 && negative > 0) qualificazione = 'SQUILIBRIO';
+    else if (positive > 0 || negative > 0) qualificazione = 'DA_APPROFONDIRE';
   }
 
   const ETICHETTE: Record<QualificazioneChecklist, { etichetta: string; dettaglio: string }> = {
     SISTEMICA: {
       etichetta: 'Azione sistemica e voluta',
       dettaglio:
-        'Tutte le domande a risposta chiusa sono state riscontrate: la storia dell’azienda racconta un comportamento presidiato e consapevole, non un incidente isolato.',
+        'Tutte le risposte chiuse sono state lette come positive: la storia dell’azienda racconta un comportamento presidiato e consapevole, non un incidente isolato.',
     },
     SQUILIBRIO: {
       etichetta: 'Squilibrio da aprire a un tavolo di trattativa',
       dettaglio:
-        'Nessuna delle domande a risposta chiusa risulta riscontrata: il quadro descrive uno squilibrio, e la via da esplorare è il tavolo di trattativa con l’ente, non la contestazione.',
+        'Nessuna delle risposte chiuse è stata letta come positiva: il quadro descrive uno squilibrio, e la via da esplorare è il tavolo di trattativa con l’ente, non la contestazione.',
     },
     DA_APPROFONDIRE: {
       etichetta: 'Quadro misto: da approfondire',
       dettaglio:
-        'Le risposte chiuse non sono tutte nella stessa direzione: alcune cose risultano, altre no. Il quadro va letto insieme alle soglie e alle note delle domande libere.',
+        'Le risposte chiuse non sono tutte positive: alcune cose risultano, altre no. Il quadro va letto insieme alle soglie e alle note delle domande libere.',
     },
     NON_VALUTABILE: {
       etichetta: 'Qualificazione non misurabile',
@@ -339,22 +390,32 @@ export function sintesiChecklistProdotti(
     chiuse: chiuseVoci.length,
     si,
     no,
+    positive,
+    negative,
     qualificazione,
     ...ETICHETTE[qualificazione],
     voci: voci.map((v) => {
       const r = risposte.find((x) => x.prodottoId === v.prodottoId && x.domandaId === v.domandaId);
+      const siNo = r?.siNo;
+      const lettura =
+        v.tipo === 'SI_NO' && (siNo === true || siNo === false)
+          ? (v.rispostaNegativa === 'SI' ? siNo === true : siNo === false)
+            ? 'NEGATIVA'
+            : 'POSITIVA'
+          : null;
       return {
         prodotto: v.prodotto,
         domanda: v.domanda,
         tipo: v.tipo,
         risposta:
           v.tipo === 'SI_NO'
-            ? r?.siNo === true
+            ? siNo === true
               ? 'Sì'
-              : r?.siNo === false
+              : siNo === false
                 ? 'No'
                 : 'Senza risposta'
             : unaRiga(r?.testo ?? '') || 'Senza risposta',
+        lettura,
       };
     }),
   };

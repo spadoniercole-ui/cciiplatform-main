@@ -41,14 +41,17 @@ import { ottieniDirettriciEnte } from '@/app/actions/screeningAzienda';
 import { confermaApp } from '@/components/FinestreApp';
 import { conRitorno } from '@/lib/navigazione/ritorno';
 import {
+  ETICHETTA_RISPOSTA_NEGATIVA,
   ETICHETTA_TIPO_DOMANDA,
   MASSIMO_CARATTERI_DOMANDA,
   MASSIMO_CARATTERI_NOME_PRODOTTO,
   MASSIMO_CARATTERI_RISPOSTA_LIBERA,
+  RISPOSTA_NEGATIVA_PREDEFINITA,
   prodottiDellaDirettrice,
   type DomandaProdotto,
   type InputProdottoEnte,
   type ProdottoEnte,
+  type RispostaNegativa,
   type TipoDomanda,
 } from '@/lib/prodotti/prodotti';
 import {
@@ -81,6 +84,7 @@ const domandaVuota = (n: number): DomandaProdotto => ({
   testo: '',
   tipo: 'SI_NO',
   maxCaratteri: null,
+  rispostaNegativa: RISPOSTA_NEGATIVA_PREDEFINITA,
 });
 
 export function ProdottiEnteManager({ nomeSchema, codice, ritorno }: Props) {
@@ -242,7 +246,9 @@ export function ProdottiEnteManager({ nomeSchema, codice, ritorno }: Props) {
             </Link>
             . Il flag «in check list» decide se il triage dovrà chiedere qualcosa su questo
             prodotto; con il flag acceso si scrivono le domande, e per ciascuna se la risposta è
-            chiusa (Sì/No) o libera, entro {MASSIMO_CARATTERI_RISPOSTA_LIBERA} caratteri.
+            chiusa (Sì/No) o libera, entro {MASSIMO_CARATTERI_RISPOSTA_LIBERA} caratteri. Per le
+            domande chiuse si sceglie anche quale risposta è negativa: la stessa parola non vale
+            allo stesso modo in ogni domanda.
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
             Le domande non sono un questionario generico: sono quelle che l’operatore si troverà
@@ -465,7 +471,15 @@ export function ProdottiEnteManager({ nomeSchema, codice, ritorno }: Props) {
                             <li key={d.id} className="text-[10px] text-slate-600">
                               — {d.testo}{' '}
                               <span className="text-slate-400">
-                                ({d.tipo === 'SI_NO' ? 'Sì/No' : `testo, max ${d.maxCaratteri}`})
+                                (
+                                {d.tipo === 'SI_NO'
+                                  ? `Sì/No · negativa: ${
+                                      ETICHETTA_RISPOSTA_NEGATIVA[
+                                        d.rispostaNegativa ?? RISPOSTA_NEGATIVA_PREDEFINITA
+                                      ]
+                                    }`
+                                  : `testo, max ${d.maxCaratteri}`}
+                                )
                               </span>
                             </li>
                           ))}
@@ -639,6 +653,29 @@ export function ProdottiEnteManager({ nomeSchema, codice, ritorno }: Props) {
                         <option value="TESTO_LIBERO">{ETICHETTA_TIPO_DOMANDA.TESTO_LIBERO}</option>
                       </select>
                     </label>
+                    {d.tipo === 'SI_NO' && (
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                        Risposta negativa
+                        <select
+                          value={d.rispostaNegativa ?? RISPOSTA_NEGATIVA_PREDEFINITA}
+                          onChange={(e) =>
+                            impostaDomanda(i, {
+                              rispostaNegativa: e.target.value as RispostaNegativa,
+                            })
+                          }
+                          className={`${CLASSE} mt-0.5`}
+                          aria-label={`Risposta negativa della domanda ${i + 1}`}
+                        >
+                          <option value="NO">No</option>
+                          <option value="SI">Sì</option>
+                        </select>
+                      </label>
+                    )}
+                    {d.tipo === 'SI_NO' && (
+                      <span className="max-w-[16rem] text-[9px] text-slate-400 leading-relaxed">
+                        Quale risposta il triage deve leggere come negativa.
+                      </span>
+                    )}
                     {d.tipo === 'TESTO_LIBERO' && (
                       <label className="text-[9px] font-bold uppercase tracking-wider text-slate-600">
                         Max caratteri

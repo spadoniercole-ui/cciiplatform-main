@@ -72,7 +72,7 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
             passo: 2,
             titolo: 'Prodotti dell’ente',
             descrizione:
-              'Il prodotto dentro una direttrice, con il flag per la check list e le domande: risposta chiusa Sì/No oppure testo libero, entro mille caratteri.',
+              'Il prodotto dentro una direttrice, con il flag per la check list e le domande: risposta chiusa Sì/No, con la scelta di quale risposta è negativa, oppure testo libero entro mille caratteri.',
           },
           {
             href: `/spazio/${codice}/parametri/tl`,

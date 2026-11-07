@@ -1,3 +1,18 @@
+## 0.174.8 — 2026-11-07
+
+**Il triage legge le risposte per quello che significano, e gli scenari si vedono tutti insieme.**
+
+- **La risposta negativa si sceglie in configurazione.** Per ogni domanda chiusa l’ente indica
+  quale delle due risposte è negativa; la sintesi qualitativa usa quella scelta, non il conteggio
+  dei «sì» come se avessero tutti lo stesso significato. Le configurazioni precedenti valgono
+  «No» negativo.
+- **Niente colori sulle risposte.** I pulsanti Sì/No della check list restano neutri: il colore
+  non può dire se una risposta è buona o cattiva quando la polarità dipende dalla domanda.
+- **Scenari in tabella, senza tendina.** Il confronto mostra tutti i ranghi nello stesso contesto,
+  con recupero in liquidazione, cram down e differenza; il rango non è più una scelta a video.
+- **Excel e riepilogo allineati.** Il foglio dei prodotti conserva la polarità, il riepilogo PDF
+  mostra tutte le righe e la lettura positiva/negativa di ogni risposta.
+
 ## 0.174.7 — 2026-11-07
 
 **La quinta azienda compare anche nelle demo già attive, e il triage demo mostra acquisizione documenti e check list.**

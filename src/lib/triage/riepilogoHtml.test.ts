@@ -47,10 +47,20 @@ describe('riepilogo del triage', () => {
         chiuse: 1,
         si: 1,
         no: 0,
+        positive: 1,
+        negative: 0,
         qualificazione: 'SISTEMICA',
         etichetta: 'Azione sistemica e voluta',
         dettaglio: 'Tutte le domande a risposta chiusa sono state riscontrate.',
-        voci: [{ prodotto: 'DURC', domanda: 'Il DURC è regolare?', tipo: 'SI_NO', risposta: 'Sì' }],
+        voci: [
+          {
+            prodotto: 'DURC',
+            domanda: 'Il DURC è regolare?',
+            tipo: 'SI_NO',
+            risposta: 'Sì',
+            lettura: 'POSITIVA',
+          },
+        ],
       },
     });
     // Il quadro qualitativo precede il giudizio: chi legge incontra prima le

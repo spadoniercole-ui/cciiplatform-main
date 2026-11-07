@@ -541,7 +541,8 @@ export async function importaProdottiEnteAction(
               e.id === d.id &&
               e.testo === d.testo &&
               e.tipo === d.tipo &&
-              (e.maxCaratteri ?? null) === (d.maxCaratteri ?? null)
+              (e.maxCaratteri ?? null) === (d.maxCaratteri ?? null) &&
+              (e.rispostaNegativa ?? 'NO') === (d.rispostaNegativa ?? 'NO')
             );
           });
 

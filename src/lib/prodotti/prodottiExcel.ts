@@ -28,13 +28,16 @@
 import * as XLSX from 'xlsx';
 import { unaRiga } from '@/lib/titoliEnte/catalogoTl';
 import {
+  ETICHETTA_RISPOSTA_NEGATIVA,
   MASSIMO_CARATTERI_RISPOSTA_LIBERA,
+  RISPOSTA_NEGATIVA_PREDEFINITA,
   chiaveProdotto,
   normalizzaProdotto,
   validaProdotto,
   type DomandaProdotto,
   type InputProdottoEnte,
   type ProdottoEnte,
+  type RispostaNegativa,
   type TipoDomanda,
 } from '@/lib/prodotti/prodotti';
 
@@ -46,6 +49,7 @@ export const INTESTAZIONI_PRODOTTI = [
   'Id domanda',
   'Domanda',
   'Risposta',
+  'Risposta negativa',
   'Max caratteri',
 ] as const;
 
@@ -57,6 +61,7 @@ const ETICHETTA_TIPO: Record<TipoDomanda, string> = {
 const NOTA =
   'Una riga per domanda: le righe con la stessa direttrice e lo stesso prodotto sono lo stesso prodotto. ' +
   'In check list: Sì o No, e con il Sì serve almeno una domanda. Risposta: «Sì/No» oppure «Testo libero». ' +
+  'Risposta negativa: per le domande Sì/No indica «Sì» o «No»; è la risposta che il triage legge come negativa. ' +
   'Id domanda: lascialo vuoto per le domande nuove, non cambiarlo per quelle che hanno già risposte.';
 
 /** L'esito di un import in blocco: i conteggi servono al riepilogo mostrato. */
@@ -106,12 +111,12 @@ export function esportaProdottiExcel(
       .filter((p) => unaRiga(p.direttrice).toLowerCase() === nomeDirettrice.toLowerCase())
       .sort((a, b) => a.ordine - b.ordine || a.id - b.id);
     if (della.length === 0) {
-      dati.push([nomeDirettrice, '', '', '', '', '', '']);
+      dati.push([nomeDirettrice, '', '', '', '', '', '', '']);
       continue;
     }
     for (const p of della) {
       if (p.domande.length === 0) {
-        dati.push([p.direttrice, p.nome, p.inChecklist ? 'Sì' : 'No', '', '', '', '']);
+        dati.push([p.direttrice, p.nome, p.inChecklist ? 'Sì' : 'No', '', '', '', '', '']);
         continue;
       }
       for (const d of p.domande) {
@@ -122,13 +127,16 @@ export function esportaProdottiExcel(
           d.id,
           d.testo,
           ETICHETTA_TIPO[d.tipo],
+          d.tipo === 'SI_NO'
+            ? ETICHETTA_RISPOSTA_NEGATIVA[d.rispostaNegativa ?? RISPOSTA_NEGATIVA_PREDEFINITA]
+            : '',
           d.tipo === 'TESTO_LIBERO' ? (d.maxCaratteri ?? MASSIMO_CARATTERI_RISPOSTA_LIBERA) : '',
         ]);
       }
     }
   }
 
-  if (nomi.length === 0) for (let i = 0; i < 10; i++) dati.push(['', '', '', '', '', '', '']);
+  if (nomi.length === 0) for (let i = 0; i < 10; i++) dati.push(['', '', '', '', '', '', '', '']);
 
   const foglio = XLSX.utils.aoa_to_sheet(dati);
   foglio['!cols'] = [
@@ -137,6 +145,7 @@ export function esportaProdottiExcel(
     { wch: 12 },
     { wch: 12 },
     { wch: 60 },
+    { wch: 18 },
     { wch: 18 },
     { wch: 12 },
   ];
@@ -217,6 +226,7 @@ export async function leggiProdottiDaExcel(file: File): Promise<EsitoLetturaProd
     id: -1,
     domanda: -1,
     tipo: -1,
+    negativa: -1,
     max: -1,
   };
   for (let c = intervallo.s.c; c <= intervallo.e.c; c++) {
@@ -227,7 +237,9 @@ export async function leggiProdottiDaExcel(file: File): Promise<EsitoLetturaProd
     else if (testo.includes('check')) colonne.flag = c;
     else if (testo.startsWith('id')) colonne.id = c;
     else if (testo.startsWith('domanda')) colonne.domanda = c;
-    else if (testo.startsWith('risposta')) colonne.tipo = c;
+    else if (testo.startsWith('risposta negativa') || testo.startsWith('negativa'))
+      colonne.negativa = c;
+    else if (testo === 'risposta' || testo.startsWith('risposta ')) colonne.tipo = c;
     else if (testo.startsWith('max')) colonne.max = c;
   }
   if (colonne.prodotto < 0 || colonne.domanda < 0)
@@ -247,6 +259,7 @@ export async function leggiProdottiDaExcel(file: File): Promise<EsitoLetturaProd
     id: string;
     testo: string;
     tipo: string;
+    negativa: string;
     max: string;
   }
   interface Gruppo {
@@ -301,6 +314,7 @@ export async function leggiProdottiDaExcel(file: File): Promise<EsitoLetturaProd
       id: testoCella(r, colonne.id),
       testo: testoDomanda,
       tipo: senzaAccenti(testoCella(r, colonne.tipo)),
+      negativa: testoCella(r, colonne.negativa),
       max: testoCella(r, colonne.max),
     });
   }
@@ -347,6 +361,20 @@ export async function leggiProdottiDaExcel(file: File): Promise<EsitoLetturaProd
         }
       }
 
+      let rispostaNegativa: RispostaNegativa = RISPOSTA_NEGATIVA_PREDEFINITA;
+      if (tipo === 'SI_NO' && d.negativa) {
+        const scelta = senzaAccenti(d.negativa);
+        if (scelta === 'si') rispostaNegativa = 'SI';
+        else if (scelta !== 'no') {
+          righeConErrore.push({
+            riga: d.riga,
+            motivo: `«${d.negativa}» non è una risposta negativa: scrivi «Sì» o «No».`,
+          });
+          rotto = true;
+          continue;
+        }
+      }
+
       let maxCaratteri: number | null = null;
       if (tipo === 'TESTO_LIBERO') {
         maxCaratteri = MASSIMO_CARATTERI_RISPOSTA_LIBERA;
@@ -368,7 +396,7 @@ export async function leggiProdottiDaExcel(file: File): Promise<EsitoLetturaProd
         }
       }
 
-      domande.push({ id, testo: d.testo, tipo, maxCaratteri });
+      domande.push({ id, testo: d.testo, tipo, maxCaratteri, rispostaNegativa });
     }
 
     if (rotto) continue;
@@ -413,7 +441,11 @@ export interface ConfrontoImport {
 }
 
 const stessaDomanda = (a: DomandaProdotto, b: DomandaProdotto) =>
-  a.testo === b.testo && a.tipo === b.tipo && (a.maxCaratteri ?? null) === (b.maxCaratteri ?? null);
+  a.testo === b.testo &&
+  a.tipo === b.tipo &&
+  (a.maxCaratteri ?? null) === (b.maxCaratteri ?? null) &&
+  (a.rispostaNegativa ?? RISPOSTA_NEGATIVA_PREDEFINITA) ===
+    (b.rispostaNegativa ?? RISPOSTA_NEGATIVA_PREDEFINITA);
 
 /**
  * Che cosa cambierebbe il file, prodotto per prodotto: è l'anteprima che si
