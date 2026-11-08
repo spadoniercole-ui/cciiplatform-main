@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { riconosciProspetto } from '@/lib/denunce/lettura';
+import { componiReportUo } from '@/lib/lavorazioni/reportUo';
 import { analizzaVera, estraiRigheVera, ritardoDaVera, totaliVera } from './veraImport';
 
 // REGRESSIONE SUL FILE DELLA certificazione dei debiti REALE (export INPS «DettaglioRichiesta», foglio
@@ -92,5 +93,102 @@ describe('certificazione dei debiti reale: destinazione degli importi', () => {
       '2025/12',
       '2026/01',
     ]);
+  });
+
+  // IL PERCORSO CHE NON PASSA DAL SEED. Le righe vengono lette dal file INPS,
+  // non inserite dal caricamento demo. Il file reale dichiara le posizioni già
+  // contabilizzate: il report le dichiara e non le elenca, quindi qui si prova
+  // il caso operativo in cui le stesse posizioni sono ancora da contabilizzare.
+  it('porta le righe reali da contabilizzare alle unità operative configurate', async () => {
+    const a = await analizzaVera(fileVera());
+    const { righe } = estraiRigheVera(a.sezioni, {}, {}, true);
+
+    const materie = [
+      {
+        id: 10,
+        nome: 'Flussi Uniemens',
+        codiciIndicativi: '27',
+        stato: 'CONFERMATA' as const,
+      },
+      {
+        id: 11,
+        nome: 'Note di rettifica',
+        codiciIndicativi: '25',
+        stato: 'CONFERMATA' as const,
+      },
+      {
+        id: 12,
+        nome: 'Verbali e vigilanza',
+        codiciIndicativi: '81',
+        stato: 'CONFERMATA' as const,
+      },
+    ];
+    const titoli = [
+      { codice: '27', materiaId: 10, dipendenza: 'Unità operativa contributi' },
+      { codice: '25', materiaId: 11, dipendenza: 'Unità operativa contributi' },
+      { codice: '81', materiaId: 12, dipendenza: 'Unità operativa vigilanza' },
+    ];
+    const lavorazioni = [
+      {
+        id: 1,
+        materiaId: 10,
+        codice: '27',
+        tipologia: 'Recupero contributi da flusso Uniemens non versato',
+        direttrice: 'Gestione del credito',
+        prodotto: 'Recupero contributi',
+        dipendenza: 'Unità operativa contributi',
+        procedura: 'Verifica il flusso, diffida e recupera.',
+        esito: 'Diffida e recupero',
+        ordine: 0,
+      },
+      {
+        id: 2,
+        materiaId: 11,
+        codice: '25',
+        tipologia: 'Lavorazione delle note di rettifica',
+        direttrice: 'Gestione del credito',
+        prodotto: 'Note di rettifica',
+        dipendenza: 'Unità operativa contributi',
+        procedura: 'Acquisisci la nota, ricostruisci il debito e aggiorna la posizione.',
+        esito: 'Posizione rettificata',
+        ordine: 0,
+      },
+      {
+        id: 3,
+        materiaId: 12,
+        codice: '81',
+        tipologia: 'Verbali di evasione e vigilanza',
+        direttrice: 'Gestione del credito',
+        prodotto: 'Vigilanza e sanzioni',
+        dipendenza: 'Unità operativa vigilanza',
+        procedura: 'Esamina il verbale e cura il recupero.',
+        esito: 'Provvedimento sanzionatorio',
+        ordine: 0,
+      },
+    ];
+
+    const report = componiReportUo({
+      azienda: 'Aretusea Detergenti S.r.l.',
+      dataVerifica: '2026-10-19',
+      righe: righe.map((r) => ({
+        sezione: r.sezione,
+        voce: r.voce,
+        categoria: r.categoria,
+        periodo: r.periodo ?? '',
+        stato: r.stato,
+        trattamento:
+          r.trattamento === 'contabilizzato' ? ('da_contabilizzare' as const) : r.trattamento,
+        importo: r.importo,
+      })),
+      titoli,
+      materie,
+      lavorazioni,
+    });
+
+    expect(report.documenti.map((d) => d.dipendenza)).toEqual(['Unità operativa contributi']);
+    const contributi = report.documenti[0];
+    expect(contributi.totale).toBeCloseTo(18_392.8, 2);
+    expect(contributi.codici.map((c) => c.codice)).toEqual(['25', '27']);
+    expect(contributi.codici.every((c) => c.lavorazioni.length > 0)).toBe(true);
   });
 });

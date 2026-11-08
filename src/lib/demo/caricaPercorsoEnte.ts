@@ -39,6 +39,7 @@ import { ripristinaConfigurazione } from '@/lib/configurazioneSpazio/configurazi
 import { assicuraTabelleProdotti } from '@/db/provisionProdotti';
 import {
   DIRETTRICI_DEMO,
+  MATERIE_TRIAGE_DEMO,
   PERCORSO_DEMO,
   TRIAGE_DEMO,
   bundleDemo,
@@ -85,26 +86,128 @@ async function assicuraProdottiDemo(nomeSchema: string): Promise<void> {
 }
 
 /**
- * Applica i parametri dello spazio demo in una sola transazione.
+ * Riallinea le posizioni della quinta azienda demo.
  *
- * `ripristinaConfigurazione` sostituisce le tabelle che il file contiene:
- * è voluto, perché la demo deve nascere con le soglie e le ipotesi di
- * scenario dell'export, non con valori casuali ereditati. Le tabelle non
- * incluse nel file restano invece intatte.
+ * Le demo create prima di questa versione hanno due righe già contabilizzate
+ * e senza codice di partita: il triage le dichiara fuori elenco e il report per
+ * unità operativa non ha nulla da mandare. Qui le stesse righe vengono portate
+ * sui codici 27, 25 e 81, marcate da contabilizzare e collegate alle materie
+ * create dal seed. La migrazione è idempotente e tocca solo le voci del seed
+ * demo: una posizione già presente non viene riscritta, nemmeno se lavorata.
  */
+async function riallineaPosizioniTriageDemo(nomeSchema: string): Promise<void> {
+  const azienda = await pool.query(
+    `SELECT id FROM "${nomeSchema}".aziende WHERE ragione_sociale = $1 LIMIT 1`,
+    [TRIAGE_DEMO.ragioneSociale]
+  );
+  const aziendaId = azienda.rows[0] ? Number(azienda.rows[0].id) : null;
+  if (!aziendaId) return;
+
+  const vecchie = ['Contributi previdenziali scaduti', 'Sanzioni civili contributive'];
+  const nuove = TRIAGE_DEMO.debiti.map((d) => d.voce);
+  const presenti = await pool.query(
+    `SELECT count(*)::int AS n FROM "${nomeSchema}".debiti_vera
+      WHERE azienda_id = $1 AND voce = ANY($2::text[])`,
+    [aziendaId, nuove]
+  );
+  const haNuove = Number(presenti.rows[0]?.n ?? 0) > 0;
+
+  // Se la riga è ancora quella del vecchio seed, la si rinomina in place: non
+  // si aggiunge una seconda posizione per lo stesso debito.
+  if (!haNuove) {
+    for (let i = 0; i < Math.min(vecchie.length, TRIAGE_DEMO.debiti.length); i += 1) {
+      const d = TRIAGE_DEMO.debiti[i];
+      const eSanzione = /sanzion|verbale/i.test(d.voce);
+      await pool.query(
+        `UPDATE "${nomeSchema}".debiti_vera
+            SET voce = $3, sezione = 'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+                importo = $4, categoria = $5, stato = 'Da contabilizzare',
+                trattamento = 'da_contabilizzare', periodo = $6,
+                contributi = $7, sanzioni = $8, ambito = 'INPS'
+          WHERE azienda_id = $1 AND voce = $2`,
+        [
+          aziendaId,
+          vecchie[i],
+          d.voce,
+          d.importo,
+          d.categoria ?? '',
+          d.periodo ?? '',
+          eSanzione ? null : d.importo,
+          eSanzione ? d.importo : null,
+        ]
+      );
+      await pool.query(
+        `UPDATE "${nomeSchema}".debiti_ente
+            SET voce = $3, importo = $4, tipo = $5, note = $6
+          WHERE azienda_id = $1 AND voce = $2`,
+        [aziendaId, vecchie[i], d.voce, d.importo, d.tipo, d.nota ?? 'posizione del percorso demo']
+      );
+    }
+  }
+
+  // Le righe nuove possono essere parziali (import interrotto) o già presenti:
+  // si inserisce solo ciò che manca. Le righe che esistono non si riscrivono:
+  // potrebbero essere già state prese in carico dall'operatore.
+  for (const d of TRIAGE_DEMO.debiti) {
+    const eSanzione = /sanzion|verbale/i.test(d.voce);
+    const contributi = eSanzione ? null : d.importo;
+    const sanzioni = eSanzione ? d.importo : null;
+    const presente = await pool.query(
+      `SELECT id FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1 AND voce = $2 LIMIT 1`,
+      [aziendaId, d.voce]
+    );
+    if (presente.rows.length === 0) {
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".debiti_vera
+           (azienda_id, sezione, voce, importo, categoria, stato, trattamento, periodo,
+            contributi, sanzioni, ambito)
+         VALUES ($1, $2, $3, $4, $5, 'Da contabilizzare', 'da_contabilizzare', $6, $7, $8, 'INPS')`,
+        [
+          aziendaId,
+          'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
+          d.voce,
+          d.importo,
+          d.categoria ?? '',
+          d.periodo ?? '',
+          contributi,
+          sanzioni,
+        ]
+      );
+    }
+
+    const ente = await pool.query(
+      `SELECT id FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1 AND voce = $2 LIMIT 1`,
+      [aziendaId, d.voce]
+    );
+    if (ente.rows.length === 0) {
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".debiti_ente (azienda_id, voce, importo, tipo, note)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [aziendaId, d.voce, d.importo, d.tipo, d.nota ?? 'posizione del percorso demo']
+      );
+    }
+  }
+}
+
 /**
- * I reparti che lavorano le due posizioni del triage demo.
+ * I reparti, le materie e le TS che rendono operativo il triage demo.
  *
  * Il triage non inventa un ufficio: lo legge dalla configurazione delle TS
  * (`tl` → `categoria_tl`) e dalla dipendenza dell'associazione (`materia_tl`).
- * Il seed crea questa configurazione una volta sola, con `materia_id = 0`
- * perché non serve una materia per far funzionare le comunicazioni: la
- * categoria della posizione è già la chiave che il raggruppamento conosce.
+ * Il vecchio seed usava `materia_id = 0`: funzionava per la vecchia chiave di
+ * categoria, ma non produceva alcun report per unità operativa perché una
+ * materia 0 non esiste in `materie_ente` e non ha una dipendenza visibile.
  *
- * Idempotente: se la demo è già configurata, non duplica né sovrascrive.
+ * Qui la configurazione è quella vera: materie confermate, codici 27, 25 e 81
+ * collegati ai titoli di credito, una TS per materia con ufficio, procedura ed
+ * esito. È la stessa catena che legge un file DettaglioRichiesta reale.
+ *
+ * Idempotente: aggiorna le associazioni demo senza duplicarle e conserva le
+ * eventuali scelte già fatte sui codici.
  */
 async function assicuraRepartiTriageDemo(nomeSchema: string): Promise<void> {
   await assicuraTabellaCategorieTipoDebito(nomeSchema);
+  await assicuraTabelleParametriSpazio(nomeSchema);
   await assicuraTabelleTl(nomeSchema);
 
   const categorie = [
@@ -121,55 +224,85 @@ async function assicuraRepartiTriageDemo(nomeSchema: string): Promise<void> {
     );
   }
 
-  const reparti = [
-    {
-      categoria: 'CONTRIBUTI',
-      codice: 'TS 01',
-      descrizione: 'Verifica e recupero della posizione contributiva',
-      dipendenza: 'Unità operativa contributi',
-      procedura: 'Verifica la posizione, diffida il debitore e contabilizza il recupero.',
-      esito: 'Diffida e recupero',
-    },
-    {
-      categoria: 'SANZIONI',
-      codice: 'TS 02',
-      descrizione: 'Recupero delle sanzioni civili contributive',
-      dipendenza: 'Unità operativa sanzioni',
-      procedura: 'Verifica le sanzioni, emetti il provvedimento e cura il recupero.',
-      esito: 'Provvedimento e recupero',
-    },
-  ];
-  for (const r of reparti) {
-    const esistente = await pool.query(
-      `SELECT id FROM "${nomeSchema}".tl WHERE lower(btrim(codice)) = lower(btrim($1)) LIMIT 1`,
-      [r.codice]
+  let ordine = 10;
+  for (const materia of MATERIE_TRIAGE_DEMO) {
+    const materiaInserita = await pool.query(
+      `INSERT INTO "${nomeSchema}".materie_ente
+         (nome, codici_indicativi, presupposto_giuridico, stato, confermata_da, confermata_il)
+       VALUES ($1, $2, $3, 'CONFERMATA', 'Demo', now())
+       ON CONFLICT (nome) DO UPDATE
+         SET codici_indicativi = EXCLUDED.codici_indicativi,
+             presupposto_giuridico = EXCLUDED.presupposto_giuridico,
+             stato = 'CONFERMATA',
+             confermata_da = COALESCE(materie_ente.confermata_da, EXCLUDED.confermata_da),
+             confermata_il = COALESCE(materie_ente.confermata_il, EXCLUDED.confermata_il),
+             aggiornato_il = now()
+       RETURNING id`,
+      [materia.nome, materia.codiciIndicativi, materia.presuppostoGiuridico]
     );
-    let tlId = esistente.rows[0] ? Number(esistente.rows[0].id) : null;
-    if (!tlId) {
-      const inserito = await pool.query(
-        `INSERT INTO "${nomeSchema}".tl (codice, descrizione, check_list, ordine)
-         VALUES ($1, $2, TRUE, $3) RETURNING id`,
-        [r.codice, r.descrizione, r.categoria === 'CONTRIBUTI' ? 10 : 20]
+    const materiaId = Number(materiaInserita.rows[0].id);
+
+    for (const t of materia.ts) {
+      const esistente = await pool.query(
+        `SELECT id FROM "${nomeSchema}".tl WHERE lower(btrim(codice)) = lower(btrim($1)) LIMIT 1`,
+        [t.codice]
       );
-      tlId = Number(inserito.rows[0].id);
+      let tlId = esistente.rows[0] ? Number(esistente.rows[0].id) : null;
+      if (!tlId) {
+        const inserito = await pool.query(
+          `INSERT INTO "${nomeSchema}".tl
+             (codice, descrizione, check_list, ordine, direttrice, prodotto, prodotti)
+           VALUES ($1, $2, TRUE, $3, $4, $5, $6::jsonb)
+           RETURNING id`,
+          [
+            t.codice,
+            t.descrizione,
+            ordine,
+            t.direttrice,
+            t.prodotto,
+            JSON.stringify([{ direttrice: t.direttrice, prodotto: t.prodotto }]),
+          ]
+        );
+        tlId = Number(inserito.rows[0].id);
+      }
+
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".materia_tl
+           (materia_id, tl_id, ordine, direttrice, prodotto, dipendenza, procedura, esito)
+         VALUES ($1, $2, 0, $3, $4, $5, $6, $7)
+         ON CONFLICT (materia_id, tl_id) DO UPDATE
+           SET direttrice = EXCLUDED.direttrice,
+               prodotto = EXCLUDED.prodotto,
+               dipendenza = EXCLUDED.dipendenza,
+               procedura = EXCLUDED.procedura,
+               esito = EXCLUDED.esito`,
+        [materiaId, tlId, t.direttrice, t.prodotto, t.dipendenza, t.procedura, t.esito]
+      );
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".categoria_tl (categoria, tl_id, attivo, ordine)
+         VALUES ($1, $2, TRUE, 0)
+         ON CONFLICT (categoria, tl_id) DO NOTHING`,
+        [t.categoria, tlId]
+      );
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".titoli_ente (codice, atto, materia_id, dipendenza)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (codice) DO UPDATE
+           SET materia_id = COALESCE(titoli_ente.materia_id, EXCLUDED.materia_id),
+               dipendenza = COALESCE(
+                 NULLIF(btrim(titoli_ente.dipendenza), ''),
+                 EXCLUDED.dipendenza
+               )`,
+        [t.codice, `TS ${t.codice} — ${t.descrizione}`, materiaId, t.dipendenza]
+      );
+      ordine += 10;
     }
-    await pool.query(
-      `INSERT INTO "${nomeSchema}".materia_tl
-         (materia_id, tl_id, ordine, dipendenza, procedura, esito)
-       VALUES (0, $1, 0, $2, $3, $4)
-       ON CONFLICT (materia_id, tl_id) DO UPDATE
-         SET dipendenza = EXCLUDED.dipendenza,
-             procedura = EXCLUDED.procedura,
-             esito = EXCLUDED.esito`,
-      [tlId, r.dipendenza, r.procedura, r.esito]
-    );
-    await pool.query(
-      `INSERT INTO "${nomeSchema}".categoria_tl (categoria, tl_id, attivo, ordine)
-       VALUES ($1, $2, TRUE, 0)
-       ON CONFLICT (categoria, tl_id) DO NOTHING`,
-      [r.categoria, tlId]
-    );
   }
+
+  // Il vecchio segnaposto non è una materia: se resta, il triage continua a
+  // mostrare una lavorazione senza ufficio e il report la scarta. Le vere
+  // associazioni sono state create sopra.
+  await pool.query(`DELETE FROM "${nomeSchema}".materia_tl WHERE materia_id = 0`);
 }
 
 /**
@@ -254,6 +387,14 @@ async function aggiornaTriageDemo(nomeSchema: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Applica i parametri dello spazio demo in una sola transazione.
+ *
+ * `ripristinaConfigurazione` sostituisce le tabelle che il file contiene:
+ * è voluto, perché la demo deve nascere con le soglie e le ipotesi di
+ * scenario dell'export, non con valori casuali ereditati. Le tabelle non
+ * incluse nel file restano invece intatte.
+ */
 async function applicaParametriDemo(nomeSchema: string): Promise<void> {
   const client = await pool.connect();
   try {
@@ -346,20 +487,19 @@ async function inserisciPosizioniTriage(
       [aziendaId, d.voce, d.importo, d.tipo, d.nota ?? 'posizione del percorso demo']
     );
 
-    const sanzione = /sanzi/i.test(d.voce);
+    const sanzione = /sanzion|verbale/i.test(d.voce);
     await esegui.query(
       `INSERT INTO "${nomeSchema}".debiti_vera
          (azienda_id, sezione, voce, importo, categoria, stato, trattamento, periodo,
           contributi, sanzioni, ambito)
-       VALUES ($1,$2,$3,$4,$5,$6,'contabilizzato',$7,$8,$9,'INPS')`,
+       VALUES ($1,$2,$3,$4,$5,'Da contabilizzare','da_contabilizzare',$6,$7,$8,'INPS')`,
       [
         aziendaId,
-        'Certificazione demo — verifica di salute',
+        'GESTIONE LAVORATORI DIPENDENTI PRIVATI',
         d.voce,
         d.importo,
         d.categoria ?? '',
-        '',
-        '',
+        d.periodo ?? '',
         sanzione ? null : d.importo,
         sanzione ? d.importo : null,
       ]
@@ -617,6 +757,7 @@ export async function caricaPercorsoDemoEnte(
   await assicuraProdottiDemo(nomeSchema);
   await assicuraRepartiTriageDemo(nomeSchema);
   await aggiornaTriageDemo(nomeSchema);
+  await riallineaPosizioniTriageDemo(nomeSchema);
 
   // Il riallineamento dei soli percorsi (usato quando si apre la pagina
   // Scenari di una demo già attiva) non deve riscrivere i parametri che

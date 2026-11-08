@@ -49,6 +49,8 @@ export interface DebitoPercorsoDemo {
   tipo: string;
   /** Categoria di lavorazione: dice al triage quale reparto deve agire. */
   categoria?: string;
+  /** Periodo di competenza nella forma della certificazione dei debiti. */
+  periodo?: string;
   nota?: string;
 }
 
@@ -908,6 +910,93 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
 ];
 
 /**
+ * Le materie e le TS che rendono operativo il triage demo.
+ *
+ * Non sono un riempitivo: senza una materia reale, un titolo che la collega al
+ * codice di partita e una lavorazione con un ufficio, il report per unità
+ * operativa non ha dove andare. I codici 27, 25 e 81 e il loro significato
+ * seguono il DettaglioRichiesta INPS (flusso Uniemens, note di rettifica,
+ * verbali di evasione), così la demo mostra lo stesso percorso dei file veri.
+ */
+export interface TsTriageDemo {
+  categoria: string;
+  codice: string;
+  descrizione: string;
+  direttrice: string;
+  prodotto: string;
+  dipendenza: string;
+  procedura: string;
+  esito: string;
+}
+
+export interface MateriaTriageDemo {
+  nome: string;
+  codiciIndicativi: string;
+  presuppostoGiuridico: string;
+  ts: TsTriageDemo[];
+}
+
+export const MATERIE_TRIAGE_DEMO: MateriaTriageDemo[] = [
+  {
+    nome: 'Flussi Uniemens',
+    codiciIndicativi: '27',
+    presuppostoGiuridico:
+      'Contributi previdenziali dichiarati nei flussi Uniemens e non versati nei termini.',
+    ts: [
+      {
+        categoria: 'CONTRIBUTI',
+        codice: '27',
+        descrizione: 'Recupero contributi da flusso Uniemens non versato',
+        direttrice: 'Gestione del credito',
+        prodotto: 'Recupero contributi',
+        dipendenza: 'Unità operativa contributi',
+        procedura:
+          'Verifica il flusso Uniemens, quantifica contributi e sanzioni, emetti la diffida e cura il recupero.',
+        esito: 'Diffida e recupero',
+      },
+    ],
+  },
+  {
+    nome: 'Note di rettifica',
+    codiciIndicativi: '25',
+    presuppostoGiuridico:
+      'Rettifica dei flussi contributivi dichiarati e ricostruzione della posizione debitoria.',
+    ts: [
+      {
+        categoria: 'CONTRIBUTI',
+        codice: '25',
+        descrizione: 'Lavorazione delle note di rettifica',
+        direttrice: 'Gestione del credito',
+        prodotto: 'Note di rettifica',
+        dipendenza: 'Unità operativa contributi',
+        procedura:
+          'Acquisisci la nota di rettifica, ricostruisci il debito e aggiorna la posizione contributiva.',
+        esito: 'Posizione rettificata',
+      },
+    ],
+  },
+  {
+    nome: 'Verbali e vigilanza',
+    codiciIndicativi: '81',
+    presuppostoGiuridico:
+      'Sanzioni civili e recupero delle somme accertate con verbale di evasione.',
+    ts: [
+      {
+        categoria: 'SANZIONI',
+        codice: '81',
+        descrizione: 'Verbali di evasione e vigilanza',
+        direttrice: 'Gestione del credito',
+        prodotto: 'Vigilanza e sanzioni',
+        dipendenza: 'Unità operativa vigilanza',
+        procedura:
+          'Esamina il verbale, contesta l’evasione, applica le sanzioni e cura il recupero.',
+        esito: 'Provvedimento sanzionatorio',
+      },
+    ],
+  },
+];
+
+/**
  * La quinta azienda del set demo, ferma alla verifica di salute.
  *
  * I dati bastano a riaprire il triage e a leggere l'indicatore: anagrafica
@@ -934,23 +1023,33 @@ export const TRIAGE_DEMO: AziendaTriageDemo = {
   dataVerifica: '2026-11-05',
   // Caso ROSSO: la soglia INPS è superata (180.000 € su 280.000 € dovuti,
   // oltre il 30% e oltre il minimo assoluto) e il ritardo supera i 90 giorni.
-  // Le due posizioni sono instradate a reparti distinti, così il triage mostra
+  // Le tre posizioni sono instradate a due uffici distinti, così il triage mostra
   // comunicazioni, report per unità operativa e presa in carico senza vuoti.
   profilo: 'ROSSO',
   debiti: [
     {
-      voce: 'Contributi previdenziali scaduti',
-      importo: 180_000,
+      voce: 'TS 27 flusso Uniemens non versato',
+      importo: 176_595.98,
       tipo: 'DEBITO',
       categoria: 'CONTRIBUTI',
+      periodo: '202506 - 202512',
       nota: 'Posizione dimostrativa del triage — oltre soglia',
     },
     {
-      voce: 'Sanzioni civili contributive',
+      voce: 'TS 25 nota di rettifica',
+      importo: 3_404.02,
+      tipo: 'DEBITO',
+      categoria: 'CONTRIBUTI',
+      periodo: '202506 - 202506',
+      nota: 'Posizione dimostrativa del triage — rettifica dei flussi',
+    },
+    {
+      voce: 'TS 81 Verbale evasione',
       importo: 25_000,
       tipo: 'DEBITO',
       categoria: 'SANZIONI',
-      nota: 'Posizione dimostrativa del triage — segnalazione al reparto sanzioni',
+      periodo: '2025',
+      nota: 'Posizione dimostrativa del triage — segnalazione alla vigilanza',
     },
   ],
   soglie: {

@@ -1,3 +1,19 @@
+## 0.174.10 — 2026-11-08
+
+**Il triage demo produce report per le unità operative, con materie e codici reali.**
+
+- **Posizioni demo lavorabili.** Le posizioni TS 27, TS 25 e TS 81 sono da contabilizzare,
+  quindi entrano nelle comunicazioni e nei report per unità operativa con periodi e riparto
+  contributi/sanzioni.
+- **Materie e dipendenze vere.** Il seed crea tre materie confermate, le collega ai titoli 27,
+  25 e 81 e assegna a ciascuna una TS con ufficio, procedura ed esito; il vecchio segnaposto
+  `materia_id = 0` viene rimosso.
+- **Demo già create riallineate.** All’apertura della dashboard le vecchie posizioni demo
+  vengono portate sui nuovi codici e sullo stato da contabilizzare, senza duplicati.
+- **Verifica del percorso reale.** Un test legge il seed dal database e ricostruisce il report
+  UO con gli stessi dati della schermata: due uffici, codici 25/27/81, 180.000 € di contributi
+  e 25.000 € di sanzioni, nessuna posizione senza dipendenza.
+
 ## 0.174.9 — 2026-11-08
 
 **Dashboard essenziale, triage demo davvero rosso e percorso piano azienda → AI → confronto.**
