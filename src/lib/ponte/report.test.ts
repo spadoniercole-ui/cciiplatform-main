@@ -80,6 +80,7 @@ function documento(): string {
     note: input.note,
     visura: null,
     visuraImpronta: null,
+    visuraTrattenuta: null,
     settore: input.settore,
     parametriScenari: input.parametriScenari ?? null,
     rangoCredito: 'PRIVILEGIATO',

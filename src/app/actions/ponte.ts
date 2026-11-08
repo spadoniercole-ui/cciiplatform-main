@@ -23,12 +23,9 @@ import { RANGHI, type ParametriScenari, type RangoCredito } from '@/lib/triage/s
 import { PROMPT_VERSIONE, promptAssunzioniPonte, validaPropostaAi } from '@/lib/ponte/assunzioniAi';
 import { analizzaCodiceAteco } from '@/lib/settore/atecoMapping';
 import { crescitaDaSerie, crescitaAzienda } from '@/lib/piano/automatico';
-import {
-  denunceDuplicateVera,
-  insiemeEsclusi,
-  type StatoDuplicatoVera,
-} from '@/lib/debitiEnte/duplicatiVera';
-import { totaliVera, type RigaVera, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
+import { type StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
+import { type RigaVera, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
+import { snapshotDebitoEnte } from '@/lib/ponte/debitoEnte';
 import type { DatiFinanziariPeriodo, FactTestuale } from '@/lib/xbrl/types';
 import { calcolaPonte, costruisciAssunzioni, ErrorePonte } from '@/lib/ponte/motore';
 import { calcolaHashInput, calcolaHashOutput } from '@/lib/ponte/hash';
@@ -119,7 +116,9 @@ async function caricaDati(nomeSchema: string, aziendaId: number): Promise<DatiPo
 
   const aziendaRis = await pool.query(
     `SELECT id, ragione_sociale, codice_ateco, verifica_esito,
-            to_char(verifica_riferita_al, 'YYYY-MM-DD') AS data_verifica
+            to_char(verifica_riferita_al, 'YYYY-MM-DD') AS data_verifica,
+            visura_triage_url, visura_triage_nome,
+            to_char(visura_triage_il, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS visura_triage_il
        FROM "${nomeSchema}".aziende WHERE id = $1`,
     [aziendaId]
   );
@@ -180,19 +179,9 @@ async function caricaDati(nomeSchema: string, aziendaId: number): Promise<DatiPo
       duplicatoStato: (r.duplicato_stato ?? '') as StatoDuplicatoVera | '',
     }));
     if (righe.length > 0) {
-      const doppie = insiemeEsclusi(denunceDuplicateVera(righe));
-      const utili = righe
-        .filter((_, i) => !doppie.has(i))
-        .filter((r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare');
-      const t = totaliVera(utili);
-      debitoEnte = {
-        totale: t.quantificato,
-        contributi: t.contributiInps,
-        sanzioni: t.sanzioni,
-        creditiAgente: t.creditiAgente,
-        righe: utili.length,
-        fonte: 'certificazione dei debiti',
-      };
+      // Tre stati, tre cifre: il totale del Ponte è solo contabilizzato + da
+      // contabilizzare; le posizioni segnalate si dichiarano a parte.
+      debitoEnte = snapshotDebitoEnte(righe);
     }
   } catch {
     // Stessa regola della visura: senza certificazione il Ponte può partire,
@@ -347,6 +336,12 @@ async function caricaDati(nomeSchema: string, aziendaId: number): Promise<DatiPo
     note,
     visura,
     visuraImpronta,
+    visuraTrattenuta: azienda.visura_triage_url
+      ? {
+          nome: String(azienda.visura_triage_nome ?? 'visura.pdf'),
+          caricataIl: azienda.visura_triage_il ? String(azienda.visura_triage_il) : null,
+        }
+      : null,
     settore,
     parametriScenari,
     rangoCredito,

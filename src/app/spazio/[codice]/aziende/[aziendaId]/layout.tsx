@@ -210,7 +210,7 @@ export default async function AziendaLayout({
           href={`/spazio/${codice}/aziende`}
           className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-blue-600 font-bold uppercase tracking-wider"
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> Torna alla verifica contabile
+          <ArrowLeft className="w-3.5 h-3.5" /> Torna a Verifica contabile aziendale
         </Link>
 
         <div className="bg-white border border-slate-200 rounded-xl p-5">

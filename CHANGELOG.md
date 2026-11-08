@@ -1,3 +1,21 @@
+## 0.178.0 — 2026-11-08
+
+**Il debito ente del Piano-ponte si legge in tre stati, e nulla sparisce in silenzio.**
+
+- **Debito ente: contabilizzato, da contabilizzare, segnalato.** Il totale del Ponte somma solo
+  le prime due grandezze; le posizioni segnalate alle unità operative si dichiarano a parte e non
+  entrano nella base contabile. Una riga che porta la cifra soltanto in contributi e sanzioni non
+  vale più zero: prima un’azienda con 34 posizioni aperte mostrava 0 €.
+- **Visura del triage riconosciuta.** Se la visura è stata caricata nel triage ma i fatti camerali
+  non sono ancora stati letti, il Ponte lo dice («acquisita, non ancora letta») invece di
+  dichiararla assente.
+- **Note integrative dichiarate.** Quando l’archivio non ha testi, la scheda spiega che le note si
+  estraggono al caricamento del bilancio e che un file già in archivio va ricaricato: il Ponte non
+  le inventa.
+- **Terna di scenari.** Centrale, pessimistico e ottimistico: tre letture, non un ventaglio.
+- **Navigazione coerente.** La scheda azienda torna a «Verifica contabile aziendale» e il Ponte
+  alla «valutazione completa»: menu e titoli delle pagine dicono la stessa cosa.
+
 ## 0.177.0 — 2026-11-08
 
 **Il Piano-ponte viene prima della valutazione completa, e la simulazione ha i bilanci XBRL.**

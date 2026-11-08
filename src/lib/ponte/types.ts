@@ -27,11 +27,22 @@ export interface EsercizioPonte {
 }
 
 export interface DebitoEntePonte {
+  /** Contabilizzato + da contabilizzare: il debito certo che il Ponte usa. */
   totale: number;
   contributi: number;
   sanzioni: number;
   creditiAgente: number;
+  /** Posizioni che formano il totale. */
   righe: number;
+  /**
+   * Il dettaglio dei tre stati. Presente nei Ponte calcolati da 0.178.0;
+   * assente nelle versioni salvate prima, che restano leggibili.
+   */
+  contabilizzato?: number;
+  daContabilizzare?: number;
+  /** Posizioni segnalate alle unità operative, fuori dal totale. */
+  segnalato?: number;
+  righeSegnalate?: number;
   /** Da dove viene lo snapshot: per ora la certificazione dei debiti. */
   fonte: string;
 }
@@ -271,6 +282,11 @@ export interface DatiPonte {
   note: FactTestuale[];
   visura: FattiVisura | null;
   visuraImpronta: string | null;
+  /**
+   * La visura trattenuta dal triage: il file c'è ma i fatti camerali non sono
+   * ancora stati letti. Si dichiara, così «assente» non è una mezza verità.
+   */
+  visuraTrattenuta: { nome: string; caricataIl: string | null } | null;
   settore: SettorePonte;
   parametriScenari: ParametriScenari | null;
   rangoCredito: RangoCredito | null;

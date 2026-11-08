@@ -216,7 +216,7 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
             href={`/spazio/${codice}/aziende/${aziendaId}/screening`}
             className="text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-blue-600"
           >
-            Torna allo Screening
+            Torna alla valutazione completa
           </a>
         </div>
       </div>
@@ -301,8 +301,13 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
         <div className="bg-white border border-slate-200 rounded-xl p-3">
           <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Visura</p>
           <p className="text-sm font-bold text-slate-900 mt-1">
-            {dati.visura ? 'disponibile' : 'assente'}
+            {dati.visura ? 'letta' : dati.visuraTrattenuta ? 'acquisita' : 'assente'}
           </p>
+          {!dati.visura && dati.visuraTrattenuta && (
+            <p className="text-[9px] text-slate-400 mt-1 truncate">
+              {dati.visuraTrattenuta.nome} · non ancora letta
+            </p>
+          )}
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-3">
           <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Settore</p>
@@ -316,11 +321,41 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
           <p className="text-sm font-bold text-slate-900 mt-1">
             {dati.debitoEnte ? euro(dati.debitoEnte.totale) : 'non disponibile'}
           </p>
-          {dati.debitoEnte && (
-            <p className="text-[9px] text-slate-400 mt-1">{dati.debitoEnte.righe} posizioni</p>
-          )}
+          {dati.debitoEnte &&
+            (dati.debitoEnte.contabilizzato === undefined ? (
+              <p className="text-[9px] text-slate-400 mt-1">{dati.debitoEnte.righe} posizioni</p>
+            ) : (
+              <p className="text-[9px] text-slate-500 mt-1 leading-snug">
+                {euro(dati.debitoEnte.contabilizzato)} contabilizzati
+                {euro(dati.debitoEnte.daContabilizzare ?? 0)} da contabilizzare
+                {(dati.debitoEnte.righeSegnalate ?? 0) > 0 && (
+                  <> · {dati.debitoEnte.righeSegnalate} segnalate alle UO, fuori dal totale</>
+                )}
+              </p>
+            ))}
         </div>
       </div>
+
+      {dati.esercizi.length > 0 && dati.note.length === 0 && (
+        <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+          <span className="font-bold">Nessuna nota integrativa in archivio.</span> Le note si
+          estraggono quando il bilancio viene caricato: se questo bilancio è entrato in archivio
+          prima di questa lettura, ricarica il file dal passo «Analisi bilancio». Il Ponte parte
+          anche senza, ma la copertura scende e il report lo dichiara.
+        </p>
+      )}
+
+      {!dati.visura && dati.visuraTrattenuta && (
+        <p className="text-[11px] text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed">
+          <span className="font-bold">Visura acquisita nel triage</span> (
+          {dati.visuraTrattenuta.nome}
+          {dati.visuraTrattenuta.caricataIl
+            ? `, ${dataIt(dati.visuraTrattenuta.caricataIl.slice(0, 10))}`
+            : ''}
+          ): i fatti camerali si leggono con la valutazione completa. Il Ponte usa l’anagrafica e i
+          dati contabili, e lo dichiara tra le fonti mancanti.
+        </p>
+      )}
 
       {!ponte && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
@@ -642,9 +677,9 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
 
           <div className="grid md:grid-cols-3 gap-2">
             {[
-              ['Base', output],
-              ['Favorevole', output.scenari.favorevole],
-              ['Sfavorevole', output.scenari.sfavorevole],
+              ['Centrale', output],
+              ['Pessimistico', output.scenari.sfavorevole],
+              ['Ottimistico', output.scenari.favorevole],
             ].map(([titolo, p]) => {
               const proiezione = p as typeof output;
               return (

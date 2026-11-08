@@ -120,8 +120,8 @@ export function reportPonteHtml(input: { dati: DatiPonte; ponte: PonteSalvato })
     <thead><tr>${th('Scenario')}${th('Cassa finale')}${th('Debito finale')}${th('Utile cumulato')}${th('Fabbisogno')}</tr></thead>
     <tbody>
       <tr>${td('Base (centrale)')}${td(euro(output.cassaFinale), 'right')}${td(euro(output.debitoFinale), 'right')}${td(euro(output.utileTotale), 'right')}${td(euro(output.fabbisognoSenzaFinanziamento), 'right')}</tr>
-      <tr>${td('Favorevole: ricavi +10%, margine +2 pp, incasso −15 gg, pagamento +15 gg')}${td(euro(output.scenari.favorevole.cassaFinale), 'right')}${td(euro(output.scenari.favorevole.debitoFinale), 'right')}${td(euro(output.scenari.favorevole.utileTotale), 'right')}${td(euro(output.scenari.favorevole.fabbisognoSenzaFinanziamento), 'right')}</tr>
-      <tr>${td('Sfavorevole: simmetrico')}${td(euro(output.scenari.sfavorevole.cassaFinale), 'right')}${td(euro(output.scenari.sfavorevole.debitoFinale), 'right')}${td(euro(output.scenari.sfavorevole.utileTotale), 'right')}${td(euro(output.scenari.sfavorevole.fabbisognoSenzaFinanziamento), 'right')}</tr>
+      <tr>${td('Ottimistico: ricavi +10%, margine +2 pp, incasso −15 gg, pagamento +15 gg')}${td(euro(output.scenari.favorevole.cassaFinale), 'right')}${td(euro(output.scenari.favorevole.debitoFinale), 'right')}${td(euro(output.scenari.favorevole.utileTotale), 'right')}${td(euro(output.scenari.favorevole.fabbisognoSenzaFinanziamento), 'right')}</tr>
+      <tr>${td('Pessimistico: simmetrico')}${td(euro(output.scenari.sfavorevole.cassaFinale), 'right')}${td(euro(output.scenari.sfavorevole.debitoFinale), 'right')}${td(euro(output.scenari.sfavorevole.utileTotale), 'right')}${td(euro(output.scenari.sfavorevole.fabbisognoSenzaFinanziamento), 'right')}</tr>
     </tbody>
   </table>
 
