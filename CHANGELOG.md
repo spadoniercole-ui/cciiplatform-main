@@ -1,3 +1,40 @@
+## 0.176.0 — 2026-11-08
+
+**Il Piano-ponte confronta credito, debito e recupero, e si fa assistere dall’AI solo sulle assunzioni.**
+
+- **Sintesi integrata nel Ponte.** Accanto al debito stimato alla Data verifica compaiono il credito
+  certo dell’ente e le due ipotesi di recupero: realizzo in liquidazione (al netto delle spese di
+  procedura) e soddisfacimento nel cram down. Le percentuali sono quelle configurate dall’ente in
+  Parametri › Scenari, rango per rango; se mancano, il recupero è dichiarato non calcolabile invece
+  di diventare zero. Il recupero non si sottrae al debito: sono tre termini di paragone.
+- **Proposta di assunzioni con l’AI, validata dal motore.** Il pulsante «Proponi con l’AI» legge
+  bilanci, note integrative, visura, debito ente e settore, e propone crescita, margine, giorni di
+  incasso e pagamento con la motivazione. Ogni valore passa dagli stessi intervalli del motore:
+  quelli fuori scala, senza motivazione o con un codice sconosciuto vengono scartati e mostrati
+  all’operatore. La chiamata consuma la quota AI dedicata (`AI_PONTE_PER_UTENTE_ORA`,
+  `AI_PONTE_PER_SPAZIO_GIORNO`).
+- **Report aggiornato.** Il report stampabile contiene la sezione della Sintesi integrata, con il
+  dettaglio delle due ipotesi e i motivi per cui una non è calcolabile.
+- **Nessuna conclusione giuridica automatica.** Il Ponte continua a misurare e riconciliare: il
+  recupero dipende dai parametri dell’ente e la qualificazione resta al professionista.
+
+## 0.175.0 — 2026-11-08
+
+**Il Piano-ponte porta il bilancio storico alla Data verifica, con fonti e riconciliazione.**
+
+- **Note integrative lette davvero.** Il parser XBRL separa i fact numerici dai testi: una nota non
+  diventa più uno zero e viene conservata con l’impronta del file, pronta per il Ponte.
+- **Ponte a livello azienda.** Data verifica, ultimo XBRL, certificazione dei debiti, visura e
+  crescita di settore alimentano un motore mensile deterministico, senza creare uno Scenario.
+- **Debito ente una volta sola.** La differenza tra esposizione certa e quota storica è una
+  rettifica esplicita; la cassa negativa resta fabbisogno e non diventa debito.
+- **Assunzioni modificabili e versionate.** Crescita, margine, giorni di incasso e pagamento
+  passano dal motore; la versione confermata è immutabile e supera la precedente, senza
+  sovrascriverla. Lo storico e il report conservano impronte e avvertenze.
+- **Scheda e report.** Proiezione, scenari favorevole/sfavorevole, riconciliazione, copertura e
+  limiti sono visibili e stampabili; il percorso è raggiungibile dallo Screening e dalla barra
+  dei passi dell’azienda.
+
 ## 0.174.10 — 2026-11-08
 
 **Il triage demo produce report per le unità operative, con materie e codici reali.**

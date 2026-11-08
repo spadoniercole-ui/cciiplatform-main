@@ -7,7 +7,7 @@
 // attributi e self-closing tag.
 
 import { XMLParser } from 'fast-xml-parser';
-import type { Periodo } from './types';
+import type { FactTestuale, Periodo } from './types';
 
 export interface FactGrezzo {
   tagPulito: string; // es. "totaleattivo" (senza namespace, minuscolo, solo alfanumerico)
@@ -18,6 +18,8 @@ export interface FactGrezzo {
 
 export interface DatiEstratti {
   facts: FactGrezzo[];
+  /** Fact testuali (note integrative e prosa) nell'ordine di lettura del file. */
+  factTestuali: FactTestuale[];
   contextPeriodo: Record<string, Periodo>;
   /** Anno solare del periodo "corrente" individuato dai contesti XBRL, se determinabile. */
   annoBilancio: number | null;
@@ -38,10 +40,15 @@ function getNodeText(node: unknown): string {
   return String(node).trim();
 }
 
-function parseNumeroItaliano(raw: unknown): number {
+function parseNumeroItaliano(raw: unknown): number | null {
   const str = getNodeText(raw);
-  if (!str) return 0;
-  let cleaned = str;
+  if (!str) return null;
+  // Una nota non è uno zero. Prima questa funzione restituiva 0 per qualunque
+  // testo non numerico, e il parser lo salvava come fact: il Piano-ponte
+  // avrebbe letto «nessun dato» dove c'era una frase. Il null è la differenza
+  // fra «non c'è» e «vale zero».
+  if (!/[-+]?\d/.test(str)) return null;
+  let cleaned = str.replace(/[€%\s]/g, '');
   if (cleaned.includes(',') && cleaned.includes('.')) {
     // 1.234,56 -> 1234.56
     cleaned = cleaned.replace(/\./g, '').replace(',', '.');
@@ -50,7 +57,30 @@ function parseNumeroItaliano(raw: unknown): number {
     cleaned = cleaned.replace(',', '.');
   }
   const parsed = parseFloat(cleaned);
-  return Number.isNaN(parsed) ? 0 : parsed;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getLingua(node: unknown): string | null {
+  if (!node || typeof node !== 'object') return null;
+  const n = node as Record<string, unknown>;
+  const lingua = n['@_xml:lang'] ?? n['@_lang'] ?? n['@_xmlLang'];
+  return typeof lingua === 'string' && lingua.trim() ? lingua.trim() : null;
+}
+
+/**
+ * Il testo sembra una nota integrativa, non un'anagrafica o un'etichetta?
+ * Il criterio è volutamente prudente: un tag che parla di note, oppure prosa
+ * lunga con più parole. Un indirizzo o una denominazione non entrano.
+ */
+function sembraNota(tagPulito: string, testo: string): boolean {
+  if (testo.length < 20) return false;
+  if (/^[-+]?[\d.,]+\s*%?$/.test(testo)) return false;
+  const tagNota =
+    /nota|informativa|commento|dettaglio|descrizione|dichiaraz|valutaz|politic|principi|eventi|continuit|impegni|particorrelat|piani|intenzion/.test(
+      tagPulito
+    );
+  const spazi = (testo.match(/\s/g) || []).length;
+  return tagNota || (testo.length >= 100 && spazi >= 8);
 }
 
 /** Rimuove il namespace (es. "itcc-ci:TotaleAttivo" -> "totaleattivo") e normalizza. */
@@ -67,19 +97,22 @@ export function pulisciTag(tag: string): string {
 function estraiTuttiIFact(
   obj: unknown,
   facts: FactGrezzo[],
+  factTestuali: FactTestuale[],
   chiaviAnagrafica: Record<string, string>
 ): void {
   if (!obj || typeof obj !== 'object') return;
 
   if (Array.isArray(obj)) {
-    obj.forEach((item) => estraiTuttiIFact(item, facts, chiaviAnagrafica));
+    obj.forEach((item) => estraiTuttiIFact(item, facts, factTestuali, chiaviAnagrafica));
     return;
   }
 
   const record = obj as Record<string, unknown>;
 
   for (const key of Object.keys(record)) {
-    if (key.startsWith('@_')) continue;
+    // `#text` è il contenuto del nodo, non un tag: senza questo salto il
+    // testo della nota veniva raccolto una seconda volta come tag «text».
+    if (key.startsWith('@_') || key.startsWith('#')) continue;
     const val = record[key];
     if (val === null || val === undefined || val === '') continue;
 
@@ -99,13 +132,27 @@ function estraiTuttiIFact(
       const testo = getNodeText(node);
       const numero = parseNumeroItaliano(node);
 
-      // Fact numerico con contesto: candidato a dato di bilancio
-      if (contextRef && testo !== '' && !Number.isNaN(numero)) {
+      // Fact numerico con contesto: candidato a dato di bilancio. `numero`
+      // null significa che il testo non è un numero: non si inventa uno zero.
+      if (contextRef && testo !== '' && numero !== null) {
         facts.push({
           tagPulito,
           tagOriginale: key,
           contextRef,
           valore: numero,
+        });
+      }
+
+      // Fact testuale: le note integrative non hanno sempre un contextRef, ma
+      // sono la parte del bilancio che spiega criteri, eventi e continuità.
+      if (sembraNota(tagPulito, testo)) {
+        factTestuali.push({
+          tagPulito,
+          tagOriginale: key,
+          contextRef,
+          testo,
+          lingua: getLingua(node),
+          ordine: factTestuali.length,
         });
       }
 
@@ -142,7 +189,7 @@ function estraiTuttiIFact(
       }
 
       if (isObjNode) {
-        estraiTuttiIFact(node, facts, chiaviAnagrafica);
+        estraiTuttiIFact(node, facts, factTestuali, chiaviAnagrafica);
       }
     });
   }
@@ -229,8 +276,9 @@ export function parseIstanzaXbrl(xmlContent: string): DatiEstratti {
   }
 
   const facts: FactGrezzo[] = [];
+  const factTestuali: FactTestuale[] = [];
   const chiaviAnagrafica: Record<string, string> = {};
-  estraiTuttiIFact(root, facts, chiaviAnagrafica);
+  estraiTuttiIFact(root, facts, factTestuali, chiaviAnagrafica);
 
   if (facts.length === 0) {
     throw new Error('Nessun dato numerico con contesto valido trovato nel file.');
@@ -240,6 +288,7 @@ export function parseIstanzaXbrl(xmlContent: string): DatiEstratti {
 
   return {
     facts,
+    factTestuali,
     contextPeriodo,
     annoBilancio,
     anagraficaGrezza: chiaviAnagrafica,

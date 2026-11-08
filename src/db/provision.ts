@@ -1495,10 +1495,87 @@ export async function assicuraTabellaXbrlAzienda(nomeSchema: string): Promise<vo
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.xbrl_storico_azienda ADD COLUMN IF NOT EXISTS documento_id INTEGER`
   );
+  // Note integrative (Piano-ponte): i fact testuali non sono numeri e non
+  // entrano nei totali, ma sono la fonte per criteri di valutazione, eventi
+  // successivi, continuita aziendale e impegni. Si conservano con l'impronta
+  // del file da cui sono state lette.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.xbrl_storico_azienda ADD COLUMN IF NOT EXISTS note_fatti JSONB`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.xbrl_storico_azienda ADD COLUMN IF NOT EXISTS note_impronta TEXT`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.xbrl_storico_azienda ADD COLUMN IF NOT EXISTS note_estratte_il TIMESTAMP`
+  );
 }
 
 /**
- * Crea proposta_creditori in uno schema tenant, se non esiste già. Stesso
+ * Piano-ponte: proiezione a livello azienda dalla chiusura dell'ultimo
+ * bilancio alla Data verifica. Non e' un piano di sviluppo: non appartiene a
+ * uno scenario e non contiene proposte ai creditori. La versione confermata
+ * e' immutabile: una nuova elaborazione crea una versione nuova e supera la
+ * precedente, senza sovrascriverla.
+ */
+export async function assicuraTabellaPonteTemporale(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaAziende(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.ponte_temporale (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      data_riferimento DATE NOT NULL,
+      stato TEXT NOT NULL DEFAULT 'BOZZA',
+      versione INTEGER NOT NULL DEFAULT 1,
+      sostituisce_id INTEGER REFERENCES ${s}.ponte_temporale(id) ON DELETE SET NULL,
+      hash_input TEXT NOT NULL,
+      hash_output TEXT,
+      input JSONB NOT NULL,
+      output JSONB,
+      assunzioni JSONB NOT NULL DEFAULT '[]',
+      copertura JSONB,
+      avvisi JSONB NOT NULL DEFAULT '[]',
+      limiti JSONB NOT NULL DEFAULT '[]',
+      motore_versione TEXT NOT NULL,
+      prompt_versione TEXT,
+      note_copertura INTEGER,
+      generato_da TEXT,
+      confermato_da TEXT,
+      confermato_il TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  // Una sola versione CONFERMATO per azienda e data: le altre restano nello
+  // storico come SUPERATO. L'indice parziale e' la garanzia, non la buona
+  // volonta' dell'azione che conferma.
+  await eseguiDdlTenant(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_ponte_confermato
+        ON ${s}.ponte_temporale (azienda_id, data_riferimento)
+        WHERE stato = 'CONFERMATO'`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_ponte_azienda_data
+        ON ${s}.ponte_temporale (azienda_id, data_riferimento DESC, versione DESC)`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.ponte_temporale_eventi (
+      id SERIAL PRIMARY KEY,
+      ponte_id INTEGER NOT NULL REFERENCES ${s}.ponte_temporale(id) ON DELETE CASCADE,
+      tipo TEXT NOT NULL,
+      dettaglio JSONB,
+      utente TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_ponte_eventi_ponte
+        ON ${s}.ponte_temporale_eventi (ponte_id, created_at)`
+  );
+}
+
+/**
+ * Crea proposta_creditori in uno schema tenant, se non esiste gia. Stesso
  * principio di auto-riparazione delle altre tabelle.
  */
 export async function assicuraTabellaProposta(nomeSchema: string): Promise<void> {

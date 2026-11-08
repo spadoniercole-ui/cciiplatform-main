@@ -16,6 +16,7 @@ import type {
   DatiFinanziariPeriodo,
   FactNonMappato,
   FactRisolto,
+  NoteXbrl,
   Periodo,
   SituazioneDebitoria,
 } from './types';
@@ -58,7 +59,8 @@ export async function analizzaFileXbrl(
 ): Promise<AnalisiXbrlResult> {
   const warnings: string[] = [];
 
-  const { facts, contextPeriodo, anagraficaGrezza, annoBilancio } = parseIstanzaXbrl(xmlContent);
+  const { facts, factTestuali, contextPeriodo, anagraficaGrezza, annoBilancio } =
+    parseIstanzaXbrl(xmlContent);
   const { mappa: mappingTag, usatoFallback, chiaviNonRiconosciute } = await caricaMappingTag();
 
   if (usatoFallback) {
@@ -165,12 +167,34 @@ export async function analizzaFileXbrl(
     corrente.valoreProduzione !== 0 ||
     corrente.costiProduzione !== 0;
 
+  // Le note non sono numeri e non entrano nei totali. Si conservano in un
+  // blocco separato, con un taglio difensivo: un'istanza può contenere molto
+  // testo, ma il Piano-ponte ha bisogno delle sezioni rilevanti, non di
+  // trascinare l'intero documento nel database e nel prompt.
+  const LIMITE_NOTE = 200;
+  const LIMITE_CARATTERI_NOTA = 4_000;
+  const noteFatti = factTestuali.slice(0, LIMITE_NOTE).map((f) => ({
+    ...f,
+    testo: f.testo.slice(0, LIMITE_CARATTERI_NOTA),
+  }));
+  const note: NoteXbrl = {
+    fatti: noteFatti,
+    copertura: {
+      fatti: factTestuali.length,
+      caratteri: noteFatti.reduce((n, f) => n + f.testo.length, 0),
+      troncate:
+        factTestuali.length > LIMITE_NOTE ||
+        factTestuali.some((f) => f.testo.length > LIMITE_CARATTERI_NOTA),
+    },
+  };
+
   return {
     meta: {
       nomeFile,
       usatoFallbackMapping: usatoFallback,
       numeroFactTotali: facts.length,
       numeroFactNonMappati: factNonMappati.length,
+      numeroNoteTestuali: factTestuali.length,
     },
     anagrafica: {
       ragioneSociale: anagraficaGrezza.ragioneSociale || '',
@@ -195,6 +219,7 @@ export async function analizzaFileXbrl(
       .filter((f) => f.valore !== 0)
       .sort((a, b) => Math.abs(b.valore) - Math.abs(a.valore))
       .slice(0, 300),
+    note,
     warnings,
   };
 }

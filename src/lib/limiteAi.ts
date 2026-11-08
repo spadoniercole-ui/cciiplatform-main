@@ -20,18 +20,20 @@ export interface Esecutore {
   query(testo: string, parametri?: unknown[]): Promise<{ rows: any[] }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export type FunzioneAi = 'VISURA' | 'RISCONTRO';
+export type FunzioneAi = 'VISURA' | 'RISCONTRO' | 'PONTE';
 
 /** Come si chiama, a schermo, ciò che si conta. */
 const CONTEGGIO: Record<FunzioneAi, string> = {
   VISURA: 'estrazioni automatiche',
   RISCONTRO: 'verifiche sulle fonti',
+  PONTE: 'proposte di assunzioni per il Ponte',
 };
 
 /** Cosa può fare chi ha esaurito il tetto. */
 const CONSIGLIO: Record<FunzioneAi, string> = {
   VISURA: 'Riprova più tardi o compila i campi a mano.',
   RISCONTRO: 'Riprova più tardi: la riga resta «da riscontrare».',
+  PONTE: 'Riprova più tardi o inserisci le assunzioni a mano.',
 };
 
 interface Limiti {
@@ -58,6 +60,13 @@ export function limitiAi(funzione: FunzioneAi, env: NodeJS.ProcessEnv = process.
       return {
         perUtenteOra: numeroDaEnv(env.AI_RISCONTRI_PER_UTENTE_ORA, 60),
         perSpazioGiorno: numeroDaEnv(env.AI_RISCONTRI_PER_SPAZIO_GIORNO, 600),
+      };
+    case 'PONTE':
+      // La proposta di assunzioni è una lettura ragionata, non un ciclo:
+      // poche chiamate per azienda bastano.
+      return {
+        perUtenteOra: numeroDaEnv(env.AI_PONTE_PER_UTENTE_ORA, 20),
+        perSpazioGiorno: numeroDaEnv(env.AI_PONTE_PER_SPAZIO_GIORNO, 150),
       };
   }
 }

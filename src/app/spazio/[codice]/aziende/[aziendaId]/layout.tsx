@@ -154,6 +154,17 @@ export default async function AziendaLayout({
       ? 'Completa prima Anagrafica, Anagrafica Ente e Analisi Bilancio.'
       : 'Completa prima Anagrafica e Analisi Bilancio.',
   });
+  // Il Piano-ponte sta a livello azienda, dopo i dati di base: non richiede
+  // uno Scenario e non è la Check List. Per l'ENTE è il passo che porta il
+  // bilancio storico alla Data verifica.
+  if (isEnte) {
+    steps.push({
+      id: 'ponte',
+      label: 'Piano-ponte',
+      stato: !passi123Verdi ? 'bloccato' : 'attivo',
+      motivo: 'Completa prima Anagrafica, Posizione Ente e Analisi Bilancio.',
+    });
+  }
   // La Check List dello screening non è più un passo dell'Azienda: si genera
   // e si risponde dentro il triage (0.154.0). Il passo resta per il Redigente,
   // dove la stessa scheda ospita il Test pratico e la Ministeriale.

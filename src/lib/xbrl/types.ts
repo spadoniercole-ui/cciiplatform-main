@@ -5,6 +5,33 @@
 
 export type Periodo = 'corrente' | 'precedente';
 
+/**
+ * Un fact testuale dell'istanza XBRL: note integrative, commenti, descrizioni.
+ * Non è un numero e non deve mai entrare nei totali: è la materia prima del
+ * Piano-ponte per capire ciò che il bilancio racconta oltre le cifre.
+ */
+export interface FactTestuale {
+  tagPulito: string;
+  tagOriginale: string;
+  contextRef: string;
+  testo: string;
+  lingua: string | null;
+  /** Posizione nell'ordine di lettura del file, per citare la nota senza perdere il filo. */
+  ordine: number;
+}
+
+/** Note integrative estratte da un'istanza XBRL, con la loro consistenza. */
+export interface NoteXbrl {
+  fatti: FactTestuale[];
+  copertura: {
+    /** Numero di fact testuali trovati prima del taglio difensivo. */
+    fatti: number;
+    caratteri: number;
+    /** true se il taglio difensivo ha ridotto il testo disponibile. */
+    troncate: boolean;
+  };
+}
+
 /** Anagrafica estratta dall'header del file XBRL (contesto entity + dati anagrafici). */
 export interface AnagraficaXbrl {
   ragioneSociale: string;
@@ -91,6 +118,7 @@ export interface AnalisiXbrlResult {
     usatoFallbackMapping: boolean;
     numeroFactTotali: number;
     numeroFactNonMappati: number;
+    numeroNoteTestuali?: number;
   };
   anagrafica: AnagraficaXbrl;
   /** Anno solare del bilancio analizzato (periodo corrente), se determinabile dai contesti XBRL. */
@@ -107,5 +135,7 @@ export interface AnalisiXbrlResult {
   factNonMappati: FactNonMappato[];
   /** Tutti i fact numerici del file, risolti (periodo + mapping). Usato dalla UI di parificazione tag. */
   tuttiIFact: FactRisolto[];
+  /** Note integrative e testi narrativi, quando il file li contiene. */
+  note?: NoteXbrl;
   warnings: string[];
 }

@@ -18,6 +18,7 @@ import {
 import type {
   AnalisiXbrlResult,
   DatiFinanziariPeriodo,
+  FactTestuale,
   IndiceCcii,
   SituazioneDebitoria,
   AlertSeverity,
@@ -37,6 +38,9 @@ export interface BilancioStoricoAzienda {
   altriIndici: IndiceCcii[];
   situazioneDebitoria: SituazioneDebitoria;
   severity: AlertSeverity;
+  noteFatti: FactTestuale[] | null;
+  noteImpronta: string | null;
+  noteEstratteIl: string | null;
   createdAt: string;
 }
 
@@ -58,7 +62,8 @@ export async function ottieniStoricoXbrlAzienda(
     await assicuraTabellaXbrlAzienda(nomeSchema);
 
     const risultato = await pool.query(
-      `SELECT id, azienda_id, anno_bilancio, nome_file, dati_finanziari, indici, altri_indici, situazione_debitoria, severity, created_at
+      `SELECT id, azienda_id, anno_bilancio, nome_file, dati_finanziari, indici, altri_indici,
+              situazione_debitoria, severity, note_fatti, note_impronta, note_estratte_il, created_at
        FROM "${nomeSchema}".xbrl_storico_azienda
        WHERE azienda_id = $1
        ORDER BY anno_bilancio ASC NULLS LAST, created_at ASC`,
@@ -77,6 +82,9 @@ export async function ottieniStoricoXbrlAzienda(
         altriIndici: r.altri_indici,
         situazioneDebitoria: r.situazione_debitoria,
         severity: r.severity,
+        noteFatti: Array.isArray(r.note_fatti) ? r.note_fatti : null,
+        noteImpronta: r.note_impronta ?? null,
+        noteEstratteIl: r.note_estratte_il ? r.note_estratte_il.toString() : null,
         createdAt: r.created_at.toString(),
       })),
     };
@@ -108,7 +116,9 @@ export async function salvaAnalisiXbrlAziendaAction(
   aziendaId: number,
   analisi: AnalisiXbrlResult,
   /** Documento di origine (fascicolo di evidenza): il file XBRL registrato con la sua impronta. */
-  documentoId: number | null = null
+  documentoId: number | null = null,
+  /** Impronta del file da cui sono state lette le note integrative. */
+  noteImpronta: string | null = null
 ): Promise<RisultatoOperazioneXbrlAzienda> {
   try {
     await richiediAccessoAzienda(nomeSchema, aziendaId, { modulo: ['xbrl'], livello: 'SCRITTURA' });
@@ -117,8 +127,9 @@ export async function salvaAnalisiXbrlAziendaAction(
     await assicuraTabellaXbrlAzienda(nomeSchema);
     await pool.query(
       `INSERT INTO "${nomeSchema}".xbrl_storico_azienda
-         (azienda_id, anno_bilancio, nome_file, dati_finanziari, indici, altri_indici, situazione_debitoria, severity, documento_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (azienda_id, anno_bilancio, nome_file, dati_finanziari, indici, altri_indici,
+          situazione_debitoria, severity, documento_id, note_fatti, note_impronta, note_estratte_il)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
        ON CONFLICT (azienda_id, anno_bilancio)
        DO UPDATE SET
          nome_file = EXCLUDED.nome_file,
@@ -128,6 +139,9 @@ export async function salvaAnalisiXbrlAziendaAction(
          altri_indici = EXCLUDED.altri_indici,
          situazione_debitoria = EXCLUDED.situazione_debitoria,
          severity = EXCLUDED.severity,
+         note_fatti = EXCLUDED.note_fatti,
+         note_impronta = EXCLUDED.note_impronta,
+         note_estratte_il = now(),
          created_at = now()`,
       [
         aziendaId,
@@ -139,6 +153,8 @@ export async function salvaAnalisiXbrlAziendaAction(
         JSON.stringify(analisi.situazioneDebitoria),
         analisi.severity,
         documentoId,
+        JSON.stringify(analisi.note?.fatti ?? []),
+        noteImpronta,
       ]
     );
 
