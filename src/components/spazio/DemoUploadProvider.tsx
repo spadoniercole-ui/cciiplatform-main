@@ -238,7 +238,9 @@ export function DemoUploadProvider({
               type:
                 d.formato === 'PDF'
                   ? 'application/pdf'
-                  : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                  : d.formato === 'XBRL'
+                    ? 'application/xml'
+                    : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             });
           })
         );

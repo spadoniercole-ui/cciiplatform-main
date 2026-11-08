@@ -139,7 +139,10 @@ export function DashboardPannelli({ codice, verifiche = [], scenari, totaleScena
             ))}
           </div>
         )}
-        <VediTutti href={`/spazio/${codice}/verifica-salute`} testo="Verifica salute azienda" />
+        <VediTutti
+          href={`/spazio/${codice}/verifica-salute`}
+          testo="Verifica amministrativa aziendale"
+        />
       </div>
 
       {/* Scenari */}

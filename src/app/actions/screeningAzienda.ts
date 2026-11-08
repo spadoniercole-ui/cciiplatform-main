@@ -28,7 +28,9 @@ import {
   richiediAccessoSchema,
   messaggioErrore,
   verificaFileDelloSpazio,
+  type ContestoAccessoSpazio,
 } from '@/lib/autorizzazione';
+import { esistePonteAzienda } from '@/lib/ponte/persistenza';
 import { assicuraTabelleScreeningAzienda } from '@/db/provision';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
@@ -471,12 +473,14 @@ export async function generaScreeningAziendaAction(
 ): Promise<RisultatoGenerazioneScreening> {
   // Verifica fuori dal try: il `finally` sotto elimina il blob `visuraUrl`
   // e non deve mai girare per un chiamante non autorizzato.
+  let contesto: ContestoAccessoSpazio | null = null;
   try {
-    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     verificaFileDelloSpazio(contesto, visuraUrl);
   } catch (error) {
     return { success: false, error: messaggioErrore(error, 'Operazione non autorizzata.') };
   }
+  if (!contesto) return { success: false, error: 'Operazione non autorizzata.' };
   let generazioneRiuscita = false;
   try {
     if (!anthropic) {
@@ -486,6 +490,23 @@ export async function generaScreeningAziendaAction(
       };
     }
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+
+    // VINCOLO: la valutazione completa si lancia DOPO il Piano-ponte. Il ponte
+    // porta il bilancio storico alla Data verifica ed è la base contabile che
+    // la valutazione confronta: senza, l'analisi partirebbe su un'altra
+    // fotografia. Il vincolo vale per il lancio dalla scheda azienda; la prima
+    // elaborazione automatica al salvataggio dei parametri dell'ente resta
+    // possibile, perché avviene nel triage, prima che il ponte esista.
+    if (contesto.tipoSpazio === 'ENTE' && origine === 'MANUALE') {
+      const ponte = await esistePonteAzienda(nomeSchema, aziendaId);
+      if (!ponte.esiste) {
+        return {
+          success: false,
+          error:
+            'Prima della valutazione completa serve il Piano-ponte: apri la scheda «Piano-ponte» di questa azienda e calcolalo. Il ponte porta il bilancio alla Data verifica ed è la base contabile su cui la valutazione si confronta.',
+        };
+      }
+    }
 
     // VINCOLO: nessuna elaborazione senza almeno un parametro dell'ente.
     // Da quel momento l'azienda si riconosce con i riferimenti interni

@@ -164,6 +164,71 @@ function pdf({ file, titolo, sottotitolo, righe }) {
   writeFileSync(join(CARTELLA, file), Buffer.from(doc.output('arraybuffer')));
 }
 
+// Bilancio in formato XBRL: è il file che il campo «Carica i bilanci XBRL»
+// propone nella simulazione. Deve essere un'istanza vera (contesti + fact con
+// contextRef), altrimenti il parser la rifiuta e la demo non può mostrare né
+// gli indici né il Piano-ponte. I tag sono quelli della tassonomia ITCC-CI che
+// il motore riconosce (src/lib/xbrl/tagMapping.ts).
+function xbrl({ file, azienda, cf }) {
+  const voci = [
+    ['TotaleAttivo', 1100000, 1200000],
+    ['TotaleAttivoCircolante', 600000, 650000],
+    ['TotaleDisponibilitaLiquide', 90000, 120000],
+    ['TotaleImmobilizzazioni', 500000, 550000],
+    ['TotalePatrimonioNetto', 55000, 100000],
+    ['TotaleDebiti', 900000, 880000],
+    ['DebitiVersoBanche', 350000, 340000],
+    ['DebitiVersoFornitori', 300000, 310000],
+    ['DebitiTributari', 150000, 140000],
+    ['DebitiVersoIstitutiPrevidenzaSicurezzaSociale', 100000, 90000],
+    ['CreditiVersoClienti', 320000, 300000],
+    ['ValoreProduzioneRicaviVenditePrestazioni', 1200000, 1350000],
+    ['TotaleValoreProduzione', 1350000, 1500000],
+    ['TotaleCostiProduzione', 1290000, 1420000],
+    ['DifferenzaValoreCostiProduzione', 60000, 80000],
+    ['TotaleAmmortamentiERettificheDiValutazione', 40000, 45000],
+    ['InteressiEdAltriOneriFinanziari', 55000, 50000],
+    ['UtilePerditaEsercizio', 5000, 15000],
+  ];
+  const fact = ([tag, corrente, precedente]) =>
+    `  <itcc-ci:${tag} contextRef="C2025" unitRef="EUR" decimals="0">${corrente}</itcc-ci:${tag}>\n` +
+    `  <itcc-ci:${tag} contextRef="C2024" unitRef="EUR" decimals="0">${precedente}</itcc-ci:${tag}>`;
+  const contenuto = `<?xml version="1.0" encoding="UTF-8"?>
+<!-- DEMO — DOCUMENTO FITTIZIO, SENZA VALORE LEGALE. Dati inventati per la simulazione. -->
+<xbrli:xbrl
+  xmlns:xbrli="http://www.xbrl.org/2003/instance"
+  xmlns:itcc-ci="http://www.itcc.it/tassonomia/ci/2025-01-01"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217">
+  <xbrli:context id="C2025">
+    <xbrli:entity>
+      <xbrli:identifier scheme="http://www.itcc.it/codicefiscale">${cf}</xbrli:identifier>
+    </xbrli:entity>
+    <xbrli:period>
+      <xbrli:startDate>2025-01-01</xbrli:startDate>
+      <xbrli:endDate>2025-12-31</xbrli:endDate>
+    </xbrli:period>
+  </xbrli:context>
+  <xbrli:context id="C2024">
+    <xbrli:entity>
+      <xbrli:identifier scheme="http://www.itcc.it/codicefiscale">${cf}</xbrli:identifier>
+    </xbrli:entity>
+    <xbrli:period>
+      <xbrli:startDate>2024-01-01</xbrli:startDate>
+      <xbrli:endDate>2024-12-31</xbrli:endDate>
+    </xbrli:period>
+  </xbrli:context>
+  <xbrli:unit id="EUR">
+    <xbrli:measure>iso4217:EUR</xbrli:measure>
+  </xbrli:unit>
+  <itcc-ci:Denominazione contextRef="C2025">${azienda}</itcc-ci:Denominazione>
+  <itcc-ci:CodiceFiscale contextRef="C2025">${cf}</itcc-ci:CodiceFiscale>
+${voci.map(fact).join('\n')}
+  <itcc-ci:NotaIntegrativaContinuitaAziendale contextRef="C2025">Documento dimostrativo: la nota riporta una valutazione di continuità aziendale fittizia, utile a mostrare come il Piano-ponte legge le note integrative e non solo i numeri di sintesi.</itcc-ci:NotaIntegrativaContinuitaAziendale>
+</xbrli:xbrl>
+`;
+  writeFileSync(join(CARTELLA, file), contenuto, 'utf8');
+}
+
 function excel({ file, titolo, azienda, righe }) {
   const wb = XLSX.utils.book_new();
   const dati = [
@@ -208,6 +273,15 @@ for (const a of aziende) {
       '## Avvertenza',
       'Questo fascicolo è un documento dimostrativo. I dati sono inventati e non corrispondono a imprese reali. La filigrana DEMO è ripetuta su ogni pagina.',
     ],
+  });
+
+  // Ogni azienda demo ha il suo bilancio XBRL, anche quella ferma al triage:
+  // è il file che la simulazione di acquisizione propone nel campo XBRL, e
+  // senza di esso il Piano-ponte di quella posizione non si può mostrare.
+  xbrl({
+    file: `bilancio-${a.chiave}-2025.xbrl`,
+    azienda: a.nome,
+    cf: a.cf,
   });
 
   if (a.chiave !== 'impianti-adriatica') {

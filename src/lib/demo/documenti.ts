@@ -81,6 +81,13 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
   ),
   documento(
     AZIENDA_MECCANICA,
+    'bilancio-meccanica-valsesia-2025.xbrl',
+    'XBRL',
+    'Bilancio 2025 — istanza XBRL letta dal motore',
+    'BILANCIO'
+  ),
+  documento(
+    AZIENDA_MECCANICA,
     'certificazione-debiti-meccanica-valsesia.xlsx',
     'EXCEL',
     'Certificazione dei debiti',
@@ -114,6 +121,13 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
     'bilancio-tessitura-lario-2025.xlsx',
     'EXCEL',
     'Bilancio 2025 — prospetto dimostrativo',
+    'BILANCIO'
+  ),
+  documento(
+    AZIENDA_TESSITURA,
+    'bilancio-tessitura-lario-2025.xbrl',
+    'XBRL',
+    'Bilancio 2025 — istanza XBRL letta dal motore',
     'BILANCIO'
   ),
   documento(
@@ -162,6 +176,13 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
   ),
   documento(
     AZIENDA_LOGISTICA,
+    'bilancio-logistica-padana-2025.xbrl',
+    'XBRL',
+    'Bilancio 2025 — istanza XBRL letta dal motore',
+    'BILANCIO'
+  ),
+  documento(
+    AZIENDA_LOGISTICA,
     'certificazione-debiti-logistica-padana.xlsx',
     'EXCEL',
     'Certificazione dei debiti',
@@ -195,6 +216,13 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
     'bilancio-cantieri-brianza-2025.xlsx',
     'EXCEL',
     'Bilancio 2025 — prospetto dimostrativo',
+    'BILANCIO'
+  ),
+  documento(
+    AZIENDA_CANTIERI,
+    'bilancio-cantieri-brianza-2025.xbrl',
+    'XBRL',
+    'Bilancio 2025 — istanza XBRL letta dal motore',
     'BILANCIO'
   ),
   documento(
@@ -234,14 +262,23 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
   ),
 
   // Impianti Adriatica — la posizione ferma al triage: visura, certificazione,
-  // denunce DM10 e deleghe di pagamento. Non ci sono bilancio, proposta o
-  // provvedimento, perché il percorso non è ancora arrivato allo scenario.
+  // denunce DM10 e deleghe di pagamento. Non ci sono proposta o provvedimento,
+  // perché il percorso non è ancora arrivato allo scenario; il bilancio XBRL
+  // invece c'è, ed è quello che permette di provare il Piano-ponte su una
+  // posizione non precostituita.
   documento(
     AZIENDA_IMPIANTI,
     'fascicolo-storico-impianti-adriatica.pdf',
     'PDF',
     'Fascicolo storico e visura camerale',
     'FASCICOLO'
+  ),
+  documento(
+    AZIENDA_IMPIANTI,
+    'bilancio-impianti-adriatica-2025.xbrl',
+    'XBRL',
+    'Bilancio 2025 — istanza XBRL letta dal motore',
+    'BILANCIO'
   ),
   documento(
     AZIENDA_IMPIANTI,
@@ -366,7 +403,13 @@ export function documentiDemoPerAccettazione(accept: string | null | undefined):
     .map((e) => e.trim())
     .filter(Boolean);
   if (estensioni.some((e) => e.includes('xbrl') || e.includes('xml'))) {
-    return DOCUMENTI_DEMO.filter((d) => d.nome.startsWith('bilancio-'));
+    // Al campo XBRL vanno solo istanze XBRL: il prospetto Excel dello stesso
+    // anno non è un file che il parser saprebbe leggere, e proporlo nella
+    // schermata di acquisizione era un vicolo cieco.
+    const istanze = DOCUMENTI_DEMO.filter((d) => d.formato === 'XBRL');
+    return istanze.length > 0
+      ? istanze
+      : DOCUMENTI_DEMO.filter((d) => d.nome.startsWith('bilancio-'));
   }
   const pdf = estensioni.some((e) => e.includes('pdf'))
     ? DOCUMENTI_DEMO.filter((d) => d.formato === 'PDF')

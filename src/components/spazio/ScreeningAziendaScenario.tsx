@@ -57,9 +57,17 @@ interface Props {
   aziendaId: number;
   codice: string;
   tipoSpazio: 'ENTE' | 'NON_ENTE';
+  /** Il Piano-ponte esiste già: senza, la valutazione completa non parte. */
+  ponteEsiste?: boolean;
 }
 
-export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSpazio }: Props) {
+export function ScreeningAziendaScenario({
+  nomeSchema,
+  aziendaId,
+  codice,
+  tipoSpazio,
+  ponteEsiste,
+}: Props) {
   const router = useRouter();
   const demo = useDemo();
   const [stato, setStato] = useState<StatoScreeningAzienda | null>(null);
@@ -395,7 +403,9 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">Screening</h2>
+        <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+          Valutazione completa dell&apos;azienda
+        </h2>
         <p className="text-[11px] text-slate-500 mt-1">
           {tipoSpazio === 'NON_ENTE' ? (
             <>
@@ -735,15 +745,35 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
             </span>
           </p>
         )}
+        {tipoSpazio === 'ENTE' && ponteEsiste === false && (
+          <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
+            <span className="font-bold">Prima il Piano-ponte.</span> La valutazione completa
+            confronta il Piano-ponte con il percorso dell&apos;azienda.{' '}
+            <a
+              href={`/spazio/${codice}/aziende/${aziendaId}/ponte`}
+              className="font-bold text-sky-700 hover:underline"
+            >
+              Apri il Piano-ponte e calcolalo
+            </a>
+            : finché non c&apos;è, la valutazione non parte.
+          </p>
+        )}
         <button
           type="button"
           onClick={handleGenera}
           disabled={
             generazioneInCorso ||
             !haFascicolo ||
+            (tipoSpazio === 'ENTE' && ponteEsiste === false) ||
             (tipoSpazio !== 'NON_ENTE' && (stato?.identificativiEnte.length ?? 0) === 0)
           }
-          title={!haFascicolo ? 'Carica prima il fascicolo storico (PDF)' : undefined}
+          title={
+            tipoSpazio === 'ENTE' && ponteEsiste === false
+              ? 'Prima calcola il Piano-ponte'
+              : !haFascicolo
+                ? 'Carica prima il fascicolo storico (PDF)'
+                : undefined
+          }
           className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold uppercase tracking-wider rounded-lg text-xs transition-colors"
         >
           {generazioneInCorso ? (
@@ -753,13 +783,15 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           )}
           {generazioneInCorso
             ? `Analisi in corso… ${secondiGenerazione}s`
-            : !haFascicolo
-              ? 'Carica il fascicolo storico per generare'
-              : tipoSpazio === 'NON_ENTE'
-                ? 'Pre-compila Check List Ministeriale'
-                : stato?.esiste
-                  ? 'Rigenera screening'
-                  : 'Genera screening'}
+            : tipoSpazio === 'ENTE' && ponteEsiste === false
+              ? 'Calcola prima il Piano-ponte'
+              : !haFascicolo
+                ? 'Carica il fascicolo storico per generare'
+                : tipoSpazio === 'NON_ENTE'
+                  ? 'Pre-compila Check List Ministeriale'
+                  : stato?.esiste
+                    ? 'Rigenera la valutazione'
+                    : 'Avvia la valutazione completa'}
         </button>
         {generazioneInCorso && (
           <div className="text-[11px] text-slate-700 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
@@ -824,7 +856,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
                 className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
                 title="Un solo documento: copertina, relazione, riscontri normativi e, se attivo, l’allegato"
               >
-                <Printer className="w-3.5 h-3.5" /> Stampa lo Screening (PDF)
+                <Printer className="w-3.5 h-3.5" /> Stampa la valutazione (PDF)
               </button>
               {menuStampa && (
                 <div className="absolute right-0 mt-1 w-80 bg-white border border-slate-200 rounded-xl shadow-lg p-3 space-y-2 z-20">

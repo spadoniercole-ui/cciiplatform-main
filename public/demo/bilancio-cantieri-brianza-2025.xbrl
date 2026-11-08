@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- DEMO — DOCUMENTO FITTIZIO, SENZA VALORE LEGALE. Dati inventati per la simulazione. -->
+<xbrli:xbrl
+  xmlns:xbrli="http://www.xbrl.org/2003/instance"
+  xmlns:itcc-ci="http://www.itcc.it/tassonomia/ci/2025-01-01"
+  xmlns:iso4217="http://www.xbrl.org/2003/iso4217">
+  <xbrli:context id="C2025">
+    <xbrli:entity>
+      <xbrli:identifier scheme="http://www.itcc.it/codicefiscale">00000000104</xbrli:identifier>
+    </xbrli:entity>
+    <xbrli:period>
+      <xbrli:startDate>2025-01-01</xbrli:startDate>
+      <xbrli:endDate>2025-12-31</xbrli:endDate>
+    </xbrli:period>
+  </xbrli:context>
+  <xbrli:context id="C2024">
+    <xbrli:entity>
+      <xbrli:identifier scheme="http://www.itcc.it/codicefiscale">00000000104</xbrli:identifier>
+    </xbrli:entity>
+    <xbrli:period>
+      <xbrli:startDate>2024-01-01</xbrli:startDate>
+      <xbrli:endDate>2024-12-31</xbrli:endDate>
+    </xbrli:period>
+  </xbrli:context>
+  <xbrli:unit id="EUR">
+    <xbrli:measure>iso4217:EUR</xbrli:measure>
+  </xbrli:unit>
+  <itcc-ci:Denominazione contextRef="C2025">Cantieri Brianza Demo S.r.l.</itcc-ci:Denominazione>
+  <itcc-ci:CodiceFiscale contextRef="C2025">00000000104</itcc-ci:CodiceFiscale>
+  <itcc-ci:TotaleAttivo contextRef="C2025" unitRef="EUR" decimals="0">1100000</itcc-ci:TotaleAttivo>
+  <itcc-ci:TotaleAttivo contextRef="C2024" unitRef="EUR" decimals="0">1200000</itcc-ci:TotaleAttivo>
+  <itcc-ci:TotaleAttivoCircolante contextRef="C2025" unitRef="EUR" decimals="0">600000</itcc-ci:TotaleAttivoCircolante>
+  <itcc-ci:TotaleAttivoCircolante contextRef="C2024" unitRef="EUR" decimals="0">650000</itcc-ci:TotaleAttivoCircolante>
+  <itcc-ci:TotaleDisponibilitaLiquide contextRef="C2025" unitRef="EUR" decimals="0">90000</itcc-ci:TotaleDisponibilitaLiquide>
+  <itcc-ci:TotaleDisponibilitaLiquide contextRef="C2024" unitRef="EUR" decimals="0">120000</itcc-ci:TotaleDisponibilitaLiquide>
+  <itcc-ci:TotaleImmobilizzazioni contextRef="C2025" unitRef="EUR" decimals="0">500000</itcc-ci:TotaleImmobilizzazioni>
+  <itcc-ci:TotaleImmobilizzazioni contextRef="C2024" unitRef="EUR" decimals="0">550000</itcc-ci:TotaleImmobilizzazioni>
+  <itcc-ci:TotalePatrimonioNetto contextRef="C2025" unitRef="EUR" decimals="0">55000</itcc-ci:TotalePatrimonioNetto>
+  <itcc-ci:TotalePatrimonioNetto contextRef="C2024" unitRef="EUR" decimals="0">100000</itcc-ci:TotalePatrimonioNetto>
+  <itcc-ci:TotaleDebiti contextRef="C2025" unitRef="EUR" decimals="0">900000</itcc-ci:TotaleDebiti>
+  <itcc-ci:TotaleDebiti contextRef="C2024" unitRef="EUR" decimals="0">880000</itcc-ci:TotaleDebiti>
+  <itcc-ci:DebitiVersoBanche contextRef="C2025" unitRef="EUR" decimals="0">350000</itcc-ci:DebitiVersoBanche>
+  <itcc-ci:DebitiVersoBanche contextRef="C2024" unitRef="EUR" decimals="0">340000</itcc-ci:DebitiVersoBanche>
+  <itcc-ci:DebitiVersoFornitori contextRef="C2025" unitRef="EUR" decimals="0">300000</itcc-ci:DebitiVersoFornitori>
+  <itcc-ci:DebitiVersoFornitori contextRef="C2024" unitRef="EUR" decimals="0">310000</itcc-ci:DebitiVersoFornitori>
+  <itcc-ci:DebitiTributari contextRef="C2025" unitRef="EUR" decimals="0">150000</itcc-ci:DebitiTributari>
+  <itcc-ci:DebitiTributari contextRef="C2024" unitRef="EUR" decimals="0">140000</itcc-ci:DebitiTributari>
+  <itcc-ci:DebitiVersoIstitutiPrevidenzaSicurezzaSociale contextRef="C2025" unitRef="EUR" decimals="0">100000</itcc-ci:DebitiVersoIstitutiPrevidenzaSicurezzaSociale>
+  <itcc-ci:DebitiVersoIstitutiPrevidenzaSicurezzaSociale contextRef="C2024" unitRef="EUR" decimals="0">90000</itcc-ci:DebitiVersoIstitutiPrevidenzaSicurezzaSociale>
+  <itcc-ci:CreditiVersoClienti contextRef="C2025" unitRef="EUR" decimals="0">320000</itcc-ci:CreditiVersoClienti>
+  <itcc-ci:CreditiVersoClienti contextRef="C2024" unitRef="EUR" decimals="0">300000</itcc-ci:CreditiVersoClienti>
+  <itcc-ci:ValoreProduzioneRicaviVenditePrestazioni contextRef="C2025" unitRef="EUR" decimals="0">1200000</itcc-ci:ValoreProduzioneRicaviVenditePrestazioni>
+  <itcc-ci:ValoreProduzioneRicaviVenditePrestazioni contextRef="C2024" unitRef="EUR" decimals="0">1350000</itcc-ci:ValoreProduzioneRicaviVenditePrestazioni>
+  <itcc-ci:TotaleValoreProduzione contextRef="C2025" unitRef="EUR" decimals="0">1350000</itcc-ci:TotaleValoreProduzione>
+  <itcc-ci:TotaleValoreProduzione contextRef="C2024" unitRef="EUR" decimals="0">1500000</itcc-ci:TotaleValoreProduzione>
+  <itcc-ci:TotaleCostiProduzione contextRef="C2025" unitRef="EUR" decimals="0">1290000</itcc-ci:TotaleCostiProduzione>
+  <itcc-ci:TotaleCostiProduzione contextRef="C2024" unitRef="EUR" decimals="0">1420000</itcc-ci:TotaleCostiProduzione>
+  <itcc-ci:DifferenzaValoreCostiProduzione contextRef="C2025" unitRef="EUR" decimals="0">60000</itcc-ci:DifferenzaValoreCostiProduzione>
+  <itcc-ci:DifferenzaValoreCostiProduzione contextRef="C2024" unitRef="EUR" decimals="0">80000</itcc-ci:DifferenzaValoreCostiProduzione>
+  <itcc-ci:TotaleAmmortamentiERettificheDiValutazione contextRef="C2025" unitRef="EUR" decimals="0">40000</itcc-ci:TotaleAmmortamentiERettificheDiValutazione>
+  <itcc-ci:TotaleAmmortamentiERettificheDiValutazione contextRef="C2024" unitRef="EUR" decimals="0">45000</itcc-ci:TotaleAmmortamentiERettificheDiValutazione>
+  <itcc-ci:InteressiEdAltriOneriFinanziari contextRef="C2025" unitRef="EUR" decimals="0">55000</itcc-ci:InteressiEdAltriOneriFinanziari>
+  <itcc-ci:InteressiEdAltriOneriFinanziari contextRef="C2024" unitRef="EUR" decimals="0">50000</itcc-ci:InteressiEdAltriOneriFinanziari>
+  <itcc-ci:UtilePerditaEsercizio contextRef="C2025" unitRef="EUR" decimals="0">5000</itcc-ci:UtilePerditaEsercizio>
+  <itcc-ci:UtilePerditaEsercizio contextRef="C2024" unitRef="EUR" decimals="0">15000</itcc-ci:UtilePerditaEsercizio>
+  <itcc-ci:NotaIntegrativaContinuitaAziendale contextRef="C2025">Documento dimostrativo: la nota riporta una valutazione di continuità aziendale fittizia, utile a mostrare come il Piano-ponte legge le note integrative e non solo i numeri di sintesi.</itcc-ci:NotaIntegrativaContinuitaAziendale>
+</xbrli:xbrl>

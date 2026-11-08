@@ -1,3 +1,21 @@
+## 0.177.0 — 2026-11-08
+
+**Il Piano-ponte viene prima della valutazione completa, e la simulazione ha i bilanci XBRL.**
+
+- **Voci di menu rinominate.** «Verifica salute azienda» diventa «Verifica amministrativa
+  aziendale» e «Aziende» diventa «Verifica contabile aziendale»: due nomi che dicono cosa si
+  fa, senza toccare rotte e permessi già salvati.
+- **Piano-ponte prima della valutazione completa.** Nella scheda azienda il passo del ponte
+  precede la valutazione (ex «Screening»), che resta bloccata finché il ponte non è calcolato;
+  l’azione lo riverifica, così il vincolo non è solo un pulsante disabilitato. La prima
+  elaborazione automatica al salvataggio dei parametri dell’ente resta possibile: avviene nel
+  triage, prima che il ponte esista.
+- **La simulazione ha i bilanci XBRL.** Ogni azienda demo — compresa Impianti Adriatica, ferma
+  al triage — porta con sé un’istanza XBRL con contesti, fatti e nota integrativa: il campo
+  «Carica i bilanci XBRL» non apre più una schermata con zero documenti, e il ponte si può
+  provare su una posizione non precostituita. Al campo XBRL si propongono solo istanze
+  .xbrl/.xml, non i prospetti Excel.
+
 ## 0.176.0 — 2026-11-08
 
 **Il Piano-ponte confronta credito, debito e recupero, e si fa assistere dall’AI solo sulle assunzioni.**

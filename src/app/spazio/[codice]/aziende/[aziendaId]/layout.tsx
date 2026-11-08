@@ -8,6 +8,7 @@ import { ottieniConteggioScreeningPendente } from '@/app/actions/screeningAziend
 import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniStatoAnalisiBilancioStep } from '@/app/actions/analisiBilancioStep';
+import { esistePonteAzienda } from '@/lib/ponte/persistenza';
 import { anagraficaAziendaCompleta } from '@/lib/anagraficaAzienda';
 import { leggiIdentificativiEnte } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
@@ -49,12 +50,16 @@ export default async function AziendaLayout({
 
   // Segnali di completamento, tutti in parallelo. La Posizione Ente esiste
   // solo per gli spazi ENTE.
-  const [pendenteScreening, anagraficaEnteRis, xbrlRis, statoAnalisiBilancio] = await Promise.all([
-    ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
-    isEnte ? ottieniAnagraficaEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
-    ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
-    ottieniStatoAnalisiBilancioStep(contesto.nomeSchema, aziendaNum),
-  ]);
+  const [pendenteScreening, anagraficaEnteRis, xbrlRis, statoAnalisiBilancio, statoPonte] =
+    await Promise.all([
+      ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
+      isEnte ? ottieniAnagraficaEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
+      ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
+      ottieniStatoAnalisiBilancioStep(contesto.nomeSchema, aziendaNum),
+      isEnte
+        ? esistePonteAzienda(contesto.nomeSchema, aziendaNum)
+        : Promise.resolve({ esiste: false, stato: null, versione: null }),
+    ]);
   const domandeMancanti = pendenteScreening.totali - pendenteScreening.risposte;
   // Identificativi presso l'ente: in testata, in evidenza, appena salvati.
   const identificativi = isEnte
@@ -111,6 +116,10 @@ export default async function AziendaLayout({
     (xbrlRis?.storico?.length ?? 0) > 0 ||
     (!!statoAnalisiBilancio?.stato.xbrlConfigVista && !!statoAnalisiBilancio?.stato.indiciVisti);
   const screeningGenerato = pendenteScreening.esiste;
+  // Il Piano-ponte viene PRIMA della valutazione completa: la valutazione
+  // confronta il ponte con il percorso dell'azienda, e senza il ponte non ha
+  // una base contabile da confrontare.
+  const ponteEsiste = statoPonte.esiste;
   const checklistCompleta =
     screeningGenerato && pendenteScreening.totali > 0 && domandeMancanti === 0;
 
@@ -146,25 +155,32 @@ export default async function AziendaLayout({
     stato: !anagraficaCompleta ? 'bloccato' : analisiBilancioCompleta ? 'completo' : 'attivo',
     motivo: "Completa prima l'Anagrafica azienda.",
   });
-  steps.push({
-    id: 'screening',
-    label: 'Screening',
-    stato: !passi123Verdi ? 'bloccato' : screeningGenerato ? 'completo' : 'attivo',
-    motivo: isEnte
-      ? 'Completa prima Anagrafica, Anagrafica Ente e Analisi Bilancio.'
-      : 'Completa prima Anagrafica e Analisi Bilancio.',
-  });
   // Il Piano-ponte sta a livello azienda, dopo i dati di base: non richiede
   // uno Scenario e non è la Check List. Per l'ENTE è il passo che porta il
-  // bilancio storico alla Data verifica.
+  // bilancio storico alla Data verifica, e precede la valutazione completa.
   if (isEnte) {
     steps.push({
       id: 'ponte',
       label: 'Piano-ponte',
-      stato: !passi123Verdi ? 'bloccato' : 'attivo',
+      stato: !passi123Verdi ? 'bloccato' : ponteEsiste ? 'completo' : 'attivo',
       motivo: 'Completa prima Anagrafica, Posizione Ente e Analisi Bilancio.',
     });
   }
+  steps.push({
+    id: 'screening',
+    label: 'Valutazione completa',
+    stato:
+      !passi123Verdi || (isEnte && !ponteEsiste)
+        ? 'bloccato'
+        : screeningGenerato
+          ? 'completo'
+          : 'attivo',
+    motivo: isEnte
+      ? ponteEsiste
+        ? 'Completa prima Anagrafica, Anagrafica Ente e Analisi Bilancio.'
+        : 'Prima calcola il Piano-ponte: la valutazione completa si lancia dopo.'
+      : 'Completa prima Anagrafica e Analisi Bilancio.',
+  });
   // La Check List dello screening non è più un passo dell'Azienda: si genera
   // e si risponde dentro il triage (0.154.0). Il passo resta per il Redigente,
   // dove la stessa scheda ospita il Test pratico e la Ministeriale.
@@ -194,7 +210,7 @@ export default async function AziendaLayout({
           href={`/spazio/${codice}/aziende`}
           className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-blue-600 font-bold uppercase tracking-wider"
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> Torna alle aziende
+          <ArrowLeft className="w-3.5 h-3.5" /> Torna alla verifica contabile
         </Link>
 
         <div className="bg-white border border-slate-200 rounded-xl p-5">

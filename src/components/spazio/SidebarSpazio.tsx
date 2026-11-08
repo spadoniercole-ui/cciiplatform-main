@@ -53,12 +53,18 @@ const VOCI_MENU: {
   { id: 'utenti', label: 'Utenti', icon: Users, stato: 'pronta', soloAdmin: true },
   {
     id: 'verifica-salute',
-    label: 'Verifica salute azienda',
+    label: 'Verifica amministrativa aziendale',
     icon: Stethoscope,
     stato: 'pronta',
     soloAdmin: true,
   },
-  { id: 'aziende', label: 'Aziende', icon: Building2, stato: 'pronta', soloAdmin: true },
+  {
+    id: 'aziende',
+    label: 'Verifica contabile aziendale',
+    icon: Building2,
+    stato: 'pronta',
+    soloAdmin: true,
+  },
   {
     id: 'scenari',
     label: 'Scenari',

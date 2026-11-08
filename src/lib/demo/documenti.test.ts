@@ -1,9 +1,12 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { analizzaFileXbrl } from '@/lib/xbrl';
+import { parseIstanzaXbrl } from '@/lib/xbrl/parser';
 import {
   AZIENDA_CANTIERI,
   AZIENDA_IMPIANTI,
+  AZIENDA_LOGISTICA,
   AZIENDA_MECCANICA,
   AZIENDA_TESSITURA,
   DOCUMENTI_DEMO,
@@ -42,9 +45,10 @@ describe('documenti del percorso demo', () => {
     expect(fascicoloDemoPerCodiceFiscale('non-esiste')).toBeNull();
   });
 
-  it('la posizione ferma al triage ha visura, certificazione, DM10 e deleghe', () => {
+  it('la posizione ferma al triage ha visura, bilancio, certificazione, DM10 e deleghe', () => {
     const documenti = documentiDemoPerAzienda(AZIENDA_IMPIANTI, null);
     expect(documenti.map((d) => d.ruolo).sort()).toEqual([
+      'BILANCIO',
       'CERTIFICAZIONE',
       'CHECKLIST',
       'DELEGHE',
@@ -83,15 +87,40 @@ describe('documenti del percorso demo', () => {
   });
 
   it('il caricamento simulato mostra il tipo di file giusto', () => {
-    expect(
-      documentiDemoPerAccettazione('.xbrl,.xml').every((d) => d.nome.startsWith('bilancio-'))
-    ).toBe(true);
+    expect(documentiDemoPerAccettazione('.xbrl,.xml').every((d) => d.formato === 'XBRL')).toBe(
+      true
+    );
     expect(documentiDemoPerAccettazione('.pdf').every((d) => d.formato === 'PDF')).toBe(true);
     expect(
       documentiDemoPerAccettazione('.xlsx,.xls').every(
         (d) => d.formato === 'EXCEL' && !d.nome.startsWith('bilancio-')
       )
     ).toBe(true);
+  });
+
+  it('ogni azienda ha il bilancio XBRL e il file è davvero leggibile', async () => {
+    for (const azienda of [
+      AZIENDA_MECCANICA,
+      AZIENDA_TESSITURA,
+      AZIENDA_LOGISTICA,
+      AZIENDA_CANTIERI,
+      AZIENDA_IMPIANTI,
+    ]) {
+      const istanze = documentiDemoPerAzienda(azienda, '.xbrl,.xml');
+      expect(istanze, azienda).toHaveLength(1);
+      const xml = readFileSync(join(process.cwd(), 'public', istanze[0].percorso), 'utf8');
+      const estratto = parseIstanzaXbrl(xml);
+      expect(estratto.annoBilancio, azienda).toBe(2025);
+      expect(estratto.facts.length, azienda).toBeGreaterThan(15);
+
+      // Il file non basta: deve arrivare ai campi del bilancio che il
+      // Piano-ponte legge. Un tag scritto male darebbe una demo di zeri.
+      const analisi = await analizzaFileXbrl(xml, istanze[0].nome);
+      expect(analisi.corrente.totaleAttivo, azienda).toBe(1_100_000);
+      expect(analisi.corrente.totaleDebiti, azienda).toBe(900_000);
+      expect(analisi.corrente.valoreProduzione, azienda).toBe(1_350_000);
+      expect(analisi.note?.fatti.length ?? 0, azienda).toBeGreaterThan(0);
+    }
   });
 
   it('filtra per azienda: nel caricamento di Meccanica non compaiono i documenti di Tessitura', () => {

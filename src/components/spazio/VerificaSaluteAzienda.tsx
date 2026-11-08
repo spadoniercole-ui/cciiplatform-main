@@ -1968,7 +1968,7 @@ export function VerificaSaluteAzienda({
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <h2 className="flex items-center gap-2 font-bold text-slate-900 uppercase text-xs tracking-wider">
             <Stethoscope className="w-4 h-4 text-slate-500" />
-            Verifica salute azienda
+            Verifica amministrativa aziendale
           </h2>
           {/* LA VIA DEL RITORNO, SEMPRE. Dentro una verifica aperta la
               dashboard del triage — le verifiche in sospeso da riprendere —

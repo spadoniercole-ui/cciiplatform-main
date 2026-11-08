@@ -128,7 +128,7 @@ export function AziendeManager({ nomeSchema, codice }: Props) {
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Aziende</h1>
+          <h1 className="text-xl font-bold text-slate-900">Verifica contabile aziendale</h1>
           <p className="text-slate-500 text-xs mt-1">
             Le analisi (check list, indici, XBRL) saranno sempre riferite a una specifica azienda.
           </p>
