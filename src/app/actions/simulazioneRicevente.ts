@@ -397,7 +397,8 @@ export async function ottieniDocumentiRiceventeAction(
 export async function analizzaDocumentiRiceventeAction(
   nomeSchema: string,
   scenarioId: number,
-  istruzioniOperatore?: string
+  istruzioniOperatore?: string,
+  opzioniPiano?: import('@/lib/piano/scelteValutazione').SceltePianoValutazione | null
 ): Promise<RisultatoAnalisiRicevente> {
   await richiediAccessoScenario(nomeSchema, scenarioId, {
     modulo: ['report'],
@@ -405,6 +406,14 @@ export async function analizzaDocumentiRiceventeAction(
   });
   if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
   await assicuraTabellaSimulazioneRicevente(nomeSchema);
+  if (opzioniPiano) {
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".simulazione_ricevente (scenario_id, opzioni_piano)
+       VALUES ($1, $2::jsonb)
+       ON CONFLICT (scenario_id) DO UPDATE SET opzioni_piano = EXCLUDED.opzioni_piano`,
+      [scenarioId, JSON.stringify(opzioniPiano)]
+    );
+  }
   // I documenti sono quelli CARICATI al primo passo (e già letti nella
   // prima lettura): la valutazione non li richiede di nuovo.
   const caricati = await leggiDocumentiCaricati(nomeSchema, scenarioId);
@@ -500,6 +509,26 @@ export async function analizzaDocumentiRiceventeAction(
     ]);
 
     const blocchiContesto: string[] = [];
+    if (scenarioRis.scenario.simulazioneAttiva) {
+      const { sintesiPianoScenarioAction } = await import('@/app/actions/sintesiPiano');
+      const piano = await sintesiPianoScenarioAction(
+        nomeSchema,
+        scenarioId,
+        aziendaId,
+        'RICEVUTA',
+        null,
+        opzioniPiano ?? null
+      );
+      if (piano.disponibile) {
+        blocchiContesto.push(
+          `PIANO DI SVILUPPO E SCELTE DELL’ISTRUTTORE (dati calcolati dalla piattaforma, da usare senza inventare cifre):\n${piano.testo}${
+            opzioniPiano
+              ? `\nScelte esplicite: piano scelto «${opzioniPiano.pianoScelto ?? 'base'}»; piano dell’azienda ${opzioniPiano.includiPianoAziendale ? 'incluso' : 'escluso'}; confronto ${opzioniPiano.includiConfronto ? 'da citare nella relazione finale' : 'non richiesto'}.`
+              : ''
+          }`
+        );
+      }
+    }
     const voce = voceStrumento(String(inquadramento.strumento_proposta));
     blocchiContesto.push(
       `Inquadramento confermato dall'istruttore: strumento ${voce ? `${voce.etichetta} (${voce.riferimento})` : inquadramento.strumento_proposta}${

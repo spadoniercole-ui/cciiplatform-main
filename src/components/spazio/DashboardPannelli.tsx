@@ -1,25 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Building2, UserCog, FolderOpen, FileText, Printer, Stethoscope } from 'lucide-react';
-import { stampaTesto } from '@/lib/stampaTesto';
-import type { UltimoScreeningSpazio } from '@/app/actions/screeningAzienda';
+import { FolderOpen, Stethoscope } from 'lucide-react';
 
-export interface RigaAzienda {
-  id: number;
-  ragioneSociale: string;
-  partitaIva: string | null;
-  codiceFiscale: string | null;
-  attiva: boolean;
-  /** Identificativi presso l'ente: in evidenza, prima dei camerali. */
-  identificativiEnte?: { etichetta: string; valore: string }[];
-}
-export interface RigaUtente {
-  nome: string;
-  cognome: string;
-  username: string | null;
-  email: string | null;
-}
 export interface RigaVerificaDashboard {
   id: number;
   ragioneSociale: string;
@@ -37,18 +20,10 @@ export interface RigaScenario {
 
 interface Props {
   codice: string;
-  aziende: RigaAzienda[];
-  totaleAziendeAttive: number | '—';
-  utenti: RigaUtente[];
-  totaleUtenti: number | '—';
   verifiche?: RigaVerificaDashboard[];
   scenari: RigaScenario[];
   totaleScenari: number | '—';
-  report: UltimoScreeningSpazio[];
 }
-
-const fmtData = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
 const MAX = 4;
 
@@ -59,7 +34,7 @@ function Intestazione({
   label,
   totale,
 }: {
-  icon: typeof Building2;
+  icon: typeof Stethoscope;
   colore: string;
   label: string;
   totale: number | '—';
@@ -94,70 +69,9 @@ function VediTutti({ href, testo }: { href: string; testo: string }) {
   );
 }
 
-export function DashboardPannelli({
-  codice,
-  aziende,
-  totaleAziendeAttive,
-  utenti,
-  totaleUtenti,
-  verifiche = [],
-  scenari,
-  totaleScenari,
-  report,
-}: Props) {
+export function DashboardPannelli({ codice, verifiche = [], scenari, totaleScenari }: Props) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Aziende */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4">
-        <Intestazione
-          icon={Building2}
-          colore="text-blue-600 bg-blue-50"
-          label="Aziende Attive"
-          totale={totaleAziendeAttive}
-        />
-        {aziende.length === 0 ? (
-          <Vuoto testo="Nessuna azienda registrata." />
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {aziende.slice(0, MAX).map((a) => {
-              const camerale = a.partitaIva
-                ? `P.IVA ${a.partitaIva}`
-                : a.codiceFiscale
-                  ? `C.F. ${a.codiceFiscale}`
-                  : null;
-              const ente = (a.identificativiEnte ?? [])
-                .map((x) => `${x.etichetta} ${x.valore}`)
-                .join(' · ');
-              const rif = ente ? (camerale ? `${ente} — ${camerale}` : ente) : camerale;
-              return (
-                <Link
-                  key={a.id}
-                  href={`/spazio/${codice}/aziende/${a.id}`}
-                  className="flex items-center justify-between gap-3 py-2 group"
-                >
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-1.5">
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.attiva ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                      />
-                      <span className="font-bold text-slate-900 text-xs group-hover:text-blue-600 transition-colors truncate">
-                        {a.ragioneSociale}
-                      </span>
-                    </span>
-                    {rif && (
-                      <span className="block text-[10px] text-slate-400 font-mono ml-3 mt-0.5">
-                        {rif}
-                      </span>
-                    )}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-        <VediTutti href={`/spazio/${codice}/aziende`} testo="Tutte le aziende" />
-      </div>
-
       {/* Aziende da verificare — al posto del pannello Utenti.
           È il triage: posizioni guardate ma non ancora prese in carico. In
           dashboard serve più sapere cosa aspetta una decisione che
@@ -259,56 +173,6 @@ export function DashboardPannelli({
           </div>
         )}
         <VediTutti href={`/spazio/${codice}/scenari`} testo="Tutti gli scenari" />
-      </div>
-
-      {/* Ultimi Report */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4">
-        <Intestazione
-          icon={FileText}
-          colore="text-blue-600 bg-blue-50"
-          label="Ultimi Report"
-          totale={report.length}
-        />
-        {report.length === 0 ? (
-          <Vuoto testo="Nessun report di Screening generato." />
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {report.slice(0, MAX).map((s) => (
-              <div key={s.aziendaId} className="flex items-center justify-between gap-2 py-2">
-                <Link
-                  href={`/spazio/${codice}/aziende/${s.aziendaId}/screening`}
-                  className="min-w-0 group"
-                >
-                  <span className="block font-bold text-slate-900 text-xs group-hover:text-blue-600 transition-colors truncate">
-                    {s.ragioneSociale}
-                  </span>
-                  <span className="block text-[10px] text-slate-400">{fmtData(s.generatoIl)}</span>
-                </Link>
-                {s.relazioneTesto ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      stampaTesto(
-                        `Screening — ${s.ragioneSociale}`,
-                        s.relazioneTesto!,
-                        s.generatoIl
-                      )
-                    }
-                    className="flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[9px] uppercase rounded transition-colors whitespace-nowrap shrink-0"
-                    title="Apre la stampa dell'ultimo screening — da lì puoi salvare come PDF"
-                  >
-                    <Printer className="w-3 h-3" /> PDF
-                  </button>
-                ) : (
-                  <span className="text-[9px] text-slate-300 uppercase font-bold px-2 py-1 shrink-0">
-                    no PDF
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-        <VediTutti href={`/spazio/${codice}/aziende`} testo="Tutti i report" />
       </div>
     </div>
   );

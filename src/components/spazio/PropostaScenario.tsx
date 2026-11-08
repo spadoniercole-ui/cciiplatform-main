@@ -456,6 +456,7 @@ export function PropostaScenario({
                   <input
                     type="file"
                     accept=".xlsx,.xls"
+                    data-demo-applica="file"
                     data-demo-ruoli="PROPOSTA"
                     className="hidden"
                     disabled={importazioneInCorso}

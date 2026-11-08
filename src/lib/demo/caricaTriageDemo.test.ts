@@ -21,12 +21,14 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/db/provision', () => ({
   assicuraTabellaAziende: async () => undefined,
+  assicuraTabellaCategorieTipoDebito: async () => undefined,
   assicuraTabellaXbrlAzienda: async () => undefined,
   assicuraTabelleScreeningAzienda: async () => undefined,
   assicuraTabellaDebitiEnte: async () => undefined,
   assicuraTabelleParametriSpazio: async () => undefined,
   assicuraTabelleScenari: async () => undefined,
   assicuraTabelleScenariTriage: async () => undefined,
+  assicuraTabelleTl: async () => undefined,
   assicuraTabelleVera: async () => undefined,
 }));
 
@@ -108,6 +110,37 @@ beforeEach(async () => {
       ordine INTEGER NOT NULL DEFAULT 0,
       aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
     );
+    CREATE TABLE ${SCHEMA}.categorie_tipo_debito (
+      codice TEXT PRIMARY KEY,
+      etichetta TEXT NOT NULL,
+      descrizione TEXT,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      attivo BOOLEAN NOT NULL DEFAULT TRUE,
+      contribuisce BOOLEAN NOT NULL DEFAULT TRUE
+    );
+    CREATE TABLE ${SCHEMA}.tl (
+      id SERIAL PRIMARY KEY,
+      codice TEXT NOT NULL DEFAULT '',
+      descrizione TEXT NOT NULL DEFAULT '',
+      check_list BOOLEAN NOT NULL DEFAULT false,
+      ordine INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE ${SCHEMA}.materia_tl (
+      materia_id INTEGER NOT NULL,
+      tl_id INTEGER NOT NULL,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      dipendenza TEXT,
+      procedura TEXT,
+      esito TEXT,
+      PRIMARY KEY (materia_id, tl_id)
+    );
+    CREATE TABLE ${SCHEMA}.categoria_tl (
+      categoria TEXT NOT NULL,
+      tl_id INTEGER NOT NULL,
+      attivo BOOLEAN NOT NULL DEFAULT TRUE,
+      ordine INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (categoria, tl_id)
+    );
   `);
 });
 
@@ -136,7 +169,7 @@ describe('caricamento demo — quinta azienda al triage', () => {
     expect(aziende.rows[0]).toMatchObject({
       ragione_sociale: 'Impianti Adriatica Demo S.r.l.',
       in_verifica: true,
-      verifica_esito: 'ATTENZIONE_MINIMA',
+      verifica_esito: 'ROSSO',
       verifica_riferita_al: '2026-11-05',
       con_lavoratori_subordinati: true,
       volume_affari: '1050000',
@@ -146,8 +179,8 @@ describe('caricamento demo — quinta azienda al triage', () => {
       `SELECT voce, importo, tipo FROM ${SCHEMA}.debiti_ente ORDER BY id`
     );
     expect(posizioni.rows).toEqual([
-      { voce: 'Contributi previdenziali scaduti', importo: '45000', tipo: 'DEBITO' },
-      { voce: 'Sanzioni civili contributive', importo: '6000', tipo: 'DEBITO' },
+      { voce: 'Contributi previdenziali scaduti', importo: '180000', tipo: 'DEBITO' },
+      { voce: 'Sanzioni civili contributive', importo: '25000', tipo: 'DEBITO' },
     ]);
 
     const certificazione = await db.query<{
@@ -163,7 +196,7 @@ describe('caricamento demo — quinta azienda al triage', () => {
     expect(certificazione.rows).toEqual([
       {
         voce: 'Contributi previdenziali scaduti',
-        contributi: '45000',
+        contributi: '180000',
         sanzioni: null,
         trattamento: 'contabilizzato',
         ambito: 'INPS',
@@ -171,7 +204,7 @@ describe('caricamento demo — quinta azienda al triage', () => {
       {
         voce: 'Sanzioni civili contributive',
         contributi: null,
-        sanzioni: '6000',
+        sanzioni: '25000',
         trattamento: 'contabilizzato',
         ambito: 'INPS',
       },

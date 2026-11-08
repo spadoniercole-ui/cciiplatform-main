@@ -605,6 +605,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               {caricamentoXbrl ? 'Caricamento...' : 'Carica XBRL'}
               <input
                 type="file"
+                data-demo-applica="file"
                 accept=".xbrl,.xml"
                 data-demo-ruoli="BILANCIO"
                 className="hidden"
@@ -667,6 +668,7 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
               <input
                 type="file"
                 accept="application/pdf,.pdf"
+                data-demo-applica="file"
                 data-demo-ruoli="FASCICOLO"
                 className="hidden"
                 onChange={(e) => setVisuraFile(e.target.files?.[0] || null)}

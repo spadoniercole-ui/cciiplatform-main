@@ -28,7 +28,8 @@ export type RuoloDocumentoDemo =
   | 'PROVVEDIMENTO'
   | 'STATO_PASSIVO'
   | 'DENUNCE'
-  | 'DELEGHE';
+  | 'DELEGHE'
+  | 'CHECKLIST';
 
 export interface DocumentoDemo {
   nome: string;
@@ -92,6 +93,13 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
     'Proposta di concordato',
     'PROPOSTA'
   ),
+  documento(
+    AZIENDA_MECCANICA,
+    'checklist-prodotti-meccanica-valsesia.xlsx',
+    'EXCEL',
+    'Check list dei prodotti — compilata',
+    'CHECKLIST'
+  ),
 
   // Tessitura Lario — liquidazione giudiziale.
   documento(
@@ -129,6 +137,13 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
     'Stato passivo — allegato al decreto',
     'STATO_PASSIVO'
   ),
+  documento(
+    AZIENDA_TESSITURA,
+    'checklist-prodotti-tessitura-lario.xlsx',
+    'EXCEL',
+    'Check list dei prodotti — compilata',
+    'CHECKLIST'
+  ),
 
   // Logistica Padana — cram down.
   documento(
@@ -158,6 +173,13 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
     'PDF',
     'Dispositivo di cram down',
     'PROVVEDIMENTO'
+  ),
+  documento(
+    AZIENDA_LOGISTICA,
+    'checklist-prodotti-logistica-padana.xlsx',
+    'EXCEL',
+    'Check list dei prodotti — compilata',
+    'CHECKLIST'
   ),
 
   // Cantieri Brianza — la valutazione aperta: nessun percorso precostituito.
@@ -203,6 +225,13 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
     'Dispositivo di cram down — variante demo',
     'PROVVEDIMENTO'
   ),
+  documento(
+    AZIENDA_CANTIERI,
+    'checklist-prodotti-cantieri-brianza.xlsx',
+    'EXCEL',
+    'Check list dei prodotti — compilata',
+    'CHECKLIST'
+  ),
 
   // Impianti Adriatica — la posizione ferma al triage: visura, certificazione,
   // denunce DM10 e deleghe di pagamento. Non ci sono bilancio, proposta o
@@ -234,6 +263,13 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
     'EXCEL',
     'Elenco deleghe di pagamento F24',
     'DELEGHE'
+  ),
+  documento(
+    AZIENDA_IMPIANTI,
+    'checklist-prodotti-impianti-adriatica.xlsx',
+    'EXCEL',
+    'Check list dei prodotti — compilata',
+    'CHECKLIST'
   ),
 ];
 

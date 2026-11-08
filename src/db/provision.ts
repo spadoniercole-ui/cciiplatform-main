@@ -1224,6 +1224,11 @@ export async function assicuraTabellaSimulazioneRicevente(nomeSchema: string): P
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS posizione_letta JSONB`
   );
+  // Scelte fatte appena prima di «Avvia la valutazione»: quale piano entra
+  // nel giudizio, se includere il piano aziendale e se citare il confronto.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.simulazione_ricevente ADD COLUMN IF NOT EXISTS opzioni_piano JSONB`
+  );
 }
 
 /**

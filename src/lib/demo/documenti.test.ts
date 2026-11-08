@@ -46,6 +46,7 @@ describe('documenti del percorso demo', () => {
     const documenti = documentiDemoPerAzienda(AZIENDA_IMPIANTI, null);
     expect(documenti.map((d) => d.ruolo).sort()).toEqual([
       'CERTIFICAZIONE',
+      'CHECKLIST',
       'DELEGHE',
       'DENUNCE',
       'FASCICOLO',

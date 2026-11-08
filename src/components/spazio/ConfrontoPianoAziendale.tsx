@@ -56,6 +56,8 @@ interface Props {
   senzaCopia?: boolean;
   /** Rate del piano di rientro scelto con le domande; se assenti, quelle della proposta. */
   rateScelte?: { ente: number[]; altri: number[] } | null;
+  /** Solo caricamento e vista del piano dell'azienda: il confronto multi-piano sta più sotto. */
+  soloIngresso?: boolean;
 }
 
 export interface ContestoConfronto {
@@ -95,6 +97,7 @@ export function ConfrontoPianoAziendale({
   onContesto,
   senzaCopia,
   rateScelte,
+  soloIngresso,
 }: Props) {
   const redigente = lato === 'DA_DEFINIRE';
   const chi = redigente ? 'piano' : 'azienda';
@@ -271,6 +274,7 @@ export function ConfrontoPianoAziendale({
           type="file"
           accept=".xlsx,.xls,.ods,.csv"
           data-demo-ruoli="PROPOSTA"
+          data-demo-applica="file"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -285,6 +289,7 @@ export function ConfrontoPianoAziendale({
           type="file"
           accept="application/pdf,.pdf"
           data-demo-ruoli="FASCICOLO,PROPOSTA"
+          data-demo-applica="file"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -405,17 +410,16 @@ export function ConfrontoPianoAziendale({
         <Scale className="w-4 h-4 text-blue-600 mt-0.5" />
         <div>
           <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-            {redigente
-              ? 'Autoverifica: il piano a confronto con il piano di settore'
-              : 'Confronto con il piano dell’azienda'}
+            {soloIngresso
+              ? 'Piano dell’azienda'
+              : redigente
+                ? 'Autoverifica: il piano a confronto con il piano di settore'
+                : 'Confronto con il piano dell’azienda'}
           </h2>
           <p className="text-[11px] text-slate-600 mt-0.5">
-            Riferimento: il piano automatico di settore. {calcolo.crescita.descrizione} Margini
-            costanti, crediti e fornitori proporzionali ai ricavi, investimenti pari agli
-            ammortamenti.{' '}
-            {redigente
-              ? `Si confronta la variante «${nomeVariante}» sullo schermo: dove il piano è più favorevole del riferimento oltre le soglie, le ipotesi vanno documentate prima del deposito.`
-              : 'Il piano dell’azienda passa nello stesso motore: si confrontano grandezze calcolate allo stesso modo.'}
+            {soloIngresso
+              ? 'Questo è il piano proposto dall’azienda. Caricalo e controllane la tabella normalizzata; il piano AI e il confronto tra i piani vengono dopo la parte operativa.'
+              : `Riferimento: il piano automatico di settore. ${calcolo.crescita.descrizione} Margini costanti, crediti e fornitori proporzionali ai ricavi, investimenti pari agli ammortamenti. ${redigente ? `Si confronta la variante «${nomeVariante}» sullo schermo: dove il piano è più favorevole del riferimento oltre le soglie, le ipotesi vanno documentate prima del deposito.` : 'Il piano dell’azienda passa nello stesso motore: si confrontano grandezze calcolate allo stesso modo.'}`}
           </p>
           {conf.settore.motivo && calcolo.crescita.fonte !== 'settore' && (
             <p className="text-[10px] text-amber-800 mt-1">
@@ -465,13 +469,15 @@ export function ConfrontoPianoAziendale({
               .
             </p>
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={stampa}
-                className="flex items-center gap-1 px-3 py-2 bg-white border border-slate-300 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
-              >
-                <Printer className="w-3.5 h-3.5" /> Stampa il confronto
-              </button>
+              {!soloIngresso && (
+                <button
+                  type="button"
+                  onClick={stampa}
+                  className="flex items-center gap-1 px-3 py-2 bg-white border border-slate-300 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Stampa il confronto
+                </button>
+              )}
               {!senzaCopia && (
                 <button
                   type="button"
@@ -493,7 +499,7 @@ export function ConfrontoPianoAziendale({
             </div>
           </div>
 
-          {bloccoEsito}
+          {!soloIngresso && bloccoEsito}
           <div className="pt-2 border-t border-slate-100">
             <p className="text-[10px] text-slate-500 mb-2">
               Per sostituire il piano dell’azienda, carica un nuovo file.

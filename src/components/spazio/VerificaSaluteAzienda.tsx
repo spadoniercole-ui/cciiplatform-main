@@ -2010,6 +2010,7 @@ export function VerificaSaluteAzienda({
           <input
             type="file"
             accept=".pdf"
+            data-demo-applica="file"
             data-demo-ruoli="FASCICOLO"
             disabled={inCorso}
             onChange={(e) => void caricaVisura(e.target.files?.[0] ?? null)}

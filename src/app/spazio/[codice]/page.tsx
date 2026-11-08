@@ -4,20 +4,16 @@ import { ottieniContestoAccessoSpazio, ottieniAdminSpazio } from '@/app/actions/
 import { ottieniAziende } from '@/app/actions/aziende';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { ottieniScenari } from '@/app/actions/scenari';
-import { ottieniUltimiScreeningSpazio } from '@/app/actions/screeningAzienda';
 import { caricaPercorsoDemoEnte } from '@/lib/demo/caricaPercorsoEnte';
 import {
   DashboardPannelli,
-  type RigaAzienda,
-  type RigaUtente,
   type RigaScenario,
   type RigaVerificaDashboard,
 } from '@/components/spazio/DashboardPannelli';
 
-// Dashboard di Spazio (cruscotto): quattro pannelli larghi, ciascuno con le
-// prime righe della propria attività (aziende, utenti, scenari, ultimi report
-// di screening con PDF). Niente più conteggi "nudi" o box separati: ogni
-// riquadro mostra il conteggio in alto e sotto le prime 4 voci reali.
+// Dashboard di Spazio (cruscotto): due pannelli, Triage e Scenari. Le aziende
+// sono già dentro uno dei due elenchi; i report sono più d'uno anche intermedi,
+// quindi «ultimo report» non è un'informazione affidabile da mettere qui.
 
 export default async function DashboardSpazioPage({
   params,
@@ -44,30 +40,6 @@ export default async function DashboardSpazioPage({
     ottieniAziende(contesto.nomeSchema),
     ottieniStoricoVerificheAction(contesto.nomeSchema),
   ]);
-
-  const aziendeAttive = risultatoAziende.aziende.filter((a) => a.attiva).length;
-
-  // Aziende: attive prima, poi le altre; riferimenti anagrafici inclusi.
-  const aziendeOrdinaTe = [...risultatoAziende.aziende].sort(
-    (a, b) => Number(b.attiva) - Number(a.attiva)
-  );
-  const righeAziende: RigaAzienda[] = aziendeOrdinaTe.map((a) => ({
-    id: a.id,
-    ragioneSociale: a.ragioneSociale,
-    partitaIva: a.partitaIva,
-    codiceFiscale: a.codiceFiscale,
-    attiva: a.attiva,
-    identificativiEnte: a.identificativiEnte ?? [],
-  }));
-
-  const righeUtenti: RigaUtente[] = risultatoAdmin.success
-    ? risultatoAdmin.admins.map((u) => ({
-        nome: u.nome,
-        cognome: u.cognome,
-        username: u.username ?? null,
-        email: u.email ?? null,
-      }))
-    : [];
 
   // Scenari: elenco reale (con nome azienda) + conteggio totale.
   let totaleScenari: number | '—' = '—';
@@ -96,11 +68,6 @@ export default async function DashboardSpazioPage({
       .map(({ id, nome, aziendaRagioneSociale }) => ({ id, nome, aziendaRagioneSociale }));
   }
 
-  // Ultimo report di Screening per azienda (uno solo per azienda: la
-  // rigenerazione sovrascrive, quindi qui c'è sempre e solo l'ultimo).
-  const screeningRis = await ottieniUltimiScreeningSpazio(contesto.nomeSchema);
-  const ultimiScreening = screeningRis.success ? screeningRis.screening : [];
-
   return (
     <div className="space-y-6 max-w-5xl">
       <div>
@@ -117,10 +84,6 @@ export default async function DashboardSpazioPage({
 
       <DashboardPannelli
         codice={codice}
-        aziende={righeAziende}
-        totaleAziendeAttive={risultatoAziende.success ? aziendeAttive : '—'}
-        utenti={righeUtenti}
-        totaleUtenti={risultatoAdmin.success ? risultatoAdmin.admins.length : '—'}
         verifiche={
           verificheRis.success && verificheRis.righe
             ? verificheRis.righe.map((v: RigaVerificaDashboard) => ({
@@ -135,7 +98,6 @@ export default async function DashboardSpazioPage({
         }
         scenari={righeScenari}
         totaleScenari={totaleScenari}
-        report={ultimiScreening}
       />
     </div>
   );

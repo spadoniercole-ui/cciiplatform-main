@@ -441,6 +441,8 @@ export function ChecklistScenario({
           <input
             type="file"
             accept=".xlsx,.xls"
+            data-demo-ruoli="CHECKLIST"
+            data-demo-applica="file"
             className="hidden"
             disabled={importazioneInCorso}
             onChange={(e) => {

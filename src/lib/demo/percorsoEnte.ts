@@ -47,6 +47,8 @@ export interface DebitoPercorsoDemo {
   importo: number;
   /** Categoria della posizione debitoria dell'ente. */
   tipo: string;
+  /** Categoria di lavorazione: dice al triage quale reparto deve agire. */
+  categoria?: string;
   nota?: string;
 }
 
@@ -930,29 +932,35 @@ export const TRIAGE_DEMO: AziendaTriageDemo = {
   pec: 'impianti.adriatica.demo@pec.esempio.it',
   annoCostituzione: 2013,
   dataVerifica: '2026-11-05',
-  profilo: 'ATTENZIONE_MINIMA',
+  // Caso ROSSO: la soglia INPS è superata (180.000 € su 280.000 € dovuti,
+  // oltre il 30% e oltre il minimo assoluto) e il ritardo supera i 90 giorni.
+  // Le due posizioni sono instradate a reparti distinti, così il triage mostra
+  // comunicazioni, report per unità operativa e presa in carico senza vuoti.
+  profilo: 'ROSSO',
   debiti: [
     {
       voce: 'Contributi previdenziali scaduti',
-      importo: 45_000,
+      importo: 180_000,
       tipo: 'DEBITO',
-      nota: 'Posizione dimostrativa del triage',
+      categoria: 'CONTRIBUTI',
+      nota: 'Posizione dimostrativa del triage — oltre soglia',
     },
     {
       voce: 'Sanzioni civili contributive',
-      importo: 6_000,
+      importo: 25_000,
       tipo: 'DEBITO',
-      nota: 'Posizione dimostrativa del triage',
+      categoria: 'SANZIONI',
+      nota: 'Posizione dimostrativa del triage — segnalazione al reparto sanzioni',
     },
   ],
   soglie: {
     conLavoratori: true,
-    contributiScaduti: 45_000,
+    contributiScaduti: 180_000,
     contributiDovutiAnnoPrecedente: 280_000,
     annoContributiDovuti: 2025,
     volumeAffari: 1_050_000,
-    ritardoOltre90Giorni: false,
-    periodiInRitardo: 0,
+    ritardoOltre90Giorni: true,
+    periodiInRitardo: 6,
   },
 };
 

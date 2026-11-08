@@ -22,7 +22,7 @@ describe('percorso demo dell’ente', () => {
 
   it('la quinta azienda è ferma al triage: niente screening né scenario', () => {
     expect(TRIAGE_DEMO.ragioneSociale).toBe('Impianti Adriatica Demo S.r.l.');
-    expect(TRIAGE_DEMO.profilo).toBe('ATTENZIONE_MINIMA');
+    expect(TRIAGE_DEMO.profilo).toBe('ROSSO');
     expect(TRIAGE_DEMO.dataVerifica).toMatch(/^2026-\d{2}-\d{2}$/);
     expect('screening' in TRIAGE_DEMO).toBe(false);
     expect('scenario' in TRIAGE_DEMO).toBe(false);

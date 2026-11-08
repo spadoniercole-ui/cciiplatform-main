@@ -18,6 +18,11 @@ import { confrontaPiani } from '@/lib/piano/confronto';
 import { anniDelPiano, ipotesiDaPianoAzienda, valoriPuliti } from '@/lib/piano/pianoAziendale';
 import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
 import { soluzionePulita } from '@/lib/piano/riceventeSalvataggio';
+import {
+  etichettaPiano,
+  sceltePianoPulite,
+  type SceltePianoValutazione,
+} from '@/lib/piano/scelteValutazione';
 
 export interface SintesiPiano {
   disponibile: boolean;
@@ -31,7 +36,8 @@ export async function sintesiPianoScenarioAction(
   scenarioId: number,
   aziendaId: number,
   lato: 'RICEVUTA' | 'DA_DEFINIRE',
-  settore?: { punti: PuntoSerie[]; descrizione: string | null } | null
+  settore?: { punti: PuntoSerie[]; descrizione: string | null } | null,
+  opzioni?: SceltePianoValutazione | null
 ): Promise<SintesiPiano> {
   try {
     await richiediAccessoScenario(nomeSchema, scenarioId);
@@ -44,6 +50,16 @@ export async function sintesiPianoScenarioAction(
       };
     }
     const d = r.dati;
+    const scelte =
+      sceltePianoPulite(opzioni) ??
+      sceltePianoPulite(
+        (
+          await pool.query(
+            `SELECT opzioni_piano FROM "${nomeSchema}".simulazione_ricevente WHERE scenario_id = $1`,
+            [scenarioId]
+          )
+        ).rows[0]?.opzioni_piano
+      );
     const base = d.storico[0];
     const o = d.orizzonte;
     const rate = { ente: d.rate.ente.slice(0, o), altri: d.rate.altri.slice(0, o) };
@@ -81,6 +97,19 @@ export async function sintesiPianoScenarioAction(
       `PIANO DI SVILUPPO (variante «base», ${o} anni, calcolato dal motore della piattaforma sulle macro-voci del bilancio ${base.anno}): ${mio.sintesi.replace(/\n/g, ' ')}`,
     ];
     if (vincoli.length) righe.push(`Vincoli che scattano: ${vincoli.join(' ')}`);
+    if (scelte?.pianoScelto) {
+      righe.push(
+        `PIANO SCELTO PER LA VALUTAZIONE: ${etichettaPiano(scelte.pianoScelto)}. È questo il piano che deve orientare il giudizio; gli altri restano alternative.`
+      );
+    }
+    if (scelte?.includiPianoAziendale === false) {
+      righe.push('PIANO DELL’AZIENDA: escluso dalla valutazione su scelta dell’istruttore.');
+    }
+    if (scelte?.includiConfronto) {
+      righe.push(
+        `CONFRONTO RICHIESTO PER LA RELAZIONE: ${scelte.pianiConfronto.length ? scelte.pianiConfronto.map(etichettaPiano).join(', ') : 'tutti i piani disponibili'}.`
+      );
+    }
     righe.push(`RIFERIMENTO DI SETTORE: ${crescita.descrizione}`);
 
     const soglie = soglieRis.soglie;
@@ -96,13 +125,29 @@ export async function sintesiPianoScenarioAction(
       righe.push(
         `AUTOVERIFICA SUL PIANO DI SETTORE (soglie ${soglie.verde}% e ${soglie.giallo}%): ${esito.sintesi}`
       );
-    } else if (aziendaRis.rows[0]) {
+    } else if (aziendaRis.rows[0] && scelte?.includiPianoAziendale !== false) {
       const valori = valoriPuliti(aziendaRis.rows[0].valori);
       const ipAz = ipotesiDaPianoAzienda(valori, base.anno + 1, o);
       const az = calcolaPiano(base, o, ipAz, rate, d.capitaleSociale);
-      const esito = confrontaPiani(auto.anni, az.anni, ipAz, soglie, new Set(anniDelPiano(valori)));
+      if (scelte?.includiConfronto === false) {
+        righe.push(
+          `PIANO DELL’AZIENDA${aziendaRis.rows[0].nome_file ? ` («${aziendaRis.rows[0].nome_file}»)` : ''}: ${az.sintesi.replace(/\n/g, ' ')}${az.vincoli.length ? ` Vincoli: ${az.vincoli.map((v) => v.testo).join(' ')}` : ''} Confronto con il settore non richiesto nell’analisi finale.`
+        );
+      } else {
+        const esito = confrontaPiani(
+          auto.anni,
+          az.anni,
+          ipAz,
+          soglie,
+          new Set(anniDelPiano(valori))
+        );
+        righe.push(
+          `PIANO DELL’AZIENDA${aziendaRis.rows[0].nome_file ? ` («${aziendaRis.rows[0].nome_file}»)` : ''} A CONFRONTO CON IL PIANO DI SETTORE (soglie ${soglie.verde}% e ${soglie.giallo}%): ${esito.sintesi}${az.vincoli.length ? ` Con le ipotesi dell’azienda scattano: ${az.vincoli.map((v) => v.testo).join(' ')}` : ''}`
+        );
+      }
+    } else if (aziendaRis.rows[0]) {
       righe.push(
-        `PIANO DELL’AZIENDA${aziendaRis.rows[0].nome_file ? ` («${aziendaRis.rows[0].nome_file}»)` : ''} A CONFRONTO CON IL PIANO DI SETTORE (soglie ${soglie.verde}% e ${soglie.giallo}%): ${esito.sintesi}${az.vincoli.length ? ` Con le ipotesi dell’azienda scattano: ${az.vincoli.map((v) => v.testo).join(' ')}` : ''}`
+        'PIANO DELL’AZIENDA: caricato ma escluso dalla valutazione su scelta dell’istruttore.'
       );
     } else {
       righe.push('PIANO DELL’AZIENDA: non caricato.');

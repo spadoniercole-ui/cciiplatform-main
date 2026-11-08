@@ -222,6 +222,7 @@ export function AziendaBilanciXbrl({ nomeSchema, aziendaId, hrefConfigurazione }
               ref={inputRef}
               type="file"
               accept=".xbrl,.xml"
+              data-demo-applica="file"
               data-demo-ruoli="BILANCIO"
               multiple
               className="hidden"

@@ -51,9 +51,11 @@ import {
 import {
   ottieniStatoValutazioneAction,
   salvaDichiarazioniValutazioneAction,
+  salvaSceltePianoValutazioneAction,
   type StatoValutazione,
   type DichiarazioniValutazione,
 } from '@/app/actions/valutazioneRicevente';
+import type { SceltePianoValutazione } from '@/lib/piano/scelteValutazione';
 import {
   aggiornaDatiSettoreAction,
   aggiornaDatiSettoreSeNecessarioAction,
@@ -128,6 +130,8 @@ export function SimulazioneRiceventeScenario({
   const [istruzioniAI, setIstruzioniAI] = useState('');
   const [stato, setStato] = useState<StatoValutazione | null>(null);
   const [dichiarazioni, setDichiarazioni] = useState<DichiarazioniValutazione>({});
+  const [modalePiano, setModalePiano] = useState(false);
+  const [sceltePiano, setSceltePiano] = useState<SceltePianoValutazione | null>(null);
   const [settoreInCorso, setSettoreInCorso] = useState(false);
   const [settoreNonDisponibile, setSettoreNonDisponibile] = useState(false);
   const settoreAvviato = useRef(false);
@@ -137,6 +141,7 @@ export function SimulazioneRiceventeScenario({
     if (ris.success) {
       setStato(ris);
       setDichiarazioni(ris.dichiarazioni);
+      setSceltePiano((precedenti) => precedenti ?? ris.opzioniPiano);
     } else if (ris.error) {
       setErrore(ris.error);
     }
@@ -297,7 +302,7 @@ export function SimulazioneRiceventeScenario({
   };
 
   /** Fase 3: la valutazione, sui documenti già caricati e con le conferme fatte. */
-  const handleAnalizza = async () => {
+  const eseguiAnalisi = async (scelte?: SceltePianoValutazione | null) => {
     if (!documenti) {
       setErrore('Carica prima i documenti ricevuti.');
       return;
@@ -316,7 +321,8 @@ export function SimulazioneRiceventeScenario({
       const risultato = await analizzaDocumentiRiceventeAction(
         nomeSchema,
         scenarioId,
-        istruzioniAI
+        istruzioniAI,
+        scelte ?? null
       );
       if (risultato.success) {
         setAnalisi(
@@ -352,6 +358,51 @@ export function SimulazioneRiceventeScenario({
     } finally {
       setAnalisiInCorso(false);
     }
+  };
+
+  /**
+   * Il clic su «Avvia la valutazione»: con il piano attivo passa prima dalla
+   * domanda sulle scelte. Senza piano attivo non c'è nulla da chiedere.
+   */
+  const handleAnalizza = async () => {
+    if (!documenti) {
+      setErrore('Carica prima i documenti ricevuti.');
+      return;
+    }
+    if (!inquadramentoConfermato) {
+      setErrore('Conferma e salva prima l’inquadramento della proposta.');
+      return;
+    }
+    if (lista && !lista.pronta) {
+      setErrore(`Prima di avviare la valutazione: ${lista.mancanti.join('; ')}.`);
+      return;
+    }
+    if (stato?.pianoSviluppoAttivo) {
+      const azienda = stato.piani.some((p) => p.chiave === 'azienda');
+      setSceltePiano(
+        stato.opzioniPiano ?? {
+          includiPianoAziendale: azienda,
+          pianoScelto: azienda ? 'azienda' : 'base',
+          includiConfronto: true,
+          pianiConfronto: stato.piani.map((p) => p.chiave),
+        }
+      );
+      setModalePiano(true);
+      return;
+    }
+    await eseguiAnalisi(null);
+  };
+
+  const confermaSceltePiano = async () => {
+    if (!sceltePiano) return;
+    setErrore(null);
+    const r = await salvaSceltePianoValutazioneAction(nomeSchema, scenarioId, sceltePiano);
+    if (!r.success) {
+      setErrore(r.error || 'Impossibile salvare le scelte sul piano.');
+      return;
+    }
+    setModalePiano(false);
+    await eseguiAnalisi(sceltePiano);
   };
 
   const presente = (tipo: TipoDocumentoRicevuto) =>
@@ -953,6 +1004,120 @@ export function SimulazioneRiceventeScenario({
               </div>
             </details>
           )}
+        </div>
+      )}
+
+      {modalePiano && stato?.pianoSviluppoAttivo && sceltePiano && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/50 p-4 sm:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Scelte sul piano prima della valutazione"
+        >
+          <div className="mx-auto max-w-2xl bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <div>
+              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                Prima di avviare la valutazione
+              </h3>
+              <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                Il piano dell’azienda e gli altri piani restano in memoria. Scegli che cosa entra
+                nel giudizio complessivo e che cosa deve comparire nella Relazione finale.
+              </p>
+            </div>
+
+            <label className="flex items-start gap-2 text-xs text-slate-700">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={sceltePiano.includiPianoAziendale}
+                onChange={(e) =>
+                  setSceltePiano({ ...sceltePiano, includiPianoAziendale: e.target.checked })
+                }
+              />
+              <span>
+                <strong>Includi il piano dell’azienda</strong> nella valutazione complessiva.
+                {!stato.piani.some((p) => p.chiave === 'azienda') && (
+                  <span className="block text-[10px] text-amber-700">
+                    Non risulta ancora caricato: puoi comunque sceglierlo quando lo carichi.
+                  </span>
+                )}
+              </span>
+            </label>
+
+            <label className="block text-xs text-slate-700 space-y-1">
+              <span className="font-bold">Quale piano deve orientare il giudizio</span>
+              <select
+                value={sceltePiano.pianoScelto ?? 'base'}
+                onChange={(e) => setSceltePiano({ ...sceltePiano, pianoScelto: e.target.value })}
+                className="w-full p-2 text-xs border border-slate-300 rounded-lg bg-white"
+              >
+                {stato.piani.length === 0 && <option value="base">Piano base</option>}
+                {stato.piani.map((p) => (
+                  <option key={p.chiave} value={p.chiave}>
+                    {p.nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex items-start gap-2 text-xs text-slate-700">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={sceltePiano.includiConfronto}
+                onChange={(e) =>
+                  setSceltePiano({ ...sceltePiano, includiConfronto: e.target.checked })
+                }
+              />
+              <span>
+                <strong>Inserisci il confronto tra i piani</strong> nell’analisi finale. Il piano AI
+                resta un’alternativa, non sostituisce quello scelto.
+              </span>
+            </label>
+
+            {sceltePiano.includiConfronto && stato.piani.length > 1 && (
+              <fieldset className="border border-slate-200 rounded-lg p-3 space-y-2">
+                <legend className="px-1 text-[10px] font-bold uppercase text-slate-500">
+                  Piani da confrontare
+                </legend>
+                {stato.piani.map((p) => (
+                  <label key={p.chiave} className="flex items-center gap-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={sceltePiano.pianiConfronto.includes(p.chiave)}
+                      onChange={(e) =>
+                        setSceltePiano({
+                          ...sceltePiano,
+                          pianiConfronto: e.target.checked
+                            ? Array.from(new Set([...sceltePiano.pianiConfronto, p.chiave]))
+                            : sceltePiano.pianiConfronto.filter((k) => k !== p.chiave),
+                        })
+                      }
+                    />
+                    {p.nome}
+                  </label>
+                ))}
+              </fieldset>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={() => setModalePiano(false)}
+                className="px-3 py-2 text-[10px] font-bold uppercase rounded-lg bg-white border border-slate-300 text-slate-700"
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                onClick={() => void confermaSceltePiano()}
+                disabled={analisiInCorso}
+                className="px-4 py-2 text-[10px] font-bold uppercase rounded-lg bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white"
+              >
+                Conferma e avvia la valutazione
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

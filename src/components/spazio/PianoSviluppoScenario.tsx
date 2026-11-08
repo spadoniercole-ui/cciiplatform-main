@@ -73,6 +73,7 @@ import {
   type SoluzioneSalvata,
 } from '@/lib/piano/riceventeSalvataggio';
 import { PassiPianoRicevente } from '@/components/spazio/PassiPianoRicevente';
+import { ConfrontaPianiScenario } from '@/components/spazio/ConfrontaPianiScenario';
 
 const GRUPPI: DefinizioneManopola['gruppo'][] = ['Ricavi', 'Costi', 'Circolante', 'Finanza'];
 
@@ -549,6 +550,7 @@ export function PianoSviluppoScenario({
       onContesto={setContestoConfronto}
       senzaCopia={tipoProposta === 'RICEVUTA'}
       rateScelte={tipoProposta === 'RICEVUTA' && pianoRientro ? rate : null}
+      soloIngresso={tipoProposta === 'RICEVUTA'}
     />
   );
 
@@ -623,7 +625,7 @@ export function PianoSviluppoScenario({
             >
               <Plus className="w-3 h-3" /> Nuova variante da questa
             </button>
-            {!modoRettifica && (
+            {
               <button
                 type="button"
                 onClick={elaboraConAi}
@@ -646,7 +648,7 @@ export function PianoSviluppoScenario({
                     ? 'L’AI rettifica il piano dell’azienda'
                     : 'L’AI imposta le manopole'}
               </button>
-            )}
+            }
             {variante !== 'base' && (
               <button
                 type="button"
@@ -921,6 +923,15 @@ export function PianoSviluppoScenario({
                   setModificato(true);
                 }}
                 onCalcola={calcolaSoluzione}
+              />
+            )}
+            {modoRettifica && (
+              <ConfrontaPianiScenario
+                nomeSchema={nomeSchema}
+                scenarioId={scenarioId}
+                aziendaId={aziendaId}
+                dati={dati}
+                orizzonte={orizzonte}
               />
             )}
           </div>

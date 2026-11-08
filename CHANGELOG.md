@@ -1,3 +1,29 @@
+## 0.174.9 — 2026-11-08
+
+**Dashboard essenziale, triage demo davvero rosso e percorso piano azienda → AI → confronto.**
+
+- **Dashboard a due pannelli.** Restano Triage e Scenari: le aziende sono già in uno dei due
+  elenchi e l’«ultimo report» non è un’indicazione affidabile quando i report sono più d’uno,
+  anche intermedi.
+- **Impianti Adriatica diventa un caso ROSSO completo.** Contributi scaduti oltre soglia e oltre
+  90 giorni, posizioni instradate a due reparti (contributi e sanzioni), configurazione delle
+  lavorazioni e check list demo pertinente: il triage mostra comunicazioni, report per unità
+  operativa e presa in carico. Le demo già esistenti vengono riallineate solo se sono ancora
+  ferme al vecchio seed, senza sovrascrivere posizioni promosse o lavorate.
+- **Caricamenti demo applicati davvero.** Ogni campo documentale usa i file demo dell’azienda e
+  li consegna al campo con progresso e conferma visibili; la check list ha il suo file compilato
+  per azienda.
+- **Piano dell’azienda prima, piano AI poi, confronto dopo la parte operativa.** Il piano
+  aziendale si carica in testa; l’elaborazione AI resta disponibile anche con il piano caricato;
+  sotto la tabella il link «Confronta i piani» apre la selezione multi-piano con i numeri
+  calcolati dallo stesso motore.
+- **Domanda prima di «Avvia la valutazione».** Se il piano è attivo, l’istruttore sceglie se
+  includere il piano aziendale, quale piano orienta il giudizio, se inserire il confronto nella
+  relazione e quali piani confrontare. Le scelte sono salvate sullo scenario e lette dalla
+  sintesi e dall’analisi finale.
+- **Flag piano attivo sugli scenari demo.** Il percorso transattivo non parte più senza il
+  passaggio di verifica del piano.
+
 ## 0.174.8 — 2026-11-07
 
 **Il triage legge le risposte per quello che significano, e gli scenari si vedono tutti insieme.**

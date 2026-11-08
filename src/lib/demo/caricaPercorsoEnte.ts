@@ -25,12 +25,14 @@
 import { pool } from '@/lib/db';
 import {
   assicuraTabellaAziende,
+  assicuraTabellaCategorieTipoDebito,
   assicuraTabellaDebitiEnte,
   assicuraTabellaXbrlAzienda,
   assicuraTabelleParametriSpazio,
   assicuraTabelleScenari,
   assicuraTabelleScenariTriage,
   assicuraTabelleScreeningAzienda,
+  assicuraTabelleTl,
   assicuraTabelleVera,
 } from '@/db/provision';
 import { ripristinaConfigurazione } from '@/lib/configurazioneSpazio/configurazione';
@@ -90,6 +92,168 @@ async function assicuraProdottiDemo(nomeSchema: string): Promise<void> {
  * scenario dell'export, non con valori casuali ereditati. Le tabelle non
  * incluse nel file restano invece intatte.
  */
+/**
+ * I reparti che lavorano le due posizioni del triage demo.
+ *
+ * Il triage non inventa un ufficio: lo legge dalla configurazione delle TS
+ * (`tl` → `categoria_tl`) e dalla dipendenza dell'associazione (`materia_tl`).
+ * Il seed crea questa configurazione una volta sola, con `materia_id = 0`
+ * perché non serve una materia per far funzionare le comunicazioni: la
+ * categoria della posizione è già la chiave che il raggruppamento conosce.
+ *
+ * Idempotente: se la demo è già configurata, non duplica né sovrascrive.
+ */
+async function assicuraRepartiTriageDemo(nomeSchema: string): Promise<void> {
+  await assicuraTabellaCategorieTipoDebito(nomeSchema);
+  await assicuraTabelleTl(nomeSchema);
+
+  const categorie = [
+    { codice: 'CONTRIBUTI', etichetta: 'Contributi previdenziali', ordine: 10 },
+    { codice: 'SANZIONI', etichetta: 'Sanzioni contributive', ordine: 20 },
+  ];
+  for (const c of categorie) {
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".categorie_tipo_debito
+         (codice, etichetta, descrizione, ordine, attivo, contribuisce)
+       VALUES ($1, $2, $3, $4, TRUE, TRUE)
+       ON CONFLICT (codice) DO NOTHING`,
+      [c.codice, c.etichetta, 'Categoria del percorso demo', c.ordine]
+    );
+  }
+
+  const reparti = [
+    {
+      categoria: 'CONTRIBUTI',
+      codice: 'TS 01',
+      descrizione: 'Verifica e recupero della posizione contributiva',
+      dipendenza: 'Unità operativa contributi',
+      procedura: 'Verifica la posizione, diffida il debitore e contabilizza il recupero.',
+      esito: 'Diffida e recupero',
+    },
+    {
+      categoria: 'SANZIONI',
+      codice: 'TS 02',
+      descrizione: 'Recupero delle sanzioni civili contributive',
+      dipendenza: 'Unità operativa sanzioni',
+      procedura: 'Verifica le sanzioni, emetti il provvedimento e cura il recupero.',
+      esito: 'Provvedimento e recupero',
+    },
+  ];
+  for (const r of reparti) {
+    const esistente = await pool.query(
+      `SELECT id FROM "${nomeSchema}".tl WHERE lower(btrim(codice)) = lower(btrim($1)) LIMIT 1`,
+      [r.codice]
+    );
+    let tlId = esistente.rows[0] ? Number(esistente.rows[0].id) : null;
+    if (!tlId) {
+      const inserito = await pool.query(
+        `INSERT INTO "${nomeSchema}".tl (codice, descrizione, check_list, ordine)
+         VALUES ($1, $2, TRUE, $3) RETURNING id`,
+        [r.codice, r.descrizione, r.categoria === 'CONTRIBUTI' ? 10 : 20]
+      );
+      tlId = Number(inserito.rows[0].id);
+    }
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".materia_tl
+         (materia_id, tl_id, ordine, dipendenza, procedura, esito)
+       VALUES (0, $1, 0, $2, $3, $4)
+       ON CONFLICT (materia_id, tl_id) DO UPDATE
+         SET dipendenza = EXCLUDED.dipendenza,
+             procedura = EXCLUDED.procedura,
+             esito = EXCLUDED.esito`,
+      [tlId, r.dipendenza, r.procedura, r.esito]
+    );
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".categoria_tl (categoria, tl_id, attivo, ordine)
+       VALUES ($1, $2, TRUE, 0)
+       ON CONFLICT (categoria, tl_id) DO NOTHING`,
+      [r.categoria, tlId]
+    );
+  }
+}
+
+/**
+ * Riporta la quinta azienda al caso ROSSO della 0.174.9 anche nelle demo già
+ * create. Tocca solo la fotografia ancora ferma al vecchio seed
+ * (`ATTENZIONE_MINIMA`): una posizione promossa, lavorata o archiviata non
+ * viene riscritta.
+ */
+async function aggiornaTriageDemo(nomeSchema: string): Promise<boolean> {
+  const r = await pool.query(
+    `SELECT id FROM "${nomeSchema}".aziende
+      WHERE ragione_sociale = $1 AND in_verifica = TRUE
+        AND verifica_esito = 'ATTENZIONE_MINIMA'
+      LIMIT 1`,
+    [TRIAGE_DEMO.ragioneSociale]
+  );
+  const aziendaId = r.rows[0] ? Number(r.rows[0].id) : null;
+  if (!aziendaId) return false;
+
+  await pool.query(
+    `UPDATE "${nomeSchema}".aziende
+        SET verifica_esito = $2,
+            con_lavoratori_subordinati = $3,
+            contributi_scaduti = $4,
+            contributi_dovuti_anno_precedente = $5,
+            anno_contributi_dovuti = $6,
+            volume_affari = $7,
+            ritardo_oltre_90_giorni = $8,
+            periodi_in_ritardo = $9,
+            soglie_aggiornate_al = $10
+      WHERE id = $1`,
+    [
+      aziendaId,
+      TRIAGE_DEMO.profilo,
+      TRIAGE_DEMO.soglie.conLavoratori,
+      TRIAGE_DEMO.soglie.contributiScaduti,
+      TRIAGE_DEMO.soglie.contributiDovutiAnnoPrecedente,
+      TRIAGE_DEMO.soglie.annoContributiDovuti,
+      TRIAGE_DEMO.soglie.volumeAffari,
+      TRIAGE_DEMO.soglie.ritardoOltre90Giorni,
+      TRIAGE_DEMO.soglie.periodiInRitardo,
+      TRIAGE_DEMO.dataVerifica,
+    ]
+  );
+  await pool.query(
+    `UPDATE "${nomeSchema}".debiti_ente d
+        SET importo = v.importo
+       FROM (VALUES ($2::text, $3::numeric), ($4::text, $5::numeric)) AS v(voce, importo)
+      WHERE d.azienda_id = $1 AND d.voce = v.voce`,
+    [
+      aziendaId,
+      TRIAGE_DEMO.debiti[0].voce,
+      TRIAGE_DEMO.debiti[0].importo,
+      TRIAGE_DEMO.debiti[1].voce,
+      TRIAGE_DEMO.debiti[1].importo,
+    ]
+  );
+  await pool.query(
+    `UPDATE "${nomeSchema}".debiti_vera d
+        SET importo = v.importo,
+            categoria = v.categoria,
+            contributi = v.contributi,
+            sanzioni = v.sanzioni
+       FROM (VALUES ($2::text, $3::numeric, $4::text, $5::numeric, $6::numeric),
+                    ($7::text, $8::numeric, $9::text, $10::numeric, $11::numeric))
+            AS v(voce, importo, categoria, contributi, sanzioni)
+      WHERE d.azienda_id = $1 AND d.voce = v.voce`,
+    [
+      aziendaId,
+      TRIAGE_DEMO.debiti[0].voce,
+      TRIAGE_DEMO.debiti[0].importo,
+      TRIAGE_DEMO.debiti[0].categoria,
+      TRIAGE_DEMO.debiti[0].importo,
+      null,
+      TRIAGE_DEMO.debiti[1].voce,
+      TRIAGE_DEMO.debiti[1].importo,
+      TRIAGE_DEMO.debiti[1].categoria,
+      null,
+      TRIAGE_DEMO.debiti[1].importo,
+    ]
+  );
+  return true;
+}
+
 async function applicaParametriDemo(nomeSchema: string): Promise<void> {
   const client = await pool.connect();
   try {
@@ -187,12 +351,14 @@ async function inserisciPosizioniTriage(
       `INSERT INTO "${nomeSchema}".debiti_vera
          (azienda_id, sezione, voce, importo, categoria, stato, trattamento, periodo,
           contributi, sanzioni, ambito)
-       VALUES ($1,$2,$3,$4,'',$5,'contabilizzato','',$6,$7,'INPS')`,
+       VALUES ($1,$2,$3,$4,$5,$6,'contabilizzato',$7,$8,$9,'INPS')`,
       [
         aziendaId,
         'Certificazione demo — verifica di salute',
         d.voce,
         d.importo,
+        d.categoria ?? '',
+        '',
         '',
         sanzione ? null : d.importo,
         sanzione ? d.importo : null,
@@ -296,8 +462,8 @@ async function inserisciScenario(
   const r = await esegui.query(
     `INSERT INTO "${nomeSchema}".scenari
        (azienda_id, nome, stato, tipo_proposta, origine_proposta,
-        tipo_istruttoria, data_deposito_proposta)
-     VALUES ($1,$2,'IN_CORSO','RICEVUTA','Ente',$3,$4)
+        tipo_istruttoria, data_deposito_proposta, simulazione_attiva)
+     VALUES ($1,$2,'IN_CORSO','RICEVUTA','Ente',$3,$4,TRUE)
      RETURNING id`,
     [aziendaId, a.scenario, a.tipoIstruttoria, a.dataDepositoProposta]
   );
@@ -331,7 +497,8 @@ async function aggiornaScenarioDemo(
     `UPDATE "${nomeSchema}".scenari
         SET nome = $2,
             tipo_istruttoria = CASE WHEN $5 THEN tipo_istruttoria ELSE $3 END,
-            data_deposito_proposta = $4
+            data_deposito_proposta = $4,
+            simulazione_attiva = TRUE
       WHERE id = $1`,
     [id, a.scenario, a.tipoIstruttoria, a.dataDepositoProposta, Boolean(a.aperta)]
   );
@@ -448,6 +615,8 @@ export async function caricaPercorsoDemoEnte(
   await assicuraTabelleScenariTriage(nomeSchema);
   await assicuraTabelleVera(nomeSchema);
   await assicuraProdottiDemo(nomeSchema);
+  await assicuraRepartiTriageDemo(nomeSchema);
+  await aggiornaTriageDemo(nomeSchema);
 
   // Il riallineamento dei soli percorsi (usato quando si apre la pagina
   // Scenari di una demo già attiva) non deve riscrivere i parametri che

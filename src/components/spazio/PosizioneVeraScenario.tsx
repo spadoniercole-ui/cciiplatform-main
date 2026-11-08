@@ -537,6 +537,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
           <input
             type="file"
             accept=".xlsx,.xls"
+            data-demo-applica="file"
             data-demo-ruoli="CERTIFICAZIONE"
             className="hidden"
             disabled={inElaborazione}
