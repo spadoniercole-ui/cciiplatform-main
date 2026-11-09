@@ -1,3 +1,28 @@
+## 0.184.0 — 2026-11-09
+
+**Il ramo contabile per anno: dal bilancio XBRL depositato alla simulazione, accanto al percorso di partenza.**
+
+- Ogni bilancio XBRL apre il proprio **ramo contabile** sullo scenario (`contabile_rami`): i
+  rami restano accanto agli altri anni, non li sostituiscono. Il ramo porta con sé dati
+  finanziari, indici, situazione debitoria e semaforo già calcolati: riaprendolo si vede il
+  prospetto che l’operatore ha lasciato, non un ricalcolo silenzioso.
+- Sul ramo di partenza si lanciano le **simulazioni** con ipotesi dichiarate: variazione dei
+  ricavi, variazione dei costi, **quota del debito dell’ente che entra nel passivo** (con la
+  natura, previdenziale o tributaria: è l’aggancio alla verifica amministrativa del passo 0).
+  Le leve si riconducono in un intervallo ammesso (-90%/+90%, debito non negativo) e il ramo
+  di partenza non viene mai modificato: ogni simulazione è un ramo nuovo.
+- Gli indici si ricalcolano con **lo stesso motore** del resto della piattaforma
+  (`costruisciBundleIndici`): nessuna formula parallela. Il raffronto base/simulazione mostra
+  le voci del prospetto con delta assoluto e percentuale, e la tabella degli indici mette a
+  confronto il ramo di partenza e tutte le sue simulazioni, PFN compresa.
+- La **valutazione del ramo** è deterministica e dichiarata operativa: patrimonio netto non
+  positivo o tre indici oltre soglia → «non sostenibile sulle ipotesi»; uno o due indici oltre
+  soglia o risultato negativo → «da approfondire». Nessun giudizio di sostenibilità, nessuna
+  conclusione giuridica: il testo lo dice a ogni lettura.
+- Nuova pagina **Ramo contabile per anno** nello scenario, raggiungibile dalla testata, con
+  l’elenco degli anni in archivio, i rami aperti, le leve, il prospetto di raffronto e gli
+  indici. Senza bilancio XBRL la scheda lo dice e porta al caricamento: il ramo non si inventa.
+
 ## 0.183.0 — 2026-11-09
 
 **La verifica contabile si aggancia all’amministrativa: visura e debito splittato in chiaro, e non si spunta se quei dati mancano.**

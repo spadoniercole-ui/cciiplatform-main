@@ -137,6 +137,25 @@ export default async function ScenarioLayout({
           }}
         />
 
+        {/* Il ramo contabile per anno sta accanto al percorso principale:
+            dal bilancio XBRL depositato alla simulazione, senza uscire dallo
+            scenario. */}
+        <Link
+          href={`${base}/contabile`}
+          className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-blue-300 transition-colors"
+        >
+          <span>
+            <span className="block text-xs font-bold text-slate-900">Ramo contabile per anno</span>
+            <span className="block text-[10px] text-slate-500 mt-0.5">
+              Ogni bilancio XBRL apre il suo ramo; sul ramo si lanciano le simulazioni, con indici e
+              valutazione ricalcolati.
+            </span>
+          </span>
+          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-blue-700">
+            Apri
+          </span>
+        </Link>
+
         {/* Lo scenario si lavora su una pagina sola: da ogni pagina di
           servizio questo link riporta lì. */}
         <Link

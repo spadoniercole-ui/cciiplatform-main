@@ -3028,3 +3028,39 @@ export async function popolaDatiMasterSpazio(
     }
   });
 }
+
+/**
+ * Ramo contabile per anno (0.184.0): un ramo per ogni bilancio XBRL aperto
+ * sullo scenario, accanto — non al posto — degli altri anni. `tipo` vale
+ * 'PARTENZA' per il ramo che nasce dal bilancio depositato e 'SIMULAZIONE'
+ * per quelli che applicano ipotesi dichiarate su un ramo di partenza
+ * (`ramo_base_id`). Dati, indici, situazione debitoria e valutazione si
+ * conservano già calcolati: riaprire il ramo deve mostrare esattamente il
+ * prospetto che l'operatore ha visto, anche se il motore degli indici
+ * cambia — un ricalcolo esplicito crea un ramo nuovo, non riscrive il
+ * passato.
+ */
+export async function assicuraTabellaContabileRami(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabelleScenari(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.contabile_rami (
+      id SERIAL PRIMARY KEY,
+      scenario_id INTEGER NOT NULL REFERENCES ${s}.scenari(id) ON DELETE CASCADE,
+      azienda_id INTEGER NOT NULL,
+      anno_bilancio INTEGER NOT NULL,
+      etichetta TEXT NOT NULL,
+      tipo TEXT NOT NULL DEFAULT 'PARTENZA',
+      ramo_base_id INTEGER REFERENCES ${s}.contabile_rami(id) ON DELETE CASCADE,
+      xbrl_storico_id INTEGER,
+      dati_finanziari JSONB NOT NULL,
+      leve JSONB NOT NULL DEFAULT '{}'::jsonb,
+      indici JSONB NOT NULL,
+      altri_indici JSONB NOT NULL DEFAULT '[]'::jsonb,
+      situazione_debitoria JSONB NOT NULL,
+      severity TEXT NOT NULL,
+      valutazione JSONB,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+}
