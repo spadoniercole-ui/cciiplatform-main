@@ -1,3 +1,27 @@
+## 0.181.0 — 2026-11-09
+
+**La certificazione che non si salva lo dice, il Piano-ponte si riconosce a colpo d’occhio, e ogni Scenario parte dalle verifiche dell’ente.**
+
+- **Un salvataggio fallito non resta muto.** La verifica amministrativa leggeva la
+  certificazione dei debiti, la mostrava a schermo e chiamava il salvataggio senza guardarne
+  l’esito: se la scrittura non riusciva, la posizione dell’azienda restava vuota mentre la
+  schermata sembrava completa — ed era esattamente il caso da cui nasceva il «Debito ente 0 €»
+  del Piano-ponte. Ora l’esito si controlla, l’errore dice quante righe sono rimaste fuori e
+  perché, la nota resta accanto alle altre, e le righe non si rileggono dal database come se il
+  salvataggio fosse andato bene. I messaggi stanno in `src/lib/debitiEnte/salvataggioVera.ts`,
+  con i loro test; anche l’import della certificazione da uno scenario già si comportava così.
+- **Il Piano-ponte ha una veste sua.** È la base contabile su cui lo Scenario confronta le
+  assunzioni, non un’altra scheda dell’ente: ora si apre su un pannello indaco con il titolo più
+  grande, le sezioni in indaco e le tabelle con le righe in tinta. Chi lo guarda dopo la
+  posizione dell’ente non lo confonde con quello che l’azienda ha già dichiarato.
+- **Le verifiche dell’ente sono il primo passo dello Scenario.** In testa a ogni tipo di
+  scenario — Redigente, Ricevente, decreto, cram down — c’è il passo 0: l’elenco, filtrato
+  sull’azienda dello scenario, di ciò che l’ente ha già verificato su di lei (certificazione dei
+  debiti del triage e Posizione Debitoria dell’Ente), con posizioni, totale e data di lettura.
+  Se non c’è nulla lo dice e porta a caricarle; se c’è, porta ad aprirle. Le verifiche non si
+  copiano dentro lo scenario: restano lette dalla posizione dell’azienda, così un dato
+  aggiornato non resta fermo in una fotografia.
+
 ## 0.180.0 — 2026-11-09
 
 **Il debito ente arriva anche dal triage, ogni salvataggio delle assunzioni è una versione, e una proposta AI vuota non si spaccia più per riuscita.**

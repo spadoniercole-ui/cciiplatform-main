@@ -3,6 +3,10 @@ import Link from 'next/link';
 import { ArrowLeft, LayoutGrid } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
+import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
+import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
+import { riepilogoVerificheEnte } from '@/lib/debitiEnte/verificheEnte';
+import { VerificheEnteScenario } from '@/components/spazio/VerificheEnteScenario';
 import { leggiRiferimentoAzienda } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
@@ -46,6 +50,19 @@ export default async function ScenarioLayout({
     redirect(`/spazio/${codice}/scenari`);
   }
 
+  // PRIMO PASSO DI OGNI SCENARIO: le verifiche che l’ente ha già fatto su
+  // questa azienda. Sta nel layout perché vale per tutti i tipi di scenario
+  // (Redigente, Ricevente, decreto, cram down), non solo per uno.
+  const [vera, posizione] = await Promise.all([
+    ottieniDebitiVera(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
+    ottieniDebitiEnte(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
+  ]);
+  const verifiche = riepilogoVerificheEnte({
+    righeVera: vera && vera.success ? vera.righe : [],
+    documentiCaricatiIl: vera && vera.success ? (vera.documentiCaricatiIl ?? null) : null,
+    righePosizione: posizione && posizione.success ? posizione.righe : [],
+  });
+
   const base = `/spazio/${codice}/scenari/${scenarioId}`;
   // Testata dell'azienda: identificativi presso l'ente in evidenza.
   const riferimento = await leggiRiferimentoAzienda(contesto.nomeSchema, scenario.aziendaId).catch(
@@ -87,6 +104,13 @@ export default async function ScenarioLayout({
             </span>
           </div>
         </div>
+
+        <VerificheEnteScenario
+          riepilogo={verifiche}
+          codice={codice}
+          aziendaId={scenario.aziendaId}
+          ragioneSociale={scenario.ragioneSocialeAzienda}
+        />
 
         {/* Lo scenario si lavora su una pagina sola: da ogni pagina di
           servizio questo link riporta lì. */}

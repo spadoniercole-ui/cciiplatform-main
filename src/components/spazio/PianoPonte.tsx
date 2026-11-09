@@ -213,13 +213,16 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
   const debitoMancante = !dati.debitoEnte;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider flex items-center gap-2">
-            <Landmark className="w-4 h-4" /> Piano-ponte
+          <h2 className="font-bold text-indigo-950 uppercase text-base tracking-[0.14em] flex items-center gap-2">
+            <span className="inline-flex w-7 h-7 items-center justify-center rounded-lg bg-indigo-600 text-white">
+              <Landmark className="w-4 h-4" />
+            </span>
+            Piano-ponte
           </h2>
-          <p className="text-[11px] text-slate-500 mt-1 max-w-3xl">
+          <p className="text-[11px] text-indigo-900/70 mt-1 max-w-3xl">
             Porta l’ultimo bilancio depositato alla Data verifica usando note integrative, visura,
             settore e debito ente. Non è un piano di sviluppo e non appartiene a uno Scenario: è la
             base contabile su cui lo Scenario potrà confrontare le assunzioni dell’azienda.
@@ -299,7 +302,7 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
       )}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
-        <div className="bg-white border border-slate-200 rounded-xl p-3">
+        <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-3">
           <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
             Ultimo bilancio
           </p>
@@ -307,13 +310,13 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
             {dati.esercizi.length ? dati.esercizi[dati.esercizi.length - 1].anno : 'assente'}
           </p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-3">
+        <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-3">
           <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
             Note integrative
           </p>
           <p className="text-sm font-bold text-slate-900 mt-1">{dati.note.length} testi</p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-3">
+        <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-3">
           <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Visura</p>
           <p className="text-sm font-bold text-slate-900 mt-1">
             {dati.visura ? 'letta' : dati.visuraTrattenuta ? 'acquisita' : 'assente'}
@@ -324,12 +327,12 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
             </p>
           )}
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-3">
+        <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-3">
           <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Settore</p>
           <p className="text-sm font-bold text-slate-900 mt-1">{perc(dati.settore.tasso)}</p>
           <p className="text-[9px] text-slate-400 mt-1">{dati.settore.fonte}</p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-3">
+        <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-3">
           <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
             Debito ente
           </p>
@@ -379,8 +382,8 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
       )}
 
       {!ponte && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-          <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+        <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-5 space-y-3">
+          <h3 className="font-bold text-indigo-900 uppercase text-[11px] tracking-[0.14em]">
             Calcola il Ponte
           </h3>
           <p className="text-xs text-slate-600 leading-relaxed">
@@ -442,10 +445,10 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
 
       {ponte && output && (
         <>
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+          <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-5 space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
-                <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                <h3 className="font-bold text-indigo-900 uppercase text-[11px] tracking-[0.14em]">
                   Versione {ponte.versione}
                 </h3>
                 <p className="text-[11px] text-slate-500 mt-1">
@@ -487,9 +490,9 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
             <p className="text-xs text-slate-700 leading-relaxed">{output.sintesi}</p>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+          <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-5 space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+              <h3 className="font-bold text-indigo-900 uppercase text-[11px] tracking-[0.14em]">
                 Assunzioni
               </h3>
               {modificabile && (
@@ -531,7 +534,7 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
             <div className="overflow-x-auto">
               <table className="w-full text-[11px]">
                 <thead>
-                  <tr className="text-left text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                  <tr className="text-left text-[9px] uppercase tracking-wider text-slate-400 border-b border-indigo-200">
                     <th className="py-2 pr-2">Assunzione</th>
                     <th className="py-2 pr-2">Valore</th>
                     <th className="py-2 pr-2">Fonte</th>
@@ -576,9 +579,9 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
             )}
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+          <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-5 space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+              <h3 className="font-bold text-indigo-900 uppercase text-[11px] tracking-[0.14em]">
                 Proiezione
               </h3>
               <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
@@ -600,7 +603,7 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
               {vistaProiezione === 'ANNI' ? (
                 <table className="w-full text-[11px]">
                   <thead>
-                    <tr className="text-left text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                    <tr className="text-left text-[9px] uppercase tracking-wider text-slate-400 border-b border-indigo-200">
                       <th className="py-2 pr-2">Voce</th>
                       {output.anni.map((a) => (
                         <th key={a.anno} className="py-2 pr-2 text-right">
@@ -634,7 +637,7 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
               ) : (
                 <table className="w-full text-[11px]">
                   <thead>
-                    <tr className="text-left text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                    <tr className="text-left text-[9px] uppercase tracking-wider text-slate-400 border-b border-indigo-200">
                       <th className="py-2 pr-2">Voce</th>
                       {output.mesi.map((m) => (
                         <th key={m.mese} className="py-2 pr-2 text-right whitespace-nowrap">
@@ -676,9 +679,9 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
             )}
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-2">
+          <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-5 space-y-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+              <h3 className="font-bold text-indigo-900 uppercase text-[11px] tracking-[0.14em]">
                 Copertura dei dati
               </h3>
               <span className="text-[11px] font-bold text-slate-700">
@@ -711,7 +714,7 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
               return (
                 <div
                   key={String(titolo)}
-                  className="bg-white border border-slate-200 rounded-xl p-3"
+                  className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-3"
                 >
                   <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
                     {String(titolo)}
@@ -733,8 +736,8 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
             })}
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-            <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+          <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-5 space-y-3">
+            <h3 className="font-bold text-indigo-900 uppercase text-[11px] tracking-[0.14em]">
               Riconciliazione
             </h3>
             <table className="w-full text-[11px]">
@@ -756,9 +759,9 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
           </div>
 
           {output.sintesiIntegrata && (
-            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+            <div className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-5 space-y-3">
               <div>
-                <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                <h3 className="font-bold text-indigo-900 uppercase text-[11px] tracking-[0.14em]">
                   Sintesi integrata
                 </h3>
                 <p className="text-[11px] text-slate-500 mt-1">
@@ -845,7 +848,7 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
             </div>
           )}
 
-          <details className="bg-white border border-slate-200 rounded-xl p-4">
+          <details className="bg-indigo-50/40 border border-indigo-200 rounded-xl p-4">
             <summary className="text-[11px] font-bold text-slate-700 cursor-pointer">
               Limiti del modello e storico delle versioni
             </summary>

@@ -127,6 +127,7 @@ import { chiaveDipendenza } from '@/lib/lavorazioni/dipendenze';
 import { conRitorno } from '@/lib/navigazione/ritorno';
 import { materiaPerRigaVera } from '@/lib/titoliEnte/materiaVera';
 import { normalizzaEtichetta } from '@/lib/debitiEnte/tracciatoCore';
+import { esitoSalvataggioVera } from '@/lib/debitiEnte/salvataggioVera';
 import { MappaturaSezioniVera } from '@/components/spazio/MappaturaSezioniVera';
 import type { StatoMateria } from '@/lib/titoliEnte/materie';
 import {
@@ -915,20 +916,30 @@ export function VerificaSaluteAzienda({
               'VERA',
               await improntaFile(fileVera)
             );
-            await sostituisciDebitiVeraAction(
+            const salvataggio = await sostituisciDebitiVeraAction(
               nomeSchema,
               c.aziendaId,
               righe,
               reg.success && reg.documentoId ? reg.documentoId : null
             );
-            // Le righe appena salvate si rileggono dal database: sono loro ad
-            // avere l'id con cui si registra la scelta sulla coppia
-            // F24/denunce. I valori sono quelli appena scritti — è la stessa
-            // estrazione — e la verifica riaperta farà lo stesso giro.
-            const salvate = await ottieniDebitiVera(nomeSchema, c.aziendaId);
-            if (salvate.success) {
-              setRigheVera(salvate.righe);
-              setVeraCaricataIl(salvate.documentiCaricatiIl ?? null);
+            if (!salvataggio.success) {
+              // L'esito si ignorava: la certificazione restava «letta» a
+              // schermo mentre la posizione dell'azienda rimaneva vuota, e il
+              // Piano-ponte leggeva 0 €. Un salvataggio fallito si dichiara, e
+              // non si rilegge il database come se fosse andato bene.
+              const messaggio = esitoSalvataggioVera(righe.length, salvataggio.error);
+              setErrore(messaggio.errore);
+              note.push(messaggio.nota);
+            } else {
+              // Le righe appena salvate si rileggono dal database: sono loro ad
+              // avere l'id con cui si registra la scelta sulla coppia
+              // F24/denunce. I valori sono quelli appena scritti — è la stessa
+              // estrazione — e la verifica riaperta farà lo stesso giro.
+              const salvate = await ottieniDebitiVera(nomeSchema, c.aziendaId);
+              if (salvate.success) {
+                setRigheVera(salvate.righe);
+                setVeraCaricataIl(salvate.documentiCaricatiIl ?? null);
+              }
             }
           }
         } catch (e) {
