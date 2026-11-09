@@ -15,6 +15,15 @@ import { assicuraTabelleScenari } from '@/db/provision';
 import { type TipoProposta, ORIGINI_PER_TIPO } from '@/lib/origineProposta';
 import type { TipoIstruttoria } from '@/lib/giudice/lettura';
 
+// Le colonne timestamp di Drizzle tornano dal driver come Date: l'API dello
+// scenario parla invece stringhe ISO, perché è quello che il browser mostra e
+// taglia sulla data. Convertirle con toString() dava una data locale
+// illeggibile («Mon Nov 09 2026 …»), che non si taglia come ISO.
+function isoData(valore: Date | string | null): string | null {
+  if (!valore) return null;
+  return valore instanceof Date ? valore.toISOString() : valore;
+}
+
 export type StatoScenario = 'BOZZA' | 'IN_CORSO' | 'COMPLETATO';
 export type { TipoProposta };
 
@@ -80,10 +89,8 @@ export async function ottieniScenari(
         simulazioneAttiva: r.simulazioneAttiva,
         verificaAmministrativa: r.verificaAmministrativa,
         verificaContabile: r.verificaContabile,
-        verificaAmministrativaIl: r.verificaAmministrativaIl
-          ? r.verificaAmministrativaIl.toString()
-          : null,
-        verificaContabileIl: r.verificaContabileIl ? r.verificaContabileIl.toString() : null,
+        verificaAmministrativaIl: isoData(r.verificaAmministrativaIl),
+        verificaContabileIl: isoData(r.verificaContabileIl),
         bloccatoIl: r.bloccatoIl ? r.bloccatoIl.toString() : null,
         createdAt: r.createdAt.toString(),
       })),
@@ -165,10 +172,8 @@ export async function ottieniScenarioPerId(
         simulazioneAttiva: r.simulazioneAttiva,
         verificaAmministrativa: r.verificaAmministrativa,
         verificaContabile: r.verificaContabile,
-        verificaAmministrativaIl: r.verificaAmministrativaIl
-          ? r.verificaAmministrativaIl.toString()
-          : null,
-        verificaContabileIl: r.verificaContabileIl ? r.verificaContabileIl.toString() : null,
+        verificaAmministrativaIl: isoData(r.verificaAmministrativaIl),
+        verificaContabileIl: isoData(r.verificaContabileIl),
         bloccatoIl: r.bloccatoIl ? r.bloccatoIl.toString() : null,
         createdAt: r.createdAt.toString(),
         ragioneSocialeAzienda: r.ragioneSocialeAzienda,
@@ -257,8 +262,10 @@ export async function creaScenarioAction(
         simulazioneAttiva,
         verificaAmministrativa: verifiche.amministrativa,
         verificaContabile: verifiche.contabile,
-        verificaAmministrativaIl: verifiche.amministrativa ? new Date().toISOString() : null,
-        verificaContabileIl: verifiche.contabile ? new Date().toISOString() : null,
+        // Le colonne sono timestamp Drizzle in modalità date: si passano Date,
+        // non stringhe ISO (la scrittura chiama toISOString() sul valore).
+        verificaAmministrativaIl: verifiche.amministrativa ? new Date() : null,
+        verificaContabileIl: verifiche.contabile ? new Date() : null,
       })
       .returning({ id: tabelle.scenari.id });
 

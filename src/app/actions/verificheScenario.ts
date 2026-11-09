@@ -115,15 +115,19 @@ export async function impostaVerificheScenarioAction(
       .set({
         verificaAmministrativa: verifiche.amministrativa,
         verificaContabile: verifiche.contabile,
+        // La data di caricamento si scrive una volta sola e non si sposta: se la
+        // verifica era già dentro lo scenario, resta la sua data.
+        // Le colonne sono timestamp Drizzle in modalità date: servono Date, non
+        // stringhe ISO, altrimenti la scrittura fallisce su toISOString().
         verificaAmministrativaIl: verifiche.amministrativa
           ? prima.amministrativa && prima.amministrativaIl
             ? prima.amministrativaIl
-            : new Date().toISOString()
+            : new Date()
           : null,
         verificaContabileIl: verifiche.contabile
           ? prima.contabile && prima.contabileIl
             ? prima.contabileIl
-            : new Date().toISOString()
+            : new Date()
           : null,
       })
       .where(eq(tabelle.scenari.id, scenarioId));

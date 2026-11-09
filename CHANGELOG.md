@@ -1,3 +1,17 @@
+## 0.182.1 — 2026-11-09
+
+**Le spunte delle verifiche dell’ente si salvano davvero: la verifica contabile torna selezionabile.**
+
+- La 0.182.0 scriveva la data di caricamento come stringa ISO in colonne `timestamp`
+  Drizzle in modalità `date`, e la scrittura chiama `toISOString()` sul valore: ogni
+  spunta falliva con «a.toISOString is not a function». La verifica contabile restava
+  quindi non selezionabile, pur essendo disponibile, e il salvataggio dalla creazione
+  dello scenario aveva lo stesso difetto. Ora si passano oggetti `Date`
+  (`impostaVerificheScenarioAction`, `creaScenarioAction`).
+- Le date tornano all’interfaccia in ISO (`isoData` in `src/app/actions/scenari.ts`):
+  «caricata nello scenario il 09/11/2026» si legge di nuovo, invece di una data locale
+  non tagliabile.
+
 ## 0.182.0 — 2026-11-09
 
 **Il Ponte non mostra più zero su un debito accertato, le verifiche dell’ente diventano spunte che dicono se il dato è nello scenario, e l’avviso demo sparisce dalle pagine dello spazio.**
