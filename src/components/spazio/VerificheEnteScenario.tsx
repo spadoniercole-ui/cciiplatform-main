@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { CheckCircle2, CircleDashed, Loader2 } from 'lucide-react';
 import { impostaVerificheScenarioAction } from '@/app/actions/verificheScenario';
 import { sintesiVerificheEnte, type RiepilogoVerificheEnte } from '@/lib/debitiEnte/verificheEnte';
+import { type AggancioContabile } from '@/lib/debitiEnte/aggancioContabile';
 
 const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
 const giorno = (iso: string | null) =>
@@ -34,6 +35,8 @@ export interface StatoVerificheScenario {
 export interface DisponibilitaVerificheScenario {
   amministrativa: boolean;
   contabile: boolean;
+  /** Visura, debito split e bilanci: l’aggancio che rende spuntabile la contabile. */
+  aggancio: AggancioContabile;
 }
 
 export function VerificheEnteScenario({
@@ -60,6 +63,7 @@ export function VerificheEnteScenario({
   const [inCorso, avvia] = useTransition();
 
   const contabileAttiva = verifiche.contabile;
+  const aggancio = disponibilita.aggancio;
 
   const cambiaContabile = (valore: boolean) => {
     setErrore(null);
@@ -173,27 +177,94 @@ export function VerificheEnteScenario({
           )}
         </div>
 
-        {/* VERIFICA CONTABILE — facoltativa, si spunta da qui. */}
+        {/* VERIFICA CONTABILE — facoltativa, ma agganciata all’amministrativa:
+            visura e debito split sono il ponte tra le due verifiche, e senza
+            quelli la contabile si spunterebbe su un’azienda che non si conosce. */}
         <div className="rounded-lg border border-slate-200 bg-white p-3">
-          <label className="flex items-start gap-2 cursor-pointer">
+          <label className={`flex items-start gap-2 ${aggancio.pronto ? 'cursor-pointer' : ''}`}>
             <input
               type="checkbox"
               checked={contabileAttiva}
-              disabled={!disponibilita.contabile || inCorso}
+              disabled={!aggancio.pronto || inCorso}
               onChange={(e) => cambiaContabile(e.target.checked)}
               className="mt-0.5"
+              title={
+                aggancio.pronto
+                  ? undefined
+                  : `Manca ${aggancio.mancanti.join(', ')}: la contabile si appoggia ai dati della verifica amministrativa.`
+              }
             />
             <span className="min-w-0">
               <span className="block text-xs font-bold text-slate-900">Verifica contabile</span>
               <span className="block text-[10px] text-slate-500 mt-0.5">
-                Visura e bilancio XBRL (bilancio e nota integrativa) · dato storico
+                Bilancio XBRL (bilancio e nota integrativa) · dato storico
               </span>
             </span>
           </label>
+
+          {/* L’aggancio, in chiaro: che cosa la contabile prende dall’amministrativa. */}
+          <ul className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-[10px]">
+            <li className="flex items-start justify-between gap-2">
+              <span className="text-slate-500">Visura dell’ente</span>
+              <span
+                className={`text-right font-bold ${
+                  aggancio.visura.presente ? 'text-slate-900' : 'text-amber-700'
+                }`}
+              >
+                {aggancio.visura.presente
+                  ? `acquisita${
+                      giorno(aggancio.visura.caricataIl)
+                        ? ` il ${giorno(aggancio.visura.caricataIl)}`
+                        : ''
+                    }`
+                  : 'da acquisire'}
+              </span>
+            </li>
+            <li className="flex items-start justify-between gap-2">
+              <span className="text-slate-500">Debito dell’ente</span>
+              <span
+                className={`text-right font-bold ${
+                  aggancio.debito ? 'text-slate-900' : 'text-amber-700'
+                }`}
+              >
+                {aggancio.debito
+                  ? aggancio.debito.ripartito
+                    ? `${euro(aggancio.debito.contabilizzato)} contabilizzati · ${euro(
+                        aggancio.debito.daContabilizzare
+                      )} da contabilizzare`
+                    : `${euro(
+                        aggancio.debito.totale
+                      )} dalle posizioni del triage — ripartizione non registrata`
+                  : 'da acquisire'}
+              </span>
+            </li>
+            <li className="flex items-start justify-between gap-2">
+              <span className="text-slate-500">Bilanci XBRL</span>
+              <span
+                className={`text-right font-bold ${
+                  aggancio.anniBilancio.length > 0 ? 'text-slate-900' : 'text-amber-700'
+                }`}
+              >
+                {aggancio.anniBilancio.length > 0
+                  ? aggancio.anniBilancio.join(', ')
+                  : 'da acquisire'}
+              </span>
+            </li>
+          </ul>
+
+          {aggancio.debito && (
+            <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">
+              Fonte del debito: {aggancio.debito.fonte}.
+              {aggancio.debito.ripartito
+                ? ' La quota contabilizzata e quella da contabilizzare entrano nella definizione del dato contabile.'
+                : ' La ripartizione tra contabilizzato e da contabilizzare non è in questo dato.'}
+            </p>
+          )}
+
           <p className="mt-2 text-[10px] text-slate-500">
-            {disponibilita.contabile
-              ? 'Con l’amministrativa forma la verifica completa.'
-              : 'Nessun bilancio XBRL caricato su questa azienda.'}
+            {aggancio.pronto
+              ? 'Con l’amministrativa forma la verifica completa: la contabile parte dagli stessi dati, portati al bilancio.'
+              : `Per aprire la contabile manca ${aggancio.mancanti.join(', ')}. I primi due dati vengono dalla verifica amministrativa.`}
           </p>
           <p
             className={`mt-2 flex items-center gap-1 text-[10px] font-bold ${
@@ -207,13 +278,25 @@ export function VerificheEnteScenario({
             )}
             {statoContabile}
           </p>
-          {!disponibilita.contabile && (
-            <Link
-              href={`/spazio/${codice}/aziende/${aziendaId}/xbrl`}
-              className="mt-1 inline-block text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
-            >
-              Carica il bilancio
-            </Link>
+          {!aggancio.pronto && (
+            <div className="mt-1 flex flex-wrap gap-3">
+              {!aggancio.visura.presente && (
+                <Link
+                  href={`/spazio/${codice}/verifica-salute?azienda=${aziendaId}`}
+                  className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+                >
+                  Acquisisci la visura
+                </Link>
+              )}
+              {aggancio.anniBilancio.length === 0 && (
+                <Link
+                  href={`/spazio/${codice}/aziende/${aziendaId}/xbrl`}
+                  className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+                >
+                  Carica il bilancio
+                </Link>
+              )}
+            </div>
           )}
         </div>
       </div>

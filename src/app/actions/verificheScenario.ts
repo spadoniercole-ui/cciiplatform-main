@@ -6,10 +6,24 @@
 // passo 0. Non è una navigazione: è uno stato dello scenario, e serve a
 // rispondere alla sola domanda che conta mentre si lavora — questo dato è
 // caricato nello scenario, o no?
+//
+// La contabile non è indipendente dall’amministrativa: si appoggia alla stessa
+// visura e al debito dell’ente splittato tra contabilizzato e da contabilizzare,
+// che è la voce con cui la contabilità chiude l’esposizione verso l’ente. La
+// scheda mostra quell’aggancio e, senza quei dati, non si spunta.
 
 import { richiediAccessoAzienda, richiediAccessoScenario } from '@/lib/autorizzazione';
 import { assicuraTabelleScenari } from '@/db/provision';
 import type { RisultatoOperazioneScenario } from '@/app/actions/scenari';
+import {
+  aggancioContabile,
+  type AggancioContabile,
+  type VisuraContabile,
+} from '@/lib/debitiEnte/aggancioContabile';
+import type { SnapshotDebitoEnte } from '@/lib/ponte/debitoEnte';
+import type { DebitoEntePonte } from '@/lib/ponte/types';
+import type { RigaVera, TrattamentoVera } from '@/lib/debitiEnte/veraImport';
+import type { StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
 
 export interface DisponibilitaVerifiche {
   success: boolean;
@@ -17,7 +31,115 @@ export interface DisponibilitaVerifiche {
   amministrativa: boolean;
   /** Esiste almeno un bilancio XBRL: il dato storico. */
   contabile: boolean;
+  /** Visura, debito split e bilanci: è ciò che rende la contabile agganciabile. */
+  aggancio: AggancioContabile;
   error?: string;
+}
+
+function numero(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+
+/**
+ * Legge dallo spazio ciò che serve all’aggancio: visura dell’ente, debito
+ * (certificazione, altrimenti triage) e anni di bilancio XBRL. Ogni lettura è
+ * indipendente: una tabella assente non fa fallire le altre, perché la scheda
+ * deve poter dire esattamente che cosa manca.
+ */
+async function leggiAggancio(nomeSchema: string, aziendaId: number): Promise<AggancioContabile> {
+  const { pool } = await import('@/lib/db');
+  const { snapshotDebitoEnte, snapshotDebitoEnteDaTriage } = await import('@/lib/ponte/debitoEnte');
+
+  let visura: VisuraContabile = { presente: false, nomeFile: null, caricataIl: null };
+  try {
+    const risposta = await pool.query(
+      `SELECT visura_triage_url, visura_triage_nome,
+              to_char(visura_triage_il, 'YYYY-MM-DD') AS visura_triage_il
+         FROM "${nomeSchema}".aziende
+        WHERE id = $1 LIMIT 1`,
+      [aziendaId]
+    );
+    const riga = risposta.rows[0];
+    if (riga?.visura_triage_url) {
+      visura = {
+        presente: true,
+        nomeFile: riga.visura_triage_nome ? String(riga.visura_triage_nome) : null,
+        caricataIl: riga.visura_triage_il ? String(riga.visura_triage_il) : null,
+      };
+    }
+  } catch {
+    // Tabella o colonne assenti su uno spazio nuovo: la visura è un dato da
+    // acquisire, non un errore da mostrare.
+  }
+
+  let certificazione: SnapshotDebitoEnte | null = null;
+  try {
+    const risposta = await pool.query(
+      `SELECT id, sezione, ambito, voce, importo, contributi, sanzioni, categoria, stato,
+              trattamento, periodo, duplicato_stato
+         FROM "${nomeSchema}".debiti_vera
+        WHERE azienda_id = $1 ORDER BY id ASC`,
+      [aziendaId]
+    );
+    const righe: RigaVera[] = risposta.rows.map((r) => ({
+      id: Number(r.id),
+      sezione: String(r.sezione ?? ''),
+      ambito: (r.ambito ?? 'INPS') as RigaVera['ambito'],
+      voce: String(r.voce ?? ''),
+      importo: numero(r.importo),
+      categoria: String(r.categoria ?? ''),
+      stato: String(r.stato ?? ''),
+      periodo: r.periodo ? String(r.periodo) : undefined,
+      trattamento: String(r.trattamento ?? 'potenziale') as TrattamentoVera,
+      contributi: r.contributi === null || r.contributi === undefined ? null : numero(r.contributi),
+      sanzioni: r.sanzioni === null || r.sanzioni === undefined ? null : numero(r.sanzioni),
+      duplicatoStato: (r.duplicato_stato ?? '') as StatoDuplicatoVera | '',
+    }));
+    if (righe.length > 0) certificazione = snapshotDebitoEnte(righe);
+  } catch {
+    // Nessuna certificazione: si prova col triage.
+  }
+
+  let triage: DebitoEntePonte | null = null;
+  if (!certificazione || certificazione.totale === 0) {
+    try {
+      const risposta = await pool.query(
+        `SELECT descrizione, categoria, importo_anno_corrente
+           FROM "${nomeSchema}".debiti_triage
+          WHERE azienda_id = $1 AND importo_anno_corrente IS NOT NULL
+          ORDER BY categoria, id`,
+        [aziendaId]
+      );
+      triage = snapshotDebitoEnteDaTriage(
+        risposta.rows.map((r) => ({
+          categoria: String(r.categoria ?? ''),
+          descrizione: String(r.descrizione ?? ''),
+          importo:
+            r.importo_anno_corrente === null || r.importo_anno_corrente === undefined
+              ? null
+              : numero(r.importo_anno_corrente),
+        }))
+      );
+    } catch {
+      // Tabella assente: il debito resta da acquisire.
+    }
+  }
+
+  let anniBilancio: number[] = [];
+  try {
+    const risposta = await pool.query(
+      `SELECT DISTINCT anno_bilancio FROM "${nomeSchema}".xbrl_storico_azienda
+        WHERE azienda_id = $1 AND anno_bilancio IS NOT NULL`,
+      [aziendaId]
+    );
+    anniBilancio = risposta.rows
+      .map((r) => Number(r.anno_bilancio))
+      .filter((n) => Number.isFinite(n));
+  } catch {
+    // Nessun bilancio caricato: la contabile resta da costruire.
+  }
+
+  return aggancioContabile({ visura, certificazione, triage, anniBilancio });
 }
 
 /**
@@ -37,33 +159,24 @@ export async function verificheDisponibiliAziendaAction(
         success: false,
         amministrativa: false,
         contabile: false,
+        aggancio: (await import('@/lib/debitiEnte/aggancioContabile')).AGGANGIO_VUOTO,
         error: 'Nome schema non valido.',
       };
     }
-    const { pool } = await import('@/lib/db');
-    const esiste = async (tabella: string): Promise<boolean> => {
-      try {
-        const r = await pool.query(
-          `SELECT EXISTS (SELECT 1 FROM "${nomeSchema}".${tabella} WHERE azienda_id = $1) AS c`,
-          [aziendaId]
-        );
-        return Boolean(r.rows[0]?.c);
-      } catch {
-        // Tabella non provisionata in questo spazio: la verifica non esiste.
-        return false;
-      }
+    const aggancio = await leggiAggancio(nomeSchema, aziendaId);
+    return {
+      success: true,
+      amministrativa: Boolean(aggancio.debito) || aggancio.visura.presente,
+      contabile: aggancio.anniBilancio.length > 0,
+      aggancio,
     };
-
-    const certificazione = await esiste('debiti_vera');
-    const amministrativa = certificazione ? true : await esiste('debiti_triage');
-    const contabile = await esiste('xbrl_storico_azienda');
-    return { success: true, amministrativa, contabile };
   } catch (error: any) {
     console.error('[verificheDisponibiliAziendaAction] Errore:', error);
     return {
       success: false,
       amministrativa: false,
       contabile: false,
+      aggancio: (await import('@/lib/debitiEnte/aggancioContabile')).AGGANGIO_VUOTO,
       error: `Impossibile leggere le verifiche dell’azienda: ${error.message || error}`,
     };
   }
@@ -71,9 +184,9 @@ export async function verificheDisponibiliAziendaAction(
 
 /**
  * Le due spunte del passo 0. Persistono sullo scenario con la data del
- * caricamento; l'amministrativa non si spegne quando l'utente la toglie —
- * è la verifica minima — quindi il server rifiuta una scelta che lascerebbe
- * lo scenario senza nessuna verifica.
+ * caricamento; il server rifiuta una scelta che lascerebbe lo scenario senza
+ * nessuna verifica, e rifiuta la contabile se l'aggancio non è completo: non si
+ * dichiara «dentro lo scenario» un dato che l'azienda non ha ancora fornito.
  */
 export async function impostaVerificheScenarioAction(
   nomeSchema: string,
@@ -92,6 +205,7 @@ export async function impostaVerificheScenarioAction(
       };
     }
     await assicuraTabelleScenari(nomeSchema);
+    const { pool } = await import('@/lib/db');
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -99,6 +213,7 @@ export async function impostaVerificheScenarioAction(
 
     const attuale = await db
       .select({
+        aziendaId: tabelle.scenari.aziendaId,
         amministrativa: tabelle.scenari.verificaAmministrativa,
         contabile: tabelle.scenari.verificaContabile,
         amministrativaIl: tabelle.scenari.verificaAmministrativaIl,
@@ -110,27 +225,35 @@ export async function impostaVerificheScenarioAction(
     if (attuale.length === 0) return { success: false, error: 'Scenario non trovato.' };
     const prima = attuale[0];
 
-    await db
-      .update(tabelle.scenari)
-      .set({
-        verificaAmministrativa: verifiche.amministrativa,
-        verificaContabile: verifiche.contabile,
-        // La data di caricamento si scrive una volta sola e non si sposta: se la
-        // verifica era già dentro lo scenario, resta la sua data.
-        // Le colonne sono timestamp Drizzle in modalità date: servono Date, non
-        // stringhe ISO, altrimenti la scrittura fallisce su toISOString().
-        verificaAmministrativaIl: verifiche.amministrativa
-          ? prima.amministrativa && prima.amministrativaIl
-            ? prima.amministrativaIl
-            : new Date()
-          : null,
-        verificaContabileIl: verifiche.contabile
-          ? prima.contabile && prima.contabileIl
-            ? prima.contabileIl
-            : new Date()
-          : null,
-      })
-      .where(eq(tabelle.scenari.id, scenarioId));
+    if (verifiche.contabile && !prima.contabile) {
+      const aggancio = await leggiAggancio(nomeSchema, prima.aziendaId);
+      if (!aggancio.pronto) {
+        return {
+          success: false,
+          error: `La verifica contabile non è ancora selezionabile: manca ${aggancio.mancanti.join(', ')}.`,
+        };
+      }
+    }
+
+    await pool.query(
+      `UPDATE "${nomeSchema}".scenari
+          SET verifica_amministrativa = $2,
+              verifica_contabile = $3,
+              verifica_amministrativa_il = CASE
+                WHEN NOT $2 THEN NULL
+                WHEN verifica_amministrativa AND verifica_amministrativa_il IS NOT NULL
+                  THEN verifica_amministrativa_il
+                ELSE now()
+              END,
+              verifica_contabile_il = CASE
+                WHEN NOT $3 THEN NULL
+                WHEN verifica_contabile AND verifica_contabile_il IS NOT NULL
+                  THEN verifica_contabile_il
+                ELSE now()
+              END
+        WHERE id = $1`,
+      [scenarioId, verifiche.amministrativa, verifiche.contabile]
+    );
 
     return { success: true, scenarioId };
   } catch (error: any) {

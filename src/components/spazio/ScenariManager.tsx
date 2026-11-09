@@ -127,7 +127,9 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
   const caricaDisponibilita = async (aziendaId: number) => {
     const esito = await verificheDisponibiliAziendaAction(nomeSchema, aziendaId).catch(() => null);
     const amministrativa = Boolean(esito?.success && esito.amministrativa);
-    const contabile = Boolean(esito?.success && esito.contabile);
+    // La contabile entra nello scenario solo quando l’aggancio è completo:
+    // visura, debito dell’ente e bilancio XBRL ci sono tutti.
+    const contabile = Boolean(esito?.success && esito.aggancio?.pronto);
     setDisponibilita({ amministrativa, contabile });
     setVerificaAmministrativa(amministrativa || !contabile);
     setVerificaContabile(amministrativa && contabile);

@@ -1,3 +1,27 @@
+## 0.183.0 — 2026-11-09
+
+**La verifica contabile si aggancia all’amministrativa: visura e debito splittato in chiaro, e non si spunta se quei dati mancano.**
+
+- La contabile non si sceglie più «a parte»: la scheda del passo 0 mostra che cosa prende
+  dalla verifica amministrativa — **visura dell’ente** (con il giorno in cui è stata
+  acquisita) e **debito dell’ente diviso tra contabilizzato e da contabilizzare**, con la
+  fonte dichiarata — più i **bilanci XBRL** disponibili per anno. Sono i due dati che, per
+  tua indicazione, servono per scendere nella contabile: la visura è la stessa, il debito
+  splittato è la voce che entra nella definizione del dato contabile.
+- **La contabile si spunta solo quando l’aggancio è completo**: visura, debito e almeno un
+  bilancio. Se manca qualcosa il riquadro dice che cosa manca (`Per aprire la contabile
+  manca …`) e offre il collegamento per acquisirlo; il server rifiuta comunque il
+  salvataggio, così lo scenario non dichiara una verifica che l’azienda non ha ancora
+  fornito. Se il debito arriva solo dalle posizioni del triage, la cifra si mostra ma la
+  scheda dichiara che la ripartizione non è registrata.
+- Il ripiego del debito è lo stesso del Piano-ponte (`debitoContabile` in
+  `src/lib/debitiEnte/aggancioContabile.ts`, con 9 test): base certa, poi posizioni del
+  triage, poi le segnalate alle unità operative — mai zero davanti a un debito accertato.
+- La preselezione alla creazione segue la stessa regola: la verifica completa si propone
+  solo se la contabile è agganciabile davvero, non solo perché esiste un file XBRL.
+- Il salvataggio delle spunte passa a SQL diretto con `now()` (niente più conversioni di
+  data lato Drizzle): la data del caricamento si scrive una volta e non si sposta.
+
 ## 0.182.1 — 2026-11-09
 
 **Le spunte delle verifiche dell’ente si salvano davvero: la verifica contabile torna selezionabile.**

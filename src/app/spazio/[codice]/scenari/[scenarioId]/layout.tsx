@@ -8,6 +8,7 @@ import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 import { riepilogoVerificheEnte } from '@/lib/debitiEnte/verificheEnte';
 import { VerificheEnteScenario } from '@/components/spazio/VerificheEnteScenario';
 import { verificheDisponibiliAziendaAction } from '@/app/actions/verificheScenario';
+import { AGGANGIO_VUOTO } from '@/lib/debitiEnte/aggancioContabile';
 import { leggiRiferimentoAzienda } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
@@ -129,6 +130,10 @@ export default async function ScenarioLayout({
           disponibilita={{
             amministrativa: Boolean(disponibilita?.success && disponibilita.amministrativa),
             contabile: Boolean(disponibilita?.success && disponibilita.contabile),
+            aggancio:
+              disponibilita?.success && disponibilita.aggancio
+                ? disponibilita.aggancio
+                : AGGANGIO_VUOTO,
           }}
         />
 
