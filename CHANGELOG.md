@@ -1,3 +1,23 @@
+## 0.179.0 — 2026-11-09
+
+**Le note integrative si leggono per sezione, e l’HTML del file non arriva più al motore.**
+
+- **Note XBRL classificate.** `src/lib/xbrl/note.ts` riconosce le sezioni che cambiano le
+  assunzioni — continuità aziendale, fatti di rilievo dopo la chiusura, impegni e passività
+  potenziali, parti correlate, eventi straordinari, piani e intenzioni, criteri di valutazione — e
+  tiene quelle prima delle altre quando il tetto taglia.
+- **HTML ripulito.** Le tassonomie ITCC-CI mettono la nota dentro paragrafi codificati
+  (`&lt;p style=…&gt;`): prima il testo arrivava al Piano-ponte con tag ed entità, ora arriva
+  leggibile, con le entità numeriche risolte e la doppia codifica gestita.
+- **Taglio dichiarato.** Il tetto (40 testi, 6.000 caratteri per testo, 48.000 in totale) non è
+  silenzioso: se scatta, l’analisi aggiunge un avviso con quanti testi c’erano nel file e quanti
+  sono stati conservati.
+- **Duplicati ed etichette fuori.** I testi ripetuti e quelli sotto gli 80 caratteri non entrano
+  nelle note: erano intestazioni e denominazioni, non note integrative.
+- **Il file vero come riferimento.** La verifica è stata fatta sui tag di un XBRL ITCC-CI reale
+  (`itcc-ci:IntroduzioneNotaIntegrativa`, `CommentoPrincipiRedazione`, `ImpegniEPassivitaPotenziali`,
+  `ContinuitaAziendale`), non solo sui file dimostrativi.
+
 ## 0.178.0 — 2026-11-08
 
 **Il debito ente del Piano-ponte si legge in tre stati, e nulla sparisce in silenzio.**

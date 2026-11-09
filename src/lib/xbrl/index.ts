@@ -11,6 +11,7 @@ import { parseIstanzaXbrl, pulisciTag } from './parser';
 import { caricaMappingTag } from './tagMapping';
 import { calcolaIndiciCcii, calcolaSeverity, calcolaAltriIndici } from './indici';
 import { estraiCodiceAteco } from './ateco';
+import { selezionaNote } from './note';
 import type {
   AnalisiXbrlResult,
   DatiFinanziariPeriodo,
@@ -167,26 +168,25 @@ export async function analizzaFileXbrl(
     corrente.valoreProduzione !== 0 ||
     corrente.costiProduzione !== 0;
 
-  // Le note non sono numeri e non entrano nei totali. Si conservano in un
-  // blocco separato, con un taglio difensivo: un'istanza può contenere molto
-  // testo, ma il Piano-ponte ha bisogno delle sezioni rilevanti, non di
-  // trascinare l'intero documento nel database e nel prompt.
-  const LIMITE_NOTE = 200;
-  const LIMITE_CARATTERI_NOTA = 4_000;
-  const noteFatti = factTestuali.slice(0, LIMITE_NOTE).map((f) => ({
-    ...f,
-    testo: f.testo.slice(0, LIMITE_CARATTERI_NOTA),
-  }));
+  // Le note non sono numeri e non entrano nei totali. Si tengono per sezione,
+  // ripulite dall'HTML che le tassonomie ci mettono dentro (vedi note.ts), con
+  // un tetto dichiarato: il Piano-ponte ha bisogno della continuità aziendale,
+  // dei fatti di rilievo e degli impegni, non di trascinare l'intero documento
+  // nel database e nel prompt.
+  const selezioneNote = selezionaNote(factTestuali);
   const note: NoteXbrl = {
-    fatti: noteFatti,
+    fatti: selezioneNote.fatti,
     copertura: {
       fatti: factTestuali.length,
-      caratteri: noteFatti.reduce((n, f) => n + f.testo.length, 0),
-      troncate:
-        factTestuali.length > LIMITE_NOTE ||
-        factTestuali.some((f) => f.testo.length > LIMITE_CARATTERI_NOTA),
+      caratteri: selezioneNote.caratteri,
+      troncate: selezioneNote.troncate,
     },
   };
+  if (selezioneNote.troncate) {
+    warnings.push(
+      `Note integrative: ${factTestuali.length} testi nel file, ${selezioneNote.fatti.length} conservati (${selezioneNote.caratteri.toLocaleString('it-IT')} caratteri). Sono state tenute le sezioni rilevanti; il testo oltre il tetto non è stato salvato.`
+    );
+  }
 
   return {
     meta: {
