@@ -31,6 +31,12 @@ export interface Scenario {
   archiviato: boolean;
   /** Ricevente (ENTE): abilita il passo «Piano di sviluppo» (confronto con il piano dell'azienda, ipotesi dell'AI) su questo scenario. Scelto alla creazione. Per il Redigente il piano è sempre disponibile, quindi questo flag è ininfluente lì. */
   simulazioneAttiva: boolean;
+  /** Le due verifiche dell'ente caricate in questo scenario (0.182.0). L'amministrativa è obbligatoria. */
+  verificaAmministrativa: boolean;
+  verificaContabile: boolean;
+  /** Quando la verifica è stata caricata NELLO SCENARIO (non quando il documento è stato letto). */
+  verificaAmministrativaIl: string | null;
+  verificaContabileIl: string | null;
   /** Solo percorso Ricevente — valorizzato quando la Relazione finale è stata generata. Da quel momento lo scenario è sola lettura permanente. */
   bloccatoIl: string | null;
   createdAt: string;
@@ -72,6 +78,12 @@ export async function ottieniScenari(
         rigaRilevanteBloccata: r.rigaRilevanteBloccata,
         archiviato: r.archiviato,
         simulazioneAttiva: r.simulazioneAttiva,
+        verificaAmministrativa: r.verificaAmministrativa,
+        verificaContabile: r.verificaContabile,
+        verificaAmministrativaIl: r.verificaAmministrativaIl
+          ? r.verificaAmministrativaIl.toString()
+          : null,
+        verificaContabileIl: r.verificaContabileIl ? r.verificaContabileIl.toString() : null,
         bloccatoIl: r.bloccatoIl ? r.bloccatoIl.toString() : null,
         createdAt: r.createdAt.toString(),
       })),
@@ -120,6 +132,10 @@ export async function ottieniScenarioPerId(
         rigaRilevanteBloccata: tabelle.scenari.rigaRilevanteBloccata,
         archiviato: tabelle.scenari.archiviato,
         simulazioneAttiva: tabelle.scenari.simulazioneAttiva,
+        verificaAmministrativa: tabelle.scenari.verificaAmministrativa,
+        verificaContabile: tabelle.scenari.verificaContabile,
+        verificaAmministrativaIl: tabelle.scenari.verificaAmministrativaIl,
+        verificaContabileIl: tabelle.scenari.verificaContabileIl,
         bloccatoIl: tabelle.scenari.bloccatoIl,
         createdAt: tabelle.scenari.createdAt,
         ragioneSocialeAzienda: tabelle.aziende.ragioneSociale,
@@ -147,6 +163,12 @@ export async function ottieniScenarioPerId(
         rigaRilevanteBloccata: r.rigaRilevanteBloccata,
         archiviato: r.archiviato,
         simulazioneAttiva: r.simulazioneAttiva,
+        verificaAmministrativa: r.verificaAmministrativa,
+        verificaContabile: r.verificaContabile,
+        verificaAmministrativaIl: r.verificaAmministrativaIl
+          ? r.verificaAmministrativaIl.toString()
+          : null,
+        verificaContabileIl: r.verificaContabileIl ? r.verificaContabileIl.toString() : null,
         bloccatoIl: r.bloccatoIl ? r.bloccatoIl.toString() : null,
         createdAt: r.createdAt.toString(),
         ragioneSocialeAzienda: r.ragioneSocialeAzienda,
@@ -170,7 +192,11 @@ export async function creaScenarioAction(
   nome: string,
   tipoProposta: TipoProposta,
   origineProposta: string,
-  simulazioneAttiva: boolean = false
+  simulazioneAttiva: boolean = false,
+  verifiche: { amministrativa: boolean; contabile: boolean } = {
+    amministrativa: true,
+    contabile: false,
+  }
 ): Promise<RisultatoOperazioneScenario> {
   try {
     await richiediAccessoAzienda(nomeSchema, aziendaId, {
@@ -179,6 +205,12 @@ export async function creaScenarioAction(
     });
     if (!nome.trim()) {
       return { success: false, error: 'Il nome dello scenario è obbligatorio.' };
+    }
+    if (!verifiche.amministrativa && !verifiche.contabile) {
+      return {
+        success: false,
+        error: 'Almeno una verifica dell’ente deve entrare nello scenario.',
+      };
     }
     if (!ORIGINI_PER_TIPO[tipoProposta]?.includes(origineProposta)) {
       return { success: false, error: 'Origine della proposta non valida per il tipo scelto.' };
@@ -223,6 +255,10 @@ export async function creaScenarioAction(
         // quindi la domanda non ha senso per lui.
         tipoIstruttoria: spazioRis.rows[0]?.tipo_spazio === 'ENTE' ? 'DA_CHIEDERE' : 'PROPOSTA',
         simulazioneAttiva,
+        verificaAmministrativa: verifiche.amministrativa,
+        verificaContabile: verifiche.contabile,
+        verificaAmministrativaIl: verifiche.amministrativa ? new Date().toISOString() : null,
+        verificaContabileIl: verifiche.contabile ? new Date().toISOString() : null,
       })
       .returning({ id: tabelle.scenari.id });
 

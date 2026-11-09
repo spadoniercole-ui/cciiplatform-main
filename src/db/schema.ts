@@ -125,6 +125,14 @@ export function getTabelleTenant(nomeSchema: string) {
       // Ricevente (ENTE): attiva lo strumento di Simulazione a levette
       // (sostenibilità del piano) su questo scenario. Scelto alla creazione.
       simulazioneAttiva: boolean('simulazione_attiva').notNull().default(false),
+      // Quali verifiche dell'ente entrano in questo scenario (0.182.0). La
+      // verifica amministrativa è il minimo indispensabile; la contabile
+      // storica si attiva a parte. Le date dicono quando la verifica è stata
+      // caricata NELLO SCENARIO, non quando il documento è stato letto.
+      verificaAmministrativa: boolean('verifica_amministrativa').notNull().default(true),
+      verificaContabile: boolean('verifica_contabile').notNull().default(false),
+      verificaAmministrativaIl: timestamp('verifica_amministrativa_il'),
+      verificaContabileIl: timestamp('verifica_contabile_il'),
       // Separato da "stato" apposta: archiviare non deve far perdere lo
       // stato procedurale originale (BOZZA/IN_CORSO/COMPLETATO) — un
       // ripristino torna esattamente com'era, non riparte da BOZZA.

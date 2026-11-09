@@ -381,6 +381,22 @@ export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> 
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS tipo_istruttoria TEXT NOT NULL DEFAULT 'PROPOSTA'`
   );
+  // Quali verifiche dell'ente sono caricate nello scenario (0.182.0): la
+  // scelta si fa alla creazione e resta modificabile dal passo 0. Gli scenari
+  // che esistevano prima nascono con l'amministrativa attiva — è la verifica
+  // minima — ma senza data: non si inventa il giorno in cui è stata caricata.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS verifica_amministrativa BOOLEAN NOT NULL DEFAULT TRUE`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS verifica_contabile BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS verifica_amministrativa_il TIMESTAMP`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS verifica_contabile_il TIMESTAMP`
+  );
 
   // Istruttoria del provvedimento del giudice: una riga per scenario.
   // I documenti si conservano fino alla generazione dell'analisi critica,

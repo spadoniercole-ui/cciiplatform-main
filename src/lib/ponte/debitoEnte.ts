@@ -172,3 +172,41 @@ export function snapshotDebitoEnteDaTriage(righe: RigaTriagePonte[]): DebitoEnte
       ' — il triage non distingue contabilizzato, da contabilizzare e sanzioni.',
   };
 }
+
+/**
+ * LA CIFRA DEL DEBITO, SENZA ZERO DAVANTI A UN DEBITO ACCERTATO.
+ *
+ * La base certa resta contabilizzato + da contabilizzare. Se però vale zero
+ * mentre la certificazione porta posizioni segnalate alle unità operative, o
+ * il triage ha posizioni qualificate, il Ponte usa quelle e dichiara la fonte:
+ * mostrare «debito ente 0 €» su un'azienda con contributi scaduti accertati è
+ * una contraddizione, non una misura.
+ *
+ * Ordine del ripiego: posizioni del triage (importi veri, categorie
+ * qualificate), poi le segnalate alle UO (importo non ancora determinato:
+ * stima dichiarata). Sospese e ignorate restano fuori; senza nulla il debito è
+ * non disponibile — non zero.
+ */
+export function debitoEnteConRipiego(
+  certificazione: SnapshotDebitoEnte | null,
+  triage: DebitoEntePonte | null
+): DebitoEntePonte | null {
+  if (certificazione && certificazione.totale > 0) return certificazione;
+  if (triage) return triage;
+  if (certificazione && certificazione.segnalato > 0) {
+    return {
+      totale: certificazione.segnalato,
+      contributi: certificazione.contributi,
+      sanzioni: certificazione.sanzioni,
+      creditiAgente: certificazione.creditiAgente,
+      righe: certificazione.righeSegnalate,
+      contabilizzato: 0,
+      daContabilizzare: 0,
+      segnalato: certificazione.segnalato,
+      righeSegnalate: certificazione.righeSegnalate,
+      fonte:
+        'Posizioni segnalate alle unità operative: importo non ancora contabilizzato — stima, non debito iscritto.',
+    };
+  }
+  return null;
+}

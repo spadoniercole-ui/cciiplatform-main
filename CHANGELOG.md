@@ -1,3 +1,34 @@
+## 0.182.0 — 2026-11-09
+
+**Il Ponte non mostra più zero su un debito accertato, le verifiche dell’ente diventano spunte che dicono se il dato è nello scenario, e l’avviso demo sparisce dalle pagine dello spazio.**
+
+- **Il debito ente non si contraddice più con il triage.** La scheda del Piano-ponte
+  sommava solo contabilizzato e da contabilizzare: se la certificazione aveva posizioni
+  segnalate alle unità operative (o nessuna posizione certa), mostrava **0 €** mentre il
+  triage denunciava 312.434 € di contributi INPS scaduti e il passo 0 dello scenario
+  leggeva 54 posizioni. Ora la base certa resta la prima scelta; quando vale zero il Ponte
+  usa le posizioni del triage — importi veri, categorie qualificate — e, se non ci sono,
+  le posizioni segnalate, dichiarandole come stima. La fonte resta scritta nella scheda.
+  Senza nulla da usare il debito è «non disponibile», non zero
+  (`debitoEnteConRipiego` in `src/lib/ponte/debitoEnte.ts`, con i suoi test).
+- **Le due verifiche dell’ente sono check, non un giro da aprire.** Il passo 0 di ogni
+  scenario non porta più nel flusso del triage: mostra due riquadri spuntabili —
+  **verifica amministrativa** (visura e prospetti dell’ente, dato attuale: obbligatoria,
+  non deselezionabile) e **verifica contabile** (visura e bilancio XBRL, dato storico:
+  facoltativa). La spunta è uno stato dello scenario, registrato con la data: la pagina
+  dice «caricata nello scenario il …» oppure «non caricata», senza lasciare il dubbio. I
+  dati restano letti dalla posizione dell’azienda, così un aggiornamento vale subito.
+  Colonne nuove su `scenari` (`verifica_amministrativa`, `verifica_contabile` e le date),
+  azione `impostaVerificheScenarioAction`.
+- **La verifica più completa si preseleziona alla creazione.** Creando uno scenario si
+  scelgono le verifiche che entrano: completa (amministrativa + contabile) se esistono
+  entrambe, altrimenti amministrativa, altrimenti la sola contabile storica quando il dato
+  attuale manca. La scelta resta modificabile dal passo 0 (azione
+  `verificheDisponibiliAziendaAction` per sapere che cosa esiste davvero sull’azienda).
+- **L’avviso «Spazio demo non attivo» è stato rimosso** da tutte le pagine dello spazio:
+  il percorso demo si attiva dall’anagrafica dello spazio e da Manutenzione Spazi, non da
+  un banner che sembrava una réclame.
+
 ## 0.181.0 — 2026-11-09
 
 **La certificazione che non si salva lo dice, il Piano-ponte si riconosce a colpo d’occhio, e ogni Scenario parte dalle verifiche dell’ente.**

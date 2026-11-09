@@ -16,6 +16,7 @@ import {
   eliminaScenarioAction,
   type Scenario,
 } from '@/app/actions/scenari';
+import { verificheDisponibiliAziendaAction } from '@/app/actions/verificheScenario';
 import { ORIGINI_PER_TIPO, type TipoProposta } from '@/lib/origineProposta';
 import { etichettaIstruttoria } from '@/lib/giudice/lettura';
 import { useDemo } from '@/components/spazio/DemoUploadProvider';
@@ -56,6 +57,15 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
   );
   const [origineNuova, setOrigineNuova] = useState(tipoSpazio === 'ENTE' ? 'Azienda' : 'Studio');
   const [simulazioneAttivaNuova, setSimulazioneAttivaNuova] = useState(false);
+  // Le due verifiche dell'ente che entrano nello scenario: scelte qui, alla
+  // creazione, con la più completa disponibile già preselezionata, e
+  // modificabili in ogni momento dal passo 0 dello scenario.
+  const [verificaAmministrativa, setVerificaAmministrativa] = useState(true);
+  const [verificaContabile, setVerificaContabile] = useState(false);
+  const [disponibilita, setDisponibilita] = useState<{
+    amministrativa: boolean;
+    contabile: boolean;
+  } | null>(null);
   const [mostraArchiviati, setMostraArchiviati] = useState(false);
   const [scenarioDaEliminare, setScenarioDaEliminare] = useState<Scenario | null>(null);
   const [confermaNome, setConfermaNome] = useState('');
@@ -110,11 +120,26 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
     }
   };
 
+  // La verifica più completa disponibile si preseleziona da sola: completa se
+  // ci sono amministrativa e contabile, altrimenti amministrativa, altrimenti
+  // la sola contabile storica — che resta l'unica scelta quando il dato
+  // attuale manca, perché l'amministrativa è la verifica minima.
+  const caricaDisponibilita = async (aziendaId: number) => {
+    const esito = await verificheDisponibiliAziendaAction(nomeSchema, aziendaId).catch(() => null);
+    const amministrativa = Boolean(esito?.success && esito.amministrativa);
+    const contabile = Boolean(esito?.success && esito.contabile);
+    setDisponibilita({ amministrativa, contabile });
+    setVerificaAmministrativa(amministrativa || !contabile);
+    setVerificaContabile(amministrativa && contabile);
+  };
+
   const handleSelezionaAzienda = (aziendaId: number) => {
     setAziendaSelezionata(aziendaId);
     setScenari([]);
     setMostraForm(false);
+    setDisponibilita(null);
     caricaScenari(aziendaId);
+    void caricaDisponibilita(aziendaId);
   };
 
   const handleCreaScenario = async () => {
@@ -125,6 +150,10 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
       return;
     }
     if (!aziendaSelezionata || !nomeNuovo.trim()) return;
+    if (!verificaAmministrativa && !verificaContabile) {
+      setErrore('Almeno una verifica dell’ente deve entrare nello scenario.');
+      return;
+    }
     setErrore(null);
     const risultato = await creaScenarioAction(
       nomeSchema,
@@ -134,7 +163,8 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
       origineNuova,
       // Il piano di sviluppo è sempre attivo per il Redigente; il flag
       // conta solo per il Ricevente (RICEVUTA).
-      tipoNuovo === 'RICEVUTA' ? simulazioneAttivaNuova : true
+      tipoNuovo === 'RICEVUTA' ? simulazioneAttivaNuova : true,
+      { amministrativa: verificaAmministrativa, contabile: verificaContabile }
     );
     if (!risultato.success) {
       setErrore(risultato.error || 'Impossibile creare lo scenario.');
@@ -144,6 +174,8 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
     setTipoNuovo(tipoSpazio === 'ENTE' ? 'RICEVUTA' : 'DA_DEFINIRE');
     setOrigineNuova(tipoSpazio === 'ENTE' ? 'Azienda' : 'Studio');
     setSimulazioneAttivaNuova(false);
+    setVerificaAmministrativa(true);
+    setVerificaContabile(false);
     setMostraForm(false);
     await caricaScenari(aziendaSelezionata);
     if (risultato.scenarioId) {
@@ -333,6 +365,45 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                   </span>
                 </label>
               )}
+              <div className="bg-white border border-slate-200 rounded-lg p-2.5 space-y-1.5">
+                <p className="text-[9px] font-bold text-slate-400 uppercase">
+                  Verifiche dell’ente che entrano nello scenario
+                </p>
+                <label className="flex items-start gap-2 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={verificaAmministrativa}
+                    disabled={!disponibilita?.amministrativa}
+                    onChange={(e) => setVerificaAmministrativa(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-bold">Verifica amministrativa</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5">
+                      {disponibilita?.amministrativa
+                        ? 'Obbligatoria: visura e prospetti dell’ente, dato attuale (triage).'
+                        : 'Non disponibile: mancano visura o prospetti dell’ente su questa azienda.'}
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={verificaContabile}
+                    disabled={!disponibilita?.contabile}
+                    onChange={(e) => setVerificaContabile(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-bold">Verifica contabile</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5">
+                      {disponibilita?.contabile
+                        ? 'Facoltativa: visura e bilancio XBRL, dato storico. Con l’amministrativa forma la verifica completa.'
+                        : 'Non disponibile: nessun bilancio XBRL caricato su questa azienda.'}
+                    </span>
+                  </span>
+                </label>
+              </div>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -344,7 +415,7 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                 <button
                   type="button"
                   onClick={handleCreaScenario}
-                  disabled={!nomeNuovo.trim()}
+                  disabled={!nomeNuovo.trim() || (!verificaAmministrativa && !verificaContabile)}
                   className="px-3 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg transition-colors shrink-0"
                 >
                   Crea

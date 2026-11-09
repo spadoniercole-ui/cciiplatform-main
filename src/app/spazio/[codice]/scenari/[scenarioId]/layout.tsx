@@ -7,6 +7,7 @@ import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
 import { riepilogoVerificheEnte } from '@/lib/debitiEnte/verificheEnte';
 import { VerificheEnteScenario } from '@/components/spazio/VerificheEnteScenario';
+import { verificheDisponibiliAziendaAction } from '@/app/actions/verificheScenario';
 import { leggiRiferimentoAzienda } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
@@ -63,6 +64,13 @@ export default async function ScenarioLayout({
     righePosizione: posizione && posizione.success ? posizione.righe : [],
   });
 
+  // Che cosa esiste davvero su questa azienda: decide quali spunte sono
+  // possibili nel passo 0 (l'amministrativa è obbligatoria, la contabile no).
+  const disponibilita = await verificheDisponibiliAziendaAction(
+    contesto.nomeSchema,
+    scenario.aziendaId
+  ).catch(() => null);
+
   const base = `/spazio/${codice}/scenari/${scenarioId}`;
   // Testata dell'azienda: identificativi presso l'ente in evidenza.
   const riferimento = await leggiRiferimentoAzienda(contesto.nomeSchema, scenario.aziendaId).catch(
@@ -109,7 +117,19 @@ export default async function ScenarioLayout({
           riepilogo={verifiche}
           codice={codice}
           aziendaId={scenario.aziendaId}
+          nomeSchema={contesto.nomeSchema}
+          scenarioId={scenario.id}
           ragioneSociale={scenario.ragioneSocialeAzienda}
+          verifiche={{
+            amministrativa: scenario.verificaAmministrativa,
+            contabile: scenario.verificaContabile,
+            amministrativaIl: scenario.verificaAmministrativaIl,
+            contabileIl: scenario.verificaContabileIl,
+          }}
+          disponibilita={{
+            amministrativa: Boolean(disponibilita?.success && disponibilita.amministrativa),
+            contabile: Boolean(disponibilita?.success && disponibilita.contabile),
+          }}
         />
 
         {/* Lo scenario si lavora su una pagina sola: da ogni pagina di

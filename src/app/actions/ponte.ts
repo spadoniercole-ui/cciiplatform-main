@@ -30,7 +30,12 @@ import { analizzaCodiceAteco } from '@/lib/settore/atecoMapping';
 import { crescitaDaSerie, crescitaAzienda } from '@/lib/piano/automatico';
 import { type StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
 import { type RigaVera, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
-import { snapshotDebitoEnte, snapshotDebitoEnteDaTriage } from '@/lib/ponte/debitoEnte';
+import {
+  debitoEnteConRipiego,
+  snapshotDebitoEnte,
+  snapshotDebitoEnteDaTriage,
+  type SnapshotDebitoEnte,
+} from '@/lib/ponte/debitoEnte';
 import type { DatiFinanziariPeriodo, FactTestuale } from '@/lib/xbrl/types';
 import { calcolaPonte, costruisciAssunzioni, ErrorePonte } from '@/lib/ponte/motore';
 import { calcolaHashInput, calcolaHashOutput } from '@/lib/ponte/hash';
@@ -160,7 +165,7 @@ async function caricaDati(nomeSchema: string, aziendaId: number): Promise<DatiPo
     // facoltativo, non un motivo per far fallire il Ponte.
   }
 
-  let debitoEnte: DebitoEntePonte | null = null;
+  let debitoCertificazione: SnapshotDebitoEnte | null = null;
   try {
     const debitiRis = await pool.query(
       `SELECT id, sezione, ambito, voce, importo, contributi, sanzioni, categoria, stato,
@@ -186,7 +191,7 @@ async function caricaDati(nomeSchema: string, aziendaId: number): Promise<DatiPo
     if (righe.length > 0) {
       // Tre stati, tre cifre: il totale del Ponte è solo contabilizzato + da
       // contabilizzare; le posizioni segnalate si dichiarano a parte.
-      debitoEnte = snapshotDebitoEnte(righe);
+      debitoCertificazione = snapshotDebitoEnte(righe);
     }
   } catch {
     // Stessa regola della visura: senza certificazione il Ponte può partire,
@@ -204,7 +209,8 @@ async function caricaDati(nomeSchema: string, aziendaId: number): Promise<DatiPo
   // zero su un'azienda con 300.000 € di contributi scaduti, e la fonte
   // dichiarata dice che cosa si è usato — con i suoi limiti: il triage non ha
   // i tre stati né il riparto contributi/sanzioni.
-  if (!debitoEnte) {
+  let debitoDaTriage: DebitoEntePonte | null = null;
+  if (!debitoCertificazione || debitoCertificazione.totale === 0) {
     try {
       const triageRis = await pool.query(
         `SELECT descrizione, categoria, importo_anno_corrente
@@ -213,7 +219,7 @@ async function caricaDati(nomeSchema: string, aziendaId: number): Promise<DatiPo
           ORDER BY categoria, id`,
         [aziendaId]
       );
-      debitoEnte = snapshotDebitoEnteDaTriage(
+      debitoDaTriage = snapshotDebitoEnteDaTriage(
         triageRis.rows.map((r) => ({
           categoria: String(r.categoria ?? ''),
           descrizione: String(r.descrizione ?? ''),
@@ -225,6 +231,12 @@ async function caricaDati(nomeSchema: string, aziendaId: number): Promise<DatiPo
       // resta non disponibile, come prima.
     }
   }
+
+  // La base certa resta contabilizzato + da contabilizzare; se è zero mentre
+  // esistono posizioni segnalate o posizioni del triage, il Ponte usa quelle e
+  // lo dichiara — uno zero davanti a un debito accertato è una contraddizione,
+  // non una misura.
+  const debitoEnte = debitoEnteConRipiego(debitoCertificazione, debitoDaTriage);
 
   let puntiSettore: { periodo: string; valore: number }[] = [];
   let descrizioneSettore = 'Nessun codice ATECO o nessuna serie ISTAT in cache.';
