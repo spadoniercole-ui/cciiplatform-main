@@ -75,6 +75,7 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
   const [valori, setValori] = useState<Record<string, number>>({});
   const [proposta, setProposta] = useState<PropostaAiPonte | null>(null);
   const [proponendo, setProponendo] = useState(false);
+  const [esitoSalvataggio, setEsitoSalvataggio] = useState<string | null>(null);
   const [vistaProiezione, setVistaProiezione] = useState<'ANNI' | 'MESI'>('ANNI');
 
   const carica = async () => {
@@ -96,17 +97,21 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, aziendaId]);
 
-  const esegui = async (fn: () => Promise<{ success: boolean; error?: string }>, dopo = true) => {
+  const esegui = async <T extends { success: boolean; error?: string }>(
+    fn: () => Promise<T>,
+    dopo = true
+  ) => {
     setInCorso(true);
     setErrore(null);
+    setEsitoSalvataggio(null);
     try {
       const r = await fn();
       if (!r.success) setErrore(r.error || 'Operazione non riuscita.');
       else if (dopo) await carica();
-      return r.success;
+      return r;
     } catch (e: any) {
       setErrore(`Operazione non riuscita: ${e.message || e}`);
-      return false;
+      return null;
     } finally {
       setInCorso(false);
     }
@@ -136,7 +141,7 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
     }
   };
 
-  const salvaAssunzioni = () => {
+  const salvaAssunzioni = async () => {
     const ponte = dati?.ponte;
     if (!ponte?.output) return;
     const proposte = new Map((proposta?.assunzioni ?? []).map((a) => [a.codice, a]));
@@ -152,7 +157,17 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
           : a.valore,
       };
     });
-    return esegui(() => salvaAssunzioniPonteAction(nomeSchema, aziendaId, ponte.id, assunzioni));
+    const r = await esegui(() =>
+      salvaAssunzioniPonteAction(nomeSchema, aziendaId, ponte.id, assunzioni)
+    );
+    if (r?.success) {
+      // La proposta ha già prodotto la sua versione: il pannello non resta
+      // aperto come se il salvataggio non fosse avvenuto.
+      setProposta(null);
+      setEsitoSalvataggio(
+        `Assunzioni salvate: ${r.versione ? `versione ${r.versione}` : 'nuova versione'} calcolata. La versione precedente resta nello storico, con le assunzioni che aveva.`
+      );
+    }
   };
 
   const conferma = () => {
@@ -323,7 +338,10 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
           </p>
           {dati.debitoEnte &&
             (dati.debitoEnte.contabilizzato === undefined ? (
-              <p className="text-[9px] text-slate-400 mt-1">{dati.debitoEnte.righe} posizioni</p>
+              <p className="text-[9px] text-slate-500 mt-1 leading-snug">
+                {dati.debitoEnte.righe} posizioni
+                {dati.debitoEnte.sanzioniNonDistinte ? ', senza riparto contributi/sanzioni' : ''}
+              </p>
             ) : (
               <p className="text-[9px] text-slate-500 mt-1 leading-snug">
                 {euro(dati.debitoEnte.contabilizzato)} contabilizzati
@@ -333,6 +351,9 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
                 )}
               </p>
             ))}
+          {dati.debitoEnte && (
+            <p className="text-[9px] text-slate-400 mt-1 leading-snug">{dati.debitoEnte.fonte}</p>
+          )}
         </div>
       </div>
 
@@ -502,6 +523,11 @@ export function PianoPonte({ nomeSchema, aziendaId, codice }: Props) {
                 </button>
               )}
             </div>
+            {esitoSalvataggio && (
+              <p className="text-[11px] text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 leading-relaxed">
+                {esitoSalvataggio}
+              </p>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-[11px]">
                 <thead>

@@ -20,12 +20,17 @@ import { estraiJson, normalizzaFattiVisura } from '@/lib/visura/fatti';
 import { consumaQuotaAi } from '@/lib/limiteAi';
 import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { RANGHI, type ParametriScenari, type RangoCredito } from '@/lib/triage/scenari';
-import { PROMPT_VERSIONE, promptAssunzioniPonte, validaPropostaAi } from '@/lib/ponte/assunzioniAi';
+import {
+  motivoPropostaVuota,
+  PROMPT_VERSIONE,
+  promptAssunzioniPonte,
+  validaPropostaAi,
+} from '@/lib/ponte/assunzioniAi';
 import { analizzaCodiceAteco } from '@/lib/settore/atecoMapping';
 import { crescitaDaSerie, crescitaAzienda } from '@/lib/piano/automatico';
 import { type StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
 import { type RigaVera, type TrattamentoVera } from '@/lib/debitiEnte/veraImport';
-import { snapshotDebitoEnte } from '@/lib/ponte/debitoEnte';
+import { snapshotDebitoEnte, snapshotDebitoEnteDaTriage } from '@/lib/ponte/debitoEnte';
 import type { DatiFinanziariPeriodo, FactTestuale } from '@/lib/xbrl/types';
 import { calcolaPonte, costruisciAssunzioni, ErrorePonte } from '@/lib/ponte/motore';
 import { calcolaHashInput, calcolaHashOutput } from '@/lib/ponte/hash';
@@ -186,6 +191,39 @@ async function caricaDati(nomeSchema: string, aziendaId: number): Promise<DatiPo
   } catch {
     // Stessa regola della visura: senza certificazione il Ponte può partire,
     // ma il debito non viene inventato.
+  }
+
+  // IL DEBITO NON SI FERMA ALLA POSIZIONE DELL'AZIENDA.
+  //
+  // La certificazione dei debiti arriva in `debiti_vera` — sia quando la
+  // importa la verifica amministrativa, sia quando la scrive la posizione
+  // dell'azienda. Può però non esserci: un'istruttoria importata prima di
+  // questo percorso, una scrittura non riuscita, un'azienda passata dal solo
+  // triage. In quel caso il debito non è assente: è nelle posizioni del triage,
+  // che l'operatore ha già raccolto. Leggerlo da lì evita che il Ponte mostri
+  // zero su un'azienda con 300.000 € di contributi scaduti, e la fonte
+  // dichiarata dice che cosa si è usato — con i suoi limiti: il triage non ha
+  // i tre stati né il riparto contributi/sanzioni.
+  if (!debitoEnte) {
+    try {
+      const triageRis = await pool.query(
+        `SELECT descrizione, categoria, importo_anno_corrente
+           FROM "${nomeSchema}".debiti_triage
+          WHERE azienda_id = $1 AND importo_anno_corrente IS NOT NULL
+          ORDER BY categoria, id`,
+        [aziendaId]
+      );
+      debitoEnte = snapshotDebitoEnteDaTriage(
+        triageRis.rows.map((r) => ({
+          categoria: String(r.categoria ?? ''),
+          descrizione: String(r.descrizione ?? ''),
+          importo: numeroOpzionale(r.importo_anno_corrente),
+        }))
+      );
+    } catch {
+      // Tabella assente (spazio che non ha mai aperto il triage): il debito
+      // resta non disponibile, come prima.
+    }
   }
 
   let puntiSettore: { periodo: string; valore: number }[] = [];
@@ -551,6 +589,12 @@ export async function proponiAssunzioniPonteAction(
       .join('\n')
       .trim();
     const proposta = validaPropostaAi(estraiJson(testo), base);
+    // Una proposta senza assunzioni valide non è un successo: è il caso in cui
+    // l'operatore vede un riquadro riuscito e legge «Nessuna sintesi». Il
+    // motivo va detto, con le righe scartate, invece di lasciare il Ponte come
+    // se l'AI non avesse potuto lavorare.
+    const motivoVuoto = motivoPropostaVuota(proposta);
+    if (motivoVuoto) return { success: false, error: motivoVuoto };
     return {
       success: true,
       proposta: { ...proposta, modello: MODELLO_PONTE, promptVersione: PROMPT_VERSIONE },
@@ -566,7 +610,7 @@ export async function salvaAssunzioniPonteAction(
   aziendaId: number,
   ponteId: number,
   assunzioni: AssunzionePonte[]
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; ponteId?: number; versione?: number; error?: string }> {
   const contesto = await richiediAccessoAzienda(nomeSchema, aziendaId, {
     modulo: ['xbrl'],
     livello: 'SCRITTURA',
@@ -577,7 +621,7 @@ export async function salvaAssunzioniPonteAction(
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await client.query('BEGIN');
     const r = await client.query(
-      `SELECT input, stato FROM "${nomeSchema}".ponte_temporale
+      `SELECT input, stato, versione, data_riferimento FROM "${nomeSchema}".ponte_temporale
         WHERE id = $1 AND azienda_id = $2 FOR UPDATE`,
       [ponteId, aziendaId]
     );
@@ -592,35 +636,75 @@ export async function salvaAssunzioniPonteAction(
         error: 'Il Piano-ponte confermato o archiviato non si modifica: creane una nuova versione.',
       };
     }
+    const versionePrecedente = Number(r.rows[0].versione);
     const input = { ...(r.rows[0].input as InputPonte), assunzioni };
     const output = calcolaPonte(input);
-    await client.query(
-      `UPDATE "${nomeSchema}".ponte_temporale
-          SET input = $3, output = $4, assunzioni = $5, copertura = $6, avvisi = $7,
-              limiti = $8, hash_input = $9, hash_output = $10, stato = 'CALCOLATO',
-              note_copertura = $11, updated_at = now()
-        WHERE id = $1 AND azienda_id = $2`,
+
+    // UNA VERSIONE NUOVA, NON UNA RIGA RISCRITTA.
+    //
+    // Prima il salvataggio sovrascriveva la versione corrente: il numero
+    // restava lo stesso, il pannello della proposta restava aperto e non
+    // restava traccia di che cosa era cambiato. Da fuori sembrava che il
+    // pulsante non avesse elaborato nulla. Ora il salvataggio produce una
+    // versione, la precedente passa a SUPERATO e resta nello storico con le
+    // assunzioni che aveva: si vede che il Ponte è cambiato e si può tornare a
+    // leggere com'era.
+    const versioneRis = await client.query(
+      `SELECT COALESCE(MAX(versione), 0) + 1 AS versione FROM "${nomeSchema}".ponte_temporale
+        WHERE azienda_id = $1`,
+      [aziendaId]
+    );
+    const versione = Number(versioneRis.rows[0].versione);
+    const inserimento = await client.query(
+      `INSERT INTO "${nomeSchema}".ponte_temporale
+        (azienda_id, data_riferimento, stato, versione, hash_input, hash_output, input, output,
+         assunzioni, copertura, avvisi, limiti, motore_versione, note_copertura, generato_da)
+       VALUES ($1, $2, 'CALCOLATO', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       RETURNING id`,
       [
-        ponteId,
         aziendaId,
+        r.rows[0].data_riferimento,
+        versione,
+        calcolaHashInput(input),
+        calcolaHashOutput(output),
         JSON.stringify(input),
         JSON.stringify(output),
         JSON.stringify(output.assunzioni),
         JSON.stringify(output.copertura),
         JSON.stringify(output.avvisi),
         JSON.stringify(output.limiti),
-        calcolaHashInput(input),
-        calcolaHashOutput(output),
+        output.versioneMotore,
         output.copertura.componenti.find((c) => c.codice === 'NOTE')?.determinato ? 1 : 0,
+        contesto.email ?? null,
+      ]
+    );
+    const nuovoId = Number(inserimento.rows[0].id);
+    await client.query(
+      `UPDATE "${nomeSchema}".ponte_temporale
+          SET stato = 'SUPERATO', updated_at = now()
+        WHERE id = $1 AND azienda_id = $2`,
+      [ponteId, aziendaId]
+    );
+    await client.query(
+      `INSERT INTO "${nomeSchema}".ponte_temporale_eventi (ponte_id, tipo, dettaglio, utente)
+       VALUES ($1, 'SUPERATO', $2, $3)`,
+      [
+        ponteId,
+        JSON.stringify({ daAssunzioni: true, nuovaVersione: versione }),
+        contesto.email ?? null,
       ]
     );
     await client.query(
       `INSERT INTO "${nomeSchema}".ponte_temporale_eventi (ponte_id, tipo, dettaglio, utente)
        VALUES ($1, 'ASSUNZIONI_MODIFICATE', $2, $3)`,
-      [ponteId, JSON.stringify({ assunzioni: output.assunzioni.length }), contesto.email ?? null]
+      [
+        nuovoId,
+        JSON.stringify({ daVersione: versionePrecedente, assunzioni: output.assunzioni.length }),
+        contesto.email ?? null,
+      ]
     );
     await client.query('COMMIT');
-    return { success: true };
+    return { success: true, ponteId: nuovoId, versione };
   } catch (error: any) {
     await client.query('ROLLBACK').catch(() => undefined);
     console.error('[salvaAssunzioniPonteAction] Errore:', error);

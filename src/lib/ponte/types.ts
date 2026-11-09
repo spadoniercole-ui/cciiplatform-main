@@ -43,7 +43,16 @@ export interface DebitoEntePonte {
   /** Posizioni segnalate alle unità operative, fuori dal totale. */
   segnalato?: number;
   righeSegnalate?: number;
-  /** Da dove viene lo snapshot: per ora la certificazione dei debiti. */
+  /**
+   * Le posizioni del triage non hanno il riparto contributi/sanzioni: lo zero
+   * di `sanzioni` è un'assenza dichiarata, non una misura.
+   */
+  sanzioniNonDistinte?: boolean;
+  /**
+   * Da dove viene lo snapshot: la certificazione dei debiti, oppure le
+   * posizioni del triage quando la prima non è arrivata alla posizione
+   * dell'azienda. La scheda lo dichiara, così la cifra non è anonima.
+   */
   fonte: string;
 }
 

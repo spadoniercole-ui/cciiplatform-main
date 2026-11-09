@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { importoRigaVera, snapshotDebitoEnte } from './debitoEnte';
+import { importoRigaVera, snapshotDebitoEnte, snapshotDebitoEnteDaTriage } from './debitoEnte';
 import type { RigaVera } from '@/lib/debitiEnte/veraImport';
 
 function riga(p: Partial<RigaVera>): RigaVera {
@@ -74,6 +74,45 @@ describe('snapshotDebitoEnte', () => {
     expect(s.totale).toBe(0);
     expect(s.righe).toBe(0);
     expect(s.righeSegnalate).toBe(0);
+  });
+});
+
+describe('snapshotDebitoEnteDaTriage', () => {
+  it('somma le categorie qualificate e dichiara il triage come fonte', () => {
+    const d = snapshotDebitoEnteDaTriage([
+      { categoria: 'PREVIDENZIALE', descrizione: 'Contributi', importo: 300_000 },
+      { categoria: 'ASSICURATIVO', descrizione: 'Premi', importo: 12_000 },
+      { categoria: 'IVA', descrizione: 'LIPE', importo: 8_000 },
+    ]);
+    expect(d?.totale).toBe(320_000);
+    expect(d?.contributi).toBe(300_000);
+    expect(d?.righe).toBe(3);
+    expect(d?.fonte).toContain('triage');
+    expect(d?.sanzioniNonDistinte).toBe(true);
+    // Il triage non ha i tre stati: non si inventa una ripartizione.
+    expect(d?.contabilizzato).toBeUndefined();
+    expect(d?.daContabilizzare).toBeUndefined();
+  });
+
+  it('le posizioni commerciali e gli altri tributi restano fuori, e si dichiarano', () => {
+    const d = snapshotDebitoEnteDaTriage([
+      { categoria: 'PREVIDENZIALE', descrizione: 'Contributi', importo: 1_000 },
+      { categoria: 'COMMERCIALE', descrizione: 'Fornitori', importo: 500_000 },
+      { categoria: 'FISCALE', descrizione: 'IRES', importo: 40_000 },
+    ]);
+    expect(d?.totale).toBe(1_000);
+    expect(d?.righe).toBe(1);
+    expect(d?.fonte).toContain('2 posizioni non qualificate restano fuori');
+  });
+
+  it('senza importi non si produce un debito: resta non disponibile', () => {
+    expect(
+      snapshotDebitoEnteDaTriage([
+        { categoria: 'PREVIDENZIALE', descrizione: 'Contributi', importo: null },
+        { categoria: 'COMMERCIALE', descrizione: 'Fornitori', importo: 5_000 },
+      ])
+    ).toBeNull();
+    expect(snapshotDebitoEnteDaTriage([])).toBeNull();
   });
 });
 

@@ -6,7 +6,7 @@
 // silenzio.
 
 import { describe, expect, it } from 'vitest';
-import { validaPropostaAi } from './assunzioniAi';
+import { motivoPropostaVuota, validaPropostaAi } from './assunzioniAi';
 import type { AssunzionePonte } from './types';
 
 const base: AssunzionePonte[] = [
@@ -96,6 +96,34 @@ describe('validazione della proposta AI', () => {
     expect(p.sintesi).toContain('Nessuna sintesi');
     expect(p.datiMancanti).toEqual([]);
     expect(p.avvisi).toEqual([]);
+  });
+
+  it('una proposta senza assunzioni non è un successo, e dice perché', () => {
+    const p = validaPropostaAi(
+      {
+        assunzioni: [{ codice: 'crescitaRicavi', valore: 45, motivazione: 'Nota.' }],
+        sintesi: 'Il file non basta per stimare la crescita.',
+      },
+      base
+    );
+    const motivo = motivoPropostaVuota(p);
+    expect(motivo).toContain('alcuna assunzione valida');
+    expect(motivo).toContain("fuori dall'intervallo");
+    expect(motivo).toContain('Il file non basta');
+    expect(motivo).toContain('inserite a mano');
+  });
+
+  it('una risposta illeggibile dichiara che non c’era un elenco', () => {
+    const motivo = motivoPropostaVuota(validaPropostaAi('testo libero', base));
+    expect(motivo).toContain('elenco di assunzioni leggibile');
+  });
+
+  it('con almeno un’assunzione valida non c’è nessun motivo di errore', () => {
+    const p = validaPropostaAi(
+      { assunzioni: [{ codice: 'margineEbitda', valore: 10, motivazione: 'Nota.' }] },
+      base
+    );
+    expect(motivoPropostaVuota(p)).toBeNull();
   });
 
   it('tiene il valore di intervallo dell’assunzione base, non quello del modello', () => {

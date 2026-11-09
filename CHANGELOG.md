@@ -1,3 +1,24 @@
+## 0.180.0 — 2026-11-09
+
+**Il debito ente arriva anche dal triage, ogni salvataggio delle assunzioni è una versione, e una proposta AI vuota non si spaccia più per riuscita.**
+
+- **Debito ente dal triage.** Il Piano-ponte leggeva le posizioni solo da `debiti_vera`: un’azienda
+  certificata nel triage ma senza posizione importata mostrava «0 € / 1 segnalata» su oltre 300.000 €
+  di contributi scaduti. Ora, se la certificazione non è arrivata alla posizione dell’azienda, il
+  Ponte legge le posizioni del triage — le categorie qualificate dell’anno di verifica — e **dichiara
+  la fonte nella scheda**. Lo snapshot dichiara anche i suoi limiti: il triage non distingue
+  contabilizzato, da contabilizzare e sanzioni, e le posizioni non qualificate (commerciali, altri
+  tributi) restano fuori perché non sono credito di questo ente.
+- **«Salva e ricalcola» crea una versione.** Prima il salvataggio sovrascriveva la versione corrente:
+  stesso numero, pannello della proposta ancora aperto, nessuna traccia del cambiamento — e sembrava
+  che non avesse elaborato nulla. Ora nasce una versione nuova (`CALCOLATO`), la precedente passa a
+  `SUPERATO` e resta nello storico con le assunzioni che aveva; la scheda conferma con il numero di
+  versione e chiude il pannello della proposta.
+- **Una proposta AI vuota è un errore, non un successo.** Se ogni assunzione viene scartata — fuori
+  intervallo, senza motivazione, codice sconosciuto — la risposta non è più `success` con «Nessuna
+  sintesi proposta dall’AI»: torna il motivo, con le righe scartate, e l’indicazione di inserire le
+  assunzioni a mano. Il caso è coperto dai test di `assunzioniAi`.
+
 ## 0.179.0 — 2026-11-09
 
 **Le note integrative si leggono per sezione, e l’HTML del file non arriva più al motore.**

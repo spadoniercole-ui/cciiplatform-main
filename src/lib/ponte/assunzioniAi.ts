@@ -13,6 +13,9 @@ import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 
 export const PROMPT_VERSIONE = 'ponte-assunzioni-1.0.0';
 
+/** La sintesi di ripiego: dice che il modello non ha scritto nulla. */
+export const SINTESI_ASSENTE = 'Nessuna sintesi proposta dall’AI.';
+
 export interface PropostaAssunzioniAi {
   assunzioni: AssunzionePonte[];
   sintesi: string;
@@ -151,9 +154,33 @@ export function validaPropostaAi(grezzo: unknown, base: AssunzionePonte[]): Prop
 
   return {
     assunzioni,
-    sintesi: str(g.sintesi, 2000) ?? 'Nessuna sintesi proposta dall’AI.',
+    sintesi: str(g.sintesi, 2000) ?? SINTESI_ASSENTE,
     datiMancanti: lista(g.datiMancanti, 12),
     avvisi: lista(g.avvisi, 12),
     scartate,
   };
+}
+
+/**
+ * PERCHÉ UNA PROPOSTA VUOTA NON È UNA PROPOSTA.
+ *
+ * Una risposta in cui ogni assunzione è stata scartata — valore fuori
+ * intervallo, motivazione assente, codice sconosciuto — non è un successo: è
+ * un lavoro che il modello ha fatto senza produrre niente di utilizzabile. La
+ * scheda lo mostrava come un riquadro riuscito con la sola frase «Nessuna
+ * sintesi proposta dall'AI», che si legge come «l'AI non ha potuto».
+ *
+ * Qui il motivo si ricava dalle assunzioni scartate, così l'operatore sa che
+ * cosa correggere (o che deve inserire le assunzioni a mano) invece di
+ * riprovare alla cieca.
+ */
+export function motivoPropostaVuota(p: PropostaAssunzioniAi): string | null {
+  if (p.assunzioni.length > 0) return null;
+  const motivi = p.scartate.length
+    ? `motivi: ${p.scartate.slice(0, 5).join('; ')}${
+        p.scartate.length > 5 ? `; e altre ${p.scartate.length - 5}` : ''
+      }`
+    : 'la risposta non conteneva un elenco di assunzioni leggibile';
+  const sintesi = p.sintesi !== SINTESI_ASSENTE ? ` Sintesi del modello: ${p.sintesi}` : '';
+  return `L’AI non ha proposto alcuna assunzione valida (${motivi}).${sintesi} Le assunzioni vanno inserite a mano.`;
 }
