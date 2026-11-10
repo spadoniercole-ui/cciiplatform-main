@@ -1,3 +1,17 @@
+## 0.198.0 — 2026-11-10
+
+**Il debito dell’ente si memorizza da dove lo si vede.**
+
+- Nella lista **Verifica azienda**, accanto al badge «Debito ente da memorizzare», c’è ora
+  l’azione **Memorizza debito**: rilegge gli archivi dell’ente e scrive la cifra nella tabella
+  che contabile, verifica azienda e scenari leggono. Il badge diventa verde con l’importo, senza
+  dover riaprire la verifica amministrativa per rifarne l’esito.
+- L’**esito della verifica amministrativa** mostra il debito consegnato alla contabile con la sua
+  scomposizione, la fonte e la data, e permette di rinnovarlo dagli archivi. È la sede in cui il
+  dato resta consultabile anche a verifica chiusa.
+- Se non c’è nulla da memorizzare (mancano certificazione e posizioni del triage) l’azione lo
+  dichiara accanto al pulsante, senza cancellare una cifra precedente.
+
 ## 0.197.0 — 2026-11-10
 
 **Il documento di confronto si apre anche agli Operatori.**

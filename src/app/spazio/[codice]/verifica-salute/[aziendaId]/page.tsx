@@ -6,6 +6,7 @@ import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { PosizioneEnteScenario } from '@/components/spazio/PosizioneEnteScenario';
+import { DebitoMemorizzatoEnte } from '@/components/spazio/DebitoMemorizzatoEnte';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 
 // L'ESITO DELLA VERIFICA AMMINISTRATIVA (0.194.0).
@@ -173,6 +174,8 @@ export default async function EsitoVerificaAmministrativaPage({
           restano comunque consultabili qui sotto.
         </p>
       )}
+
+      <DebitoMemorizzatoEnte nomeSchema={contesto.nomeSchema} aziendaId={id} />
 
       <PosizioneEnteScenario
         nomeSchema={contesto.nomeSchema}
