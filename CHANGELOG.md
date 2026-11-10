@@ -1,3 +1,29 @@
+## 0.186.0 — 2026-11-10
+
+**Verifica contabile autonoma a livello azienda: visura storica, parametri ente, bilanci XBRL e prospetto a scalare con gli indici.**
+
+- Nuova voce di menu **Verifica contabile aziendale** con il proprio percorso
+  (`/verifica-contabile`): elenco delle aziende con lo stato di ogni acquisizione e, per ognuna,
+  la scheda guidata in quattro passi — visura storica, parametri dell’ente, bilanci XBRL,
+  prospetto a scalare e indici.
+- La **visura storica** si chiede qui di nuovo, ma con un altro scopo: non racconta la vita
+  dell’azienda, fissa l’anagrafica su cui si innestano i parametri dell’ente. Si può leggerne i
+  dati con il modello, che restano proposti e non salvati: l’anagrafica si modifica nella sua
+  scheda.
+- I **parametri dell’ente** restano a livello azienda (id ente e campi configurati), non di
+  scenario: sono la caratterizzazione dell’azienda dentro l’ente.
+- Il **prospetto a scalare** affianca una colonna per annualità con ricavi, valore e costi della
+  produzione, EBITDA, EBIT, risultato, patrimonio netto, debiti, liquidità e PFN, seguito dagli
+  **indici per annualità** con la soglia e il semaforo. Nessun calcolo nuovo: i dati sono quelli
+  già archiviati dal motore XBRL.
+- La **certificazione dei debiti non è più un requisito** della contabile: l’aggancio si chiude
+  con visura e bilancio, il debito si mostra quando la verifica amministrativa lo ha consegnato.
+- Il **debito memorizzato** compare nella scheda della verifica amministrativa e in quella
+  contabile, con i tre stati, la fonte e la data, e si può rinnovare dagli archivi con un gesto
+  esplicito.
+- Le **simulazioni contabili** partono con la quota del debito dell’ente già compilata dalla
+  cifra memorizzata, e dichiarano da dove viene e di quando è.
+
 ## 0.185.0 — 2026-11-10
 
 **La verifica amministrativa consegna il debito alla contabile: la cifra si memorizza quando la verifica si chiude.**

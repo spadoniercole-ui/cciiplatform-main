@@ -72,7 +72,7 @@ describe('debitoContabile', () => {
 });
 
 describe('aggancioContabile', () => {
-  it('è pronto solo con visura, debito e bilancio', () => {
+  it('è pronto con visura e bilancio', () => {
     const a = aggancioContabile({
       visura,
       certificazione: certificazione(),
@@ -92,11 +92,8 @@ describe('aggancioContabile', () => {
       anniBilancio: [],
     });
     expect(a.pronto).toBe(false);
-    expect(a.mancanti).toEqual([
-      'visura dell’ente',
-      'debito dell’ente (contabilizzato e da contabilizzare)',
-      'bilancio XBRL',
-    ]);
+    // Il debito non è più un requisito della contabile (0.186.0).
+    expect(a.mancanti).toEqual(['visura dell’ente', 'bilancio XBRL']);
   });
 
   it('regge anche il debito dal solo triage: aggancio pronto ma ripartizione assente', () => {
@@ -131,7 +128,7 @@ describe('aggancioContabile', () => {
 
   it('il valore vuoto è già «manca tutto»', () => {
     expect(AGGANGIO_VUOTO.pronto).toBe(false);
-    expect(AGGANGIO_VUOTO.mancanti).toHaveLength(3);
+    expect(AGGANGIO_VUOTO.mancanti).toHaveLength(2);
   });
 });
 

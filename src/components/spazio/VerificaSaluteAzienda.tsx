@@ -32,6 +32,7 @@ import {
 } from '@/lib/triage/riepilogoHtml';
 import { stampaHtml } from '@/lib/stampaTesto';
 import { etaVerifica } from '@/lib/triage/etaVerifica';
+import { DebitoMemorizzatoEnte } from './DebitoMemorizzatoEnte';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MateriaVociVera, type VoceDaRimappare } from './MateriaVociVera';
 import { ottieniMaterieVociVera } from '@/app/actions/posizioneVera';
@@ -2007,6 +2008,12 @@ export function VerificaSaluteAzienda({
           decidi di procedere — ma la verifica resta comunque registrata.
         </p>
       </div>
+
+      {aziendaId && (
+        <div className="mb-4">
+          <DebitoMemorizzatoEnte nomeSchema={nomeSchema} aziendaId={aziendaId} />
+        </div>
+      )}
 
       {avvisoCiclo && (
         <div className="flex items-start gap-2 text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-lg p-3">

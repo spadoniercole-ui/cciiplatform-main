@@ -55,7 +55,7 @@ export const AGGANGIO_VUOTO: AggancioContabile = {
   visura: { presente: false, nomeFile: null, caricataIl: null },
   debito: null,
   anniBilancio: [],
-  mancanti: ['visura dell’ente', 'debito dell’ente', 'bilancio XBRL'],
+  mancanti: ['visura dell’ente', 'bilancio XBRL'],
   pronto: false,
 };
 
@@ -107,10 +107,12 @@ export function debitoContabile(
 }
 
 /**
- * L'aggancio completo. La contabile è pronta solo se ci sono tutti e tre i
- * pezzi: la visura (che è la stessa dell'amministrativa), il debito dell'ente
- * e almeno un bilancio XBRL. I mancanti si elencano in ordine di dipendenza:
- * prima i dati dell'amministrativa, poi il bilancio.
+ * L'aggancio completo. Dal 0.186.0 il debito NON è più un requisito della
+ * contabile: la verifica contabile si fa a livello azienda, con visura storica,
+ * parametri dell'ente e bilanci XBRL, e non chiede la certificazione dei debiti
+ * — quella è materia della verifica amministrativa e della verifica azienda.
+ * Restano requisiti la visura e almeno un bilancio XBRL; il debito, quando
+ * c'è, si mostra e si usa altrove (l'aggancio lo porta comunque con sé).
  *
  * Il debito memorizzato, quando c'è, vince sulle letture: è il dato che la
  * verifica amministrativa ha consegnato, non l'ultimo file importato.
@@ -132,7 +134,8 @@ export function aggancioContabile(input: {
   const anniBilancio = [...new Set(input.anniBilancio)].sort((a, b) => b - a);
   const mancanti: string[] = [];
   if (!input.visura.presente) mancanti.push('visura dell’ente');
-  if (!debito) mancanti.push('debito dell’ente (contabilizzato e da contabilizzare)');
+  // Il debito non entra nei mancanti: la contabile non lo richiede più. Se
+  // manca, la scheda lo può dire — ma non impedisce di lavorare sul bilancio.
   if (anniBilancio.length === 0) mancanti.push('bilancio XBRL');
   return {
     visura: input.visura,

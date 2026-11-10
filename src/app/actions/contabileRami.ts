@@ -30,6 +30,7 @@ import {
   type VoceConfronto,
 } from '@/lib/contabile/rami';
 import { ottieniScenarioPerId, verificaScenarioNonBloccato } from '@/app/actions/scenari';
+import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 import type {
   AlertSeverity,
   DatiFinanziariPeriodo,
@@ -80,10 +81,22 @@ export interface AnnoDisponibile {
   ramiAperti: number;
 }
 
+/**
+ * Il debito consegnato dalla verifica amministrativa: è la quota che la
+ * simulazione porta nel passivo come ipotesi di partenza, dichiarata.
+ */
+export interface DebitoSorgente {
+  totale: number;
+  memorizzatoIl: string | null;
+  fonte: string;
+  natura: 'previdenziale' | 'tributario';
+}
+
 export interface RisultatoRamiContabile {
   success: boolean;
   anni: AnnoDisponibile[];
   rami: RamoContabile[];
+  debitoSorgente: DebitoSorgente | null;
   error?: string;
 }
 
@@ -137,7 +150,13 @@ export async function elencoRamiContabileAction(
   try {
     await richiediAccessoScenario(nomeSchema, scenarioId);
     if (!validaSchema(nomeSchema)) {
-      return { success: false, anni: [], rami: [], error: 'Nome schema non valido.' };
+      return {
+        success: false,
+        anni: [],
+        rami: [],
+        debitoSorgente: null,
+        error: 'Nome schema non valido.',
+      };
     }
     await assicuraTabellaContabileRami(nomeSchema);
 
@@ -147,10 +166,27 @@ export async function elencoRamiContabileAction(
         success: false,
         anni: [],
         rami: [],
+        debitoSorgente: null,
         error: scenarioRis.error || 'Scenario non trovato.',
       };
     }
     const aziendaId = scenarioRis.scenario.aziendaId;
+
+    // Il debito memorizzato a verifica amministrativa chiusa. Se c'è, la
+    // simulazione parte da quella cifra; se non c'è, il campo resta vuoto e
+    // l'operatore decide.
+    const memorizzato = await leggiDebitoEnteMemorizzato(nomeSchema, aziendaId);
+    const debitoSorgente: DebitoSorgente | null = memorizzato
+      ? {
+          totale: memorizzato.debito.totale,
+          memorizzatoIl: memorizzato.memorizzatoIl,
+          fonte: memorizzato.debito.fonte,
+          natura:
+            memorizzato.debito.contributi >= memorizzato.debito.sanzioni
+              ? 'previdenziale'
+              : 'tributario',
+        }
+      : null;
 
     const [ramiRis, anniRis] = await Promise.all([
       pool.query(
@@ -183,13 +219,14 @@ export async function elencoRamiContabileAction(
       };
     });
 
-    return { success: true, anni, rami };
+    return { success: true, anni, rami, debitoSorgente };
   } catch (error: any) {
     console.error('[elencoRamiContabileAction] Errore:', error);
     return {
       success: false,
       anni: [],
       rami: [],
+      debitoSorgente: null,
       error: `Impossibile leggere i rami contabili: ${error.message || error}`,
     };
   }

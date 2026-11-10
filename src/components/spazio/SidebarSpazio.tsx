@@ -58,8 +58,11 @@ const VOCI_MENU: {
     stato: 'pronta',
     soloAdmin: true,
   },
+  // La contabile ha una vita propria a livello azienda: visura storica,
+  // parametri dell'ente, bilanci XBRL e prospetto a scalare. La gestione
+  // delle aziende resta raggiungibile dalle sue pagine, non da qui.
   {
-    id: 'aziende',
+    id: 'verifica-contabile',
     label: 'Verifica contabile aziendale',
     icon: Building2,
     stato: 'pronta',

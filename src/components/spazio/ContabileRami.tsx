@@ -16,6 +16,7 @@ import {
   eliminaRamoContabileAction,
   elencoRamiContabileAction,
   simulaRamoContabileAction,
+  type DebitoSorgente,
   type RamoContabile,
   type RisultatoRamiContabile,
 } from '@/app/actions/contabileRami';
@@ -61,6 +62,9 @@ export function ContabileRami({
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [messaggio, setMessaggio] = useState<string | null>(null);
+  // Il debito consegnato dalla verifica amministrativa, se c'è: arriva con
+  // l'elenco dei rami e serve a precompilare la quota.
+  const debitoSorgente: DebitoSorgente | null = dati?.debitoSorgente ?? null;
 
   const ricarica = useCallback(
     async (seleziona?: number | null) => {
@@ -81,6 +85,18 @@ export function ContabileRami({
   useEffect(() => {
     void ricarica();
   }, [ricarica]);
+
+  // La quota del debito dell'ente si precompila con la cifra memorizzata a
+  // fine verifica amministrativa: è un'ipotesi di partenza dichiarata, non un
+  // numero nascosto. Se l'operatore l'ha già scritta, non si sovrascrive.
+  useEffect(() => {
+    if (!debitoSorgente || debitoSorgente.totale <= 0) return;
+    setLeve((l) =>
+      l.debitoEnteEuro === 0
+        ? { ...l, debitoEnteEuro: debitoSorgente.totale, naturaDebitoEnte: debitoSorgente.natura }
+        : l
+    );
+  }, [debitoSorgente]);
 
   const rami = useMemo(() => dati?.rami ?? [], [dati]);
   const anni = dati?.anni ?? [];
@@ -125,7 +141,12 @@ export function ContabileRami({
     setMessaggio(
       'Simulazione creata accanto al ramo di partenza: il bilancio depositato non è stato toccato.'
     );
-    setLeve(LEVE_NEUTRE);
+    setLeve((l) => ({
+      ...l,
+      ...LEVE_NEUTRE,
+      debitoEnteEuro: debitoSorgente?.totale ?? 0,
+      naturaDebitoEnte: debitoSorgente?.natura ?? 'previdenziale',
+    }));
     await ricarica(r.ramo?.id ?? null);
   };
 
@@ -411,6 +432,13 @@ export function ContabileRami({
                       className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1 text-xs"
                     />
                   </label>
+                  <p className="text-[10px] text-slate-400 leading-relaxed col-span-2">
+                    {debitoSorgente && debitoSorgente.totale > 0
+                      ? `Precompilato dalla verifica amministrativa${
+                          debitoSorgente.memorizzatoIl ? ` del ${debitoSorgente.memorizzatoIl}` : ''
+                        }: ${euro(debitoSorgente.totale)} — ${debitoSorgente.fonte}`
+                      : 'Nessun debito memorizzato: la quota si inserisce a mano e resta un’ipotesi dichiarata.'}
+                  </p>
                   <label className="text-[10px] text-slate-600 col-span-2">
                     Natura del debito dell’ente
                     <select
