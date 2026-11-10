@@ -4,6 +4,7 @@ import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { ottieniFunzioniPlusSpazio } from '@/app/actions/funzioniPlus';
 import { RelazioneAiScenario } from '@/components/spazio/RelazioneAiScenario';
 import { FunzionePlusNonAbilitata } from '@/components/spazio/FunzionePlusNonAbilitata';
+import { leggiStoricoSituazione } from '@/lib/scenari/storicoSituazione';
 
 // La generazione della Relazione legge un confronto liquidatorio già
 // pronto (generato a parte, a fine Brogliaccio) — non fa più ricerca
@@ -36,9 +37,17 @@ export default async function RelazioneScenarioPage({
     return <FunzionePlusNonAbilitata nomeFunzione="Relazione AI" />;
   }
 
+  const storicoSituazione = await leggiStoricoSituazione(
+    contesto.nomeSchema,
+    Number(scenarioId),
+    50
+  ).catch(() => []);
+
   return (
     <RelazioneAiScenario
       nomeSchema={contesto.nomeSchema}
+      situazione={risultato.scenario!.tipoIstruttoria ?? 'PROPOSTA'}
+      storicoSituazione={storicoSituazione}
       scenarioId={Number(scenarioId)}
       aziendaId={risultato.scenario!.aziendaId}
       tipoProposta={risultato.scenario!.tipoProposta}

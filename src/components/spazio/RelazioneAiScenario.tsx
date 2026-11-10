@@ -28,10 +28,14 @@ import {
   type SbloccoScenario,
   type VersioneRelazione,
 } from '@/app/actions/scenarioSblocco';
+import { ottieniSituazioneStoricoAction } from '@/app/actions/scenari';
 import { stampaTesto } from '@/lib/stampaTesto';
 import { RevisioneTesto, stampaSeConsegnabile } from '@/components/spazio/RevisioneTesto';
 import { FascicoloEvidenza } from '@/components/spazio/FascicoloEvidenza';
 import type { Evidenza } from '@/lib/fascicolo/evidenza';
+import { bloccoSituazioneRelazione } from '@/lib/relazione/situazione';
+import type { VoceStoricoSituazione } from '@/lib/scenari/storicoSituazione';
+import type { TipoIstruttoria } from '@/lib/giudice/lettura';
 
 interface Props {
   nomeSchema: string;
@@ -41,6 +45,10 @@ interface Props {
   eAdminSpazio: boolean;
   identitaUtente: string | null;
   bloccatoIl: string | null;
+  /** Situazione attuale; se assente il componente la legge dal server. */
+  situazione?: TipoIstruttoria;
+  /** La cronologia dei cambi; se assente il componente la legge dal server. */
+  storicoSituazione?: VoceStoricoSituazione[];
 }
 
 interface StatoPrerequisiti {
@@ -57,6 +65,8 @@ export function RelazioneAiScenario({
   eAdminSpazio,
   identitaUtente,
   bloccatoIl: bloccatoIlIniziale,
+  situazione,
+  storicoSituazione,
 }: Props) {
   const [fascicolo, setFascicolo] = useState<Evidenza[] | null>(null);
   const [prerequisiti, setPrerequisiti] = useState<StatoPrerequisiti | null>(null);
@@ -73,6 +83,37 @@ export function RelazioneAiScenario({
   const [sbloccoInCorso, setSbloccoInCorso] = useState(false);
   const [erroreSblocco, setErroreSblocco] = useState<string | null>(null);
   const [mostraFormSblocco, setMostraFormSblocco] = useState(false);
+  const [situazioneCorrente, setSituazioneCorrente] = useState<TipoIstruttoria | null>(
+    situazione ?? null
+  );
+  const [storicoCorrente, setStoricoCorrente] = useState<VoceStoricoSituazione[] | null>(
+    storicoSituazione ?? null
+  );
+
+  // Nei punti in cui la Relazione è mostrata senza che la pagina le passi,
+  // situazione e cronologia si leggono dal server: il documento deve portarle
+  // comunque, non solo nella pagina dedicata.
+  useEffect(() => {
+    if (situazione && storicoSituazione) return;
+    let vivo = true;
+    ottieniSituazioneStoricoAction(nomeSchema, scenarioId)
+      .then((r) => {
+        if (!vivo) return;
+        setSituazioneCorrente(r.situazione);
+        setStoricoCorrente(r.storico);
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [nomeSchema, scenarioId, situazione, storicoSituazione]);
+
+  // Situazione e cronologia sono un dato, non un testo da generare: la
+  // Relazione le riporta per intero, anche nella stampa che esce dalla
+  // piattaforma.
+  const bloccoSituazione = situazioneCorrente
+    ? bloccoSituazioneRelazione({ situazione: situazioneCorrente, storico: storicoCorrente ?? [] })
+    : '';
 
   const caricaStoricoSbloccoEVersioni = async () => {
     const [sblocchiRis, versioniRis] = await Promise.all([
@@ -311,6 +352,16 @@ export function RelazioneAiScenario({
 
         {/* Il fascicolo si vede anche PRIMA di generare: chi lavora sa su quali
             evidenze il testo potra' poggiare, e quali provenienze mancano. */}
+        {bloccoSituazione && (
+          <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+              Situazione e cronologia
+            </p>
+            <pre className="whitespace-pre-wrap text-[11px] text-slate-600 font-sans leading-relaxed">
+              {bloccoSituazione}
+            </pre>
+          </div>
+        )}
         <div className="mb-3">
           <FascicoloEvidenza
             nomeSchema={nomeSchema}
@@ -334,7 +385,7 @@ export function RelazioneAiScenario({
                   stampaSeConsegnabile(
                     'RELAZIONE_SCENARIO',
                     'Relazione',
-                    relazione,
+                    bloccoSituazione ? `${bloccoSituazione}\n\n${relazione}` : relazione,
                     null,
                     fascicolo
                   )

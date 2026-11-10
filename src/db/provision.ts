@@ -366,6 +366,14 @@ export async function assicuraStoricoSituazione(nomeSchema: string): Promise<voi
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.situazione_storico ADD COLUMN IF NOT EXISTS annullato_il TIMESTAMP`
   );
+  // Chi ha cambiato e chi ha annullato (0.192.0): l'autore viene dalla
+  // sessione, mai dal browser.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.situazione_storico ADD COLUMN IF NOT EXISTS autore TEXT`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.situazione_storico ADD COLUMN IF NOT EXISTS annullato_da TEXT`
+  );
 }
 
 export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> {

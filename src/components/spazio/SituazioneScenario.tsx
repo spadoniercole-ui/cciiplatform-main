@@ -10,15 +10,16 @@
 //
 // Il cambio non cancella il lavoro fatto (0.189.0): lo scenario torna in
 // bozza, l'origine si riallinea e la scheda dice che cosa va ricontrollato.
-// Ogni cambio lascia una traccia (0.190.0); l'Admin di Spazio può annullare
-// l'ultimo (0.191.0) e la traccia resta, marcata «annullato».
+// Ogni cambio lascia una traccia con autore e data (0.190.0/0.192.0);
+// l'Admin può annullare l'ultimo cambio, anche su scenario bloccato ma solo
+// dopo uno sblocco esplicito con motivo (0.191.0/0.192.0).
 //
 // Avviso e cronologia finiscono anche nella stampa della scheda: sono parte
 // del documento che esce dalla piattaforma.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Printer, Undo2 } from 'lucide-react';
+import { Loader2, Printer, Undo2, Unlock } from 'lucide-react';
 import {
   aggiornaSituazioneScenarioAction,
   annullaUltimoCambioSituazioneAction,
@@ -62,11 +63,14 @@ export function SituazioneScenario({
 }) {
   const router = useRouter();
   const [scelta, setScelta] = useState<TipoIstruttoria>(situazione);
+  const [bloccatoOra, setBloccatoOra] = useState(bloccato);
   const [dataCambio, setDataCambio] = useState<string | null>(cambiataIl ?? null);
   const [daRivedere, setDaRivedere] = useState<string[]>(rivedere ?? []);
   const [cronologia, setCronologia] = useState<VoceStoricoSituazione[]>(storico ?? []);
   const [inCorso, setInCorso] = useState(false);
   const [inAnnullamento, setInAnnullamento] = useState(false);
+  const [motivoSblocco, setMotivoSblocco] = useState('');
+  const [mostraSblocco, setMostraSblocco] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [messaggio, setMessaggio] = useState<string | null>(null);
 
@@ -82,7 +86,14 @@ export function SituazioneScenario({
       return;
     }
     setCronologia((precedenti) => [
-      { da: scelta, a: codice, cambiataIl: new Date().toISOString(), annullatoIl: null },
+      {
+        da: scelta,
+        a: codice,
+        cambiataIl: new Date().toISOString(),
+        autore: null,
+        annullatoIl: null,
+        annullatoDa: null,
+      },
       ...precedenti,
     ]);
     setScelta(codice);
@@ -92,12 +103,15 @@ export function SituazioneScenario({
     router.refresh();
   };
 
-  const annulla = async () => {
+  const annulla = async (motivo?: string) => {
     if (inCorso || inAnnullamento) return;
     setInAnnullamento(true);
     setErrore(null);
     setMessaggio(null);
-    const r = await annullaUltimoCambioSituazioneAction(nomeSchema, scenarioId);
+    const r =
+      motivo === undefined
+        ? await annullaUltimoCambioSituazioneAction(nomeSchema, scenarioId)
+        : await annullaUltimoCambioSituazioneAction(nomeSchema, scenarioId, motivo);
     setInAnnullamento(false);
     if (!r.success) {
       setErrore(r.error ?? 'Cambio non annullato.');
@@ -108,11 +122,14 @@ export function SituazioneScenario({
     if (r.situazione) setScelta(r.situazione);
     setDaRivedere(r.rivedere ?? []);
     setDataCambio(aggiornata.find((v) => !v.annullatoIl)?.cambiataIl ?? null);
+    setBloccatoOra(false);
+    setMostraSblocco(false);
+    setMotivoSblocco('');
     setMessaggio('Ultimo cambio annullato: lo scenario è tornato all’atto precedente, in bozza.');
     router.refresh();
   };
 
-  const modificabile = !bloccato && !demo;
+  const modificabile = !bloccatoOra && !demo;
   const haCambiDaAnnullare = cronologia.some((v) => !v.annullatoIl);
 
   return (
@@ -152,7 +169,7 @@ export function SituazioneScenario({
       </div>
       <p className="text-[10px] text-slate-500 leading-relaxed">
         Origine: {origine}
-        {bloccato
+        {bloccatoOra
           ? ' · scenario in sola lettura: la Relazione finale è già stata generata.'
           : demo
             ? ' · nell’ambiente demo i percorsi sono già predisposti.'
@@ -177,24 +194,73 @@ export function SituazioneScenario({
                 {dataItaliana(voce.cambiataIl)} — da{' '}
                 {etichettaIstruttoria(voce.da as TipoIstruttoria | null)} a{' '}
                 {etichettaIstruttoria(voce.a as TipoIstruttoria)}
-                {voce.annullatoIl ? ' (annullato)' : ''}
+                {voce.autore ? ` · ${voce.autore}` : ''}
+                {voce.annullatoIl
+                  ? ` (annullato${voce.annullatoDa ? ` da ${voce.annullatoDa}` : ''})`
+                  : ''}
               </li>
             ))}
           </ul>
-          {puoAnnullare && modificabile && haCambiDaAnnullare && (
-            <button
-              type="button"
-              onClick={() => void annulla()}
-              disabled={inCorso || inAnnullamento}
-              className="mt-1 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-800 hover:text-amber-900 disabled:opacity-50 print:hidden"
-            >
-              {inAnnullamento ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
+          {puoAnnullare && !demo && haCambiDaAnnullare && (
+            <div className="mt-1 print:hidden">
+              {!bloccatoOra ? (
+                <button
+                  type="button"
+                  onClick={() => void annulla()}
+                  disabled={inCorso || inAnnullamento}
+                  className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-800 hover:text-amber-900 disabled:opacity-50"
+                >
+                  {inAnnullamento ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Undo2 className="w-3 h-3" />
+                  )}
+                  Annulla ultimo cambio
+                </button>
+              ) : !mostraSblocco ? (
+                <button
+                  type="button"
+                  onClick={() => setMostraSblocco(true)}
+                  className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-800 hover:text-amber-900"
+                >
+                  <Unlock className="w-3 h-3" /> Sblocca e annulla
+                </button>
               ) : (
-                <Undo2 className="w-3 h-3" />
+                <div className="space-y-1 rounded-md border border-amber-200 bg-white p-2">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                    Motivo dello sblocco (obbligatorio, resta in cronologia)
+                  </p>
+                  <textarea
+                    value={motivoSblocco}
+                    onChange={(e) => setMotivoSblocco(e.target.value)}
+                    rows={2}
+                    placeholder="Es. situazione scelta per errore, da riportare all’atto precedente…"
+                    className="w-full p-1.5 text-[11px] bg-white border border-slate-300 rounded-md outline-none focus:border-blue-500 text-slate-900"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void annulla(motivoSblocco)}
+                      disabled={!motivoSblocco.trim() || inAnnullamento}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[9px] uppercase rounded-md"
+                    >
+                      {inAnnullamento && <Loader2 className="w-3 h-3 animate-spin" />}
+                      Conferma sblocco e annulla
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMostraSblocco(false);
+                        setMotivoSblocco('');
+                      }}
+                      className="px-2 py-1 text-[9px] font-bold uppercase text-slate-500 hover:text-slate-700"
+                    >
+                      Rinuncia
+                    </button>
+                  </div>
+                </div>
               )}
-              Annulla ultimo cambio
-            </button>
+            </div>
           )}
         </div>
       )}

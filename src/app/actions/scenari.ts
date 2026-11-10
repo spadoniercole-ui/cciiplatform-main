@@ -540,7 +540,7 @@ export async function aggiornaSituazioneScenarioAction(
   tipoIstruttoria: TipoIstruttoria
 ): Promise<RisultatoOperazioneScenario> {
   try {
-    await richiediAccessoScenario(nomeSchema, scenarioId, {
+    const contesto = await richiediAccessoScenario(nomeSchema, scenarioId, {
       modulo: ['scenari'],
       livello: 'SCRITTURA',
     });
@@ -550,6 +550,8 @@ export async function aggiornaSituazioneScenarioAction(
     if (!tipoIstruttoriaValido(tipoIstruttoria) || tipoIstruttoria === 'DA_CHIEDERE') {
       return { success: false, error: 'Situazione dello scenario non riconosciuta.' };
     }
+    const autore =
+      contesto.email ?? (contesto.modalita === 'SALVAGENTE' ? 'Superadmin (salvagente)' : null);
 
     const { pool } = await import('@/lib/db');
     const scenarioRis = await pool.query(
@@ -599,9 +601,9 @@ export async function aggiornaSituazioneScenarioAction(
     // si perde — è proprio quello che rende leggibile il riallineamento.
     await assicuraStoricoSituazione(nomeSchema);
     await pool.query(
-      `INSERT INTO "${nomeSchema}".situazione_storico (scenario_id, da, a)
-       VALUES ($1, $2, $3)`,
-      [scenarioId, scenarioRis.rows[0].tipo_istruttoria as string, tipoIstruttoria]
+      `INSERT INTO "${nomeSchema}".situazione_storico (scenario_id, da, a, autore)
+       VALUES ($1, $2, $3, $4)`,
+      [scenarioId, scenarioRis.rows[0].tipo_istruttoria as string, tipoIstruttoria, autore]
     );
 
     const passi = await leggiPassiCompilati(nomeSchema, scenarioId);
@@ -623,12 +625,40 @@ export async function aggiornaSituazioneScenarioAction(
  * la riga resta e viene marcata «annullato», così si legge anche la
  * correzione. Nessun dato compilato viene toccato.
  */
-export async function annullaUltimoCambioSituazioneAction(
+/**
+ * Situazione attuale e cronologia dei cambi, per chi le deve riportare in un
+ * documento (la Relazione finale). Sola lettura: la guardia verifica l'accesso
+ * allo scenario, nulla viene modificato.
+ */
+export async function ottieniSituazioneStoricoAction(
   nomeSchema: string,
   scenarioId: number
+): Promise<{ situazione: TipoIstruttoria; storico: VoceStoricoSituazione[] }> {
+  try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, { modulo: ['scenari'] });
+    if (!schemaOk(nomeSchema)) return { situazione: 'PROPOSTA', storico: [] };
+    const { pool } = await import('@/lib/db');
+    const r = await pool.query(
+      `SELECT tipo_istruttoria FROM "${nomeSchema}".scenari WHERE id = $1`,
+      [scenarioId]
+    );
+    const tipo: unknown = r.rows[0]?.tipo_istruttoria;
+    return {
+      situazione: tipoIstruttoriaValido(tipo) && tipo !== 'DA_CHIEDERE' ? tipo : 'PROPOSTA',
+      storico: await leggiStoricoSituazione(nomeSchema, scenarioId, 50).catch(() => []),
+    };
+  } catch {
+    return { situazione: 'PROPOSTA', storico: [] };
+  }
+}
+
+export async function annullaUltimoCambioSituazioneAction(
+  nomeSchema: string,
+  scenarioId: number,
+  motivoSblocco?: string
 ): Promise<RisultatoOperazioneScenario> {
   try {
-    await richiediAccessoScenario(nomeSchema, scenarioId, {
+    const contesto = await richiediAccessoScenario(nomeSchema, scenarioId, {
       soloAdmin: true,
       modulo: ['scenari'],
       livello: 'SCRITTURA',
@@ -636,6 +666,8 @@ export async function annullaUltimoCambioSituazioneAction(
     if (!schemaOk(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }
+    const autore =
+      contesto.email ?? (contesto.modalita === 'SALVAGENTE' ? 'Superadmin (salvagente)' : null);
 
     const { pool } = await import('@/lib/db');
     const scenarioRis = await pool.query(
@@ -644,9 +676,6 @@ export async function annullaUltimoCambioSituazioneAction(
     );
     if (scenarioRis.rows.length === 0) {
       return { success: false, error: 'Scenario non trovato.' };
-    }
-    if (scenarioRis.rows[0].bloccato_il) {
-      return { success: false, error: MESSAGGIO_SCENARIO_BLOCCATO };
     }
 
     const spazioRis = await pool.query(
@@ -658,6 +687,28 @@ export async function annullaUltimoCambioSituazioneAction(
         success: false,
         error: 'Nell’ambiente demo i percorsi sono già predisposti: il cambio non si annulla.',
       };
+    }
+
+    // Scenario bloccato: l'annullamento passa da uno sblocco esplicito, con
+    // motivo, che resta nella cronologia degli sblocchi. Senza motivo non si
+    // tocca nulla.
+    if (scenarioRis.rows[0].bloccato_il) {
+      if (!motivoSblocco?.trim()) {
+        return {
+          success: false,
+          error:
+            'Lo scenario è in sola lettura: per annullare il cambio serve uno sblocco esplicito con motivo.',
+        };
+      }
+      await assicuraTabelleScenari(nomeSchema);
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".scenario_sblocchi (scenario_id, motivo, sbloccato_da)
+         VALUES ($1, $2, $3)`,
+        [scenarioId, motivoSblocco.trim(), autore]
+      );
+      await pool.query(`UPDATE "${nomeSchema}".scenari SET bloccato_il = NULL WHERE id = $1`, [
+        scenarioId,
+      ]);
     }
 
     await assicuraStoricoSituazione(nomeSchema);
@@ -675,8 +726,10 @@ export async function annullaUltimoCambioSituazioneAction(
     }
 
     await pool.query(
-      `UPDATE "${nomeSchema}".situazione_storico SET annullato_il = now() WHERE id = $1`,
-      [voce.id]
+      `UPDATE "${nomeSchema}".situazione_storico
+          SET annullato_il = now(), annullato_da = $2
+        WHERE id = $1`,
+      [voce.id, autore]
     );
 
     const origineProposta = originePerSituazione(

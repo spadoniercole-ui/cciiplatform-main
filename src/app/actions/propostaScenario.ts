@@ -51,6 +51,8 @@ import {
   contestoRelazioneRicevente,
   ISTRUZIONI_RELAZIONE_RICEVENTE,
 } from '@/lib/relazione/contestoRicevente';
+import { bloccoSituazioneRelazione } from '@/lib/relazione/situazione';
+import { leggiStoricoSituazione } from '@/lib/scenari/storicoSituazione';
 import { ottienePosizioneAggiornata } from '@/app/actions/posizioneAggiornata';
 import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
 import { ottieniDatiSettore } from '@/app/actions/datiSettore';
@@ -987,6 +989,15 @@ ${righeProposta
         })()
       : '';
 
+    // Situazione e cronologia sono un dato deterministico: non lo ricostruisce
+    // il modello, lo riporta. Entra nel prompt perché la Relazione è il
+    // documento che esce dalla piattaforma e deve dire per intero che cosa si
+    // stava valutando e come ci si è arrivati.
+    const bloccoSituazione = bloccoSituazioneRelazione({
+      situazione: scenario.tipoIstruttoria ?? 'PROPOSTA',
+      storico: await leggiStoricoSituazione(nomeSchema, scenarioId, 50).catch(() => []),
+    });
+
     const userPrompt = `
 SCENARIO: ${scenario.nome} (${scenario.ragioneSocialeAzienda})
 CODICE ATECO DELL'AZIENDA: ${aziendaRisultato.success && aziendaRisultato.azienda?.codiceAteco ? aziendaRisultato.azienda.codiceAteco : 'non indicato — se manca, la ricerca settoriale nella sezione 2bis non può essere mirata, dichiaralo esplicitamente invece di generalizzare'}
@@ -1028,6 +1039,8 @@ ${
 }
 
 ${isRicevuta ? contestoRicevente : costruisciBloccoQuantitativo(ultimoBilancio, codiciAbilitati, trend)}
+
+${bloccoSituazione}
 
 Elabora la relazione di valutazione della proposta seguendo la struttura prescritta.
 `;

@@ -39,15 +39,24 @@ async function riga() {
 
 async function storico() {
   const r = await db.query(
-    `SELECT da, a, annullato_il FROM ${SCHEMA}.situazione_storico WHERE scenario_id = $1 ORDER BY id`,
+    `SELECT da, a, autore, annullato_il, annullato_da FROM ${SCHEMA}.situazione_storico WHERE scenario_id = $1 ORDER BY id`,
     [SCENARIO]
   );
-  return r.rows as { da: string | null; a: string; annullato_il: Date | null }[];
+  return r.rows as {
+    da: string | null;
+    a: string;
+    autore: string | null;
+    annullato_il: Date | null;
+    annullato_da: string | null;
+  }[];
 }
 
 beforeEach(async () => {
   richiediAccessoScenario.mockReset();
-  richiediAccessoScenario.mockResolvedValue({ modalita: 'ADMIN_SPAZIO' } as never);
+  richiediAccessoScenario.mockResolvedValue({
+    modalita: 'ADMIN_SPAZIO',
+    email: 'anna@alfa.it',
+  } as never);
   vi.spyOn(console, 'error').mockImplementation(() => {});
   await db.exec(`
     DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE;
@@ -76,7 +85,16 @@ beforeEach(async () => {
       da TEXT,
       a TEXT NOT NULL,
       cambiata_il TIMESTAMP NOT NULL DEFAULT now(),
-      annullato_il TIMESTAMP
+      annullato_il TIMESTAMP,
+      autore TEXT,
+      annullato_da TEXT
+    );
+    CREATE TABLE ${SCHEMA}.scenario_sblocchi (
+      id SERIAL PRIMARY KEY,
+      scenario_id INTEGER NOT NULL,
+      motivo TEXT NOT NULL,
+      sbloccato_da TEXT,
+      sbloccato_il TIMESTAMP NOT NULL DEFAULT now()
     );
     CREATE TABLE ${SCHEMA}.proposta_creditori (
       id SERIAL PRIMARY KEY,
@@ -111,6 +129,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
     const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'DECRETO_LIQUIDAZIONE');
 
     expect(esito.success).toBe(true);
+    expect((await storico())[0].autore).toBe('anna@alfa.it');
     expect(esito.rivedere).toEqual([
       'Proposta: 2 righe di creditori da ricontrollare',
       'Check List: 2 risposte da riconfermare',
@@ -214,6 +233,37 @@ describe('annullaUltimoCambioSituazioneAction', () => {
     expect(r.stato).toBe('BOZZA');
     expect(r.situazione_cambiata_il).toBeNull();
     expect((await storico())[0].annullato_il).not.toBeNull();
+    expect((await storico())[0].annullato_da).toBe('anna@alfa.it');
+  });
+
+  it('lo scenario bloccato si annulla solo con motivo, e lo sblocco resta tracciato', async () => {
+    await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN');
+    await db.query(`UPDATE ${SCHEMA}.scenari SET bloccato_il = now() WHERE id = $1`, [SCENARIO]);
+
+    const senzaMotivo = await annullaUltimoCambioSituazioneAction(SCHEMA, SCENARIO);
+    expect(senzaMotivo.success).toBe(false);
+    expect(senzaMotivo.error).toMatch(/sblocco esplicito/);
+    expect((await riga()).tipo_istruttoria).toBe('CRAM_DOWN');
+
+    const conMotivo = await annullaUltimoCambioSituazioneAction(
+      SCHEMA,
+      SCENARIO,
+      '  Inquadramento errato  '
+    );
+    expect(conMotivo.success).toBe(true);
+    const r = await riga();
+    expect(r.tipo_istruttoria).toBe('PROPOSTA');
+    expect(r.bloccato_il).toBeNull();
+    const sblocco = await db.query(
+      `SELECT motivo, sbloccato_da FROM ${SCHEMA}.scenario_sblocchi WHERE scenario_id = $1`,
+      [SCENARIO]
+    );
+    expect(sblocco.rows[0]).toMatchObject({
+      motivo: 'Inquadramento errato',
+      sbloccato_da: 'anna@alfa.it',
+    });
+    const voce = (await storico())[0];
+    expect(voce.annullato_da).toBe('anna@alfa.it');
   });
 
   it('senza cambi da annullare non inventa un ripristino', async () => {

@@ -37,7 +37,9 @@ const VOCE = {
   da: 'PROPOSTA',
   a: 'CRAM_DOWN',
   cambiataIl: '2026-11-10T08:00:00.000Z',
+  autore: 'anna@alfa.it',
   annullatoIl: null,
+  annullatoDa: null,
 };
 
 describe('SituazioneScenario', () => {
@@ -62,6 +64,8 @@ describe('SituazioneScenario', () => {
     expect(screen.getByText(/2 righe di creditori da ricontrollare/)).toBeTruthy();
     expect(screen.getByText(/Cronologia della situazione \(1\)/)).toBeTruthy();
     expect(screen.getByText(/da Proposta a Dispositivo di cram down/)).toBeTruthy();
+    // La traccia dice anche chi ha cambiato.
+    expect(screen.getByText(/anna@alfa\.it/)).toBeTruthy();
     // Senza il permesso di annullare il comando non compare.
     expect(screen.queryByText('Annulla ultimo cambio')).toBeNull();
   });
@@ -95,7 +99,7 @@ describe('SituazioneScenario', () => {
       scenarioId: 4,
       situazione: 'PROPOSTA',
       rivedere: [],
-      storico: [{ ...VOCE, annullatoIl: '2026-11-10T09:00:00.000Z' }],
+      storico: [{ ...VOCE, annullatoIl: '2026-11-10T09:00:00.000Z', annullatoDa: 'anna@alfa.it' }],
     });
 
     render(
@@ -114,8 +118,41 @@ describe('SituazioneScenario', () => {
     fireEvent.click(screen.getByText('Annulla ultimo cambio'));
 
     await waitFor(() => expect(annulla).toHaveBeenCalledWith('tenant_test', 4));
-    expect((await screen.findAllByText(/\(annullato\)/)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/annullato da anna@alfa\.it/)).length).toBeGreaterThan(0);
     expect(screen.getByText(/Ultimo cambio annullato/)).toBeTruthy();
+  });
+
+  it('su scenario bloccato l’Admin annulla solo dopo uno sblocco motivato', async () => {
+    annulla.mockResolvedValue({
+      success: true,
+      scenarioId: 4,
+      situazione: 'PROPOSTA',
+      rivedere: [],
+      storico: [{ ...VOCE, annullatoIl: '2026-11-10T09:30:00.000Z', annullatoDa: 'anna@alfa.it' }],
+    });
+
+    render(
+      <SituazioneScenario
+        nomeSchema="tenant_test"
+        scenarioId={4}
+        situazione="CRAM_DOWN"
+        origine="Tribunale"
+        bloccato
+        puoAnnullare
+        storico={[VOCE]}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Sblocca e annulla'));
+
+    const motivo = screen.getByRole('textbox');
+    fireEvent.change(motivo, { target: { value: 'Inquadramento errato' } });
+    fireEvent.click(screen.getByText('Conferma sblocco e annulla'));
+
+    await waitFor(() =>
+      expect(annulla).toHaveBeenCalledWith('tenant_test', 4, 'Inquadramento errato')
+    );
+    expect(await screen.findByText(/Ultimo cambio annullato/)).toBeTruthy();
   });
 
   it('uno scenario bloccato non si cambia', () => {

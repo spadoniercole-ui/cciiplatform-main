@@ -1,3 +1,18 @@
+## 0.192.0 — 2026-11-10
+
+**La traccia dice chi, e la Relazione porta con sé situazione e cronologia.**
+
+- Ogni cambio di situazione registra l’**autore** (email dalla sessione, mai dal browser);
+  anche l’annullamento dice chi l’ha fatto. La scheda mostra «· anna@alfa.it» accanto alla
+  voce e «(annullato da …)» quando il cambio è stato corretto.
+- **Annullamento su scenario bloccato**: l’Admin può farlo solo dopo uno **sblocco esplicito
+  con motivo**, che resta nella cronologia degli sblocchi; senza motivo il server rifiuta.
+- La **Relazione finale** riceve un blocco deterministico con situazione attuale e cronologia
+  completa (date, atti, autori, annullamenti), riportato per intero nel testo e incluso nella
+  stampa del documento.
+- **Test**: autore e annullamento con sblocco su PGlite; blocco Relazione su casi con e senza
+  cronologia e con un cambio annullato.
+
 ## 0.191.0 — 2026-11-10
 
 **L’Admin può annullare l’ultimo cambio, e la scheda si stampa con avviso e cronologia.**
