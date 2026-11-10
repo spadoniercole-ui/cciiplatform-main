@@ -413,6 +413,26 @@ export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> 
   // La verifica di base scelta alla creazione (0.195.0): aziendale per
   // l'accordo transattivo, amministrativa per liquidazione e cram down.
   await eseguiDdlTenant(sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS base_verifica TEXT`);
+  // Le sovrascritture del transattivo (0.196.0): una riga per cella
+  // modificata, con il valore di base e la differenza. La traccia serve alla
+  // statistica del modello, non a nascondere la correzione.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.scenario_sovrascritture (
+      id SERIAL PRIMARY KEY,
+      scenario_id INTEGER NOT NULL REFERENCES ${s}.scenari(id) ON DELETE CASCADE,
+      anno INTEGER NOT NULL,
+      voce TEXT NOT NULL,
+      valore_base NUMERIC(16,2) NOT NULL,
+      valore_inserito NUMERIC(16,2) NOT NULL,
+      differenza NUMERIC(16,2) NOT NULL,
+      autore TEXT,
+      aggiornata_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS scenario_sovrascritture_unica
+          ON ${s}.scenario_sovrascritture (scenario_id, anno, voce)`
+  );
   // Cambio di situazione (0.189.0): la data non cancella il lavoro fatto,
   // dice soltanto da quando i passi compilati vanno ricontrollati.
   await eseguiDdlTenant(

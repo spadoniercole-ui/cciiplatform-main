@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, LayoutGrid } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, Scale } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
@@ -198,6 +198,25 @@ export default async function ScenarioLayout({
             Apri
           </span>
         </Link>
+
+        {scenario.baseVerifica && (
+          <Link
+            href={`${base}/confronto`}
+            className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 mb-3 hover:border-blue-300 transition-colors"
+          >
+            <span>
+              <span className="block text-xs font-bold text-slate-900">Confronto della base</span>
+              <span className="block text-[10px] text-slate-500 mt-0.5">
+                {scenario.baseVerifica === 'AMMINISTRATIVA'
+                  ? 'Debito, soglie e parametri dello spazio per liquidazione e cram down.'
+                  : 'Il dato dell’azienda sovrascritto rispetto alla simulazione base, con le differenze.'}
+              </span>
+            </span>
+            <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700">
+              <Scale className="w-3 h-3" /> Apri
+            </span>
+          </Link>
+        )}
 
         {/* Lo scenario si lavora su una pagina sola: da ogni pagina di
           servizio questo link riporta lì. */}

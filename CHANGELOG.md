@@ -1,3 +1,25 @@
+## 0.196.0 — 2026-11-10
+
+**Il documento di confronto e la traccia delle sovrascritture.**
+
+- Nuovo **documento di confronto** dello scenario, raggiungibile dalla scheda. Con la base
+  **amministrativa** mette a confronto liquidazione giudiziale e cram down sull’esposizione
+  dell’ente: rango selezionabile, tasso di realizzo e spese di procedura per la liquidazione,
+  percentuale di soddisfacimento per il cram down, confronto fra i due netti e parametri usati.
+  Accanto, l’esito delle **soglie** (superate, non determinabili, dati mancanti) e il credito
+  memorizzato a fine verifica. Stampa/PDF dalla pagina.
+- Con la base **aziendale** il documento mostra il dato storico della simulazione e permette di
+  **sovrascrivere** ogni voce per anno. Il server rilegge la base, calcola la differenza e la
+  conserva: la simulazione non viene alterata, la correzione resta tracciata con autore e data.
+  Il documento riepiloga le celle sovrascritte, lo scostamento assoluto e medio, le differenze per
+  anno e l’elenco puntuale base/inserito/differenza.
+- Nuova tabella `scenario_sovrascritture` (DDL idempotente, una riga per scenario/anno/voce);
+  azioni di lettura e salvataggio con la guardia dello scenario e il calcolo del delta lato server.
+- `ottieniScenarioPerId` restituisce anche la base dello scenario; la scheda mostra il collegamento
+  al confronto solo quando la base esiste.
+- **Test**: statistiche delle sovrascritture e documento (confronto, cambio rango, salvataggio con
+  differenza).
+
 ## 0.195.0 — 2026-11-10
 
 **Due verifiche, due box; la simulazione diventa la base degli scenari.**
@@ -221,7 +243,7 @@
   splittato è la voce che entra nella definizione del dato contabile.
 - **La contabile si spunta solo quando l’aggancio è completo**: visura, debito e almeno un
   bilancio. Se manca qualcosa il riquadro dice che cosa manca (`Per aprire la contabile
-  manca …`) e offre il collegamento per acquisirlo; il server rifiuta comunque il
+manca …`) e offre il collegamento per acquisirlo; il server rifiuta comunque il
   salvataggio, così lo scenario non dichiara una verifica che l’azienda non ha ancora
   fornito. Se il debito arriva solo dalle posizioni del triage, la cifra si mostra ma la
   scheda dichiara che la ripartizione non è registrata.
