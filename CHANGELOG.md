@@ -1,3 +1,17 @@
+## 0.188.0 — 2026-11-10
+
+**La situazione dello scenario si corregge dalla scheda, e le nuove schermate hanno i loro test.**
+
+- La **scheda dello scenario** mostra la situazione — accordo transattivo, liquidazione
+  giudiziale, cram down — come scelta attiva: si cambia finché la Relazione finale non ha
+  congelato lo scenario. L’**origine si riallinea da sola** (azienda per la proposta,
+  tribunale per decreto e cram down) e il server rifiuta situazioni non riconosciute; in demo i
+  percorsi restano predisposti.
+- **Test di rendering** per la mappa della verifica azienda (tre profili, colonne storiche e
+  proiettate, debito certo e caso senza debito, profilo richiesto al server) e per la creazione
+  dello scenario (tre situazioni, nessun campo tipo proposta/origine, situazione e origine
+  giuste nella chiamata).
+
 ## 0.187.0 — 2026-11-10
 
 **Verifica azienda: le due verifiche diventano una mappa sola, e lo scenario si crea dalla situazione.**

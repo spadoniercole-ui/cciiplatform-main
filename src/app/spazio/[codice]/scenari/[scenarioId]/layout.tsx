@@ -12,7 +12,7 @@ import { AGGANGIO_VUOTO } from '@/lib/debitiEnte/aggancioContabile';
 import { leggiRiferimentoAzienda } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
-import { etichettaIstruttoria } from '@/lib/giudice/lettura';
+import { SituazioneScenario } from '@/components/spazio/SituazioneScenario';
 import { DemoAziendaScope } from '@/components/spazio/DemoUploadProvider';
 
 export default async function ScenarioLayout({
@@ -93,9 +93,16 @@ export default async function ScenarioLayout({
             <div>
               <h1 className="text-lg font-bold text-slate-900">{scenario.nome}</h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                {scenario.ragioneSocialeAzienda} — {etichettaIstruttoria(scenario.tipoIstruttoria)}{' '}
-                · origine: {scenario.origineProposta}
+                {scenario.ragioneSocialeAzienda} · origine: {scenario.origineProposta}
               </p>
+              <SituazioneScenario
+                nomeSchema={contesto.nomeSchema}
+                scenarioId={scenario.id}
+                situazione={scenario.tipoIstruttoria ?? 'PROPOSTA'}
+                origine={scenario.origineProposta}
+                bloccato={Boolean(scenario.bloccatoIl)}
+                demo={contesto.demo}
+              />
               {riferimento && (
                 <p className="mt-1">
                   <IdentificativiEnte

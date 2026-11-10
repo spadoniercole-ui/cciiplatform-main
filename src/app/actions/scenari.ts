@@ -500,3 +500,65 @@ export async function attivaPianoSviluppoAction(
     return { success: false, error: `Impossibile attivare il piano: ${(error as Error).message}` };
   }
 }
+
+/**
+ * Cambia la situazione di uno scenario già creato (0.188.0).
+ *
+ * La scelta fatta alla creazione non è un'etichetta: decide che cosa si sta
+ * valutando. Restare vincolati a un errore di inquadramento costringerebbe a
+ * rifare lo scenario da capo, quindi si corregge qui — finché la Relazione
+ * finale non l'ha congelato. Per uno spazio ENTE l'origine si riallinea
+ * (proposta dall'azienda, decreto e cram down dal tribunale); per il Redigente
+ * resta quella dichiarata.
+ */
+export async function aggiornaSituazioneScenarioAction(
+  nomeSchema: string,
+  scenarioId: number,
+  tipoIstruttoria: TipoIstruttoria
+): Promise<RisultatoOperazioneScenario> {
+  try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
+    if (!tipoIstruttoriaValido(tipoIstruttoria) || tipoIstruttoria === 'DA_CHIEDERE') {
+      return { success: false, error: 'Situazione dello scenario non riconosciuta.' };
+    }
+    const bloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
+    if (bloccato) return { success: false, error: bloccato };
+
+    const { pool } = await import('@/lib/db');
+    const spazioRis = await pool.query(
+      `SELECT tipo_spazio, demo FROM public.spazi WHERE nome_schema = $1`,
+      [nomeSchema]
+    );
+    if (spazioRis.rows[0]?.demo) {
+      return {
+        success: false,
+        error: 'Nell’ambiente demo i percorsi sono già predisposti: la situazione non si cambia.',
+      };
+    }
+    const ente = spazioRis.rows[0]?.tipo_spazio === 'ENTE';
+    const origineProposta = ente
+      ? tipoIstruttoria === 'PROPOSTA'
+        ? 'Azienda'
+        : 'Tribunale'
+      : undefined;
+
+    const { db } = await import('@/db/client');
+    const { getTabelleTenant } = await import('@/db/schema');
+    const { eq } = await import('drizzle-orm');
+    const tabelle = getTabelleTenant(nomeSchema);
+    await db
+      .update(tabelle.scenari)
+      .set(origineProposta ? { tipoIstruttoria, origineProposta } : { tipoIstruttoria })
+      .where(eq(tabelle.scenari.id, scenarioId));
+    return { success: true, scenarioId };
+  } catch (error: unknown) {
+    console.error('[aggiornaSituazioneScenarioAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile aggiornare la situazione: ${(error as Error).message}`,
+    };
+  }
+}
