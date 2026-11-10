@@ -85,11 +85,6 @@ export default async function VerificaContabilePage({
                       ? `${a.anniXbrl} ${a.anniXbrl === 1 ? 'annualità XBRL' : 'annualità XBRL'}`
                       : 'Bilanci da caricare'}
                   </span>
-                  {a.debitoMemorizzato !== null && (
-                    <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-600">
-                      Debito ente {Math.round(a.debitoMemorizzato).toLocaleString('it-IT')} €
-                    </span>
-                  )}
                 </div>
               </div>
               <span

@@ -9,9 +9,9 @@
 // con l'acquisizione del dato storico: nessuna simulazione, nessuna
 // conclusione — quella è materia della verifica azienda.
 //
-// La certificazione dei debiti non si chiede: è il dato della verifica
-// amministrativa, e quando c'è si mostra qui perché la verifica azienda lo
-// userà. Non è un requisito di questa scheda.
+// La certificazione dei debiti non si chiede e non si mostra: è il dato della
+// verifica amministrativa, che vive nel suo esito. Qui resta il solo dato
+// storico dell'azienda.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -27,7 +27,6 @@ import {
 } from 'lucide-react';
 import { AziendaBilanciXbrl } from './AziendaBilanciXbrl';
 import { ProspettoContabileStorico } from './ProspettoContabileStorico';
-import { DebitoMemorizzatoEnte } from './DebitoMemorizzatoEnte';
 import { registraVisuraTriageAction } from '@/app/actions/visuraTriage';
 import { estraiAnagraficaDaVisuraAction } from '@/app/actions/visuraEstrazione';
 import {
@@ -356,8 +355,6 @@ export function VerificaContabileAzienda({
         </h2>
         <ProspettoContabileStorico nomeSchema={nomeSchema} aziendaId={aziendaId} />
       </section>
-
-      <DebitoMemorizzatoEnte nomeSchema={nomeSchema} aziendaId={aziendaId} />
 
       <p className="text-[11px] text-slate-500">
         La verifica contabile si chiude con l’acquisizione del dato storico: per la simulazione e le

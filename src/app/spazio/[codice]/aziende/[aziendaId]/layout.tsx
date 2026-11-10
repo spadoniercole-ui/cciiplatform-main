@@ -5,7 +5,6 @@ import { ArrowLeft, Check, Lock, Users } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniConteggioScreeningPendente } from '@/app/actions/screeningAzienda';
-import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniStatoAnalisiBilancioStep } from '@/app/actions/analisiBilancioStep';
 import { esistePonteAzienda } from '@/lib/ponte/persistenza';
@@ -48,18 +47,15 @@ export default async function AziendaLayout({
   const aziendaNum = Number(aziendaId);
   const isEnte = contesto.tipoSpazio === 'ENTE';
 
-  // Segnali di completamento, tutti in parallelo. La Posizione Ente esiste
-  // solo per gli spazi ENTE.
-  const [pendenteScreening, anagraficaEnteRis, xbrlRis, statoAnalisiBilancio, statoPonte] =
-    await Promise.all([
-      ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
-      isEnte ? ottieniAnagraficaEnte(contesto.nomeSchema, aziendaNum) : Promise.resolve(null),
-      ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
-      ottieniStatoAnalisiBilancioStep(contesto.nomeSchema, aziendaNum),
-      isEnte
-        ? esistePonteAzienda(contesto.nomeSchema, aziendaNum)
-        : Promise.resolve({ esiste: false, stato: null, versione: null }),
-    ]);
+  // Segnali di completamento, tutti in parallelo.
+  const [pendenteScreening, xbrlRis, statoAnalisiBilancio, statoPonte] = await Promise.all([
+    ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
+    ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
+    ottieniStatoAnalisiBilancioStep(contesto.nomeSchema, aziendaNum),
+    isEnte
+      ? esistePonteAzienda(contesto.nomeSchema, aziendaNum)
+      : Promise.resolve({ esiste: false, stato: null, versione: null }),
+  ]);
   const domandeMancanti = pendenteScreening.totali - pendenteScreening.risposte;
   // Identificativi presso l'ente: in testata, in evidenza, appena salvati.
   const identificativi = isEnte
@@ -70,43 +66,10 @@ export default async function AziendaLayout({
   const anagraficaCompleta = anagraficaAziendaCompleta(
     azienda as unknown as Record<string, unknown>
   );
-  // "Anagrafica ente compilata": STESSA regola usata dentro
-  // PosizioneEnteScenario (anagraficaCompilata) — almeno un campo tra idEnte e
-  // campo_1..campo_10 valorizzato. Prima qui si guardava solo idEnte: se
-  // l'operatore compilava i campi ma non l'id, il verde non scattava.
-  const dEnte = anagraficaEnteRis?.dati as Record<string, unknown> | undefined;
-  const anagraficaEnteCompilata =
-    !!dEnte &&
-    [
-      'idEnte',
-      'campo1',
-      'campo2',
-      'campo3',
-      'campo4',
-      'campo5',
-      'campo6',
-      'campo7',
-      'campo8',
-      'campo9',
-      'campo10',
-    ].some((k) => {
-      const v = dEnte[k];
-      return typeof v === 'string' && v.trim().length > 0;
-    });
-  // "Posizione Ente completa" NON richiede più le righe di debito.
-  //
-  // La Situazione Debitoria si è spostata nello scenario: il contabilizzato è
-  // la base dei conti al momento della proposta, non un dato dell'azienda.
-  // Il blocco però era rimasto qui, e teneva chiuso lo Screening in attesa di
-  // qualcosa che a questo livello non si carica più — con l'operatore che
-  // aveva fatto tutto il necessario e vedeva il passo restare aperto.
-  //
-  // Quel che serve a questo livello è l'Anagrafica Ente compilata (chi è
-  // l'ente per questa azienda) e, se c'è, la Certificazione dei debiti — che è la
-  // fotografia certificata dell'esposizione. La certificazione dei debiti resta facoltativa:
-  // la sua assenza la dichiara l'indicatore di attenzione, non un blocco che
-  // impedisce di proseguire.
-  const posizioneEnteCompleta = anagraficaEnteCompilata;
+  // La Posizione Ente (certificazione dei debiti e soglie di segnalazione)
+  // non è più un passo di questa scheda: vive nell'esito della verifica
+  // amministrativa, dove nasce. Qui restano l'Anagrafica azienda, il dato
+  // storico e la valutazione.
   // "Analisi Bilancio" verde: la parte XBRL (caricamento in Bilanci XBRL o
   // configurazione delle tab) e gli Indici sono sotto-sezioni dello stesso
   // passo. Basta che l'operatore le abbia aperte (presa visione registrata
@@ -124,11 +87,9 @@ export default async function AziendaLayout({
     screeningGenerato && pendenteScreening.totali > 0 && domandeMancanti === 0;
 
   // Prerequisiti di attivazione (semaforo/gating richiesti da INPS):
-  //  - Screening si attiva solo se Anagrafica, Posizione Ente e Analisi
-  //    Bilancio sono verdi (per il Redigente non c'è Posizione Ente).
+  //  - Screening si attiva solo se Anagrafica e Analisi Bilancio sono verdi.
   //  - Check List è bloccata finché lo Screening non è stato generato.
-  const passi123Verdi =
-    anagraficaCompleta && (!isEnte || posizioneEnteCompleta) && analisiBilancioCompleta;
+  const passi123Verdi = anagraficaCompleta && analisiBilancioCompleta;
 
   const base = `/spazio/${codice}/aziende/${aziendaId}`;
 
@@ -139,14 +100,6 @@ export default async function AziendaLayout({
     label: 'Anagrafica',
     stato: anagraficaCompleta ? 'completo' : 'attivo',
   });
-  if (isEnte) {
-    steps.push({
-      id: 'posizione-ente',
-      label: 'Posizione Ente',
-      stato: !anagraficaCompleta ? 'bloccato' : posizioneEnteCompleta ? 'completo' : 'attivo',
-      motivo: "Completa prima l'Anagrafica azienda.",
-    });
-  }
   steps.push({
     // Si apre sugli indici calcolati: è quello che si cerca entrando. La
     // configurazione delle schede XBRL è la seconda sotto-scheda.
@@ -163,7 +116,7 @@ export default async function AziendaLayout({
       id: 'ponte',
       label: 'Piano-ponte',
       stato: !passi123Verdi ? 'bloccato' : ponteEsiste ? 'completo' : 'attivo',
-      motivo: 'Completa prima Anagrafica, Posizione Ente e Analisi Bilancio.',
+      motivo: 'Completa prima Anagrafica e Analisi Bilancio.',
     });
   }
   steps.push({
@@ -210,7 +163,7 @@ export default async function AziendaLayout({
           href={`/spazio/${codice}/aziende`}
           className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-blue-600 font-bold uppercase tracking-wider"
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> Torna a Verifica contabile aziendale
+          <ArrowLeft className="w-3.5 h-3.5" /> Torna alle aziende
         </Link>
 
         <div className="bg-white border border-slate-200 rounded-xl p-5">

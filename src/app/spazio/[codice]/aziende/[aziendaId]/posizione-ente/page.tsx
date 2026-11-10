@@ -1,13 +1,13 @@
 import { redirect } from 'next/navigation';
-import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
-import { ottieniAziendaPerId } from '@/app/actions/aziende';
-import { PosizioneEnteScenario } from '@/components/spazio/PosizioneEnteScenario';
 
-// Raggiungibile direttamente da Azienda, non solo passando per uno
-// Scenario — i dati vivono qui (Anagrafica Ente e Situazione
-// Debitoria non cambiano da una proposta all'altra della stessa
-// azienda), quindi anche il punto di accesso deve stare qui, non
-// nascosto dietro il percorso di un singolo scenario.
+// LA POSIZIONE ENTE VIVE NELL'ESITO AMMINISTRATIVO (0.194.0).
+//
+// Certificazione dei debiti e soglie di segnalazione sono il risultato della
+// verifica amministrativa: stavano qui, nella scheda azienda, raggiungibili
+// anche dalla contabile. Ora la rotta non ha più una pagina propria: porta
+// all'esito, dove i dati nascono. Il vecchio indirizzo resta valido per i
+// collegamenti e i segnalibri già esistenti.
+
 export default async function PosizioneEnteAziendaPage({
   params,
   searchParams,
@@ -16,36 +16,7 @@ export default async function PosizioneEnteAziendaPage({
   searchParams: Promise<{ scheda?: string }>;
 }) {
   const { codice, aziendaId } = await params;
-  // Solo la scheda delle soglie si può aprire dall'esterno: è quella a cui
-  // rimanda l'esito del triage quando un parametro supera la soglia.
   const { scheda } = await searchParams;
-  const contesto = await ottieniContestoAccessoSpazio(codice);
-  if (!contesto) redirect('/');
-  if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
-
-  // Aperta a ENTRAMBI i percorsi, con contenuti diversi.
-  //
-  // ENTE: Anagrafica Ente, Situazione Debitoria, Certificazione dei debiti e Soglie
-  // di segnalazione — l'ente dichiara cio' che sa dell'impresa.
-  //
-  // NON_ENTE: la sola scheda Soglie di segnalazione. Il professionista quei
-  // valori li ha: o ha richiesto il file della certificazione dei debiti all'istituto, o li ricava
-  // dai flussi UNIEMENS inviati, da cui prende il totale annuo. Le altre tre
-  // schede restano fuori, perche' un redigente non ha un ente che dichiara
-  // qualcosa su di se'.
-
-  const risultato = await ottieniAziendaPerId(contesto.nomeSchema, Number(aziendaId));
-  if (!risultato.success || !risultato.azienda) {
-    redirect(`/spazio/${codice}/aziende`);
-  }
-
-  return (
-    <PosizioneEnteScenario
-      nomeSchema={contesto.nomeSchema}
-      aziendaId={Number(aziendaId)}
-      nomeAzienda={risultato.azienda!.ragioneSociale}
-      tipoSpazio={contesto.tipoSpazio}
-      schedaIniziale={scheda === 'soglie' ? 'soglie' : undefined}
-    />
-  );
+  const query = scheda ? `?scheda=${encodeURIComponent(scheda)}` : '';
+  redirect(`/spazio/${codice}/verifica-salute/${aziendaId}${query}`);
 }

@@ -1,3 +1,16 @@
+## 0.194.0 — 2026-11-10
+
+**L’esito della verifica amministrativa ha una casa propria.**
+
+- Nuova pagina **Esito della verifica amministrativa** per azienda: indicatore di attenzione con
+  accertato e da accertare, certificazione dei debiti e soglie di segnalazione. La riga «presa in
+  carico» della dashboard porta qui, non più alla scheda azienda (che rimandava alla contabile).
+- **Posizione Ente** non è più un passo della scheda azienda: il vecchio indirizzo rimanda
+  all’esito, così segnalibri e collegamenti restano validi.
+- La **verifica contabile** resta solo storica: via il debito memorizzato dalla scheda e il badge
+  «Debito ente» dall’elenco. Certificazione e soglie non si duplicano più.
+- **Test**: 1.717 verdi (nessuna nuova asserzione: cambiano collegamenti e collocazione).
+
 ## 0.193.0 — 2026-11-10
 
 **La traccia si legge tutta, sblocchi compresi.**

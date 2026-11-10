@@ -2278,11 +2278,13 @@ export function VerificaSaluteAzienda({
                 key={v.id}
                 // Una verifica ancora in sospeso si RIAPRE nel triage — è lì che
                 // ci sono le comunicazioni e la decisione. Una già decisa porta
-                // alla scheda: lì non c'è più niente da decidere.
+                // al suo ESITO: indicatore, certificazione dei debiti e soglie.
+                // Prima finiva nella scheda azienda, che parlava di contabile e
+                // faceva sembrare la stessa cosa due verifiche diverse.
                 href={
                   !v.presaInCarico && !v.archiviata
                     ? `/spazio/${codice}/verifica-salute?azienda=${v.id}`
-                    : `/spazio/${codice}/aziende/${v.id}`
+                    : `/spazio/${codice}/verifica-salute/${v.id}`
                 }
                 className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
               >
@@ -2360,14 +2362,14 @@ export function VerificaSaluteAzienda({
           <p className="text-[11px] text-slate-500 leading-relaxed">
             {tipoSpazio === 'NON_ENTE'
               ? 'La check list si genera dalla scheda azienda, come si è sempre fatto: nulla è andato perduto, manca solo la preparazione automatica.'
-              : 'Salva i parametri dell’ente in Posizione Ente › Anagrafica: con la visura disponibile la prima elaborazione dello screening parte da sola; altrimenti caricala nella scheda Screening.'}
+              : 'Salva i parametri dell’ente nell’esito della verifica amministrativa › Anagrafica: con la visura disponibile la prima elaborazione dello screening parte da sola; altrimenti caricala nella scheda Screening.'}
           </p>
           <a
-            href={`/spazio/${codice}/aziende/${aziendaId}`}
+            href={`/spazio/${codice}/verifica-salute/${aziendaId}`}
             className="inline-flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-sky-700"
           >
             <ArrowRight className="w-3.5 h-3.5" />
-            Vai alla scheda azienda
+            Vai all’esito della verifica
           </a>
         </div>
       )}
