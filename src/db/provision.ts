@@ -362,6 +362,10 @@ export async function assicuraStoricoSituazione(nomeSchema: string): Promise<voi
       cambiata_il TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
+  // Annullamento dell'ultimo cambio (0.191.0): la riga resta, marcata.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.situazione_storico ADD COLUMN IF NOT EXISTS annullato_il TIMESTAMP`
+  );
 }
 
 export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> {

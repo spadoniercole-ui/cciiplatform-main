@@ -4,20 +4,28 @@
 //
 // Il cambio non cancella il lavoro fatto: lo scenario torna in bozza e la
 // scheda dice quante righe di proposta e quante risposte di Check List vanno
-// ricontrollate. Ogni cambio lascia una riga nella cronologia. Lo scenario
-// bloccato e la demo non si toccano.
+// ricontrollate. Ogni cambio lascia una riga nella cronologia; l'Admin può
+// annullare l'ultimo e la riga resta marcata «annullato». Lo scenario bloccato
+// e la demo non si toccano.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
-vi.mock('@/app/actions/scenari', () => ({ aggiornaSituazioneScenarioAction: vi.fn() }));
+vi.mock('@/app/actions/scenari', () => ({
+  aggiornaSituazioneScenarioAction: vi.fn(),
+  annullaUltimoCambioSituazioneAction: vi.fn(),
+}));
 
-import { aggiornaSituazioneScenarioAction } from '@/app/actions/scenari';
+import {
+  aggiornaSituazioneScenarioAction,
+  annullaUltimoCambioSituazioneAction,
+} from '@/app/actions/scenari';
 import { SituazioneScenario } from './SituazioneScenario';
 
 const cambia = vi.mocked(aggiornaSituazioneScenarioAction);
+const annulla = vi.mocked(annullaUltimoCambioSituazioneAction);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -25,8 +33,15 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+const VOCE = {
+  da: 'PROPOSTA',
+  a: 'CRAM_DOWN',
+  cambiataIl: '2026-11-10T08:00:00.000Z',
+  annullatoIl: null,
+};
+
 describe('SituazioneScenario', () => {
-  it('mostra le tre situazioni, i passi compilati e la cronologia', async () => {
+  it('mostra le tre situazioni, i passi compilati e la cronologia', () => {
     render(
       <SituazioneScenario
         nomeSchema="tenant_test"
@@ -36,13 +51,7 @@ describe('SituazioneScenario', () => {
         bloccato={false}
         cambiataIl="2026-11-09"
         rivedere={['Proposta: 2 righe di creditori da ricontrollare']}
-        storico={[
-          {
-            da: 'PROPOSTA',
-            a: 'CRAM_DOWN',
-            cambiataIl: '2026-11-10T08:00:00.000Z',
-          },
-        ]}
+        storico={[VOCE]}
       />
     );
 
@@ -53,6 +62,8 @@ describe('SituazioneScenario', () => {
     expect(screen.getByText(/2 righe di creditori da ricontrollare/)).toBeTruthy();
     expect(screen.getByText(/Cronologia della situazione \(1\)/)).toBeTruthy();
     expect(screen.getByText(/da Proposta a Dispositivo di cram down/)).toBeTruthy();
+    // Senza il permesso di annullare il comando non compare.
+    expect(screen.queryByText('Annulla ultimo cambio')).toBeNull();
   });
 
   it('al cambio mostra cosa rivedere restituito dal server', async () => {
@@ -76,7 +87,35 @@ describe('SituazioneScenario', () => {
 
     await waitFor(() => expect(cambia).toHaveBeenCalledWith('tenant_test', 4, 'CRAM_DOWN'));
     expect(await screen.findByText(/5 risposte da riconfermare/)).toBeTruthy();
-    expect(screen.getByText(/Cronologia della situazione \(1\)/)).toBeTruthy();
+  });
+
+  it('l’Admin annulla l’ultimo cambio e la traccia resta marcata', async () => {
+    annulla.mockResolvedValue({
+      success: true,
+      scenarioId: 4,
+      situazione: 'PROPOSTA',
+      rivedere: [],
+      storico: [{ ...VOCE, annullatoIl: '2026-11-10T09:00:00.000Z' }],
+    });
+
+    render(
+      <SituazioneScenario
+        nomeSchema="tenant_test"
+        scenarioId={4}
+        situazione="CRAM_DOWN"
+        origine="Tribunale"
+        bloccato={false}
+        puoAnnullare
+        cambiataIl="2026-11-10"
+        storico={[VOCE]}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Annulla ultimo cambio'));
+
+    await waitFor(() => expect(annulla).toHaveBeenCalledWith('tenant_test', 4));
+    expect((await screen.findAllByText(/\(annullato\)/)).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Ultimo cambio annullato/)).toBeTruthy();
   });
 
   it('uno scenario bloccato non si cambia', () => {

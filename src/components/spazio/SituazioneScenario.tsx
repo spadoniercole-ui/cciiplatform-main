@@ -9,14 +9,20 @@
 // qui finché la Relazione finale non ha congelato lo scenario.
 //
 // Il cambio non cancella il lavoro fatto (0.189.0): lo scenario torna in
-// bozza, l'origine si riallinea e la scheda dice quante righe di proposta e
-// quante risposte di Check List vanno ricontrollate. Ogni cambio lascia anche
-// una traccia leggibile (0.190.0): da che atto a che atto, e quando.
+// bozza, l'origine si riallinea e la scheda dice che cosa va ricontrollato.
+// Ogni cambio lascia una traccia (0.190.0); l'Admin di Spazio può annullare
+// l'ultimo (0.191.0) e la traccia resta, marcata «annullato».
+//
+// Avviso e cronologia finiscono anche nella stampa della scheda: sono parte
+// del documento che esce dalla piattaforma.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
-import { aggiornaSituazioneScenarioAction } from '@/app/actions/scenari';
+import { Loader2, Printer, Undo2 } from 'lucide-react';
+import {
+  aggiornaSituazioneScenarioAction,
+  annullaUltimoCambioSituazioneAction,
+} from '@/app/actions/scenari';
 import { dataItaliana } from '@/lib/scenari/situazione';
 import type { VoceStoricoSituazione } from '@/lib/scenari/storicoSituazione';
 import { etichettaIstruttoria, type TipoIstruttoria } from '@/lib/giudice/lettura';
@@ -34,6 +40,7 @@ export function SituazioneScenario({
   origine,
   bloccato,
   demo = false,
+  puoAnnullare = false,
   cambiataIl,
   rivedere,
   storico,
@@ -44,6 +51,8 @@ export function SituazioneScenario({
   origine: string;
   bloccato: boolean;
   demo?: boolean;
+  /** Solo l'Admin di Spazio vede il comando di annullamento. */
+  puoAnnullare?: boolean;
   /** Data dell'ultimo cambio di situazione, se c'è stato. */
   cambiataIl?: string | null;
   /** Che cosa va ricontrollato dopo quel cambio. */
@@ -57,11 +66,12 @@ export function SituazioneScenario({
   const [daRivedere, setDaRivedere] = useState<string[]>(rivedere ?? []);
   const [cronologia, setCronologia] = useState<VoceStoricoSituazione[]>(storico ?? []);
   const [inCorso, setInCorso] = useState(false);
+  const [inAnnullamento, setInAnnullamento] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [messaggio, setMessaggio] = useState<string | null>(null);
 
   const cambia = async (codice: TipoIstruttoria) => {
-    if (codice === scelta || inCorso) return;
+    if (codice === scelta || inCorso || inAnnullamento) return;
     setInCorso(true);
     setErrore(null);
     setMessaggio(null);
@@ -72,7 +82,7 @@ export function SituazioneScenario({
       return;
     }
     setCronologia((precedenti) => [
-      { da: scelta, a: codice, cambiataIl: new Date().toISOString() },
+      { da: scelta, a: codice, cambiataIl: new Date().toISOString(), annullatoIl: null },
       ...precedenti,
     ]);
     setScelta(codice);
@@ -82,13 +92,43 @@ export function SituazioneScenario({
     router.refresh();
   };
 
+  const annulla = async () => {
+    if (inCorso || inAnnullamento) return;
+    setInAnnullamento(true);
+    setErrore(null);
+    setMessaggio(null);
+    const r = await annullaUltimoCambioSituazioneAction(nomeSchema, scenarioId);
+    setInAnnullamento(false);
+    if (!r.success) {
+      setErrore(r.error ?? 'Cambio non annullato.');
+      return;
+    }
+    const aggiornata = r.storico ?? [];
+    setCronologia(aggiornata);
+    if (r.situazione) setScelta(r.situazione);
+    setDaRivedere(r.rivedere ?? []);
+    setDataCambio(aggiornata.find((v) => !v.annullatoIl)?.cambiataIl ?? null);
+    setMessaggio('Ultimo cambio annullato: lo scenario è tornato all’atto precedente, in bozza.');
+    router.refresh();
+  };
+
   const modificabile = !bloccato && !demo;
+  const haCambiDaAnnullare = cronologia.some((v) => !v.annullatoIl);
 
   return (
-    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5 space-y-1.5">
-      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-        Situazione dello scenario
-      </p>
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5 space-y-1.5 print:border-slate-300">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+          Situazione dello scenario
+        </p>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800 print:hidden"
+        >
+          <Printer className="w-3 h-3" /> Stampa scheda
+        </button>
+      </div>
       <div className="flex flex-wrap items-center gap-1.5">
         {SITUAZIONI.map((s) => {
           const attiva = scelta === s.codice;
@@ -97,7 +137,7 @@ export function SituazioneScenario({
               key={s.codice}
               type="button"
               onClick={() => void cambia(s.codice)}
-              disabled={!modificabile || inCorso}
+              disabled={!modificabile || inCorso || inAnnullamento}
               className={`px-2.5 py-1 rounded-md border text-[10px] font-bold transition-colors disabled:opacity-60 ${
                 attiva
                   ? 'border-blue-400 bg-blue-50 text-blue-800'
@@ -119,7 +159,7 @@ export function SituazioneScenario({
             : ' · modificabile finché la Relazione finale non viene generata.'}
       </p>
       {dataCambio && (
-        <div className="text-[10px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md p-2 leading-relaxed">
+        <div className="text-[10px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md p-2 leading-relaxed print:block">
           <span className="font-bold">Situazione cambiata il {dataItaliana(dataCambio)}.</span>{' '}
           {daRivedere.length > 0
             ? `Il lavoro fatto resta: rivedi ${daRivedere.join('; ')}.`
@@ -127,20 +167,36 @@ export function SituazioneScenario({
         </div>
       )}
       {cronologia.length > 0 && (
-        <details className="text-[10px] text-slate-500">
-          <summary className="cursor-pointer font-bold uppercase tracking-wider text-slate-400">
+        <div className="text-[10px] text-slate-500 print:block">
+          <p className="font-bold uppercase tracking-wider text-slate-400">
             Cronologia della situazione ({cronologia.length})
-          </summary>
+          </p>
           <ul className="mt-1 space-y-0.5">
             {cronologia.map((voce, i) => (
               <li key={`${voce.cambiataIl}-${i}`}>
                 {dataItaliana(voce.cambiataIl)} — da{' '}
                 {etichettaIstruttoria(voce.da as TipoIstruttoria | null)} a{' '}
                 {etichettaIstruttoria(voce.a as TipoIstruttoria)}
+                {voce.annullatoIl ? ' (annullato)' : ''}
               </li>
             ))}
           </ul>
-        </details>
+          {puoAnnullare && modificabile && haCambiDaAnnullare && (
+            <button
+              type="button"
+              onClick={() => void annulla()}
+              disabled={inCorso || inAnnullamento}
+              className="mt-1 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-800 hover:text-amber-900 disabled:opacity-50 print:hidden"
+            >
+              {inAnnullamento ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Undo2 className="w-3 h-3" />
+              )}
+              Annulla ultimo cambio
+            </button>
+          )}
+        </div>
       )}
       {errore && <p className="text-[10px] font-bold text-red-700">{errore}</p>}
       {messaggio && <p className="text-[10px] font-bold text-emerald-700">{messaggio}</p>}

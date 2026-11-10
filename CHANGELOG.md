@@ -1,3 +1,16 @@
+## 0.191.0 — 2026-11-10
+
+**L’Admin può annullare l’ultimo cambio, e la scheda si stampa con avviso e cronologia.**
+
+- **Annulla ultimo cambio**: riservato all’Admin di Spazio, riporta lo scenario all’atto
+  precedente con l’origine riallineata e in bozza. La traccia non si cancella: la riga resta
+  marcata **«annullato»**, così si legge anche la correzione. Il comando non compare su
+  scenari bloccati o in demo, e il server lo impone comunque.
+- **Stampa scheda**: avviso dei passi da rivedere e cronologia fanno parte del documento
+  stampato, con un pulsante dedicato nella scheda scenario. I comandi restano fuori dalla stampa.
+- **Test**: l’annullamento su PGlite verifica ripristino dell’atto e origine, riga marcata,
+  guardia, demo e caso senza cambi; il componente verifica il comando e la voce «annullato».
+
 ## 0.190.0 — 2026-11-10
 
 **L’avviso dove si corregge il dato, e la cronologia dei cambi di situazione.**

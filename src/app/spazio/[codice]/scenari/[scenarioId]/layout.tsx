@@ -86,6 +86,11 @@ export default async function ScenarioLayout({
       )
     : [];
 
+  // L'annullamento dell'ultimo cambio è riservato all'Admin di Spazio (il
+  // server lo impone comunque: qui serve solo a non mostrare un comando inutile).
+  const puoAnnullareSituazione =
+    contesto.modalita === 'ADMIN_SPAZIO' || contesto.modalita === 'SALVAGENTE';
+
   const storicoSituazione = scenario.situazioneCambiataIl
     ? await leggiStoricoSituazione(contesto.nomeSchema, scenario.id).catch(() => [])
     : [];
@@ -123,6 +128,7 @@ export default async function ScenarioLayout({
                 cambiataIl={scenario.situazioneCambiataIl}
                 rivedere={passiScenario}
                 storico={storicoSituazione}
+                puoAnnullare={puoAnnullareSituazione}
               />
               {riferimento && (
                 <p className="mt-1">

@@ -1,12 +1,12 @@
 // @vitest-environment node
 //
-// L'AZIONE CHE CAMBIA LA SITUAZIONE, PROVATA SUL DATABASE.
+// CAMBIARE E ANNULLARE LA SITUAZIONE, PROVATI SUL DATABASE.
 //
 // Le guardie sono simulate (sono le uniche cose che non si possono provare su
 // un Postgres di test), il resto è codice di produzione: SELECT, UPDATE,
 // derivazione dell'origine, ritorno allo stato di bozza, conteggio dei passi
-// da rivedere e riga di cronologia. PGlite dice se il dato resta al suo posto:
-// il cambio non cancella nulla.
+// da rivedere e righe di cronologia. PGlite dice se il dato resta al suo
+// posto: né il cambio né l'annullamento cancellano il lavoro fatto.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
@@ -25,7 +25,8 @@ vi.mock('@/db/provision', () => ({
   assicuraTabelleScenari: async () => undefined,
 }));
 
-const { aggiornaSituazioneScenarioAction } = await import('./scenari');
+const { aggiornaSituazioneScenarioAction, annullaUltimoCambioSituazioneAction } =
+  await import('./scenari');
 const { leggiStoricoSituazione } = await import('@/lib/scenari/storicoSituazione');
 
 const SCHEMA = 'tenant_prova_situazione';
@@ -38,10 +39,10 @@ async function riga() {
 
 async function storico() {
   const r = await db.query(
-    `SELECT da, a FROM ${SCHEMA}.situazione_storico WHERE scenario_id = $1 ORDER BY id`,
+    `SELECT da, a, annullato_il FROM ${SCHEMA}.situazione_storico WHERE scenario_id = $1 ORDER BY id`,
     [SCENARIO]
   );
-  return r.rows as { da: string | null; a: string }[];
+  return r.rows as { da: string | null; a: string; annullato_il: Date | null }[];
 }
 
 beforeEach(async () => {
@@ -74,7 +75,8 @@ beforeEach(async () => {
       scenario_id INTEGER NOT NULL,
       da TEXT,
       a TEXT NOT NULL,
-      cambiata_il TIMESTAMP NOT NULL DEFAULT now()
+      cambiata_il TIMESTAMP NOT NULL DEFAULT now(),
+      annullato_il TIMESTAMP
     );
     CREATE TABLE ${SCHEMA}.proposta_creditori (
       id SERIAL PRIMARY KEY,
@@ -119,11 +121,12 @@ describe('aggiornaSituazioneScenarioAction', () => {
     expect(r.stato).toBe('BOZZA');
     expect(r.situazione_cambiata_il).not.toBeNull();
 
-    expect(await storico()).toEqual([{ da: 'PROPOSTA', a: 'DECRETO_LIQUIDAZIONE' }]);
+    expect((await storico())[0]).toMatchObject({ da: 'PROPOSTA', a: 'DECRETO_LIQUIDAZIONE' });
     const letto = await leggiStoricoSituazione(SCHEMA, SCENARIO);
     expect(letto).toHaveLength(1);
     expect(letto[0].da).toBe('PROPOSTA');
     expect(letto[0].a).toBe('DECRETO_LIQUIDAZIONE');
+    expect(letto[0].annullatoIl).toBeNull();
   });
 
   it('la guardia viene prima di tutto: se rifiuta, il dato non si tocca', async () => {
@@ -173,7 +176,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
     const r = await riga();
     expect(r.tipo_istruttoria).toBe('PROPOSTA');
     expect(r.origine_proposta).toBe('Studio');
-    expect(await storico()).toEqual([{ da: 'DECRETO_LIQUIDAZIONE', a: 'PROPOSTA' }]);
+    expect((await storico())[0]).toMatchObject({ da: 'DECRETO_LIQUIDAZIONE', a: 'PROPOSTA' });
   });
 
   it('rifiuta una situazione non riconosciuta', async () => {
@@ -193,5 +196,53 @@ describe('aggiornaSituazioneScenarioAction', () => {
     expect(r.stato).toBe('IN_CORSO');
     expect(r.situazione_cambiata_il).toBeNull();
     expect(await storico()).toEqual([]);
+  });
+});
+
+describe('annullaUltimoCambioSituazioneAction', () => {
+  it('l’Admin torna all’atto precedente e la riga resta marcata annullata', async () => {
+    await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'DECRETO_LIQUIDAZIONE');
+
+    const esito = await annullaUltimoCambioSituazioneAction(SCHEMA, SCENARIO);
+
+    expect(esito.success).toBe(true);
+    expect(esito.situazione).toBe('PROPOSTA');
+    expect(esito.storico?.[0]?.annullatoIl).not.toBeNull();
+    const r = await riga();
+    expect(r.tipo_istruttoria).toBe('PROPOSTA');
+    expect(r.origine_proposta).toBe('Azienda');
+    expect(r.stato).toBe('BOZZA');
+    expect(r.situazione_cambiata_il).toBeNull();
+    expect((await storico())[0].annullato_il).not.toBeNull();
+  });
+
+  it('senza cambi da annullare non inventa un ripristino', async () => {
+    const esito = await annullaUltimoCambioSituazioneAction(SCHEMA, SCENARIO);
+
+    expect(esito.success).toBe(false);
+    expect(esito.error).toMatch(/Nessun cambio/);
+    expect((await riga()).tipo_istruttoria).toBe('PROPOSTA');
+  });
+
+  it('in demo il cambio non si annulla', async () => {
+    await db.query(`UPDATE public.spazi SET demo = TRUE WHERE nome_schema = $1`, [SCHEMA]);
+
+    const esito = await annullaUltimoCambioSituazioneAction(SCHEMA, SCENARIO);
+
+    expect(esito.success).toBe(false);
+    expect(esito.error).toMatch(/demo/);
+  });
+
+  it('la guardia nega l’annullamento a chi non è Admin di Spazio', async () => {
+    await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN');
+    richiediAccessoScenario.mockRejectedValueOnce(
+      new Error('Solo l’Admin di Spazio può annullare un cambio.')
+    );
+
+    const esito = await annullaUltimoCambioSituazioneAction(SCHEMA, SCENARIO);
+
+    expect(esito.success).toBe(false);
+    expect((await riga()).tipo_istruttoria).toBe('CRAM_DOWN');
+    expect((await storico())[0].annullato_il).toBeNull();
   });
 });

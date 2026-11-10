@@ -13,7 +13,7 @@
 import { richiediAccessoAzienda, richiediAccessoScenario } from '@/lib/autorizzazione';
 import { assicuraTabelleScenari } from '@/db/provision';
 import { type TipoProposta, ORIGINI_PER_TIPO } from '@/lib/origineProposta';
-import { tipoIstruttoriaValido, type TipoIstruttoria } from '@/lib/giudice/lettura';
+import { tipoAttoValido, tipoIstruttoriaValido, type TipoIstruttoria } from '@/lib/giudice/lettura';
 import {
   MESSAGGIO_SCENARIO_BLOCCATO,
   originePerSituazione,
@@ -21,6 +21,10 @@ import {
 } from '@/lib/scenari/situazione';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { assicuraStoricoSituazione } from '@/db/provision';
+import {
+  leggiStoricoSituazione,
+  type VoceStoricoSituazione,
+} from '@/lib/scenari/storicoSituazione';
 
 const schemaOk = (nome: string) => /^[a-z0-9_]+$/.test(nome);
 
@@ -205,6 +209,9 @@ export interface RisultatoOperazioneScenario {
   error?: string;
   /** Dopo un cambio di situazione: i passi già compilati da ricontrollare. */
   rivedere?: string[];
+  /** Dopo un annullamento: la situazione ripristinata e la traccia aggiornata. */
+  situazione?: TipoIstruttoria;
+  storico?: VoceStoricoSituazione[];
 }
 
 export async function creaScenarioAction(
@@ -604,6 +611,105 @@ export async function aggiornaSituazioneScenarioAction(
     return {
       success: false,
       error: `Impossibile aggiornare la situazione: ${(error as Error).message}`,
+    };
+  }
+}
+
+/**
+ * Annulla l'ultimo cambio di situazione (0.191.0) — solo l'Admin di Spazio.
+ *
+ * Un cambio sbagliato non deve restare: si torna all'atto precedente, con
+ * l'origine riallineata e lo scenario in bozza. La traccia non si cancella:
+ * la riga resta e viene marcata «annullato», così si legge anche la
+ * correzione. Nessun dato compilato viene toccato.
+ */
+export async function annullaUltimoCambioSituazioneAction(
+  nomeSchema: string,
+  scenarioId: number
+): Promise<RisultatoOperazioneScenario> {
+  try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      soloAdmin: true,
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
+    if (!schemaOk(nomeSchema)) {
+      return { success: false, error: 'Nome schema non valido.' };
+    }
+
+    const { pool } = await import('@/lib/db');
+    const scenarioRis = await pool.query(
+      `SELECT bloccato_il FROM "${nomeSchema}".scenari WHERE id = $1`,
+      [scenarioId]
+    );
+    if (scenarioRis.rows.length === 0) {
+      return { success: false, error: 'Scenario non trovato.' };
+    }
+    if (scenarioRis.rows[0].bloccato_il) {
+      return { success: false, error: MESSAGGIO_SCENARIO_BLOCCATO };
+    }
+
+    const spazioRis = await pool.query(
+      `SELECT tipo_spazio, demo FROM public.spazi WHERE nome_schema = $1`,
+      [nomeSchema]
+    );
+    if (spazioRis.rows[0]?.demo) {
+      return {
+        success: false,
+        error: 'Nell’ambiente demo i percorsi sono già predisposti: il cambio non si annulla.',
+      };
+    }
+
+    await assicuraStoricoSituazione(nomeSchema);
+    const ultimo = await pool.query(
+      `SELECT id, da FROM "${nomeSchema}".situazione_storico
+        WHERE scenario_id = $1 AND annullato_il IS NULL
+        ORDER BY id DESC
+        LIMIT 1`,
+      [scenarioId]
+    );
+    const voce = ultimo.rows[0];
+    const precedente: unknown = voce?.da;
+    if (!voce || !tipoAttoValido(precedente)) {
+      return { success: false, error: 'Nessun cambio di situazione da annullare.' };
+    }
+
+    await pool.query(
+      `UPDATE "${nomeSchema}".situazione_storico SET annullato_il = now() WHERE id = $1`,
+      [voce.id]
+    );
+
+    const origineProposta = originePerSituazione(
+      spazioRis.rows[0]?.tipo_spazio === 'ENTE',
+      precedente
+    );
+    await pool.query(
+      `UPDATE "${nomeSchema}".scenari
+          SET tipo_istruttoria = $2,
+              origine_proposta = COALESCE($3, origine_proposta),
+              stato = 'BOZZA',
+              situazione_cambiata_il = (
+                SELECT cambiata_il FROM "${nomeSchema}".situazione_storico
+                 WHERE scenario_id = $1 AND annullato_il IS NULL
+                 ORDER BY id DESC LIMIT 1
+              )
+        WHERE id = $1`,
+      [scenarioId, precedente, origineProposta ?? null]
+    );
+
+    const passi = await leggiPassiCompilati(nomeSchema, scenarioId);
+    return {
+      success: true,
+      scenarioId,
+      situazione: precedente,
+      rivedere: passiDaRivedere(passi),
+      storico: await leggiStoricoSituazione(nomeSchema, scenarioId),
+    };
+  } catch (error: unknown) {
+    console.error('[annullaUltimoCambioSituazioneAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile annullare il cambio: ${(error as Error).message}`,
     };
   }
 }
