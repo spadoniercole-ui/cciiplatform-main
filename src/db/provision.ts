@@ -3097,3 +3097,41 @@ export async function assicuraTabellaDebitoEnteMemorizzato(nomeSchema: string): 
     )`
   );
 }
+
+/**
+ * Verifica azienda (0.187.0): la simulazione che unisce amministrativa e
+ * contabile, e la configurazione delle annualità di proiezione.
+ *
+ * `verifica_azienda_config` ha una sola riga per spazio: le annualità si
+ * fissano una volta e valgono per tutte le aziende, così due simulazioni della
+ * stessa posizione non usano orizzonti diversi senza dirlo. Le simulazioni si
+ * conservano già calcolate (colonne, crescita, avvertenze) perché sono la
+ * memoria storica su cui il sistema dovrà misurare i propri scostamenti: una
+ * nuova elaborazione non cancella quella precedente.
+ */
+export async function assicuraTabelleVerificaAzienda(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaAziende(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.verifica_azienda_config (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      annualita_proiezione INTEGER NOT NULL DEFAULT 3,
+      updated_at TIMESTAMP NOT NULL DEFAULT now(),
+      CONSTRAINT verifica_azienda_config_una_riga CHECK (id = 1)
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.verifica_azienda_simulazioni (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      profilo TEXT NOT NULL,
+      annualita INTEGER NOT NULL,
+      debito_ente NUMERIC(16,2) NOT NULL DEFAULT 0,
+      crescita_storica_pct NUMERIC(8,2),
+      crescita_applicata_pct NUMERIC(8,2) NOT NULL DEFAULT 0,
+      colonne JSONB NOT NULL,
+      avvertenze JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+}

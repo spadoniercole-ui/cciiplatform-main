@@ -1,3 +1,28 @@
+## 0.187.0 — 2026-11-10
+
+**Verifica azienda: le due verifiche diventano una mappa sola, e lo scenario si crea dalla situazione.**
+
+- Nuova voce di menu **Verifica azienda**, sotto la contabile: elenco delle aziende con debito
+  memorizzato, annualità XBRL e stato della contabile; per ognuna la **mappa a sezioni
+  affiancate** con gli anni storici e le annualità proiettate.
+- Il **check in testa** è mutuamente esclusivo — standard, migliorativo, peggiorativo — e
+  ricalcola dati e indici delle sole colonne proiettate: lo standard usa la crescita storica
+  composta dei ricavi, gli altri due la scostano di una misura dichiarata (3 punti sui ricavi, 2
+  sui costi). Nessuna stima di settore spacciata per dato.
+- Il **debito memorizzato dalla verifica amministrativa** è il dato certo della simulazione:
+  entra nel passivo nella prima annualità proiettata, una volta sola, con data e fonte
+  dichiarate. Se manca, la mappa lo dice e non iscrive zero.
+- **Indici per colonna** dallo stesso motore del resto della piattaforma; in coda il raffronto
+  **liquidazione giudiziale / cram down** sul credito dell’ente, con le percentuali dei parametri
+  di spazio e il rango dichiarato dall’operatore. Termini di paragone, non conclusioni giuridiche.
+- Le annualità di proiezione si fissano **una volta per spazio** (predefinite 3): lo stesso
+  orizzonte per tutte le aziende, altrimenti i confronti non reggono. Ogni calcolo si conserva in
+  `verifica_azienda_simulazioni` con profilo, crescita e avvertenze: è la memoria storica su cui
+  misurare gli scostamenti.
+- **Nuovo scenario**: titolo e **situazione** — accordo transattivo, liquidazione giudiziale, cram
+  down. Spariscono tipo proposta e origine: il tipo si deriva dallo spazio (ENTE riceve) e
+  l’origine dalla situazione (azienda o tribunale).
+
 ## 0.186.0 — 2026-11-10
 
 **Verifica contabile autonoma a livello azienda: visura storica, parametri ente, bilanci XBRL e prospetto a scalare con gli indici.**

@@ -13,7 +13,7 @@
 import { richiediAccessoAzienda, richiediAccessoScenario } from '@/lib/autorizzazione';
 import { assicuraTabelleScenari } from '@/db/provision';
 import { type TipoProposta, ORIGINI_PER_TIPO } from '@/lib/origineProposta';
-import type { TipoIstruttoria } from '@/lib/giudice/lettura';
+import { tipoIstruttoriaValido, type TipoIstruttoria } from '@/lib/giudice/lettura';
 
 // Le colonne timestamp di Drizzle tornano dal driver come Date: l'API dello
 // scenario parla invece stringhe ISO, perché è quello che il browser mostra e
@@ -201,7 +201,14 @@ export async function creaScenarioAction(
   verifiche: { amministrativa: boolean; contabile: boolean } = {
     amministrativa: true,
     contabile: false,
-  }
+  },
+  /**
+   * La situazione che si sta valutando, scelta alla creazione (0.187.0):
+   * accordo transattivo, liquidazione giudiziale o cram down. Prende il posto
+   * della scelta tipo proposta/origine, che era un doppione della stessa
+   * domanda.
+   */
+  tipoIstruttoria?: TipoIstruttoria
 ): Promise<RisultatoOperazioneScenario> {
   try {
     await richiediAccessoAzienda(nomeSchema, aziendaId, {
@@ -219,6 +226,10 @@ export async function creaScenarioAction(
     }
     if (!ORIGINI_PER_TIPO[tipoProposta]?.includes(origineProposta)) {
       return { success: false, error: 'Origine della proposta non valida per il tipo scelto.' };
+    }
+
+    if (tipoIstruttoria !== undefined && !tipoIstruttoriaValido(tipoIstruttoria)) {
+      return { success: false, error: 'Situazione dello scenario non riconosciuta.' };
     }
 
     // Uno spazio ENTE riceve sempre proposte, non le redige mai — non ci
@@ -258,7 +269,17 @@ export async function creaScenarioAction(
         // Solo lo spazio ENTE riceve: il nuovo scenario si apre chiedendo
         // che cosa ha in mano l'azienda. Il Redigente redige una proposta,
         // quindi la domanda non ha senso per lui.
-        tipoIstruttoria: spazioRis.rows[0]?.tipo_spazio === 'ENTE' ? 'DA_CHIEDERE' : 'PROPOSTA',
+        // Alla creazione la situazione è già dichiarata (0.187.0): il
+        // vecchio «da chiedere» resta solo come ripiego per i chiamanti che
+        // non la passano.
+        tipoIstruttoria:
+          spazioRis.rows[0]?.tipo_spazio === 'ENTE'
+            ? tipoIstruttoria &&
+              tipoIstruttoria !== 'DA_CHIEDERE' &&
+              tipoIstruttoriaValido(tipoIstruttoria)
+              ? tipoIstruttoria
+              : 'DA_CHIEDERE'
+            : 'PROPOSTA',
         simulazioneAttiva,
         verificaAmministrativa: verifiche.amministrativa,
         verificaContabile: verifiche.contabile,

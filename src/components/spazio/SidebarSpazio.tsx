@@ -19,6 +19,7 @@ import {
   Settings2,
   BookOpen,
   Stethoscope,
+  Gauge,
 } from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
 
@@ -65,6 +66,13 @@ const VOCI_MENU: {
     id: 'verifica-contabile',
     label: 'Verifica contabile aziendale',
     icon: Building2,
+    stato: 'pronta',
+    soloAdmin: true,
+  },
+  {
+    id: 'verifica-azienda',
+    label: 'Verifica azienda',
+    icon: Gauge,
     stato: 'pronta',
     soloAdmin: true,
   },

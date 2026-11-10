@@ -17,9 +17,32 @@ import {
   type Scenario,
 } from '@/app/actions/scenari';
 import { verificheDisponibiliAziendaAction } from '@/app/actions/verificheScenario';
-import { ORIGINI_PER_TIPO, type TipoProposta } from '@/lib/origineProposta';
+import type { TipoProposta } from '@/lib/origineProposta';
 import { etichettaIstruttoria } from '@/lib/giudice/lettura';
 import { useDemo } from '@/components/spazio/DemoUploadProvider';
+
+type Situazione = 'PROPOSTA' | 'DECRETO_LIQUIDAZIONE' | 'CRAM_DOWN';
+
+// Le tre situazioni che lo scenario può valutare. L'accordo transattivo è la
+// proposta dell'azienda (il tipo storico «PROPOSTA»): decreto e cram down sono
+// atti del tribunale, e non hanno bisogno di una seconda scelta d'origine.
+const SITUAZIONI: { codice: Situazione; etichetta: string; aiuto: string }[] = [
+  {
+    codice: 'PROPOSTA',
+    etichetta: 'Accordo transattivo',
+    aiuto: 'Proposta dell’azienda: si valuta nel merito.',
+  },
+  {
+    codice: 'DECRETO_LIQUIDAZIONE',
+    etichetta: 'Liquidazione giudiziale',
+    aiuto: 'Decreto del tribunale: si misura il recupero.',
+  },
+  {
+    codice: 'CRAM_DOWN',
+    etichetta: 'Cram down',
+    aiuto: 'Omologazione: si misura il soddisfacimento.',
+  },
+];
 
 interface Props {
   codiceSpazio: string;
@@ -56,6 +79,7 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
     tipoSpazio === 'ENTE' ? 'RICEVUTA' : 'DA_DEFINIRE'
   );
   const [origineNuova, setOrigineNuova] = useState(tipoSpazio === 'ENTE' ? 'Azienda' : 'Studio');
+  const [situazioneNuova, setSituazioneNuova] = useState<Situazione>('PROPOSTA');
   const [simulazioneAttivaNuova, setSimulazioneAttivaNuova] = useState(false);
   // Le due verifiche dell'ente che entrano nello scenario: scelte qui, alla
   // creazione, con la più completa disponibile già preselezionata, e
@@ -144,6 +168,17 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
     void caricaDisponibilita(aziendaId);
   };
 
+  const scegliSituazione = (situazione: Situazione) => {
+    setSituazioneNuova(situazione);
+    if (tipoSpazio === 'ENTE') {
+      setTipoNuovo('RICEVUTA');
+      setOrigineNuova(situazione === 'PROPOSTA' ? 'Azienda' : 'Tribunale');
+    } else {
+      setTipoNuovo('DA_DEFINIRE');
+      setOrigineNuova('Studio');
+    }
+  };
+
   const handleCreaScenario = async () => {
     if (demo) {
       setErrore(
@@ -166,7 +201,8 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
       // Il piano di sviluppo è sempre attivo per il Redigente; il flag
       // conta solo per il Ricevente (RICEVUTA).
       tipoNuovo === 'RICEVUTA' ? simulazioneAttivaNuova : true,
-      { amministrativa: verificaAmministrativa, contabile: verificaContabile }
+      { amministrativa: verificaAmministrativa, contabile: verificaContabile },
+      situazioneNuova
     );
     if (!risultato.success) {
       setErrore(risultato.error || 'Impossibile creare lo scenario.');
@@ -176,6 +212,7 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
     setTipoNuovo(tipoSpazio === 'ENTE' ? 'RICEVUTA' : 'DA_DEFINIRE');
     setOrigineNuova(tipoSpazio === 'ENTE' ? 'Azienda' : 'Studio');
     setSimulazioneAttivaNuova(false);
+    setSituazioneNuova('PROPOSTA');
     setVerificaAmministrativa(true);
     setVerificaContabile(false);
     setMostraForm(false);
@@ -304,49 +341,32 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
 
           {mostraForm && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                    Tipo proposta
-                  </label>
-                  {tipoSpazio === 'ENTE' ? (
-                    <div
-                      className="w-full p-2 text-xs bg-slate-100 border border-slate-200 rounded-lg text-slate-500"
-                      title="Uno spazio ENTE riceve sempre proposte, non le redige mai."
+              <div className="space-y-1.5">
+                <p className="block text-[9px] font-bold text-slate-400 uppercase">
+                  Situazione da valutare
+                </p>
+                <div className="grid sm:grid-cols-3 gap-2">
+                  {SITUAZIONI.map((s) => (
+                    <button
+                      key={s.codice}
+                      type="button"
+                      onClick={() => scegliSituazione(s.codice)}
+                      className={`text-left rounded-lg border p-2 transition-colors ${
+                        situazioneNuova === s.codice
+                          ? 'border-blue-400 bg-blue-50 text-blue-900'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                      }`}
                     >
-                      Ricevuta (fisso per uno spazio ENTE)
-                    </div>
-                  ) : (
-                    <select
-                      value={tipoNuovo}
-                      onChange={(e) => {
-                        const tipo = e.target.value as TipoProposta;
-                        setTipoNuovo(tipo);
-                        setOrigineNuova(ORIGINI_PER_TIPO[tipo][0]);
-                      }}
-                      className="w-full p-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-900"
-                    >
-                      <option value="DA_DEFINIRE">Da definire</option>
-                      <option value="RICEVUTA">Ricevuta</option>
-                    </select>
-                  )}
+                      <span className="block text-[11px] font-bold">{s.etichetta}</span>
+                      <span className="block text-[10px] text-slate-500 mt-0.5">{s.aiuto}</span>
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">
-                    Origine
-                  </label>
-                  <select
-                    value={origineNuova}
-                    onChange={(e) => setOrigineNuova(e.target.value)}
-                    className="w-full p-2 text-xs bg-white border border-slate-200 rounded-lg text-slate-900"
-                  >
-                    {ORIGINI_PER_TIPO[tipoNuovo].map((o) => (
-                      <option key={o} value={o}>
-                        {o}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <p className="text-[10px] text-slate-400">
+                  {tipoSpazio === 'ENTE'
+                    ? 'Lo spazio riceve: la proposta arriva dall’azienda, decreto e cram down dal tribunale.'
+                    : 'Il percorso redigente prepara la proposta; decreto e cram down restano valutazioni del tribunale.'}
+                </p>
               </div>
               {tipoNuovo === 'RICEVUTA' && (
                 <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg p-2.5">
