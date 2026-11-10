@@ -111,14 +111,24 @@ export function debitoContabile(
  * pezzi: la visura (che è la stessa dell'amministrativa), il debito dell'ente
  * e almeno un bilancio XBRL. I mancanti si elencano in ordine di dipendenza:
  * prima i dati dell'amministrativa, poi il bilancio.
+ *
+ * Il debito memorizzato, quando c'è, vince sulle letture: è il dato che la
+ * verifica amministrativa ha consegnato, non l'ultimo file importato.
  */
 export function aggancioContabile(input: {
   visura: VisuraContabile;
   certificazione: SnapshotDebitoEnte | null;
   triage: DebitoEntePonte | null;
   anniBilancio: number[];
+  /**
+   * Il debito memorizzato a fine verifica amministrativa (0.185.0). Quando
+   * c'è, è LA cifra della contabile: la verifica amministrativa è un atto
+   * concluso e il suo numero non si ricalcola da un archivio che nel
+   * frattempo può essere cambiato. Assente, si legge dagli archivi.
+   */
+  memorizzato?: DebitoContabile | null;
 }): AggancioContabile {
-  const debito = debitoContabile(input.certificazione, input.triage);
+  const debito = input.memorizzato ?? debitoContabile(input.certificazione, input.triage);
   const anniBilancio = [...new Set(input.anniBilancio)].sort((a, b) => b - a);
   const mancanti: string[] = [];
   if (!input.visura.presente) mancanti.push('visura dell’ente');

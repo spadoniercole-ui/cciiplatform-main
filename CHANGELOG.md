@@ -1,3 +1,21 @@
+## 0.185.0 — 2026-11-10
+
+**La verifica amministrativa consegna il debito alla contabile: la cifra si memorizza quando la verifica si chiude.**
+
+- A esito registrato il sistema legge dagli archivi dell’ente il **debito dell’azienda**
+  (certificazione dei debiti; se la base certa manca, posizioni del triage; altrimenti posizioni
+  segnalate alle unità operative, dichiarate come stima) e lo **memorizza** in
+  `debiti_ente_memorizzati`, una riga per azienda con i tre stati separati, la fonte e la data.
+- La cifra è un **atto della verifica**, non un ricalcolo: la verifica contabile legge quella
+  memorizzata, non l’ultimo file importato. Una nuova memorizzazione sostituisce la precedente e
+  ne dichiara la data; senza memorizzazione si rilegge dagli archivi, come prima.
+- Se la scrittura fallisce l’esito resta valido — non si annulla un atto già compiuto — ma la
+  scheda lo dichiara invece di lasciare che la contabile lavori su un dato diverso.
+- Modulo puro `memorizzazione.ts` con 9 test (ripiego, tre stati, arrotondamenti, descrizione):
+  nessuno zero al posto di un’assenza, nessuna ripartizione inventata per il triage.
+- Azioni `debitoEnteMemorizzatoAction` (lettura) e `aggiornaDebitoEnteMemorizzatoAction`
+  (rinnovo esplicito quando gli archivi cambiano senza rifare la verifica).
+
 ## 0.184.0 — 2026-11-09
 
 **Il ramo contabile per anno: dal bilancio XBRL depositato alla simulazione, accanto al percorso di partenza.**

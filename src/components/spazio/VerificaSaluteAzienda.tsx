@@ -1298,12 +1298,21 @@ export function VerificaSaluteAzienda({
         // Con l'esito si conserva la data a cui si riferiscono i conti: è
         // l'unico dato del triage che il database non aveva, e senza di essa
         // una verifica riaperta ricostruirebbe i documenti su un'altra data.
-        await registraEsitoVerificaAction(
+        const esitoVerifica = await registraEsitoVerificaAction(
           nomeSchema,
           c.aziendaId,
           a.attenzione.esito,
           dataVerifica
         );
+        // Il debito si memorizza insieme all'esito: se non ci riesce, la
+        // verifica resta chiusa ma la scheda lo dice, invece di lasciare che
+        // la contabile legga in silenzio un archivio diverso.
+        if (esitoVerifica.avvisoDebito) {
+          note.push(
+            `Debito dell’ente non memorizzato: ${esitoVerifica.avvisoDebito}. La contabile userà gli archivi al prossimo accesso.`
+          );
+          setEsitoFogli([...note]);
+        }
       } else {
         // PRIMA questo caso era muto: l'esito mostrava "Indicatore non
         // calcolabile con i dati inseriti" — una frase che accusa i dati

@@ -3064,3 +3064,36 @@ export async function assicuraTabellaContabileRami(nomeSchema: string): Promise<
     )`
   );
 }
+
+/**
+ * Debito dell'ente memorizzato a fine verifica amministrativa (0.185.0).
+ *
+ * La verifica amministrativa non è un calcolo a schermo: è un atto che si
+ * chiude con una cifra. Quella cifra resta qui, una riga per azienda, con i tre
+ * stati separati e la data in cui è stata letta dagli archivi. La contabile la
+ * legge come dato della verifica, non ricalcolandola per conto proprio; una
+ * nuova memorizzazione sostituisce la precedente, e la data dice quando.
+ */
+export async function assicuraTabellaDebitoEnteMemorizzato(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaAziende(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.debiti_ente_memorizzati (
+      azienda_id INTEGER PRIMARY KEY REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      totale NUMERIC(16,2) NOT NULL,
+      contabilizzato NUMERIC(16,2) NOT NULL DEFAULT 0,
+      da_contabilizzare NUMERIC(16,2) NOT NULL DEFAULT 0,
+      segnalato NUMERIC(16,2) NOT NULL DEFAULT 0,
+      contributi NUMERIC(16,2) NOT NULL DEFAULT 0,
+      sanzioni NUMERIC(16,2) NOT NULL DEFAULT 0,
+      crediti_agente NUMERIC(16,2) NOT NULL DEFAULT 0,
+      righe INTEGER NOT NULL DEFAULT 0,
+      righe_segnalate INTEGER NOT NULL DEFAULT 0,
+      ripartito BOOLEAN NOT NULL DEFAULT FALSE,
+      sanzioni_non_distinte BOOLEAN NOT NULL DEFAULT FALSE,
+      fonte TEXT NOT NULL,
+      fonte_tipo TEXT NOT NULL DEFAULT 'certificazione',
+      memorizzato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+}

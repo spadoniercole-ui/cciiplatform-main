@@ -12,12 +12,18 @@ import { pool } from '@/lib/db';
 import { assicuraTabellaAziende } from '@/db/provision';
 import type { AnagraficaEstratta } from '@/app/actions/visuraEstrazione';
 import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
+import { memorizzaDebitoEnte } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 
 export interface RisultatoVerifica {
   success: boolean;
   aziendaId?: number;
   /** L'azienda era già nota e il lavoro precedente è stato archiviato: si riparte da zero. */
   cicloArchiviato?: boolean;
+  /**
+   * L'esito è salvato ma il debito non è stato memorizzato: la contabile
+   * rileggerà gli archivi. Si dichiara invece di far finta di nulla.
+   */
+  avvisoDebito?: string;
   error?: string;
 }
 
@@ -220,7 +226,23 @@ export async function registraEsitoVerificaAction(
         WHERE id = $1`,
       [aziendaId, esito, giorno]
     );
-    return { success: true, aziendaId };
+
+    // IL DEBITO DELLA VERIFICA RESTA ANCHE A SCHEDA CHIUSA.
+    //
+    // Con l'esito la verifica si considera definita: qui la cifra letta dagli
+    // archivi dell'ente viene memorizzata, così la contabile la trova come dato
+    // della verifica e non come ultimo file capitato. Se non c'è nulla da
+    // memorizzare la verifica resta valida — un'azienda senza debiti
+    // certificati non è un errore — ma se la scrittura fallisce l'esito già
+    // salvato non si annulla: l'avviso lo dichiara.
+    let avvisoDebito: string | undefined;
+    try {
+      await memorizzaDebitoEnte(nomeSchema, aziendaId);
+    } catch (errore) {
+      console.error('[registraEsitoVerificaAction] Debito non memorizzato:', errore);
+      avvisoDebito = (errore as Error).message;
+    }
+    return { success: true, aziendaId, avvisoDebito };
   } catch (error: unknown) {
     console.error('[registraEsitoVerificaAction] Errore:', error);
     return { success: false, error: `Salvataggio non riuscito: ${(error as Error).message}` };

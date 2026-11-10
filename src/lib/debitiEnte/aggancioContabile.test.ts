@@ -134,3 +134,38 @@ describe('aggancioContabile', () => {
     expect(AGGANGIO_VUOTO.mancanti).toHaveLength(3);
   });
 });
+
+describe('aggancioContabile con il debito memorizzato', () => {
+  it('usa il debito consegnato dalla verifica amministrativa al posto delle letture', () => {
+    const a = aggancioContabile({
+      visura,
+      certificazione: certificazione(),
+      triage: null,
+      anniBilancio: [2024],
+      memorizzato: {
+        contabilizzato: 500,
+        daContabilizzare: 0,
+        segnalato: 0,
+        totale: 500,
+        righe: 1,
+        fonte: 'memoria della verifica amministrativa',
+        ripartito: true,
+      },
+    });
+    expect(a.debito?.totale).toBe(500);
+    expect(a.debito?.fonte).toContain('memoria della verifica amministrativa');
+    expect(a.pronto).toBe(true);
+  });
+
+  it('senza debito memorizzato resta la lettura dagli archivi', () => {
+    const a = aggancioContabile({
+      visura,
+      certificazione: certificazione(),
+      triage: null,
+      anniBilancio: [2024],
+      memorizzato: null,
+    });
+    expect(a.debito?.totale).toBe(100);
+    expect(a.pronto).toBe(true);
+  });
+});

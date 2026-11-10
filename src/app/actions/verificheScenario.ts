@@ -20,6 +20,7 @@ import {
   type AggancioContabile,
   type VisuraContabile,
 } from '@/lib/debitiEnte/aggancioContabile';
+import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 import type { SnapshotDebitoEnte } from '@/lib/ponte/debitoEnte';
 import type { DebitoEntePonte } from '@/lib/ponte/types';
 import type { RigaVera, TrattamentoVera } from '@/lib/debitiEnte/veraImport';
@@ -139,7 +140,31 @@ async function leggiAggancio(nomeSchema: string, aziendaId: number): Promise<Agg
     // Nessun bilancio caricato: la contabile resta da costruire.
   }
 
-  return aggancioContabile({ visura, certificazione, triage, anniBilancio });
+  // IL DEBITO DELLA VERIFICA AMMINISTRATIVA VINCE SULLE LETTURE.
+  //
+  // A verifica chiusa la cifra è stata memorizzata (0.185.0): è quella, non
+  // l'ultima certificazione importata, a entrare nella contabile. Se la
+  // memorizzazione non c'è — verifica mai chiusa, o spazio precedente — si
+  // ripiega sulle letture di qui sopra, come prima.
+  const memorizzato = await leggiDebitoEnteMemorizzato(nomeSchema, aziendaId);
+
+  return aggancioContabile({
+    visura,
+    certificazione,
+    triage,
+    anniBilancio,
+    memorizzato: memorizzato
+      ? {
+          contabilizzato: memorizzato.debito.contabilizzato,
+          daContabilizzare: memorizzato.debito.daContabilizzare,
+          segnalato: memorizzato.debito.segnalato,
+          totale: memorizzato.debito.totale,
+          righe: memorizzato.debito.righe,
+          fonte: memorizzato.debito.fonte,
+          ripartito: memorizzato.debito.ripartito,
+        }
+      : null,
+  });
 }
 
 /**
