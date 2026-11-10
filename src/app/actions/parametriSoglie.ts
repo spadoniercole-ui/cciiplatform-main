@@ -14,7 +14,8 @@
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { pool } from '@/lib/db';
 import { assicuraTabelleParametriSpazio } from '@/db/provision';
-import { SOGLIE_DI_LEGGE, type ParametriSoglie } from '@/lib/soglie25novies/parametri';
+import { type ParametriSoglie } from '@/lib/soglie25novies/parametri';
+import { leggiParametriSoglie } from '@/lib/soglie25novies/letturaParametri';
 
 export type { ParametriSoglie };
 
@@ -27,28 +28,7 @@ export async function ottieniParametriSoglieAction(
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
-    const r = await pool.query(
-      `SELECT * FROM "${nomeSchema}".parametri_soglie_25novies WHERE id = 1`
-    );
-    // Tabella appena creata e riga non ancora presente: si torna la legge.
-    if (r.rows.length === 0) return { success: true, parametri: { ...SOGLIE_DI_LEGGE } };
-    const x = r.rows[0];
-    return {
-      success: true,
-      parametri: {
-        inpsPercentuale: Number(x.inps_percentuale),
-        inpsImportoConLavoratori: Number(x.inps_importo_con_lavoratori),
-        inpsImportoSenzaLavoratori: Number(x.inps_importo_senza_lavoratori),
-        inail: Number(x.inail),
-        ivaImporto: Number(x.iva_importo),
-        ivaPercentualeVolumeAffari: Number(x.iva_percentuale_volume_affari),
-        ivaImportoAssoluto: Number(x.iva_importo_assoluto),
-        aerImpresaIndividuale: Number(x.aer_impresa_individuale),
-        aerSocietaPersone: Number(x.aer_societa_persone),
-        aerAltreSocieta: Number(x.aer_altre_societa),
-        giorniRitardo: Number(x.giorni_ritardo),
-      },
-    };
+    return { success: true, parametri: await leggiParametriSoglie(nomeSchema) };
   } catch (error: unknown) {
     console.error('[ottieniParametriSoglieAction] Errore:', error);
     return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };

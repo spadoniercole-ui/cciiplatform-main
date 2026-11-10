@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { ottieniParametriScenariAction } from '@/app/actions/parametriScenari';
-import { valutaSoglieAction } from '@/app/actions/soglie25novies';
+import { valutaSoglieAziendaAction } from '@/app/actions/soglie25novies';
 import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 import { leggiSimulazioneBase } from '@/lib/verificaAzienda/baseSimulazione';
 import { ottieniSovrascrittureAction } from '@/app/actions/confrontoScenario';
@@ -61,7 +61,7 @@ export default async function ConfrontoScenarioPage({
     const [debito, parametri, soglie] = await Promise.all([
       leggiDebitoEnteMemorizzato(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
       ottieniParametriScenariAction(contesto.nomeSchema).catch(() => null),
-      valutaSoglieAction(contesto.nomeSchema, scenario.aziendaId, contesto.tipoSpazio).catch(
+      valutaSoglieAziendaAction(contesto.nomeSchema, scenario.aziendaId, contesto.tipoSpazio).catch(
         () => null
       ),
     ]);

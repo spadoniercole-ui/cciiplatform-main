@@ -14,7 +14,7 @@
 
 import { pool } from '@/lib/db';
 import { assicuraTabellaAziende, assicuraTabelleParametriSpazio } from '@/db/provision';
-import { ottieniParametriSoglieAction } from '@/app/actions/parametriSoglie';
+import { leggiParametriSoglie } from '@/lib/soglie25novies/letturaParametri';
 import {
   calcolaSoglie25Novies,
   type DatiSoglie,
@@ -598,7 +598,7 @@ export interface RisultatoEsitoSoglie {
  *                   NON_ENTE = tutte, perche' e' l'insieme a definire il
  *                   tempo che l'impresa ha.
  */
-export async function valutaSoglieAction(
+export async function valutaSoglieAziendaAction(
   nomeSchema: string,
   aziendaId: number,
   tipoSpazio: 'ENTE' | 'NON_ENTE',
@@ -619,7 +619,9 @@ export async function valutaSoglieAction(
   daSessione?: Partial<DatiSoglie>
 ): Promise<RisultatoEsitoSoglie> {
   try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    // Basta l'accesso all'azienda: la stessa valutazione serve al documento
+    // di confronto dello scenario, che un Operatore può aprire.
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleParametriSpazio(nomeSchema);
 
@@ -659,11 +661,11 @@ export async function valutaSoglieAction(
     };
 
     // Soglie configurate per lo spazio, non costanti.
-    const par = await ottieniParametriSoglieAction(nomeSchema);
+    const parametri = await leggiParametriSoglie(nomeSchema);
     const esito = calcolaSoglie25Novies(
       dati,
       tipoSpazio === 'ENTE' ? (ente ?? undefined) : undefined,
-      par.parametri
+      parametri
     );
 
     if (tipoSpazio === 'ENTE' && ente === null) {
@@ -673,6 +675,26 @@ export async function valutaSoglieAction(
     }
 
     return { success: true, esito, ente, categorieSenzaEnte, usati: lettura.usati };
+  } catch (error: unknown) {
+    console.error('[valutaSoglieAziendaAction] Errore:', error);
+    return { success: false, error: `Valutazione non riuscita: ${(error as Error).message}` };
+  }
+}
+
+/**
+ * La stessa valutazione, riservata all'Admin di Spazio: la usano le pagine di
+ * configurazione e la verifica salute. Gli scenari usano
+ * `valutaSoglieAziendaAction`, che chiede solo l'accesso all'azienda.
+ */
+export async function valutaSoglieAction(
+  nomeSchema: string,
+  aziendaId: number,
+  tipoSpazio: 'ENTE' | 'NON_ENTE',
+  daSessione?: Partial<DatiSoglie>
+): Promise<RisultatoEsitoSoglie> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    return await valutaSoglieAziendaAction(nomeSchema, aziendaId, tipoSpazio, daSessione);
   } catch (error: unknown) {
     console.error('[valutaSoglieAction] Errore:', error);
     return { success: false, error: `Valutazione non riuscita: ${(error as Error).message}` };

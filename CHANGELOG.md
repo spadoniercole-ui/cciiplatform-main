@@ -1,3 +1,17 @@
+## 0.197.0 — 2026-11-10
+
+**Il documento di confronto si apre anche agli Operatori.**
+
+- La valutazione delle **soglie** ha ora una porta che chiede il solo accesso all’azienda
+  (`valutaSoglieAziendaAction`): il documento di confronto dello scenario la usa, così un
+  Operatore assegnato all’azienda vede le soglie superate, quelle non determinabili e i dati
+  mancanti. L’azione riservata all’Admin resta per le pagine di configurazione e la verifica
+  salute, con la stessa logica.
+- La lettura dei **parametri delle soglie** è estratta in un modulo di sola lettura, riusato
+  dall’azione Admin: nessuna duplicazione dei valori di legge e un solo punto in cui la
+  tabella assente ricade sui valori dell’articolo.
+- Nessun cambio di calcolo: formule, soglie e risultati restano quelli già verificati.
+
 ## 0.196.0 — 2026-11-10
 
 **Il documento di confronto e la traccia delle sovrascritture.**
