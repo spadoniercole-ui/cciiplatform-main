@@ -1,3 +1,18 @@
+## 0.189.0 — 2026-11-10
+
+**Cambiare la situazione riallinea lo scenario, senza cancellare il lavoro fatto.**
+
+- Il cambio di situazione non è più una semplice etichetta: lo scenario torna in
+  **bozza**, l’origine si riallinea (azienda per l’accordo, tribunale per decreto e cram down)
+  e viene registrata la **data del cambio**. Il dato già compilato resta al suo posto.
+- La scheda dice **che cosa va rivisto**, con i numeri veri: righe di proposta e risposte di
+  Check List da ricontrollare. Indici, XBRL e contabile non dipendono dall’atto e non si
+  elencano. Se non è stato compilato nulla, lo dice invece di allarmare.
+- Se la situazione scelta è già quella dello scenario non succede niente: nessun ritorno in
+  bozza e nessun avviso.
+- **Test lato server** dell’azione su Postgres (PGlite): guardia di accesso, scenario bloccato,
+  spazio demo, origine per ENTE e per redigente, situazione non valida, caso invariato.
+
 ## 0.188.0 — 2026-11-10
 
 **La situazione dello scenario si corregge dalla scheda, e le nuove schermate hanno i loro test.**

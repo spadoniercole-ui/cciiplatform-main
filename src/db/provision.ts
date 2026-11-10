@@ -381,6 +381,11 @@ export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> 
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS tipo_istruttoria TEXT NOT NULL DEFAULT 'PROPOSTA'`
   );
+  // Cambio di situazione (0.189.0): la data non cancella il lavoro fatto,
+  // dice soltanto da quando i passi compilati vanno ricontrollati.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS situazione_cambiata_il TIMESTAMP`
+  );
   // Quali verifiche dell'ente sono caricate nello scenario (0.182.0): la
   // scelta si fa alla creazione e resta modificabile dal passo 0. Gli scenari
   // che esistevano prima nascono con l'amministrativa attiva — è la verifica

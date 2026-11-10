@@ -8,9 +8,9 @@
 // inquadramento costringerebbe a rifare tutto da capo, quindi si corregge da
 // qui finché la Relazione finale non ha congelato lo scenario.
 //
-// L'origine non si sceglie: la deriva il server dalla situazione e dallo spazio
-// (proposta dall'azienda, decreto e cram down dal tribunale). Il componente
-// mostra solo il risultato.
+// Il cambio non cancella il lavoro fatto (0.189.0): lo scenario torna in
+// bozza, l'origine si riallinea e la scheda dice quante righe di proposta e
+// quante risposte di Check List vanno ricontrollate.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -31,6 +31,8 @@ export function SituazioneScenario({
   origine,
   bloccato,
   demo = false,
+  cambiataIl,
+  rivedere,
 }: {
   nomeSchema: string;
   scenarioId: number;
@@ -38,9 +40,15 @@ export function SituazioneScenario({
   origine: string;
   bloccato: boolean;
   demo?: boolean;
+  /** Data dell'ultimo cambio di situazione, se c'è stato. */
+  cambiataIl?: string | null;
+  /** Che cosa va ricontrollato dopo quel cambio. */
+  rivedere?: string[];
 }) {
   const router = useRouter();
   const [scelta, setScelta] = useState<TipoIstruttoria>(situazione);
+  const [dataCambio, setDataCambio] = useState<string | null>(cambiataIl ?? null);
+  const [daRivedere, setDaRivedere] = useState<string[]>(rivedere ?? []);
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [messaggio, setMessaggio] = useState<string | null>(null);
@@ -57,7 +65,9 @@ export function SituazioneScenario({
       return;
     }
     setScelta(codice);
-    setMessaggio('Situazione aggiornata: il percorso dello scenario è stato riallineato.');
+    setDataCambio(new Date().toISOString().slice(0, 10));
+    setDaRivedere(r.rivedere ?? []);
+    setMessaggio('Situazione aggiornata: lo scenario è tornato in bozza.');
     router.refresh();
   };
 
@@ -97,6 +107,14 @@ export function SituazioneScenario({
             ? ' · nell’ambiente demo i percorsi sono già predisposti.'
             : ' · modificabile finché la Relazione finale non viene generata.'}
       </p>
+      {dataCambio && (
+        <div className="text-[10px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md p-2 leading-relaxed">
+          <span className="font-bold">Situazione cambiata il {dataCambio}.</span>{' '}
+          {daRivedere.length > 0
+            ? `Il lavoro fatto resta: rivedi ${daRivedere.join('; ')}.`
+            : 'Nessun passo compilato da rivedere.'}
+        </div>
+      )}
       {errore && <p className="text-[10px] font-bold text-red-700">{errore}</p>}
       {messaggio && <p className="text-[10px] font-bold text-emerald-700">{messaggio}</p>}
     </div>

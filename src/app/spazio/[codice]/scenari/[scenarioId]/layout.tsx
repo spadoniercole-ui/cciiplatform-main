@@ -13,6 +13,8 @@ import { leggiRiferimentoAzienda } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
 import { SituazioneScenario } from '@/components/spazio/SituazioneScenario';
+import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
+import { passiDaRivedere } from '@/lib/scenari/situazione';
 import { DemoAziendaScope } from '@/components/spazio/DemoUploadProvider';
 
 export default async function ScenarioLayout({
@@ -72,6 +74,17 @@ export default async function ScenarioLayout({
     scenario.aziendaId
   ).catch(() => null);
 
+  // Dopo un cambio di situazione i passi compilati non sono spariti: si dice
+  // che cosa va ricontrollato, con i numeri veri letti adesso.
+  const passiScenario = scenario.situazioneCambiataIl
+    ? passiDaRivedere(
+        await leggiPassiCompilati(contesto.nomeSchema, scenario.id).catch(() => ({
+          propostaRighe: 0,
+          risposteChecklist: 0,
+        }))
+      )
+    : [];
+
   const base = `/spazio/${codice}/scenari/${scenarioId}`;
   // Testata dell'azienda: identificativi presso l'ente in evidenza.
   const riferimento = await leggiRiferimentoAzienda(contesto.nomeSchema, scenario.aziendaId).catch(
@@ -102,6 +115,8 @@ export default async function ScenarioLayout({
                 origine={scenario.origineProposta}
                 bloccato={Boolean(scenario.bloccatoIl)}
                 demo={contesto.demo}
+                cambiataIl={scenario.situazioneCambiataIl}
+                rivedere={passiScenario}
               />
               {riferimento && (
                 <p className="mt-1">

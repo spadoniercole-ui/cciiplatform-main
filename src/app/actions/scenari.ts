@@ -14,6 +14,14 @@ import { richiediAccessoAzienda, richiediAccessoScenario } from '@/lib/autorizza
 import { assicuraTabelleScenari } from '@/db/provision';
 import { type TipoProposta, ORIGINI_PER_TIPO } from '@/lib/origineProposta';
 import { tipoIstruttoriaValido, type TipoIstruttoria } from '@/lib/giudice/lettura';
+import {
+  MESSAGGIO_SCENARIO_BLOCCATO,
+  originePerSituazione,
+  passiDaRivedere,
+} from '@/lib/scenari/situazione';
+import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
+
+const schemaOk = (nome: string) => /^[a-z0-9_]+$/.test(nome);
 
 // Le colonne timestamp di Drizzle tornano dal driver come Date: l'API dello
 // scenario parla invece stringhe ISO, perché è quello che il browser mostra e
@@ -36,6 +44,8 @@ export interface Scenario {
   origineProposta: string;
   /** Che cosa ha in mano l'azienda. Assente sugli scenari anteriori alla 0.170.0: vale PROPOSTA. */
   tipoIstruttoria?: TipoIstruttoria;
+  /** Data dell'ultimo cambio di situazione (0.189.0); null se non è mai cambiata. */
+  situazioneCambiataIl: string | null;
   rigaRilevanteBloccata: boolean;
   archiviato: boolean;
   /** Ricevente (ENTE): abilita il passo «Piano di sviluppo» (confronto con il piano dell'azienda, ipotesi dell'AI) su questo scenario. Scelto alla creazione. Per il Redigente il piano è sempre disponibile, quindi questo flag è ininfluente lì. */
@@ -84,6 +94,7 @@ export async function ottieniScenari(
         tipoProposta: r.tipoProposta as TipoProposta,
         origineProposta: r.origineProposta,
         tipoIstruttoria: r.tipoIstruttoria as TipoIstruttoria,
+        situazioneCambiataIl: isoData(r.situazioneCambiataIl),
         rigaRilevanteBloccata: r.rigaRilevanteBloccata,
         archiviato: r.archiviato,
         simulazioneAttiva: r.simulazioneAttiva,
@@ -136,6 +147,7 @@ export async function ottieniScenarioPerId(
         tipoProposta: tabelle.scenari.tipoProposta,
         origineProposta: tabelle.scenari.origineProposta,
         tipoIstruttoria: tabelle.scenari.tipoIstruttoria,
+        situazioneCambiataIl: tabelle.scenari.situazioneCambiataIl,
         rigaRilevanteBloccata: tabelle.scenari.rigaRilevanteBloccata,
         archiviato: tabelle.scenari.archiviato,
         simulazioneAttiva: tabelle.scenari.simulazioneAttiva,
@@ -167,6 +179,7 @@ export async function ottieniScenarioPerId(
         tipoProposta: r.tipoProposta as TipoProposta,
         origineProposta: r.origineProposta,
         tipoIstruttoria: r.tipoIstruttoria as TipoIstruttoria,
+        situazioneCambiataIl: isoData(r.situazioneCambiataIl),
         rigaRilevanteBloccata: r.rigaRilevanteBloccata,
         archiviato: r.archiviato,
         simulazioneAttiva: r.simulazioneAttiva,
@@ -189,6 +202,8 @@ export interface RisultatoOperazioneScenario {
   success: boolean;
   scenarioId?: number;
   error?: string;
+  /** Dopo un cambio di situazione: i passi già compilati da ricontrollare. */
+  rivedere?: string[];
 }
 
 export async function creaScenarioAction(
@@ -465,7 +480,7 @@ export async function verificaScenarioNonBloccato(
   const risultato = await ottieniScenarioPerId(nomeSchema, scenarioId);
   if (!risultato.success || !risultato.scenario) return null; // scenario non trovato, altri controlli se ne occupano altrove
   if (risultato.scenario.bloccatoIl) {
-    return "Questo scenario è in sola lettura permanente — la Relazione finale è già stata generata. Per una nuova valutazione, apri un nuovo scenario — oppure, se serve correggere un errore su questo, l'Admin di Spazio può sbloccarlo qui sotto.";
+    return MESSAGGIO_SCENARIO_BLOCCATO;
   }
   return null;
 }
@@ -521,13 +536,28 @@ export async function aggiornaSituazioneScenarioAction(
       modulo: ['scenari'],
       livello: 'SCRITTURA',
     });
+    if (!schemaOk(nomeSchema)) {
+      return { success: false, error: 'Nome schema non valido.' };
+    }
     if (!tipoIstruttoriaValido(tipoIstruttoria) || tipoIstruttoria === 'DA_CHIEDERE') {
       return { success: false, error: 'Situazione dello scenario non riconosciuta.' };
     }
-    const bloccato = await verificaScenarioNonBloccato(nomeSchema, scenarioId);
-    if (bloccato) return { success: false, error: bloccato };
 
     const { pool } = await import('@/lib/db');
+    const scenarioRis = await pool.query(
+      `SELECT tipo_istruttoria, bloccato_il FROM "${nomeSchema}".scenari WHERE id = $1`,
+      [scenarioId]
+    );
+    if (scenarioRis.rows.length === 0) {
+      return { success: false, error: 'Scenario non trovato.' };
+    }
+    if (scenarioRis.rows[0].bloccato_il) {
+      return { success: false, error: MESSAGGIO_SCENARIO_BLOCCATO };
+    }
+    if (scenarioRis.rows[0].tipo_istruttoria === tipoIstruttoria) {
+      return { success: true, scenarioId, rivedere: [] };
+    }
+
     const spazioRis = await pool.query(
       `SELECT tipo_spazio, demo FROM public.spazi WHERE nome_schema = $1`,
       [nomeSchema]
@@ -538,22 +568,27 @@ export async function aggiornaSituazioneScenarioAction(
         error: 'Nell’ambiente demo i percorsi sono già predisposti: la situazione non si cambia.',
       };
     }
-    const ente = spazioRis.rows[0]?.tipo_spazio === 'ENTE';
-    const origineProposta = ente
-      ? tipoIstruttoria === 'PROPOSTA'
-        ? 'Azienda'
-        : 'Tribunale'
-      : undefined;
 
-    const { db } = await import('@/db/client');
-    const { getTabelleTenant } = await import('@/db/schema');
-    const { eq } = await import('drizzle-orm');
-    const tabelle = getTabelleTenant(nomeSchema);
-    await db
-      .update(tabelle.scenari)
-      .set(origineProposta ? { tipoIstruttoria, origineProposta } : { tipoIstruttoria })
-      .where(eq(tabelle.scenari.id, scenarioId));
-    return { success: true, scenarioId };
+    const origineProposta = originePerSituazione(
+      spazioRis.rows[0]?.tipo_spazio === 'ENTE',
+      tipoIstruttoria
+    );
+
+    // Riallineamento, non cancellazione: il lavoro fatto resta, lo scenario
+    // torna in bozza perché non è più concluso per l'atto che si valuta, e la
+    // data dice da quando i passi vanno riguardati.
+    await pool.query(
+      `UPDATE "${nomeSchema}".scenari
+          SET tipo_istruttoria = $2,
+              origine_proposta = COALESCE($3, origine_proposta),
+              stato = 'BOZZA',
+              situazione_cambiata_il = now()
+        WHERE id = $1`,
+      [scenarioId, tipoIstruttoria, origineProposta ?? null]
+    );
+
+    const passi = await leggiPassiCompilati(nomeSchema, scenarioId);
+    return { success: true, scenarioId, rivedere: passiDaRivedere(passi) };
   } catch (error: unknown) {
     console.error('[aggiornaSituazioneScenarioAction] Errore:', error);
     return {

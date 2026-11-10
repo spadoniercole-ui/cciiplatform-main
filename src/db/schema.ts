@@ -117,6 +117,10 @@ export function getTabelleTenant(nomeSchema: string) {
       // liquidazione giudiziale o dispositivo di cram down. 'DA_CHIEDERE'
       // solo sugli scenari nuovi, finché la domanda non ha risposta.
       tipoIstruttoria: text('tipo_istruttoria').notNull().default('PROPOSTA'),
+      // Data dell'ultimo cambio di situazione (0.189.0): da quel momento i
+      // passi compilati vanno riguardati. Il dato resta, ma non si presume
+      // più che appartenga all'atto che si sta valutando adesso.
+      situazioneCambiataIl: timestamp('situazione_cambiata_il'),
       // Blocca la scelta della riga "rilevante per l'ente" (Proposta), in
       // modo che il confronto con la Posizione Debitoria dell'Ente resti
       // stabile — cambiare selezione dopo il blocco richiede uno sblocco
