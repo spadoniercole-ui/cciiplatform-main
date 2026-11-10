@@ -1,3 +1,16 @@
+## 0.193.0 — 2026-11-10
+
+**La traccia si legge tutta, sblocchi compresi.**
+
+- Nella scheda della situazione, accanto alle ultime voci, c’è il collegamento **Tutta la
+  cronologia**: una pagina dedicata con tutti i cambi (data, atto di partenza e di arrivo,
+  autore, eventuale annullamento) e tutti gli **sblocchi** con motivo e autore.
+- La scheda mostra anche gli ultimi sblocchi, così la ragione per cui lo scenario è stato
+  rimesso in lavorazione è visibile senza aprire il database.
+- Lettura condivisa `leggiStoricoSblocchi` (con guardia sulla tabella assente per gli spazi
+  vecchi); nessuna nuova scrittura.
+- **Test**: sblocchi e collegamento nella scheda.
+
 ## 0.192.0 — 2026-11-10
 
 **La traccia dice chi, e la Relazione porta con sé situazione e cronologia.**

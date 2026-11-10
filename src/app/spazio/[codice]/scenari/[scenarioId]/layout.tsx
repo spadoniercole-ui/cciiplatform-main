@@ -16,6 +16,7 @@ import { SituazioneScenario } from '@/components/spazio/SituazioneScenario';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { passiDaRivedere } from '@/lib/scenari/situazione';
 import { leggiStoricoSituazione } from '@/lib/scenari/storicoSituazione';
+import { leggiStoricoSblocchi } from '@/lib/scenari/storicoSblocchi';
 import { DemoAziendaScope } from '@/components/spazio/DemoUploadProvider';
 
 export default async function ScenarioLayout({
@@ -95,6 +96,12 @@ export default async function ScenarioLayout({
     ? await leggiStoricoSituazione(contesto.nomeSchema, scenario.id).catch(() => [])
     : [];
 
+  // Gli sblocchi restano visibili anche dopo: sono la traccia di chi ha
+  // rimesso lo scenario in lavorazione, e perché.
+  const sblocchiScenario = await leggiStoricoSblocchi(contesto.nomeSchema, scenario.id, 5).catch(
+    () => []
+  );
+
   const base = `/spazio/${codice}/scenari/${scenarioId}`;
   // Testata dell'azienda: identificativi presso l'ente in evidenza.
   const riferimento = await leggiRiferimentoAzienda(contesto.nomeSchema, scenario.aziendaId).catch(
@@ -128,6 +135,8 @@ export default async function ScenarioLayout({
                 cambiataIl={scenario.situazioneCambiataIl}
                 rivedere={passiScenario}
                 storico={storicoSituazione}
+                sblocchi={sblocchiScenario}
+                codice={codice}
                 puoAnnullare={puoAnnullareSituazione}
               />
               {riferimento && (

@@ -155,6 +155,33 @@ describe('SituazioneScenario', () => {
     expect(await screen.findByText(/Ultimo cambio annullato/)).toBeTruthy();
   });
 
+  it('mostra gli sblocchi con motivo e autore e il link alla cronologia completa', () => {
+    render(
+      <SituazioneScenario
+        nomeSchema="tenant_test"
+        scenarioId={4}
+        situazione="PROPOSTA"
+        origine="Azienda"
+        bloccato={false}
+        codice="spazio1"
+        storico={[VOCE]}
+        sblocchi={[
+          {
+            motivo: 'Inquadramento errato, da riportare all’atto precedente',
+            sbloccatoDa: 'anna@alfa.it',
+            sbloccatoIl: '2026-11-10T09:30:00.000Z',
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText(/Sblocchi dello scenario \(1\)/)).toBeTruthy();
+    expect(screen.getByText(/Inquadramento errato/)).toBeTruthy();
+    expect(screen.getAllByText(/anna@alfa\.it/).length).toBeGreaterThan(0);
+    const link = screen.getByText('Tutta la cronologia').closest('a');
+    expect(link?.getAttribute('href')).toBe('/spazio/spazio1/scenari/4/situazione');
+  });
+
   it('uno scenario bloccato non si cambia', () => {
     render(
       <SituazioneScenario

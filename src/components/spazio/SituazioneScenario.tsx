@@ -18,14 +18,16 @@
 // del documento che esce dalla piattaforma.
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Loader2, Printer, Undo2, Unlock } from 'lucide-react';
+import { History, Loader2, Printer, Undo2, Unlock } from 'lucide-react';
 import {
   aggiornaSituazioneScenarioAction,
   annullaUltimoCambioSituazioneAction,
 } from '@/app/actions/scenari';
 import { dataItaliana } from '@/lib/scenari/situazione';
 import type { VoceStoricoSituazione } from '@/lib/scenari/storicoSituazione';
+import type { VoceSbloccoScenario } from '@/lib/scenari/storicoSblocchi';
 import { etichettaIstruttoria, type TipoIstruttoria } from '@/lib/giudice/lettura';
 
 const SITUAZIONI: { codice: TipoIstruttoria; etichetta: string }[] = [
@@ -45,6 +47,8 @@ export function SituazioneScenario({
   cambiataIl,
   rivedere,
   storico,
+  sblocchi,
+  codice,
 }: {
   nomeSchema: string;
   scenarioId: number;
@@ -60,6 +64,10 @@ export function SituazioneScenario({
   rivedere?: string[];
   /** Le ultime voci della cronologia, dalla più recente. */
   storico?: VoceStoricoSituazione[];
+  /** Gli ultimi sblocchi dello scenario, con motivo e autore. */
+  sblocchi?: VoceSbloccoScenario[];
+  /** Codice dello spazio: serve al collegamento alla cronologia completa. */
+  codice?: string;
 }) {
   const router = useRouter();
   const [scelta, setScelta] = useState<TipoIstruttoria>(situazione);
@@ -263,6 +271,29 @@ export function SituazioneScenario({
             </div>
           )}
         </div>
+      )}
+      {(sblocchi ?? []).length > 0 && (
+        <div className="text-[10px] text-slate-500 print:block">
+          <p className="font-bold uppercase tracking-wider text-slate-400">
+            Sblocchi dello scenario ({sblocchi!.length})
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {sblocchi!.map((voce, i) => (
+              <li key={`${voce.sbloccatoIl}-${i}`}>
+                {dataItaliana(voce.sbloccatoIl)} — {voce.motivo}
+                {voce.sbloccatoDa ? ` · ${voce.sbloccatoDa}` : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {codice && (cronologia.length > 0 || (sblocchi ?? []).length > 0) && (
+        <Link
+          href={`/spazio/${codice}/scenari/${scenarioId}/situazione`}
+          className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800 print:hidden"
+        >
+          <History className="w-3 h-3" /> Tutta la cronologia
+        </Link>
       )}
       {errore && <p className="text-[10px] font-bold text-red-700">{errore}</p>}
       {messaggio && <p className="text-[10px] font-bold text-emerald-700">{messaggio}</p>}
