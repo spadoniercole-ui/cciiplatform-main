@@ -15,6 +15,7 @@ import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAzienda
 import { SituazioneScenario } from '@/components/spazio/SituazioneScenario';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { passiDaRivedere } from '@/lib/scenari/situazione';
+import { leggiStoricoSituazione } from '@/lib/scenari/storicoSituazione';
 import { DemoAziendaScope } from '@/components/spazio/DemoUploadProvider';
 
 export default async function ScenarioLayout({
@@ -85,6 +86,10 @@ export default async function ScenarioLayout({
       )
     : [];
 
+  const storicoSituazione = scenario.situazioneCambiataIl
+    ? await leggiStoricoSituazione(contesto.nomeSchema, scenario.id).catch(() => [])
+    : [];
+
   const base = `/spazio/${codice}/scenari/${scenarioId}`;
   // Testata dell'azienda: identificativi presso l'ente in evidenza.
   const riferimento = await leggiRiferimentoAzienda(contesto.nomeSchema, scenario.aziendaId).catch(
@@ -117,6 +122,7 @@ export default async function ScenarioLayout({
                 demo={contesto.demo}
                 cambiataIl={scenario.situazioneCambiataIl}
                 rivedere={passiScenario}
+                storico={storicoSituazione}
               />
               {riferimento && (
                 <p className="mt-1">

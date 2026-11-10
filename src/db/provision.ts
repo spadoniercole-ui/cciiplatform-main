@@ -347,6 +347,23 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
  * Crea scenari e checklist_risposte in uno schema tenant, se non esistono
  * già. Stesso principio di auto-riparazione delle altre tabelle.
  */
+/**
+ * Cronologia dei cambi di situazione (0.190.0). Tabella separata e
+ * idempotente: si crea al primo cambio, non serve a chi non ne ha mai fatti.
+ */
+export async function assicuraStoricoSituazione(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.situazione_storico (
+      id SERIAL PRIMARY KEY,
+      scenario_id INTEGER NOT NULL REFERENCES ${s}.scenari(id) ON DELETE CASCADE,
+      da TEXT,
+      a TEXT NOT NULL,
+      cambiata_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+}
+
 export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> {
   const s = sql.identifier(nomeSchema);
 

@@ -4,9 +4,9 @@
 //
 // Le guardie sono simulate (sono le uniche cose che non si possono provare su
 // un Postgres di test), il resto è codice di produzione: SELECT, UPDATE,
-// derivazione dell'origine, ritorno allo stato di bozza e conteggio dei passi
-// da rivedere. PGlite dice se il dato resta al suo posto: il cambio non
-// cancella nulla.
+// derivazione dell'origine, ritorno allo stato di bozza, conteggio dei passi
+// da rivedere e riga di cronologia. PGlite dice se il dato resta al suo posto:
+// il cambio non cancella nulla.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
@@ -20,7 +20,13 @@ vi.mock('@/lib/db', () => ({
 const richiediAccessoScenario = vi.fn(async () => ({ modalita: 'ADMIN_SPAZIO' as const }));
 vi.mock('@/lib/autorizzazione', () => ({ richiediAccessoScenario }));
 
+vi.mock('@/db/provision', () => ({
+  assicuraStoricoSituazione: async () => undefined,
+  assicuraTabelleScenari: async () => undefined,
+}));
+
 const { aggiornaSituazioneScenarioAction } = await import('./scenari');
+const { leggiStoricoSituazione } = await import('@/lib/scenari/storicoSituazione');
 
 const SCHEMA = 'tenant_prova_situazione';
 const SCENARIO = 1;
@@ -28,6 +34,14 @@ const SCENARIO = 1;
 async function riga() {
   const r = await db.query(`SELECT * FROM ${SCHEMA}.scenari WHERE id = $1`, [SCENARIO]);
   return r.rows[0] as Record<string, unknown>;
+}
+
+async function storico() {
+  const r = await db.query(
+    `SELECT da, a FROM ${SCHEMA}.situazione_storico WHERE scenario_id = $1 ORDER BY id`,
+    [SCENARIO]
+  );
+  return r.rows as { da: string | null; a: string }[];
 }
 
 beforeEach(async () => {
@@ -54,6 +68,13 @@ beforeEach(async () => {
       tipo_istruttoria TEXT NOT NULL DEFAULT 'PROPOSTA',
       situazione_cambiata_il TIMESTAMP,
       bloccato_il TIMESTAMP
+    );
+    CREATE TABLE ${SCHEMA}.situazione_storico (
+      id SERIAL PRIMARY KEY,
+      scenario_id INTEGER NOT NULL,
+      da TEXT,
+      a TEXT NOT NULL,
+      cambiata_il TIMESTAMP NOT NULL DEFAULT now()
     );
     CREATE TABLE ${SCHEMA}.proposta_creditori (
       id SERIAL PRIMARY KEY,
@@ -84,7 +105,7 @@ afterEach(() => {
 });
 
 describe('aggiornaSituazioneScenarioAction', () => {
-  it('ENTE, decreto: origine Tribunale, scenario in bozza e passi da rivedere', async () => {
+  it('ENTE, decreto: origine Tribunale, scenario in bozza, passi e cronologia', async () => {
     const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'DECRETO_LIQUIDAZIONE');
 
     expect(esito.success).toBe(true);
@@ -97,6 +118,12 @@ describe('aggiornaSituazioneScenarioAction', () => {
     expect(r.origine_proposta).toBe('Tribunale');
     expect(r.stato).toBe('BOZZA');
     expect(r.situazione_cambiata_il).not.toBeNull();
+
+    expect(await storico()).toEqual([{ da: 'PROPOSTA', a: 'DECRETO_LIQUIDAZIONE' }]);
+    const letto = await leggiStoricoSituazione(SCHEMA, SCENARIO);
+    expect(letto).toHaveLength(1);
+    expect(letto[0].da).toBe('PROPOSTA');
+    expect(letto[0].a).toBe('DECRETO_LIQUIDAZIONE');
   });
 
   it('la guardia viene prima di tutto: se rifiuta, il dato non si tocca', async () => {
@@ -108,6 +135,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
     const r = await riga();
     expect(r.tipo_istruttoria).toBe('PROPOSTA');
     expect(r.stato).toBe('IN_CORSO');
+    expect(await storico()).toEqual([]);
   });
 
   it('uno scenario bloccato resta in sola lettura', async () => {
@@ -118,6 +146,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
     expect(esito.success).toBe(false);
     expect(esito.error).toMatch(/sola lettura permanente/);
     expect((await riga()).tipo_istruttoria).toBe('PROPOSTA');
+    expect(await storico()).toEqual([]);
   });
 
   it('in demo i percorsi sono predisposti e non si cambiano', async () => {
@@ -128,6 +157,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
     expect(esito.success).toBe(false);
     expect(esito.error).toMatch(/demo/);
     expect((await riga()).tipo_istruttoria).toBe('PROPOSTA');
+    expect(await storico()).toEqual([]);
   });
 
   it('per un redigente l’origine dichiarata non viene riscritta', async () => {
@@ -143,6 +173,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
     const r = await riga();
     expect(r.tipo_istruttoria).toBe('PROPOSTA');
     expect(r.origine_proposta).toBe('Studio');
+    expect(await storico()).toEqual([{ da: 'DECRETO_LIQUIDAZIONE', a: 'PROPOSTA' }]);
   });
 
   it('rifiuta una situazione non riconosciuta', async () => {
@@ -150,9 +181,10 @@ describe('aggiornaSituazioneScenarioAction', () => {
 
     expect(esito.success).toBe(false);
     expect(esito.error).toMatch(/non riconosciuta/);
+    expect(await storico()).toEqual([]);
   });
 
-  it('se la situazione è già quella non risveglia la bozza né segnala passi', async () => {
+  it('se la situazione è già quella non risveglia la bozza né scrive cronologia', async () => {
     const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'PROPOSTA');
 
     expect(esito.success).toBe(true);
@@ -160,5 +192,6 @@ describe('aggiornaSituazioneScenarioAction', () => {
     const r = await riga();
     expect(r.stato).toBe('IN_CORSO');
     expect(r.situazione_cambiata_il).toBeNull();
+    expect(await storico()).toEqual([]);
   });
 });

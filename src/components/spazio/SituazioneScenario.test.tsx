@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-// LA SITUAZIONE NELLA SCHEDA: ATTIVA, CON QUELLO CHE VA RIVISTO.
+// LA SITUAZIONE NELLA SCHEDA: ATTIVA, CON QUELLO CHE VA RIVISTO E LA STORIA.
 //
 // Il cambio non cancella il lavoro fatto: lo scenario torna in bozza e la
 // scheda dice quante righe di proposta e quante risposte di Check List vanno
-// ricontrollate. Lo scenario bloccato e la demo non si toccano.
+// ricontrollate. Ogni cambio lascia una riga nella cronologia. Lo scenario
+// bloccato e la demo non si toccano.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -25,7 +26,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('SituazioneScenario', () => {
-  it('mostra le tre situazioni e segnala i passi già compilati', async () => {
+  it('mostra le tre situazioni, i passi compilati e la cronologia', async () => {
     render(
       <SituazioneScenario
         nomeSchema="tenant_test"
@@ -35,14 +36,23 @@ describe('SituazioneScenario', () => {
         bloccato={false}
         cambiataIl="2026-11-09"
         rivedere={['Proposta: 2 righe di creditori da ricontrollare']}
+        storico={[
+          {
+            da: 'PROPOSTA',
+            a: 'CRAM_DOWN',
+            cambiataIl: '2026-11-10T08:00:00.000Z',
+          },
+        ]}
       />
     );
 
     expect(screen.getByText('Accordo transattivo')).toBeTruthy();
     expect(screen.getByText('Liquidazione giudiziale')).toBeTruthy();
     expect(screen.getByText('Cram down')).toBeTruthy();
-    expect(screen.getByText(/Situazione cambiata il 2026-11-09/)).toBeTruthy();
+    expect(screen.getByText(/Situazione cambiata il/)).toBeTruthy();
     expect(screen.getByText(/2 righe di creditori da ricontrollare/)).toBeTruthy();
+    expect(screen.getByText(/Cronologia della situazione \(1\)/)).toBeTruthy();
+    expect(screen.getByText(/da Proposta a Dispositivo di cram down/)).toBeTruthy();
   });
 
   it('al cambio mostra cosa rivedere restituito dal server', async () => {
@@ -66,6 +76,7 @@ describe('SituazioneScenario', () => {
 
     await waitFor(() => expect(cambia).toHaveBeenCalledWith('tenant_test', 4, 'CRAM_DOWN'));
     expect(await screen.findByText(/5 risposte da riconfermare/)).toBeTruthy();
+    expect(screen.getByText(/Cronologia della situazione \(1\)/)).toBeTruthy();
   });
 
   it('uno scenario bloccato non si cambia', () => {

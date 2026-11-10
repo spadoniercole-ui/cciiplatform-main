@@ -18,6 +18,9 @@ import { MODELLO_MINISTERIALE } from '@/lib/checklist/costanti';
 import { CHECKLIST_MINISTERIALE } from '@/lib/checklist/ministeriale';
 import { calcolaQuadroQualitativo, type RispostaPerCalcolo } from '@/lib/checklist/scoring';
 import { crescitaAzienda, crescitaDaSerie } from '@/lib/piano/automatico';
+import { AvvisoPassiDaRivedere } from '@/components/spazio/AvvisoPassiDaRivedere';
+import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
+import { passiDaRivedere } from '@/lib/scenari/situazione';
 
 // L'analisi dei documenti della proposta (Ricevente) è l'operazione AI più
 // pesante di questo flusso — due chiamate in parallelo su più PDF. Senza un
@@ -49,6 +52,20 @@ export default async function PropostaScenarioPage({
   const eAdminSpazio = contesto.modalita === 'ADMIN_SPAZIO' || contesto.modalita === 'SALVAGENTE';
   const identitaUtente =
     contesto.email || (contesto.modalita === 'SALVAGENTE' ? 'Superadmin (salvagente)' : null);
+
+  // Se la situazione è cambiata, i passi compilati vanno ricontrollati qui:
+  // è questa la pagina in cui il dato si corregge.
+  const passiRiallineamento = scenario.situazioneCambiataIl
+    ? passiDaRivedere(
+        await leggiPassiCompilati(contesto.nomeSchema, scenario.id).catch(() => ({
+          propostaRighe: 0,
+          risposteChecklist: 0,
+        }))
+      )
+    : [];
+  const avvisoRiallineamento = (
+    <AvvisoPassiDaRivedere cambiataIl={scenario.situazioneCambiataIl} passi={passiRiallineamento} />
+  );
 
   // Percorso Redigente: la lavorazione della proposta è una pagina sola —
   // stato attuale, proposta, piano di sviluppo, documenti, Relazione.
@@ -88,47 +105,50 @@ export default async function PropostaScenarioPage({
         )
       : null;
     return (
-      <LavorazioneRedigente
-        nomeSchema={contesto.nomeSchema}
-        codice={codice}
-        scenarioId={sid}
-        aziendaId={scenario.aziendaId}
-        tipoSpazio={contesto.tipoSpazio}
-        nomeScenario={scenario.nome}
-        rigaRilevanteBloccataIniziale={scenario.rigaRilevanteBloccata}
-        stato={{
-          anniBilancio,
-          posizione:
-            posizioneR.success && posizioneR.esiste
-              ? { data: posizioneR.posizione.dataRiferimento }
-              : null,
-          checklist: {
-            risposte: risposteDate,
-            totale: totaleDomande,
-            esito: risposteDate
-              ? calcolaQuadroQualitativo(CHECKLIST_MINISTERIALE, mappa).etichetta
-              : null,
-          },
-          testPratico:
-            testR.success && testR.stato.compilato ? testR.stato.risultato.etichetta : null,
-          settore:
-            crescitaSet || crescitaAz
-              ? {
-                  gruppo: settoreR.success ? (settoreR.info?.gruppo ?? null) : null,
-                  settore: crescitaSet ? crescitaSet.tasso : null,
-                  azienda: crescitaAz ? crescitaAz.tasso : null,
-                }
-              : null,
-        }}
-        chiusura={{
-          pianoDisponibile: plusR.funzioni.simulazione && permesso('simulazione'),
-          relazioneDisponibile: plusR.funzioni.relazioneAi && permesso('relazione'),
-          settoreDisponibile: plusR.funzioni.datiSettore,
-          eAdminSpazio,
-          identitaUtente,
-          bloccatoIl: scenario.bloccatoIl,
-        }}
-      />
+      <div className="space-y-4">
+        {avvisoRiallineamento}
+        <LavorazioneRedigente
+          nomeSchema={contesto.nomeSchema}
+          codice={codice}
+          scenarioId={sid}
+          aziendaId={scenario.aziendaId}
+          tipoSpazio={contesto.tipoSpazio}
+          nomeScenario={scenario.nome}
+          rigaRilevanteBloccataIniziale={scenario.rigaRilevanteBloccata}
+          stato={{
+            anniBilancio,
+            posizione:
+              posizioneR.success && posizioneR.esiste
+                ? { data: posizioneR.posizione.dataRiferimento }
+                : null,
+            checklist: {
+              risposte: risposteDate,
+              totale: totaleDomande,
+              esito: risposteDate
+                ? calcolaQuadroQualitativo(CHECKLIST_MINISTERIALE, mappa).etichetta
+                : null,
+            },
+            testPratico:
+              testR.success && testR.stato.compilato ? testR.stato.risultato.etichetta : null,
+            settore:
+              crescitaSet || crescitaAz
+                ? {
+                    gruppo: settoreR.success ? (settoreR.info?.gruppo ?? null) : null,
+                    settore: crescitaSet ? crescitaSet.tasso : null,
+                    azienda: crescitaAz ? crescitaAz.tasso : null,
+                  }
+                : null,
+          }}
+          chiusura={{
+            pianoDisponibile: plusR.funzioni.simulazione && permesso('simulazione'),
+            relazioneDisponibile: plusR.funzioni.relazioneAi && permesso('relazione'),
+            settoreDisponibile: plusR.funzioni.datiSettore,
+            eAdminSpazio,
+            identitaUtente,
+            bloccatoIl: scenario.bloccatoIl,
+          }}
+        />
+      </div>
     );
   }
 
@@ -138,12 +158,15 @@ export default async function PropostaScenarioPage({
   const tipoIstruttoria = scenario.tipoIstruttoria ?? 'PROPOSTA';
   if (scenario.tipoProposta === 'RICEVUTA' && tipoIstruttoria === 'DA_CHIEDERE') {
     return (
-      <SceltaIstruttoria
-        nomeSchema={contesto.nomeSchema}
-        scenarioId={Number(scenarioId)}
-        nomeScenario={scenario.nome}
-        ragioneSociale={scenario.ragioneSocialeAzienda}
-      />
+      <div className="space-y-4">
+        {avvisoRiallineamento}
+        <SceltaIstruttoria
+          nomeSchema={contesto.nomeSchema}
+          scenarioId={Number(scenarioId)}
+          nomeScenario={scenario.nome}
+          ragioneSociale={scenario.ragioneSocialeAzienda}
+        />
+      </div>
     );
   }
   if (
@@ -152,6 +175,7 @@ export default async function PropostaScenarioPage({
   ) {
     return (
       <div className="space-y-10">
+        {avvisoRiallineamento}
         <IstruttoriaProvvedimento
           nomeSchema={contesto.nomeSchema}
           scenarioId={Number(scenarioId)}
@@ -181,6 +205,7 @@ export default async function PropostaScenarioPage({
 
   return (
     <div className="space-y-10">
+      {avvisoRiallineamento}
       <PropostaScenario
         nomeSchema={contesto.nomeSchema}
         scenarioId={Number(scenarioId)}

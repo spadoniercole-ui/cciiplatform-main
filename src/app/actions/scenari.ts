@@ -20,6 +20,7 @@ import {
   passiDaRivedere,
 } from '@/lib/scenari/situazione';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
+import { assicuraStoricoSituazione } from '@/db/provision';
 
 const schemaOk = (nome: string) => /^[a-z0-9_]+$/.test(nome);
 
@@ -585,6 +586,15 @@ export async function aggiornaSituazioneScenarioAction(
               situazione_cambiata_il = now()
         WHERE id = $1`,
       [scenarioId, tipoIstruttoria, origineProposta ?? null]
+    );
+
+    // La traccia: da che atto a che atto, e quando. Il dato precedente non
+    // si perde — è proprio quello che rende leggibile il riallineamento.
+    await assicuraStoricoSituazione(nomeSchema);
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".situazione_storico (scenario_id, da, a)
+       VALUES ($1, $2, $3)`,
+      [scenarioId, scenarioRis.rows[0].tipo_istruttoria as string, tipoIstruttoria]
     );
 
     const passi = await leggiPassiCompilati(nomeSchema, scenarioId);

@@ -10,13 +10,16 @@
 //
 // Il cambio non cancella il lavoro fatto (0.189.0): lo scenario torna in
 // bozza, l'origine si riallinea e la scheda dice quante righe di proposta e
-// quante risposte di Check List vanno ricontrollate.
+// quante risposte di Check List vanno ricontrollate. Ogni cambio lascia anche
+// una traccia leggibile (0.190.0): da che atto a che atto, e quando.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { aggiornaSituazioneScenarioAction } from '@/app/actions/scenari';
-import type { TipoIstruttoria } from '@/lib/giudice/lettura';
+import { dataItaliana } from '@/lib/scenari/situazione';
+import type { VoceStoricoSituazione } from '@/lib/scenari/storicoSituazione';
+import { etichettaIstruttoria, type TipoIstruttoria } from '@/lib/giudice/lettura';
 
 const SITUAZIONI: { codice: TipoIstruttoria; etichetta: string }[] = [
   { codice: 'PROPOSTA', etichetta: 'Accordo transattivo' },
@@ -33,6 +36,7 @@ export function SituazioneScenario({
   demo = false,
   cambiataIl,
   rivedere,
+  storico,
 }: {
   nomeSchema: string;
   scenarioId: number;
@@ -44,11 +48,14 @@ export function SituazioneScenario({
   cambiataIl?: string | null;
   /** Che cosa va ricontrollato dopo quel cambio. */
   rivedere?: string[];
+  /** Le ultime voci della cronologia, dalla più recente. */
+  storico?: VoceStoricoSituazione[];
 }) {
   const router = useRouter();
   const [scelta, setScelta] = useState<TipoIstruttoria>(situazione);
   const [dataCambio, setDataCambio] = useState<string | null>(cambiataIl ?? null);
   const [daRivedere, setDaRivedere] = useState<string[]>(rivedere ?? []);
+  const [cronologia, setCronologia] = useState<VoceStoricoSituazione[]>(storico ?? []);
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [messaggio, setMessaggio] = useState<string | null>(null);
@@ -64,6 +71,10 @@ export function SituazioneScenario({
       setErrore(r.error ?? 'Situazione non aggiornata.');
       return;
     }
+    setCronologia((precedenti) => [
+      { da: scelta, a: codice, cambiataIl: new Date().toISOString() },
+      ...precedenti,
+    ]);
     setScelta(codice);
     setDataCambio(new Date().toISOString().slice(0, 10));
     setDaRivedere(r.rivedere ?? []);
@@ -109,11 +120,27 @@ export function SituazioneScenario({
       </p>
       {dataCambio && (
         <div className="text-[10px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md p-2 leading-relaxed">
-          <span className="font-bold">Situazione cambiata il {dataCambio}.</span>{' '}
+          <span className="font-bold">Situazione cambiata il {dataItaliana(dataCambio)}.</span>{' '}
           {daRivedere.length > 0
             ? `Il lavoro fatto resta: rivedi ${daRivedere.join('; ')}.`
             : 'Nessun passo compilato da rivedere.'}
         </div>
+      )}
+      {cronologia.length > 0 && (
+        <details className="text-[10px] text-slate-500">
+          <summary className="cursor-pointer font-bold uppercase tracking-wider text-slate-400">
+            Cronologia della situazione ({cronologia.length})
+          </summary>
+          <ul className="mt-1 space-y-0.5">
+            {cronologia.map((voce, i) => (
+              <li key={`${voce.cambiataIl}-${i}`}>
+                {dataItaliana(voce.cambiataIl)} — da{' '}
+                {etichettaIstruttoria(voce.da as TipoIstruttoria | null)} a{' '}
+                {etichettaIstruttoria(voce.a as TipoIstruttoria)}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
       {errore && <p className="text-[10px] font-bold text-red-700">{errore}</p>}
       {messaggio && <p className="text-[10px] font-bold text-emerald-700">{messaggio}</p>}

@@ -1,3 +1,16 @@
+## 0.190.0 — 2026-11-10
+
+**L’avviso dove si corregge il dato, e la cronologia dei cambi di situazione.**
+
+- Nella pagina **Proposta** l’avviso dice che la situazione è cambiata e che cosa
+  ricontrollare, con i numeri veri: è lì che il dato si corregge, non solo nella scheda.
+- Ogni cambio lascia una **traccia**: da che atto a che atto, con data e ora, in una tabella
+  dedicata (`situazione_storico`, creata al primo cambio). La scheda la mostra in forma
+  compatta, con le ultime cinque voci; il dato precedente non si perde.
+- **Test**: l’azione su PGlite verifica anche la riga di cronologia (e che non ne nasca una
+  quando la situazione non cambia o il cambio è rifiutato); il componente della scheda
+  controlla la cronologia visibile.
+
 ## 0.189.0 — 2026-11-10
 
 **Cambiare la situazione riallinea lo scenario, senza cancellare il lavoro fatto.**
