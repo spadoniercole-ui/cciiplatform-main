@@ -29,9 +29,14 @@ vi.mock('@/app/actions/verificheScenario', () => ({
   verificheDisponibiliAziendaAction: vi.fn(),
 }));
 
+vi.mock('@/app/actions/verificaAzienda', () => ({
+  ottieniSimulazioneBaseAction: vi.fn(),
+}));
+
 import { ottieniAziende } from '@/app/actions/aziende';
 import { creaScenarioAction, ottieniScenari } from '@/app/actions/scenari';
 import { verificheDisponibiliAziendaAction } from '@/app/actions/verificheScenario';
+import { ottieniSimulazioneBaseAction } from '@/app/actions/verificaAzienda';
 import { ScenariManager } from './ScenariManager';
 
 const crea = vi.mocked(creaScenarioAction);
@@ -46,8 +51,14 @@ beforeEach(() => {
   vi.mocked(verificheDisponibiliAziendaAction).mockResolvedValue({
     success: true,
     amministrativa: true,
-    contabile: false,
-    aggancio: { pronto: false },
+    contabile: true,
+    aggancio: { pronto: true },
+  } as never);
+  // Una simulazione salvata come base: senza, la verifica azienda non è una
+  // strada praticabile e resterebbe solo l'amministrativa.
+  vi.mocked(ottieniSimulazioneBaseAction).mockResolvedValue({
+    success: true,
+    base: { id: 11, profilo: 'STANDARD', annualita: 3, createdAt: '2026-11-10' },
   } as never);
   crea.mockResolvedValue({ success: true, scenarioId: 7 });
 });
@@ -62,12 +73,19 @@ async function apriForm(tipoSpazio: 'ENTE' | 'NON_ENTE') {
 }
 
 describe('ScenariManager — creazione scenario', () => {
-  it('chiede solo titolo e situazione, senza tipo proposta né origine', async () => {
+  it('la verifica di base decide quali situazioni si possono scegliere', async () => {
     await apriForm('ENTE');
 
+    expect(screen.getByText('Verifica azienda')).toBeTruthy();
+    expect(screen.getByText('Verifica amministrativa')).toBeTruthy();
+    // La base aziendale è preselezionata: c'è la simulazione salvata e il dato storico.
     expect(screen.getByText('Accordo transattivo')).toBeTruthy();
+    expect(screen.queryByText('Liquidazione giudiziale')).toBeNull();
+
+    fireEvent.click(screen.getByText('Verifica amministrativa'));
     expect(screen.getByText('Liquidazione giudiziale')).toBeTruthy();
     expect(screen.getByText('Cram down')).toBeTruthy();
+    expect(screen.queryByText('Accordo transattivo')).toBeNull();
     expect(screen.queryByText('Tipo proposta')).toBeNull();
     expect(screen.queryByText('Origine')).toBeNull();
   });
@@ -75,6 +93,7 @@ describe('ScenariManager — creazione scenario', () => {
   it('per uno spazio ENTE la liquidazione porta origine Tribunale al server', async () => {
     await apriForm('ENTE');
 
+    fireEvent.click(screen.getByText('Verifica amministrativa'));
     fireEvent.click(screen.getByText('Liquidazione giudiziale'));
     fireEvent.change(screen.getByPlaceholderText(/Nome scenario/), {
       target: { value: 'Ipotesi liquidazione' },
@@ -90,7 +109,8 @@ describe('ScenariManager — creazione scenario', () => {
         'Tribunale',
         false,
         { amministrativa: true, contabile: false },
-        'DECRETO_LIQUIDAZIONE'
+        'DECRETO_LIQUIDAZIONE',
+        'AMMINISTRATIVA'
       )
     );
     await waitFor(() => expect(push).toHaveBeenCalledWith('/spazio/demo/scenari/7'));
@@ -113,8 +133,9 @@ describe('ScenariManager — creazione scenario', () => {
         'DA_DEFINIRE',
         'Studio',
         true,
-        { amministrativa: true, contabile: false },
-        'PROPOSTA'
+        { amministrativa: true, contabile: true },
+        'PROPOSTA',
+        'AZIENDALE'
       )
     );
   });

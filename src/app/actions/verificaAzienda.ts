@@ -34,6 +34,19 @@ const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 export interface RisultatoConfigVerificaAzienda {
   success: boolean;
   annualita: number;
+  /** Il flag che abilita il lancio della simulazione nello spazio (0.195.0). */
+  simulazioneAttiva: boolean;
+  error?: string;
+}
+
+export interface RisultatoSimulazioneBase {
+  success: boolean;
+  base: {
+    id: number;
+    profilo: string;
+    annualita: number;
+    createdAt: string;
+  } | null;
   error?: string;
 }
 
@@ -57,11 +70,17 @@ export async function ottieniConfigVerificaAziendaAction(
   try {
     await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) {
-      return { success: false, annualita: ANNUALITA_PREDEFINITE, error: 'Nome schema non valido.' };
+      return {
+        success: false,
+        annualita: ANNUALITA_PREDEFINITE,
+        simulazioneAttiva: false,
+        error: 'Nome schema non valido.',
+      };
     }
     await assicuraTabelleVerificaAzienda(nomeSchema);
     const r = await pool.query(
-      `SELECT annualita_proiezione FROM "${nomeSchema}".verifica_azienda_config WHERE id = 1`
+      `SELECT annualita_proiezione, simulazione_attiva
+         FROM "${nomeSchema}".verifica_azienda_config WHERE id = 1`
     );
     const n = Number(r.rows[0]?.annualita_proiezione);
     return {
@@ -69,12 +88,14 @@ export async function ottieniConfigVerificaAziendaAction(
       annualita: Number.isFinite(n)
         ? Math.min(ANNUALITA_MASSIME, Math.max(ANNUALITA_MINIME, n))
         : ANNUALITA_PREDEFINITE,
+      simulazioneAttiva: Boolean(r.rows[0]?.simulazione_attiva),
     };
   } catch (error: unknown) {
     console.error('[ottieniConfigVerificaAziendaAction] Errore:', error);
     return {
       success: false,
       annualita: ANNUALITA_PREDEFINITE,
+      simulazioneAttiva: false,
       error: `Impossibile leggere la configurazione: ${(error as Error).message}`,
     };
   }
@@ -87,7 +108,12 @@ export async function impostaConfigVerificaAziendaAction(
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) {
-      return { success: false, annualita: ANNUALITA_PREDEFINITE, error: 'Nome schema non valido.' };
+      return {
+        success: false,
+        annualita: ANNUALITA_PREDEFINITE,
+        simulazioneAttiva: false,
+        error: 'Nome schema non valido.',
+      };
     }
     if (
       !Number.isInteger(annualita) ||
@@ -97,6 +123,7 @@ export async function impostaConfigVerificaAziendaAction(
       return {
         success: false,
         annualita: ANNUALITA_PREDEFINITE,
+        simulazioneAttiva: false,
         error: `Le annualità di proiezione stanno fra ${ANNUALITA_MINIME} e ${ANNUALITA_MASSIME}.`,
       };
     }
@@ -107,14 +134,135 @@ export async function impostaConfigVerificaAziendaAction(
        ON CONFLICT (id) DO UPDATE SET annualita_proiezione = EXCLUDED.annualita_proiezione, updated_at = now()`,
       [annualita]
     );
-    return { success: true, annualita };
+    const flag = await pool.query(
+      `SELECT simulazione_attiva FROM "${nomeSchema}".verifica_azienda_config WHERE id = 1`
+    );
+    return {
+      success: true,
+      annualita,
+      simulazioneAttiva: Boolean(flag.rows[0]?.simulazione_attiva),
+    };
   } catch (error: unknown) {
     console.error('[impostaConfigVerificaAziendaAction] Errore:', error);
     return {
       success: false,
       annualita: ANNUALITA_PREDEFINITE,
+      simulazioneAttiva: false,
       error: `Impossibile salvare la configurazione: ${(error as Error).message}`,
     };
+  }
+}
+
+/** Accende o spegne il lancio della simulazione nello spazio (0.195.0). */
+export async function impostaSimulazioneAttivaAction(
+  nomeSchema: string,
+  attiva: boolean
+): Promise<{ success: boolean; attiva: boolean; error?: string }> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!schemaOk(nomeSchema)) {
+      return { success: false, attiva: false, error: 'Nome schema non valido.' };
+    }
+    await assicuraTabelleVerificaAzienda(nomeSchema);
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".verifica_azienda_config
+         (id, annualita_proiezione, simulazione_attiva, updated_at)
+       VALUES (1, $1, $2, now())
+       ON CONFLICT (id) DO UPDATE
+         SET simulazione_attiva = EXCLUDED.simulazione_attiva, updated_at = now()`,
+      [ANNUALITA_PREDEFINITE, attiva]
+    );
+    return { success: true, attiva };
+  } catch (error: unknown) {
+    console.error('[impostaSimulazioneAttivaAction] Errore:', error);
+    return {
+      success: false,
+      attiva: false,
+      error: `Impossibile salvare il flag: ${(error as Error).message}`,
+    };
+  }
+}
+
+/** La simulazione salvata come base degli scenari di accordo transattivo. */
+export async function ottieniSimulazioneBaseAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<RisultatoSimulazioneBase> {
+  try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    if (!schemaOk(nomeSchema)) {
+      return { success: false, base: null, error: 'Nome schema non valido.' };
+    }
+    await assicuraTabelleVerificaAzienda(nomeSchema);
+    const r = await pool.query(
+      `SELECT id, profilo, annualita, created_at
+         FROM "${nomeSchema}".verifica_azienda_simulazioni
+        WHERE azienda_id = $1 AND base_per_proposta = TRUE
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [aziendaId]
+    );
+    const riga = r.rows[0];
+    return {
+      success: true,
+      base: riga
+        ? {
+            id: Number(riga.id),
+            profilo: String(riga.profilo),
+            annualita: Number(riga.annualita),
+            createdAt: riga.created_at?.toString() ?? '',
+          }
+        : null,
+    };
+  } catch (error: unknown) {
+    console.error('[ottieniSimulazioneBaseAction] Errore:', error);
+    return {
+      success: false,
+      base: null,
+      error: `Impossibile leggere la base: ${(error as Error).message}`,
+    };
+  }
+}
+
+/** Fissa una simulazione come base; le altre della stessa azienda tornano a non esserlo. */
+export async function salvaSimulazioneBaseAction(
+  nomeSchema: string,
+  aziendaId: number,
+  simulazioneId: number
+): Promise<{ success: boolean; simulazioneId?: number; error?: string }> {
+  try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    if (!schemaOk(nomeSchema)) {
+      return { success: false, error: 'Nome schema non valido.' };
+    }
+    if (!Number.isInteger(simulazioneId) || simulazioneId <= 0) {
+      return { success: false, error: 'Simulazione non riconosciuta.' };
+    }
+    await assicuraTabelleVerificaAzienda(nomeSchema);
+    const esiste = await pool.query(
+      `SELECT id FROM "${nomeSchema}".verifica_azienda_simulazioni
+        WHERE id = $1 AND azienda_id = $2`,
+      [simulazioneId, aziendaId]
+    );
+    if (esiste.rows.length === 0) {
+      return { success: false, error: 'La simulazione non appartiene a questa azienda.' };
+    }
+    await pool.query(
+      `UPDATE "${nomeSchema}".verifica_azienda_simulazioni
+          SET base_per_proposta = FALSE
+        WHERE azienda_id = $1`,
+      [aziendaId]
+    );
+    await pool.query(
+      `UPDATE "${nomeSchema}".verifica_azienda_simulazioni
+          SET base_per_proposta = TRUE
+        WHERE id = $1`,
+      [simulazioneId]
+    );
+    return { success: true, simulazioneId };
+  } catch (error: unknown) {
+    console.error('[salvaSimulazioneBaseAction] Errore:', error);
+    return { success: false, error: `Base non salvata: ${(error as Error).message}` };
   }
 }
 

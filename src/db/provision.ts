@@ -410,6 +410,9 @@ export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> 
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS tipo_istruttoria TEXT NOT NULL DEFAULT 'PROPOSTA'`
   );
+  // La verifica di base scelta alla creazione (0.195.0): aziendale per
+  // l'accordo transattivo, amministrativa per liquidazione e cram down.
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS base_verifica TEXT`);
   // Cambio di situazione (0.189.0): la data non cancella il lavoro fatto,
   // dice soltanto da quando i passi compilati vanno ricontrollati.
   await eseguiDdlTenant(
@@ -3150,9 +3153,13 @@ export async function assicuraTabelleVerificaAzienda(nomeSchema: string): Promis
     sql`CREATE TABLE IF NOT EXISTS ${s}.verifica_azienda_config (
       id INTEGER PRIMARY KEY DEFAULT 1,
       annualita_proiezione INTEGER NOT NULL DEFAULT 3,
+      simulazione_attiva BOOLEAN NOT NULL DEFAULT FALSE,
       updated_at TIMESTAMP NOT NULL DEFAULT now(),
       CONSTRAINT verifica_azienda_config_una_riga CHECK (id = 1)
     )`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.verifica_azienda_config ADD COLUMN IF NOT EXISTS simulazione_attiva BOOLEAN NOT NULL DEFAULT FALSE`
   );
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.verifica_azienda_simulazioni (
@@ -3165,7 +3172,13 @@ export async function assicuraTabelleVerificaAzienda(nomeSchema: string): Promis
       crescita_applicata_pct NUMERIC(8,2) NOT NULL DEFAULT 0,
       colonne JSONB NOT NULL,
       avvertenze JSONB NOT NULL DEFAULT '[]'::jsonb,
+      base_per_proposta BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP NOT NULL DEFAULT now()
     )`
+  );
+  // La simulazione scelta come base degli scenari di accordo transattivo
+  // (0.195.0). Una sola per azienda: l'azione azzera le altre.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.verifica_azienda_simulazioni ADD COLUMN IF NOT EXISTS base_per_proposta BOOLEAN NOT NULL DEFAULT FALSE`
   );
 }

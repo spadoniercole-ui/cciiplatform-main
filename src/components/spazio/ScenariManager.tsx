@@ -17,11 +17,15 @@ import {
   type Scenario,
 } from '@/app/actions/scenari';
 import { verificheDisponibiliAziendaAction } from '@/app/actions/verificheScenario';
+import { ottieniSimulazioneBaseAction } from '@/app/actions/verificaAzienda';
 import type { TipoProposta } from '@/lib/origineProposta';
 import { etichettaIstruttoria } from '@/lib/giudice/lettura';
 import { useDemo } from '@/components/spazio/DemoUploadProvider';
 
 type Situazione = 'PROPOSTA' | 'DECRETO_LIQUIDAZIONE' | 'CRAM_DOWN';
+
+/** La verifica da cui parte lo scenario: azienda (con simulazione) o sola amministrativa. */
+type BaseVerifica = 'AZIENDALE' | 'AMMINISTRATIVA';
 
 // Le tre situazioni che lo scenario può valutare. L'accordo transattivo è la
 // proposta dell'azienda (il tipo storico «PROPOSTA»): decreto e cram down sono
@@ -81,11 +85,11 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
   const [origineNuova, setOrigineNuova] = useState(tipoSpazio === 'ENTE' ? 'Azienda' : 'Studio');
   const [situazioneNuova, setSituazioneNuova] = useState<Situazione>('PROPOSTA');
   const [simulazioneAttivaNuova, setSimulazioneAttivaNuova] = useState(false);
-  // Le due verifiche dell'ente che entrano nello scenario: scelte qui, alla
-  // creazione, con la più completa disponibile già preselezionata, e
-  // modificabili in ogni momento dal passo 0 dello scenario.
-  const [verificaAmministrativa, setVerificaAmministrativa] = useState(true);
-  const [verificaContabile, setVerificaContabile] = useState(false);
+  // La verifica di base decide il percorso: azienda (amministrativa +
+  // contabile, con la simulazione salvata) per l'accordo transattivo, sola
+  // amministrativa per liquidazione e cram down.
+  const [baseNuova, setBaseNuova] = useState<BaseVerifica>('AMMINISTRATIVA');
+  const [basePronta, setBasePronta] = useState(false);
   const [disponibilita, setDisponibilita] = useState<{
     amministrativa: boolean;
     contabile: boolean;
@@ -149,14 +153,27 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
   // la sola contabile storica — che resta l'unica scelta quando il dato
   // attuale manca, perché l'amministrativa è la verifica minima.
   const caricaDisponibilita = async (aziendaId: number) => {
-    const esito = await verificheDisponibiliAziendaAction(nomeSchema, aziendaId).catch(() => null);
+    const [esito, baseRis] = await Promise.all([
+      verificheDisponibiliAziendaAction(nomeSchema, aziendaId).catch(() => null),
+      ottieniSimulazioneBaseAction(nomeSchema, aziendaId).catch(() => null),
+    ]);
     const amministrativa = Boolean(esito?.success && esito.amministrativa);
     // La contabile entra nello scenario solo quando l’aggancio è completo:
     // visura, debito dell’ente e bilancio XBRL ci sono tutti.
     const contabile = Boolean(esito?.success && esito.aggancio?.pronto);
+    // Senza simulazione salvata come base la verifica azienda non è pronta:
+    // l'amministrativa resta l'unica strada, ed è quella che guida.
+    const pronta = Boolean(baseRis?.success && baseRis.base);
     setDisponibilita({ amministrativa, contabile });
-    setVerificaAmministrativa(amministrativa || !contabile);
-    setVerificaContabile(amministrativa && contabile);
+    setBasePronta(pronta);
+    const base: BaseVerifica = pronta && contabile ? 'AZIENDALE' : 'AMMINISTRATIVA';
+    setBaseNuova(base);
+    setSituazioneNuova(base === 'AZIENDALE' ? 'PROPOSTA' : 'DECRETO_LIQUIDAZIONE');
+  };
+
+  const scegliBase = (base: BaseVerifica) => {
+    setBaseNuova(base);
+    setSituazioneNuova(base === 'AZIENDALE' ? 'PROPOSTA' : 'DECRETO_LIQUIDAZIONE');
   };
 
   const handleSelezionaAzienda = (aziendaId: number) => {
@@ -187,8 +204,10 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
       return;
     }
     if (!aziendaSelezionata || !nomeNuovo.trim()) return;
-    if (!verificaAmministrativa && !verificaContabile) {
-      setErrore('Almeno una verifica dell’ente deve entrare nello scenario.');
+    if (baseNuova === 'AZIENDALE' && (!basePronta || !disponibilita?.contabile)) {
+      setErrore(
+        'L’accordo transattivo parte dalla verifica azienda: serve una simulazione salvata come base e un bilancio XBRL.'
+      );
       return;
     }
     setErrore(null);
@@ -201,8 +220,12 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
       // Il piano di sviluppo è sempre attivo per il Redigente; il flag
       // conta solo per il Ricevente (RICEVUTA).
       tipoNuovo === 'RICEVUTA' ? simulazioneAttivaNuova : true,
-      { amministrativa: verificaAmministrativa, contabile: verificaContabile },
-      situazioneNuova
+      {
+        amministrativa: true,
+        contabile: baseNuova === 'AZIENDALE' && Boolean(disponibilita?.contabile),
+      },
+      situazioneNuova,
+      baseNuova
     );
     if (!risultato.success) {
       setErrore(risultato.error || 'Impossibile creare lo scenario.');
@@ -212,11 +235,9 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
     setTipoNuovo(tipoSpazio === 'ENTE' ? 'RICEVUTA' : 'DA_DEFINIRE');
     setOrigineNuova(tipoSpazio === 'ENTE' ? 'Azienda' : 'Studio');
     setSimulazioneAttivaNuova(false);
-    setSituazioneNuova('PROPOSTA');
-    setVerificaAmministrativa(true);
-    setVerificaContabile(false);
     setMostraForm(false);
     await caricaScenari(aziendaSelezionata);
+    await caricaDisponibilita(aziendaSelezionata);
     if (risultato.scenarioId) {
       router.push(`/spazio/${codiceSpazio}/scenari/${risultato.scenarioId}`);
     }
@@ -343,10 +364,52 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4 space-y-3">
               <div className="space-y-1.5">
                 <p className="block text-[9px] font-bold text-slate-400 uppercase">
+                  Verifica di base
+                </p>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => scegliBase('AZIENDALE')}
+                    disabled={!basePronta || !disponibilita?.contabile}
+                    className={`text-left rounded-lg border p-2 transition-colors disabled:opacity-50 ${
+                      baseNuova === 'AZIENDALE'
+                        ? 'border-blue-400 bg-blue-50 text-blue-900'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="block text-[11px] font-bold">Verifica azienda</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5">
+                      {basePronta && disponibilita?.contabile
+                        ? 'Amministrativa e contabile insieme, con la simulazione salvata come base.'
+                        : 'Serve una simulazione salvata come base nella verifica azienda e un bilancio XBRL.'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scegliBase('AMMINISTRATIVA')}
+                    className={`text-left rounded-lg border p-2 transition-colors ${
+                      baseNuova === 'AMMINISTRATIVA'
+                        ? 'border-blue-400 bg-blue-50 text-blue-900'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="block text-[11px] font-bold">Verifica amministrativa</span>
+                    <span className="block text-[10px] text-slate-500 mt-0.5">
+                      {disponibilita?.amministrativa
+                        ? 'Dato attuale: debito dell’ente e soglie. Guida liquidazione e cram down.'
+                        : 'Non disponibile: mancano visura o prospetti dell’ente su questa azienda.'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <p className="block text-[9px] font-bold text-slate-400 uppercase">
                   Situazione da valutare
                 </p>
-                <div className="grid sm:grid-cols-3 gap-2">
-                  {SITUAZIONI.map((s) => (
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {SITUAZIONI.filter((s) =>
+                    baseNuova === 'AZIENDALE' ? s.codice === 'PROPOSTA' : s.codice !== 'PROPOSTA'
+                  ).map((s) => (
                     <button
                       key={s.codice}
                       type="button"
@@ -363,68 +426,10 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                   ))}
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  {tipoSpazio === 'ENTE'
-                    ? 'Lo spazio riceve: la proposta arriva dall’azienda, decreto e cram down dal tribunale.'
-                    : 'Il percorso redigente prepara la proposta; decreto e cram down restano valutazioni del tribunale.'}
+                  {baseNuova === 'AZIENDALE'
+                    ? 'L’accordo transattivo si valuta sulla verifica azienda e sulla simulazione salvata come base.'
+                    : 'Liquidazione e cram down si misurano sul debito e sulle soglie della verifica amministrativa.'}
                 </p>
-              </div>
-              {tipoNuovo === 'RICEVUTA' && (
-                <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                  <input
-                    type="checkbox"
-                    checked={simulazioneAttivaNuova}
-                    onChange={(e) => setSimulazioneAttivaNuova(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="font-bold">Attiva l’analisi del piano aziendale</span>
-                    <span className="block text-[10px] text-slate-500 mt-0.5">
-                      Aggiunge il passo «Piano di sviluppo»: piano a macro-voci del bilancio e
-                      confronto del piano dell’azienda con il piano automatico di settore, con i
-                      semafori. È l’ultima attività, dopo la valutazione. Richiede la funzione
-                      Simulazione abilitata sullo spazio.
-                    </span>
-                  </span>
-                </label>
-              )}
-              <div className="bg-white border border-slate-200 rounded-lg p-2.5 space-y-1.5">
-                <p className="text-[9px] font-bold text-slate-400 uppercase">
-                  Verifiche dell’ente che entrano nello scenario
-                </p>
-                <label className="flex items-start gap-2 text-xs text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={verificaAmministrativa}
-                    disabled={!disponibilita?.amministrativa}
-                    onChange={(e) => setVerificaAmministrativa(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="font-bold">Verifica amministrativa</span>
-                    <span className="block text-[10px] text-slate-500 mt-0.5">
-                      {disponibilita?.amministrativa
-                        ? 'Obbligatoria: visura e prospetti dell’ente, dato attuale (triage).'
-                        : 'Non disponibile: mancano visura o prospetti dell’ente su questa azienda.'}
-                    </span>
-                  </span>
-                </label>
-                <label className="flex items-start gap-2 text-xs text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={verificaContabile}
-                    disabled={!disponibilita?.contabile}
-                    onChange={(e) => setVerificaContabile(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    <span className="font-bold">Verifica contabile</span>
-                    <span className="block text-[10px] text-slate-500 mt-0.5">
-                      {disponibilita?.contabile
-                        ? 'Facoltativa: visura e bilancio XBRL, dato storico. Con l’amministrativa forma la verifica completa.'
-                        : 'Non disponibile: nessun bilancio XBRL caricato su questa azienda.'}
-                    </span>
-                  </span>
-                </label>
               </div>
               <div className="flex gap-2">
                 <input
@@ -437,7 +442,10 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                 <button
                   type="button"
                   onClick={handleCreaScenario}
-                  disabled={!nomeNuovo.trim() || (!verificaAmministrativa && !verificaContabile)}
+                  disabled={
+                    !nomeNuovo.trim() ||
+                    (baseNuova === 'AZIENDALE' && (!basePronta || !disponibilita?.contabile))
+                  }
                   className="px-3 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg transition-colors shrink-0"
                 >
                   Crea
@@ -482,6 +490,9 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                         <div className="font-bold text-slate-900 text-xs">{s.nome}</div>
                         <div className="text-[10px] text-slate-500 mt-0.5">
                           {etichettaIstruttoria(s.tipoIstruttoria)} — origine: {s.origineProposta} ·
+                          {s.baseVerifica
+                            ? ` base: ${s.baseVerifica === 'AMMINISTRATIVA' ? 'verifica amministrativa' : 'verifica azienda'} ·`
+                            : ''}{' '}
                           Stato: {s.stato}
                         </div>
                       </button>

@@ -51,6 +51,12 @@ export interface Scenario {
   tipoIstruttoria?: TipoIstruttoria;
   /** Data dell'ultimo cambio di situazione (0.189.0); null se non è mai cambiata. */
   situazioneCambiataIl: string | null;
+  /**
+   * Verifica di base scelta alla creazione (0.195.0): aziendale per l'accordo
+   * transattivo, amministrativa per liquidazione e cram down. Null sugli
+   * scenari creati prima.
+   */
+  baseVerifica?: 'AZIENDALE' | 'AMMINISTRATIVA' | null;
   rigaRilevanteBloccata: boolean;
   archiviato: boolean;
   /** Ricevente (ENTE): abilita il passo «Piano di sviluppo» (confronto con il piano dell'azienda, ipotesi dell'AI) su questo scenario. Scelto alla creazione. Per il Redigente il piano è sempre disponibile, quindi questo flag è ininfluente lì. */
@@ -79,6 +85,7 @@ export async function ottieniScenari(
   try {
     await richiediAccessoAzienda(nomeSchema, aziendaId);
     await assicuraTabelleScenari(nomeSchema);
+
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const { eq } = await import('drizzle-orm');
@@ -88,6 +95,23 @@ export async function ottieniScenari(
       .select()
       .from(tabelle.scenari)
       .where(eq(tabelle.scenari.aziendaId, aziendaId));
+
+    // La base non passa da Drizzle (la colonna vive nel DDL del tenant): una
+    // lettura sola per l'elenco, e l'assenza vale «scenario anteriore».
+    const { pool } = await import('@/lib/db');
+    const basi = new Map<number, 'AZIENDALE' | 'AMMINISTRATIVA'>();
+    await pool
+      .query(`SELECT id, base_verifica FROM "${nomeSchema}".scenari WHERE azienda_id = $1`, [
+        aziendaId,
+      ])
+      .then((r) =>
+        r.rows.forEach((x) => {
+          if (x.base_verifica === 'AZIENDALE' || x.base_verifica === 'AMMINISTRATIVA') {
+            basi.set(Number(x.id), x.base_verifica);
+          }
+        })
+      )
+      .catch(() => undefined);
 
     return {
       success: true,
@@ -100,6 +124,7 @@ export async function ottieniScenari(
         origineProposta: r.origineProposta,
         tipoIstruttoria: r.tipoIstruttoria as TipoIstruttoria,
         situazioneCambiataIl: isoData(r.situazioneCambiataIl),
+        baseVerifica: basi.get(r.id) ?? null,
         rigaRilevanteBloccata: r.rigaRilevanteBloccata,
         archiviato: r.archiviato,
         simulazioneAttiva: r.simulazioneAttiva,
@@ -231,7 +256,13 @@ export async function creaScenarioAction(
    * della scelta tipo proposta/origine, che era un doppione della stessa
    * domanda.
    */
-  tipoIstruttoria?: TipoIstruttoria
+  tipoIstruttoria?: TipoIstruttoria,
+  /**
+   * La verifica di base (0.195.0). Aziendale = accordo transattivo, con la
+   * simulazione salvata come base; amministrativa = liquidazione e cram down,
+   * con debito e soglie dell'ente. Omessa = scenari anteriori, nessun vincolo.
+   */
+  baseVerifica?: 'AZIENDALE' | 'AMMINISTRATIVA'
 ): Promise<RisultatoOperazioneScenario> {
   try {
     await richiediAccessoAzienda(nomeSchema, aziendaId, {
@@ -253,6 +284,23 @@ export async function creaScenarioAction(
 
     if (tipoIstruttoria !== undefined && !tipoIstruttoriaValido(tipoIstruttoria)) {
       return { success: false, error: 'Situazione dello scenario non riconosciuta.' };
+    }
+
+    // La base e la situazione non sono indipendenti: l'accordo transattivo si
+    // valuta sulla verifica azienda, liquidazione e cram down sulla sola
+    // amministrativa. Il browser le tiene allineate; il server non si fida.
+    if (baseVerifica === 'AZIENDALE' && tipoIstruttoria && tipoIstruttoria !== 'PROPOSTA') {
+      return {
+        success: false,
+        error:
+          'La verifica azienda è la base dell’accordo transattivo, non di liquidazione o cram down.',
+      };
+    }
+    if (baseVerifica === 'AMMINISTRATIVA' && tipoIstruttoria === 'PROPOSTA') {
+      return {
+        success: false,
+        error: 'L’accordo transattivo parte dalla verifica azienda, non dalla sola amministrativa.',
+      };
     }
 
     // Uno spazio ENTE riceve sempre proposte, non le redige mai — non ci
@@ -281,6 +329,32 @@ export async function creaScenarioAction(
     const { db } = await import('@/db/client');
     const { getTabelleTenant } = await import('@/db/schema');
     const tabelle = getTabelleTenant(nomeSchema);
+
+    // Una base aziendale esiste solo se qualcuno ha salvato una simulazione
+    // come base: senza, l'accordo transattivo non avrebbe i numeri su cui
+    // costruire il confronto.
+    if (baseVerifica === 'AZIENDALE') {
+      const esistenza = await pool.query(`SELECT to_regclass($1) AS tabella`, [
+        `${nomeSchema}.verifica_azienda_simulazioni`,
+      ]);
+      let pronta = false;
+      if (esistenza.rows[0]?.tabella) {
+        const base = await pool.query(
+          `SELECT 1 FROM "${nomeSchema}".verifica_azienda_simulazioni
+            WHERE azienda_id = $1 AND base_per_proposta = TRUE
+            LIMIT 1`,
+          [aziendaId]
+        );
+        pronta = base.rows.length > 0;
+      }
+      if (!pronta) {
+        return {
+          success: false,
+          error:
+            'Salva prima una simulazione come base nella verifica azienda: senza, l’accordo transattivo non ha una base.',
+        };
+      }
+    }
 
     const inserito = await db
       .insert(tabelle.scenari)
@@ -314,6 +388,15 @@ export async function creaScenarioAction(
       .returning({ id: tabelle.scenari.id });
 
     const nuovoScenarioId = inserito[0].id;
+
+    // La colonna vive nel DDL del tenant, non in Drizzle: si scrive dopo
+    // l'inserimento, in un colpo solo.
+    if (baseVerifica) {
+      await pool.query(`UPDATE "${nomeSchema}".scenari SET base_verifica = $2 WHERE id = $1`, [
+        nuovoScenarioId,
+        baseVerifica,
+      ]);
+    }
 
     // Redigente: erediti nella Check List del nuovo scenario le risposte
     // già date a livello Azienda (manuali o da Screening) — così non si

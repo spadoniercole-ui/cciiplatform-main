@@ -1,3 +1,24 @@
+## 0.195.0 — 2026-11-10
+
+**Due verifiche, due box; la simulazione diventa la base degli scenari.**
+
+- Nella **verifica azienda** l’amministrativa e la contabile stanno in due riquadri distinti, con
+  indicatore, debito, annualità, visura e parametri, e il collegamento alla pagina che li produce.
+  Sotto i box c’è il **flag che abilita la simulazione** e il lancio: senza flag non si calcola
+  nulla, e il flag resta salvato per lo spazio.
+- La simulazione calcolata si può **salvare come base per la proposta**: una sola per azienda,
+  diventa la base degli scenari di accordo transattivo. Liquidazione e cram down non la usano.
+- Via dalla verifica azienda il riquadro di liquidazione e cram down: quei numeri appartengono agli
+  scenari, non alla simulazione.
+- **Ingresso negli scenari**: si sceglie prima la verifica di base — **verifica azienda**
+  (amministrativa + contabile, richiede la simulazione salvata) per l’accordo transattivo, **verifica
+  amministrativa** per liquidazione e cram down — e le situazioni proposte seguono la base. La scelta
+  è registrata sullo scenario (`base_verifica`) e il server rifiuta combinazioni incoerenti o una
+  base aziendale senza simulazione salvata.
+- Nuove letture e scritture: flag `simulazione_attiva`, `base_per_proposta` sulle simulazioni,
+  `base_verifica` sugli scenari (DDL idempotente per i tenant esistenti).
+- **Test**: scheda verifica azienda riscritta sul nuovo flusso (due box, flag, lancio, base).
+
 ## 0.194.0 — 2026-11-10
 
 **L’esito della verifica amministrativa ha una casa propria.**
