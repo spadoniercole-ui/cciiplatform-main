@@ -1,3 +1,17 @@
+## 0.198.1 — 2026-11-10
+
+**Il debito memorizzato segue la verifica a cui appartiene.**
+
+- Riaprendo l’azienda per un nuovo ciclo di triage, la cifra consegnata alla contabile dalla
+  verifica precedente viene tolta: il lavoro da cui era stata letta è già nell’archivio del
+  ciclo, e lasciarla in tabella faceva apparire verde una verifica che non aveva ancora prodotto
+  nulla. La lista torna a dichiarare «Debito ente da memorizzare».
+- La chiusura della verifica usa lo stesso riallineamento: se gli archivi non portano posizioni,
+  il debito memorizzato viene rimosso invece di restare quello di una verifica diversa, e
+  l’esito lo dichiara; se la scrittura fallisce, l’esito resta valido con l’avviso.
+- Il rinnovo esplicito «Memorizza debito» continua a non cancellare nulla quando non c’è niente
+  da leggere, così un archivio momentaneamente vuoto non perde una cifra già consegnata.
+
 ## 0.198.0 — 2026-11-10
 
 **Il debito dell’ente si memorizza da dove lo si vede.**

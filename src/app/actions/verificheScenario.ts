@@ -37,8 +37,15 @@ export interface DisponibilitaVerifiche {
   error?: string;
 }
 
+// Le colonne NUMERIC arrivano da `pg` come stringhe: senza questa conversione
+// ogni importo letto dall'aggancio contabile valeva zero.
 function numero(v: unknown): number {
-  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
 }
 
 /**

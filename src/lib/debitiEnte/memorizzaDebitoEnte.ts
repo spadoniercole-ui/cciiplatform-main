@@ -27,7 +27,17 @@ import type { RigaVera, TrattamentoVera } from './veraImport';
 import type { StatoDuplicatoVera } from './duplicatiVera';
 import { debitoDaMemorizzare, type DebitoMemorizzato } from './memorizzazione';
 
-const numero = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+// `pg` restituisce le colonne NUMERIC come STRINGHE, non come numeri: scartare
+// tutto ciò che non è già un number trasformava ogni importo in zero, e la
+// verifica non trovava mai un debito da memorizzare.
+const numero = (v: unknown): number => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
 
 /** Gli anni di bilancio in archivio, dal più recente: servono all'aggancio. */
 export async function anniBilancioAzienda(
@@ -114,8 +124,10 @@ export async function leggiSnapshotDebito(
 
 /**
  * Scrive il debito dell'azienda. Restituisce null quando non c'è nulla di
- * memorizzabile: in quel caso la riga precedente — se c'è — resta com'era,
- * perché un'azienda senza archivi oggi non è un'azienda senza debito ieri.
+ * memorizzabile: in quel caso la riga precedente — se c'è — resta com'era.
+ * È il comportamento giusto per il rinnovo esplicito (un archivio momentaneamente
+ * vuoto non deve cancellare una cifra già consegnata). Chi invece deve tenere la
+ * memorizzazione allineata alla verifica corrente usa `allineaDebitoEnteMemorizzato`.
  */
 export async function memorizzaDebitoEnte(
   nomeSchema: string,
@@ -168,6 +180,48 @@ export async function memorizzaDebitoEnte(
   );
 
   return debito;
+}
+
+/**
+ * Toglie la cifra memorizzata. Restituisce true se c'era una riga da togliere.
+ *
+ * Serve alla riapertura: il debito memorizzato è quello di UNA verifica, non un
+ * attributo permanente dell'azienda. Quando si apre un nuovo ciclo di triage la
+ * cifra precedente non descrive più la verifica in corso — e il lavoro da cui
+ * era stata letta è già nell'archivio del ciclo — quindi va tolta, invece di
+ * restare a schermo come se appartenesse al nuovo ciclo.
+ */
+export async function azzeraDebitoEnteMemorizzato(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<boolean> {
+  await assicuraTabellaDebitoEnteMemorizzato(nomeSchema);
+  const risposta = await pool.query(
+    `DELETE FROM "${nomeSchema}".debiti_ente_memorizzati
+      WHERE azienda_id = $1
+      RETURNING azienda_id`,
+    [aziendaId]
+  );
+  return risposta.rows.length > 0;
+}
+
+/**
+ * Riallinea la cifra memorizzata alla verifica amministrativa corrente.
+ *
+ * Una sola regola per chiusura e riapertura: o c'è un debito negli archivi e
+ * allora è quello memorizzato, oppure non c'è e la riga precedente viene tolta,
+ * perché apparteneva a una verifica diversa. Il risultato dichiara che cosa è
+ * successo, così l'esito può dire di aver rimosso una cifra invece di lasciarla
+ * sparire in silenzio.
+ */
+export async function allineaDebitoEnteMemorizzato(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<{ debito: DebitoMemorizzato | null; azzerato: boolean }> {
+  const debito = await memorizzaDebitoEnte(nomeSchema, aziendaId);
+  if (debito) return { debito, azzerato: false };
+  const azzerato = await azzeraDebitoEnteMemorizzato(nomeSchema, aziendaId);
+  return { debito: null, azzerato };
 }
 
 export interface DebitoMemorizzatoLetto {

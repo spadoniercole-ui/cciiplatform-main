@@ -12,7 +12,10 @@ import { pool } from '@/lib/db';
 import { assicuraTabellaAziende } from '@/db/provision';
 import type { AnagraficaEstratta } from '@/app/actions/visuraEstrazione';
 import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
-import { memorizzaDebitoEnte } from '@/lib/debitiEnte/memorizzaDebitoEnte';
+import {
+  allineaDebitoEnteMemorizzato,
+  azzeraDebitoEnteMemorizzato,
+} from '@/lib/debitiEnte/memorizzaDebitoEnte';
 
 export interface RisultatoVerifica {
   success: boolean;
@@ -120,7 +123,23 @@ export async function creaAziendaInVerificaAction(
           id
         );
         await client.query('COMMIT');
-        return { success: true, aziendaId: id, cicloArchiviato: esito.archiviato };
+
+        // IL DEBITO MEMORIZZATO APPARTENEVA ALLA VERIFICA ARCHIVIATA.
+        //
+        // Riaprendo il triage si riparte da zero, ma la cifra consegnata alla
+        // contabile restava nella tabella e continuava a valere per la nuova
+        // verifica: la lista la mostrava verde mentre le posizioni da cui era
+        // stata letta erano già in archivio. Qui si toglie, così il badge torna
+        // a dire «da memorizzare» finché il nuovo esito non consegna la sua
+        // cifra. Un errore nella pulizia non annulla la riapertura, ma si dice.
+        let avvisoDebito: string | undefined;
+        try {
+          await azzeraDebitoEnteMemorizzato(nomeSchema, id);
+        } catch (errore) {
+          console.error('[creaAziendaInVerificaAction] Debito non azzerato:', errore);
+          avvisoDebito = `la cifra memorizzata con la verifica precedente non è stata rimossa (${(errore as Error).message})`;
+        }
+        return { success: true, aziendaId: id, cicloArchiviato: esito.archiviato, avvisoDebito };
       } catch (e) {
         await client.query('ROLLBACK').catch(() => undefined);
         throw e;
@@ -237,7 +256,14 @@ export async function registraEsitoVerificaAction(
     // salvato non si annulla: l'avviso lo dichiara.
     let avvisoDebito: string | undefined;
     try {
-      await memorizzaDebitoEnte(nomeSchema, aziendaId);
+      // Riallineamento, non semplice scrittura: se questa verifica non porta
+      // posizioni, la cifra di una verifica precedente non deve restare al suo
+      // posto. L'esito lo dichiara quando toglie qualcosa.
+      const allineato = await allineaDebitoEnteMemorizzato(nomeSchema, aziendaId);
+      if (allineato.azzerato) {
+        avvisoDebito =
+          'gli archivi non portano posizioni per questa azienda: la cifra memorizzata con la verifica precedente è stata tolta, perché non apparteneva a questa';
+      }
     } catch (errore) {
       console.error('[registraEsitoVerificaAction] Debito non memorizzato:', errore);
       avvisoDebito = (errore as Error).message;
