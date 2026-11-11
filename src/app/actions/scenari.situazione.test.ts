@@ -13,6 +13,15 @@ import { PGlite } from '@electric-sql/pglite';
 
 const db = await PGlite.create();
 
+/**
+ * Il PIN del secondo fattore è l'unica cosa che non si prova su PGlite: il
+ * verificatore ha il suo modulo (pinIdentita.test.ts) e il database vero. Qui
+ * si simula l'esito, e si controlla che senza esito positivo il dato non si
+ * tocchi.
+ */
+const { verificaPin } = vi.hoisted(() => ({ verificaPin: vi.fn() }));
+vi.mock('@/lib/mfa/pinSessione', () => ({ verificaPinSecondoFattore: verificaPin }));
+
 vi.mock('@/lib/db', () => ({
   pool: { query: (testo: string, parametri?: unknown[]) => db.query(testo, parametri) },
 }));
@@ -31,6 +40,7 @@ const { leggiStoricoSituazione } = await import('@/lib/scenari/storicoSituazione
 
 const SCHEMA = 'tenant_prova_situazione';
 const SCENARIO = 1;
+const PIN = '123456';
 
 async function riga() {
   const r = await db.query(`SELECT * FROM ${SCHEMA}.scenari WHERE id = $1`, [SCENARIO]);
@@ -53,6 +63,8 @@ async function storico() {
 
 beforeEach(async () => {
   richiediAccessoScenario.mockReset();
+  verificaPin.mockReset();
+  verificaPin.mockResolvedValue({ ok: true });
   richiediAccessoScenario.mockResolvedValue({
     modalita: 'ADMIN_SPAZIO',
     email: 'anna@alfa.it',
@@ -126,7 +138,12 @@ afterEach(() => {
 
 describe('aggiornaSituazioneScenarioAction', () => {
   it('ENTE, decreto: origine Tribunale, scenario in bozza, passi e cronologia', async () => {
-    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'DECRETO_LIQUIDAZIONE');
+    const esito = await aggiornaSituazioneScenarioAction(
+      SCHEMA,
+      SCENARIO,
+      'DECRETO_LIQUIDAZIONE',
+      PIN
+    );
 
     expect(esito.success).toBe(true);
     expect((await storico())[0].autore).toBe('anna@alfa.it');
@@ -151,7 +168,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
   it('la guardia viene prima di tutto: se rifiuta, il dato non si tocca', async () => {
     richiediAccessoScenario.mockRejectedValueOnce(new Error('Accesso negato'));
 
-    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN');
+    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN', PIN);
 
     expect(esito.success).toBe(false);
     const r = await riga();
@@ -163,7 +180,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
   it('uno scenario bloccato resta in sola lettura', async () => {
     await db.query(`UPDATE ${SCHEMA}.scenari SET bloccato_il = now() WHERE id = $1`, [SCENARIO]);
 
-    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN');
+    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN', PIN);
 
     expect(esito.success).toBe(false);
     expect(esito.error).toMatch(/sola lettura permanente/);
@@ -174,7 +191,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
   it('in demo i percorsi sono predisposti e non si cambiano', async () => {
     await db.query(`UPDATE public.spazi SET demo = TRUE WHERE nome_schema = $1`, [SCHEMA]);
 
-    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN');
+    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN', PIN);
 
     expect(esito.success).toBe(false);
     expect(esito.error).toMatch(/demo/);
@@ -189,7 +206,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
       [SCENARIO]
     );
 
-    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'PROPOSTA');
+    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'PROPOSTA', PIN);
 
     expect(esito.success).toBe(true);
     const r = await riga();
@@ -199,7 +216,12 @@ describe('aggiornaSituazioneScenarioAction', () => {
   });
 
   it('rifiuta una situazione non riconosciuta', async () => {
-    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'DA_CHIEDERE' as never);
+    const esito = await aggiornaSituazioneScenarioAction(
+      SCHEMA,
+      SCENARIO,
+      'DA_CHIEDERE' as never,
+      PIN
+    );
 
     expect(esito.success).toBe(false);
     expect(esito.error).toMatch(/non riconosciuta/);
@@ -207,7 +229,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
   });
 
   it('se la situazione è già quella non risveglia la bozza né scrive cronologia', async () => {
-    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'PROPOSTA');
+    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'PROPOSTA', PIN);
 
     expect(esito.success).toBe(true);
     expect(esito.rivedere).toEqual([]);
@@ -216,11 +238,59 @@ describe('aggiornaSituazioneScenarioAction', () => {
     expect(r.situazione_cambiata_il).toBeNull();
     expect(await storico()).toEqual([]);
   });
+
+  it('senza PIN corretto il tipo non si tocca', async () => {
+    verificaPin.mockResolvedValueOnce({ ok: false, error: 'PIN non corretto.' });
+
+    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN', '999999');
+
+    expect(esito.success).toBe(false);
+    expect(esito.error).toBe('PIN non corretto.');
+    const r = await riga();
+    expect(r.tipo_istruttoria).toBe('PROPOSTA');
+    expect(r.stato).toBe('IN_CORSO');
+    expect(r.situazione_cambiata_il).toBeNull();
+    expect(await storico()).toEqual([]);
+  });
+
+  it('se il tipo non cambia il PIN non si chiede', async () => {
+    const esito = await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'PROPOSTA', '');
+
+    expect(esito.success).toBe(true);
+    expect(esito.rivedere).toEqual([]);
+    expect(verificaPin).not.toHaveBeenCalled();
+  });
+
+  it('il cambio non lancia né ricalcola simulazioni', async () => {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS ${SCHEMA}.verifica_azienda_simulazioni (
+        id SERIAL PRIMARY KEY, azienda_id INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS ${SCHEMA}.contabile_rami (
+        id SERIAL PRIMARY KEY, scenario_id INTEGER
+      );
+    `);
+
+    const esito = await aggiornaSituazioneScenarioAction(
+      SCHEMA,
+      SCENARIO,
+      'DECRETO_LIQUIDAZIONE',
+      PIN
+    );
+
+    expect(esito.success).toBe(true);
+    const simulazioni = await db.query(
+      `SELECT COUNT(*)::int AS n FROM ${SCHEMA}.verifica_azienda_simulazioni`
+    );
+    const rami = await db.query(`SELECT COUNT(*)::int AS n FROM ${SCHEMA}.contabile_rami`);
+    expect((simulazioni.rows[0] as { n: number }).n).toBe(0);
+    expect((rami.rows[0] as { n: number }).n).toBe(0);
+  });
 });
 
 describe('annullaUltimoCambioSituazioneAction', () => {
   it('l’Admin torna all’atto precedente e la riga resta marcata annullata', async () => {
-    await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'DECRETO_LIQUIDAZIONE');
+    await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'DECRETO_LIQUIDAZIONE', PIN);
 
     const esito = await annullaUltimoCambioSituazioneAction(SCHEMA, SCENARIO);
 
@@ -237,7 +307,7 @@ describe('annullaUltimoCambioSituazioneAction', () => {
   });
 
   it('lo scenario bloccato si annulla solo con motivo, e lo sblocco resta tracciato', async () => {
-    await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN');
+    await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN', PIN);
     await db.query(`UPDATE ${SCHEMA}.scenari SET bloccato_il = now() WHERE id = $1`, [SCENARIO]);
 
     const senzaMotivo = await annullaUltimoCambioSituazioneAction(SCHEMA, SCENARIO);
@@ -284,7 +354,7 @@ describe('annullaUltimoCambioSituazioneAction', () => {
   });
 
   it('la guardia nega l’annullamento a chi non è Admin di Spazio', async () => {
-    await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN');
+    await aggiornaSituazioneScenarioAction(SCHEMA, SCENARIO, 'CRAM_DOWN', PIN);
     richiediAccessoScenario.mockRejectedValueOnce(
       new Error('Solo l’Admin di Spazio può annullare un cambio.')
     );

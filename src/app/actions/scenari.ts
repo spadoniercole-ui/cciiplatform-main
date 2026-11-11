@@ -20,6 +20,7 @@ import {
   passiDaRivedere,
 } from '@/lib/scenari/situazione';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
+import { verificaPinSecondoFattore } from '@/lib/mfa/pinSessione';
 import { assicuraStoricoSituazione } from '@/db/provision';
 import {
   leggiStoricoSituazione,
@@ -620,7 +621,12 @@ export async function attivaPianoSviluppoAction(
 export async function aggiornaSituazioneScenarioAction(
   nomeSchema: string,
   scenarioId: number,
-  tipoIstruttoria: TipoIstruttoria
+  tipoIstruttoria: TipoIstruttoria,
+  /**
+   * Il PIN del secondo fattore: il tipo si sceglie alla CREAZIONE, e cambiarlo
+   * dopo è un atto firmato. Senza PIN non si tocca (0.202.0).
+   */
+  pin: string
 ): Promise<RisultatoOperazioneScenario> {
   try {
     const contesto = await richiediAccessoScenario(nomeSchema, scenarioId, {
@@ -650,6 +656,18 @@ export async function aggiornaSituazioneScenarioAction(
     if (scenarioRis.rows[0].tipo_istruttoria === tipoIstruttoria) {
       return { success: true, scenarioId, rivedere: [] };
     }
+
+    // IL CAMBIO È UN ATTO FIRMATO. Il tipo si sceglie alla creazione; dopo,
+    // correggerlo è possibile solo con il PIN del secondo fattore (fig. 9:
+    // «modificabile finché la Relazione finale non viene generata»). Verificato
+    // qui, non nel browser: la schermata può solo chiedere il PIN.
+    const esitoPin = await verificaPinSecondoFattore(pin);
+    if (!esitoPin.ok) return { success: false, error: esitoPin.error };
+
+    // NESSUN LANCIO DI SIMULAZIONI. Il cambio riallinea l'atto e riporta lo
+    // scenario in bozza; non ricalcola la mappa della verifica azienda né il
+    // ramo contabile. La proiezione si lancia da dove nasce — la verifica
+    // azienda e il ramo contabile — e qui non si tocca.
 
     const spazioRis = await pool.query(
       `SELECT tipo_spazio, demo FROM public.spazi WHERE nome_schema = $1`,

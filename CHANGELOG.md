@@ -1,3 +1,14 @@
+## 0.202.0 — 2026-11-11
+
+- **Cambiare l’atto in valutazione è un atto firmato.** Il tipo di scenario si sceglie alla
+  creazione: dopo, non si cambia con un clic. La scheda chiede il PIN del secondo fattore — lo
+  stesso dell’accesso, verificato sul server con tentativi limitati — e il cambio resta tracciato
+  in cronologia con autore e data, riporta lo scenario in bozza e dice che cosa va ricontrollato.
+  Su scenario bloccato resta la via dell’Admin con sblocco motivato.
+- **Il cambio non lancia simulazioni.** Riallineare l’atto non ricalcola la mappa della verifica
+  azienda né il ramo contabile: le proiezioni si lanciano dove nascono, e il PIN non è un modo per
+  riaprirle da qui.
+
 ## 0.201.0 — 2026-11-11
 
 - **La mappa della verifica azienda entra nel report.** Quando esiste una simulazione salvata come

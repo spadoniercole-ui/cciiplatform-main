@@ -70,7 +70,7 @@ describe('SituazioneScenario', () => {
     expect(screen.queryByText('Annulla ultimo cambio')).toBeNull();
   });
 
-  it('al cambio mostra cosa rivedere restituito dal server', async () => {
+  it('al clic chiede il PIN, poi mostra cosa rivedere restituito dal server', async () => {
     cambia.mockResolvedValue({
       success: true,
       scenarioId: 4,
@@ -87,10 +87,45 @@ describe('SituazioneScenario', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Cram down'));
+    fireEvent.click(screen.getByRole('button', { name: 'Cram down' }));
 
-    await waitFor(() => expect(cambia).toHaveBeenCalledWith('tenant_test', 4, 'CRAM_DOWN'));
+    // Il tipo non si cambia al clic: prima il PIN del secondo fattore.
+    expect(cambia).not.toHaveBeenCalled();
+    expect(screen.getByText(/PIN del secondo fattore/)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('PIN del secondo fattore'), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByText('Conferma il cambio'));
+
+    await waitFor(() =>
+      expect(cambia).toHaveBeenCalledWith('tenant_test', 4, 'CRAM_DOWN', '123456')
+    );
     expect(await screen.findByText(/5 risposte da riconfermare/)).toBeTruthy();
+  });
+
+  it('con il PIN rifiutato il server dice perché e la situazione resta', async () => {
+    cambia.mockResolvedValue({ success: false, error: 'PIN non corretto.' });
+
+    render(
+      <SituazioneScenario
+        nomeSchema="tenant_test"
+        scenarioId={4}
+        situazione="PROPOSTA"
+        origine="Azienda"
+        bloccato={false}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cram down' }));
+    fireEvent.change(screen.getByLabelText('PIN del secondo fattore'), {
+      target: { value: '999999' },
+    });
+    fireEvent.click(screen.getByText('Conferma il cambio'));
+
+    expect(await screen.findByText('PIN non corretto.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Accordo transattivo' })).toBeTruthy();
+    expect(screen.queryByText(/Situazione aggiornata/)).toBeNull();
   });
 
   it('l’Admin annulla l’ultimo cambio e la traccia resta marcata', async () => {

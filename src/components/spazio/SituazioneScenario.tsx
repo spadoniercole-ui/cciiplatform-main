@@ -81,18 +81,39 @@ export function SituazioneScenario({
   const [mostraSblocco, setMostraSblocco] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [messaggio, setMessaggio] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [daCambiare, setDaCambiare] = useState<TipoIstruttoria | null>(null);
+  const [chiediPin, setChiediPin] = useState(false);
 
-  const cambia = async (codice: TipoIstruttoria) => {
+  // IL TIPO SI SCEGLIE ALLA CREAZIONE. Qui non si cambia al clic: si apre la
+  // richiesta del PIN del secondo fattore, e solo la conferma chiama il
+  // server, che verifica il PIN e lascia la traccia in cronologia. Il cambio
+  // non lancia e non ricalcola simulazioni: quelle si lanciano dalla verifica
+  // azienda e dal ramo contabile, dove nascono.
+  const cambia = (codice: TipoIstruttoria) => {
     if (codice === scelta || inCorso || inAnnullamento) return;
+    setErrore(null);
+    setMessaggio(null);
+    setDaCambiare(codice);
+    setPin('');
+    setChiediPin(true);
+  };
+
+  const confermaCambio = async () => {
+    if (!daCambiare || inCorso || inAnnullamento) return;
+    const codice = daCambiare;
     setInCorso(true);
     setErrore(null);
     setMessaggio(null);
-    const r = await aggiornaSituazioneScenarioAction(nomeSchema, scenarioId, codice);
+    const r = await aggiornaSituazioneScenarioAction(nomeSchema, scenarioId, codice, pin);
     setInCorso(false);
     if (!r.success) {
       setErrore(r.error ?? 'Situazione non aggiornata.');
       return;
     }
+    setChiediPin(false);
+    setDaCambiare(null);
+    setPin('');
     setCronologia((precedenti) => [
       {
         da: scelta,
@@ -175,13 +196,62 @@ export function SituazioneScenario({
         })}
         {inCorso && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />}
       </div>
+      {chiediPin && daCambiare && (
+        <div className="rounded-md border border-amber-200 bg-white p-2 space-y-1.5 print:hidden">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+            PIN del secondo fattore — cambio in «
+            {SITUAZIONI.find((s) => s.codice === daCambiare)?.etichetta ?? daCambiare}»
+          </p>
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            Il tipo si sceglie alla creazione: correggerlo è un atto firmato. Il PIN è lo stesso del
+            tuo accesso; il cambio resta in cronologia, riporta lo scenario in bozza e non lancia
+            nuove simulazioni.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={6}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void confermaCambio();
+              }}
+              placeholder="PIN (4-6 cifre)"
+              aria-label="PIN del secondo fattore"
+              className="w-36 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] tracking-[0.25em] text-slate-900 outline-none focus:border-blue-500"
+            />
+            <button
+              type="button"
+              onClick={() => void confermaCambio()}
+              disabled={inCorso || inAnnullamento || pin.trim().length < 4}
+              className="inline-flex items-center gap-1 px-2 py-1 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[9px] uppercase rounded-md"
+            >
+              {inCorso && <Loader2 className="w-3 h-3 animate-spin" />}
+              Conferma il cambio
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setChiediPin(false);
+                setDaCambiare(null);
+                setPin('');
+              }}
+              className="px-2 py-1 text-[9px] font-bold uppercase text-slate-500 hover:text-slate-700"
+            >
+              Rinuncia
+            </button>
+          </div>
+        </div>
+      )}
       <p className="text-[10px] text-slate-500 leading-relaxed">
         Origine: {origine}
         {bloccatoOra
           ? ' · scenario in sola lettura: la Relazione finale è già stata generata.'
           : demo
             ? ' · nell’ambiente demo i percorsi sono già predisposti.'
-            : ' · modificabile finché la Relazione finale non viene generata.'}
+            : ' · si sceglie alla creazione; dopo si cambia con il PIN, finché la Relazione finale non viene generata.'}
       </p>
       {dataCambio && (
         <div className="text-[10px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md p-2 leading-relaxed print:block">
