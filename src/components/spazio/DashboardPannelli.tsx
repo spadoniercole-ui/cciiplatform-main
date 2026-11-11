@@ -101,12 +101,9 @@ export function DashboardPannelli({
   scenari,
   totaleScenari,
 }: Props) {
-  const daDecidere = verifiche.filter((v) => !v.presaInCarico && !v.archiviata).length;
-  const contabiliDaCompletare = contabile ? contabile.filter((a) => !a.completa).length : null;
-  const debitiDaMemorizzare = azienda
-    ? azienda.filter((a) => a.debitoMemorizzato === null).length
-    : null;
-
+  // I numeri contano le posizioni che la card mostra, con lo stesso criterio
+  // degli scenari: un «0» accanto a una riga elencata sembrava un errore di
+  // conteggio. A dire cosa resta da fare sono le etichette delle righe.
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Verifica amministrativa — il triage: posizioni guardate ma non ancora
@@ -117,7 +114,7 @@ export function DashboardPannelli({
           icon={Stethoscope}
           colore="text-amber-600 bg-amber-50"
           label="Verifica amministrativa"
-          totale={daDecidere}
+          totale={verifiche.length}
         />
         {verifiche.length === 0 ? (
           <Vuoto testo="Nessuna verifica eseguita." />
@@ -125,9 +122,9 @@ export function DashboardPannelli({
           <div className="divide-y divide-slate-100">
             {/* Si mostrano TUTTE le verifiche, non solo quelle in sospeso: una
                 verifica conclusa spariva dalla dashboard, e la traccia
-                promessa a schermo non era da nessuna parte. Il numero in
-                testa resta il conteggio di quelle che aspettano una
-                decisione — è quello che serve come coda di lavoro. */}
+                promessa a schermo non era da nessuna parte. Il numero in testa
+                conta le posizioni della card; è l'etichetta «Triage — da
+                decidere» a dire che cosa aspetta ancora una decisione. */}
             {verifiche.slice(0, MAX).map((v) => (
               <a
                 key={v.id}
@@ -179,14 +176,14 @@ export function DashboardPannelli({
       </Card>
 
       {/* Verifica contabile — il dato storico dell'azienda: visura, parametri
-          dell'ente, bilanci. Il numero in testa è la coda: le aziende la cui
-          contabile non è ancora completa. */}
+          dell'ente, bilanci. Il numero in testa conta le aziende della card;
+          «Da completare» segnala quelle che aspettano un lavoro. */}
       <Card>
         <Intestazione
           icon={Building2}
           colore="text-emerald-600 bg-emerald-50"
           label="Verifica contabile"
-          totale={contabiliDaCompletare ?? '—'}
+          totale={contabile ? contabile.length : '—'}
         />
         {contabile === null ? (
           <Vuoto testo="Riservata all’Admin di Spazio." />
@@ -230,14 +227,14 @@ export function DashboardPannelli({
       </Card>
 
       {/* Verifica azienda — le due verifiche lette insieme. Il numero in testa
-          è ciò che manca perché la mappa sia leggibile: il debito dell'ente
-          non ancora memorizzato. */}
+          conta le aziende della card; «Da memorizzare» segnala il debito
+          dell'ente che manca perché la mappa sia leggibile. */}
       <Card>
         <Intestazione
           icon={Gauge}
           colore="text-violet-600 bg-violet-50"
           label="Verifica azienda"
-          totale={debitiDaMemorizzare ?? '—'}
+          totale={azienda ? azienda.length : '—'}
         />
         {azienda === null ? (
           <Vuoto testo="Riservata all’Admin di Spazio." />

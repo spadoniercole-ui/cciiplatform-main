@@ -1,3 +1,11 @@
+## 0.203.2 — 2026-11-11
+
+- **I numeri della dashboard contano le posizioni della card.** «Verifica amministrativa»,
+  «Verifica contabile» e «Verifica azienda» mostrano quante posizioni contengono — lo stesso
+  criterio degli scenari — e sono le etichette di riga a dire cosa resta da fare (triage da
+  decidere, contabile da completare, debito da memorizzare). Prima il numero contava solo la coda:
+  una card con una riga e «0» in testa sembrava un errore di conteggio.
+
 ## 0.203.1 — 2026-11-11
 
 - **L'ultima card della dashboard si chiama come si deve.** Il collegamento alla verifica azienda
