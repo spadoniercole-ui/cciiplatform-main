@@ -1,3 +1,8 @@
+## 0.203.1 — 2026-11-11
+
+- **L'ultima card della dashboard si chiama come si deve.** Il collegamento alla verifica azienda
+  dice «Tutte le aziende in verifica», non «Tutte le verifiche azienda».
+
 ## 0.203.0 — 2026-11-11
 
 - **La dashboard torna a quattro pannelli.** Verifica amministrativa, verifica contabile, verifica

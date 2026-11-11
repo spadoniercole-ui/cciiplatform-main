@@ -279,7 +279,10 @@ export function DashboardPannelli({
               ))}
           </div>
         )}
-        <VediTutti href={`/spazio/${codice}/verifica-azienda`} testo="Tutte le verifiche azienda" />
+        <VediTutti
+          href={`/spazio/${codice}/verifica-azienda`}
+          testo="Tutte le aziende in verifica"
+        />
       </Card>
 
       {/* Scenari */}
