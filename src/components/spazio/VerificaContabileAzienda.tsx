@@ -34,6 +34,10 @@ import {
   salvaAnagraficaEnteAction,
   type AnagraficaEnte,
 } from '@/app/actions/anagraficaEnte';
+import {
+  ottieniEtichetteAnagraficaEnte,
+  type EtichettaAnagraficaEnte,
+} from '@/app/actions/anagraficaEnteConfig';
 
 interface Props {
   nomeSchema: string;
@@ -43,8 +47,15 @@ interface Props {
   visuraIniziale: { nome: string; caricataIl: string } | null;
   parametriIniziali: AnagraficaEnte;
   anniXbrl: number;
+  /** Codici degli indici abilitati nello spazio: il prospetto mostra questi. */
+  indiciAbilitati?: string[];
+  /** Da dove si è arrivati (verifica azienda): il ritorno riporta lì. */
+  ritorno?: string | null;
 }
 
+// Ripiego usato solo se la configurazione delle etichette non si legge: in
+// condizioni normali i campi visibili sono quelli attivi, con le etichette
+// configurate nello spazio (Parametri di Spazio → Anagrafica Ente).
 const campiAnagrafica: { chiave: keyof AnagraficaEnte; etichetta: string }[] = [
   { chiave: 'idEnte', etichetta: 'ID ente' },
   ...Array.from({ length: 10 }, (_, i) => ({
@@ -75,6 +86,8 @@ export function VerificaContabileAzienda({
   visuraIniziale,
   parametriIniziali,
   anniXbrl,
+  indiciAbilitati = [],
+  ritorno = null,
 }: Props) {
   const [visura, setVisura] = useState(visuraIniziale);
   const [fileVisura, setFileVisura] = useState<File | null>(null);
@@ -84,11 +97,14 @@ export function VerificaContabileAzienda({
   const [salvataggioParametri, setSalvataggioParametri] = useState(false);
   const [messaggio, setMessaggio] = useState<string | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
+  const [etichette, setEtichette] = useState<EtichettaAnagraficaEnte[] | null>(null);
 
   useEffect(() => {
     (async () => {
       const r = await ottieniAnagraficaEnte(nomeSchema, aziendaId);
       if (r.success) setParametri(r.dati);
+      const e = await ottieniEtichetteAnagraficaEnte(nomeSchema);
+      if (e.success && e.etichette.length > 0) setEtichette(e.etichette);
     })();
   }, [nomeSchema, aziendaId]);
 
@@ -96,6 +112,17 @@ export function VerificaContabileAzienda({
     () => campiAnagrafica.some((c) => (parametri[c.chiave] ?? '').trim() !== ''),
     [parametri]
   );
+
+  // I campi attivi, con il nome che l'ente dà loro (matricola, CSC, CA…).
+  const campiEnte = useMemo(() => {
+    if (!etichette) return campiAnagrafica.filter((c) => c.chiave !== 'idEnte');
+    const attivi = etichette.filter((e) => e.attivo);
+    const visibili = attivi.length > 0 ? attivi : etichette;
+    return visibili.map((e) => ({
+      chiave: `campo${e.campo}` as keyof AnagraficaEnte,
+      etichetta: e.etichetta,
+    }));
+  }, [etichette]);
 
   const passi = useMemo(
     () => [
@@ -310,10 +337,10 @@ export function VerificaContabileAzienda({
         <p className="text-[11px] text-slate-500">
           I campi che caratterizzano l’azienda dentro l’ente: restano a livello azienda, non di
           scenario. Compila quelli che servono — l’etichetta dei campi è quella configurata nello
-          spazio.
+          spazio, e compaiono solo i campi attivi.
         </p>
         <div className="grid sm:grid-cols-2 gap-2">
-          {campiAnagrafica.map((c) => (
+          {campiEnte.map((c) => (
             <label key={c.chiave} className="text-[10px] text-slate-600">
               {c.etichetta}
               <input
@@ -326,6 +353,15 @@ export function VerificaContabileAzienda({
               />
             </label>
           ))}
+          <label className="text-[10px] text-slate-600 sm:col-span-2">
+            ID ente (riferimento interno, facoltativo)
+            <input
+              type="text"
+              value={parametri.idEnte ?? ''}
+              onChange={(e) => setParametri((p) => ({ ...p, idEnte: e.target.value || null }))}
+              className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-900"
+            />
+          </label>
         </div>
         <button
           type="button"
@@ -353,17 +389,27 @@ export function VerificaContabileAzienda({
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
           4. Prospetto a scalare e indici
         </h2>
-        <ProspettoContabileStorico nomeSchema={nomeSchema} aziendaId={aziendaId} />
+        <ProspettoContabileStorico
+          nomeSchema={nomeSchema}
+          aziendaId={aziendaId}
+          indiciAbilitati={indiciAbilitati}
+        />
       </section>
 
       <p className="text-[11px] text-slate-500">
         La verifica contabile si chiude con l’acquisizione del dato storico: per la simulazione e le
         proiezioni c’è la verifica azienda.{' '}
         <Link
-          href={`/spazio/${codice}/verifica-contabile`}
+          href={
+            ritorno && ritorno.startsWith('/spazio/')
+              ? ritorno
+              : `/spazio/${codice}/verifica-contabile`
+          }
           className="font-bold text-blue-700 hover:text-blue-800"
         >
-          Torna all’elenco
+          {ritorno && ritorno.startsWith('/spazio/')
+            ? 'Torna alla verifica azienda'
+            : 'Torna all’elenco'}
         </Link>
       </p>
     </div>

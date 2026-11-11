@@ -4,16 +4,20 @@ import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniVisuraTriageAction } from '@/app/actions/visuraTriage';
 import { ottieniAnagraficaEnte } from '@/app/actions/anagraficaEnte';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
+import { ottieniIndiciSpazio } from '@/app/actions/parametriSpazio';
 import { VerificaContabileAzienda } from '@/components/spazio/VerificaContabileAzienda';
 
 export const dynamic = 'force-dynamic';
 
 export default async function VerificaContabileAziendaPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ codice: string; aziendaId: string }>;
+  searchParams: Promise<{ ritorno?: string }>;
 }) {
   const { codice, aziendaId } = await params;
+  const { ritorno } = await searchParams;
   const contesto = await ottieniContestoAccessoSpazio(codice);
   if (!contesto) redirect('/');
   if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
@@ -26,10 +30,12 @@ export default async function VerificaContabileAziendaPage({
     redirect(`/spazio/${codice}/verifica-contabile`);
   }
 
-  const [visuraRis, parametriRis, storicoRis] = await Promise.all([
+  const [visuraRis, parametriRis, storicoRis, indiciRis] = await Promise.all([
     ottieniVisuraTriageAction(contesto.nomeSchema, id),
     ottieniAnagraficaEnte(contesto.nomeSchema, id),
     ottieniStoricoXbrlAzienda(contesto.nomeSchema, id),
+    // Gli indici abilitati nello spazio: il prospetto mostra questi.
+    ottieniIndiciSpazio(contesto.nomeSchema).catch(() => null),
   ]);
 
   const visura = visuraRis.success && visuraRis.visura ? visuraRis.visura : null;
@@ -47,6 +53,10 @@ export default async function VerificaContabileAziendaPage({
       anniXbrl={
         storicoRis.success ? storicoRis.storico.filter((b) => b.annoBilancio !== null).length : 0
       }
+      indiciAbilitati={
+        indiciRis?.success ? indiciRis.indici.filter((i) => i.abilitato).map((i) => i.codice) : []
+      }
+      ritorno={ritorno ?? null}
     />
   );
 }

@@ -48,10 +48,13 @@ export default async function EsitoVerificaAmministrativaPage({
   searchParams,
 }: {
   params: Promise<{ codice: string; aziendaId: string }>;
-  searchParams: Promise<{ scheda?: string }>;
+  searchParams: Promise<{ scheda?: string; ritorno?: string }>;
 }) {
   const { codice, aziendaId } = await params;
-  const { scheda } = await searchParams;
+  const { scheda, ritorno } = await searchParams;
+  // Il rientro: chi arriva dalla verifica azienda torna lì — con i dati
+  // riletti, perché questa pagina è force-dynamic — invece che al triage.
+  const ritornoValido = ritorno && ritorno.startsWith(`/spazio/${codice}/`) ? ritorno : null;
 
   const contesto = await ottieniContestoAccessoSpazio(codice);
   if (!contesto) redirect('/');
@@ -82,10 +85,11 @@ export default async function EsitoVerificaAmministrativaPage({
   return (
     <div className="max-w-5xl space-y-4">
       <Link
-        href={`/spazio/${codice}/verifica-salute`}
+        href={ritornoValido ?? `/spazio/${codice}/verifica-salute`}
         className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-blue-600 font-bold uppercase tracking-wider"
       >
-        <ArrowLeft className="w-3.5 h-3.5" /> Torna alla verifica amministrativa
+        <ArrowLeft className="w-3.5 h-3.5" />{' '}
+        {ritornoValido ? 'Torna alla verifica azienda' : 'Torna alla verifica amministrativa'}
       </Link>
 
       <div className="bg-white border border-slate-200 rounded-xl p-5">

@@ -47,9 +47,17 @@ const pfn = (d: DatiFinanziariPeriodo) =>
 export function ProspettoContabileStorico({
   nomeSchema,
   aziendaId,
+  indiciAbilitati = [],
 }: {
   nomeSchema: string;
   aziendaId: number;
+  /**
+   * I codici degli indici abilitati nello spazio (Parametri di Spazio →
+   * Indici). La tabella mostra questi, non i primi cinque che il motore
+   * calcola: parlare di indici che l'ente non usa è rumore. Vuoto = ripiego
+   * sugli indici del bilancio, così la tabella non resta mai senza righe.
+   */
+  indiciAbilitati?: string[];
 }) {
   const [storico, setStorico] = useState<BilancioStoricoAzienda[]>([]);
   const [caricamento, setCaricamento] = useState(true);
@@ -74,6 +82,14 @@ export function ProspettoContabileStorico({
       </p>
     );
   }
+
+  // Gli indici abilitati nello spazio, nell'ordine con cui li propone il
+  // motore: la tabella deve parlare degli indici che questo ente usa davvero.
+  const indiciUltimo = storico[storico.length - 1].indici;
+  const codici = indiciAbilitati.length > 0 ? indiciAbilitati : indiciUltimo.map((i) => i.codice);
+  const indici = codici
+    .map((codice) => indiciUltimo.find((x) => x.codice === codice))
+    .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
   return (
     <div className="space-y-3">
@@ -142,7 +158,7 @@ export function ProspettoContabileStorico({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {storico[storico.length - 1].indici.map((ind) => (
+              {indici.map((ind) => (
                 <tr key={ind.codice}>
                   <td className="py-1 pr-2 text-slate-700">
                     <span className="font-mono text-[9px] text-slate-400 mr-1">{ind.codice}</span>

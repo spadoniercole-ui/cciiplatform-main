@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniConfigVerificaAziendaAction } from '@/app/actions/verificaAzienda';
+import { ottieniIndiciSpazio } from '@/app/actions/parametriSpazio';
 import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati';
@@ -30,13 +31,17 @@ export default async function VerificaAziendaSchedaPage({
 
   // Le due verifiche si leggono dalle loro fonti: l'esito amministrativo e lo
   // stato della contabile. La scheda non le ricalcola, le mette in due box.
-  const [config, statoContabile, attenzioneRis, debitoRis, storicoRis] = await Promise.all([
-    ottieniConfigVerificaAziendaAction(contesto.nomeSchema),
-    statoVerificaContabileAction(contesto.nomeSchema),
-    ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
-    debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
-    ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
-  ]);
+  const [config, statoContabile, attenzioneRis, debitoRis, storicoRis, indiciRis] =
+    await Promise.all([
+      ottieniConfigVerificaAziendaAction(contesto.nomeSchema),
+      statoVerificaContabileAction(contesto.nomeSchema),
+      ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
+      debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
+      ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
+      // Gli indici abilitati nello spazio: la mappa mostra questi, non i primi
+      // cinque che il motore calcola.
+      ottieniIndiciSpazio(contesto.nomeSchema).catch(() => null),
+    ]);
 
   const rigaContabile = statoContabile.success
     ? statoContabile.aziende.find((a) => a.aziendaId === id)
@@ -54,6 +59,9 @@ export default async function VerificaAziendaSchedaPage({
       annualitaIniziale={config.success ? config.annualita : 3}
       codice={codice}
       simulazioneAttivaIniziale={config.success ? config.simulazioneAttiva : false}
+      indiciAbilitati={
+        indiciRis?.success ? indiciRis.indici.filter((i) => i.abilitato).map((i) => i.codice) : []
+      }
       amministrativa={
         attenzione
           ? {

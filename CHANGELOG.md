@@ -1,3 +1,19 @@
+## 0.199.0 — 2026-11-11
+
+- **Segnali dell’impresa fuori dalla piattaforma.** I sette importi di libro paga,
+  scadenzario fornitori e centrale dei rischi non si chiedono più nella scheda Soglie: sono
+  dati che può fornire solo l’azienda. L’esito dell’art. 3, comma 4 mostra la sola lettera d),
+  il rinvio alle soglie dell’art. 25-novies, che la piattaforma confronta davvero.
+- **Anagrafica Ente nella verifica contabile con le etichette dello spazio.** I campi attivi
+  si chiamano come li configura l’ente (matricola, CSC, CA…) e l’ID ente resta in coda: prima
+  la contabile mostrava «Parametro 1…10» al posto delle etichette vere.
+- **Indici abilitati, non i primi cinque.** Il prospetto contabile e la mappa della verifica
+  azienda mostrano gli indici attivi in Parametri di Spazio → Indici.
+- **Rientro dalla verifica azienda.** Aprendo l’esito amministrativo o la verifica contabile
+  dalla scheda azienda, il ritorno riporta lì con i dati riletti, non al menu.
+- **Debito dell’ente come «di cui» dei costi della produzione.** Nella mappa della simulazione
+  compare sotto i costi, nell’annualità in cui entra, invece di sembrare una voce a sé.
+
 ## 0.198.1 — 2026-11-10
 
 **Il debito memorizzato segue la verifica a cui appartiene.**

@@ -13,7 +13,7 @@
 // di accordo transattivo. Liquidazione e cram down non la usano — partono dalla
 // verifica amministrativa — e per questo il loro riquadro non sta più qui.
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { ArrowRight, Calculator, CheckCircle2, Loader2, Printer } from 'lucide-react';
 import {
   calcolaVerificaAziendaAction,
@@ -65,6 +65,7 @@ export function VerificaAziendaScheda({
   simulazioneAttivaIniziale = false,
   amministrativa = null,
   contabile = null,
+  indiciAbilitati = [],
 }: {
   nomeSchema: string;
   aziendaId: number;
@@ -75,6 +76,8 @@ export function VerificaAziendaScheda({
   simulazioneAttivaIniziale?: boolean;
   amministrativa?: RiepilogoAmministrativo | null;
   contabile?: RiepilogoContabile | null;
+  /** Codici degli indici abilitati nello spazio: la mappa mostra questi. */
+  indiciAbilitati?: string[];
 }) {
   const [profilo, setProfilo] = useState<ProfiloSimulazione>('STANDARD');
   const [annualita, setAnnualita] = useState(annualitaIniziale);
@@ -174,6 +177,19 @@ export function VerificaAziendaScheda({
   };
 
   const primaProiezione = colonne.findIndex((c) => c.tipo === 'PROIEZIONE');
+  // Gli indici da mostrare sono quelli abilitati nello spazio (Parametri di
+  // Spazio → Indici), non i primi cinque che il motore calcola. Vuoto = ripiego
+  // sugli indici della colonna, così la tabella non resta mai senza righe.
+  const indiciBase = colonne[0]?.indici ?? [];
+  const codiciIndici =
+    indiciAbilitati.length > 0 ? indiciAbilitati : indiciBase.map((i) => i.codice);
+  const indiciVisibili = codiciIndici
+    .map((codice) => indiciBase.find((x) => x.codice === codice))
+    .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  const ritornoQui = codice ? `/spazio/${codice}/verifica-azienda/${aziendaId}` : null;
+  // Il «di cui» dei costi parla del debito che la verifica amministrativa ha
+  // consegnato: senza quello non c’è nulla da leggere dentro i costi.
+  const mostraDebitoNeiCosti = Boolean(debito);
 
   return (
     <div className="space-y-4">
@@ -241,7 +257,9 @@ export function VerificaAziendaScheda({
           )}
           {codice && (
             <a
-              href={`/spazio/${codice}/verifica-salute/${aziendaId}`}
+              href={`/spazio/${codice}/verifica-salute/${aziendaId}${
+                ritornoQui ? `?ritorno=${encodeURIComponent(ritornoQui)}` : ''
+              }`}
               className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
             >
               Apri l’esito <ArrowRight className="w-3 h-3" />
@@ -283,7 +301,9 @@ export function VerificaAziendaScheda({
           )}
           {codice && (
             <a
-              href={`/spazio/${codice}/verifica-contabile/${aziendaId}`}
+              href={`/spazio/${codice}/verifica-contabile/${aziendaId}${
+                ritornoQui ? `?ritorno=${encodeURIComponent(ritornoQui)}` : ''
+              }`}
               className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
             >
               Apri la verifica contabile <ArrowRight className="w-3 h-3" />
@@ -468,23 +488,43 @@ export function VerificaAziendaScheda({
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {VOCI_MAPPA.map((v) => (
-                      <tr key={v.chiave} className={v.forte ? 'bg-slate-50/60' : undefined}>
-                        <td
-                          className={`py-1 pr-2 ${v.forte ? 'font-bold text-slate-800' : 'text-slate-600'}`}
-                        >
-                          {v.etichetta}
-                        </td>
-                        {colonne.map((c) => (
+                      <Fragment key={v.chiave}>
+                        <tr className={v.forte ? 'bg-slate-50/60' : undefined}>
                           <td
-                            key={c.anno}
-                            className={`py-1 px-1 text-right tabular-nums ${
-                              v.forte ? 'font-bold text-slate-900' : 'text-slate-700'
-                            }`}
+                            className={`py-1 pr-2 ${v.forte ? 'font-bold text-slate-800' : 'text-slate-600'}`}
                           >
-                            {euro(c.dati[v.chiave] as number | undefined)}
+                            {v.etichetta}
                           </td>
-                        ))}
-                      </tr>
+                          {colonne.map((c) => (
+                            <td
+                              key={c.anno}
+                              className={`py-1 px-1 text-right tabular-nums ${
+                                v.forte ? 'font-bold text-slate-900' : 'text-slate-700'
+                              }`}
+                            >
+                              {euro(c.dati[v.chiave] as number | undefined)}
+                            </td>
+                          ))}
+                        </tr>
+                        {/* Il debito dell’ente è un «di cui» dei costi della
+                            produzione: si legge nell’anno in cui entra, non come
+                            una riga a sé che sembra un’altra voce di bilancio. */}
+                        {v.chiave === 'costiProduzione' && mostraDebitoNeiCosti && (
+                          <tr className="bg-slate-50/40">
+                            <td className="py-1 pr-2 pl-3 italic text-slate-500">
+                              di cui debito dell’ente
+                            </td>
+                            {colonne.map((c) => (
+                              <td
+                                key={c.anno}
+                                className="py-1 px-1 text-right tabular-nums text-slate-500"
+                              >
+                                {c.debitoEnteInserito > 0 ? euro(c.debitoEnteInserito) : '—'}
+                              </td>
+                            ))}
+                          </tr>
+                        )}
+                      </Fragment>
                     ))}
                     <tr className="border-t-2 border-slate-200">
                       <td className="py-1 pr-2 font-bold text-slate-800">
@@ -504,9 +544,9 @@ export function VerificaAziendaScheda({
               </div>
               {primaProiezione > 0 && (
                 <p className="text-[10px] text-slate-400 leading-relaxed">
-                  Il debito dell’ente entra nella prima annualità proiettata (
-                  {colonne[primaProiezione].anno}). Gli anni storici sono quelli depositati, senza
-                  modifiche.
+                  Il debito dell’ente entra come «di cui» dei costi della produzione nella prima
+                  annualità proiettata ({colonne[primaProiezione].anno}) e da lì resta nel passivo.
+                  Gli anni storici sono quelli depositati, senza modifiche.
                 </p>
               )}
 
@@ -527,7 +567,7 @@ export function VerificaAziendaScheda({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {(colonne[0]?.indici ?? []).map((ind) => (
+                    {indiciVisibili.map((ind) => (
                       <tr key={ind.codice}>
                         <td className="py-1 pr-2 text-slate-700">
                           <span className="font-mono text-[9px] text-slate-400 mr-1">
