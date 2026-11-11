@@ -160,6 +160,9 @@ describe('VerificaAziendaScheda', () => {
     expect(screen.getAllByText('proiezione').length).toBeGreaterThan(0);
     expect(screen.getAllByText('120.000 €').length).toBeGreaterThan(0);
     expect(screen.getByText(/Debito dell’ente — dato certo della simulazione/)).toBeTruthy();
+    // Il debito si legge anche dentro i costi della produzione, come «di cui»:
+    // è l’annualità in cui entra nella mappa.
+    expect(screen.getByText('di cui debito dell’ente')).toBeTruthy();
   });
 
   it('cambiando profilo richiede al server proprio quel profilo', async () => {
@@ -196,6 +199,8 @@ describe('VerificaAziendaScheda', () => {
     fireEvent.click(screen.getByText('Lancia la simulazione'));
     expect(await screen.findByText(/Nessun debito memorizzato/)).toBeTruthy();
     expect(screen.queryByText('120.000 €')).toBeNull();
+    // Senza debito consegnato non c’è nulla da leggere dentro i costi.
+    expect(screen.queryByText('di cui debito dell’ente')).toBeNull();
   });
 
   it('salva la simulazione calcolata come base degli scenari', async () => {
