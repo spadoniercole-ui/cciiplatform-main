@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FolderOpen, Stethoscope } from 'lucide-react';
+import { Building2, FolderOpen, Gauge, Stethoscope } from 'lucide-react';
 
 export interface RigaVerificaDashboard {
   id: number;
@@ -18,9 +18,29 @@ export interface RigaScenario {
   aziendaRagioneSociale: string;
 }
 
+export interface RigaContabileDashboard {
+  id: number;
+  ragioneSociale: string;
+  partitaIva: string | null;
+  completa: boolean;
+  anniXbrl: number;
+  visuraPresente: boolean;
+}
+
+export interface RigaAziendaDashboard {
+  id: number;
+  ragioneSociale: string;
+  debitoMemorizzato: number | null;
+  anniXbrl: number;
+}
+
 interface Props {
   codice: string;
   verifiche?: RigaVerificaDashboard[];
+  /** null = non leggibile a questo accesso (Operatore): la card lo dichiara. */
+  contabile: RigaContabileDashboard[] | null;
+  /** null = non leggibile a questo accesso (Operatore): la card lo dichiara. */
+  azienda: RigaAziendaDashboard[] | null;
   scenari: RigaScenario[];
   totaleScenari: number | '—';
 }
@@ -69,20 +89,35 @@ function VediTutti({ href, testo }: { href: string; testo: string }) {
   );
 }
 
-export function DashboardPannelli({ codice, verifiche = [], scenari, totaleScenari }: Props) {
+function Card({ children }: { children: React.ReactNode }) {
+  return <div className="bg-white border border-slate-200 rounded-xl p-4">{children}</div>;
+}
+
+export function DashboardPannelli({
+  codice,
+  verifiche = [],
+  contabile,
+  azienda,
+  scenari,
+  totaleScenari,
+}: Props) {
+  const daDecidere = verifiche.filter((v) => !v.presaInCarico && !v.archiviata).length;
+  const contabiliDaCompletare = contabile ? contabile.filter((a) => !a.completa).length : null;
+  const debitiDaMemorizzare = azienda
+    ? azienda.filter((a) => a.debitoMemorizzato === null).length
+    : null;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Aziende da verificare — al posto del pannello Utenti.
-          È il triage: posizioni guardate ma non ancora prese in carico. In
-          dashboard serve più sapere cosa aspetta una decisione che
-          l'elenco degli utenti, che cambia raramente e ha già la sua
-          pagina. */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4">
+      {/* Verifica amministrativa — il triage: posizioni guardate ma non ancora
+          prese in carico. In dashboard serve più sapere cosa aspetta una
+          decisione che l'elenco degli utenti, che ha già la sua pagina. */}
+      <Card>
         <Intestazione
           icon={Stethoscope}
           colore="text-amber-600 bg-amber-50"
-          label="Aziende da verificare"
-          totale={verifiche.filter((v) => !v.presaInCarico && !v.archiviata).length}
+          label="Verifica amministrativa"
+          totale={daDecidere}
         />
         {verifiche.length === 0 ? (
           <Vuoto testo="Nessuna verifica eseguita." />
@@ -98,8 +133,6 @@ export function DashboardPannelli({ codice, verifiche = [], scenari, totaleScena
                 key={v.id}
                 // Una verifica in sospeso si riapre NEL TRIAGE: è lì che ci sono
                 // le comunicazioni già preparate e la decisione da prendere.
-                // Mandarla alla scheda azienda lasciava la sola via d'uscita
-                // «rifai la verifica», che archivia il lavoro precedente.
                 href={
                   !v.presaInCarico && !v.archiviata
                     ? `/spazio/${codice}/verifica-salute?azienda=${v.id}`
@@ -141,12 +174,116 @@ export function DashboardPannelli({ codice, verifiche = [], scenari, totaleScena
         )}
         <VediTutti
           href={`/spazio/${codice}/verifica-salute`}
-          testo="Verifica amministrativa aziendale"
+          testo="Tutte le verifiche amministrative"
         />
-      </div>
+      </Card>
+
+      {/* Verifica contabile — il dato storico dell'azienda: visura, parametri
+          dell'ente, bilanci. Il numero in testa è la coda: le aziende la cui
+          contabile non è ancora completa. */}
+      <Card>
+        <Intestazione
+          icon={Building2}
+          colore="text-emerald-600 bg-emerald-50"
+          label="Verifica contabile"
+          totale={contabiliDaCompletare ?? '—'}
+        />
+        {contabile === null ? (
+          <Vuoto testo="Riservata all’Admin di Spazio." />
+        ) : contabile.length === 0 ? (
+          <Vuoto testo="Nessuna azienda attiva." />
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {[...contabile]
+              .sort((a, b) => Number(a.completa) - Number(b.completa))
+              .slice(0, MAX)
+              .map((a) => (
+                <Link
+                  key={a.id}
+                  href={`/spazio/${codice}/verifica-contabile/${a.id}`}
+                  className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-bold text-slate-900 text-xs truncate">
+                      {a.ragioneSociale}
+                    </span>
+                    <span className="block text-[10px] text-slate-400 truncate">
+                      {a.anniXbrl > 0
+                        ? `${a.anniXbrl} ${a.anniXbrl === 1 ? 'annualità XBRL' : 'annualità XBRL'}`
+                        : 'Bilanci da caricare'}
+                      {a.visuraPresente ? ' · visura acquisita' : ' · visura da acquisire'}
+                    </span>
+                  </span>
+                  {!a.completa && (
+                    <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 bg-amber-50 text-amber-700 border-amber-200">
+                      Da completare
+                    </span>
+                  )}
+                </Link>
+              ))}
+          </div>
+        )}
+        <VediTutti
+          href={`/spazio/${codice}/verifica-contabile`}
+          testo="Tutte le verifiche contabili"
+        />
+      </Card>
+
+      {/* Verifica azienda — le due verifiche lette insieme. Il numero in testa
+          è ciò che manca perché la mappa sia leggibile: il debito dell'ente
+          non ancora memorizzato. */}
+      <Card>
+        <Intestazione
+          icon={Gauge}
+          colore="text-violet-600 bg-violet-50"
+          label="Verifica azienda"
+          totale={debitiDaMemorizzare ?? '—'}
+        />
+        {azienda === null ? (
+          <Vuoto testo="Riservata all’Admin di Spazio." />
+        ) : azienda.length === 0 ? (
+          <Vuoto testo="Nessuna azienda attiva." />
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {[...azienda]
+              .sort(
+                (a, b) =>
+                  Number(a.debitoMemorizzato !== null) - Number(b.debitoMemorizzato !== null)
+              )
+              .slice(0, MAX)
+              .map((a) => (
+                <Link
+                  key={a.id}
+                  href={`/spazio/${codice}/verifica-azienda/${a.id}`}
+                  className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-bold text-slate-900 text-xs truncate">
+                      {a.ragioneSociale}
+                    </span>
+                    <span className="block text-[10px] text-slate-400 truncate">
+                      {a.debitoMemorizzato !== null
+                        ? `Debito ente ${Math.round(a.debitoMemorizzato).toLocaleString('it-IT')} €`
+                        : 'Debito ente da memorizzare'}
+                      {a.anniXbrl > 0
+                        ? ` · ${a.anniXbrl} annualità XBRL`
+                        : ' · bilanci da caricare'}
+                    </span>
+                  </span>
+                  {a.debitoMemorizzato === null && (
+                    <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 bg-amber-50 text-amber-700 border-amber-200">
+                      Da memorizzare
+                    </span>
+                  )}
+                </Link>
+              ))}
+          </div>
+        )}
+        <VediTutti href={`/spazio/${codice}/verifica-azienda`} testo="Tutte le verifiche azienda" />
+      </Card>
 
       {/* Scenari */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4">
+      <Card>
         <Intestazione
           icon={FolderOpen}
           colore="text-blue-600 bg-blue-50"
@@ -176,7 +313,7 @@ export function DashboardPannelli({ codice, verifiche = [], scenari, totaleScena
           </div>
         )}
         <VediTutti href={`/spazio/${codice}/scenari`} testo="Tutti gli scenari" />
-      </div>
+      </Card>
     </div>
   );
 }

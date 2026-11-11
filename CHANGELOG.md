@@ -1,3 +1,13 @@
+## 0.203.0 — 2026-11-11
+
+- **La dashboard torna a quattro pannelli.** Verifica amministrativa, verifica contabile, verifica
+  azienda e scenari: ogni card mostra quante posizioni aspettano un lavoro — triage da decidere,
+  contabile da completare, debito dell’ente da memorizzare — e apre l’elenco giusto. Le due
+  verifiche aziendali sono riservate all’Admin: a un Operatore la card lo dichiara invece di
+  mostrare uno zero che non è un dato.
+- **«Aziendale» esce dai nomi.** Nel menù e nella dashboard le voci sono «Verifica amministrativa»
+  e «Verifica contabile», come i rispettivi pannelli.
+
 ## 0.202.0 — 2026-11-11
 
 - **Cambiare l’atto in valutazione è un atto firmato.** Il tipo di scenario si sceglie alla

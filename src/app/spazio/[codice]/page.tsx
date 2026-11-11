@@ -4,16 +4,20 @@ import { ottieniContestoAccessoSpazio, ottieniAdminSpazio } from '@/app/actions/
 import { ottieniAziende } from '@/app/actions/aziende';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { ottieniScenari } from '@/app/actions/scenari';
+import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
 import { caricaPercorsoDemoEnte } from '@/lib/demo/caricaPercorsoEnte';
 import {
   DashboardPannelli,
+  type RigaAziendaDashboard,
+  type RigaContabileDashboard,
   type RigaScenario,
   type RigaVerificaDashboard,
 } from '@/components/spazio/DashboardPannelli';
 
-// Dashboard di Spazio (cruscotto): due pannelli, Triage e Scenari. Le aziende
-// sono già dentro uno dei due elenchi; i report sono più d'uno anche intermedi,
-// quindi «ultimo report» non è un'informazione affidabile da mettere qui.
+// Dashboard di Spazio (cruscotto): quattro pannelli — verifica amministrativa,
+// verifica contabile, verifica azienda e scenari. Sono le quattro porte da cui
+// si entra nel lavoro; i report sono più d'uno anche intermedi, quindi «ultimo
+// report» non è un'informazione affidabile da mettere qui.
 
 export default async function DashboardSpazioPage({
   params,
@@ -35,11 +39,36 @@ export default async function DashboardSpazioPage({
     }
   }
 
-  const [risultatoAdmin, risultatoAziende, verificheRis] = await Promise.all([
+  // Le due verifiche aziendali sono riservate all'Admin: a un Operatore non si
+  // chiedono nemmeno, e le card lo dichiarano invece di scrivere zero.
+  const [risultatoAdmin, risultatoAziende, verificheRis, statoVerifiche] = await Promise.all([
     ottieniAdminSpazio(contesto.nomeSchema),
     ottieniAziende(contesto.nomeSchema),
     ottieniStoricoVerificheAction(contesto.nomeSchema),
+    contesto.modalita === 'OPERATORE'
+      ? Promise.resolve(null)
+      : statoVerificaContabileAction(contesto.nomeSchema).catch(() => null),
   ]);
+
+  const contabile: RigaContabileDashboard[] | null = statoVerifiche?.success
+    ? statoVerifiche.aziende.map((a) => ({
+        id: a.aziendaId,
+        ragioneSociale: a.ragioneSociale,
+        partitaIva: a.partitaIva ?? null,
+        completa: a.completa,
+        anniXbrl: a.anniXbrl,
+        visuraPresente: a.visuraPresente,
+      }))
+    : null;
+
+  const azienda: RigaAziendaDashboard[] | null = statoVerifiche?.success
+    ? statoVerifiche.aziende.map((a) => ({
+        id: a.aziendaId,
+        ragioneSociale: a.ragioneSociale,
+        debitoMemorizzato: a.debitoMemorizzato,
+        anniXbrl: a.anniXbrl,
+      }))
+    : null;
 
   // Scenari: elenco reale (con nome azienda) + conteggio totale.
   let totaleScenari: number | '—' = '—';
@@ -96,6 +125,8 @@ export default async function DashboardSpazioPage({
               }))
             : []
         }
+        contabile={contabile}
+        azienda={azienda}
         scenari={righeScenari}
         totaleScenari={totaleScenari}
       />
