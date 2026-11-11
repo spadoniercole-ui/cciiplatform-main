@@ -1,3 +1,21 @@
+## 0.200.0 — 2026-11-11
+
+- **Report dell’azienda, uno e in sola lettura.** Il documento mette insieme l’esito della
+  verifica amministrativa (con il debito memorizzato, la fonte e la data), il dato della verifica
+  contabile e l’analisi della valutazione completa. L’amministrativa si cita, non si modifica: dal
+  report non si ricalcola e non si rilancia, e se non è chiusa il documento lo dichiara invece di
+  scrivere zero.
+- **Si sceglie prima di emettere.** Pannello delle inclusioni: analisi riusata, rigenerata o
+  esclusa; riscontri normativi; questionario come allegato (escluso di default); riferimenti e
+  metodo. L’emissione è definitiva — rigenerare crea una nuova generazione, con versione e
+  impronta SHA-256 del contenuto, e le precedenti restano leggibili com’erano.
+- **Chiude il placeholder delle «cinque tipologie».** `/spazio/[codice]/report` è ora l’elenco
+  delle aziende con l’ultimo report emesso e lo stato delle fonti; il documento vive nella scheda
+  dell’azienda, accanto alla verifica azienda.
+- **Avvisi deterministici in testa al documento.** Verifica amministrativa assente o senza debito,
+  contabile incompleta, analisi scaduta o assente: ciascuno ha la sua riga, perché un report
+  parziale si legge per quello che è.
+
 ## 0.199.0 — 2026-11-11
 
 - **Segnali dell’impresa fuori dalla piattaforma.** I sette importi di libro paga,

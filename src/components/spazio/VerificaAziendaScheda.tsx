@@ -639,6 +639,25 @@ export function VerificaAziendaScheda({
         </>
       )}
 
+      {codice && (
+        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Report dell’azienda
+          </p>
+          <p className="text-[11px] text-slate-600 leading-relaxed max-w-2xl">
+            Un documento solo con l’esito amministrativo (in sola lettura), il dato contabile e
+            l’analisi. Scegli che cosa includere prima di emetterlo: l’emissione è definitiva, e
+            rigenerare crea una nuova generazione.
+          </p>
+          <a
+            href={`/spazio/${codice}/aziende/${aziendaId}/report`}
+            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+          >
+            Genera il report <ArrowRight className="w-3 h-3" />
+          </a>
+        </div>
+      )}
+
       <p className="text-[11px] text-slate-500 leading-relaxed">
         Il documento è messo a disposizione della direzione dell’ente per le valutazioni del caso.
         La simulazione è un’ipotesi dichiarata su un dato storico; la verifica amministrativa resta

@@ -1503,6 +1503,32 @@ export async function assicuraTabelleScreeningAzienda(nomeSchema: string): Promi
 }
 
 /**
+ * Il report dell'azienda (0.200.0): l'unico documento che tiene insieme le due
+ * verifiche e la valutazione. Si conserva come SNAPSHOT — il contenuto è già
+ * composto al momento dell'emissione, non si ricalcola leggendolo — con la
+ * versione della piattaforma e l'impronta del contenuto: due report diversi si
+ * spiegano con una di queste due cose, non restano versioni parallele
+ * indistinguibili. Rigenerare aggiunge una riga, non sovrascrive.
+ */
+export async function assicuraTabellaReportAzienda(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaAziende(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.azienda_report (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      contenuto JSONB NOT NULL,
+      impronta TEXT,
+      app_version TEXT,
+      generato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_azienda_report_azienda ON ${s}.azienda_report (azienda_id)`
+  );
+}
+
+/**
  * Override PER AZIENDA di cosa è abilitato a livello di spazio: quali tab
  * XBRL (tra quelle già attive per lo spazio) e quali indici (tra quelli
  * già attivi per lo spazio) si applicano a QUESTA azienda. Serve perché

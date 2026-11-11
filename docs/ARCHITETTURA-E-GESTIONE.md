@@ -453,7 +453,7 @@ più d'una → si nominano tutte e la scelta resta all'ente, perché possono ess
 | `…/checklist`, `…/indici`, `…/xbrl`, `…/settore`, `…/simulazione`, `…/posizione-aggiornata`, `…/situazione-debitoria` | viste di dettaglio |
 | `/spazio/[codice]/parametri/**` | soglie, ricevibilità, checklist, lavorazioni per tipo di debito, indici, stampa, anagrafica ente, titoli, materie, direttrici |
 | `/spazio/[codice]/indici`, `…/normativa`, `…/utenti`, `…/verifica-salute` | strumenti di spazio |
-| `/spazio/[codice]/report` | **placeholder** "Sezione in costruzione" (Generazione Report) |
+| `/spazio/[codice]/report` | elenco dei report per azienda (0.200.0); il documento si genera da `…/aziende/[aziendaId]/report` |
 | `/api/blob-upload`, `/api/xbrl/*`, `/api/indici`, `/api/configurazioni/ccii` | route API |
 
 ### Dove sta la logica
@@ -578,9 +578,10 @@ modifica.
 2. **`CLAUDE.md` dice `tipo_spazio = ENTE | RED`**, il codice usa `ENTE | NON_ENTE`
    (default `NON_ENTE`). È la documentazione da correggere, non il codice: cambiare il
    valore romperebbe i dati esistenti.
-3. **`/spazio/[codice]/report`** è ancora una pagina "Sezione in costruzione"
-   ("Generazione Report", cinque tipologie). È un residuo di prodotto: decidere se
-   implementarla o rimuoverla dalla navigazione.
+3. **`/spazio/[codice]/report`** non è più un residuo: dalla 0.200.0 è l'elenco dei report
+   emessi per azienda, e il documento si genera da `…/aziende/[aziendaId]/report`. Le
+   «cinque tipologie» del vecchio placeholder non esistono: il report è uno, cambia che cosa
+   include.
 4. **`giudicante`** è presente in `spazi` e nel contesto ma, come dice il commento in
    `src/lib/autorizzazione.ts`, è predisposto e non ancora operativo.
 5. **Doppia sorgente DDL**: `ensureTables.ts` (globali + alter) e `provision.ts` (tenant)
