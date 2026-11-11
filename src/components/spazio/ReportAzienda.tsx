@@ -10,7 +10,7 @@
 // Il documento emesso non si modifica: rigenerare produce una nuova
 // generazione, e quelle precedenti restano leggibili con data e versione.
 
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, FileText, Loader2, Printer, RefreshCw } from 'lucide-react';
 import {
   generaReportAziendaAction,
@@ -377,6 +377,110 @@ function Sezione({ sezione, codice }: { sezione: SezioneReport; codice: string }
                   {sezione.anni.map((a) => (
                     <th key={String(a)} className="text-right py-1.5 px-1">
                       {a ?? 'n/d'}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {sezione.indici.map((ind) => (
+                  <tr key={ind.codice}>
+                    <td className="py-1 pr-2 text-slate-700">
+                      <span className="font-mono text-[9px] text-slate-400 mr-1">{ind.codice}</span>
+                      {ind.nome}
+                    </td>
+                    <td className="py-1 px-1 text-right text-[10px] text-slate-500">
+                      {ind.soglia}
+                    </td>
+                    {ind.valori.map((v, i) => (
+                      <td
+                        key={i}
+                        className={`py-1 px-1 text-right tabular-nums ${
+                          ind.esiti[i] === 'VIOLATO'
+                            ? 'text-red-700 font-bold'
+                            : ind.esiti[i] === 'OK'
+                              ? 'text-emerald-700'
+                              : 'text-slate-400'
+                        }`}
+                      >
+                        {numero(v)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+      {sezione.tipo === 'mappa' && (
+        <div className="space-y-3 overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="text-[9px] uppercase text-slate-400 border-b border-slate-200">
+                <th className="text-left py-1.5 pr-2">Voce</th>
+                {sezione.anni.map((a, k) => (
+                  <th key={`${a}-${k}`} className="text-right py-1.5 px-1 whitespace-nowrap">
+                    {a}
+                    <span
+                      className={`block text-[8px] font-normal ${
+                        sezione.tipi[k] === 'PROIEZIONE' ? 'text-blue-600' : 'text-slate-400'
+                      }`}
+                    >
+                      {sezione.tipi[k] === 'PROIEZIONE' ? 'proiezione' : 'storico'}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {sezione.righe.map((r) => (
+                <Fragment key={r.etichetta}>
+                  <tr className={r.forte ? 'bg-slate-50/60' : undefined}>
+                    <td
+                      className={`py-1 pr-2 ${
+                        r.forte ? 'font-bold text-slate-800' : 'text-slate-600'
+                      }`}
+                    >
+                      {r.etichetta}
+                    </td>
+                    {r.valori.map((v, i) => (
+                      <td
+                        key={i}
+                        className={`py-1 px-1 text-right tabular-nums ${
+                          r.forte ? 'font-bold text-slate-900' : 'text-slate-700'
+                        }`}
+                      >
+                        {euro(v)}
+                      </td>
+                    ))}
+                  </tr>
+                  {/* Il debito è un «di cui» dei costi: si legge nell’anno in
+                      cui entra, non come una voce di bilancio a sé. */}
+                  {r.etichetta === 'Costi della produzione' && (
+                    <tr className="bg-slate-50/40">
+                      <td className="py-1 pr-2 pl-3 italic text-slate-500">
+                        di cui debito dell’ente
+                      </td>
+                      {sezione.debitiInseriti.map((d, i) => (
+                        <td key={i} className="py-1 px-1 text-right tabular-nums text-slate-500">
+                          {d > 0 ? euro(d) : '—'}
+                        </td>
+                      ))}
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+          {sezione.indici.length > 0 && (
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-[9px] uppercase text-slate-400 border-b border-slate-200">
+                  <th className="text-left py-1.5 pr-2">Indice</th>
+                  <th className="text-right py-1.5 px-1">Soglia</th>
+                  {sezione.anni.map((a, k) => (
+                    <th key={`${a}-${k}`} className="text-right py-1.5 px-1">
+                      {a}
                     </th>
                   ))}
                 </tr>

@@ -16,12 +16,15 @@
 import { createHash } from 'node:crypto';
 import { pool } from '@/lib/db';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
-import { assicuraTabellaReportAzienda } from '@/db/provision';
+import { assicuraTabellaReportAzienda, assicuraTabelleVerificaAzienda } from '@/db/provision';
 import { APP_VERSION } from '@/lib/appVersion';
 import {
   componiReport,
   normalizzaInclusioni,
+  type ColonnaMappa,
   type DomandaQuestionario,
+  type FonteMappa,
+  type FonteSoglie25,
   type FontiReport,
   type InclusioniReport,
   type IndiceProspetto,
@@ -44,6 +47,8 @@ import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { leggiIdentificativiEnte } from '@/lib/anagraficaEnte/identificativi';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 import type { Riscontri } from '@/lib/normativa/riscontri';
+import { PROFILI, VOCI_MAPPA } from '@/lib/verificaAzienda/simulazione';
+import { valutaSoglieAction } from '@/app/actions/soglie25novies';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -108,6 +113,10 @@ const VOCI_PROSPETTO: { etichetta: string; chiave: string; forte: boolean }[] = 
 const numeroONull = (v: unknown): number | null =>
   typeof v === 'number' && Number.isFinite(v) ? v : null;
 
+/** I NUMERIC arrivano come stringa: null resta null, non diventa zero. */
+const numeric = (v: unknown): number | null =>
+  v === null || v === undefined || v === '' ? null : numeroONull(Number(v));
+
 /**
  * Gli indici di un bilancio, letti in modo difensivo: la forma dei due elenchi
  * (`indici`, `altriIndici`) non è identica, e un indice senza codice non può
@@ -151,7 +160,8 @@ function indiciDelBilancio(b: unknown): {
 async function raccogliFonti(
   nomeSchema: string,
   aziendaId: number,
-  inclusioni: InclusioniReport
+  inclusioni: InclusioniReport,
+  tipoSpazio: 'ENTE' | 'NON_ENTE'
 ): Promise<FontiReport | string> {
   const azienda = await ottieniAziendaPerId(nomeSchema, aziendaId);
   if (!azienda.success || !azienda.azienda) return 'Azienda non trovata.';
@@ -231,9 +241,95 @@ async function raccogliFonti(
   }
 
   let riscontri: Riscontri | null = null;
+  let soglie25: FonteSoglie25 | null = null;
   if (inclusioni.riscontri) {
     const r = await calcolaRiscontriNormativiAzienda(nomeSchema, aziendaId).catch(() => null);
     riscontri = r?.success ? (r.riscontri ?? null) : null;
+    // Le soglie dell'art. 25-novies: in uno spazio ENTE si valuta la sua
+    // lettera, in uno REDIGENTE tutte — lo decide il motore delle soglie.
+    const s = await valutaSoglieAction(nomeSchema, aziendaId, tipoSpazio).catch(() => null);
+    if (s?.success && s.esito) {
+      soglie25 = {
+        righe: s.esito.righe.map((riga) => ({
+          ambito: riga.ambito,
+          descrizione: riga.descrizione,
+          esposizione: riga.esposizione,
+          esito: riga.esito,
+          motivo: riga.motivo,
+          fonte: riga.fonte ?? null,
+          applicabile: riga.applicabile,
+        })),
+        datiMancanti: s.esito.datiMancanti,
+        nonApplicabiliPerDatiMancanti: s.esito.nonApplicabiliPerDatiMancanti ?? 0,
+      };
+    }
+  }
+
+  // La mappa: solo la simulazione SALVATA come base degli scenari. Se la
+  // tabella non esiste ancora (verifica azienda mai aperta) non è un errore:
+  // semplicemente non c'è una base da citare.
+  let mappa: FonteMappa | null = null;
+  try {
+    await assicuraTabelleVerificaAzienda(nomeSchema);
+    const baseRis = await pool.query(
+      `SELECT profilo, annualita, debito_ente, crescita_storica_pct, crescita_applicata_pct,
+              colonne, avvertenze, created_at
+         FROM "${nomeSchema}".verifica_azienda_simulazioni
+        WHERE azienda_id = $1 AND base_per_proposta = TRUE
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [aziendaId]
+    );
+    const b = baseRis.rows[0];
+    if (b) {
+      const abilitati =
+        indiciRis?.success && indiciRis.indici.length > 0
+          ? indiciRis.indici.filter((i) => i.abilitato).map((i) => i.codice)
+          : [];
+      const grezze = Array.isArray(b.colonne) ? (b.colonne as unknown[]) : [];
+      const colonne: ColonnaMappa[] = grezze.flatMap((x) => {
+        if (!x || typeof x !== 'object') return [];
+        const c = x as Record<string, unknown>;
+        const anno = Number(c.anno);
+        if (!Number.isInteger(anno)) return [];
+        const dati = (c.dati && typeof c.dati === 'object' ? c.dati : {}) as Record<
+          string,
+          unknown
+        >;
+        const valori: Record<string, number | null> = {};
+        for (const v of VOCI_MAPPA) valori[v.chiave] = numeroONull(dati[v.chiave]);
+        return [
+          {
+            anno,
+            tipo: (c.tipo === 'PROIEZIONE' ? 'PROIEZIONE' : 'STORICO') as 'STORICO' | 'PROIEZIONE',
+            valori,
+            debitoEnteInserito: numeroONull(c.debitoEnteInserito) ?? 0,
+            indici: indiciDelBilancio(c)
+              .filter((i) => abilitati.length === 0 || abilitati.includes(i.codice))
+              .map((i) => ({
+                codice: i.codice,
+                nome: i.nome,
+                soglia: i.soglia,
+                valore: i.valore,
+                esito: i.esito,
+              })),
+          },
+        ];
+      });
+      const profilo = String(b.profilo ?? '');
+      mappa = {
+        profilo: PROFILI.find((p) => p.codice === profilo)?.etichetta ?? profilo,
+        annualita: Number(b.annualita ?? 0),
+        debitoEnte: numeric(b.debito_ente) ?? 0,
+        crescitaStoricaPct: numeric(b.crescita_storica_pct),
+        crescitaApplicataPct: numeric(b.crescita_applicata_pct),
+        avvertenze: Array.isArray(b.avvertenze) ? b.avvertenze.map(String) : [],
+        salvataIl: b.created_at ? new Date(b.created_at as string).toISOString() : null,
+        colonne,
+      };
+    }
+  } catch {
+    mappa = null;
   }
 
   const risposte = new Map((stato?.risposte ?? []).map((r) => [r.domandaId, r.risposta]));
@@ -278,6 +374,8 @@ async function raccogliFonti(
     screening,
     prospetto,
     riscontri,
+    soglie25,
+    mappa,
     questionario,
   };
 }
@@ -378,7 +476,7 @@ export async function generaReportAziendaAction(
   inclusioniInput: unknown
 ): Promise<RisultatoGenerazioneReport> {
   try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
       return { success: false, error: 'Azienda non valida.' };
@@ -407,7 +505,7 @@ export async function generaReportAziendaAction(
       if (!g.success) return { success: false, error: g.error ?? 'Rigenerazione non riuscita.' };
     }
 
-    const fonti = await raccogliFonti(nomeSchema, aziendaId, inclusioni);
+    const fonti = await raccogliFonti(nomeSchema, aziendaId, inclusioni, contesto.tipoSpazio);
     if (typeof fonti === 'string') return { success: false, error: fonti };
 
     const composto = componiReport(fonti, inclusioni);

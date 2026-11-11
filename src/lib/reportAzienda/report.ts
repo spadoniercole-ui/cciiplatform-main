@@ -16,6 +16,7 @@
 // e dai test.
 
 import { markdownInHtml } from '@/lib/stampa/markdown';
+import { VOCI_MAPPA } from '@/lib/verificaAzienda/simulazione';
 import type { Riscontri } from '@/lib/normativa/riscontri';
 import type { FattiVisura } from '@/lib/visura/fatti';
 
@@ -123,6 +124,41 @@ export interface SezioneQuestionario {
   domande: DomandaQuestionario[];
 }
 
+export interface ColonnaMappa {
+  anno: number;
+  tipo: 'STORICO' | 'PROIEZIONE';
+  valori: Record<string, number | null>;
+  debitoEnteInserito: number;
+  indici: { codice: string; nome: string; soglia: string; valore: number | null; esito: string }[];
+}
+
+/** La simulazione SALVATA come base: il report la legge, non la ricalcola. */
+export interface FonteMappa {
+  profilo: string;
+  annualita: number;
+  debitoEnte: number;
+  crescitaStoricaPct: number | null;
+  crescitaApplicataPct: number | null;
+  avvertenze: string[];
+  salvataIl: string | null;
+  colonne: ColonnaMappa[];
+}
+
+/** Le righe dell'art. 25-novies, già calcolate dal motore delle soglie. */
+export interface FonteSoglie25 {
+  righe: {
+    ambito: string;
+    descrizione: string;
+    esposizione: number | null;
+    esito: string;
+    motivo: string;
+    fonte: string | null;
+    applicabile: boolean;
+  }[];
+  datiMancanti: string[];
+  nonApplicabiliPerDatiMancanti: number;
+}
+
 export interface FontiReport {
   ragioneSociale: string;
   partitaIva: string | null;
@@ -133,6 +169,8 @@ export interface FontiReport {
   screening: FonteScreening | null;
   prospetto: FonteProspetto | null;
   riscontri: Riscontri | null;
+  soglie25: FonteSoglie25 | null;
+  mappa: FonteMappa | null;
   questionario: SezioneQuestionario[] | null;
 }
 
@@ -153,6 +191,17 @@ export type SezioneReport =
       tipo: 'prospetto';
       anni: (number | null)[];
       righe: RigaProspetto[];
+      indici: IndiceProspetto[];
+      nota: string | null;
+    }
+  | {
+      id: string;
+      titolo: string;
+      tipo: 'mappa';
+      anni: number[];
+      tipi: ('STORICO' | 'PROIEZIONE')[];
+      righe: RigaProspetto[];
+      debitiInseriti: number[];
       indici: IndiceProspetto[];
       nota: string | null;
     };
@@ -183,6 +232,14 @@ const data = (iso: string | null) => {
 
 const valoreONonDisponibile = (v: string | null | undefined) =>
   v && v.trim() ? v : 'non disponibile';
+
+/** Gli esiti dell'art. 25-novies, in parole: mai «segnalazione dovuta». */
+const esito25 = (e: string) =>
+  e === 'sopra'
+    ? 'presupposti oggettivi rilevati'
+    : e === 'sotto'
+      ? 'presupposti oggettivi non rilevati'
+      : 'esito non esprimibile';
 
 // ---- Composizione --------------------------------------------------------
 
@@ -350,6 +407,61 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     });
   }
 
+  // 4. La mappa della verifica azienda entra solo se esiste una simulazione
+  // SALVATA come base: quella è la proiezione che l'operatore ha scelto. Senza
+  // base non si ricalcola nulla — si dichiara che la mappa non c'è, perché una
+  // proiezione «al volo» dentro un documento emesso non sarebbe la stessa cosa.
+  if (fonti.mappa && fonti.mappa.colonne.length > 0) {
+    const m = fonti.mappa;
+    const indici: IndiceProspetto[] = [];
+    for (const colonna of m.colonne) {
+      for (const i of colonna.indici) {
+        if (indici.some((x) => x.codice === i.codice)) continue;
+        indici.push({
+          codice: i.codice,
+          nome: i.nome,
+          soglia: i.soglia,
+          valori: m.colonne.map((c) => c.indici.find((x) => x.codice === i.codice)?.valore ?? null),
+          esiti: m.colonne.map((c) => c.indici.find((x) => x.codice === i.codice)?.esito ?? null),
+        });
+      }
+    }
+    const testata = [
+      `Profilo ${m.profilo} · ${m.annualita} annualità di proiezione`,
+      m.crescitaApplicataPct === null
+        ? null
+        : `crescita applicata ai ricavi ${m.crescitaApplicataPct}%`,
+      m.crescitaStoricaPct === null ? null : `crescita storica composta ${m.crescitaStoricaPct}%`,
+      m.salvataIl ? `salvata come base il ${data(m.salvataIl)}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    const primaProiezione = m.colonne.find((c) => c.tipo === 'PROIEZIONE');
+    sezioni.push({
+      id: 'mappa',
+      titolo: '4. Verifica azienda — mappa a colonne',
+      tipo: 'mappa',
+      anni: m.colonne.map((c) => c.anno),
+      tipi: m.colonne.map((c) => c.tipo),
+      righe: VOCI_MAPPA.map((v) => ({
+        etichetta: v.etichetta,
+        forte: Boolean(v.forte),
+        valori: m.colonne.map((c) => c.valori[v.chiave] ?? null),
+      })),
+      debitiInseriti: m.colonne.map((c) => c.debitoEnteInserito),
+      indici,
+      nota: `${testata}.${
+        primaProiezione
+          ? ` Il debito dell’ente entra come «di cui» dei costi della produzione nella prima annualità proiettata (${primaProiezione.anno}); gli anni storici sono quelli depositati, senza modifiche.`
+          : ''
+      }${m.avvertenze.length > 0 ? ` ${m.avvertenze.join(' ')}` : ''}`,
+    });
+  } else {
+    avvisi.push(
+      'Nessuna simulazione è salvata come base della verifica azienda: il report non riporta la mappa a colonne.'
+    );
+  }
+
   // 4. Analisi di inquadramento: l'unico testo dell'AI, e solo quello.
   if (inclusioni.analisi !== 'ESCLUDI') {
     const scr = fonti.screening;
@@ -363,7 +475,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
         .join(' · ');
       sezioni.push({
         id: 'analisi',
-        titolo: '4. Analisi di inquadramento',
+        titolo: '5. Analisi di inquadramento',
         tipo: 'testo',
         testo: scr.relazioneTesto,
         nota,
@@ -379,7 +491,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
       );
       sezioni.push({
         id: 'analisi',
-        titolo: '4. Analisi di inquadramento',
+        titolo: '5. Analisi di inquadramento',
         tipo: 'testo',
         testo: '',
         nota: 'Non disponibile: nessuna relazione generata.',
@@ -415,21 +527,47 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
       for (const i of r.indicatori) {
         voci.push({ etichetta: i.nome, valore: `${i.dettaglio} (art. ${i.articolo})` });
       }
+      // Le soglie dell'art. 25-novies: il superamento si dichiara, l'obbligo
+      // di segnalazione no — il requisito dei novanta giorni non è nei dati.
+      const s25 = fonti.soglie25;
+      if (s25) {
+        for (const riga of s25.righe.filter((x) => x.applicabile)) {
+          voci.push({
+            etichetta: `Art. 25-novies — ${riga.ambito}`,
+            valore: `${euro(riga.esposizione)} · ${esito25(riga.esito)} · ${riga.motivo}${
+              riga.fonte ? ` · ${riga.fonte}` : ''
+            }`,
+          });
+        }
+        if (s25.nonApplicabiliPerDatiMancanti > 0) {
+          voci.push({
+            etichetta: 'Art. 25-novies — soglie non applicate',
+            valore: `${s25.nonApplicabiliPerDatiMancanti} ${
+              s25.nonApplicabiliPerDatiMancanti === 1
+                ? 'soglia resta fuori dal confronto'
+                : 'soglie restano fuori dal confronto'
+            } per un dato che le seleziona mancante: non sono «sotto soglia».`,
+          });
+        }
+      }
+      const qualifica25 = s25
+        ? ' Il superamento di una soglia dell’art. 25-novies non accerta lo stato di crisi né attesta l’obbligo di segnalazione: il requisito dei novanta giorni non è verificabile dai dati.'
+        : '';
       sezioni.push({
         id: 'riscontri',
-        titolo: '5. Riscontri normativi',
+        titolo: '6. Riscontri normativi',
         tipo: 'elenco',
         voci,
         nota: `Calcolo deterministico sui dati disponibili.${
           r.datiMancanti.length > 0
             ? ` Non verificato automaticamente: ${r.datiMancanti.join('; ')}.`
             : ''
-        } Il rilevamento di un segnale non accerta lo stato di crisi.`,
+        } Il rilevamento di un segnale non accerta lo stato di crisi.${qualifica25}`,
       });
     } else {
       sezioni.push({
         id: 'riscontri',
-        titolo: '5. Riscontri normativi',
+        titolo: '6. Riscontri normativi',
         tipo: 'elenco',
         voci: [],
         nota: 'Non calcolabili sui dati disponibili.',
@@ -537,6 +675,52 @@ function prospettoHtml(sezione: Extract<SezioneReport, { tipo: 'prospetto' }>): 
     }`;
 }
 
+function mappaHtml(sezione: Extract<SezioneReport, { tipo: 'mappa' }>): string {
+  const intestazioni = sezione.anni.map(
+    (a, k) => `${a}${sezione.tipi[k] === 'PROIEZIONE' ? ' (proiezione)' : ''}`
+  );
+  const indiceCosti = sezione.righe.findIndex((r) => r.etichetta === 'Costi della produzione');
+  const righe = sezione.righe
+    .map((r, idx) => {
+      const principale = `<tr${r.forte ? ' class="tot"' : ''}><td>${esc(r.etichetta)}</td>${r.valori
+        .map((v) => `<td class="num">${euro(v)}</td>`)
+        .join('')}</tr>`;
+      const sotto =
+        idx === indiceCosti
+          ? `<tr><td style="padding-left:14px;font-style:italic">di cui debito dell’ente</td>${sezione.debitiInseriti
+              .map((d) => `<td class="num">${d > 0 ? euro(d) : '—'}</td>`)
+              .join('')}</tr>`
+          : '';
+      return principale + sotto;
+    })
+    .join('');
+  const indici = sezione.indici
+    .map(
+      (i) =>
+        `<tr><td>${esc(i.codice)} — ${esc(i.nome)}</td><td>${esc(i.soglia)}</td>${i.valori
+          .map(
+            (v, k) =>
+              `<td class="num">${v === null ? '—' : numero(v)}${
+                i.esiti[k] === 'VIOLATO' ? ' (oltre soglia)' : ''
+              }</td>`
+          )
+          .join('')}</tr>`
+    )
+    .join('');
+  return `
+    <table><thead><tr><th>Voce</th>${intestazioni
+      .map((a) => `<th class="num">${esc(a)}</th>`)
+      .join('')}</tr></thead><tbody>${righe}</tbody></table>
+    ${
+      sezione.indici.length > 0
+        ? `<h3 style="font-size:12px">Indici per annualità</h3>
+           <table><thead><tr><th>Indice</th><th>Soglia</th>${intestazioni
+             .map((a) => `<th class="num">${esc(a)}</th>`)
+             .join('')}</tr></thead><tbody>${indici}</tbody></table>`
+        : ''
+    }`;
+}
+
 function sezioneHtml(s: SezioneReport): string {
   const titolo = `<h2 style="font-size:14px;margin-top:24px">${esc(s.titolo)}</h2>`;
   const nota = s.nota ? `<p class="note">${esc(s.nota)}</p>` : '';
@@ -545,6 +729,9 @@ function sezioneHtml(s: SezioneReport): string {
   }
   if (s.tipo === 'prospetto') {
     return `${titolo}${prospettoHtml(s)}${nota}`;
+  }
+  if (s.tipo === 'mappa') {
+    return `${titolo}${mappaHtml(s)}${nota}`;
   }
   if (s.voci.length === 0) return `${titolo}${nota}`;
   if (s.tipo === 'elenco') {

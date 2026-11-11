@@ -46,6 +46,8 @@ function fonti(extra: Partial<FontiReport> = {}): FontiReport {
     },
     prospetto: null,
     riscontri: null,
+    soglie25: null,
+    mappa: null,
     questionario: null,
     ...extra,
   };
@@ -178,5 +180,92 @@ describe('componiReport', () => {
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
     expect(html).toContain('<strong>in tensione</strong>');
+  });
+
+  it('porta la mappa salvata come base, con il debito come «di cui» dei costi', () => {
+    const { sezioni } = componiReport(
+      fonti({
+        mappa: {
+          profilo: 'Standard',
+          annualita: 3,
+          debitoEnte: 925272,
+          crescitaStoricaPct: 4.2,
+          crescitaApplicataPct: 4.2,
+          avvertenze: [],
+          salvataIl: '2026-11-10T10:00:00.000Z',
+          colonne: [
+            {
+              anno: 2024,
+              tipo: 'STORICO',
+              valori: { ricaviVendite: 7050112, costiProduzione: 6000000 },
+              debitoEnteInserito: 0,
+              indici: [],
+            },
+            {
+              anno: 2025,
+              tipo: 'PROIEZIONE',
+              valori: { ricaviVendite: 7300000, costiProduzione: 6400000 },
+              debitoEnteInserito: 925272,
+              indici: [],
+            },
+          ],
+        },
+      }),
+      inclusioniTutte
+    );
+    const mappa = sezioni.find((s) => s.id === 'mappa');
+    if (mappa?.tipo !== 'mappa') throw new Error('sezione mappa assente');
+    expect(mappa.anni).toEqual([2024, 2025]);
+    expect(mappa.tipi).toEqual(['STORICO', 'PROIEZIONE']);
+    expect(mappa.debitiInseriti).toEqual([0, 925272]);
+    expect(mappa.righe.find((r) => r.etichetta === 'Costi della produzione')?.valori).toEqual([
+      6000000, 6400000,
+    ]);
+    expect(mappa.nota).toMatch(/di cui/i);
+    expect(mappa.nota).toMatch(/2025/);
+  });
+
+  it('senza base salvata lo dichiara invece di mostrare una mappa vuota', () => {
+    const { sezioni, avvisi } = componiReport(fonti(), inclusioniTutte);
+    expect(sezioni.some((s) => s.id === 'mappa')).toBe(false);
+    expect(avvisi.some((a) => /Nessuna simulazione è salvata come base/i.test(a))).toBe(true);
+  });
+
+  it('porta le righe dell’art. 25-novies nei riscontri, con la qualificazione', () => {
+    const { sezioni } = componiReport(
+      fonti({
+        riscontri: {
+          soglie: [],
+          indicatori: [],
+          articoli: [],
+          datiMancanti: [],
+          impresaMinore: null,
+        },
+        soglie25: {
+          righe: [
+            {
+              ambito: 'INPS',
+              descrizione: 'Contributi scaduti',
+              esposizione: 30000,
+              esito: 'sopra',
+              motivo: 'Oltre la soglia del 30% dei contributi dovuti',
+              fonte: 'Certificazione dei debiti',
+              applicabile: true,
+            },
+          ],
+          datiMancanti: [],
+          nonApplicabiliPerDatiMancanti: 0,
+        },
+      }),
+      inclusioniTutte
+    );
+    const riscontri = sezioni.find((s) => s.id === 'riscontri');
+    if (riscontri?.tipo !== 'elenco') throw new Error('sezione riscontri assente');
+    expect(
+      riscontri.voci.some(
+        (v) => v.etichetta === 'Art. 25-novies — INPS' && v.valore.includes('30.000 €')
+      )
+    ).toBe(true);
+    expect(riscontri.nota).toMatch(/non accerta lo stato di crisi/i);
   });
 });

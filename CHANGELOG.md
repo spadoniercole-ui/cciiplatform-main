@@ -1,3 +1,14 @@
+## 0.201.0 — 2026-11-11
+
+- **La mappa della verifica azienda entra nel report.** Quando esiste una simulazione salvata come
+  base degli scenari, il documento porta la mappa a colonne con il profilo, le annualità proiettate
+  e il debito dell’ente come «di cui» dei costi della produzione, nell’anno in cui entra. Senza una
+  base salvata il report lo dichiara: non si inventa una proiezione.
+- **Le soglie dell’art. 25-novies nei riscontri.** Le righe applicabili entrano nel report con
+  importo confrontato, esito e motivo, e con la qualificazione che il superamento di una soglia non
+  accerta lo stato di crisi né attesta l’obbligo di segnalazione: il requisito dei novanta giorni
+  non è verificabile dai dati della piattaforma.
+
 ## 0.200.0 — 2026-11-11
 
 - **Report dell’azienda, uno e in sola lettura.** Il documento mette insieme l’esito della
