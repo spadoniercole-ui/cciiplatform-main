@@ -362,7 +362,7 @@ export function SituazioneScenario({
           href={`/spazio/${codice}/scenari/${scenarioId}/situazione`}
           className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800 print:hidden"
         >
-          <History className="w-3 h-3" /> Tutta la cronologia
+          <History className="w-3 h-3" /> Natura e cronologia
         </Link>
       )}
       {errore && <p className="text-[10px] font-bold text-red-700">{errore}</p>}

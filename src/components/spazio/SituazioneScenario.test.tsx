@@ -190,7 +190,7 @@ describe('SituazioneScenario', () => {
     expect(await screen.findByText(/Ultimo cambio annullato/)).toBeTruthy();
   });
 
-  it('mostra gli sblocchi con motivo e autore e il link alla cronologia completa', () => {
+  it('mostra gli sblocchi con motivo e autore e il link a natura e cronologia', () => {
     render(
       <SituazioneScenario
         nomeSchema="tenant_test"
@@ -213,7 +213,7 @@ describe('SituazioneScenario', () => {
     expect(screen.getByText(/Sblocchi dello scenario \(1\)/)).toBeTruthy();
     expect(screen.getByText(/Inquadramento errato/)).toBeTruthy();
     expect(screen.getAllByText(/anna@alfa\.it/).length).toBeGreaterThan(0);
-    const link = screen.getByText('Tutta la cronologia').closest('a');
+    const link = screen.getByText('Natura e cronologia').closest('a');
     expect(link?.getAttribute('href')).toBe('/spazio/spazio1/scenari/4/situazione');
   });
 

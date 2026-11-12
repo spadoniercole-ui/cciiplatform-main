@@ -8,6 +8,8 @@ import { leggiStoricoSblocchi } from '@/lib/scenari/storicoSblocchi';
 import { dataItaliana } from '@/lib/scenari/situazione';
 import { etichettaIstruttoria, type TipoIstruttoria } from '@/lib/giudice/lettura';
 import { SituazioneScenario } from '@/components/spazio/SituazioneScenario';
+import { EsitoPropostaScenario } from '@/components/spazio/EsitoPropostaScenario';
+import { esitoPropostaValido } from '@/lib/scenari/esitoProposta';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { passiDaRivedere } from '@/lib/scenari/situazione';
 
@@ -50,6 +52,19 @@ export default async function CronologiaSituazionePage({
     : [];
   const puoAnnullare = contesto.modalita === 'ADMIN_SPAZIO' || contesto.modalita === 'SALVAGENTE';
 
+  // L'esito della proposta sta nella colonna del tenant: si legge qui, come in
+  // scheda, e si cambia da questa pagina — fuori dalla fase operativa.
+  const esitoProposta = await (async () => {
+    const { pool } = await import('@/lib/db');
+    const righe = await pool
+      .query(`SELECT esito_proposta FROM "${contesto.nomeSchema}".scenari WHERE id = $1`, [
+        scenario.id,
+      ])
+      .catch(() => null);
+    const valore = righe?.rows[0]?.esito_proposta;
+    return esitoPropostaValido(valore) ? valore : null;
+  })();
+
   return (
     <div className="space-y-4">
       <Link
@@ -60,7 +75,7 @@ export default async function CronologiaSituazionePage({
       </Link>
 
       <div className="bg-white border border-slate-200 rounded-xl p-5">
-        <h1 className="text-lg font-bold text-slate-900">Cronologia della situazione</h1>
+        <h1 className="text-lg font-bold text-slate-900">Natura ed esito dello scenario</h1>
         <p className="text-xs text-slate-500 mt-1">
           {scenario.ragioneSocialeAzienda} · situazione attuale:{' '}
           <span className="font-bold text-slate-700">
@@ -68,8 +83,10 @@ export default async function CronologiaSituazionePage({
           </span>
         </p>
         <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-          Ogni cambio e ogni annullamento restano scritti: la cronologia non si cancella. Gli
-          sblocchi sono elencati sotto, con il motivo dichiarato da chi li ha fatti.
+          Qui si amministra l’atto, fuori dalla fase operativa: la natura dello scenario e, per
+          l’accordo, l’esito che si sta valutando. Ogni cambio e ogni annullamento restano scritti:
+          la cronologia non si cancella, e gli sblocchi sono elencati sotto con il motivo
+          dichiarato.
         </p>
       </div>
 
@@ -92,6 +109,24 @@ export default async function CronologiaSituazionePage({
           puoAnnullare={puoAnnullare}
         />
       </div>
+
+      {/* L'ESITO DELLA PROPOSTA SI DICHIARA QUI. È un'ipotesi da valutare, e
+          resta fuori dal lavoro dello scenario come la natura: si legge nella
+          scheda, si cambia in questa pagina. */}
+      {scenario.tipoIstruttoria === 'PROPOSTA' && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <h2 className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-700">
+            Esito della proposta
+          </h2>
+          <EsitoPropostaScenario
+            nomeSchema={contesto.nomeSchema}
+            scenarioId={scenario.id}
+            esito={esitoProposta}
+            bloccato={Boolean(scenario.bloccatoIl)}
+            demo={contesto.demo}
+          />
+        </div>
+      )}
 
       <div className="bg-white border border-slate-200 rounded-xl p-5">
         <div className="flex items-center gap-2 mb-3">

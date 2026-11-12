@@ -14,7 +14,6 @@ import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
 import { NaturaScenario } from '@/components/spazio/NaturaScenario';
 import { StampaSchedaScenario } from '@/components/spazio/StampaSchedaScenario';
-import { EsitoPropostaScenario } from '@/components/spazio/EsitoPropostaScenario';
 import { esitoPropostaValido } from '@/lib/scenari/esitoProposta';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { passiDaRivedere } from '@/lib/scenari/situazione';
@@ -139,16 +138,8 @@ export default async function ScenarioLayout({
                 cambiataIl={scenario.situazioneCambiataIl}
                 rivedere={passiScenario}
                 vociCronologia={storicoSituazione.length}
+                esito={esitoProposta}
               />
-              {scenario.tipoIstruttoria === 'PROPOSTA' && (
-                <EsitoPropostaScenario
-                  nomeSchema={contesto.nomeSchema}
-                  scenarioId={scenario.id}
-                  esito={esitoProposta}
-                  bloccato={Boolean(scenario.bloccatoIl)}
-                  demo={contesto.demo}
-                />
-              )}
               {riferimento && (
                 <p className="mt-1">
                   <IdentificativiEnte

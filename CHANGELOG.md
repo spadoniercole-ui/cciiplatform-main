@@ -1,3 +1,12 @@
+## 0.212.0 — 2026-11-12
+
+- **Anche l'esito della proposta esce dalla fase operativa.** Nello scenario l'esito si legge —
+  «Esito della proposta in valutazione: …» — e si dichiara nella pagina dedicata, insieme alla
+  natura dell'atto; la scheda continua a portarlo con sé, anche in stampa. Niente più bottoni
+  dentro il lavoro dello scenario: quello che si amministra sta in un posto solo.
+- La pagina dedicata prende il nome di «Natura ed esito dello scenario», con la cronologia e gli
+  sblocchi sotto; il collegamento dalla scheda si chiama «Natura e cronologia».
+
 ## 0.211.0 — 2026-11-12
 
 - **La natura dello scenario esce dalla fase operativa.** Dentro lo scenario non ci sono più i tre
