@@ -1,3 +1,18 @@
+## 0.207.0 — 2026-11-12
+
+- **La fotografia contabile: un documento schematico, stampabile.** Dalla verifica contabile si
+  apre una pagina che mette in fila i documenti in possesso, il prospetto a scalare, TUTTI gli
+  indici abilitati nei parametri su ogni annualità e la diagnosi: quanti indici oltre soglia anno
+  per anno, patrimonio netto, debiti su ricavi, posizione finanziaria netta, con la direzione
+  della tendenza (in riduzione, in aumento, invariata) calcolata sui conteggi, non a parole.
+- **Il DSCR è nel documento, con il suo perché.** Gli indicatori del CCII che un bilancio non
+  basta a calcolare — DSCR e test pratico — compaiono dichiarati «n/d» con il motivo: serve il
+  servizio del debito, che si legge sugli scenari. La composizione sta in
+  `src/lib/contabile/fotografia.ts`, pura e con i suoi test.
+- **Nessun calcolo nuovo.** I valori sono quelli salvati dal motore XBRL: la fotografia non
+  introduce formule parallele che potrebbero disallinearsi dagli indici del resto della
+  piattaforma.
+
 ## 0.206.0 — 2026-11-12
 
 - **L'esito amministrativo ora instrada.** Alla data della verifica il debito verso l'ente è un

@@ -386,9 +386,17 @@ export function VerificaContabileAzienda({
       </section>
 
       <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-          4. Prospetto a scalare e indici
-        </h2>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+            4. Prospetto a scalare e indici
+          </h2>
+          <Link
+            href={`${base}/fotografia`}
+            className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+          >
+            Fotografia contabile (stampabile) →
+          </Link>
+        </div>
         <ProspettoContabileStorico
           nomeSchema={nomeSchema}
           aziendaId={aziendaId}
