@@ -370,6 +370,23 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
   //      lettura dell'esito, non un capitolo a sé.
   if (fonti.raccomandazione) {
     const r = fonti.raccomandazione;
+    // I percorsi entrano uno per uno, con chi decide: nel documento non si
+    // può leggere «accordo con cram down» come se fossero la stessa cosa.
+    const righePercorsi: string[] = [];
+    for (const p of r.percorsi) {
+      righePercorsi.push(
+        `— ${p.etichetta}${p.codice === r.percorsoConsigliato ? ' (da valutare per primo)' : ''}`
+      );
+      righePercorsi.push(`  Decide: ${p.chiDecide}.`);
+      righePercorsi.push(`  ${p.natura}`);
+      for (const voce of p.presupposti) righePercorsi.push(`  · ${voce}`);
+      if (p.esiti) {
+        righePercorsi.push('  Esiti possibili della proposta:');
+        for (const e of p.esiti)
+          righePercorsi.push(`    · ${e.etichetta} — decide ${e.chiDecide}. ${e.descrizione}`);
+      }
+      for (const l of p.limiti) righePercorsi.push(`  Limite: ${l}`);
+    }
     const testo = [
       r.titolo,
       '',
@@ -377,6 +394,11 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
       '',
       'Motivi',
       ...r.motivi.map((m) => `— ${m}`),
+      '',
+      'I percorsi, distinti',
+      ...righePercorsi,
+      '',
+      r.nonEquiparabili,
       '',
       'Limiti della lettura',
       ...r.limiti.map((l) => `— ${l}`),

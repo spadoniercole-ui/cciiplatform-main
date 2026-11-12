@@ -1,3 +1,22 @@
+## 0.209.0 — 2026-11-12
+
+- **Il report dell'amministrativa separa i percorsi.** La raccomandazione non scrive più «accordo
+  con cram down»: descrive i tre percorsi uno per uno, con **chi decide** — i creditori col voto,
+  il tribunale con l'apertura, il giudice con il provvedimento — i presupposti e i limiti. La nota
+  sul confine fra accordo e cram down sta a video e nel report dell'azienda, non in una riga di
+  chiusura.
+- **Gli esiti della proposta sono previsti negli scenari.** Uno scenario di accordo transattivo
+  dichiara quale esito si sta valutando: **definizione dell'accordo**, **presentazione al
+  tribunale con apertura della liquidazione giudiziale**, oppure **cram down**. È un'ipotesi
+  dichiarata, non una previsione; si registra solo sugli scenari di accordo, e l'azione rifiuta
+  liquidazione e cram down perché lì il percorso è già quello dell'atto. Colonna
+  `esito_proposta` aggiunta con `ADD COLUMN IF NOT EXISTS`.
+- **La fotografia contabile dichiara le assunzioni.** Nuova sezione «Assunzioni della traduzione
+  (XBRL → schemi)»: cosa viene dai tag mappati, quali valori sono di riserva (valore della
+  produzione dai ricavi, EBIT dalla differenza, EBITDA dagli ammortamenti, PFN dai soli debiti
+  bancari), che i fact assenti non si stimano, e che nota integrativa e DSCR restano fuori dal
+  calcolo invece di essere forzati dentro.
+
 ## 0.208.0 — 2026-11-12
 
 - **Il modello di proiezione è un parametro, non una costante.** Nei Parametri di Spazio la voce

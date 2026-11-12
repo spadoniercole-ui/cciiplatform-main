@@ -1,11 +1,19 @@
-// LA VERIFICA AMMINISTRATIVA NON FINISCE IN SÉ: INSTrada.
+// LA VERIFICA AMMINISTRATIVA NON FINISCE IN SÉ: INSTRADA.
 //
 // L'esito amministrativo dice com'è l'azienda alla data e quanto vale il debito
 // nell'ente. Da lì si aprono tre strade, e la prima decisione è quale
 // imboccare: completare la verifica contabile (perché senza il dato depositato
-// non si sceglie), valutare la liquidazione, oppure valutare un accordo con
-// cram down. Qui quella decisione diventa una raccomandazione dichiarata, con
-// i fatti che la sostengono e i limiti che la circoscrivono.
+// non si sceglie), valutare la liquidazione, oppure valutare un accordo
+// transattivo con i creditori.
+//
+// LE STRADE NON SI MESCOLANO (0.209.0). L'accordo transattivo è una proposta
+// dell'azienda che si definisce con il VOTO dei creditori; dalla stessa
+// proposta possono discendere la presentazione al tribunale (apertura della
+// liquidazione giudiziale) oppure il cram down. Ma il cram down non è
+// «l'accordo con un altro nome»: è un piano reso efficace con il PROVVEDIMENTO
+// del giudice, anche senza quel consenso. Per questo la raccomandazione non
+// scrive più «accordo con cram down»: indica il percorso, e gli esiti della
+// proposta restano esiti, elencati uno per uno in `percorsi`.
 //
 // REGOLE, NON GIUDIZI. Non c'è AI e non c'è una probabilità: si leggono i fatti
 // già accertati dalla verifica (esito, copertura, patrimonio netto, indici oltre
@@ -19,10 +27,20 @@
 //
 // Logica pura, con i suoi test.
 
+import {
+  NON_EQUIPARABILI,
+  percorsiOrdinati,
+  type CodicePercorso,
+  type PercorsoDescritto,
+} from './percorsi';
+
 export type EsitoAmministrativo = 'ROSSO' | 'GIALLO' | 'ATTENZIONE_MINIMA';
 
-/** Le quattro direzioni possibili, in ordine di precedenza. */
-export type Direzione = 'CONTABILE' | 'LIQUIDAZIONE' | 'CRAM_DOWN' | 'ORDINARIO';
+/**
+ * Le quattro direzioni possibili, in ordine di precedenza. La terza si chiama
+ * per quello che è — accordo transattivo — e non per uno dei suoi esiti.
+ */
+export type Direzione = 'CONTABILE' | 'LIQUIDAZIONE' | 'ACCORDO_TRANSATTIVO' | 'ORDINARIO';
 
 export interface IngressoRaccomandazione {
   esito: EsitoAmministrativo;
@@ -53,6 +71,15 @@ export interface EsitoRaccomandazione {
   motivi: string[];
   azioni: AzioneConsigliata[];
   limiti: string[];
+  /**
+   * Il percorso da valutare per primo, oppure null quando la prima cosa da
+   * fare non è scegliere una strada (dato incompleto o percorso ordinario).
+   */
+  percorsoConsigliato: CodicePercorso | null;
+  /** I tre percorsi descritti, ciascuno con chi decide: quello consigliato per primo. */
+  percorsi: PercorsoDescritto[];
+  /** Il confine fra accordo e cram down, dichiarato per esteso. */
+  nonEquiparabili: string;
 }
 
 /** Oltre questo numero di indici oltre soglia il quadro contabile è grave. */
@@ -63,6 +90,7 @@ const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
 const LIMITI_COMUNI = [
   'La raccomandazione è un ordine di priorità fra le strade possibili, non una conclusione giuridica: la scelta resta all’ente.',
   'Il DSCR non si calcola dal bilancio depositato (serve la rata del piano): si legge sugli scenari, dove il piano di rientro la definisce.',
+  'Gli esiti della proposta sono ipotesi da valutare, non previsioni: li producono il voto dei creditori e il provvedimento del giudice.',
 ];
 
 export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccomandazione {
@@ -117,6 +145,9 @@ export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccom
         },
       ],
       limiti,
+      percorsoConsigliato: null,
+      percorsi: percorsiOrdinati(null),
+      nonEquiparabili: NON_EQUIPARABILI,
     };
   }
 
@@ -129,13 +160,13 @@ export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccom
       direzione: 'LIQUIDAZIONE',
       titolo: 'Si consiglia di valutare la liquidazione giudiziale',
       sintesi:
-        'Il patrimonio netto è negativo e gli indici di bilancio sono oltre soglia su più dimensioni: il confronto con la liquidazione va fatto prima di qualsiasi ipotesi di accordo, e con i valori di realizzo configurati nello spazio.',
+        'Il patrimonio netto è negativo e gli indici di bilancio sono oltre soglia su più dimensioni: il confronto con la liquidazione va fatto prima di qualsiasi ipotesi di accordo, e con i valori di realizzo configurati nello spazio. La liquidazione non è un piano: è l’apertura della procedura.',
       motivi,
       azioni: [
         {
           etichetta: 'Confronta la proposta con la liquidazione',
           descrizione:
-            'Realizzo in liquidazione e soddisfacimento nel cram down, per rango del credito.',
+            'Realizzo in liquidazione, per rango del credito, accanto al soddisfacimento offerto.',
         },
         {
           etichetta: 'Apri la verifica contabile',
@@ -144,10 +175,15 @@ export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccom
         },
       ],
       limiti,
+      percorsoConsigliato: 'LIQUIDAZIONE_GIUDIZIALE',
+      percorsi: percorsiOrdinati('LIQUIDAZIONE_GIUDIZIALE'),
+      nonEquiparabili: NON_EQUIPARABILI,
     };
   }
 
-  // 3. CRITICITÀ NON GRAVE, O SEGNALAZIONE SUPERATA: L'ACCORDO VA VALUTATO.
+  // 3. CRITICITÀ NON GRAVI, O SEGNALAZIONE SUPERATA: L'ACCORDO VA VALUTATO.
+  //    Il percorso è la proposta da votare; cram down e apertura della
+  //    liquidazione restano esiti, non sinonimi del percorso.
   if (pnNegativo || almenoUnIndice || input.esito === 'ROSSO') {
     if (pnNegativo) {
       motivi.push(`Patrimonio netto negativo (${euro(input.patrimonioNetto ?? 0)}).`);
@@ -158,16 +194,17 @@ export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccom
       );
     }
     return {
-      direzione: 'CRAM_DOWN',
-      titolo: 'Si consiglia di valutare un accordo di ristrutturazione con cram down',
+      direzione: 'ACCORDO_TRANSATTIVO',
+      titolo:
+        'Si consiglia di valutare un accordo transattivo, da sottoporre al voto dei creditori',
       sintesi:
-        'Le criticità sono accertate ma non assumono, dai dati disponibili, la forma del quadro grave: la strada da valutare è la regolazione del debito, con il confronto rispetto alla liquidazione sempre a vista.',
+        'Le criticità sono accertate ma non assumono, dai dati disponibili, la forma del quadro grave: la strada da valutare è una proposta di accordo transattivo, che si definisce con il voto dei creditori. Dalla stessa proposta possono discendere la presentazione al tribunale con l’apertura della liquidazione giudiziale, oppure il cram down — che però è un atto diverso: un piano reso efficace dal provvedimento del giudice, senza il consenso dei creditori.',
       motivi,
       azioni: [
         {
           etichetta: 'Apri gli scenari',
           descrizione:
-            'Accordo transattivo, liquidazione e cram down sullo stesso dato, con le soglie dell’ente.',
+            'L’accordo transattivo sullo stesso dato, con l’esito che si sta valutando: definizione, apertura della liquidazione o cram down.',
         },
         {
           etichetta: 'Apri la verifica contabile',
@@ -175,6 +212,9 @@ export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccom
         },
       ],
       limiti,
+      percorsoConsigliato: 'ACCORDO_TRANSATTIVO',
+      percorsi: percorsiOrdinati('ACCORDO_TRANSATTIVO'),
+      nonEquiparabili: NON_EQUIPARABILI,
     };
   }
 
@@ -196,5 +236,8 @@ export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccom
       },
     ],
     limiti,
+    percorsoConsigliato: null,
+    percorsi: percorsiOrdinati(null),
+    nonEquiparabili: NON_EQUIPARABILI,
   };
 }

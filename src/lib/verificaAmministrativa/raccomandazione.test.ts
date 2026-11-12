@@ -37,17 +37,22 @@ describe('raccomandaDecisione', () => {
     expect(esito.motivi.join(' ')).toContain('Patrimonio netto negativo');
   });
 
-  it('patrimonio netto negativo con indici sotto la soglia grave: valutare il cram down', () => {
+  it('patrimonio netto negativo con indici sotto la soglia grave: valutare l’accordo transattivo', () => {
     const esito = raccomandaDecisione(input({ patrimonioNetto: -240_000, indiciViolati: 2 }));
 
-    expect(esito.direzione).toBe('CRAM_DOWN');
-    expect(esito.titolo).toMatch(/cram down/);
+    expect(esito.direzione).toBe('ACCORDO_TRANSATTIVO');
+    expect(esito.titolo).toMatch(/accordo transattivo/);
+    // Il cram down è un esito dichiarato, non il percorso: non sta nel titolo.
+    expect(esito.titolo).not.toMatch(/cram down/i);
+    expect(
+      esito.percorsi.find((p) => p.codice === 'ACCORDO_TRANSATTIVO')?.esiti?.map((e) => e.codice)
+    ).toEqual(['DEFINIZIONE_ACCORDO', 'APERTURA_LIQUIDAZIONE', 'CRAM_DOWN']);
   });
 
   it('una sola criticità accertata porta a valutare l’accordo', () => {
     const esito = raccomandaDecisione(input({ esito: 'GIALLO', indiciViolati: 1 }));
 
-    expect(esito.direzione).toBe('CRAM_DOWN');
+    expect(esito.direzione).toBe('ACCORDO_TRANSATTIVO');
   });
 
   it('senza criticità il percorso è ordinario, e il debito resta dichiarato', () => {
@@ -57,6 +62,18 @@ describe('raccomandaDecisione', () => {
 
     expect(esito.direzione).toBe('ORDINARIO');
     expect(esito.motivi.join(' ')).toContain('16.756 €');
+  });
+
+  it('il percorso consigliato apre la lista, e i tre restano distinti', () => {
+    const accordo = raccomandaDecisione(input({ esito: 'ROSSO', indiciViolati: 1 }));
+    expect(accordo.percorsoConsigliato).toBe('ACCORDO_TRANSATTIVO');
+    expect(accordo.percorsi[0].codice).toBe('ACCORDO_TRANSATTIVO');
+    expect(accordo.percorsi).toHaveLength(3);
+    expect(accordo.nonEquiparabili).toContain('non stanno sullo stesso piano');
+
+    const daDato = raccomandaDecisione(input({ anniXbrl: 0, indiciViolati: null }));
+    expect(daDato.percorsoConsigliato).toBeNull();
+    expect(daDato.percorsi).toHaveLength(3);
   });
 
   it('dichiara sempre che non è una conclusione giuridica e perché il DSCR non c’è', () => {

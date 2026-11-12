@@ -101,3 +101,30 @@ describe('componiFotografia', () => {
     expect(f.avvertenze.join(' ')).toContain('non c’è una tendenza');
   });
 });
+
+describe('assunzioni della traduzione', () => {
+  it('dichiara fuori bilancio ciò che il bilancio non basta a calcolare', () => {
+    const f = componiFotografia({ bilanci: [], codiciAbilitati: [] });
+    expect(f.assunzioni.length).toBeGreaterThan(5);
+    const dscr = f.assunzioni.find((a) => a.voce.includes('DSCR'))!;
+    expect(dscr.origine).toBe('FUORI_BILANCIO');
+    expect(dscr.assunzione).toContain('n/d');
+  });
+
+  it('dichiara che i fact assenti non si stimano, e la riserva sul valore della produzione', () => {
+    const f = componiFotografia({ bilanci: [], codiciAbilitati: [] });
+    expect(f.assunzioni.find((a) => a.voce === 'Fact assenti')?.assunzione).toContain(
+      'Non si stimano'
+    );
+    const vp = f.assunzioni.find((a) => a.voce === 'Valore della produzione')!;
+    expect(vp.origine).toBe('RISERVA');
+    expect(vp.assunzione).toContain('ricavi delle vendite');
+  });
+
+  it('la nota integrativa resta contesto e non diventa un tasso', () => {
+    const nota = componiFotografia({ bilanci: [], codiciAbilitati: [] }).assunzioni.find((a) =>
+      a.voce.includes('Nota integrativa')
+    )!;
+    expect(nota.assunzione).toContain('non si converte');
+  });
+});

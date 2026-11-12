@@ -13,6 +13,8 @@ import { leggiRiferimentoAzienda } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
 import { SituazioneScenario } from '@/components/spazio/SituazioneScenario';
+import { EsitoPropostaScenario } from '@/components/spazio/EsitoPropostaScenario';
+import { esitoPropostaValido } from '@/lib/scenari/esitoProposta';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { passiDaRivedere } from '@/lib/scenari/situazione';
 import { leggiStoricoSituazione } from '@/lib/scenari/storicoSituazione';
@@ -102,6 +104,20 @@ export default async function ScenarioLayout({
     () => []
   );
 
+  // L'esito della proposta vive in una colonna del tenant e si legge a parte,
+  // come la base della verifica: non passa da Drizzle. Assenza o valore
+  // illeggibile valgono «non dichiarato».
+  const esitoProposta = await (async () => {
+    const { pool } = await import('@/lib/db');
+    const righe = await pool
+      .query(`SELECT esito_proposta FROM "${contesto.nomeSchema}".scenari WHERE id = $1`, [
+        scenario.id,
+      ])
+      .catch(() => null);
+    const valore = righe?.rows[0]?.esito_proposta;
+    return esitoPropostaValido(valore) ? valore : null;
+  })();
+
   const base = `/spazio/${codice}/scenari/${scenarioId}`;
   // Testata dell'azienda: identificativi presso l'ente in evidenza.
   const riferimento = await leggiRiferimentoAzienda(contesto.nomeSchema, scenario.aziendaId).catch(
@@ -139,6 +155,15 @@ export default async function ScenarioLayout({
                 codice={codice}
                 puoAnnullare={puoAnnullareSituazione}
               />
+              {scenario.tipoIstruttoria === 'PROPOSTA' && (
+                <EsitoPropostaScenario
+                  nomeSchema={contesto.nomeSchema}
+                  scenarioId={scenario.id}
+                  esito={esitoProposta}
+                  bloccato={Boolean(scenario.bloccatoIl)}
+                  demo={contesto.demo}
+                />
+              )}
               {riferimento && (
                 <p className="mt-1">
                   <IdentificativiEnte

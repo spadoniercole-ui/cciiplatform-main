@@ -19,6 +19,7 @@ import {
   originePerSituazione,
   passiDaRivedere,
 } from '@/lib/scenari/situazione';
+import { esitoPropostaValido, type EsitoProposta } from '@/lib/scenari/esitoProposta';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { verificaPinSecondoFattore } from '@/lib/mfa/pinSessione';
 import { assicuraStoricoSituazione } from '@/db/provision';
@@ -864,6 +865,64 @@ export async function annullaUltimoCambioSituazioneAction(
     return {
       success: false,
       error: `Impossibile annullare il cambio: ${(error as Error).message}`,
+    };
+  }
+}
+
+/**
+ * Registra l'esito che si sta valutando per la proposta di accordo (0.209.0).
+ *
+ * Una proposta non ha un esito solo: la definizione dell'accordo con il voto,
+ * l'apertura della liquidazione giudiziale, oppure il cram down con il
+ * provvedimento del giudice. Lo scenario dice quale si sta valutando — è
+ * un'ipotesi dichiarata, non una previsione — e il resto della piattaforma la
+ * legge. Si registra solo sugli scenari di accordo: per liquidazione e cram
+ * down il percorso è già quello dell'atto.
+ */
+export async function impostaEsitoPropostaAction(
+  nomeSchema: string,
+  scenarioId: number,
+  esito: EsitoProposta | null
+): Promise<RisultatoOperazioneScenario> {
+  try {
+    await richiediAccessoScenario(nomeSchema, scenarioId, {
+      modulo: ['scenari'],
+      livello: 'SCRITTURA',
+    });
+    if (!schemaOk(nomeSchema)) {
+      return { success: false, error: 'Nome schema non valido.' };
+    }
+    if (esito !== null && !esitoPropostaValido(esito)) {
+      return { success: false, error: 'Esito della proposta non riconosciuto.' };
+    }
+    const { pool } = await import('@/lib/db');
+    const righe = await pool.query(
+      `SELECT tipo_istruttoria, bloccato_il FROM "${nomeSchema}".scenari WHERE id = $1`,
+      [scenarioId]
+    );
+    if (righe.rows.length === 0) {
+      return { success: false, error: 'Scenario non trovato.' };
+    }
+    if (righe.rows[0].bloccato_il) {
+      return { success: false, error: MESSAGGIO_SCENARIO_BLOCCATO };
+    }
+    if (righe.rows[0].tipo_istruttoria !== 'PROPOSTA') {
+      return {
+        success: false,
+        error:
+          'L’esito della proposta si registra solo sugli scenari di accordo transattivo: per la liquidazione e il cram down il percorso è già quello dell’atto.',
+      };
+    }
+    await pool.query(`UPDATE "${nomeSchema}".scenari SET esito_proposta = $2 WHERE id = $1`, [
+      scenarioId,
+      esito,
+    ]);
+    return { success: true, scenarioId };
+  } catch (error: unknown) {
+    console.error('[impostaEsitoPropostaAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile registrare l’esito della proposta: ${(error as Error).message}`,
     };
   }
 }

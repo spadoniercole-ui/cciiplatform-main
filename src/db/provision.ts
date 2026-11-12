@@ -410,6 +410,11 @@ export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> 
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS tipo_istruttoria TEXT NOT NULL DEFAULT 'PROPOSTA'`
   );
+  // L'esito che si sta valutando per la proposta di accordo (0.209.0):
+  // definizione dell'accordo, apertura della liquidazione giudiziale o cram
+  // down. Nullo finché non si sceglie, e non è un'etichetta: solo l'accordo ha
+  // tre esiti, perché solo l'accordo si vota.
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS esito_proposta TEXT`);
   // La verifica di base scelta alla creazione (0.195.0): aziendale per
   // l'accordo transattivo, amministrativa per liquidazione e cram down.
   await eseguiDdlTenant(sql`ALTER TABLE ${s}.scenari ADD COLUMN IF NOT EXISTS base_verifica TEXT`);

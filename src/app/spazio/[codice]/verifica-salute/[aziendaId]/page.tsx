@@ -192,6 +192,72 @@ export default async function EsitoVerificaAmministrativaPage({
           <p className="text-sm font-bold text-slate-900">{raccomandazione.titolo}</p>
           <p className="text-[11px] text-slate-700 leading-relaxed">{raccomandazione.sintesi}</p>
 
+          {/* I PERCORSI, DISTINTI. Accordo, liquidazione e cram down non stanno
+              sullo stesso piano: ognuno dice chi decide, e solo l'accordo porta
+              gli esiti della proposta. Il testo lo dichiara, la struttura lo
+              impone. */}
+          <div className="space-y-2">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+              I percorsi, distinti
+            </p>
+            <div className="grid gap-2">
+              {raccomandazione.percorsi.map((p) => (
+                <div
+                  key={p.codice}
+                  className={`rounded-lg border p-3 ${
+                    p.codice === raccomandazione.percorsoConsigliato
+                      ? 'border-blue-300 bg-white'
+                      : 'border-slate-200 bg-white/60'
+                  }`}
+                >
+                  <p className="text-[11px] font-bold text-slate-900">
+                    {p.etichetta}
+                    {p.codice === raccomandazione.percorsoConsigliato && (
+                      <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-blue-700">
+                        da valutare per primo
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[10px] text-slate-600 leading-relaxed mt-0.5">{p.natura}</p>
+                  <p className="text-[10px] text-slate-500 leading-relaxed mt-0.5">
+                    <strong className="text-slate-600">Decide:</strong> {p.chiDecide}.
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {p.presupposti.map((voce, i) => (
+                      <li
+                        key={i}
+                        className="text-[10px] text-slate-600 leading-relaxed flex gap-1.5"
+                      >
+                        <span className="text-slate-400 shrink-0">—</span>
+                        <span>{voce}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {p.esiti && (
+                    <div className="mt-1.5 rounded-md bg-slate-50 border border-slate-200 p-2">
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                        Esiti possibili della proposta
+                      </p>
+                      <ul className="mt-1 space-y-1">
+                        {p.esiti.map((e) => (
+                          <li key={e.codice} className="text-[10px] text-slate-700 leading-relaxed">
+                            <strong>{e.etichetta}</strong> — decide {e.chiDecide}. {e.descrizione}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-slate-500 leading-relaxed mt-1 italic">
+                    {p.limiti.join(' ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-slate-600 leading-relaxed border-l-2 border-amber-300 pl-2">
+              {raccomandazione.nonEquiparabili}
+            </p>
+          </div>
+
           <div>
             <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Motivi</p>
             <ul className="mt-1 space-y-0.5">

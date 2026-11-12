@@ -49,6 +49,78 @@ export interface DiagnosiAnno {
   debitiSuRicavi: number | null;
 }
 
+/**
+ * Le assunzioni con cui i fact XBRL diventano gli schemi del documento. Non
+ * sono formule nuove: sono le scelte già fatte dal mappatore e dal motore,
+ * scritte perché chi legge il prospetto sappia su che cosa poggia.
+ */
+export interface AssunzioneTraduzione {
+  voce: string;
+  assunzione: string;
+  origine: 'MAPPATURA' | 'RISERVA' | 'FUORI_BILANCIO';
+}
+
+export const ASSUNZIONI_TRADUZIONE: AssunzioneTraduzione[] = [
+  {
+    voce: 'Ricavi delle vendite',
+    assunzione:
+      'Ricavi delle vendite e delle prestazioni: il fact XBRL ricondotto a `ricaviVendite` dal mapping dei tag.',
+    origine: 'MAPPATURA',
+  },
+  {
+    voce: 'Valore della produzione',
+    assunzione:
+      'Se il fact non c’è, si assume il valore dei ricavi delle vendite: senza il totale della produzione il prospetto non avrebbe una base.',
+    origine: 'RISERVA',
+  },
+  {
+    voce: 'EBIT',
+    assunzione:
+      'Se non è dichiarato, si assume valore della produzione meno costi della produzione.',
+    origine: 'RISERVA',
+  },
+  {
+    voce: 'EBITDA',
+    assunzione: 'Se non è dichiarato, si assume EBIT più ammortamenti.',
+    origine: 'RISERVA',
+  },
+  {
+    voce: 'Patrimonio netto',
+    assunzione: 'Il totale del patrimonio netto del passivo, così come esposto nel bilancio.',
+    origine: 'MAPPATURA',
+  },
+  {
+    voce: 'Debiti',
+    assunzione:
+      'Il totale dei debiti (voce D del passivo), non solo quelli verso banche: è la base di C1 e del rapporto debiti/ricavi.',
+    origine: 'MAPPATURA',
+  },
+  {
+    voce: 'Posizione finanziaria netta',
+    assunzione:
+      'Debiti verso banche meno disponibilità liquide. Le altre passività finanziarie, se esposte altrove, non entrano: la fotografia non le sposta.',
+    origine: 'RISERVA',
+  },
+  {
+    voce: 'Fact assenti',
+    assunzione:
+      'Non si stimano: valgono zero nella scheda. Un indice che dipende da un fact assente può quindi risultare non calcolabile o non rappresentativo, e il valore va letto con questa avvertenza.',
+    origine: 'RISERVA',
+  },
+  {
+    voce: 'Nota integrativa',
+    assunzione:
+      'Si legge come contesto (criteri, fatti di rilievo, impegni, parti correlate): non si converte in un tasso né in una percentuale.',
+    origine: 'FUORI_BILANCIO',
+  },
+  {
+    voce: 'DSCR e test pratico',
+    assunzione:
+      'Non si assumono: servono la quota capitale e gli interessi in scadenza, che il bilancio non espone. Restano «n/d» con il motivo, e si leggono sugli scenari.',
+    origine: 'FUORI_BILANCIO',
+  },
+];
+
 export interface FotografiaContabile {
   anni: number[];
   /** Gli indici abilitati nello spazio, con i valori per annualità. */
@@ -58,6 +130,8 @@ export interface FotografiaContabile {
   diagnosi: DiagnosiAnno[];
   /** Cosa dicono i numeri sulla direzione, senza aggettivi di giudizio. */
   tendenza: string;
+  /** Le assunzioni della traduzione XBRL → schemi, dichiarate una per una. */
+  assunzioni: AssunzioneTraduzione[];
   avvertenze: string[];
 }
 
@@ -97,6 +171,7 @@ export function componiFotografia(input: {
       indicatoriDichiarati: [],
       diagnosi: [],
       tendenza: 'Nessun bilancio in archivio: non c’è una direzione da leggere.',
+      assunzioni: ASSUNZIONI_TRADUZIONE,
       avvertenze: [
         'Nessun bilancio XBRL caricato per questa azienda: la fotografia contabile non ha documenti su cui poggiare.',
       ],
@@ -165,6 +240,7 @@ export function componiFotografia(input: {
     indicatoriDichiarati,
     diagnosi,
     tendenza,
+    assunzioni: ASSUNZIONI_TRADUZIONE,
     avvertenze,
   };
 }

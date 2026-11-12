@@ -247,6 +247,34 @@ export default async function FotografiaContabilePage({
             </ul>
           </section>
 
+          {/* LE ASSUNZIONI. Il documento dice anche come i fact XBRL sono
+              diventati questi schemi: un numero senza la sua assunzione è un
+              numero che non si può discutere. */}
+          <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+              Assunzioni della traduzione (XBRL → schemi)
+            </h2>
+            <ul className="space-y-1.5">
+              {fotografia.assunzioni.map((a) => (
+                <li key={a.voce} className="text-[11px] text-slate-700 leading-relaxed">
+                  <strong>{a.voce}</strong>
+                  <span className="ml-1.5 text-[9px] uppercase tracking-wider text-slate-400">
+                    {a.origine === 'MAPPATURA'
+                      ? 'dal bilancio'
+                      : a.origine === 'RISERVA'
+                        ? 'valore di riserva'
+                        : 'fuori bilancio'}
+                  </span>{' '}
+                  — {a.assunzione}
+                </li>
+              ))}
+            </ul>
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              Sono le scelte con cui il bilancio diventa prospetto e indici: nessuna è una stima, e
+              dove il dato manca il documento lo dice invece di colmarlo.
+            </p>
+          </section>
+
           <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
             <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
               Diagnosi
