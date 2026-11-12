@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ArrowLeft, Building2, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Building2, FileDown, ShieldAlert } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
@@ -110,12 +110,23 @@ export default async function EsitoVerificaAmministrativaPage({
               dell’azienda e non ripete questi dati.
             </p>
           </div>
-          <Link
-            href={`/spazio/${codice}/aziende/${id}`}
-            className="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
-          >
-            Scheda azienda
-          </Link>
+          <div className="shrink-0 flex items-center gap-3">
+            {/* Il report in PDF si lancia da qui: apre il documento stampabile
+                con l'impaginazione per la carta e la finestra di stampa già
+                aperta (Stampa → Salva come PDF). */}
+            <Link
+              href={`/spazio/${codice}/verifica-salute/${id}/supporto?stampa=1`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-slate-800"
+            >
+              <FileDown className="w-3.5 h-3.5" /> Report PDF
+            </Link>
+            <Link
+              href={`/spazio/${codice}/aziende/${id}`}
+              className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+            >
+              Scheda azienda
+            </Link>
+          </div>
         </div>
       </div>
 

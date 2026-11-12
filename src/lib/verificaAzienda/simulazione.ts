@@ -64,6 +64,15 @@ export const PROFILI: {
 export const SCOSTAMENTO_PROFILO_PP = 3;
 /** Quanto i costi seguono i ricavi in più o in meno, in punti percentuali. */
 export const SCOSTAMENTO_COSTI_PP = 2;
+/**
+ * Quanta parte della crescita dei ricavi passa sui costi (0,85 = 85%).
+ *
+ * I costi non crescono come i ricavi: una parte è variabile e segue i volumi,
+ * una parte è fissa e non li segue. Senza questa elasticità le due colonne
+ * diventano la stessa curva traslata, e la simulazione non dice più nulla.
+ * È un'ipotesi dichiarata, non un dato normativo.
+ */
+export const ELASTICITA_COSTI = 0.85;
 /** Oltre questo intervallo la proiezione non descrive più un'ipotesi. */
 export const LIMITE_CRESCITA_PCT = 25;
 /**
@@ -129,6 +138,10 @@ export interface EsitoSimulazione {
   crescitaStoricaPct: number | null;
   /** Crescita della serie ISTAT del settore, se il dato è in archivio. */
   crescitaSettorePct: number | null;
+  /** Crescita storica dei costi della produzione, letta dai bilanci. */
+  crescitaStoricaCostiPct: number | null;
+  /** Quanta parte della crescita dei ricavi passa sui costi (dichiarata). */
+  elasticitaCosti: number;
   fonteCrescita: SorgenteCrescita;
   /** Quanto crescono i ricavi nella prima annualità proiettata. */
   crescitaApplicataPct: number;
@@ -148,46 +161,64 @@ const limita = (n: number, min: number, max: number) => Math.min(max, Math.max(m
  * dati non bastano o il primo ricavo non è positivo. Nessuna divisione per
  * zero e nessuna crescita inventata.
  */
-export function crescitaStorica(anni: AnnoStorico[]): number | null {
-  const validi = [...anni]
-    .filter((a) => Number.isFinite(a.dati?.ricaviVendite) && a.dati.ricaviVendite > 0)
+function crescitaComposta(serie: { anno: number; valore: number }[]): number | null {
+  const validi = [...serie]
+    .filter((a) => Number.isFinite(a.valore) && a.valore > 0)
     .sort((a, b) => a.anno - b.anno);
   if (validi.length < 2) return null;
   const primo = validi[0];
   const ultimo = validi[validi.length - 1];
   const anniTrascorsi = ultimo.anno - primo.anno;
   if (anniTrascorsi <= 0) return null;
-  const tasso =
-    Math.pow(ultimo.dati.ricaviVendite / primo.dati.ricaviVendite, 1 / anniTrascorsi) - 1;
+  const tasso = Math.pow(ultimo.valore / primo.valore, 1 / anniTrascorsi) - 1;
   if (!Number.isFinite(tasso)) return null;
   return arrotonda(limita(tasso * 100, -LIMITE_CRESCITA_PCT, LIMITE_CRESCITA_PCT));
+}
+
+/**
+ * Crescita annua composta dei ricavi fra primo e ultimo anno: null quando i
+ * dati non bastano o il primo ricavo non è positivo. Nessuna divisione per
+ * zero e nessuna crescita inventata.
+ */
+export function crescitaStorica(anni: AnnoStorico[]): number | null {
+  return crescitaComposta(anni.map((a) => ({ anno: a.anno, valore: a.dati?.ricaviVendite })));
+}
+
+/**
+ * Crescita annua composta dei costi della produzione: la stessa lettura dei
+ * ricavi, sulla loro serie. Serve perché costi e ricavi hanno una storia
+ * diversa, e la proiezione deve partire da quella, non da un'unica curva.
+ */
+export function crescitaStoricaCosti(anni: AnnoStorico[]): number | null {
+  return crescitaComposta(anni.map((a) => ({ anno: a.anno, valore: a.dati?.costiProduzione })));
 }
 
 /** Quanto crescono ricavi e costi nel profilo scelto, dato un tasso di base. */
 export function cresciteProfilo(
   profilo: ProfiloSimulazione,
-  storica: number | null
+  ricaviBase: number,
+  costiBase: number
 ): { ricaviPct: number; costiPct: number } {
-  const base = storica ?? 0;
-  const scostamento =
+  const scostamentoRicavi =
     profilo === 'MIGLIORATIVO'
       ? SCOSTAMENTO_PROFILO_PP
       : profilo === 'PEGGIORATIVO'
         ? -SCOSTAMENTO_PROFILO_PP
         : 0;
-  const ricaviPct = arrotonda(
-    limita(base + scostamento, -LIMITE_CRESCITA_PCT, LIMITE_CRESCITA_PCT)
-  );
-  const costiScostamento =
+  const scostamentoCosti =
     profilo === 'MIGLIORATIVO'
       ? -SCOSTAMENTO_COSTI_PP
       : profilo === 'PEGGIORATIVO'
         ? SCOSTAMENTO_COSTI_PP
         : 0;
-  const costiPct = arrotonda(
-    limita(ricaviPct + costiScostamento, -LIMITE_CRESCITA_PCT, LIMITE_CRESCITA_PCT)
-  );
-  return { ricaviPct, costiPct };
+  return {
+    ricaviPct: arrotonda(
+      limita(ricaviBase + scostamentoRicavi, -LIMITE_CRESCITA_PCT, LIMITE_CRESCITA_PCT)
+    ),
+    costiPct: arrotonda(
+      limita(costiBase + scostamentoCosti, -LIMITE_CRESCITA_PCT, LIMITE_CRESCITA_PCT)
+    ),
+  };
 }
 
 /**
@@ -200,20 +231,33 @@ export function cresciteProfilo(
  */
 export function traiettoriaCrescite(input: {
   storica: number | null;
+  /** Crescita storica dei costi: se manca, si parte da quella dei ricavi. */
+  storicaCosti?: number | null;
   settore: number | null;
   profilo: ProfiloSimulazione;
   annualita: number;
   decadimento?: number;
 }): CrescitaAnno[] {
   const decadimento = limita(input.decadimento ?? DECADIMENTO_CRESCITA, 0, 1);
-  const partenza = input.storica ?? input.settore ?? 0;
-  const arrivo = input.settore ?? 0;
   const annualita = Math.max(1, Math.round(input.annualita));
+
+  // RICAVI: dalla loro crescita storica verso quella di settore.
+  const partenzaRicavi = input.storica ?? input.settore ?? 0;
+  const arrivoRicavi = input.settore ?? 0;
+
+  // COSTI: dalla loro crescita storica verso quella di settore ridotta
+  // dall'elasticità — solo la parte variabile segue i volumi. Senza serie di
+  // settore i costi convergono verso zero come i ricavi, ma dalla loro storia.
+  const arrivoCosti = input.settore === null ? 0 : arrotonda(input.settore * ELASTICITA_COSTI);
+  const partenzaCosti =
+    input.storicaCosti ?? input.storica ?? (input.settore === null ? 0 : arrivoCosti);
 
   const anni: CrescitaAnno[] = [];
   for (let progressivo = 1; progressivo <= annualita; progressivo++) {
-    const convergenza = arrivo + (partenza - arrivo) * Math.pow(decadimento, progressivo - 1);
-    const { ricaviPct, costiPct } = cresciteProfilo(input.profilo, arrotonda(convergenza));
+    const decadimentoAnno = Math.pow(decadimento, progressivo - 1);
+    const ricaviBase = arrotonda(arrivoRicavi + (partenzaRicavi - arrivoRicavi) * decadimentoAnno);
+    const costiBase = arrotonda(arrivoCosti + (partenzaCosti - arrivoCosti) * decadimentoAnno);
+    const { ricaviPct, costiPct } = cresciteProfilo(input.profilo, ricaviBase, costiBase);
     anni.push({ progressivo, ricaviPct, costiPct });
   }
   return anni;
@@ -317,10 +361,12 @@ export function colonneSimulazione(input: {
       ? null
       : arrotonda(limita(input.crescitaSettorePct, -LIMITE_CRESCITA_PCT, LIMITE_CRESCITA_PCT));
   const storica = crescitaStorica(anni);
+  const storicaCosti = crescitaStoricaCosti(anni);
   const fonte: SorgenteCrescita =
     settore !== null ? 'SETTORE' : storica !== null ? 'STORICA' : 'NESSUNA';
   const traiettoria = traiettoriaCrescite({
     storica,
+    storicaCosti,
     settore,
     profilo: input.profilo,
     annualita,
@@ -336,6 +382,8 @@ export function colonneSimulazione(input: {
       debitoEnte,
       crescitaStoricaPct: null,
       crescitaSettorePct: settore,
+      crescitaStoricaCostiPct: null,
+      elasticitaCosti: ELASTICITA_COSTI,
       fonteCrescita: fonte,
       crescitaApplicataPct: traiettoria[0]?.ricaviPct ?? 0,
       anniRientroDebito: anniRientro,
@@ -363,6 +411,9 @@ export function colonneSimulazione(input: {
       `Il debito dell’ente si iscrive nella prima annualità proiettata e si estingue in ${anniRientro} ${anniRientro === 1 ? 'rata' : 'rate'} costanti: il passivo scende, non resta piatto.`
     );
   }
+  avvertenze.push(
+    `Ricavi e costi hanno traiettorie distinte: i costi partono dalla loro crescita storica e arrivano a quella di settore ridotta dall’elasticità dichiarata (${Math.round(ELASTICITA_COSTI * 100)}%): solo la parte variabile segue i volumi. Non sono la stessa curva traslata.`
+  );
   avvertenze.push(
     'Disponibilità liquide: seguono il risultato dell’esercizio, al netto dei rimborsi del debito. Nessun movimento di capitale circolante o investimento è ipotizzato.'
   );
@@ -423,6 +474,8 @@ export function colonneSimulazione(input: {
     debitoEnte,
     crescitaStoricaPct: storica,
     crescitaSettorePct: settore,
+    crescitaStoricaCostiPct: storicaCosti,
+    elasticitaCosti: ELASTICITA_COSTI,
     fonteCrescita: fonte,
     crescitaApplicataPct: traiettoria[0]?.ricaviPct ?? 0,
     anniRientroDebito: anniRientro,

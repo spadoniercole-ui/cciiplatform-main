@@ -22,7 +22,7 @@ import {
 import { esitoPropostaValido, type EsitoProposta } from '@/lib/scenari/esitoProposta';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { verificaPinSecondoFattore } from '@/lib/mfa/pinSessione';
-import { assicuraStoricoSituazione } from '@/db/provision';
+import { assicuraStoricoEsitoProposta, assicuraStoricoSituazione } from '@/db/provision';
 import {
   leggiStoricoSituazione,
   type VoceStoricoSituazione,
@@ -882,10 +882,15 @@ export async function annullaUltimoCambioSituazioneAction(
 export async function impostaEsitoPropostaAction(
   nomeSchema: string,
   scenarioId: number,
-  esito: EsitoProposta | null
+  esito: EsitoProposta | null,
+  /**
+   * Il PIN del secondo fattore: dichiarare o correggere l'esito è un atto
+   * firmato, non un'etichetta che si sposta mentre si lavora (0.213.0).
+   */
+  pin: string
 ): Promise<RisultatoOperazioneScenario> {
   try {
-    await richiediAccessoScenario(nomeSchema, scenarioId, {
+    const contesto = await richiediAccessoScenario(nomeSchema, scenarioId, {
       modulo: ['scenari'],
       livello: 'SCRITTURA',
     });
@@ -913,10 +918,35 @@ export async function impostaEsitoPropostaAction(
           'L’esito della proposta si registra solo sugli scenari di accordo transattivo: per la liquidazione e il cram down il percorso è già quello dell’atto.',
       };
     }
+    const esitoAttuale = await pool.query(
+      `SELECT esito_proposta FROM "${nomeSchema}".scenari WHERE id = $1`,
+      [scenarioId]
+    );
+    const precedente = (esitoAttuale.rows[0]?.esito_proposta as string | null) ?? null;
+    if (precedente === esito) {
+      return { success: true, scenarioId };
+    }
+
+    // IL PASSAGGIO È SOTTO PIN E LASCIALA TRACCIA. Il PIN si verifica qui, non
+    // nel browser: la schermata può solo chiedere il numero. Chi cambia viene
+    // dalla sessione, mai da un campo del form.
+    const esitoPin = await verificaPinSecondoFattore(pin);
+    if (!esitoPin.ok) return { success: false, error: esitoPin.error };
+
+    const autore =
+      contesto.email ?? (contesto.modalita === 'SALVAGENTE' ? 'Superadmin (salvagente)' : null);
+
     await pool.query(`UPDATE "${nomeSchema}".scenari SET esito_proposta = $2 WHERE id = $1`, [
       scenarioId,
       esito,
     ]);
+
+    await assicuraStoricoEsitoProposta(nomeSchema);
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".esito_proposta_storico (scenario_id, da, a, autore)
+       VALUES ($1, $2, $3, $4)`,
+      [scenarioId, precedente, esito, autore]
+    );
     return { success: true, scenarioId };
   } catch (error: unknown) {
     console.error('[impostaEsitoPropostaAction] Errore:', error);

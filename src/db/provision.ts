@@ -376,6 +376,25 @@ export async function assicuraStoricoSituazione(nomeSchema: string): Promise<voi
   );
 }
 
+/**
+ * Cronologia dell'esito della proposta (0.213.0). Come per la situazione, il
+ * passaggio è un atto firmato: la riga resta, con chi l'ha compiuto. Tabella
+ * idempotente e creata al primo cambio.
+ */
+export async function assicuraStoricoEsitoProposta(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.esito_proposta_storico (
+      id SERIAL PRIMARY KEY,
+      scenario_id INTEGER NOT NULL REFERENCES ${s}.scenari(id) ON DELETE CASCADE,
+      da TEXT,
+      a TEXT,
+      cambiato_il TIMESTAMP NOT NULL DEFAULT now(),
+      autore TEXT
+    )`
+  );
+}
+
 export async function assicuraTabelleScenari(nomeSchema: string): Promise<void> {
   const s = sql.identifier(nomeSchema);
 

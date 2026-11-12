@@ -20,6 +20,7 @@ import {
   BookOpen,
   Stethoscope,
   Gauge,
+  TrendingUp,
 } from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
 
@@ -66,6 +67,16 @@ const VOCI_MENU: {
     id: 'verifica-contabile',
     label: 'Verifica contabile',
     icon: Building2,
+    stato: 'pronta',
+    soloAdmin: true,
+  },
+  // Il settore sta fra la contabile e la verifica azienda perché è il ponte
+  // fra le due: la contabile legge lo storico, la verifica azienda proietta, e
+  // la proiezione ha bisogno di sapere dove va il settore.
+  {
+    id: 'studi-settore',
+    label: 'Studi di settore',
+    icon: TrendingUp,
     stato: 'pronta',
     soloAdmin: true,
   },

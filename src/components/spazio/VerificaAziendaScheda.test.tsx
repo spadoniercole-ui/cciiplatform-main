@@ -160,9 +160,12 @@ describe('VerificaAziendaScheda', () => {
     expect(screen.getAllByText('proiezione').length).toBeGreaterThan(0);
     expect(screen.getAllByText('120.000 €').length).toBeGreaterThan(0);
     expect(screen.getByText(/Debito dell’ente — dato certo della simulazione/)).toBeTruthy();
-    // Il debito si legge anche dentro i costi della produzione, come «di cui»:
-    // è l’annualità in cui entra nella mappa.
-    expect(screen.getByText('di cui debito dell’ente (iscritto / rimborsato)')).toBeTruthy();
+    // Il debito è un dato accertato, non una riga simulata: sta in un blocco
+    // suo, fuori dalla mappa, con la fonte e le annualità di iscrizione e
+    // rimborso. Dentro le righe simulate non compare più come «di cui».
+    expect(screen.getByText('Debito dell’ente — dato certo, non simulato')).toBeTruthy();
+    expect(screen.getByText(/accertato nella verifica amministrativa/)).toBeTruthy();
+    expect(screen.queryByText('di cui debito dell’ente (iscritto / rimborsato)')).toBeNull();
   });
 
   it('cambiando profilo richiede al server proprio quel profilo', async () => {

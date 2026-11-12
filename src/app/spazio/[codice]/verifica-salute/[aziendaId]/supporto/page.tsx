@@ -34,10 +34,13 @@ const STILE: Record<string, { testo: string; sfondo: string; bordo: string }> = 
 
 export default async function ReportSupportoPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ codice: string; aziendaId: string }>;
+  searchParams: Promise<{ stampa?: string }>;
 }) {
   const { codice, aziendaId } = await params;
+  const { stampa } = await searchParams;
   const contesto = await ottieniContestoAccessoSpazio(codice);
   if (!contesto) redirect('/');
   if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
@@ -71,7 +74,7 @@ export default async function ReportSupportoPage({
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Torna all’esito
         </Link>
-        <StampaDocumento etichetta="Stampa il report" />
+        <StampaDocumento etichetta="Stampa il report" auto={stampa === '1'} />
       </div>
 
       {/* INTESTAZIONE DEL DOCUMENTO */}

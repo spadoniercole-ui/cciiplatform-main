@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Printer } from 'lucide-react';
 
 /**
@@ -7,7 +8,22 @@ import { Printer } from 'lucide-react';
  * dell'amministrativa. Il PDF si ottiene da qui — Stampa → Salva come PDF — con
  * l'impaginazione già pensata per la carta.
  */
-export function StampaDocumento({ etichetta }: { etichetta: string }) {
+export function StampaDocumento({
+  etichetta,
+  auto = false,
+}: {
+  etichetta: string;
+  /** Arrivo dal bottone «Report PDF»: apre subito la finestra di stampa. */
+  auto?: boolean;
+}) {
+  useEffect(() => {
+    if (!auto) return;
+    // Un attimo per il font e il layout: la finestra di stampa si apre sul
+    // documento già impaginato, non su un foglio mezzo vuoto.
+    const t = window.setTimeout(() => window.print(), 400);
+    return () => window.clearTimeout(t);
+  }, [auto]);
+
   return (
     <button
       type="button"

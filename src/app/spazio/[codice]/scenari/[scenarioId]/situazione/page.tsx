@@ -4,6 +4,7 @@ import { ArrowLeft, History, Unlock } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { leggiStoricoSituazione } from '@/lib/scenari/storicoSituazione';
+import { leggiStoricoEsitoProposta } from '@/lib/scenari/storicoEsitoProposta';
 import { leggiStoricoSblocchi } from '@/lib/scenari/storicoSblocchi';
 import { dataItaliana } from '@/lib/scenari/situazione';
 import { etichettaIstruttoria, type TipoIstruttoria } from '@/lib/giudice/lettura';
@@ -35,9 +36,10 @@ export default async function CronologiaSituazionePage({
   }
   const scenario = risultato.scenario;
 
-  const [storico, sblocchi] = await Promise.all([
+  const [storico, sblocchi, storicoEsito] = await Promise.all([
     leggiStoricoSituazione(contesto.nomeSchema, scenario.id, 200).catch(() => []),
     leggiStoricoSblocchi(contesto.nomeSchema, scenario.id, 200).catch(() => []),
+    leggiStoricoEsitoProposta(contesto.nomeSchema, scenario.id, 50).catch(() => []),
   ]);
 
   // I passi da rivedere dopo un cambio, e il comando di annullamento riservato
@@ -124,6 +126,7 @@ export default async function CronologiaSituazionePage({
             esito={esitoProposta}
             bloccato={Boolean(scenario.bloccatoIl)}
             demo={contesto.demo}
+            storico={storicoEsito}
           />
         </div>
       )}

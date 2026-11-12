@@ -65,22 +65,23 @@ describe('crescitaStorica', () => {
 
 describe('cresciteProfilo', () => {
   it('il migliorativo cresce più dello standard, il peggiorativo meno', () => {
-    const standard = cresciteProfilo('STANDARD', 10);
-    const migliorativo = cresciteProfilo('MIGLIORATIVO', 10);
-    const peggiorativo = cresciteProfilo('PEGGIORATIVO', 10);
+    const standard = cresciteProfilo('STANDARD', 10, 8);
+    const migliorativo = cresciteProfilo('MIGLIORATIVO', 10, 8);
+    const peggiorativo = cresciteProfilo('PEGGIORATIVO', 10, 8);
     expect(standard.ricaviPct).toBe(10);
     expect(migliorativo.ricaviPct).toBe(13);
     expect(peggiorativo.ricaviPct).toBe(7);
   });
 
-  it('nel migliorativo i costi crescono meno dei ricavi, nel peggiorativo più', () => {
-    expect(cresciteProfilo('MIGLIORATIVO', 10).costiPct).toBe(11);
-    expect(cresciteProfilo('PEGGIORATIVO', 10).costiPct).toBe(9);
+  it('i costi seguono le loro basi, non quelle dei ricavi', () => {
+    expect(cresciteProfilo('STANDARD', 10, 8).costiPct).toBe(8);
+    expect(cresciteProfilo('MIGLIORATIVO', 10, 8).costiPct).toBe(6);
+    expect(cresciteProfilo('PEGGIORATIVO', 10, 8).costiPct).toBe(10);
   });
 
   it('limita la crescita all’intervallo dichiarato', () => {
-    expect(cresciteProfilo('MIGLIORATIVO', 24).ricaviPct).toBe(25);
-    expect(cresciteProfilo('PEGGIORATIVO', -24).ricaviPct).toBe(-25);
+    expect(cresciteProfilo('MIGLIORATIVO', 24, 10).ricaviPct).toBe(25);
+    expect(cresciteProfilo('PEGGIORATIVO', -24, 10).ricaviPct).toBe(-25);
   });
 });
 
@@ -126,10 +127,26 @@ describe('traiettoriaCrescite', () => {
 
     migliorativo.forEach((a, i) => {
       expect(a.ricaviPct).toBe(standard[i].ricaviPct + 3);
-      // I costi restano più lenti dei ricavi di 2 punti: quindi un punto sopra
-      // lo standard, che li fa crescere come i ricavi.
-      expect(a.costiPct).toBe(standard[i].costiPct + 1);
+      // I costi hanno la loro traiettoria: il migliorativo li abbassa di 2
+      // punti rispetto allo standard, non li fa crescere come i ricavi.
+      expect(a.costiPct).toBeCloseTo(standard[i].costiPct - 2, 6);
     });
+  });
+
+  it('ricavi e costi non viaggiano sulla stessa curva: la loro storia è diversa', () => {
+    const t = traiettoriaCrescite({
+      storica: 20,
+      storicaCosti: 12,
+      settore: 2,
+      profilo: 'STANDARD',
+      annualita: 3,
+    });
+
+    // I ricavi arrivano al settore (2%), i costi a 2% × elasticità (1,7%).
+    expect(t[0].ricaviPct).toBe(20);
+    expect(t[0].costiPct).toBe(12);
+    expect(t[2].ricaviPct).toBeGreaterThan(t[2].costiPct);
+    expect(t[0].costiPct).not.toBe(t[0].ricaviPct);
   });
 
   it('senza storico né settore parte da zero e lo dichiara nel profilo', () => {

@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 // VERIFICA AZIENDA — due verifiche, due riquadri, e la simulazione sopra di esse.
 //
 // La verifica amministrativa dice com'è l'azienda oggi e consegna il debito
@@ -212,10 +214,6 @@ export function VerificaAziendaScheda({
     primaColonna?.altriIndici ?? []
   );
   const ritornoQui = codice ? `/spazio/${codice}/verifica-azienda/${aziendaId}` : null;
-  // Il «di cui» dei costi parla del debito che la verifica amministrativa ha
-  // consegnato: senza quello non c’è nulla da leggere dentro i costi.
-  const mostraDebitoNeiCosti = Boolean(debito);
-
   return (
     <div className="space-y-4">
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-2">
@@ -447,6 +445,14 @@ export function VerificaAziendaScheda({
             </div>
             {risultato?.esito && (
               <div className="space-y-1.5">
+                {codice && (
+                  <Link
+                    href={`/spazio/${codice}/studi-settore/${aziendaId}`}
+                    className="inline-flex text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+                  >
+                    Vedi l’andamento del settore →
+                  </Link>
+                )}
                 <p className="text-[10px] text-slate-500 leading-relaxed">
                   {risultato.esito.fonteCrescita === 'SETTORE'
                     ? `Traiettoria: dalla crescita storica ${risultato.esito.crescitaStoricaPct ?? 'non calcolabile'}% verso quella di settore ${risultato.esito.crescitaSettorePct}%, anno dopo anno.`
@@ -565,6 +571,65 @@ export function VerificaAziendaScheda({
                   </button>
                 </div>
               </div>
+              {debito && primaProiezione > 0 && (
+                <div className="rounded-lg border border-slate-300 bg-slate-50/80 p-3 space-y-2 print:break-inside-avoid">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                      Debito dell’ente — dato certo, non simulato
+                    </p>
+                    <p className="text-[12px] font-bold text-slate-900">
+                      {euro(debito.totale)}
+                      <span className="ml-1.5 text-[10px] font-normal text-slate-500">
+                        accertato nella verifica amministrativa
+                      </span>
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    Questa cifra non è un’assunzione del modello: è il debito verificato
+                    {debito.fonte ? ` (${debito.fonte})` : ''}
+                    {debito.memorizzatoIl ? ` il ${debito.memorizzatoIl}` : ''}. Si iscrive nel
+                    passivo della prima annualità proiettata ({colonne[primaProiezione].anno}) e da
+                    lì si estingue in rate costanti: qui sotto si vede anno per anno quanto è
+                    iscritto, quanto è rimborsato e quanto resta.
+                  </p>
+                  <table className="w-full text-[10px]">
+                    <thead>
+                      <tr className="text-[8px] uppercase text-slate-400 border-b border-slate-200">
+                        <th className="text-left py-1">Annualità</th>
+                        <th className="text-right py-1">Iscritto</th>
+                        <th className="text-right py-1">Rimborsato</th>
+                        <th className="text-right py-1">Residuo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(() => {
+                        let residuo = debito.totale;
+                        return colonne
+                          .filter((c) => c.tipo === 'PROIEZIONE')
+                          .map((c) => {
+                            residuo = Math.max(0, residuo - (c.rimborsoDebitoEnte ?? 0));
+                            return (
+                              <tr key={c.anno}>
+                                <td className="py-1 text-slate-600">{c.anno}</td>
+                                <td className="py-1 text-right tabular-nums text-slate-700">
+                                  {c.debitoEnteInserito > 0 ? euro(c.debitoEnteInserito) : '—'}
+                                </td>
+                                <td className="py-1 text-right tabular-nums text-slate-700">
+                                  {c.rimborsoDebitoEnte > 0
+                                    ? `−${euro(c.rimborsoDebitoEnte)}`
+                                    : '—'}
+                                </td>
+                                <td className="py-1 text-right tabular-nums text-slate-900">
+                                  {euro(residuo)}
+                                </td>
+                              </tr>
+                            );
+                          });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-[11px]">
                   <thead>
@@ -604,28 +669,6 @@ export function VerificaAziendaScheda({
                             </td>
                           ))}
                         </tr>
-                        {/* Il debito dell’ente è un «di cui» dei costi della
-                            produzione: si legge nell’anno in cui entra, non come
-                            una riga a sé che sembra un’altra voce di bilancio. */}
-                        {v.chiave === 'costiProduzione' && mostraDebitoNeiCosti && (
-                          <tr className="bg-slate-50/40">
-                            <td className="py-1 pr-2 pl-3 italic text-slate-500">
-                              di cui debito dell’ente (iscritto / rimborsato)
-                            </td>
-                            {colonne.map((c) => (
-                              <td
-                                key={c.anno}
-                                className="py-1 px-1 text-right tabular-nums text-slate-500"
-                              >
-                                {c.debitoEnteInserito > 0
-                                  ? euro(c.debitoEnteInserito)
-                                  : c.rimborsoDebitoEnte > 0
-                                    ? `−${euro(c.rimborsoDebitoEnte)}`
-                                    : '—'}
-                              </td>
-                            ))}
-                          </tr>
-                        )}
                       </Fragment>
                     ))}
                     <tr className="border-t-2 border-slate-200">
@@ -644,13 +687,10 @@ export function VerificaAziendaScheda({
                   </tbody>
                 </table>
               </div>
-              {primaProiezione > 0 && (
-                <p className="text-[10px] text-slate-400 leading-relaxed">
-                  Il debito dell’ente si iscrive nella prima annualità proiettata (
-                  {colonne[primaProiezione].anno}) e da lì si estingue a rate: la riga negativa è il
-                  rimborso dell’anno. Gli anni storici sono quelli depositati, senza modifiche.
-                </p>
-              )}
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                Gli anni storici sono quelli depositati, senza modifiche. La proiezione parte
+                dall’ultimo bilancio e applica la traiettoria dichiarata qui sopra.
+              </p>
 
               <div className="overflow-x-auto pt-2">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">

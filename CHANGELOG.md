@@ -1,3 +1,26 @@
+## 0.213.0 — 2026-11-12
+
+- **Ricavi e costi non crescono più della stessa misura.** Il profilo della simulazione applicava
+  ai costi la stessa percentuale dei ricavi, con un solo scostamento di profilo: le due colonne
+  erano la stessa curva. Ora i costi partono dalla *loro* crescita storica (letta dai bilanci) e
+  arrivano alla crescita di settore ridotta da un'elasticità dichiarata (85%): solo la parte
+  variabile segue i volumi. La scheda e la mappa mostrano due traiettorie, e l'avvertenza dice
+  perché.
+- **Il debito dell'ente esce dalle righe simulate.** Non è un'assunzione del modello: è il debito
+  accertato nella verifica amministrativa. Compare in un blocco suo, fuori dalla mappa, con la
+  fonte, la data della verifica e le annualità di iscrizione, rimborso e residuo; dentro i costi
+  della produzione non è più un «di cui» che sembrava una voce di bilancio.
+- **Il passaggio dell'esito della proposta è sotto PIN e lascia traccia.** Cambiare l'esito
+  richiede il PIN del secondo fattore, verificato sul server; ogni passaggio va in
+  `esito_proposta_storico` con esito precedente, nuovo esito, data e autore, e la cronologia si
+  legge nella pagina «Natura ed esito dello scenario».
+- **Nuova voce di menu «Studi di settore»**, fra la verifica contabile e la verifica azienda:
+  mostra, per l'azienda scelta, la serie ISTAT del gruppo ATECO, la crescita composta che ne esce
+  e la quota che la simulazione applica ai costi. La mappa della verifica azienda rimanda lì, così
+  i tassi non sembrano più numeri presi a caso.
+- **Bottone «Report PDF»** nella testata dell'esito della verifica amministrativa: apre il report
+  stampabile con la finestra di stampa già aperta (Stampa → Salva come PDF).
+
 ## 0.212.0 — 2026-11-12
 
 - **Anche l'esito della proposta esce dalla fase operativa.** Nello scenario l'esito si legge —
