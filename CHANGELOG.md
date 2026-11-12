@@ -1,3 +1,21 @@
+## 0.204.0 — 2026-11-12
+
+- **Gli indici dei parametri tornano visibili tutti.** La tabella «Indici per colonna» della
+  verifica azienda e quella del prospetto contabile filtravano i codici abilitati nello spazio su
+  una sola delle due liste che il motore produce (i 5 CNDCEC). Ogni indice abilitato oltre quelli
+  — ROE, ROI, rotazione dell'attivo, incidenza dell'indebitamento — veniva scartato in silenzio, e
+  i parametri sembravano senza effetto. Ora le due liste si leggono insieme, da un unico punto
+  (`src/lib/xbrl/indiciVisibili.ts`), con i suoi test.
+- **Il DSCR si dice dove sta.** Non è calcolabile da un bilancio depositato: serve il servizio del
+  debito (quota capitale e interessi in scadenza). In Parametri di Spazio è dichiarato accanto agli
+  altri indicatori del CCII, e nelle tabelle dei bilanci compare come «n/d» con il motivo, invece
+  di mancare senza spiegazione. Si calcola sugli scenari, dove esiste il piano di rientro.
+- **Via la simulazione di scenario.** «Ramo contabile per anno» — pagina, componente, azioni,
+  motore puro, tabelle di appoggio e collegamento nella testata dello scenario — è rimossa:
+  aprire una situazione da modificare con i dati aziendali è la simulazione della verifica
+  contabile, non un ramo dello scenario. Negli schemi già creati la tabella `contabile_rami`
+  resta, ma non viene più né creata né letta.
+
 ## 0.203.2 — 2026-11-11
 
 - **I numeri della dashboard contano le posizioni della card.** «Verifica amministrativa»,

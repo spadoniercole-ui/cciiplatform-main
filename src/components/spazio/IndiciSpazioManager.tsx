@@ -66,6 +66,13 @@ export function IndiciSpazioManager({ nomeSchema }: Props) {
         CNDCEC/CCII + 4 di lettura economico-finanziaria). Spenti qui, non compariranno più
         nell&apos;Import XBRL di nessuna azienda di questo spazio.
       </p>
+      <p className="text-[11px] text-slate-500">
+        Restano fuori da questo elenco gli indicatori del CCII che il solo bilancio non basta a
+        calcolare: il <strong>DSCR</strong> (serve il servizio del debito, cioè la rata) e il{' '}
+        <strong>test pratico</strong> (dipende dal tempo di rientro). Non sono spenti: si calcolano
+        sugli scenari, dove esiste il piano di rientro, e nelle tabelle dei bilanci compaiono come
+        «n/d» con il motivo.
+      </p>
 
       {errore && (
         <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">

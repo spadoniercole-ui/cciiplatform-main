@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { Table2 } from 'lucide-react';
 import { ottieniStoricoXbrlAzienda, type BilancioStoricoAzienda } from '@/app/actions/xbrlAzienda';
 import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
+import { indiciVisibili, valoreIndice } from '@/lib/xbrl/indiciVisibili';
 
 const euro = (n: number | undefined) =>
   typeof n === 'number' && Number.isFinite(n) ? `${Math.round(n).toLocaleString('it-IT')} €` : '—';
@@ -83,13 +84,11 @@ export function ProspettoContabileStorico({
     );
   }
 
-  // Gli indici abilitati nello spazio, nell'ordine con cui li propone il
-  // motore: la tabella deve parlare degli indici che questo ente usa davvero.
-  const indiciUltimo = storico[storico.length - 1].indici;
-  const codici = indiciAbilitati.length > 0 ? indiciAbilitati : indiciUltimo.map((i) => i.codice);
-  const indici = codici
-    .map((codice) => indiciUltimo.find((x) => x.codice === codice))
-    .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  // Gli indici abilitati nello spazio, cercati in entrambe le liste che il
+  // motore produce per l'ultimo bilancio (5 CNDCEC + 4 di lettura): la tabella
+  // deve parlare degli indici che questo ente usa davvero, tutti.
+  const ultimo = storico[storico.length - 1];
+  const indici = indiciVisibili(indiciAbilitati, ultimo.indici, ultimo.altriIndici ?? []);
 
   return (
     <div className="space-y-3">
@@ -166,11 +165,11 @@ export function ProspettoContabileStorico({
                   </td>
                   <td className="py-1 px-1 text-right text-slate-500 text-[10px]">{ind.soglia}</td>
                   {storico.map((b) => {
-                    const v = b.indici.find((x) => x.codice === ind.codice);
+                    const v = valoreIndice(b, ind.codice);
                     return (
                       <td
                         key={b.id}
-                        title={v?.note}
+                        title={v?.note ?? ind.motivoNonCalcolabile}
                         className={`py-1 px-1 text-right tabular-nums ${
                           v?.esito === 'VIOLATO'
                             ? 'text-red-700 font-bold'
@@ -179,7 +178,7 @@ export function ProspettoContabileStorico({
                               : 'text-slate-400'
                         }`}
                       >
-                        {v ? num(v.valore) : '—'}
+                        {v ? num(v.valore) : ind.motivoNonCalcolabile ? 'n/d' : '—'}
                       </td>
                     );
                   })}

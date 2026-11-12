@@ -266,9 +266,6 @@ describe('aggiornaSituazioneScenarioAction', () => {
       CREATE TABLE IF NOT EXISTS ${SCHEMA}.verifica_azienda_simulazioni (
         id SERIAL PRIMARY KEY, azienda_id INTEGER
       );
-      CREATE TABLE IF NOT EXISTS ${SCHEMA}.contabile_rami (
-        id SERIAL PRIMARY KEY, scenario_id INTEGER
-      );
     `);
 
     const esito = await aggiornaSituazioneScenarioAction(
@@ -282,9 +279,7 @@ describe('aggiornaSituazioneScenarioAction', () => {
     const simulazioni = await db.query(
       `SELECT COUNT(*)::int AS n FROM ${SCHEMA}.verifica_azienda_simulazioni`
     );
-    const rami = await db.query(`SELECT COUNT(*)::int AS n FROM ${SCHEMA}.contabile_rami`);
     expect((simulazioni.rows[0] as { n: number }).n).toBe(0);
-    expect((rami.rows[0] as { n: number }).n).toBe(0);
   });
 });
 

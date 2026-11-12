@@ -460,7 +460,6 @@ const TABELLE_CON_AZIENDA = {
   xbrl_storico_azienda: 'azienda_id',
   proposta_creditori: 'scenario_id',
   posizione_aggiornata: 'scenario_id',
-  contabile_rami: 'scenario_id',
 } as const;
 export type TabellaConAzienda = keyof typeof TABELLE_CON_AZIENDA;
 

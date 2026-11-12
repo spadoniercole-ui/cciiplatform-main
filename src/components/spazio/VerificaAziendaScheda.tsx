@@ -30,6 +30,7 @@ import {
   type ColonnaVerificaAzienda,
   type ProfiloSimulazione,
 } from '@/lib/verificaAzienda/simulazione';
+import { indiciVisibili, valoreIndice } from '@/lib/xbrl/indiciVisibili';
 
 const euro = (n: number | undefined) =>
   typeof n === 'number' && Number.isFinite(n) ? `${Math.round(n).toLocaleString('it-IT')} €` : '—';
@@ -178,14 +179,17 @@ export function VerificaAziendaScheda({
 
   const primaProiezione = colonne.findIndex((c) => c.tipo === 'PROIEZIONE');
   // Gli indici da mostrare sono quelli abilitati nello spazio (Parametri di
-  // Spazio → Indici), non i primi cinque che il motore calcola. Vuoto = ripiego
-  // sugli indici della colonna, così la tabella non resta mai senza righe.
-  const indiciBase = colonne[0]?.indici ?? [];
-  const codiciIndici =
-    indiciAbilitati.length > 0 ? indiciAbilitati : indiciBase.map((i) => i.codice);
-  const indiciVisibili = codiciIndici
-    .map((codice) => indiciBase.find((x) => x.codice === codice))
-    .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  // Spazio → Indici), non i primi cinque che il motore calcola. Si cercano in
+  // ENTRAMBE le liste della colonna — i 5 CNDCEC e i 4 di lettura — perché
+  // prima si guardava solo la prima e ogni indice oltre i primi cinque spariva
+  // dalla tabella. Vuoto = ripiego sul catalogo della colonna, così la tabella
+  // non resta mai senza righe.
+  const primaColonna = colonne[0];
+  const indiciRiga = indiciVisibili(
+    indiciAbilitati,
+    primaColonna?.indici ?? [],
+    primaColonna?.altriIndici ?? []
+  );
   const ritornoQui = codice ? `/spazio/${codice}/verifica-azienda/${aziendaId}` : null;
   // Il «di cui» dei costi parla del debito che la verifica amministrativa ha
   // consegnato: senza quello non c’è nulla da leggere dentro i costi.
@@ -567,7 +571,7 @@ export function VerificaAziendaScheda({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {indiciVisibili.map((ind) => (
+                    {indiciRiga.map((ind) => (
                       <tr key={ind.codice}>
                         <td className="py-1 pr-2 text-slate-700">
                           <span className="font-mono text-[9px] text-slate-400 mr-1">
@@ -579,11 +583,11 @@ export function VerificaAziendaScheda({
                           {ind.soglia}
                         </td>
                         {colonne.map((c) => {
-                          const v = c.indici.find((x) => x.codice === ind.codice);
+                          const v = valoreIndice(c, ind.codice);
                           return (
                             <td
                               key={c.anno}
-                              title={v?.note}
+                              title={v?.note ?? ind.motivoNonCalcolabile}
                               className={`py-1 px-1 text-right tabular-nums ${
                                 v?.esito === 'VIOLATO'
                                   ? 'text-red-700 font-bold'
@@ -592,7 +596,7 @@ export function VerificaAziendaScheda({
                                     : 'text-slate-400'
                               }`}
                             >
-                              {v ? num(v.valore) : '—'}
+                              {v ? num(v.valore) : ind.motivoNonCalcolabile ? 'n/d' : '—'}
                             </td>
                           );
                         })}
@@ -601,6 +605,11 @@ export function VerificaAziendaScheda({
                   </tbody>
                 </table>
               </div>
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                Gli indici sono quelli abilitati in Parametri di Spazio. Il DSCR non si calcola dal
+                bilancio depositato — serve il servizio del debito (rata e interessi in scadenza):
+                si legge negli scenari, dove esiste il piano di rientro.
+              </p>
             </div>
           )}
 
