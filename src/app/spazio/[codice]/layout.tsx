@@ -85,7 +85,9 @@ export default async function LayoutSpazio({
               {children}
             </main>
           </div>
-          <ChatbotAiuto />
+          <div className="print:hidden">
+            <ChatbotAiuto />
+          </div>
         </div>
       </DemoUploadProvider>
     </ContestoAssistenteProvider>

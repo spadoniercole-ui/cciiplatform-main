@@ -1,3 +1,8 @@
+## 0.214.1 — 2026-11-12
+
+- Anche il riquadro dell'assistente resta fuori dalla stampa: era l'ultimo elemento fisso del
+  guscio che poteva finire sopra il documento.
+
 ## 0.214.0 — 2026-11-12
 
 - **Il report della verifica amministrativa è un documento, non una pagina mandata in stampa.**
