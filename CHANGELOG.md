@@ -1,3 +1,19 @@
+## 0.206.0 — 2026-11-12
+
+- **L'esito amministrativo ora instrada.** Alla data della verifica il debito verso l'ente è un
+  fatto strategico: da lì si decide se la verifica contabile è necessaria, se va valutata la
+  liquidazione o se va valutato un accordo con cram down. La raccomandazione è deterministica —
+  esito, copertura, patrimonio netto, indici oltre soglia, debito memorizzato, dati contabili
+  presenti — e parla sempre nella forma «si consiglia di valutare», con i motivi a fianco e i
+  limiti dichiarati: nessuna conclusione giuridica, e il DSCR resta fuori perché dal bilancio non
+  si calcola (`src/lib/verificaAmministrativa/raccomandazione.ts`, con i test).
+- **A video, nella verifica amministrativa.** Nuovo riquadro «Supporto decisionale» sotto l'esito:
+  titolo, sintesi, motivi, passi che ne discendono e limiti, con i collegamenti alla verifica
+  contabile e agli scenari.
+- **Nel report dell'azienda.** Il documento porta una sezione «Supporto decisionale» subito dopo
+  l'esito amministrativo: il report la cita com'era al momento dell'emissione, senza ricalcolarla,
+  perché lo snapshot resta la fotografia di ciò che l'operatore ha consegnato.
+
 ## 0.205.0 — 2026-11-12
 
 - **La proiezione ha una traiettoria, non una moltiplicazione.** Ogni annualità cresceva dello

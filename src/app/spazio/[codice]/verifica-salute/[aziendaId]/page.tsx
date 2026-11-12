@@ -5,6 +5,7 @@ import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
+import { ottieniRaccomandazioneAction } from '@/app/actions/raccomandazioneVerifica';
 import { PosizioneEnteScenario } from '@/components/spazio/PosizioneEnteScenario';
 import { DebitoMemorizzatoEnte } from '@/components/spazio/DebitoMemorizzatoEnte';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
@@ -68,10 +69,14 @@ export default async function EsitoVerificaAmministrativaPage({
     redirect(`/spazio/${codice}/verifica-salute`);
   }
 
-  const [attenzioneRis, storicoRis] = await Promise.all([
+  const [attenzioneRis, storicoRis, raccomandazioneRis] = await Promise.all([
     ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
     ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
+    ottieniRaccomandazioneAction(contesto.nomeSchema, id).catch(() => null),
   ]);
+  const raccomandazione = raccomandazioneRis?.success
+    ? (raccomandazioneRis.raccomandazione ?? null)
+    : null;
   const attenzione = attenzioneRis?.success ? (attenzioneRis.attenzione ?? null) : null;
   const riga = storicoRis?.success ? storicoRis.righe?.find((v) => v.id === id) : undefined;
   const validita = valutaValidita(riga?.eseguitaIl ?? null);
@@ -177,6 +182,70 @@ export default async function EsitoVerificaAmministrativaPage({
           L’indicatore non è leggibile per questa azienda: certificazione dei debiti e soglie
           restano comunque consultabili qui sotto.
         </p>
+      )}
+
+      {raccomandazione && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 space-y-3">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-blue-800">
+            Supporto decisionale
+          </p>
+          <p className="text-sm font-bold text-slate-900">{raccomandazione.titolo}</p>
+          <p className="text-[11px] text-slate-700 leading-relaxed">{raccomandazione.sintesi}</p>
+
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Motivi</p>
+            <ul className="mt-1 space-y-0.5">
+              {raccomandazione.motivi.map((m, i) => (
+                <li key={i} className="text-[11px] text-slate-700 leading-relaxed flex gap-1.5">
+                  <span className="text-slate-400 shrink-0">—</span>
+                  <span>{m}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+              Passi che ne discendono
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {raccomandazione.azioni.map((a, i) => (
+                <li key={i} className="text-[11px] text-slate-700 leading-relaxed">
+                  <strong>{a.etichetta}.</strong> {a.descrizione}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href={`/spazio/${codice}/verifica-contabile/${id}`}
+              className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+            >
+              Apri la verifica contabile →
+            </Link>
+            <Link
+              href={`/spazio/${codice}/scenari`}
+              className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+            >
+              Apri gli scenari →
+            </Link>
+          </div>
+
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+              Limiti della lettura
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {raccomandazione.limiti.map((l, i) => (
+                <li key={i} className="text-[10px] text-slate-500 leading-relaxed flex gap-1.5">
+                  <span className="text-slate-400 shrink-0">—</span>
+                  <span>{l}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       )}
 
       <DebitoMemorizzatoEnte nomeSchema={contesto.nomeSchema} aziendaId={id} />

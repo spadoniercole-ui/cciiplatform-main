@@ -19,6 +19,7 @@ import { markdownInHtml } from '@/lib/stampa/markdown';
 import { VOCI_MAPPA } from '@/lib/verificaAzienda/simulazione';
 import type { Riscontri } from '@/lib/normativa/riscontri';
 import type { FattiVisura } from '@/lib/visura/fatti';
+import type { EsitoRaccomandazione } from '@/lib/verificaAmministrativa/raccomandazione';
 
 // ---- Cosa includere ------------------------------------------------------
 
@@ -172,6 +173,11 @@ export interface FontiReport {
   soglie25: FonteSoglie25 | null;
   mappa: FonteMappa | null;
   questionario: SezioneQuestionario[] | null;
+  /**
+   * La raccomandazione della verifica amministrativa, già composta dalle sue
+   * regole: il report la riporta com’è e non la ricalcola.
+   */
+  raccomandazione?: EsitoRaccomandazione | null;
 }
 
 // ---- Il report composto --------------------------------------------------
@@ -354,6 +360,33 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
       tipo: 'voci',
       voci: [],
       nota: 'Non disponibile: la verifica amministrativa non è ancora stata eseguita.',
+    });
+  }
+
+  // 2-bis. Supporto decisionale: la raccomandazione composta dalle regole
+  //      della verifica amministrativa. Sta subito dopo l'esito perché è la
+  //      lettura che dall'esito discende: prima i fatti, poi la strada da
+  //      valutare, poi i numeri che la sostengono. Non è numerata: è una
+  //      lettura dell'esito, non un capitolo a sé.
+  if (fonti.raccomandazione) {
+    const r = fonti.raccomandazione;
+    const testo = [
+      r.titolo,
+      '',
+      r.sintesi,
+      '',
+      'Motivi',
+      ...r.motivi.map((m) => `— ${m}`),
+      '',
+      'Limiti della lettura',
+      ...r.limiti.map((l) => `— ${l}`),
+    ].join('\n');
+    sezioni.push({
+      id: 'raccomandazione',
+      titolo: 'Supporto decisionale',
+      tipo: 'testo',
+      testo,
+      nota: 'Ordine di priorità fra le strade possibili, non una conclusione giuridica: la scelta resta all’ente.',
     });
   }
 

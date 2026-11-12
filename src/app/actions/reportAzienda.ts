@@ -49,6 +49,10 @@ import { valutaValidita } from '@/lib/screening/validitaVerifica';
 import type { Riscontri } from '@/lib/normativa/riscontri';
 import { PROFILI, VOCI_MAPPA } from '@/lib/verificaAzienda/simulazione';
 import { valutaSoglieAction } from '@/app/actions/soglie25novies';
+import {
+  raccomandaDecisione,
+  type EsitoAmministrativo,
+} from '@/lib/verificaAmministrativa/raccomandazione';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -332,6 +336,23 @@ async function raccogliFonti(
     mappa = null;
   }
 
+  // L'ultimo bilancio in archivio: indici oltre soglia e patrimonio netto.
+  // Sono gli stessi fatti che legge la raccomandazione della verifica
+  // amministrativa: si prendono da qui, senza una seconda interrogazione.
+  const bilancioRecente =
+    xbrlRis?.success && xbrlRis.storico.length > 0
+      ? [...xbrlRis.storico]
+          .filter((b) => b.annoBilancio !== null)
+          .sort((a, b) => (a.annoBilancio ?? 0) - (b.annoBilancio ?? 0))
+          .pop()
+      : undefined;
+  const indiciViolati = bilancioRecente
+    ? bilancioRecente.indici.filter((i) => i.esito === 'VIOLATO').length
+    : null;
+  const patrimonioNetto = bilancioRecente
+    ? (bilancioRecente.datiFinanziari.patrimonioNetto ?? null)
+    : null;
+
   const risposte = new Map((stato?.risposte ?? []).map((r) => [r.domandaId, r.risposta]));
   const questionario = inclusioni.questionario
     ? (stato?.sezioni ?? []).map((sezione) => ({
@@ -377,6 +398,21 @@ async function raccogliFonti(
     soglie25,
     mappa,
     questionario,
+    // La raccomandazione si compone dagli stessi fatti già letti qui: nessuna
+    // interrogazione in più, e il documento la riporta com'era al momento
+    // dell'emissione.
+    raccomandazione: attenzione
+      ? raccomandaDecisione({
+          esito: attenzione.esito as EsitoAmministrativo,
+          fattoreDeterminante: attenzione.fattoreDeterminante,
+          copertura: attenzione.copertura,
+          debitoEnte: debitoRis?.debito?.totale ?? null,
+          anniXbrl: rigaContabile?.anniXbrl ?? 0,
+          parametriPresenti: rigaContabile?.parametriPresenti ?? false,
+          indiciViolati,
+          patrimonioNetto,
+        })
+      : null,
   };
 }
 
