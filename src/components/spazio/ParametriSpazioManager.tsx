@@ -200,11 +200,11 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
         ]
       : []),
     {
-      href: `/spazio/${codice}/parametri/orizzonte`,
+      href: `/spazio/${codice}/parametri/proiezione`,
       icon: CalendarRange,
-      titolo: 'Orizzonte di proiezione',
+      titolo: 'Modello di proiezione',
       descrizione:
-        'Quante annualità proietta la simulazione della verifica azienda: è il predefinito dello spazio, e ogni azienda può avere il suo.',
+        'Annualità proiettate, decadimento della crescita verso il settore e rate di rientro del debito dell’ente: le ipotesi dichiarate della simulazione.',
     },
     {
       href: `/spazio/${codice}/parametri/visualizzazione`,

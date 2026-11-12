@@ -3203,4 +3203,15 @@ export async function assicuraTabelleVerificaAzienda(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.verifica_azienda_simulazioni ADD COLUMN IF NOT EXISTS base_per_proposta BOOLEAN NOT NULL DEFAULT FALSE`
   );
+  // Il modello di proiezione è configurabile per spazio (0.208.0): quanto la
+  // crescita converge verso il settore a ogni annualità e in quante rate si
+  // estingue il debito dell'ente. I default sono quelli dichiarati nel motore
+  // (src/lib/verificaAzienda/simulazione.ts); gli spazi già provisionati
+  // prendono le colonne con l'ALTER idempotente, senza migrazioni.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.verifica_azienda_config ADD COLUMN IF NOT EXISTS decadimento_crescita NUMERIC(3,2) NOT NULL DEFAULT 0.60`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.verifica_azienda_config ADD COLUMN IF NOT EXISTS anni_rientro_debito INTEGER NOT NULL DEFAULT 3`
+  );
 }

@@ -1,3 +1,16 @@
+## 0.208.0 — 2026-11-12
+
+- **Il modello di proiezione è un parametro, non una costante.** Nei Parametri di Spazio la voce
+  «Modello di proiezione» raccoglie le tre ipotesi dichiarate della simulazione: annualità
+  proiettate, **decadimento della crescita** (quanto resta ogni anno dello scostamento dal settore:
+  0% converge subito, 90% resta a lungo vicina al passato) e **rate di rientro del debito
+  dell'ente**. Predefiniti invariati — 3 annualità, 60%, 3 rate — ma ora si vedono e si cambiano.
+- **Gli spazi esistenti non richiedono migrazioni.** Le due colonne nascono con un `ALTER TABLE …
+  ADD COLUMN IF NOT EXISTS` su `verifica_azienda_config`, come le altre aggiunte idempotenti; il
+  motore continua a limitare i valori al proprio intervallo, anche se arrivassero da fuori.
+- **Le simulazioni già salvate restano com'erano.** Le ipotesi nuove valgono per i calcoli
+  successivi: cambiare il modello non riscrive le valutazioni emesse.
+
 ## 0.207.0 — 2026-11-12
 
 - **La fotografia contabile: un documento schematico, stampabile.** Dalla verifica contabile si

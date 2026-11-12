@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
-import { OrizzonteVerificaManager } from '@/components/spazio/OrizzonteVerificaManager';
+import { ModelloProiezioneManager } from '@/components/spazio/ModelloProiezioneManager';
 import { LinkRitorno } from '@/components/spazio/LinkRitorno';
 
-export default async function ParametriOrizzontePage({
+export default async function ParametriProiezionePage({
   params,
   searchParams,
 }: {
@@ -20,7 +20,7 @@ export default async function ParametriOrizzontePage({
     <div className="max-w-4xl space-y-4">
       <LinkRitorno codice={codice} ritorno={ritorno} />
       <div className="bg-white border border-slate-200 rounded-xl p-6">
-        <OrizzonteVerificaManager nomeSchema={contesto.nomeSchema} />
+        <ModelloProiezioneManager nomeSchema={contesto.nomeSchema} />
       </div>
     </div>
   );

@@ -26,9 +26,15 @@ import { pool } from '@/lib/db';
 import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
 import { assicuraTabelleVerificaAzienda } from '@/db/provision';
 import {
+  ANNI_RIENTRO_DEBITO,
+  ANNI_RIENTRO_MASSIMI,
+  ANNI_RIENTRO_MINIMI,
   ANNUALITA_MASSIME,
   ANNUALITA_MINIME,
   ANNUALITA_PREDEFINITE,
+  DECADIMENTO_CRESCITA,
+  DECADIMENTO_MASSIMO,
+  DECADIMENTO_MINIMO,
   PROFILI,
   colonneSimulazione,
   type AnnoStorico,
@@ -85,6 +91,121 @@ export interface RiepilogoNota {
   sezioni: string[];
   continuita: string | null;
   piani: string | null;
+}
+
+export interface RisultatoModelloProiezione {
+  success: boolean;
+  decadimentoCrescita: number;
+  anniRientroDebito: number;
+  error?: string;
+}
+
+const arrotonda2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Il modello di proiezione dello spazio: con quale velocità la crescita
+ * converge al settore e in quante rate si estingue il debito dell'ente.
+ * Configurabile (0.208.0) perché sono ipotesi dichiarate, non leggi: i valori
+ * predefiniti restano quelli del motore, ma l'ente può scegliere i suoi.
+ */
+export async function ottieniModelloProiezioneAction(
+  nomeSchema: string
+): Promise<RisultatoModelloProiezione> {
+  const predefinito = {
+    decadimentoCrescita: DECADIMENTO_CRESCITA,
+    anniRientroDebito: ANNI_RIENTRO_DEBITO,
+  };
+  try {
+    await richiediAccessoSchema(nomeSchema);
+    if (!schemaOk(nomeSchema)) {
+      return { success: false, ...predefinito, error: 'Nome schema non valido.' };
+    }
+    await assicuraTabelleVerificaAzienda(nomeSchema);
+    const r = await pool.query(
+      `SELECT decadimento_crescita, anni_rientro_debito
+         FROM "${nomeSchema}".verifica_azienda_config WHERE id = 1`
+    );
+    const decadimento = Number(r.rows[0]?.decadimento_crescita);
+    const anni = Number(r.rows[0]?.anni_rientro_debito);
+    return {
+      success: true,
+      decadimentoCrescita: Number.isFinite(decadimento)
+        ? Math.min(DECADIMENTO_MASSIMO, Math.max(DECADIMENTO_MINIMO, arrotonda2(decadimento)))
+        : DECADIMENTO_CRESCITA,
+      anniRientroDebito: Number.isFinite(anni)
+        ? Math.min(ANNI_RIENTRO_MASSIMI, Math.max(ANNI_RIENTRO_MINIMI, Math.round(anni)))
+        : ANNI_RIENTRO_DEBITO,
+    };
+  } catch (error: unknown) {
+    console.error('[ottieniModelloProiezioneAction] Errore:', error);
+    return {
+      success: false,
+      ...predefinito,
+      error: `Impossibile leggere il modello: ${(error as Error).message}`,
+    };
+  }
+}
+
+export async function impostaModelloProiezioneAction(
+  nomeSchema: string,
+  decadimentoCrescita: number,
+  anniRientroDebito: number
+): Promise<RisultatoModelloProiezione> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!schemaOk(nomeSchema)) {
+      return {
+        success: false,
+        decadimentoCrescita: DECADIMENTO_CRESCITA,
+        anniRientroDebito: ANNI_RIENTRO_DEBITO,
+        error: 'Nome schema non valido.',
+      };
+    }
+    if (
+      !Number.isFinite(decadimentoCrescita) ||
+      decadimentoCrescita < DECADIMENTO_MINIMO ||
+      decadimentoCrescita > DECADIMENTO_MASSIMO
+    ) {
+      return {
+        success: false,
+        decadimentoCrescita: DECADIMENTO_CRESCITA,
+        anniRientroDebito: ANNI_RIENTRO_DEBITO,
+        error: 'Il decadimento della crescita sta fra 0 e 0,9 (0%–90%).',
+      };
+    }
+    if (
+      !Number.isInteger(anniRientroDebito) ||
+      anniRientroDebito < ANNI_RIENTRO_MINIMI ||
+      anniRientroDebito > ANNI_RIENTRO_MASSIMI
+    ) {
+      return {
+        success: false,
+        decadimentoCrescita: DECADIMENTO_CRESCITA,
+        anniRientroDebito: ANNI_RIENTRO_DEBITO,
+        error: `Le rate di rientro stanno fra ${ANNI_RIENTRO_MINIMI} e ${ANNI_RIENTRO_MASSIMI}.`,
+      };
+    }
+    await assicuraTabelleVerificaAzienda(nomeSchema);
+    await pool.query(
+      `INSERT INTO "${nomeSchema}".verifica_azienda_config
+         (id, annualita_proiezione, decadimento_crescita, anni_rientro_debito, updated_at)
+       VALUES (1, $3, $1, $2, now())
+       ON CONFLICT (id) DO UPDATE
+         SET decadimento_crescita = EXCLUDED.decadimento_crescita,
+             anni_rientro_debito = EXCLUDED.anni_rientro_debito,
+             updated_at = now()`,
+      [arrotonda2(decadimentoCrescita), anniRientroDebito, ANNUALITA_PREDEFINITE]
+    );
+    return ottieniModelloProiezioneAction(nomeSchema);
+  } catch (error: unknown) {
+    console.error('[impostaModelloProiezioneAction] Errore:', error);
+    return {
+      success: false,
+      decadimentoCrescita: DECADIMENTO_CRESCITA,
+      anniRientroDebito: ANNI_RIENTRO_DEBITO,
+      error: `Impossibile salvare il modello: ${(error as Error).message}`,
+    };
+  }
 }
 
 export interface RisultatoOrizzonteAzienda {
@@ -447,6 +568,15 @@ export async function calcolaVerificaAziendaAction(
     const propria = await leggiOrizzonteAzienda(nomeSchema, aziendaId);
     const annualitaScelta = annualita ?? propria ?? config.annualita;
 
+    // Il modello dello spazio: decadimento della crescita e rate di rientro
+    // del debito dell'ente. Il motore li limita comunque al proprio intervallo.
+    const modelloRis = await pool.query(
+      `SELECT decadimento_crescita, anni_rientro_debito
+         FROM "${nomeSchema}".verifica_azienda_config WHERE id = 1`
+    );
+    const decadimentoCrescita = Number(modelloRis.rows[0]?.decadimento_crescita);
+    const anniRientroDebito = Number(modelloRis.rows[0]?.anni_rientro_debito);
+
     const bilancioRis = await pool.query(
       `SELECT anno_bilancio, dati_finanziari FROM "${nomeSchema}".xbrl_storico_azienda
         WHERE azienda_id = $1 AND anno_bilancio IS NOT NULL
@@ -515,6 +645,8 @@ export async function calcolaVerificaAziendaAction(
       annualita: annualitaScelta,
       debitoEnte: debito?.totale ?? 0,
       crescitaSettorePct,
+      decadimentoCrescita: Number.isFinite(decadimentoCrescita) ? decadimentoCrescita : undefined,
+      anniRientroDebito: Number.isFinite(anniRientroDebito) ? anniRientroDebito : undefined,
     });
 
     let simulazioneId: number | undefined;

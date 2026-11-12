@@ -71,6 +71,14 @@ export const LIMITE_CRESCITA_PCT = 25;
  * anno resta il 60% dello scostamento, dopo due il 36%, dopo tre il 22%.
  */
 export const DECADIMENTO_CRESCITA = 0.6;
+/**
+ * I limiti del decadimento configurabile: a 0 la convergenza al settore è
+ * immediata (il primo anno proiettato usa già il tasso di settore), a 0,9 la
+ * traiettoria resta a lungo vicina al passato. Oltre, non è più una
+ * convergenza e il prospetto torna a essere una riga.
+ */
+export const DECADIMENTO_MINIMO = 0;
+export const DECADIMENTO_MASSIMO = 0.9;
 /** Rate in cui si estingue il debito dell'ente entrato nel passivo. */
 export const ANNI_RIENTRO_DEBITO = 3;
 export const ANNI_RIENTRO_MINIMI = 1;
@@ -125,6 +133,8 @@ export interface EsitoSimulazione {
   /** Quanto crescono i ricavi nella prima annualità proiettata. */
   crescitaApplicataPct: number;
   anniRientroDebito: number;
+  /** Quanto resta dello scostamento dal settore dopo un anno (0–0,9). */
+  decadimentoCrescita: number;
   /** Perché la simulazione non è calcolabile, se lo è. */
   motivo: string | null;
   avvertenze: string[];
@@ -272,6 +282,8 @@ export function colonneSimulazione(input: {
   crescitaSettorePct?: number | null;
   /** Rate in cui si estingue il debito dell'ente. */
   anniRientroDebito?: number;
+  /** Decadimento della crescita verso il settore (0–0,9). */
+  decadimentoCrescita?: number;
 }): EsitoSimulazione {
   const anni = [...input.anni]
     .filter((a) => Number.isInteger(a.anno) && a.dati && typeof a.dati.ricaviVendite === 'number')
@@ -292,6 +304,13 @@ export function colonneSimulazione(input: {
       ANNI_RIENTRO_MASSIMI
     )
   );
+  const decadimento = limita(
+    Number.isFinite(input.decadimentoCrescita)
+      ? (input.decadimentoCrescita as number)
+      : DECADIMENTO_CRESCITA,
+    DECADIMENTO_MINIMO,
+    DECADIMENTO_MASSIMO
+  );
   const debitoEnte = Math.max(0, Number.isFinite(input.debitoEnte) ? input.debitoEnte : 0);
   const settore =
     input.crescitaSettorePct === null || input.crescitaSettorePct === undefined
@@ -305,6 +324,7 @@ export function colonneSimulazione(input: {
     settore,
     profilo: input.profilo,
     annualita,
+    decadimento,
   });
   const avvertenze: string[] = [];
 
@@ -319,6 +339,7 @@ export function colonneSimulazione(input: {
       fonteCrescita: fonte,
       crescitaApplicataPct: traiettoria[0]?.ricaviPct ?? 0,
       anniRientroDebito: anniRientro,
+      decadimentoCrescita: decadimento,
       motivo: 'Nessun bilancio XBRL leggibile: la simulazione parte dal dato depositato.',
       avvertenze,
     };
@@ -405,6 +426,7 @@ export function colonneSimulazione(input: {
     fonteCrescita: fonte,
     crescitaApplicataPct: traiettoria[0]?.ricaviPct ?? 0,
     anniRientroDebito: anniRientro,
+    decadimentoCrescita: decadimento,
     motivo: null,
     avvertenze,
   };

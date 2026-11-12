@@ -245,6 +245,66 @@ describe('colonneSimulazione', () => {
     expect(proiezioni[0].crescitaRicaviPct).toBeGreaterThan(proiezioni[2].crescitaRicaviPct);
   });
 
+  it('il decadimento configurabile cambia la velocità di convergenza', () => {
+    const rapida = colonneSimulazione({
+      anni,
+      profilo: 'STANDARD',
+      annualita: 3,
+      debitoEnte: 0,
+      crescitaSettorePct: 2,
+      decadimentoCrescita: 0,
+    });
+    const lenta = colonneSimulazione({
+      anni,
+      profilo: 'STANDARD',
+      annualita: 3,
+      debitoEnte: 0,
+      crescitaSettorePct: 2,
+      decadimentoCrescita: 0.9,
+    });
+    const ricavi = (e: typeof rapida) =>
+      e.colonne.filter((c) => c.tipo === 'PROIEZIONE').map((c) => c.crescitaRicaviPct);
+
+    // Con decadimento 0 la seconda annualità è già al tasso di settore.
+    expect(ricavi(rapida)[1]).toBe(2);
+    expect(ricavi(lenta)[1]).toBeGreaterThan(ricavi(rapida)[1]);
+  });
+
+  it('le rate di rientro configurabili cambiano il piano del debito', () => {
+    const esito = colonneSimulazione({
+      anni,
+      profilo: 'STANDARD',
+      annualita: 2,
+      debitoEnte: 300_000,
+      anniRientroDebito: 1,
+    });
+    const proiezioni = esito.colonne.filter((c) => c.tipo === 'PROIEZIONE');
+
+    expect(proiezioni[1].rimborsoDebitoEnte).toBe(300_000);
+    expect(proiezioni[1].debitoEnteResiduo).toBe(0);
+  });
+
+  it('limita decadimento e rate all’intervallo dichiarato', () => {
+    expect(
+      colonneSimulazione({
+        anni,
+        profilo: 'STANDARD',
+        annualita: 2,
+        debitoEnte: 0,
+        decadimentoCrescita: 5,
+      }).decadimentoCrescita
+    ).toBe(0.9);
+    expect(
+      colonneSimulazione({
+        anni,
+        profilo: 'STANDARD',
+        annualita: 2,
+        debitoEnte: 0,
+        anniRientroDebito: 99,
+      }).anniRientroDebito
+    ).toBe(8);
+  });
+
   it('dichiara l’assenza del debito senza mettere zero al suo posto', () => {
     const esito = colonneSimulazione({ anni, profilo: 'STANDARD', annualita: 2, debitoEnte: 0 });
     expect(esito.debitoEnte).toBe(0);
