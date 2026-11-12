@@ -49,6 +49,10 @@ const colonna = (anno: number, ricavi: number): ColonnaVerificaAzienda => ({
   altriIndici: [],
   severity: 'GREEN',
   debitoEnteInserito: 0,
+  rimborsoDebitoEnte: 0,
+  debitoEnteResiduo: 0,
+  crescitaRicaviPct: 0,
+  crescitaCostiPct: 0,
 });
 
 describe('documento di confronto', () => {

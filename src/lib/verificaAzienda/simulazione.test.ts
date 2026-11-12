@@ -3,7 +3,9 @@ import {
   colonneSimulazione,
   crescitaStorica,
   cresciteProfilo,
+  traiettoriaCrescite,
   ANNUALITA_PREDEFINITE,
+  DECADIMENTO_CRESCITA,
 } from './simulazione';
 import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
 
@@ -82,6 +84,66 @@ describe('cresciteProfilo', () => {
   });
 });
 
+describe('traiettoriaCrescite', () => {
+  it('parte dalla storica e converge verso il settore, anno dopo anno', () => {
+    const t = traiettoriaCrescite({
+      storica: 12,
+      settore: 2,
+      profilo: 'STANDARD',
+      annualita: 4,
+    });
+
+    expect(t.map((a) => a.ricaviPct)).toEqual([12, 8, 5.6, 4.16]);
+    expect(DECADIMENTO_CRESCITA).toBe(0.6);
+    // La riga non è più parallela: la crescita rallenta.
+    expect(t[0].ricaviPct).toBeGreaterThan(t[3].ricaviPct);
+  });
+
+  it('senza settore converge verso ricavi invariati, non resta costante', () => {
+    const t = traiettoriaCrescite({
+      storica: 12,
+      settore: null,
+      profilo: 'STANDARD',
+      annualita: 3,
+    });
+
+    expect(t.map((a) => a.ricaviPct)).toEqual([12, 7.2, 4.32]);
+  });
+
+  it('il profilo sposta la traiettoria di una misura dichiarata, senza cambiarne la forma', () => {
+    const standard = traiettoriaCrescite({
+      storica: 10,
+      settore: 2,
+      profilo: 'STANDARD',
+      annualita: 3,
+    });
+    const migliorativo = traiettoriaCrescite({
+      storica: 10,
+      settore: 2,
+      profilo: 'MIGLIORATIVO',
+      annualita: 3,
+    });
+
+    migliorativo.forEach((a, i) => {
+      expect(a.ricaviPct).toBe(standard[i].ricaviPct + 3);
+      // I costi restano più lenti dei ricavi di 2 punti: quindi un punto sopra
+      // lo standard, che li fa crescere come i ricavi.
+      expect(a.costiPct).toBe(standard[i].costiPct + 1);
+    });
+  });
+
+  it('senza storico né settore parte da zero e lo dichiara nel profilo', () => {
+    const t = traiettoriaCrescite({
+      storica: null,
+      settore: null,
+      profilo: 'STANDARD',
+      annualita: 2,
+    });
+
+    expect(t.map((a) => a.ricaviPct)).toEqual([0, 0]);
+  });
+});
+
 describe('colonneSimulazione', () => {
   it('affianca gli anni storici e le proiezioni, con gli indici per colonna', () => {
     const esito = colonneSimulazione({
@@ -97,7 +159,7 @@ describe('colonneSimulazione', () => {
     for (const c of esito.colonne) expect(c.indici.length).toBeGreaterThan(0);
   });
 
-  it('iscrive il debito dell’ente una volta sola, nella prima proiezione', () => {
+  it('iscrive il debito dell’ente una volta sola e lo estingue a rate', () => {
     const esito = colonneSimulazione({
       anni,
       profilo: 'STANDARD',
@@ -105,11 +167,41 @@ describe('colonneSimulazione', () => {
       debitoEnte: 300_000,
     });
     const proiezioni = esito.colonne.filter((c) => c.tipo === 'PROIEZIONE');
-    expect(proiezioni[0].debitoEnteInserito).toBe(300_000);
-    expect(proiezioni[1].debitoEnteInserito).toBe(0);
     const storica = esito.colonne[2];
+
+    expect(proiezioni[0].debitoEnteInserito).toBe(300_000);
     expect(proiezioni[0].dati.totaleDebiti).toBe(storica.dati.totaleDebiti + 300_000);
-    expect(proiezioni[1].dati.totaleDebiti).toBe(proiezioni[0].dati.totaleDebiti);
+    expect(proiezioni.slice(1).every((c) => c.debitoEnteInserito === 0)).toBe(true);
+
+    // Tre rate da 100.000: il passivo flette, non resta piatto.
+    expect(proiezioni[1].rimborsoDebitoEnte).toBe(100_000);
+    expect(proiezioni[1].dati.totaleDebiti).toBe(proiezioni[0].dati.totaleDebiti - 100_000);
+    expect(proiezioni[2].dati.totaleDebiti).toBe(storica.dati.totaleDebiti + 100_000);
+    expect(proiezioni[2].debitoEnteResiduo).toBe(100_000);
+  });
+
+  it('il rimborso del debito non è una crescita: il debito scende sempre', () => {
+    const esito = colonneSimulazione({
+      anni,
+      profilo: 'STANDARD',
+      annualita: 4,
+      debitoEnte: 300_000,
+    });
+    const debiti = esito.colonne
+      .filter((c) => c.tipo === 'PROIEZIONE')
+      .map((c) => c.dati.totaleDebiti);
+
+    for (let i = 1; i < debiti.length; i++) expect(debiti[i]).toBeLessThan(debiti[i - 1]);
+  });
+
+  it('la cassa segue il risultato e i rimborsi, non resta ferma', () => {
+    const esito = colonneSimulazione({ anni, profilo: 'STANDARD', annualita: 1, debitoEnte: 0 });
+    const utlimoStorico = esito.colonne[2];
+    const proiezione = esito.colonne[3];
+
+    expect(proiezione.dati.disponibilitaLiquide).toBe(
+      utlimoStorico.dati.disponibilitaLiquide + proiezione.dati.utileEsercizio
+    );
   });
 
   it('il patrimonio netto segue il risultato, non lo sostituisce', () => {
@@ -136,6 +228,21 @@ describe('colonneSimulazione', () => {
       debitoEnte: 0,
     });
     expect(migliore.colonne[5].dati.ebitda).toBeGreaterThan(peggiore.colonne[5].dati.ebitda);
+  });
+
+  it('usa il settore come destinazione e lo dichiara', () => {
+    const esito = colonneSimulazione({
+      anni,
+      profilo: 'STANDARD',
+      annualita: 3,
+      debitoEnte: 0,
+      crescitaSettorePct: 2,
+    });
+
+    expect(esito.fonteCrescita).toBe('SETTORE');
+    expect(esito.crescitaSettorePct).toBe(2);
+    const proiezioni = esito.colonne.filter((c) => c.tipo === 'PROIEZIONE');
+    expect(proiezioni[0].crescitaRicaviPct).toBeGreaterThan(proiezioni[2].crescitaRicaviPct);
   });
 
   it('dichiara l’assenza del debito senza mettere zero al suo posto', () => {

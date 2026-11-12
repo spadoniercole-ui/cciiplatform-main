@@ -162,7 +162,7 @@ describe('VerificaAziendaScheda', () => {
     expect(screen.getByText(/Debito dell’ente — dato certo della simulazione/)).toBeTruthy();
     // Il debito si legge anche dentro i costi della produzione, come «di cui»:
     // è l’annualità in cui entra nella mappa.
-    expect(screen.getByText('di cui debito dell’ente')).toBeTruthy();
+    expect(screen.getByText('di cui debito dell’ente (iscritto / rimborsato)')).toBeTruthy();
   });
 
   it('cambiando profilo richiede al server proprio quel profilo', async () => {

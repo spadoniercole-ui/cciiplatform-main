@@ -1,7 +1,10 @@
 import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
-import { ottieniConfigVerificaAziendaAction } from '@/app/actions/verificaAzienda';
+import {
+  ottieniConfigVerificaAziendaAction,
+  ottieniOrizzonteAziendaAction,
+} from '@/app/actions/verificaAzienda';
 import { ottieniIndiciSpazio } from '@/app/actions/parametriSpazio';
 import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
@@ -31,9 +34,10 @@ export default async function VerificaAziendaSchedaPage({
 
   // Le due verifiche si leggono dalle loro fonti: l'esito amministrativo e lo
   // stato della contabile. La scheda non le ricalcola, le mette in due box.
-  const [config, statoContabile, attenzioneRis, debitoRis, storicoRis, indiciRis] =
+  const [config, orizzonte, statoContabile, attenzioneRis, debitoRis, storicoRis, indiciRis] =
     await Promise.all([
       ottieniConfigVerificaAziendaAction(contesto.nomeSchema),
+      ottieniOrizzonteAziendaAction(contesto.nomeSchema, id),
       statoVerificaContabileAction(contesto.nomeSchema),
       ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
       debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
@@ -56,7 +60,11 @@ export default async function VerificaAziendaSchedaPage({
       nomeSchema={contesto.nomeSchema}
       aziendaId={id}
       ragioneSociale={risultato.azienda.ragioneSociale}
-      annualitaIniziale={config.success ? config.annualita : 3}
+      annualitaIniziale={
+        orizzonte.success ? orizzonte.annualita : config.success ? config.annualita : 3
+      }
+      orizzonteSpazio={orizzonte.success ? orizzonte.spazio : undefined}
+      orizzontePersonalizzato={orizzonte.success ? orizzonte.personalizzato : false}
       codice={codice}
       simulazioneAttivaIniziale={config.success ? config.simulazioneAttiva : false}
       indiciAbilitati={

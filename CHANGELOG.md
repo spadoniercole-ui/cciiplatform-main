@@ -1,3 +1,24 @@
+## 0.205.0 — 2026-11-12
+
+- **La proiezione ha una traiettoria, non una moltiplicazione.** Ogni annualità cresceva dello
+  stesso tasso: ricavi, EBITDA e debiti salivano su righe parallele. Ora la crescita parte dal
+  composto dei ricavi depositati e si avvicina, anno dopo anno, a quella del settore ISTAT del
+  gruppo ATECO dell'azienda (`g(t) = g_settore + (g_storica − g_settore) · 0,6^(t−1)`). Senza
+  serie di settore converge verso ricavi invariati: il passato non viene spacciato per
+  previsione. La traiettoria è a video, annualità per annualità, con la sua fonte.
+- **Il debito dell'ente flette.** Si iscrive nella prima annualità proiettata e si estingue in
+  rate costanti (tre, dichiarate): passivo e posizione finanziaria netta scendono, invece di
+  restare piatti per sempre. Le disponibilità liquide seguono il risultato al netto dei
+  rimborsi — l'unica ipotesi è dichiarata sotto la mappa.
+- **L'orizzonte è per azienda.** Il predefinito dello spazio vive nei Parametri di Spazio
+  («Orizzonte di proiezione»); ogni azienda può avere il suo, e si imposta nella verifica
+  contabile con «Salva per questa azienda» o si riporta al predefinito con un clic. Le
+  simulazioni già salvate conservano l'orizzonte con cui sono nate: cambiarlo non riscrive
+  valutazioni fatte.
+- **La nota integrativa si legge accanto alla simulazione.** Dell'ultimo bilancio si mostrano le
+  sezioni presenti e i testi di continuità e piani: è il contesto dichiarato dagli
+  amministratori, e non viene convertito in un tasso inventato.
+
 ## 0.204.0 — 2026-11-12
 
 - **Gli indici dei parametri tornano visibili tutti.** La tabella «Indici per colonna» della

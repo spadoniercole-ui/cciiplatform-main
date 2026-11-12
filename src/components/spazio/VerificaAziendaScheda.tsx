@@ -17,7 +17,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { ArrowRight, Calculator, CheckCircle2, Loader2, Printer } from 'lucide-react';
 import {
   calcolaVerificaAziendaAction,
-  impostaConfigVerificaAziendaAction,
+  impostaOrizzonteAziendaAction,
   impostaSimulazioneAttivaAction,
   ottieniSimulazioneBaseAction,
   salvaSimulazioneBaseAction,
@@ -62,6 +62,8 @@ export function VerificaAziendaScheda({
   aziendaId,
   ragioneSociale,
   annualitaIniziale,
+  orizzonteSpazio = annualitaIniziale,
+  orizzontePersonalizzato = false,
   codice,
   simulazioneAttivaIniziale = false,
   amministrativa = null,
@@ -72,6 +74,10 @@ export function VerificaAziendaScheda({
   aziendaId: number;
   ragioneSociale: string;
   annualitaIniziale: number;
+  /** Predefinito dello spazio (Parametri di Spazio → Orizzonte di proiezione). */
+  orizzonteSpazio?: number;
+  /** true se questa azienda ha un orizzonte proprio, diverso dal predefinito. */
+  orizzontePersonalizzato?: boolean;
   /** Codice dello spazio: serve ai collegamenti alle due verifiche. */
   codice?: string;
   simulazioneAttivaIniziale?: boolean;
@@ -83,6 +89,7 @@ export function VerificaAziendaScheda({
   const [profilo, setProfilo] = useState<ProfiloSimulazione>('STANDARD');
   const [annualita, setAnnualita] = useState(annualitaIniziale);
   const [annualitaSalvata, setAnnualitaSalvata] = useState(annualitaIniziale);
+  const [personalizzato, setPersonalizzato] = useState(orizzontePersonalizzato);
   const [risultato, setRisultato] = useState<RisultatoVerificaAzienda | null>(null);
   const [inCorso, setInCorso] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
@@ -149,17 +156,31 @@ export function VerificaAziendaScheda({
     await calcola(p);
   };
 
+  // L'orizzonte si salva sull'AZIENDA: il predefinito vive nei Parametri di
+  // Spazio, e le simulazioni già salvate restano con il loro orizzonte.
   const salvaAnnualita = async () => {
-    const r = await impostaConfigVerificaAziendaAction(nomeSchema, annualita);
+    const r = await impostaOrizzonteAziendaAction(nomeSchema, aziendaId, annualita);
     if (!r.success) {
       setErrore(r.error ?? 'Annualità non salvate.');
       return;
     }
     setAnnualitaSalvata(r.annualita);
     setAnnualita(r.annualita);
-    setMessaggio(
-      `Annualità di proiezione impostate a ${r.annualita} per tutte le aziende dello spazio.`
-    );
+    setPersonalizzato(r.personalizzato);
+    setMessaggio(`Orizzonte di questa azienda: ${r.annualita} annualità di proiezione.`);
+    await calcola(profilo);
+  };
+
+  const ripristinaOrizzonte = async () => {
+    const r = await impostaOrizzonteAziendaAction(nomeSchema, aziendaId, null);
+    if (!r.success) {
+      setErrore(r.error ?? 'Predefinito non ripristinato.');
+      return;
+    }
+    setAnnualitaSalvata(r.annualita);
+    setAnnualita(r.annualita);
+    setPersonalizzato(false);
+    setMessaggio(`Orizzonte riportato al predefinito dello spazio: ${r.annualita} annualità.`);
     await calcola(profilo);
   };
 
@@ -406,17 +427,68 @@ export function VerificaAziendaScheda({
                 disabled={inCorso || annualita === annualitaSalvata}
                 className="rounded-lg bg-slate-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-slate-800 disabled:opacity-40"
               >
-                Salva per lo spazio
+                Salva per questa azienda
               </button>
-              <span className="text-[10px] text-slate-400">
-                Vale per tutte le aziende: stesso orizzonte, confronti possibili.
+              {personalizzato && (
+                <button
+                  type="button"
+                  onClick={() => void ripristinaOrizzonte()}
+                  disabled={inCorso}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  Ripristina il predefinito
+                </button>
+              )}
+              <span className="text-[10px] text-slate-400 leading-relaxed">
+                Vale per questa azienda. Predefinito dello spazio: {orizzonteSpazio} annualità
+                {codice ? ' (Parametri di Spazio → Orizzonte di proiezione)' : ''}. Le simulazioni
+                già salvate restano con il loro orizzonte.
               </span>
             </div>
             {risultato?.esito && (
-              <p className="text-[10px] text-slate-500">
-                Crescita storica composta: {risultato.esito.crescitaStoricaPct ?? 'non calcolabile'}
-                % · crescita applicata ai ricavi: {risultato.esito.crescitaApplicataPct}%
-              </p>
+              <div className="space-y-1.5">
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  {risultato.esito.fonteCrescita === 'SETTORE'
+                    ? `Traiettoria: dalla crescita storica ${risultato.esito.crescitaStoricaPct ?? 'non calcolabile'}% verso quella di settore ${risultato.esito.crescitaSettorePct}%, anno dopo anno.`
+                    : risultato.esito.fonteCrescita === 'STORICA'
+                      ? `Traiettoria: dalla crescita storica ${risultato.esito.crescitaStoricaPct}% verso ricavi invariati — dati di settore non in archivio.`
+                      : 'Nessuna crescita calcolabile: ricavi invariati.'}
+                </p>
+                {risultato.esito.colonne.some((c) => c.tipo === 'PROIEZIONE') && (
+                  <table className="w-full text-[10px]">
+                    <thead>
+                      <tr className="text-[8px] uppercase text-slate-400 border-b border-slate-100">
+                        <th className="text-left py-0.5">Annualità</th>
+                        <th className="text-right py-0.5">Ricavi</th>
+                        <th className="text-right py-0.5">Costi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {risultato.esito.colonne
+                        .filter((c) => c.tipo === 'PROIEZIONE')
+                        .map((c, i) => (
+                          <tr key={c.anno}>
+                            <td className="py-0.5 text-slate-600">
+                              {c.anno} <span className="text-slate-400">· {i + 1}ª</span>
+                            </td>
+                            <td className="py-0.5 text-right tabular-nums text-slate-800">
+                              {c.crescitaRicaviPct}%
+                            </td>
+                            <td className="py-0.5 text-right tabular-nums text-slate-800">
+                              {c.crescitaCostiPct}%
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                )}
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  Debito dell’ente: si iscrive nella prima annualità e si estingue in{' '}
+                  {risultato.esito.anniRientroDebito}{' '}
+                  {risultato.esito.anniRientroDebito === 1 ? 'rata' : 'rate'} costanti. Le
+                  disponibilità liquide seguono il risultato, al netto dei rimborsi.
+                </p>
+              </div>
             )}
           </div>
 
@@ -453,6 +525,28 @@ export function VerificaAziendaScheda({
               {a}
             </p>
           ))}
+
+          {risultato?.nota && (
+            <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Nota integrativa — {risultato.nota.anno ?? 'ultimo bilancio'}
+              </p>
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                Sezioni lette: {risultato.nota.sezioni.join(', ')}. È il contesto dichiarato dagli
+                amministratori: si legge accanto alla traiettoria e non ne cambia i tassi.
+              </p>
+              {risultato.nota.continuita && (
+                <p className="text-[11px] text-slate-700 leading-relaxed">
+                  <strong>Continuità:</strong> {risultato.nota.continuita}
+                </p>
+              )}
+              {risultato.nota.piani && (
+                <p className="text-[11px] text-slate-700 leading-relaxed">
+                  <strong>Piani e intenzioni:</strong> {risultato.nota.piani}
+                </p>
+              )}
+            </div>
+          )}
 
           {colonne.length > 0 && (
             <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
@@ -516,14 +610,18 @@ export function VerificaAziendaScheda({
                         {v.chiave === 'costiProduzione' && mostraDebitoNeiCosti && (
                           <tr className="bg-slate-50/40">
                             <td className="py-1 pr-2 pl-3 italic text-slate-500">
-                              di cui debito dell’ente
+                              di cui debito dell’ente (iscritto / rimborsato)
                             </td>
                             {colonne.map((c) => (
                               <td
                                 key={c.anno}
                                 className="py-1 px-1 text-right tabular-nums text-slate-500"
                               >
-                                {c.debitoEnteInserito > 0 ? euro(c.debitoEnteInserito) : '—'}
+                                {c.debitoEnteInserito > 0
+                                  ? euro(c.debitoEnteInserito)
+                                  : c.rimborsoDebitoEnte > 0
+                                    ? `−${euro(c.rimborsoDebitoEnte)}`
+                                    : '—'}
                               </td>
                             ))}
                           </tr>
@@ -548,9 +646,9 @@ export function VerificaAziendaScheda({
               </div>
               {primaProiezione > 0 && (
                 <p className="text-[10px] text-slate-400 leading-relaxed">
-                  Il debito dell’ente entra come «di cui» dei costi della produzione nella prima
-                  annualità proiettata ({colonne[primaProiezione].anno}) e da lì resta nel passivo.
-                  Gli anni storici sono quelli depositati, senza modifiche.
+                  Il debito dell’ente si iscrive nella prima annualità proiettata (
+                  {colonne[primaProiezione].anno}) e da lì si estingue a rate: la riga negativa è il
+                  rimborso dell’anno. Gli anni storici sono quelli depositati, senza modifiche.
                 </p>
               )}
 

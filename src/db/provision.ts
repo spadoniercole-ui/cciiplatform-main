@@ -3159,6 +3159,18 @@ export async function assicuraTabellaDebitoEnteMemorizzato(nomeSchema: string): 
 export async function assicuraTabelleVerificaAzienda(nomeSchema: string): Promise<void> {
   const s = sql.identifier(nomeSchema);
   await assicuraTabellaAziende(nomeSchema);
+  // Orizzonte di proiezione per azienda (0.205.0): lo spazio fissa il
+  // predefinito (verifica_azienda_config), l'azienda può avere il suo. Una
+  // riga per azienda; nessuna riga = vale il predefinito dello spazio. Le
+  // simulazioni già salvate conservano il proprio orizzonte: questo valore
+  // serve ai calcoli nuovi, non riscrive quelli passati.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.verifica_azienda_orizzonti (
+      azienda_id INTEGER PRIMARY KEY REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      annualita INTEGER NOT NULL,
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.verifica_azienda_config (
       id INTEGER PRIMARY KEY DEFAULT 1,

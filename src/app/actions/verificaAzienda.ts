@@ -8,10 +8,19 @@
 // gli indici. Il calcolo sta in src/lib/verificaAzienda/simulazione.ts, che è
 // puro e ha i suoi test; qui si autorizza, si legge e si conserva.
 //
-// Le annualità di proiezione si fissano nello spazio (una riga di
-// configurazione), non azienda per azienda: lo stesso orizzonte per tutte le
-// posizioni, altrimenti due relazioni della stessa data non sarebbero
-// confrontabili.
+// L'ORIZZONTE (0.205.0) ha due livelli: il predefinito dello spazio (una riga
+// di configurazione, che vale per tutte) e, se serve, quello della singola
+// azienda (`verifica_azienda_orizzonti`). Il secondo si usa quando la posizione
+// ha una storia sua — un piano più corto, un triennio già deliberato — e non
+// deve costringere tutto lo spazio a cambiare orizzonte: cambiare il valore di
+// spazio, da solo, non deve riscrivere valutazioni già fatte.
+//
+// LA TRAIETTURA non è più a tasso costante: parte dalla crescita storica dei
+// ricavi depositati e converge verso la crescita del settore (serie ISTAT già
+// in cache), con la forma dichiarata in src/lib/verificaAzienda/simulazione.ts.
+// La nota integrativa dell'ultimo bilancio viene letta e riassunta accanto alla
+// simulazione: dice l'andamento dichiarato dagli amministratori e i piani, e
+// non si trasforma in un tasso inventato.
 
 import { pool } from '@/lib/db';
 import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
@@ -27,7 +36,10 @@ import {
   type ProfiloSimulazione,
 } from '@/lib/verificaAzienda/simulazione';
 import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
-import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
+import { ottieniDatiSettore } from '@/app/actions/datiSettore';
+import { crescitaDaSerie } from '@/lib/piano/automatico';
+import { selezionaNote, type SezioneNota } from '@/lib/xbrl/note';
+import type { DatiFinanziariPeriodo, FactTestuale } from '@/lib/xbrl/types';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -61,7 +73,57 @@ export interface RisultatoVerificaAzienda {
   esito?: EsitoSimulazione;
   debito?: DebitoVerificaAzienda | null;
   simulazioneId?: number;
+  /** Orizzonte usato dal calcolo: il suo, quello dell'azienda o il predefinito. */
+  orizzonte?: { annualita: number; personalizzato: boolean; spazio: number };
+  /** Nota integrativa dell'ultimo bilancio, riassunta: contesto, non un tasso. */
+  nota?: RiepilogoNota | null;
   error?: string;
+}
+
+export interface RiepilogoNota {
+  anno: number | null;
+  sezioni: string[];
+  continuita: string | null;
+  piani: string | null;
+}
+
+export interface RisultatoOrizzonteAzienda {
+  success: boolean;
+  annualita: number;
+  personalizzato: boolean;
+  spazio: number;
+  error?: string;
+}
+
+/** Orizzonte proprio dell'azienda, se ne ha uno; null = vale il predefinito. */
+async function leggiOrizzonteAzienda(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<number | null> {
+  await assicuraTabelleVerificaAzienda(nomeSchema);
+  const r = await pool.query(
+    `SELECT annualita FROM "${nomeSchema}".verifica_azienda_orizzonti WHERE azienda_id = $1`,
+    [aziendaId]
+  );
+  const n = Number(r.rows[0]?.annualita);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(ANNUALITA_MASSIME, Math.max(ANNUALITA_MINIME, n));
+}
+
+/** La nota integrativa dell'ultimo bilancio, ridotta a ciò che serve: sezioni e due testi. */
+function riepilogaNota(fatti: unknown, anno: number | null): RiepilogoNota | null {
+  if (!Array.isArray(fatti) || fatti.length === 0) return null;
+  const note = selezionaNote(fatti as FactTestuale[]);
+  const testo = (sezione: SezioneNota): string | null => {
+    const trovato = note.fatti.find((f) => f.sezione === sezione);
+    return trovato ? trovato.testo.slice(0, 600) : null;
+  };
+  return {
+    anno,
+    sezioni: note.sezioni.map((s) => s.sezione),
+    continuita: testo('CONTINUITA'),
+    piani: testo('PIANI'),
+  };
 }
 
 export async function ottieniConfigVerificaAziendaAction(
@@ -183,6 +245,102 @@ export async function impostaSimulazioneAttivaAction(
   }
 }
 
+/** L'orizzonte di questa azienda: il suo, o il predefinito dello spazio. */
+export async function ottieniOrizzonteAziendaAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<RisultatoOrizzonteAzienda> {
+  const predefinito = {
+    annualita: ANNUALITA_PREDEFINITE,
+    personalizzato: false,
+    spazio: ANNUALITA_PREDEFINITE,
+  };
+  try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    if (!schemaOk(nomeSchema)) {
+      return { success: false, ...predefinito, error: 'Nome schema non valido.' };
+    }
+    const config = await ottieniConfigVerificaAziendaAction(nomeSchema);
+    const proprio = await leggiOrizzonteAzienda(nomeSchema, aziendaId);
+    return {
+      success: true,
+      annualita: proprio ?? config.annualita,
+      personalizzato: proprio !== null,
+      spazio: config.annualita,
+    };
+  } catch (error: unknown) {
+    console.error('[ottieniOrizzonteAziendaAction] Errore:', error);
+    return {
+      success: false,
+      ...predefinito,
+      error: `Impossibile leggere l'orizzonte: ${(error as Error).message}`,
+    };
+  }
+}
+
+/**
+ * Fissa l'orizzonte di questa azienda. `null` toglie l'override e torna al
+ * predefinito dello spazio. Le simulazioni già salvate non si toccano: portano
+ * con sé l'orizzonte con cui sono state calcolate.
+ */
+export async function impostaOrizzonteAziendaAction(
+  nomeSchema: string,
+  aziendaId: number,
+  annualita: number | null
+): Promise<RisultatoOrizzonteAzienda> {
+  try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    if (!schemaOk(nomeSchema)) {
+      return {
+        success: false,
+        annualita: ANNUALITA_PREDEFINITE,
+        personalizzato: false,
+        spazio: ANNUALITA_PREDEFINITE,
+        error: 'Nome schema non valido.',
+      };
+    }
+    if (
+      annualita !== null &&
+      (!Number.isInteger(annualita) ||
+        annualita < ANNUALITA_MINIME ||
+        annualita > ANNUALITA_MASSIME)
+    ) {
+      return {
+        success: false,
+        annualita: ANNUALITA_PREDEFINITE,
+        personalizzato: false,
+        spazio: ANNUALITA_PREDEFINITE,
+        error: `Le annualità di proiezione stanno fra ${ANNUALITA_MINIME} e ${ANNUALITA_MASSIME}.`,
+      };
+    }
+    await assicuraTabelleVerificaAzienda(nomeSchema);
+    if (annualita === null) {
+      await pool.query(
+        `DELETE FROM "${nomeSchema}".verifica_azienda_orizzonti WHERE azienda_id = $1`,
+        [aziendaId]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".verifica_azienda_orizzonti (azienda_id, annualita, updated_at)
+         VALUES ($1, $2, now())
+         ON CONFLICT (azienda_id) DO UPDATE
+           SET annualita = EXCLUDED.annualita, updated_at = now()`,
+        [aziendaId, annualita]
+      );
+    }
+    return ottieniOrizzonteAziendaAction(nomeSchema, aziendaId);
+  } catch (error: unknown) {
+    console.error('[impostaOrizzonteAziendaAction] Errore:', error);
+    return {
+      success: false,
+      annualita: ANNUALITA_PREDEFINITE,
+      personalizzato: false,
+      spazio: ANNUALITA_PREDEFINITE,
+      error: `Impossibile salvare l'orizzonte: ${(error as Error).message}`,
+    };
+  }
+}
+
 /** La simulazione salvata come base degli scenari di accordo transattivo. */
 export async function ottieniSimulazioneBaseAction(
   nomeSchema: string,
@@ -286,7 +444,8 @@ export async function calcolaVerificaAziendaAction(
     await assicuraTabelleVerificaAzienda(nomeSchema);
 
     const config = await ottieniConfigVerificaAziendaAction(nomeSchema);
-    const annualitaScelta = annualita ?? config.annualita;
+    const propria = await leggiOrizzonteAzienda(nomeSchema, aziendaId);
+    const annualitaScelta = annualita ?? propria ?? config.annualita;
 
     const bilancioRis = await pool.query(
       `SELECT anno_bilancio, dati_finanziari FROM "${nomeSchema}".xbrl_storico_azienda
@@ -312,11 +471,50 @@ export async function calcolaVerificaAziendaAction(
         }
       : null;
 
+    // La crescita di settore viene dalla serie ISTAT già in archivio: la
+    // funzione la legge dalla cache e non interroga ISTAT. Se manca, la
+    // traiettoria converge verso ricavi invariati e lo dichiara.
+    let crescitaSettorePct: number | null = null;
+    try {
+      const settoreRis = await ottieniDatiSettore(nomeSchema, aziendaId);
+      if (settoreRis.success && settoreRis.punti.length > 0) {
+        crescitaSettorePct = crescitaDaSerie(settoreRis.punti)?.tasso ?? null;
+      }
+    } catch {
+      crescitaSettorePct = null;
+    }
+
+    // La nota integrativa dell'ultimo bilancio: si mostra accanto alla
+    // simulazione, non diventa un tasso. Se la tabella non c'è (azienda senza
+    // bilanci) la simulazione non deve fallire per questo.
+    let nota: RiepilogoNota | null = null;
+    try {
+      const notaRis = await pool.query(
+        `SELECT anno_bilancio, note_fatti FROM "${nomeSchema}".xbrl_storico_azienda
+          WHERE azienda_id = $1 AND note_fatti IS NOT NULL
+          ORDER BY anno_bilancio DESC NULLS LAST
+          LIMIT 1`,
+        [aziendaId]
+      );
+      const riga = notaRis.rows[0];
+      if (riga) {
+        nota = riepilogaNota(
+          riga.note_fatti,
+          riga.anno_bilancio === null || riga.anno_bilancio === undefined
+            ? null
+            : Number(riga.anno_bilancio)
+        );
+      }
+    } catch {
+      nota = null;
+    }
+
     const esito = colonneSimulazione({
       anni,
       profilo,
       annualita: annualitaScelta,
       debitoEnte: debito?.totale ?? 0,
+      crescitaSettorePct,
     });
 
     let simulazioneId: number | undefined;
@@ -341,7 +539,18 @@ export async function calcolaVerificaAziendaAction(
       simulazioneId = Number(inserita.rows[0]?.id);
     }
 
-    return { success: true, esito, debito, simulazioneId };
+    return {
+      success: true,
+      esito,
+      debito,
+      simulazioneId,
+      orizzonte: {
+        annualita: esito.annualita,
+        personalizzato: propria !== null,
+        spazio: config.annualita,
+      },
+      nota,
+    };
   } catch (error: unknown) {
     console.error('[calcolaVerificaAziendaAction] Errore:', error);
     return { success: false, error: `Simulazione non riuscita: ${(error as Error).message}` };

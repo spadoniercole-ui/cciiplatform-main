@@ -23,6 +23,7 @@ import {
   Gauge,
   Printer,
   ClipboardList,
+  CalendarRange,
 } from 'lucide-react';
 import { ConfigurazioneSpazioFile } from '@/components/spazio/ConfigurazioneSpazioFile';
 
@@ -198,6 +199,13 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
           },
         ]
       : []),
+    {
+      href: `/spazio/${codice}/parametri/orizzonte`,
+      icon: CalendarRange,
+      titolo: 'Orizzonte di proiezione',
+      descrizione:
+        'Quante annualità proietta la simulazione della verifica azienda: è il predefinito dello spazio, e ogni azienda può avere il suo.',
+    },
     {
       href: `/spazio/${codice}/parametri/visualizzazione`,
       icon: History,
