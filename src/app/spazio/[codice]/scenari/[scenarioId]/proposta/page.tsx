@@ -21,6 +21,8 @@ import { crescitaAzienda, crescitaDaSerie } from '@/lib/piano/automatico';
 import { AvvisoPassiDaRivedere } from '@/components/spazio/AvvisoPassiDaRivedere';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { passiDaRivedere } from '@/lib/scenari/situazione';
+import { leggiEsitoPropostaCorrente } from '@/lib/scenari/esitoPropostaCorrente';
+import { leggiStoricoEsitoProposta } from '@/lib/scenari/storicoEsitoProposta';
 
 // L'analisi dei documenti della proposta (Ricevente) è l'operazione AI più
 // pesante di questo flusso — due chiamate in parallelo su più PDF. Senza un
@@ -191,6 +193,15 @@ export default async function PropostaScenarioPage({
     scenario.tipoProposta === 'RICEVUTA'
       ? await ottieniFunzioniPlusSpazio(contesto.nomeSchema)
       : null;
+  // La direzione si dichiara alla chiusura: l'esito corrente e i passaggi già
+  // registrati servono a quella sezione, non alla testata dell'atto.
+  const [esitoCorrente, storicoEsito] =
+    scenario.tipoProposta === 'RICEVUTA' && scenario.tipoIstruttoria === 'PROPOSTA'
+      ? await Promise.all([
+          leggiEsitoPropostaCorrente(contesto.nomeSchema, scenario.id).catch(() => null),
+          leggiStoricoEsitoProposta(contesto.nomeSchema, scenario.id, 20).catch(() => []),
+        ])
+      : [null, []];
   const chiusura =
     scenario.tipoProposta === 'RICEVUTA' && plus
       ? {
@@ -200,6 +211,8 @@ export default async function PropostaScenarioPage({
           eAdminSpazio,
           identitaUtente,
           bloccatoIl: scenario.bloccatoIl,
+          esito: esitoCorrente,
+          storicoEsito,
         }
       : undefined;
 

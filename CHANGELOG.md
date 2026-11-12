@@ -1,3 +1,19 @@
+## 0.214.0 — 2026-11-12
+
+- **Il report della verifica amministrativa è un documento, non una pagina mandata in stampa.**
+  Il difetto era nel guscio: la stampa prendeva la schermata con sidebar, barra di ispezione e
+  contenitore scorrevole, e si fermava alla prima pagina. In stampa il guscio ora non c'è e il
+  contenitore torna alto quanto il documento; il report è stato ridisegnato — frontespizio, sintesi
+  in quattro numeri (esito, copertura, data della verifica, debito certo), esito con accertato e da
+  accertare, **debito dell'ente con la sua scomposizione e la fonte**, lettura, i percorsi distinti
+  con gli esiti della proposta in tabella, elementi letti numerati, limiti e piede — impaginato su
+  A4 con filetti e sezioni numerate.
+- **La direzione dello scenario si dichiara alla fine.** La conferma dell'esito della proposta —
+  definizione dell'accordo, presentazione al tribunale, cram down — è tornata nella pagina dello
+  scenario, sotto PIN, ma nel punto in cui si decide: la chiusura dell'analisi, accanto alla
+  Relazione. Nella testata dell'atto resta solo la natura, senza la riga sull'esito; nella pagina
+  «Natura ed esito» l'esito si legge con i passaggi registrati e si cambia alla chiusura.
+
 ## 0.213.0 — 2026-11-12
 
 - **Ricavi e costi non crescono più della stessa misura.** Il profilo della simulazione applicava

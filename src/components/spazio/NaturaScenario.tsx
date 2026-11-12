@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { History } from 'lucide-react';
 import { etichettaIstruttoria, type TipoIstruttoria } from '@/lib/giudice/lettura';
 import { dataItaliana } from '@/lib/scenari/situazione';
-import { ESITI_PROPOSTA, type EsitoProposta } from '@/lib/scenari/esitoProposta';
 
 // LA NATURA DELLO SCENARIO, IN SOLA LETTURA (0.211.0).
 //
@@ -23,7 +22,6 @@ export function NaturaScenario({
   cambiataIl,
   rivedere,
   vociCronologia,
-  esito,
 }: {
   codice: string;
   scenarioId: number;
@@ -34,8 +32,6 @@ export function NaturaScenario({
   rivedere?: string[];
   /** Quante voci ha la cronologia: serve solo a dire se c'è da leggere. */
   vociCronologia?: number;
-  /** L'esito dichiarato della proposta: si legge qui, si cambia nella pagina dedicata. */
-  esito?: EsitoProposta | null;
 }) {
   const base = `/spazio/${codice}/scenari/${scenarioId}`;
   const attuale = etichettaIstruttoria(situazione);
@@ -81,14 +77,6 @@ export function NaturaScenario({
           : ''}
         .
       </p>
-      {situazione === 'PROPOSTA' && (
-        <p className="text-[10px] text-slate-700 leading-relaxed print:block">
-          <strong>Esito della proposta in valutazione:</strong>{' '}
-          {esito
-            ? `${ESITI_PROPOSTA.find((e) => e.codice === esito)?.etichetta} — decide ${ESITI_PROPOSTA.find((e) => e.codice === esito)?.chiDecide}.`
-            : 'nessuno dichiarato.'}
-        </p>
-      )}
       {cambiataIl && (
         <div className="text-[10px] text-amber-900 bg-amber-50 border border-amber-200 rounded-md p-2 leading-relaxed print:block">
           <span className="font-bold">Natura cambiata il {dataItaliana(cambiataIl)}.</span>{' '}

@@ -27,7 +27,15 @@ h6 {
    scuro anche se chi lo scrive dimentica di dichiararlo («bianco su bianco»,
    rilievo ricorrente di Ercole). :where() ha specificita' zero, cosi' le
    classi text-* di Tailwind, se presenti, vincono comunque. */
-:where(.bg-white, .bg-slate-50, .bg-slate-100, .bg-blue-50, .bg-amber-50, .bg-emerald-50, .bg-red-50) {
+:where(
+  .bg-white,
+  .bg-slate-50,
+  .bg-slate-100,
+  .bg-blue-50,
+  .bg-amber-50,
+  .bg-emerald-50,
+  .bg-red-50
+) {
   color: rgb(15 23 42); /* slate-900 */
 }
 :where(.bg-white, .bg-slate-50) :where(input, select, textarea) {
@@ -48,5 +56,29 @@ h6 {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* STAMPA (0.214.0). Il guscio dell'applicazione non finisce sulla carta: la
+   sidebar e le barre di stato sono nascoste dai loro stessi contenitori con
+   `print:hidden`, e il contenitore scorrevole torna alto quanto il documento.
+   Senza queste regole il browser stampava solo la prima schermata, tagliando
+   il resto del report. */
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm 14mm;
+  }
+  html,
+  body {
+    height: auto !important;
+    background: #fff !important;
+    color: #0f172a;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  a {
+    text-decoration: none;
+    color: inherit;
   }
 }

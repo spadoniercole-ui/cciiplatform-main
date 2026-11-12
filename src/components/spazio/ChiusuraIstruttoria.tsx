@@ -8,7 +8,10 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SlidersHorizontal, FileCheck2 } from 'lucide-react';
 import { RelazioneAiScenario } from '@/components/spazio/RelazioneAiScenario';
+import { EsitoPropostaScenario } from '@/components/spazio/EsitoPropostaScenario';
 import { attivaPianoSviluppoAction } from '@/app/actions/scenari';
+import type { EsitoProposta } from '@/lib/scenari/esitoProposta';
+import type { VoceStoricoEsitoProposta } from '@/lib/scenari/storicoEsitoProposta';
 
 export interface DatiChiusura {
   simulazioneAttiva: boolean;
@@ -17,6 +20,9 @@ export interface DatiChiusura {
   eAdminSpazio: boolean;
   identitaUtente: string | null;
   bloccatoIl: string | null;
+  /** L'esito dichiarato della proposta e i passaggi registrati. */
+  esito?: EsitoProposta | null;
+  storicoEsito?: VoceStoricoEsitoProposta[];
 }
 
 export function ChiusuraIstruttoria({
@@ -92,8 +98,25 @@ export function ChiusuraIstruttoria({
           <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">
             4
           </span>
-          Chiusura — la Relazione
+          Chiusura — la direzione e la Relazione
         </h3>
+
+        {/* LA DIREZIONE SI DECIDE IN FONDO. L'esito della proposta è la scelta
+            che chiude l'analisi — accordo definito, apertura della liquidazione
+            o cram down — e si dichiara qui, dopo che tutto il resto è stato
+            letto, non nella testata dell'atto dove sembrava un'etichetta. */}
+        <div id="esito" className="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            La direzione che si dichiara
+          </p>
+          <EsitoPropostaScenario
+            nomeSchema={nomeSchema}
+            scenarioId={scenarioId}
+            esito={dati.esito ?? null}
+            bloccato={Boolean(dati.bloccatoIl)}
+            storico={dati.storicoEsito ?? []}
+          />
+        </div>
         {dati.relazioneDisponibile ? (
           <RelazioneAiScenario
             nomeSchema={nomeSchema}

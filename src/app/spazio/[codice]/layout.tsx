@@ -38,7 +38,7 @@ export default async function LayoutSpazio({
   return (
     <ContestoAssistenteProvider>
       <DemoUploadProvider attivo={Boolean(contesto.demo)}>
-        <div className="flex h-screen bg-slate-50">
+        <div className="flex h-screen bg-slate-50 print:block print:h-auto print:bg-white">
           <SidebarSpazio
             codice={contesto.codice}
             descrizione={contesto.descrizione}
@@ -46,9 +46,9 @@ export default async function LayoutSpazio({
             permessi={contesto.permessi}
           />
 
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible">
             {contesto.modalita === 'SALVAGENTE' && (
-              <div className="bg-amber-50 border-b border-amber-200 text-amber-800 px-6 py-2 flex items-center justify-between text-xs">
+              <div className="bg-amber-50 border-b border-amber-200 text-amber-800 px-6 py-2 flex items-center justify-between text-xs print:hidden">
                 <div className="flex items-center gap-2">
                   <ShieldAlert className="w-3.5 h-3.5" />
                   <span className="font-bold uppercase tracking-wider">Modalità Ispezione</span>
@@ -72,13 +72,15 @@ export default async function LayoutSpazio({
             )}
 
             {(contesto.modalita === 'ADMIN_SPAZIO' || contesto.modalita === 'OPERATORE') && (
-              <TopStatusBar
-                nomeUtente={contesto.descrizione}
-                ruolo={contesto.modalita === 'ADMIN_SPAZIO' ? 'Admin di Spazio' : 'Operatore'}
-              />
+              <div className="print:hidden">
+                <TopStatusBar
+                  nomeUtente={contesto.descrizione}
+                  ruolo={contesto.modalita === 'ADMIN_SPAZIO' ? 'Admin di Spazio' : 'Operatore'}
+                />
+              </div>
             )}
 
-            <main className="flex-1 overflow-y-auto p-6">
+            <main className="flex-1 overflow-y-auto p-6 print:overflow-visible print:p-0">
               <ParametriStampaLoader nomeSchema={contesto.nomeSchema} />
               {children}
             </main>

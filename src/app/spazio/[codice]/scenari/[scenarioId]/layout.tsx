@@ -14,7 +14,6 @@ import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
 import { NaturaScenario } from '@/components/spazio/NaturaScenario';
 import { StampaSchedaScenario } from '@/components/spazio/StampaSchedaScenario';
-import { esitoPropostaValido } from '@/lib/scenari/esitoProposta';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { passiDaRivedere } from '@/lib/scenari/situazione';
 import { leggiStoricoSituazione } from '@/lib/scenari/storicoSituazione';
@@ -92,20 +91,6 @@ export default async function ScenarioLayout({
     ? await leggiStoricoSituazione(contesto.nomeSchema, scenario.id).catch(() => [])
     : [];
 
-  // L'esito della proposta vive in una colonna del tenant e si legge a parte,
-  // come la base della verifica: non passa da Drizzle. Assenza o valore
-  // illeggibile valgono «non dichiarato».
-  const esitoProposta = await (async () => {
-    const { pool } = await import('@/lib/db');
-    const righe = await pool
-      .query(`SELECT esito_proposta FROM "${contesto.nomeSchema}".scenari WHERE id = $1`, [
-        scenario.id,
-      ])
-      .catch(() => null);
-    const valore = righe?.rows[0]?.esito_proposta;
-    return esitoPropostaValido(valore) ? valore : null;
-  })();
-
   const base = `/spazio/${codice}/scenari/${scenarioId}`;
   // Testata dell'azienda: identificativi presso l'ente in evidenza.
   const riferimento = await leggiRiferimentoAzienda(contesto.nomeSchema, scenario.aziendaId).catch(
@@ -138,7 +123,6 @@ export default async function ScenarioLayout({
                 cambiataIl={scenario.situazioneCambiataIl}
                 rivedere={passiScenario}
                 vociCronologia={storicoSituazione.length}
-                esito={esitoProposta}
               />
               {riferimento && (
                 <p className="mt-1">

@@ -117,7 +117,7 @@ export function SidebarSpazio({ codice, descrizione, modalita, permessi }: Props
         : 'Operatore';
 
   return (
-    <aside className="w-64 shrink-0 bg-slate-950 text-slate-300 h-screen flex flex-col border-r border-slate-800">
+    <aside className="w-64 shrink-0 bg-slate-950 text-slate-300 h-screen flex flex-col border-r border-slate-800 print:hidden">
       <div className="p-4 border-b border-slate-800">
         <Logo variante="icon" dimensione={26} className="mb-2" />
         <div className="text-white font-black text-sm tracking-wider uppercase truncate">

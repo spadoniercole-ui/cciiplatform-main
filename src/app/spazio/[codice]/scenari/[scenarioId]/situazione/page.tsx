@@ -9,8 +9,7 @@ import { leggiStoricoSblocchi } from '@/lib/scenari/storicoSblocchi';
 import { dataItaliana } from '@/lib/scenari/situazione';
 import { etichettaIstruttoria, type TipoIstruttoria } from '@/lib/giudice/lettura';
 import { SituazioneScenario } from '@/components/spazio/SituazioneScenario';
-import { EsitoPropostaScenario } from '@/components/spazio/EsitoPropostaScenario';
-import { esitoPropostaValido } from '@/lib/scenari/esitoProposta';
+import { ESITI_PROPOSTA, esitoPropostaValido } from '@/lib/scenari/esitoProposta';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { passiDaRivedere } from '@/lib/scenari/situazione';
 
@@ -112,22 +111,56 @@ export default async function CronologiaSituazionePage({
         />
       </div>
 
-      {/* L'ESITO DELLA PROPOSTA SI DICHIARA QUI. È un'ipotesi da valutare, e
-          resta fuori dal lavoro dello scenario come la natura: si legge nella
-          scheda, si cambia in questa pagina. */}
+      {/* L'ESITO DELLA PROPOSTA SI DICHIARA ALLA CHIUSURA. Qui resta leggibile,
+          con i passaggi registrati: la scelta appartiene alla fine dell'analisi,
+          dove si decide in che direzione andare, non alla testata dell'atto. */}
       {scenario.tipoIstruttoria === 'PROPOSTA' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5">
-          <h2 className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-700">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-2">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
             Esito della proposta
           </h2>
-          <EsitoPropostaScenario
-            nomeSchema={contesto.nomeSchema}
-            scenarioId={scenario.id}
-            esito={esitoProposta}
-            bloccato={Boolean(scenario.bloccatoIl)}
-            demo={contesto.demo}
-            storico={storicoEsito}
-          />
+          <p className="text-sm font-bold text-slate-900">
+            {esitoProposta
+              ? `In valutazione: ${ESITI_PROPOSTA.find((e) => e.codice === esitoProposta)?.etichetta}`
+              : 'Nessuna direzione dichiarata'}
+          </p>
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            La direzione si dichiara alla chiusura dell’analisi — sotto PIN, perché è un atto
+            firmato — e resta scritta nella cronologia qui sotto. Da questa pagina non si cambia.
+          </p>
+          <Link
+            href={`/spazio/${codice}/scenari/${scenario.id}/proposta#esito`}
+            className="inline-flex text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+          >
+            Vai alla chiusura dell’analisi →
+          </Link>
+          {storicoEsito.length > 0 && (
+            <div className="border-t border-slate-200 pt-2">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                Passaggi dell’esito ({storicoEsito.length})
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {storicoEsito.map((voce, i) => (
+                  <li key={`${voce.cambiatoIl}-${i}`} className="text-[10px] text-slate-600">
+                    <span className="text-slate-400">
+                      {voce.cambiatoIl
+                        ? new Date(voce.cambiatoIl).toLocaleDateString('it-IT')
+                        : 'data non registrata'}
+                    </span>{' '}
+                    — da{' '}
+                    {voce.da
+                      ? (ESITI_PROPOSTA.find((e) => e.codice === voce.da)?.etichetta ?? voce.da)
+                      : 'nessun esito'}{' '}
+                    a{' '}
+                    {voce.a
+                      ? (ESITI_PROPOSTA.find((e) => e.codice === voce.a)?.etichetta ?? voce.a)
+                      : 'nessun esito'}
+                    {voce.autore ? ` · ${voce.autore}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
