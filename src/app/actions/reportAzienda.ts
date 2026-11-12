@@ -53,6 +53,8 @@ import {
   raccomandaDecisione,
   type EsitoAmministrativo,
 } from '@/lib/verificaAmministrativa/raccomandazione';
+import { etichettaIstruttoria, type TipoIstruttoria } from '@/lib/giudice/lettura';
+import { esitoPropostaValido } from '@/lib/scenari/esitoProposta';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -353,6 +355,29 @@ async function raccogliFonti(
     ? (bilancioRecente.datiFinanziari.patrimonioNetto ?? null)
     : null;
 
+  // Gli scenari dell'azienda: il report cita l'esito che si sta valutando, non
+  // lo ricalcola. La colonna può mancare in un tenant non ancora provisionato:
+  // in quel caso la sezione non c'è, e non è un errore.
+  let proposte: FontiReport['proposte'] = null;
+  try {
+    const r = await pool.query(
+      `SELECT id, nome, tipo_istruttoria, esito_proposta, archiviato
+         FROM "${nomeSchema}".scenari
+        WHERE azienda_id = $1
+        ORDER BY id DESC`,
+      [aziendaId]
+    );
+    proposte = r.rows.map((x) => ({
+      scenarioId: Number(x.id),
+      nome: String(x.nome ?? 'Scenario'),
+      situazione: etichettaIstruttoria(x.tipo_istruttoria as TipoIstruttoria),
+      esito: esitoPropostaValido(x.esito_proposta) ? x.esito_proposta : null,
+      archiviato: x.archiviato === true,
+    }));
+  } catch {
+    proposte = null;
+  }
+
   const risposte = new Map((stato?.risposte ?? []).map((r) => [r.domandaId, r.risposta]));
   const questionario = inclusioni.questionario
     ? (stato?.sezioni ?? []).map((sezione) => ({
@@ -398,6 +423,7 @@ async function raccogliFonti(
     soglie25,
     mappa,
     questionario,
+    proposte,
     // La raccomandazione si compone dagli stessi fatti già letti qui: nessuna
     // interrogazione in più, e il documento la riporta com'era al momento
     // dell'emissione.

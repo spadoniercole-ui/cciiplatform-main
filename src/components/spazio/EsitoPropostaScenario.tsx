@@ -61,14 +61,16 @@ export function EsitoPropostaScenario({
         <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
           <Scale className="w-3 h-3" /> Esito che si sta valutando
         </p>
-        {inCorso && <span className="text-[9px] text-slate-400">Salvataggio…</span>}
+        {inCorso && <span className="text-[9px] text-slate-400 print:hidden">Salvataggio…</span>}
       </div>
       <p className="text-[10px] text-slate-500 leading-relaxed">
         La proposta si definisce con il voto dei creditori, oppure passa al tribunale, oppure viene
         resa efficace dal giudice. Indica quale stai valutando: è un’ipotesi dichiarata, e lo
         scenario la porta con sé.
       </p>
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* I comandi non sono parte del documento: in stampa resta l'esito
+          dichiarato, non i bottoni per cambiarlo. */}
+      <div className="flex flex-wrap items-center gap-1.5 print:hidden">
         {ESITI_PROPOSTA.map((e) => {
           const attivo = scelto === e.codice;
           return (
@@ -99,16 +101,18 @@ export function EsitoPropostaScenario({
           </button>
         )}
       </div>
-      <p className="text-[10px] text-slate-500 leading-relaxed">
+      <p className="text-[10px] text-slate-700 leading-relaxed font-bold">
         {scelto
-          ? `Decide ${ESITI_PROPOSTA.find((e) => e.codice === scelto)?.chiDecide}.`
-          : 'Nessun esito dichiarato: lo scenario resta una proposta da valutare.'}
+          ? `Esito in valutazione: ${ESITI_PROPOSTA.find((e) => e.codice === scelto)?.etichetta} — decide ${ESITI_PROPOSTA.find((e) => e.codice === scelto)?.chiDecide}.`
+          : 'Esito in valutazione: nessuno dichiarato — lo scenario resta una proposta da valutare.'}
       </p>
       <p className="text-[10px] text-slate-500 leading-relaxed italic border-l-2 border-amber-300 pl-2 print:block">
         {MESSAGGIO_NON_EQUIPARABILI}
       </p>
-      {errore && <p className="text-[10px] font-bold text-red-700">{errore}</p>}
-      {messaggio && <p className="text-[10px] font-bold text-emerald-700">{messaggio}</p>}
+      {errore && <p className="text-[10px] font-bold text-red-700 print:hidden">{errore}</p>}
+      {messaggio && (
+        <p className="text-[10px] font-bold text-emerald-700 print:hidden">{messaggio}</p>
+      )}
     </div>
   );
 }

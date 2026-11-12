@@ -269,3 +269,62 @@ describe('componiReport', () => {
     expect(riscontri.nota).toMatch(/non accerta lo stato di crisi/i);
   });
 });
+
+describe('proposte ed esiti valutati', () => {
+  it('cita l’esito dichiarato con chi decide, senza confonderlo con l’accordo', () => {
+    const { sezioni } = componiReport(
+      fonti({
+        proposte: [
+          {
+            scenarioId: 7,
+            nome: 'Accordo Sanmichele',
+            situazione: 'Proposta',
+            esito: 'CRAM_DOWN',
+            archiviato: false,
+          },
+        ],
+      }),
+      inclusioniTutte
+    );
+    const sezione = sezioni.find((s) => s.id === 'proposte')!;
+    expect(sezione.tipo).toBe('elenco');
+    const testo = JSON.stringify(sezione);
+    expect(testo).toContain('Accordo Sanmichele');
+    expect(testo).toContain('Cram down');
+    expect(testo).toContain('provvedimento');
+    expect(testo).toContain('non previsioni');
+  });
+
+  it('se l’esito non è dichiarato lo dice, e la definizione dell’accordo resta dal voto', () => {
+    const { sezioni } = componiReport(
+      fonti({
+        proposte: [
+          {
+            scenarioId: 8,
+            nome: 'Proposta Tessitura',
+            situazione: 'Proposta',
+            esito: 'DEFINIZIONE_ACCORDO',
+            archiviato: true,
+          },
+          {
+            scenarioId: 9,
+            nome: 'Proposta senza esito',
+            situazione: 'Proposta',
+            esito: null,
+            archiviato: false,
+          },
+        ],
+      }),
+      inclusioniTutte
+    );
+    const testo = JSON.stringify(sezioni.find((s) => s.id === 'proposte'));
+    expect(testo).toContain('archiviato');
+    expect(testo).toContain('voto');
+    expect(testo).toContain('esito della proposta non dichiarato');
+  });
+
+  it('senza scenari la sezione non c’è', () => {
+    const { sezioni } = componiReport(fonti({ proposte: [] }), inclusioniTutte);
+    expect(sezioni.some((s) => s.id === 'proposte')).toBe(false);
+  });
+});

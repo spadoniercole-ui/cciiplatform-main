@@ -1,3 +1,14 @@
+## 0.210.0 — 2026-11-12
+
+- **L'esito della proposta entra nel report dell'azienda.** Nuova sezione «Proposte ed esiti
+  valutati»: gli scenari dell'azienda con l'atto e l'esito dichiarato — definizione dell'accordo,
+  apertura della liquidazione giudiziale, cram down — ciascuno con **chi decide**. È la fotografia
+  di ciò che è stato messo in valutazione, non un secondo giudizio: la nota ripete che sono
+  ipotesi e che accordo e cram down non si equiparano.
+- **Nella stampa della scheda scenario** l'esito compare come riga del documento («Esito in
+  valutazione: … — decide …»), mentre i comandi per cambiarlo restano a video e non finiscono
+  sulla carta.
+
 ## 0.209.0 — 2026-11-12
 
 - **Il report dell'amministrativa separa i percorsi.** La raccomandazione non scrive più «accordo

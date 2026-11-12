@@ -20,6 +20,7 @@ import { VOCI_MAPPA } from '@/lib/verificaAzienda/simulazione';
 import type { Riscontri } from '@/lib/normativa/riscontri';
 import type { FattiVisura } from '@/lib/visura/fatti';
 import type { EsitoRaccomandazione } from '@/lib/verificaAmministrativa/raccomandazione';
+import { ESITI_PROPOSTA, type EsitoProposta } from '@/lib/scenari/esitoProposta';
 
 // ---- Cosa includere ------------------------------------------------------
 
@@ -160,6 +161,19 @@ export interface FonteSoglie25 {
   nonApplicabiliPerDatiMancanti: number;
 }
 
+/**
+ * Uno scenario dell'azienda con l'esito che si sta valutando. Il report lo
+ * cita com'è: l'esito è un'ipotesi dichiarata, non un calcolo del documento.
+ */
+export interface FonteProposta {
+  scenarioId: number;
+  nome: string;
+  /** L'atto, in forma leggibile: proposta, decreto, cram down. */
+  situazione: string;
+  esito: EsitoProposta | null;
+  archiviato: boolean;
+}
+
 export interface FontiReport {
   ragioneSociale: string;
   partitaIva: string | null;
@@ -178,6 +192,8 @@ export interface FontiReport {
    * regole: il report la riporta com’è e non la ricalcola.
    */
   raccomandazione?: EsitoRaccomandazione | null;
+  /** Gli scenari dell'azienda, con l'esito della proposta se dichiarato. */
+  proposte?: FonteProposta[] | null;
 }
 
 // ---- Il report composto --------------------------------------------------
@@ -409,6 +425,29 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
       tipo: 'testo',
       testo,
       nota: 'Ordine di priorità fra le strade possibili, non una conclusione giuridica: la scelta resta all’ente.',
+    });
+  }
+
+  // 2-ter. Le proposte dell'azienda e l'esito che si sta valutando. Non è un
+  //      doppione del supporto decisionale: quello dice quale strada valutare,
+  //      questo dice che cosa è stato messo in valutazione su questa azienda e
+  //      con quale esito dichiarato — un'ipotesi, non una previsione.
+  if (fonti.proposte && fonti.proposte.length > 0) {
+    const voci: VociReport[] = fonti.proposte.map((p) => {
+      const esito = p.esito ? ESITI_PROPOSTA.find((e) => e.codice === p.esito) : null;
+      return {
+        etichetta: `${p.nome} — ${p.situazione}${p.archiviato ? ' (archiviato)' : ''}`,
+        valore: esito
+          ? `${esito.etichetta} · decide ${esito.chiDecide}`
+          : 'esito della proposta non dichiarato',
+      };
+    });
+    sezioni.push({
+      id: 'proposte',
+      titolo: 'Proposte ed esiti valutati',
+      tipo: 'elenco',
+      voci,
+      nota: 'Esiti dichiarati negli scenari: sono ipotesi da valutare, non previsioni. La definizione dell’accordo passa dal voto dei creditori; il cram down dal provvedimento del giudice.',
     });
   }
 
