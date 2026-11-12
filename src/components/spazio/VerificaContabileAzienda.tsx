@@ -391,7 +391,7 @@ export function VerificaContabileAzienda({
             4. Prospetto a scalare e indici
           </h2>
           <Link
-            href={`${base}/fotografia`}
+            href={`/spazio/${codice}/verifica-contabile/${aziendaId}/fotografia`}
             className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
           >
             Fotografia contabile (stampabile) →

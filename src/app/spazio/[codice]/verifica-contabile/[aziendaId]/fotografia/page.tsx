@@ -8,7 +8,7 @@ import { ottieniIndiciSpazio } from '@/app/actions/parametriSpazio';
 import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
 import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati';
 import { componiFotografia, VOCI_FOTOGRAFIA } from '@/lib/contabile/fotografia';
-import { StampaFotografia } from '@/components/spazio/StampaFotografia';
+import { StampaDocumento } from '@/components/spazio/StampaDocumento';
 
 // LA FOTOGRAFIA CONTABILE (0.207.0).
 //
@@ -88,7 +88,7 @@ export default async function FotografiaContabilePage({
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Torna alla verifica contabile
         </Link>
-        <StampaFotografia />
+        <StampaDocumento etichetta="Stampa la fotografia" />
       </div>
 
       <header className="bg-white border border-slate-200 rounded-xl p-6 space-y-2">

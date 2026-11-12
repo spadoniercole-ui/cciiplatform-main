@@ -214,7 +214,7 @@ export default async function EsitoVerificaAmministrativaPage({
                     {p.etichetta}
                     {p.codice === raccomandazione.percorsoConsigliato && (
                       <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-blue-700">
-                        da valutare per primo
+                        primo confronto
                       </span>
                     )}
                   </p>
@@ -295,6 +295,12 @@ export default async function EsitoVerificaAmministrativaPage({
               className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
             >
               Apri gli scenari →
+            </Link>
+            <Link
+              href={`/spazio/${codice}/verifica-salute/${id}/supporto`}
+              className="text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:text-slate-900"
+            >
+              Report stampabile →
             </Link>
           </div>
 

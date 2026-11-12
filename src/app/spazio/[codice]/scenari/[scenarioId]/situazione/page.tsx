@@ -7,6 +7,9 @@ import { leggiStoricoSituazione } from '@/lib/scenari/storicoSituazione';
 import { leggiStoricoSblocchi } from '@/lib/scenari/storicoSblocchi';
 import { dataItaliana } from '@/lib/scenari/situazione';
 import { etichettaIstruttoria, type TipoIstruttoria } from '@/lib/giudice/lettura';
+import { SituazioneScenario } from '@/components/spazio/SituazioneScenario';
+import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
+import { passiDaRivedere } from '@/lib/scenari/situazione';
 
 // LA CRONOLOGIA COMPLETA (0.193.0).
 //
@@ -35,6 +38,18 @@ export default async function CronologiaSituazionePage({
     leggiStoricoSblocchi(contesto.nomeSchema, scenario.id, 200).catch(() => []),
   ]);
 
+  // I passi da rivedere dopo un cambio, e il comando di annullamento riservato
+  // all'Admin: qui si amministra l'atto, quindi possono stare in questa pagina.
+  const passi = scenario.situazioneCambiataIl
+    ? passiDaRivedere(
+        await leggiPassiCompilati(contesto.nomeSchema, scenario.id).catch(() => ({
+          propostaRighe: 0,
+          risposteChecklist: 0,
+        }))
+      )
+    : [];
+  const puoAnnullare = contesto.modalita === 'ADMIN_SPAZIO' || contesto.modalita === 'SALVAGENTE';
+
   return (
     <div className="space-y-4">
       <Link
@@ -56,6 +71,26 @@ export default async function CronologiaSituazionePage({
           Ogni cambio e ogni annullamento restano scritti: la cronologia non si cancella. Gli
           sblocchi sono elencati sotto, con il motivo dichiarato da chi li ha fatti.
         </p>
+      </div>
+
+      {/* LA NATURA SI CAMBIA QUI, FUORI DALLA FASE OPERATIVA. Lo scenario
+          mostra solo quale atto sta valutando: cambiarlo è un atto firmato,
+          che si compie in questa pagina e non mentre si lavora. */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5">
+        <SituazioneScenario
+          nomeSchema={contesto.nomeSchema}
+          scenarioId={scenario.id}
+          situazione={scenario.tipoIstruttoria ?? 'PROPOSTA'}
+          origine={scenario.origineProposta}
+          bloccato={Boolean(scenario.bloccatoIl)}
+          demo={contesto.demo}
+          cambiataIl={scenario.situazioneCambiataIl}
+          rivedere={passi}
+          storico={storico}
+          sblocchi={sblocchi}
+          codice={codice}
+          puoAnnullare={puoAnnullare}
+        />
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-5">

@@ -15,12 +15,12 @@
 // scrive più «accordo con cram down»: indica il percorso, e gli esiti della
 // proposta restano esiti, elencati uno per uno in `percorsi`.
 //
-// REGOLE, NON GIUDIZI. Non c'è AI e non c'è una probabilità: si leggono i fatti
+// STRUMENTI, NON CONSIGLI (0.211.0). La piattaforma non consiglia e non guida: si leggono i fatti
 // già accertati dalla verifica (esito, copertura, patrimonio netto, indici oltre
 // soglia, debito dell'ente, dati contabili presenti) e si applicano soglie
-// dichiarate. La formula resta quella che l'utente ha chiesto — «si consiglia di
-// valutare» — perché la scelta è dell'ente, non della piattaforma: qui non si
-// scrive mai «si deve», né «è insolvente».
+// dichiarate. Le voci descrivono che cosa è disponibile e che cosa manca: la
+// decisione non dipende dall'applicativo, che è uno strumento di supporto. Qui
+// non si scrive mai «si deve», né «è insolvente».
 //
 // Perché non entra il DSCR: dal solo bilancio non è calcolabile (manca la rata).
 // Il limite è dichiarato fra i `limiti`, non nascosto.
@@ -65,7 +65,7 @@ export interface AzioneConsigliata {
 
 export interface EsitoRaccomandazione {
   direzione: Direzione;
-  /** Sempre nella forma «Si consiglia di valutare…»: proposta, non prescrizione. */
+  /** Descrittivo: dice che cosa è disponibile, non che cosa fare. */
   titolo: string;
   sintesi: string;
   motivi: string[];
@@ -88,7 +88,7 @@ export const SOGLIA_INDICI_GRAVI = 3;
 const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
 
 const LIMITI_COMUNI = [
-  'La raccomandazione è un ordine di priorità fra le strade possibili, non una conclusione giuridica: la scelta resta all’ente.',
+  'Questa lettura accosta le strade possibili e i fatti che le riguardano: non formula una scelta e non è una conclusione giuridica — la decisione resta all’ente e non dipende dalla piattaforma.',
   'Il DSCR non si calcola dal bilancio depositato (serve la rata del piano): si legge sugli scenari, dove il piano di rientro la definisce.',
   'Gli esiti della proposta sono ipotesi da valutare, non previsioni: li producono il voto dei creditori e il provvedimento del giudice.',
 ];
@@ -130,9 +130,10 @@ export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccom
     }
     return {
       direzione: 'CONTABILE',
-      titolo: 'Si consiglia di completare la verifica contabile prima di ogni altra scelta',
+      titolo:
+        'Verifica contabile incompleta: il confronto con accordo e liquidazione non è ancora possibile',
       sintesi:
-        'La situazione debitoria verso l’ente è accertata, ma manca il dato contabile che dice se l’impresa può sostenerla. È il passaggio che rende confrontabili le due strade — accordo o liquidazione — invece di sceglierle a intuito.',
+        'La situazione debitoria verso l’ente è accertata, ma manca il dato contabile che dice se l’impresa può sostenerla. Senza quel dato accordo e liquidazione non sono confrontabili: la piattaforma espone i fatti disponibili e segnala quello che manca.',
       motivi,
       azioni: [
         {
@@ -158,9 +159,9 @@ export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccom
     );
     return {
       direzione: 'LIQUIDAZIONE',
-      titolo: 'Si consiglia di valutare la liquidazione giudiziale',
+      titolo: 'Quadro contabile grave: il confronto con la liquidazione giudiziale è disponibile',
       sintesi:
-        'Il patrimonio netto è negativo e gli indici di bilancio sono oltre soglia su più dimensioni: il confronto con la liquidazione va fatto prima di qualsiasi ipotesi di accordo, e con i valori di realizzo configurati nello spazio. La liquidazione non è un piano: è l’apertura della procedura.',
+        'Patrimonio netto negativo e indici di bilancio oltre soglia su più dimensioni. Il confronto con la liquidazione giudiziale è disponibile, con i valori di realizzo configurati nello spazio: la liquidazione non è un piano, è l’apertura della procedura.',
       motivi,
       azioni: [
         {
@@ -181,7 +182,7 @@ export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccom
     };
   }
 
-  // 3. CRITICITÀ NON GRAVI, O SEGNALAZIONE SUPERATA: L'ACCORDO VA VALUTATO.
+  // 3. CRITICITÀ NON GRAVI, O SEGNALAZIONE SUPERATA: IL CONFRONTO CON L'ACCORDO È DISPONIBILE.
   //    Il percorso è la proposta da votare; cram down e apertura della
   //    liquidazione restano esiti, non sinonimi del percorso.
   if (pnNegativo || almenoUnIndice || input.esito === 'ROSSO') {
@@ -195,10 +196,9 @@ export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccom
     }
     return {
       direzione: 'ACCORDO_TRANSATTIVO',
-      titolo:
-        'Si consiglia di valutare un accordo transattivo, da sottoporre al voto dei creditori',
+      titolo: 'Criticità accertate non gravi: il confronto con l’accordo transattivo è disponibile',
       sintesi:
-        'Le criticità sono accertate ma non assumono, dai dati disponibili, la forma del quadro grave: la strada da valutare è una proposta di accordo transattivo, che si definisce con il voto dei creditori. Dalla stessa proposta possono discendere la presentazione al tribunale con l’apertura della liquidazione giudiziale, oppure il cram down — che però è un atto diverso: un piano reso efficace dal provvedimento del giudice, senza il consenso dei creditori.',
+        'Le criticità sono accertate ma non assumono, dai dati disponibili, la forma del quadro grave. Il confronto con una proposta di accordo transattivo è disponibile: l’accordo si definisce con il voto dei creditori, e dalla stessa proposta possono discendere la presentazione al tribunale con l’apertura della liquidazione giudiziale, oppure il cram down — che è un altro atto: un piano reso efficace dal provvedimento del giudice, senza il consenso dei creditori.',
       motivi,
       azioni: [
         {
@@ -221,9 +221,9 @@ export function raccomandaDecisione(input: IngressoRaccomandazione): EsitoRaccom
   // 4. NESSUNA CRITICITÀ: IL PERCORSO ORDINARIO, CON IL DEBITO A VISTA.
   return {
     direzione: 'ORDINARIO',
-    titolo: 'Si consiglia di proseguire nel percorso ordinario, tenendo il debito a vista',
+    titolo: 'Nessuna criticità rilevata: resta aperto il percorso ordinario',
     sintesi:
-      'Dai dati disponibili non emergono elementi che impongano di scegliere fra accordo e liquidazione. Il debito dell’ente resta il dato da presidiare, e la verifica contabile è completa: la posizione si aggiorna quando cambiano i documenti.',
+      'Dai dati disponibili non emergono elementi che impongano di confrontare accordo e liquidazione. Il debito dell’ente resta il dato da presidiare; la verifica contabile è completa e questa lettura si aggiorna quando cambiano i documenti.',
     motivi,
     azioni: [
       {

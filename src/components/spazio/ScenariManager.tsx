@@ -396,7 +396,7 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                     <span className="block text-[11px] font-bold">Verifica amministrativa</span>
                     <span className="block text-[10px] text-slate-500 mt-0.5">
                       {disponibilita?.amministrativa
-                        ? 'Dato attuale: debito dell’ente e soglie. Guida liquidazione e cram down.'
+                        ? 'Dato attuale: debito dell’ente e soglie, come base di confronto per liquidazione e cram down.'
                         : 'Non disponibile: mancano visura o prospetti dell’ente su questa azienda.'}
                     </span>
                   </button>

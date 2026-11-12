@@ -391,7 +391,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     const righePercorsi: string[] = [];
     for (const p of r.percorsi) {
       righePercorsi.push(
-        `— ${p.etichetta}${p.codice === r.percorsoConsigliato ? ' (da valutare per primo)' : ''}`
+        `— ${p.etichetta}${p.codice === r.percorsoConsigliato ? ' (primo confronto)' : ''}`
       );
       righePercorsi.push(`  Decide: ${p.chiDecide}.`);
       righePercorsi.push(`  ${p.natura}`);

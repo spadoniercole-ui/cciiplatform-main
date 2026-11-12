@@ -1,3 +1,23 @@
+## 0.211.0 — 2026-11-12
+
+- **La natura dello scenario esce dalla fase operativa.** Dentro lo scenario non ci sono più i tre
+  bottoni che ripetevano la scelta fatta alla creazione: c'è la natura in sola lettura, con l'origine
+  e l'eventuale cambio. La correzione — con PIN — sta nella pagina dedicata, raggiungibile dalla
+  scheda; la stampa della scheda resta sulla scheda, accanto allo stato.
+- **Nessun consiglio, nessuna guida.** La comunicazione è stata riarmonizzata: i titoli dicono che
+  cosa è disponibile («Quadro contabile grave: il confronto con la liquidazione giudiziale è
+  disponibile»), non che cosa fare; «si consiglia di valutare» è sparito da tutta la piattaforma e
+  il percorso messo per primo è detto «primo confronto». La decisione non dipende
+  dall'applicativo: la piattaforma è uno strumento di supporto.
+- **Report stampabile della verifica amministrativa.** Nuova pagina «report di supporto»: esito con
+  accertato e da accertare, i tre percorsi distinti con gli esiti della proposta, gli elementi letti
+  e i limiti, impaginata per la carta (Stampa → Salva come PDF). Si apre dal riquadro di supporto.
+- **Corretto il link alla fotografia contabile**, che puntava a un percorso inesistente e finiva in
+  404: ora apre la pagina stampabile della verifica contabile.
+- **Due provvedimenti fittizi** per il collaudo del percorso ricevente (liquidazione giudiziale e
+  cram down), generati da `scripts/genera-provvedimenti-fittizi.mjs` con i dati che la lettura deve
+  estrarre.
+
 ## 0.210.0 — 2026-11-12
 
 - **L'esito della proposta entra nel report dell'azienda.** Nuova sezione «Proposte ed esiti

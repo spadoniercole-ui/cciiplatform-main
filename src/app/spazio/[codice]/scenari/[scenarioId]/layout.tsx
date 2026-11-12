@@ -12,13 +12,13 @@ import { AGGANGIO_VUOTO } from '@/lib/debitiEnte/aggancioContabile';
 import { leggiRiferimentoAzienda } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
-import { SituazioneScenario } from '@/components/spazio/SituazioneScenario';
+import { NaturaScenario } from '@/components/spazio/NaturaScenario';
+import { StampaSchedaScenario } from '@/components/spazio/StampaSchedaScenario';
 import { EsitoPropostaScenario } from '@/components/spazio/EsitoPropostaScenario';
 import { esitoPropostaValido } from '@/lib/scenari/esitoProposta';
 import { leggiPassiCompilati } from '@/lib/scenari/passiCompilati';
 import { passiDaRivedere } from '@/lib/scenari/situazione';
 import { leggiStoricoSituazione } from '@/lib/scenari/storicoSituazione';
-import { leggiStoricoSblocchi } from '@/lib/scenari/storicoSblocchi';
 import { DemoAziendaScope } from '@/components/spazio/DemoUploadProvider';
 
 export default async function ScenarioLayout({
@@ -89,20 +89,9 @@ export default async function ScenarioLayout({
       )
     : [];
 
-  // L'annullamento dell'ultimo cambio è riservato all'Admin di Spazio (il
-  // server lo impone comunque: qui serve solo a non mostrare un comando inutile).
-  const puoAnnullareSituazione =
-    contesto.modalita === 'ADMIN_SPAZIO' || contesto.modalita === 'SALVAGENTE';
-
   const storicoSituazione = scenario.situazioneCambiataIl
     ? await leggiStoricoSituazione(contesto.nomeSchema, scenario.id).catch(() => [])
     : [];
-
-  // Gli sblocchi restano visibili anche dopo: sono la traccia di chi ha
-  // rimesso lo scenario in lavorazione, e perché.
-  const sblocchiScenario = await leggiStoricoSblocchi(contesto.nomeSchema, scenario.id, 5).catch(
-    () => []
-  );
 
   // L'esito della proposta vive in una colonna del tenant e si legge a parte,
   // come la base della verifica: non passa da Drizzle. Assenza o valore
@@ -141,19 +130,15 @@ export default async function ScenarioLayout({
               <p className="text-xs text-slate-500 mt-0.5">
                 {scenario.ragioneSocialeAzienda} · origine: {scenario.origineProposta}
               </p>
-              <SituazioneScenario
-                nomeSchema={contesto.nomeSchema}
+              <NaturaScenario
+                codice={codice}
                 scenarioId={scenario.id}
                 situazione={scenario.tipoIstruttoria ?? 'PROPOSTA'}
                 origine={scenario.origineProposta}
                 bloccato={Boolean(scenario.bloccatoIl)}
-                demo={contesto.demo}
                 cambiataIl={scenario.situazioneCambiataIl}
                 rivedere={passiScenario}
-                storico={storicoSituazione}
-                sblocchi={sblocchiScenario}
-                codice={codice}
-                puoAnnullare={puoAnnullareSituazione}
+                vociCronologia={storicoSituazione.length}
               />
               {scenario.tipoIstruttoria === 'PROPOSTA' && (
                 <EsitoPropostaScenario
@@ -176,9 +161,12 @@ export default async function ScenarioLayout({
               )}
               {riferimento && <RiferimentoAziendaStampa {...riferimento} />}
             </div>
-            <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-600">
-              {scenario.stato}
-            </span>
+            <div className="flex items-center gap-3">
+              <StampaSchedaScenario />
+              <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-600">
+                {scenario.stato}
+              </span>
+            </div>
           </div>
         </div>
 

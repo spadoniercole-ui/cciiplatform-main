@@ -18,7 +18,7 @@ describe('raccomandaDecisione', () => {
     const esito = raccomandaDecisione(input({ anniXbrl: 0, indiciViolati: null }));
 
     expect(esito.direzione).toBe('CONTABILE');
-    expect(esito.titolo).toMatch(/^Si consiglia di completare la verifica contabile/);
+    expect(esito.titolo).toMatch(/^Verifica contabile incompleta/);
     expect(esito.motivi.join(' ')).toContain('Nessun bilancio XBRL');
   });
 
@@ -33,7 +33,7 @@ describe('raccomandaDecisione', () => {
     const esito = raccomandaDecisione(input({ patrimonioNetto: -240_000, indiciViolati: 3 }));
 
     expect(esito.direzione).toBe('LIQUIDAZIONE');
-    expect(esito.titolo).toMatch(/^Si consiglia di valutare la liquidazione giudiziale/);
+    expect(esito.titolo).toMatch(/^Quadro contabile grave/);
     expect(esito.motivi.join(' ')).toContain('Patrimonio netto negativo');
   });
 
@@ -85,7 +85,7 @@ describe('raccomandaDecisione', () => {
     ]) {
       const esito = raccomandaDecisione(caso);
       const limiti = esito.limiti.join(' ');
-      expect(limiti).toContain('non una conclusione giuridica');
+      expect(limiti).toContain('non è una conclusione giuridica');
       expect(limiti).toContain('DSCR');
     }
   });
