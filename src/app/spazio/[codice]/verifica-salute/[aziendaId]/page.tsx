@@ -115,7 +115,7 @@ export default async function EsitoVerificaAmministrativaPage({
                 con l'impaginazione per la carta e la finestra di stampa già
                 aperta (Stampa → Salva come PDF). */}
             <Link
-              href={`/spazio/${codice}/verifica-salute/${id}/supporto?stampa=1`}
+              href={`/report/verifica-amministrativa/${codice}/${id}?stampa=1`}
               className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-slate-800"
             >
               <FileDown className="w-3.5 h-3.5" /> Report PDF
@@ -308,7 +308,7 @@ export default async function EsitoVerificaAmministrativaPage({
               Apri gli scenari →
             </Link>
             <Link
-              href={`/spazio/${codice}/verifica-salute/${id}/supporto`}
+              href={`/report/verifica-amministrativa/${codice}/${id}`}
               className="text-[10px] font-bold uppercase tracking-wider text-slate-700 hover:text-slate-900"
             >
               Report stampabile →

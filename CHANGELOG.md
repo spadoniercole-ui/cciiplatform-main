@@ -1,3 +1,15 @@
+## 0.215.0 — 2026-11-12
+
+- **Il report esce dal Pannello Spazio: è un documento, non una schermata.** Nuova rotta autonoma
+  `/report/verifica-amministrativa/[spazio]/[azienda]`, senza sidebar né barre: foglio A4 con
+  copertina (azienda, esito, copertura, data, debito certo, primo confronto), indice, sezioni
+  numerate — dati della verifica, esito con accertato e da accertare, debito con la scomposizione
+  e la fonte, lettura, percorsi distinti con gli esiti in tabella, elementi letti, limiti — testata
+  e piede che si ripetono a ogni pagina, controllo dei salti di pagina, unità di misura da carta
+  (mm e pt), non classi da schermo. Il bottone «Report PDF» apre direttamente la stampa.
+- Il vecchio indirizzo `/verifica-salute/[id]/supporto` reindirizza al nuovo report, così i
+  collegamenti già salvati continuano a funzionare.
+
 ## 0.214.1 — 2026-11-12
 
 - Anche il riquadro dell'assistente resta fuori dalla stampa: era l'ultimo elemento fisso del
