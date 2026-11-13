@@ -183,6 +183,9 @@ export default async function ReportVerificaAmministrativaPage({
   const prodottiCompleti = checklistProdottiCompleta(sintesiProdotti);
   const risposteChecklist = sintesiProdotti?.risposte ?? 0;
   const totaleDomande = sintesiProdotti?.totale ?? 0;
+  // Zero domande in check list non è «0/0 risposte»: è un quadro che non si
+  // può formare, e il documento deve dirlo con le parole giuste.
+  const prodottiChiesti = totaleDomande > 0;
   const checklistCompleta = prodottiCompleti;
   const allegatoDisponibile = prodottiCompleti && raccomandazione !== null;
   const righeSoglie = (soglie?.righe ?? []).filter((r) => r.applicabile);
@@ -392,9 +395,9 @@ export default async function ReportVerificaAmministrativaPage({
                     </p>
                   ) : (
                     <p className="doc-nota">
-                      Non completa: {risposteChecklist}/{totaleDomande} risposte date. Finché la
-                      check list dei prodotti non è compilata il quadro qualitativo non entra nella
-                      valutazione, e il supporto decisionale resta fuori dal documento.
+                      {prodottiChiesti
+                        ? `Non completa: ${risposteChecklist}/${totaleDomande} risposte date. Finché la check list dei prodotti non è compilata il quadro qualitativo non entra nella valutazione, e il supporto decisionale resta fuori dal documento.`
+                        : 'Nessun prodotto è in check list: non ci sono domande da porre, quindi il quadro qualitativo non si forma e non entra nella valutazione. Le domande si scrivono sui prodotti, nei parametri dello spazio.'}
                     </p>
                   )}
                 </div>
@@ -670,10 +673,9 @@ export default async function ReportVerificaAmministrativaPage({
               </>
             ) : (
               <p>
-                Non riportato: la check list dei prodotti che qualifica il caso non è completa (
-                {risposteChecklist}/{totaleDomande} risposte date). Senza quelle risposte il quadro
-                qualitativo non entra nella valutazione e le strade possibili restano fuori dal
-                documento.
+                {prodottiChiesti
+                  ? `Non riportato: la check list dei prodotti che qualifica il caso non è completa (${risposteChecklist}/${totaleDomande} risposte date). Senza quelle risposte il quadro qualitativo non entra nella valutazione e le strade possibili restano fuori dal documento.`
+                  : 'Non riportato: nessun prodotto è in check list, quindi non ci sono domande da porre. Senza un quadro qualitativo le strade possibili restano fuori dal documento; le domande si scrivono sui prodotti, nei parametri dello spazio.'}
               </p>
             )}
           </section>

@@ -1,3 +1,12 @@
+## 0.222.0 — 2026-11-13
+
+- **Quando nessun prodotto è in check list la pagina non scrive più «0/0 risposte».** Zero domande
+  non è una check list incompleta a metà: è un quadro che non si può formare, e il numero 0/0
+  sembrava un guasto. Ora la verifica e il report dicono che non ci sono domande da porre, perché il
+  quadro qualitativo non entra nella valutazione, e dove si scrivono le domande (Parametri di spazio
+  → Prodotti, flag «in check list»). Quando invece le domande ci sono ma non sono tutte risposte,
+  resta il conteggio reale e il rimando al triage.
+
 ## 0.221.0 — 2026-11-13
 
 - **Il supporto decisionale non si sposta più mentre la pagina carica.** Stava in fondo alla

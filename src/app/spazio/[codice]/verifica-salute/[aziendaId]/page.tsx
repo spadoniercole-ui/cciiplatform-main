@@ -89,6 +89,9 @@ export default async function EsitoVerificaAmministrativaPage({
   // non lo è, il blocco lo dice con quante risposte mancano e dove si compila.
   const sintesiProdotti = checklistRis;
   const prodottiCompleti = checklistProdottiCompleta(sintesiProdotti);
+  // Con zero domande in check list la check list non è «incompleta a metà»:
+  // non c'è nulla da chiedere, e scrivere «0/0 risposte» sembra un guasto.
+  const prodottiChiesti = (sintesiProdotti?.totale ?? 0) > 0;
   const riga = storicoRis?.success ? storicoRis.righe?.find((v) => v.id === id) : undefined;
   const validita = valutaValidita(riga?.eseguitaIl ?? null);
   const stile = attenzione ? STILE[attenzione.esito as keyof typeof STILE] : null;
@@ -227,7 +230,9 @@ export default async function EsitoVerificaAmministrativaPage({
                 consiglio.{' '}
                 {prodottiCompleti && sintesiProdotti
                   ? `Il quadro della check list dei prodotti (${sintesiProdotti.etichetta}, ${sintesiProdotti.risposte}/${sintesiProdotti.totale} risposte) è già entrato nella valutazione amministrativa.`
-                  : `La check list dei prodotti non è completa (${sintesiProdotti?.risposte ?? 0}/${sintesiProdotti?.totale ?? 0}): il quadro qualitativo resta fuori dalla valutazione finché non lo è.`}
+                  : prodottiChiesti
+                    ? `La check list dei prodotti non è completa (${sintesiProdotti?.risposte ?? 0}/${sintesiProdotti?.totale ?? 0} risposte): il quadro qualitativo resta fuori dalla valutazione finché non lo è.`
+                    : `Nessun prodotto è in check list, quindi non ci sono domande da porre: il quadro qualitativo non entra nella valutazione.`}
               </span>
             </span>
             <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-blue-700 group-open:hidden">
@@ -238,19 +243,32 @@ export default async function EsitoVerificaAmministrativaPage({
             </span>
           </summary>
           <div className="border-t border-slate-200 p-5 space-y-3">
-            {!prodottiCompleti && (
-              <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-[10px] text-slate-600 leading-relaxed">
-                Il quadro qualitativo non pesa nell’indicatore finché la check list dei prodotti non
-                è completa ({sintesiProdotti?.risposte ?? 0}/{sintesiProdotti?.totale ?? 0}{' '}
-                risposte). Si compila nel triage, prima dell’esito, non nella fase redigente:{' '}
-                <Link
-                  href={`/spazio/${codice}/verifica-salute?azienda=${id}`}
-                  className="font-bold text-blue-700 hover:text-blue-800"
-                >
-                  riapri il triage di questa azienda →
-                </Link>
-              </p>
-            )}
+            {!prodottiCompleti &&
+              (prodottiChiesti ? (
+                <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-[10px] text-slate-600 leading-relaxed">
+                  Il quadro qualitativo non pesa nell’indicatore finché la check list dei prodotti
+                  non è completa ({sintesiProdotti?.risposte ?? 0}/{sintesiProdotti?.totale ?? 0}{' '}
+                  risposte). Si compila nel triage, prima dell’esito, non nella fase redigente:{' '}
+                  <Link
+                    href={`/spazio/${codice}/verifica-salute?azienda=${id}`}
+                    className="font-bold text-blue-700 hover:text-blue-800"
+                  >
+                    riapri il triage di questa azienda →
+                  </Link>
+                </p>
+              ) : (
+                <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-[10px] text-slate-600 leading-relaxed">
+                  Nessun prodotto ha il flag «in check list»: le domande si scrivono sui prodotti,
+                  non qui. Finché non ce n’è almeno uno il quadro qualitativo non entra nella
+                  valutazione, e non c’è nulla da compilare:{' '}
+                  <Link
+                    href={`/spazio/${codice}/parametri/prodotti`}
+                    className="font-bold text-blue-700 hover:text-blue-800"
+                  >
+                    Parametri di spazio → Prodotti →
+                  </Link>
+                </p>
+              ))}
             {raccomandazione && (
               <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 space-y-3">
                 <p className="text-[9px] font-bold uppercase tracking-wider text-blue-800">
