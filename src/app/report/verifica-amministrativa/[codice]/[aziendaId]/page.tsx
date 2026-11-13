@@ -8,8 +8,8 @@ import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { ottieniRaccomandazioneAction } from '@/app/actions/raccomandazioneVerifica';
 import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati';
 import { valutaSoglieAction } from '@/app/actions/soglie25novies';
-import { ottieniChecklistMinisterialeAzienda } from '@/app/actions/checklistMinisterialeAzienda';
-import { CHECKLIST_MINISTERIALE } from '@/lib/checklist/ministeriale';
+import { leggiChecklistProdottiAzienda } from '@/lib/prodotti/checklistAzienda';
+import { checklistProdottiCompleta } from '@/lib/checklist/pesoProdotti';
 import { StampaDocumento } from '@/components/spazio/StampaDocumento';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 
@@ -163,7 +163,7 @@ export default async function ReportVerificaAmministrativaPage({
       ottieniRaccomandazioneAction(contesto.nomeSchema, id).catch(() => null),
       debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
       valutaSoglieAction(contesto.nomeSchema, id, tipoSpazio).catch(() => null),
-      ottieniChecklistMinisterialeAzienda(contesto.nomeSchema, id).catch(() => null),
+      leggiChecklistProdottiAzienda(contesto.nomeSchema, id).catch(() => null),
     ]);
   const attenzione = attenzioneRis?.success ? (attenzioneRis.attenzione ?? null) : null;
   const raccomandazione = raccomandazioneRis?.success
@@ -172,17 +172,19 @@ export default async function ReportVerificaAmministrativaPage({
   const debito = debitoRis?.success ? (debitoRis.debito ?? null) : null;
   const soglie = soglieRis?.success ? (soglieRis.esito ?? null) : null;
 
-  // LA CHECK LIST CHE QUALIFICA. Il supporto decisionale — la lettura, i
-  // percorsi, i loro esiti — non è un dato della verifica: è una lettura che
-  // pesa solo se il caso è stato qualificato. Si riporta nel documento come
-  // allegato quando la check list ministeriale dell'azienda è completa, e si
-  // tace quando non lo è, dichiarando quante domande mancano.
-  const checklist = checklistRis?.success ? checklistRis.stato : null;
-  const totaleDomande = CHECKLIST_MINISTERIALE.reduce((a, x) => a + x.domande.length, 0);
-  const risposteChecklist = (checklist?.risposte ?? []).filter((r) => r.risposta !== null).length;
-  const checklistCompleta = checklist !== null && risposteChecklist >= totaleDomande;
-  const quadro = checklist?.quadro ?? null;
-  const allegatoDisponibile = checklistCompleta && raccomandazione !== null;
+  // LA CHECK LIST CHE QUALIFICA È QUELLA DEI PRODOTTI (0.220.0). Si compila nel
+  // triage, prima dell'esito: è da quelle risposte che la lettura prende peso.
+  // La ministeriale si compila, nella peggiore delle ipotesi, nella fase
+  // redigente, e non può qualificare un documento che la precede.
+  //
+  // L'allegato si riporta quando la check list è completa, e quando non lo è il
+  // documento dichiara perché manca: non lo si toglie in silenzio.
+  const sintesiProdotti = checklistRis;
+  const prodottiCompleti = checklistProdottiCompleta(sintesiProdotti);
+  const risposteChecklist = sintesiProdotti?.risposte ?? 0;
+  const totaleDomande = sintesiProdotti?.totale ?? 0;
+  const checklistCompleta = prodottiCompleti;
+  const allegatoDisponibile = prodottiCompleti && raccomandazione !== null;
   const righeSoglie = (soglie?.righe ?? []).filter((r) => r.applicabile);
   // I numeri della sintesi finale: le stesse righe del documento, contate.
   const soglieSuperate = righeSoglie.filter((r) => r.esito === 'sopra');
@@ -379,21 +381,20 @@ export default async function ReportVerificaAmministrativaPage({
                   </>
                 )}
                 <div style={{ marginTop: '3mm' }}>
-                  <p className="doc-occhiello">Check list ministeriale — quadro qualitativo</p>
-                  {checklistCompleta && quadro ? (
+                  <p className="doc-occhiello">Check list dei prodotti — quadro qualitativo</p>
+                  {prodottiCompleti && sintesiProdotti ? (
                     <p>
-                      <strong>{quadro.etichetta}</strong>
-                      {quadro.percentualeCriticitaComplessiva !== null
-                        ? ` · ${Math.round(quadro.percentualeCriticitaComplessiva)}% di criticità pesata`
-                        : ''}
-                      . {risposteChecklist}/{totaleDomande} domande risposte: il quadro entra nella
-                      valutazione amministrativa con il peso delle risposte date.
+                      <strong>{sintesiProdotti.etichetta}</strong>. {sintesiProdotti.positive}{' '}
+                      risposte lette come positive e {sintesiProdotti.negative} come negative sulle{' '}
+                      {sintesiProdotti.chiuse} domande chiuse; {risposteChecklist}/{totaleDomande}{' '}
+                      risposte date. Il quadro entra nella valutazione amministrativa con il peso
+                      delle risposte date, e può peggiorare l’esito ma non migliorarlo.
                     </p>
                   ) : (
                     <p className="doc-nota">
-                      Non completa: {risposteChecklist}/{totaleDomande} domande risposte. Finché la
-                      check list non è compilata il quadro qualitativo non entra nella valutazione e
-                      il supporto decisionale resta fuori dal documento.
+                      Non completa: {risposteChecklist}/{totaleDomande} risposte date. Finché la
+                      check list dei prodotti non è compilata il quadro qualitativo non entra nella
+                      valutazione, e il supporto decisionale resta fuori dal documento.
                     </p>
                   )}
                 </div>
@@ -579,7 +580,7 @@ export default async function ReportVerificaAmministrativaPage({
 
           {/* ALLEGATO A · IL SUPPORTO DECISIONALE. Sta in fondo, come si
               consulta un allegato: la lettura dei dati, i percorsi e i loro
-              esiti. Si riporta solo se la check list ministeriale che qualifica
+              esiti. Si riporta solo se la check list dei prodotti che qualifica
               il caso è completa, perché è da quelle risposte che la lettura
               prende peso; altrimenti il documento dichiara perché manca. */}
           <section className="doc-sezione doc-allegato">
@@ -587,10 +588,10 @@ export default async function ReportVerificaAmministrativaPage({
             {allegatoDisponibile && raccomandazione ? (
               <>
                 <p className="doc-nota" style={{ marginBottom: '3mm' }}>
-                  Riportato perché la check list ministeriale è completa ({risposteChecklist}/
-                  {totaleDomande} domande) e il quadro qualitativo è «
-                  {quadro?.etichetta ?? 'non determinato'}». Non è una raccomandazione: sono le
-                  strade che i fatti accertati rendono disponibili, con chi le decide.
+                  Riportato perché la check list dei prodotti è completa ({risposteChecklist}/
+                  {totaleDomande} risposte) e il quadro qualitativo è «
+                  {sintesiProdotti?.etichetta ?? 'non determinato'}». Non è una raccomandazione:
+                  sono le strade che i fatti accertati rendono disponibili, con chi le decide.
                 </p>
 
                 <div className="doc-blocco" style={{ marginBottom: '5mm' }}>
@@ -669,10 +670,10 @@ export default async function ReportVerificaAmministrativaPage({
               </>
             ) : (
               <p>
-                Non riportato: la check list ministeriale che qualifica il caso non è completa (
-                {risposteChecklist}/{totaleDomande} domande risposte). Senza quelle risposte il
-                quadro qualitativo non entra nella valutazione e le strade possibili restano fuori
-                dal documento.
+                Non riportato: la check list dei prodotti che qualifica il caso non è completa (
+                {risposteChecklist}/{totaleDomande} risposte date). Senza quelle risposte il quadro
+                qualitativo non entra nella valutazione e le strade possibili restano fuori dal
+                documento.
               </p>
             )}
           </section>

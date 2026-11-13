@@ -6,8 +6,8 @@ import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { ottieniRaccomandazioneAction } from '@/app/actions/raccomandazioneVerifica';
-import { ottieniChecklistMinisterialeAzienda } from '@/app/actions/checklistMinisterialeAzienda';
-import { CHECKLIST_MINISTERIALE } from '@/lib/checklist/ministeriale';
+import { leggiChecklistProdottiAzienda } from '@/lib/prodotti/checklistAzienda';
+import { checklistProdottiCompleta } from '@/lib/checklist/pesoProdotti';
 import { PosizioneEnteScenario } from '@/components/spazio/PosizioneEnteScenario';
 import { DebitoMemorizzatoEnte } from '@/components/spazio/DebitoMemorizzatoEnte';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
@@ -75,21 +75,20 @@ export default async function EsitoVerificaAmministrativaPage({
     ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
     ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
     ottieniRaccomandazioneAction(contesto.nomeSchema, id).catch(() => null),
-    ottieniChecklistMinisterialeAzienda(contesto.nomeSchema, id).catch(() => null),
+    leggiChecklistProdottiAzienda(contesto.nomeSchema, id).catch(() => null),
   ]);
   const raccomandazione = raccomandazioneRis?.success
     ? (raccomandazioneRis.raccomandazione ?? null)
     : null;
   const attenzione = attenzioneRis?.success ? (attenzioneRis.attenzione ?? null) : null;
 
-  // IL SUPPORTO DECISIONALE SI APRE SOLO SE IL CASO È QUALIFICATO. La lettura
-  // dei dati e le strade possibili non sono un dato della verifica: prendono
-  // peso dalle risposte della check list ministeriale. Finché non è completa il
-  // blocco resta chiuso e dice quante domande mancano.
-  const checklist = checklistRis?.success ? checklistRis.stato : null;
-  const totaleDomande = CHECKLIST_MINISTERIALE.reduce((a, x) => a + x.domande.length, 0);
-  const risposteChecklist = (checklist?.risposte ?? []).filter((r) => r.risposta !== null).length;
-  const checklistCompleta = checklist !== null && risposteChecklist >= totaleDomande;
+  // LA CHECK LIST CHE QUALIFICA È QUELLA DEI PRODOTTI, e ha un peso, non un
+  // permesso: il supporto decisionale resta leggibile sempre — è la lettura dei
+  // dati e delle strade, e nasconderla non protegge nessuno — mentre il quadro
+  // qualitativo entra nell'indicatore solo quando la check list è completa. Se
+  // non lo è, il blocco lo dice con quante risposte mancano e dove si compila.
+  const sintesiProdotti = checklistRis;
+  const prodottiCompleti = checklistProdottiCompleta(sintesiProdotti);
   const riga = storicoRis?.success ? storicoRis.righe?.find((v) => v.id === id) : undefined;
   const validita = valutaValidita(riga?.eseguitaIl ?? null);
   const stile = attenzione ? STILE[attenzione.esito as keyof typeof STILE] : null;
@@ -217,174 +216,174 @@ export default async function EsitoVerificaAmministrativaPage({
         schedaIniziale={schedaIniziale}
       />
 
-      {/* IL SUPPORTO DECISIONALE, IN FONDO E CHIUSO. Tutto il discorso
-          — lettura, percorsi, esiti — non sta più in mezzo alla verifica: si
-          apre su richiesta, e solo dopo la check list ministeriale che
-          qualifica il caso. */}
-      {raccomandazione &&
-        (checklistCompleta ? (
-          <details className="group bg-white border border-slate-200 rounded-xl">
-            <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-5">
-              <span>
-                <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-700">
+      {/* IL SUPPORTO DECISIONALE, IN FONDO E CHIUSO. Tutto il discorso —
+          lettura, percorsi, esiti — sta sotto questo link e non in mezzo alla
+          verifica. Il blocco però c'è sempre: la check list dei prodotti non
+          apre e chiude la lettura, decide solo quanto pesa. Prima la stessa
+          pagina mostrava il discorso, poi lo sostituiva con un riquadro e
+          infine lo toglieva: tre stati per la stessa cosa, e la sensazione che
+          il contenuto sparisse. */}
+      {raccomandazione && (
+        <details className="group bg-white border border-slate-200 rounded-xl">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-5">
+            <span>
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-700">
+                Supporto decisionale
+              </span>
+              <span className="mt-0.5 block text-[10px] text-slate-500 leading-relaxed">
+                La lettura dei dati, i percorsi e i loro esiti. Si apre su richiesta: non è un
+                consiglio.{' '}
+                {prodottiCompleti && sintesiProdotti
+                  ? `Il quadro della check list dei prodotti (${sintesiProdotti.etichetta}, ${sintesiProdotti.risposte}/${sintesiProdotti.totale} risposte) è già entrato nella valutazione amministrativa.`
+                  : `La check list dei prodotti non è completa (${sintesiProdotti?.risposte ?? 0}/${sintesiProdotti?.totale ?? 0}): il quadro qualitativo resta fuori dalla valutazione finché non lo è.`}
+              </span>
+            </span>
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-blue-700 group-open:hidden">
+              Apri
+            </span>
+            <span className="hidden shrink-0 text-[10px] font-bold uppercase tracking-wider text-slate-500 group-open:inline">
+              Chiudi
+            </span>
+          </summary>
+          <div className="border-t border-slate-200 p-5 space-y-3">
+            {!prodottiCompleti && (
+              <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-[10px] text-slate-600 leading-relaxed">
+                Il quadro qualitativo non pesa nell’indicatore finché la check list dei prodotti non
+                è completa ({sintesiProdotti?.risposte ?? 0}/{sintesiProdotti?.totale ?? 0}{' '}
+                risposte). Si compila nel triage, prima dell’esito, non nella fase redigente:{' '}
+                <Link
+                  href={`/spazio/${codice}/verifica-salute?azienda=${id}`}
+                  className="font-bold text-blue-700 hover:text-blue-800"
+                >
+                  riapri il triage di questa azienda →
+                </Link>
+              </p>
+            )}
+            {raccomandazione && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 space-y-3">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-blue-800">
                   Supporto decisionale
-                </span>
-                <span className="mt-0.5 block text-[10px] text-slate-500 leading-relaxed">
-                  La lettura dei dati, i percorsi e i loro esiti. Si apre su richiesta: non è un
-                  consiglio, e il quadro qualitativo della check list (
-                  {checklist?.quadro?.etichetta}) è già entrato nella valutazione.
-                </span>
-              </span>
-              <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-blue-700 group-open:hidden">
-                Apri
-              </span>
-              <span className="hidden shrink-0 text-[10px] font-bold uppercase tracking-wider text-slate-500 group-open:inline">
-                Chiudi
-              </span>
-            </summary>
-            <div className="border-t border-slate-200 p-5 space-y-3">
-              {raccomandazione && (
-                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 space-y-3">
-                  <p className="text-[9px] font-bold uppercase tracking-wider text-blue-800">
-                    Supporto decisionale
+                </p>
+                <p className="text-sm font-bold text-slate-900">{raccomandazione.titolo}</p>
+                <p className="text-[11px] text-slate-700 leading-relaxed">
+                  {raccomandazione.sintesi}
+                </p>
+                <div className="space-y-2">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                    I percorsi, distinti
                   </p>
-                  <p className="text-sm font-bold text-slate-900">{raccomandazione.titolo}</p>
-                  <p className="text-[11px] text-slate-700 leading-relaxed">
-                    {raccomandazione.sintesi}
-                  </p>
-                  <div className="space-y-2">
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                      I percorsi, distinti
-                    </p>
-                    <div className="grid gap-2">
-                      {raccomandazione.percorsi.map((p) => (
-                        <div
-                          key={p.codice}
-                          className={`rounded-lg border p-3 ${
-                            p.codice === raccomandazione.percorsoConsigliato
-                              ? 'border-blue-300 bg-white'
-                              : 'border-slate-200 bg-white/60'
-                          }`}
-                        >
-                          <p className="text-[11px] font-bold text-slate-900">
-                            {p.etichetta}
-                            {p.codice === raccomandazione.percorsoConsigliato && (
-                              <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-blue-700">
-                                primo confronto
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-[10px] text-slate-600 leading-relaxed mt-0.5">
-                            {p.natura}
-                          </p>
-                          <p className="text-[10px] text-slate-500 leading-relaxed mt-0.5">
-                            <strong className="text-slate-600">Decide:</strong> {p.chiDecide}.
-                          </p>
-                          <ul className="mt-1 space-y-0.5">
-                            {p.presupposti.map((voce, i) => (
-                              <li
-                                key={i}
-                                className="text-[10px] text-slate-600 leading-relaxed flex gap-1.5"
-                              >
-                                <span className="text-slate-400 shrink-0">—</span>
-                                <span>{voce}</span>
-                              </li>
-                            ))}
-                          </ul>
-                          {p.esiti && (
-                            <div className="mt-1.5 rounded-md bg-slate-50 border border-slate-200 p-2">
-                              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                                Esiti possibili della proposta
-                              </p>
-                              <ul className="mt-1 space-y-1">
-                                {p.esiti.map((e) => (
-                                  <li
-                                    key={e.codice}
-                                    className="text-[10px] text-slate-700 leading-relaxed"
-                                  >
-                                    <strong>{e.etichetta}</strong> — decide {e.chiDecide}.{' '}
-                                    {e.descrizione}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
+                  <div className="grid gap-2">
+                    {raccomandazione.percorsi.map((p) => (
+                      <div
+                        key={p.codice}
+                        className={`rounded-lg border p-3 ${
+                          p.codice === raccomandazione.percorsoConsigliato
+                            ? 'border-blue-300 bg-white'
+                            : 'border-slate-200 bg-white/60'
+                        }`}
+                      >
+                        <p className="text-[11px] font-bold text-slate-900">
+                          {p.etichetta}
+                          {p.codice === raccomandazione.percorsoConsigliato && (
+                            <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-blue-700">
+                              primo confronto
+                            </span>
                           )}
-                          <p className="text-[10px] text-slate-500 leading-relaxed mt-1 italic">
-                            {p.limiti.join(' ')}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-slate-600 leading-relaxed border-l-2 border-amber-300 pl-2">
-                      {raccomandazione.nonEquiparabili}
-                    </p>
+                        </p>
+                        <p className="text-[10px] text-slate-600 leading-relaxed mt-0.5">
+                          {p.natura}
+                        </p>
+                        <p className="text-[10px] text-slate-500 leading-relaxed mt-0.5">
+                          <strong className="text-slate-600">Decide:</strong> {p.chiDecide}.
+                        </p>
+                        <ul className="mt-1 space-y-0.5">
+                          {p.presupposti.map((voce, i) => (
+                            <li
+                              key={i}
+                              className="text-[10px] text-slate-600 leading-relaxed flex gap-1.5"
+                            >
+                              <span className="text-slate-400 shrink-0">—</span>
+                              <span>{voce}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        {p.esiti && (
+                          <div className="mt-1.5 rounded-md bg-slate-50 border border-slate-200 p-2">
+                            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                              Esiti possibili della proposta
+                            </p>
+                            <ul className="mt-1 space-y-1">
+                              {p.esiti.map((e) => (
+                                <li
+                                  key={e.codice}
+                                  className="text-[10px] text-slate-700 leading-relaxed"
+                                >
+                                  <strong>{e.etichetta}</strong> — decide {e.chiDecide}.{' '}
+                                  {e.descrizione}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <p className="text-[10px] text-slate-500 leading-relaxed mt-1 italic">
+                          {p.limiti.join(' ')}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                  <div>
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                      Motivi
-                    </p>
-                    <ul className="mt-1 space-y-0.5">
-                      {raccomandazione.motivi.map((m, i) => (
-                        <li
-                          key={i}
-                          className="text-[11px] text-slate-700 leading-relaxed flex gap-1.5"
-                        >
-                          <span className="text-slate-400 shrink-0">—</span>
-                          <span>{m}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                      Passi che ne discendono
-                    </p>
-                    <ul className="mt-1 space-y-0.5">
-                      {raccomandazione.azioni.map((a, i) => (
-                        <li key={i} className="text-[11px] text-slate-700 leading-relaxed">
-                          <strong>{a.etichetta}.</strong> {a.descrizione}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                      Limiti della lettura
-                    </p>
-                    <ul className="mt-1 space-y-0.5">
-                      {raccomandazione.limiti.map((l, i) => (
-                        <li
-                          key={i}
-                          className="text-[10px] text-slate-500 leading-relaxed flex gap-1.5"
-                        >
-                          <span className="text-slate-400 shrink-0">—</span>
-                          <span>{l}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <p className="text-[10px] text-slate-600 leading-relaxed border-l-2 border-amber-300 pl-2">
+                    {raccomandazione.nonEquiparabili}
+                  </p>
                 </div>
-              )}
-            </div>
-          </details>
-        ) : (
-          <div className="bg-white border border-dashed border-slate-300 rounded-xl p-5 space-y-2">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-              Supporto decisionale
-            </p>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Si apre dopo la check list ministeriale che qualifica il caso: {risposteChecklist}/
-              {totaleDomande} domande risposte. È da quelle risposte che la lettura dei dati e le
-              strade possibili prendono peso nella valutazione amministrativa.
-            </p>
-            <Link
-              href={`/spazio/${codice}/aziende/${id}/checklist`}
-              className="inline-flex text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
-            >
-              Compila la check list ministeriale →
-            </Link>
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                    Motivi
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {raccomandazione.motivi.map((m, i) => (
+                      <li
+                        key={i}
+                        className="text-[11px] text-slate-700 leading-relaxed flex gap-1.5"
+                      >
+                        <span className="text-slate-400 shrink-0">—</span>
+                        <span>{m}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                    Passi che ne discendono
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {raccomandazione.azioni.map((a, i) => (
+                      <li key={i} className="text-[11px] text-slate-700 leading-relaxed">
+                        <strong>{a.etichetta}.</strong> {a.descrizione}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                    Limiti della lettura
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {raccomandazione.limiti.map((l, i) => (
+                      <li
+                        key={i}
+                        className="text-[10px] text-slate-500 leading-relaxed flex gap-1.5"
+                      >
+                        <span className="text-slate-400 shrink-0">—</span>
+                        <span>{l}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
           </div>
-        ))}
+        </details>
+      )}
     </div>
   );
 }

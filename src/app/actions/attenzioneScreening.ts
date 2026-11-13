@@ -23,8 +23,12 @@ import { ottieniParametriSoglieAction } from '@/app/actions/parametriSoglie';
 import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 import { sintetizzaSoglie } from '@/lib/soglie25novies/sintesi';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
-import { CHECKLIST_MINISTERIALE } from '@/lib/checklist/ministeriale';
-import { calcolaQuadroQualitativo, type RispostaPerCalcolo } from '@/lib/checklist/scoring';
+import { leggiChecklistProdottiAzienda } from '@/lib/prodotti/checklistAzienda';
+import {
+  checklistProdottiCompleta,
+  coloreDaQualificazione,
+  dettaglioQualificazioneProdotti,
+} from '@/lib/checklist/pesoProdotti';
 
 export interface RisultatoAttenzione {
   success: boolean;
@@ -180,51 +184,29 @@ export async function ottieniAttenzioneScreeningAction(
 
     // ---- Quadro qualitativo -------------------------------------------------
     //
-    // IL QUADRO VIENE DALLA CHECK LIST MINISTERIALE DELL'AZIENDA (0.219.0).
+    // IL QUADRO VIENE DALLA CHECK LIST DEI PRODOTTI (0.220.0).
     //
-    // Prima si leggeva `checklist_quadro`, una tabella che nessuno scrive: la
-    // dimensione qualitativa restava sempre scoperta e la check list, una volta
-    // compilata, non pesava per nulla sull'indicatore. Ora il quadro si calcola
-    // dalle risposte effettive, con lo stesso motore della scheda.
+    // Due correzioni in fila. Prima si leggeva `checklist_quadro`, una tabella
+    // che nessuno scrive: la dimensione restava sempre scoperta. Poi si è letta
+    // la check list ministeriale, che è sbagliata per questo posto: si compila,
+    // nella peggiore delle ipotesi, nella fase redigente — quando la lettura è
+    // già stata fatta. Le domande dei prodotti si rispondono nel triage, prima
+    // dell'esito, e sono il quadro qualitativo del caso.
     //
-    // Pesa solo se è COMPLETA: un quadro su tre domande su quaranta è una
-    // lettura parziale, e farla entrare nell'esito significherebbe attribuire a
-    // un caso non qualificato un giudizio che non lo riguarda. In quel caso la
-    // dimensione resta scoperta — dichiarata nella copertura — e non peggiora
-    // nulla.
-    const risposteQualitative = await pool
-      .query(
-        `SELECT domanda_id, risposta FROM "${nomeSchema}".azienda_checklist_ministeriale_risposte WHERE azienda_id = $1`,
-        [aziendaId]
-      )
-      .catch(() => ({ rows: [] as { domanda_id: string; risposta: boolean | null }[] }));
-    const mappaQualitativa: Record<string, RispostaPerCalcolo> = {};
-    for (const r of risposteQualitative.rows) {
-      mappaQualitativa[r.domanda_id] = { domandaId: r.domanda_id, risposta: r.risposta };
-    }
-    const totaleDomandeQualitative = CHECKLIST_MINISTERIALE.reduce(
-      (a, x) => a + x.domande.length,
-      0
+    // Pesa solo se è COMPLETA: un quadro su tre domande su venti non è una
+    // lettura parziale da attribuire a un caso non qualificato. In quel caso la
+    // dimensione resta scoperta — la copertura lo dichiara — e non peggiora
+    // nulla. Se i prodotti non hanno domande in check list non c'è nulla da
+    // chiedere e vale lo stesso.
+    const sintesiProdotti = await leggiChecklistProdottiAzienda(nomeSchema, aziendaId).catch(
+      () => null
     );
-    const risposteDate = risposteQualitative.rows.filter((r) => r.risposta !== null).length;
-    const checklistCompleta =
-      totaleDomandeQualitative > 0 && risposteDate >= totaleDomandeQualitative;
-    const quadro = checklistCompleta
-      ? calcolaQuadroQualitativo(CHECKLIST_MINISTERIALE, mappaQualitativa)
+    const prodottiCompleti = checklistProdottiCompleta(sintesiProdotti);
+    const coloreQualitativo = prodottiCompleti
+      ? coloreDaQualificazione(sintesiProdotti?.qualificazione)
       : null;
-
-    // Il colore resta null quando il quadro non c'è o non è valutabile: la
-    // dimensione non è determinata e non deve né pesare né fingere neutralità.
-    const coloreQualitativo =
-      quadro && quadro.coloreEtichetta !== 'grigio' ? quadro.coloreEtichetta : null;
     const dettaglioQualitativo =
-      quadro && coloreQualitativo
-        ? `Quadro qualitativo della check list ministeriale: ${quadro.etichetta}${
-            quadro.percentualeCriticitaComplessiva !== null
-              ? ` (${Math.round(quadro.percentualeCriticitaComplessiva)}% di criticità pesata`
-              : ' ('
-          }, ${risposteDate}/${totaleDomandeQualitative} domande risposte). Concorre all’esito, non lo migliora.`
-        : null;
+      prodottiCompleti && sintesiProdotti ? dettaglioQualificazioneProdotti(sintesiProdotti) : null;
 
     const attenzione = calcolaAttenzione({
       annoCostituzione: num(a.anno_costituzione),

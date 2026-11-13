@@ -1,3 +1,22 @@
+## 0.220.0 — 2026-11-13
+
+- **La check list che qualifica è quella dei prodotti, non quella ministeriale.** La 0.219.0 aveva
+  corretto la fonte sbagliata con un'altra fonte sbagliata: la ministeriale si compila, nella
+  peggiore delle ipotesi, nella fase redigente, e non può qualificare una valutazione che la
+  precede. Ora il quadro qualitativo — e quindi il peso sull'indicatore di attenzione — viene dalle
+  risposte alle domande dei prodotti in check list, quelle del triage: `SISTEMICA` non peggiora,
+  `DA_APPROFONDIRE` porta ad «Attenzione», `SQUILIBRIO` porta ad «Attenzione», `NON_VALUTABILE`
+  lascia la dimensione scoperta (mai «grigio»). Fra gli elementi accertati compaiono etichetta,
+  risposte positive e negative sulle domande chiuse, risposte date sul totale.
+- **Il supporto decisionale non sparisce più.** La stessa pagina aveva tre stati per lo stesso
+  contenuto: il discorso in mezzo alla verifica, poi un riquadro che lo sostituiva, poi niente. Ora
+  il blocco c'è sempre, in fondo, chiuso dietro il suo link, con tutto il discorso — lettura,
+  percorsi, esiti, limiti — e in testa una riga che dice quanto pesa. Se la check list dei prodotti
+  è incompleta il blocco resta leggibile, dichiara le risposte mancanti e rimanda al triage
+  dell'azienda, che è il posto dove si compila.
+- Nel report la sezione del quadro qualitativo e l'Allegato A leggono la stessa check list dei
+  prodotti; quando non è completa il documento dice perché l'allegato manca, invece di tacerlo.
+
 ## 0.219.0 — 2026-11-12
 
 - **La check list ministeriale pesa davvero sull’indicatore di attenzione.** La dimensione
