@@ -23,6 +23,8 @@ import { ottieniParametriSoglieAction } from '@/app/actions/parametriSoglie';
 import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 import { sintetizzaSoglie } from '@/lib/soglie25novies/sintesi';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { CHECKLIST_MINISTERIALE } from '@/lib/checklist/ministeriale';
+import { calcolaQuadroQualitativo, type RispostaPerCalcolo } from '@/lib/checklist/scoring';
 
 export interface RisultatoAttenzione {
   success: boolean;
@@ -176,14 +178,53 @@ export async function ottieniAttenzioneScreeningAction(
       indiciViolati = tutti.filter((i: { esito?: string }) => i.esito === 'VIOLATO').length;
     }
 
-    // ---- Quadro qualitativo ----------------------------------------------
-    const check = await pool
-      .query(`SELECT colore FROM "${nomeSchema}".checklist_quadro WHERE azienda_id = $1 LIMIT 1`, [
-        aziendaId,
-      ])
-      .catch(() => ({ rows: [] as { colore?: string }[] }));
+    // ---- Quadro qualitativo -------------------------------------------------
+    //
+    // IL QUADRO VIENE DALLA CHECK LIST MINISTERIALE DELL'AZIENDA (0.219.0).
+    //
+    // Prima si leggeva `checklist_quadro`, una tabella che nessuno scrive: la
+    // dimensione qualitativa restava sempre scoperta e la check list, una volta
+    // compilata, non pesava per nulla sull'indicatore. Ora il quadro si calcola
+    // dalle risposte effettive, con lo stesso motore della scheda.
+    //
+    // Pesa solo se è COMPLETA: un quadro su tre domande su quaranta è una
+    // lettura parziale, e farla entrare nell'esito significherebbe attribuire a
+    // un caso non qualificato un giudizio che non lo riguarda. In quel caso la
+    // dimensione resta scoperta — dichiarata nella copertura — e non peggiora
+    // nulla.
+    const risposteQualitative = await pool
+      .query(
+        `SELECT domanda_id, risposta FROM "${nomeSchema}".azienda_checklist_ministeriale_risposte WHERE azienda_id = $1`,
+        [aziendaId]
+      )
+      .catch(() => ({ rows: [] as { domanda_id: string; risposta: boolean | null }[] }));
+    const mappaQualitativa: Record<string, RispostaPerCalcolo> = {};
+    for (const r of risposteQualitative.rows) {
+      mappaQualitativa[r.domanda_id] = { domandaId: r.domanda_id, risposta: r.risposta };
+    }
+    const totaleDomandeQualitative = CHECKLIST_MINISTERIALE.reduce(
+      (a, x) => a + x.domande.length,
+      0
+    );
+    const risposteDate = risposteQualitative.rows.filter((r) => r.risposta !== null).length;
+    const checklistCompleta =
+      totaleDomandeQualitative > 0 && risposteDate >= totaleDomandeQualitative;
+    const quadro = checklistCompleta
+      ? calcolaQuadroQualitativo(CHECKLIST_MINISTERIALE, mappaQualitativa)
+      : null;
+
+    // Il colore resta null quando il quadro non c'è o non è valutabile: la
+    // dimensione non è determinata e non deve né pesare né fingere neutralità.
     const coloreQualitativo =
-      (check.rows[0]?.colore as 'verde' | 'giallo' | 'rosso' | 'grigio' | undefined) ?? null;
+      quadro && quadro.coloreEtichetta !== 'grigio' ? quadro.coloreEtichetta : null;
+    const dettaglioQualitativo =
+      quadro && coloreQualitativo
+        ? `Quadro qualitativo della check list ministeriale: ${quadro.etichetta}${
+            quadro.percentualeCriticitaComplessiva !== null
+              ? ` (${Math.round(quadro.percentualeCriticitaComplessiva)}% di criticità pesata`
+              : ' ('
+          }, ${risposteDate}/${totaleDomandeQualitative} domande risposte). Concorre all’esito, non lo migliora.`
+        : null;
 
     const attenzione = calcolaAttenzione({
       annoCostituzione: num(a.anno_costituzione),
@@ -195,6 +236,7 @@ export async function ottieniAttenzioneScreeningAction(
       esposizione,
       sogliaApplicabile,
       coloreQualitativo,
+      dettaglioQualitativo,
       // Il dettaglio di COSA è stato superato, con i numeri: il motivo che il
       // motore ha già composto riga per riga, non una frase riassuntiva.
       dettaglioSoglieSuperate: soglie.superate.map(

@@ -46,6 +46,24 @@ describe('non compensatorietà', () => {
     expect(nonMigliora.esito).toBe('GIALLO');
   });
 
+  it('il quadro qualitativo entra con i suoi numeri, non come una parola', () => {
+    const a = calcolaAttenzione({
+      ...completo,
+      coloreQualitativo: 'giallo',
+      dettaglioQualitativo:
+        'Quadro qualitativo della check list ministeriale: Criticità contenute, alcune aree di attenzione (23% di criticità pesata, 47/47 domande risposte). Concorre all’esito, non lo migliora.',
+    });
+    expect(a.esito).toBe('GIALLO');
+    expect(a.fattoreDeterminante).toBe('Quadro qualitativo');
+    expect(a.accertato.some((v) => v.includes('47/47 domande risposte'))).toBe(true);
+    expect(a.accertato.some((v) => v.includes('23% di criticità pesata'))).toBe(true);
+  });
+
+  it('senza il dettaglio resta la frase dichiarativa, non un buco', () => {
+    const a = calcolaAttenzione({ ...completo, coloreQualitativo: 'rosso' });
+    expect(a.accertato.some((v) => v.includes('criticità strutturali'))).toBe(true);
+  });
+
   it('il quadro qualitativo da solo non arriva mai al rosso', () => {
     const a = calcolaAttenzione({ ...completo, coloreQualitativo: 'rosso' });
     expect(a.esito).not.toBe('ROSSO');

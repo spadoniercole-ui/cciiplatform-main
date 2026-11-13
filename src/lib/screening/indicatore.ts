@@ -141,8 +141,17 @@ export interface IngressoIndicatore {
    * semaforo sarebbe la meno controllata. Facoltativo: senza, il semaforo
    * dichiara l'importo e tace il confronto. */
   dettaglioSogliaApplicabile?: string | null;
-  /** Colore del quadro qualitativo (Check List / Direttrici). */
+  /** Colore del quadro qualitativo (Check List ministeriale dell'azienda). */
   coloreQualitativo: 'verde' | 'giallo' | 'rosso' | 'grigio' | null;
+  /**
+   * Che cosa dice il quadro qualitativo, con i suoi numeri: etichetta,
+   * percentuale di criticità pesata e domande risposte sul totale.
+   *
+   * Il colore da solo non basta a far pesare la check list: «quadro giallo»
+   * non dice se le risposte sono tre o tutte. Il dettaglio entra fra gli
+   * elementi accertati, così chi legge sa da dove viene il peso.
+   */
+  dettaglioQualitativo?: string | null;
   /**
    * Dettaglio delle soglie superate: quale, con quali numeri.
    *
@@ -449,9 +458,11 @@ export function calcolaAttenzione(input: IngressoIndicatore): Attenzione {
       fattoreDeterminante = 'Quadro qualitativo';
     }
     accertato.push(
-      input.coloreQualitativo === 'rosso'
-        ? 'Il quadro qualitativo evidenzia criticità strutturali rilevanti.'
-        : 'Il quadro qualitativo evidenzia aree da rafforzare.'
+      input.dettaglioQualitativo && input.dettaglioQualitativo.trim() !== ''
+        ? input.dettaglioQualitativo
+        : input.coloreQualitativo === 'rosso'
+          ? 'Il quadro qualitativo evidenzia criticità strutturali rilevanti.'
+          : 'Il quadro qualitativo evidenzia aree da rafforzare.'
     );
   }
 

@@ -1,3 +1,16 @@
+## 0.219.0 — 2026-11-12
+
+- **La check list ministeriale pesa davvero sull’indicatore di attenzione.** La dimensione
+  qualitativa leggeva `checklist_quadro`, una tabella che nessuno scrive: restava sempre scoperta,
+  così compilare la check list non cambiava nulla. Ora il quadro si calcola dalle risposte effettive
+  della check list dell’azienda, con lo stesso motore della scheda: se è **completa** e il quadro è
+  giallo o rosso, l’esito sale ad «Attenzione», il fattore determinante lo dichiara e fra gli
+  elementi accertati compare il quadro **con i suoi numeri** (etichetta, percentuale di criticità
+  pesata, domande risposte sul totale).
+- Restano le regole dell’indicatore: il quadro qualitativo può peggiorare l’esito ma non migliorarlo,
+  non arriva da solo al rosso, e se la check list è incompleta non entra — la dimensione resta
+  scoperta e la copertura lo dice.
+
 ## 0.218.0 — 2026-11-12
 
 - **Il supporto decisionale esce dalla verifica e si apre su richiesta, dopo la check list.** La
