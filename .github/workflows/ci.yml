@@ -35,8 +35,23 @@ jobs:
       - name: Test
         run: npm test
 
+      # LA BUILD SCARICA I FONT DA GOOGLE (`next/font/google`). Una caduta di
+      # rete del runner fa fallire il passo con un errore del loader che non
+      # c'entra nulla col codice — è già successo (0.216.0, 0.218.0) e la
+      # build locale e quella di Vercel passavano sullo stesso commit. Un
+      # secondo tentativo distingue l'intermittenza dal guasto vero; un errore
+      # di codice resta rosso anche al secondo giro.
       - name: Build cloud
-        run: npm run build
+        run: |
+          for tentativo in 1 2; do
+            if npm run build; then
+              exit 0
+            fi
+            echo "::warning::Build cloud fallita (tentativo $tentativo)."
+            sleep 10
+          done
+          echo "::error::La build cloud è caduta due volte: non è un'intermittenza di rete."
+          exit 1
 
   immagine-server:
     name: Immagine Docker edizione server
