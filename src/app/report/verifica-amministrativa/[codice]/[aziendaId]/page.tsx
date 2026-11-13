@@ -87,6 +87,10 @@ const CSS = `
 .doc-firma { margin-top: 6mm; border-top: 1px solid #0f172a; padding-top: 2mm; font-size: 8pt; color: #475569; }
 .doc-firma .doc-riga-doc { display: flex; justify-content: space-between; gap: 10px; }
 .doc-finale { break-before: page; padding-top: 2mm; }
+/* LA PRIMA SEZIONE COMINCIA SU UNA PAGINA NUOVA (0.224.0). La copertina —
+   testata, oggetto, indice — resta la copertina: il documento non deve
+   iniziare a metà foglio, sotto l'elenco dei contenuti. */
+.doc-prima-sezione { break-before: page; padding-top: 2mm; }
 .doc-allegato { break-before: page; padding-top: 2mm; }
 .doc-finale .doc-titolo { font-size: 14pt; border-bottom-width: 2px; }
 .doc-finale .doc-numero .doc-numero-valore { font-size: 12pt; }
@@ -307,7 +311,7 @@ export default async function ReportVerificaAmministrativaPage({
           </section>
 
           {/* 1 · DATI DELLA VERIFICA */}
-          <section className="doc-sezione">
+          <section className="doc-sezione doc-prima-sezione">
             <h2 className="doc-titolo">
               <span className="doc-num">1</span> Dati della verifica
             </h2>

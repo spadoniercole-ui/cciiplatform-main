@@ -1,3 +1,12 @@
+## 0.224.0 — 2026-11-13
+
+- **La check list dei prodotti sta chiusa dietro un link, come il supporto decisionale.** Aperta
+  occupava decine di schermate prima ancora del debito e delle soglie. Ora è una riga: titolo e
+  stato — quante risposte mancano su quante, oppure il quadro raggiunto — con «Apri» a destra. Le
+  domande restano lì, a un clic, e il salvataggio continua ad aggiornare indicatore e supporto.
+- **Il documento inizia su una pagina nuova.** La copertina con l'indice resta la copertina: la
+  sezione «1 Dati della verifica» non parte più a metà foglio sotto l'elenco dei contenuti.
+
 ## 0.223.0 — 2026-11-13
 
 - **La check list dei prodotti si compila nella pagina dell'esito, fra l'indicatore e il debito.**
