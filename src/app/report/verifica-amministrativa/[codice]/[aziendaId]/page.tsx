@@ -84,6 +84,12 @@ const CSS = `
   letter-spacing: .12em; text-transform: uppercase; color: #475569; font-weight: 700; vertical-align: 1px; }
 .doc-firma { margin-top: 6mm; border-top: 1px solid #0f172a; padding-top: 2mm; font-size: 8pt; color: #475569; }
 .doc-firma .doc-riga-doc { display: flex; justify-content: space-between; gap: 10px; }
+.doc-finale { break-before: page; padding-top: 2mm; }
+.doc-finale .doc-titolo { font-size: 14pt; border-bottom-width: 2px; }
+.doc-finale .doc-numero .doc-numero-valore { font-size: 12pt; }
+.doc-finale .doc-sintesi-riga { display: flex; justify-content: space-between; gap: 6mm;
+  border-bottom: 1px solid #e2e8f0; padding: 1.4mm 0; font-size: 9pt; }
+.doc-finale .doc-sintesi-riga strong { font-weight: 700; }
 
 .doc-barra { position: fixed; top: 14px; right: 16px; display: flex; gap: 8px; z-index: 20; }
 
@@ -161,6 +167,10 @@ export default async function ReportVerificaAmministrativaPage({
   const debito = debitoRis?.success ? (debitoRis.debito ?? null) : null;
   const soglie = soglieRis?.success ? (soglieRis.esito ?? null) : null;
   const righeSoglie = (soglie?.righe ?? []).filter((r) => r.applicabile);
+  // I numeri della sintesi finale: le stesse righe del documento, contate.
+  const soglieSuperate = righeSoglie.filter((r) => r.esito === 'sopra');
+  const soglieNonDeterminabili = righeSoglie.filter((r) => r.esito === 'non_determinabile');
+  const totaleSoglieSuperate = soglieSuperate.reduce((somma, r) => somma + (r.esposizione ?? 0), 0);
   const debitoIl = data(debitoRis?.memorizzatoIl ?? null);
   const riga = storicoRis?.success ? storicoRis.righe?.find((v) => v.id === id) : undefined;
   const validita = valutaValidita(riga?.eseguitaIl ?? null);
@@ -270,6 +280,7 @@ export default async function ReportVerificaAmministrativaPage({
                 {raccomandazione && <li>I percorsi, distinti, e i loro esiti</li>}
                 {raccomandazione && <li>Elementi letti</li>}
                 <li>Limiti e natura del documento</li>
+                <li>Sintesi finale — i numeri in trenta secondi</li>
               </ol>
             </div>
           </section>
@@ -611,6 +622,116 @@ export default async function ReportVerificaAmministrativaPage({
                 <span className="doc-cifra">{azienda.azienda.ragioneSociale}</span>
               </div>
             </div>
+          </section>
+
+          {/* PAGINA DI SINTESI FINALE — i numeri, in trenta secondi */}
+          <section className="doc-sezione doc-finale">
+            <h2 className="doc-titolo">Sintesi finale — i numeri in trenta secondi</h2>
+
+            <div className="doc-numeri">
+              <div className="doc-numero">
+                <span className="doc-numero-etichetta">Esito della verifica</span>
+                <span className="doc-numero-valore">
+                  {attenzione ? attenzione.etichetta : 'non leggibile'}
+                </span>
+                <span className="doc-numero-nota">
+                  {attenzione ? attenzione.fattoreDeterminante : 'verifica non completata'}
+                </span>
+              </div>
+              <div className="doc-numero">
+                <span className="doc-numero-etichetta">Debito dell’ente</span>
+                <span className="doc-numero-valore doc-cifra">
+                  {debito ? euro(debito.totale) : '—'}
+                </span>
+                <span className="doc-numero-nota">
+                  {debito ? `dato certo · ${debito.righe} voci` : 'non memorizzato'}
+                </span>
+              </div>
+              <div className="doc-numero">
+                <span className="doc-numero-etichetta">Soglie superate</span>
+                <span className="doc-numero-valore doc-cifra">
+                  {soglieSuperate.length}/{righeSoglie.length}
+                </span>
+                <span className="doc-numero-nota">
+                  {totaleSoglieSuperate > 0
+                    ? `${euro(totaleSoglieSuperate)} di esposizione`
+                    : 'nessuna esposizione sopra soglia'}
+                </span>
+              </div>
+              <div className="doc-numero">
+                <span className="doc-numero-etichetta">Primo confronto</span>
+                <span className="doc-numero-valore">{oggetto?.etichetta ?? 'non disponibile'}</span>
+                <span className="doc-numero-nota">
+                  {oggetto ? `decide ${oggetto.chiDecide.toLowerCase()}` : '—'}
+                </span>
+              </div>
+            </div>
+
+            {soglieSuperate.length > 0 && (
+              <div style={{ marginTop: '4mm' }}>
+                <p className="doc-occhiello">Soglie superate, con l’importo</p>
+                <ul className="doc-elenco">
+                  {soglieSuperate.map((r, i) => (
+                    <li key={`sint-sopra-${i}`}>
+                      <strong>{r.ambito}</strong>
+                      {r.esposizione === null ? '' : ` — ${euro(r.esposizione)}`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {soglieNonDeterminabili.length > 0 && (
+              <div style={{ marginTop: '4mm' }}>
+                <p className="doc-occhiello">Soglie non calcolabili con i dati in archivio</p>
+                <ul className="doc-elenco vuoto">
+                  {soglieNonDeterminabili.map((r, i) => (
+                    <li key={`sint-nondet-${i}`}>
+                      <strong>{r.ambito}</strong> — {r.motivo}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {attenzione && attenzione.daAccertare.length > 0 && (
+              <div style={{ marginTop: '4mm' }}>
+                <p className="doc-occhiello">Da accertare prima di decidere</p>
+                <ul className="doc-elenco vuoto">
+                  {attenzione.daAccertare.map((voce, i) => (
+                    <li key={`sint-acc-${i}`}>{voce}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {raccomandazione && (
+              <div style={{ marginTop: '6mm' }}>
+                <p className="doc-occhiello">Dove porta ciascuna strada</p>
+                {raccomandazione.percorsi.map((p) => (
+                  <div key={`sint-perc-${p.codice}`} className="doc-sintesi-riga">
+                    <span>
+                      <strong>{p.etichetta}</strong>
+                      {p.codice === raccomandazione.percorsoConsigliato ? ' · primo confronto' : ''}
+                      <br />
+                      <span className="doc-nota">
+                        {p.esiti
+                          ? `Esiti: ${p.esiti.map((e) => e.etichetta).join('; ')}`
+                          : 'Nessun esito della proposta: l’atto lo decide il giudice'}
+                      </span>
+                    </span>
+                    <span className="doc-nota" style={{ textAlign: 'right', minWidth: '42mm' }}>
+                      Decide {p.chiDecide.toLowerCase()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <p className="doc-nota-forte" style={{ marginTop: '6mm' }}>
+              Questi sono i fatti e le strade che ne discendono. La direzione non è scritta qui: la
+              sceglie l’ente, e la piattaforma non la sostituisce.
+            </p>
           </section>
         </div>
       </div>

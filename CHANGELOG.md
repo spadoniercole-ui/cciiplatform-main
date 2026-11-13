@@ -1,3 +1,12 @@
+## 0.217.0 — 2026-11-12
+
+- **Sintesi finale nel report: i numeri in trenta secondi.** Ultima pagina, su foglio suo: esito,
+  debito certo con il numero di voci, soglie superate sul totale con l’esposizione complessiva,
+  primo confronto; sotto, le soglie superate una per una con l’importo, quelle non calcolabili con
+  il motivo, ciò che resta da accertare, e per ogni percorso chi decide e quali esiti porta. Chiude
+  la frase che tiene insieme tutto il documento: la direzione non è scritta nel report, la sceglie
+  l’ente.
+
 ## 0.216.0 — 2026-11-12
 
 - **Le soglie di segnalazione entrano nel report, una per riga.** Nuova sezione 3 «Soglie di
