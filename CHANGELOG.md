@@ -1,3 +1,12 @@
+## 0.216.0 — 2026-11-12
+
+- **Le soglie di segnalazione entrano nel report, una per riga.** Nuova sezione 3 «Soglie di
+  segnalazione (art. 25-novies)»: per ogni soglia applicabile all’azienda, l’ambito, la
+  descrizione con la soglia di legge, l’esposizione confrontata e l’esito (superata, non superata,
+  non determinabile), seguiti dal motivo con i numeri del confronto. In uno spazio ente si valuta
+  la soglia dell’ente, in uno redigente tutte; se il dato manca lo dice, invece di far sembrare
+  rispettata una soglia che non è stata calcolata. Le sezioni successive sono rinumerate.
+
 ## 0.215.0 — 2026-11-12
 
 - **Il report esce dal Pannello Spazio: è un documento, non una schermata.** Nuova rotta autonoma

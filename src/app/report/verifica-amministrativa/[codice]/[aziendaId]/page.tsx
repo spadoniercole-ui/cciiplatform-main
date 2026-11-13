@@ -7,6 +7,7 @@ import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreen
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { ottieniRaccomandazioneAction } from '@/app/actions/raccomandazioneVerifica';
 import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati';
+import { valutaSoglieAction } from '@/app/actions/soglie25novies';
 import { StampaDocumento } from '@/components/spazio/StampaDocumento';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 
@@ -118,10 +119,10 @@ const euro = (valore: number) =>
 const data = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString('it-IT') : null;
 
-const ETICHETTE_PERCORSO: Record<string, string> = {
-  ACCORDO: 'Accordo transattivo',
-  LIQUIDAZIONE: 'Liquidazione giudiziale',
-  CRAM_DOWN: 'Cram down',
+const ESITO_SOGLIA: Record<string, string> = {
+  sopra: 'Superata',
+  sotto: 'Non superata',
+  non_determinabile: 'Non determinabile',
 };
 
 export default async function ReportVerificaAmministrativaPage({
@@ -143,17 +144,23 @@ export default async function ReportVerificaAmministrativaPage({
   const azienda = await ottieniAziendaPerId(contesto.nomeSchema, id);
   if (!azienda.success || !azienda.azienda) redirect(`/spazio/${codice}/verifica-salute`);
 
-  const [attenzioneRis, storicoRis, raccomandazioneRis, debitoRis] = await Promise.all([
+  // In uno spazio ENTE si valuta la soglia dell'ente, in uno REDIGENTE tutte:
+  // lo decide il motore delle soglie, non questa pagina.
+  const tipoSpazio = contesto.tipoSpazio === 'ENTE' ? 'ENTE' : 'NON_ENTE';
+  const [attenzioneRis, storicoRis, raccomandazioneRis, debitoRis, soglieRis] = await Promise.all([
     ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
     ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
     ottieniRaccomandazioneAction(contesto.nomeSchema, id).catch(() => null),
     debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
+    valutaSoglieAction(contesto.nomeSchema, id, tipoSpazio).catch(() => null),
   ]);
   const attenzione = attenzioneRis?.success ? (attenzioneRis.attenzione ?? null) : null;
   const raccomandazione = raccomandazioneRis?.success
     ? (raccomandazioneRis.raccomandazione ?? null)
     : null;
   const debito = debitoRis?.success ? (debitoRis.debito ?? null) : null;
+  const soglie = soglieRis?.success ? (soglieRis.esito ?? null) : null;
+  const righeSoglie = (soglie?.righe ?? []).filter((r) => r.applicabile);
   const debitoIl = data(debitoRis?.memorizzatoIl ?? null);
   const riga = storicoRis?.success ? storicoRis.righe?.find((v) => v.id === id) : undefined;
   const validita = valutaValidita(riga?.eseguitaIl ?? null);
@@ -257,6 +264,7 @@ export default async function ReportVerificaAmministrativaPage({
               <ol>
                 <li>Dati della verifica</li>
                 <li>Esito e fatti accertati</li>
+                <li>Soglie di segnalazione (art. 25-novies)</li>
                 <li>Debito dell’ente</li>
                 {raccomandazione && <li>Lettura dei dati</li>}
                 {raccomandazione && <li>I percorsi, distinti, e i loro esiti</li>}
@@ -356,10 +364,72 @@ export default async function ReportVerificaAmministrativaPage({
             )}
           </section>
 
-          {/* 3 · DEBITO */}
+          {/* 3 · SOGLIE */}
           <section className="doc-sezione">
             <h2 className="doc-titolo">
-              <span className="doc-num">3</span> Debito dell’ente — dato certo
+              <span className="doc-num">3</span> Soglie di segnalazione (art. 25-novies)
+            </h2>
+            {righeSoglie.length > 0 ? (
+              <div className="doc-blocco">
+                <table className="doc-tabella">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '46%' }}>Soglia</th>
+                      <th className="num">Esposizione</th>
+                      <th style={{ width: '22%' }}>Esito</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {righeSoglie.map((r, i) => (
+                      <tr key={`${r.ambito}-${i}`}>
+                        <td>
+                          <strong>{r.ambito}</strong>
+                          <br />
+                          <span style={{ fontSize: '8pt', color: '#475569' }}>
+                            {r.descrizione}
+                            {r.valore ? ` · soglia ${r.valore}` : ''}
+                          </span>
+                        </td>
+                        <td className="num">
+                          {r.esposizione === null ? '—' : euro(r.esposizione)}
+                        </td>
+                        <td>
+                          <strong>{ESITO_SOGLIA[r.esito] ?? r.esito}</strong>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <ul className="doc-elenco" style={{ marginTop: '2.5mm' }}>
+                  {righeSoglie.map((r, i) => (
+                    <li key={`motivo-${i}`}>
+                      <strong>{r.ambito}.</strong> {r.motivo}
+                    </li>
+                  ))}
+                </ul>
+                {soglie && soglie.datiMancanti.length > 0 && (
+                  <p className="doc-nota">
+                    Dati mancanti per il calcolo: {soglie.datiMancanti.join('; ')}.
+                  </p>
+                )}
+                <p className="doc-nota">
+                  Ogni riga riporta la soglia nella lettera dell’art. 25-novies e l’importo
+                  confrontato. «Non determinabile» dice che il dato necessario non è in archivio,
+                  non che la soglia sia rispettata.
+                </p>
+              </div>
+            ) : (
+              <p className="doc-blocco">
+                Nessuna soglia valutabile per questa azienda: mancano i dati necessari al confronto
+                (contributi, retribuzioni o debiti iscritti).
+              </p>
+            )}
+          </section>
+
+          {/* 4 · DEBITO */}
+          <section className="doc-sezione">
+            <h2 className="doc-titolo">
+              <span className="doc-num">4</span> Debito dell’ente — dato certo
             </h2>
             {debito ? (
               <div className="doc-blocco">
@@ -416,7 +486,7 @@ export default async function ReportVerificaAmministrativaPage({
             <>
               <section className="doc-sezione">
                 <h2 className="doc-titolo">
-                  <span className="doc-num">4</span> Lettura dei dati
+                  <span className="doc-num">5</span> Lettura dei dati
                 </h2>
                 <div className="doc-blocco">
                   <p style={{ fontWeight: 700, fontSize: '11pt', marginBottom: '1.5mm' }}>
@@ -434,7 +504,7 @@ export default async function ReportVerificaAmministrativaPage({
 
               <section className="doc-sezione">
                 <h2 className="doc-titolo">
-                  <span className="doc-num">5</span> I percorsi, distinti, e i loro esiti
+                  <span className="doc-num">6</span> I percorsi, distinti, e i loro esiti
                 </h2>
                 {raccomandazione.percorsi.map((p) => (
                   <div
@@ -496,7 +566,7 @@ export default async function ReportVerificaAmministrativaPage({
 
               <section className="doc-sezione">
                 <h2 className="doc-titolo">
-                  <span className="doc-num">6</span> Elementi letti
+                  <span className="doc-num">7</span> Elementi letti
                 </h2>
                 <table className="doc-tabella">
                   <tbody>
@@ -517,7 +587,7 @@ export default async function ReportVerificaAmministrativaPage({
           {/* 7 · LIMITI */}
           <section className="doc-sezione">
             <h2 className="doc-titolo">
-              <span className="doc-num">{raccomandazione ? '7' : '4'}</span> Limiti e natura del
+              <span className="doc-num">{raccomandazione ? '8' : '5'}</span> Limiti e natura del
               documento
             </h2>
             <ul className="doc-elenco">
