@@ -208,21 +208,13 @@ export default async function EsitoVerificaAmministrativaPage({
 
       <DebitoMemorizzatoEnte nomeSchema={contesto.nomeSchema} aziendaId={id} />
 
-      <PosizioneEnteScenario
-        nomeSchema={contesto.nomeSchema}
-        aziendaId={id}
-        nomeAzienda={risultato.azienda.ragioneSociale}
-        tipoSpazio={contesto.tipoSpazio}
-        schedaIniziale={schedaIniziale}
-      />
-
-      {/* IL SUPPORTO DECISIONALE, IN FONDO E CHIUSO. Tutto il discorso —
-          lettura, percorsi, esiti — sta sotto questo link e non in mezzo alla
-          verifica. Il blocco però c'è sempre: la check list dei prodotti non
-          apre e chiude la lettura, decide solo quanto pesa. Prima la stessa
-          pagina mostrava il discorso, poi lo sostituiva con un riquadro e
-          infine lo toglieva: tre stati per la stessa cosa, e la sensazione che
-          il contenuto sparisse. */}
+      {/* IL SUPPORTO DECISIONALE, CHIUSO E IN POSIZIONE FISSA (0.221.0).
+          Sta alla fine della VERIFICA — dopo l'indicatore e il debito — e non
+          alla fine della pagina. In fondo alla pagina finiva sotto «Posizione
+          ente», che si apre in migliaia di pixel di tabelle: il blocco veniva
+          spinto fuori schermo mentre la pagina caricava, e sembrava sparire.
+          Qui invece non si muove: la check list dei prodotti decide quanto
+          pesa, non se il contenuto esiste. */}
       {raccomandazione && (
         <details className="group bg-white border border-slate-200 rounded-xl">
           <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-5">
@@ -384,6 +376,14 @@ export default async function EsitoVerificaAmministrativaPage({
           </div>
         </details>
       )}
+
+      <PosizioneEnteScenario
+        nomeSchema={contesto.nomeSchema}
+        aziendaId={id}
+        nomeAzienda={risultato.azienda.ragioneSociale}
+        tipoSpazio={contesto.tipoSpazio}
+        schedaIniziale={schedaIniziale}
+      />
     </div>
   );
 }

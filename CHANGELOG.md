@@ -1,3 +1,12 @@
+## 0.221.0 — 2026-11-13
+
+- **Il supporto decisionale non si sposta più mentre la pagina carica.** Stava in fondo alla
+  pagina, dopo «Posizione ente»: quella sezione parte con «Caricamento...» e poi si apre in
+  migliaia di pixel di tabelle (certificazione dei debiti, 54 righe, dettagli per categoria). Il
+  blocco veniva quindi spinto fuori schermo mentre i dati arrivavano, e sembrava sparire. Ora sta
+  alla fine della **verifica** — dopo l'indicatore di attenzione e il debito consegnato — e prima
+  della posizione dell'ente: il posto non cambia più, e il discorso resta a un link di distanza.
+
 ## 0.220.0 — 2026-11-13
 
 - **La check list che qualifica è quella dei prodotti, non quella ministeriale.** La 0.219.0 aveva
