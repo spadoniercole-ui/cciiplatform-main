@@ -45,6 +45,9 @@ interface Props {
   aziendaId: number;
   /** Il quadro aggiornato: il triage lo usa per calcolare l'esito e per «Procedi». */
   onEsito?: (sintesi: SintesiChecklistProdotti | null) => void;
+  /** L'intestazione propria del blocco. Nella pagina dell'esito il titolo lo
+   * mette la scheda che lo contiene: qui si spegne, per non scriverlo due volte. */
+  conIntestazione?: boolean;
 }
 
 /** Le domande raggruppate per prodotto, nell'ordine in cui sono configurate. */
@@ -62,7 +65,12 @@ function perProdotto(voci: StatoChecklistProdotti['voci']) {
   }));
 }
 
-export function ChecklistProdottiTriage({ nomeSchema, aziendaId, onEsito }: Props) {
+export function ChecklistProdottiTriage({
+  nomeSchema,
+  aziendaId,
+  onEsito,
+  conIntestazione = true,
+}: Props) {
   const [stato, setStato] = useState<StatoChecklistProdotti | null>(null);
   const [caricamento, setCaricamento] = useState(true);
   const [errore, setErrore] = useState<string | null>(null);
@@ -121,20 +129,22 @@ export function ChecklistProdottiTriage({ nomeSchema, aziendaId, onEsito }: Prop
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-2">
-        <ListChecks className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
-        <div>
-          <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-            Check list dei prodotti
-          </h3>
-          <p className="text-[11px] text-slate-500 mt-1 max-w-3xl leading-relaxed">
-            Le domande scritte sui prodotti con il flag attivo. Servono a qualificare l’operato
-            dell’azienda: se la sua storia racconta un’azione sistemica o uno squilibrio da aprire a
-            un tavolo di trattativa. Le soglie misurano gli importi; questa check dice che cosa
-            l’azienda ha fatto (o non ha fatto).
-          </p>
+      {conIntestazione && (
+        <div className="flex items-start gap-2">
+          <ListChecks className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+              Check list dei prodotti
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-1 max-w-3xl leading-relaxed">
+              Le domande scritte sui prodotti con il flag attivo. Servono a qualificare l’operato
+              dell’azienda: se la sua storia racconta un’azione sistemica o uno squilibrio da aprire
+              a un tavolo di trattativa. Le soglie misurano gli importi; questa check dice che cosa
+              l’azienda ha fatto (o non ha fatto).
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {errore && (
         <p className="flex items-start gap-1.5 text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
@@ -145,8 +155,8 @@ export function ChecklistProdottiTriage({ nomeSchema, aziendaId, onEsito }: Prop
 
       {voci.length === 0 ? (
         <p className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed">
-          Nessun prodotto è in check list: la verifica non ha domande da porre e il triage non si
-          ferma. Il flag si accende in{' '}
+          Nessun prodotto è in check list: la verifica non ha domande da porre e nessun passaggio si
+          blocca. Il flag si accende in{' '}
           <span className="font-bold">Parametri › Prodotti dell’ente</span>.
         </p>
       ) : (

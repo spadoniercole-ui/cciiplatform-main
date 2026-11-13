@@ -1,3 +1,17 @@
+## 0.223.0 — 2026-11-13
+
+- **La check list dei prodotti si compila nella pagina dell'esito, fra l'indicatore e il debito.**
+  Non è una formalità del triage: è uno degli oggetti dell'analisi, insieme alla visura e ai
+  prospetti, e sta prima del debito e delle soglie perché è da lì che la storia dell'azienda prende
+  forma. Le risposte salvate aggiornano la pagina da sole: l'indicatore e il supporto decisionale
+  mostrano subito il peso nuovo, senza ricaricare a mano.
+- **Il supporto decisionale torna in fondo, dopo tutto.** Dare il riscontro della lettura prima
+  ancora delle soglie non aveva senso né logico né pratico: il blocco ora arriva dopo la posizione
+  dell'ente e le soglie, chiuso dietro il suo link, e dichiara i materiali su cui è condotta
+  l'analisi: visura camerale, prospetti contabili, check list dei prodotti con il suo quadro.
+- **Il debito è quello della verifica azienda, non della contabile**: cambia l'intestazione della
+  scheda, che confondeva i due percorsi.
+
 ## 0.222.0 — 2026-11-13
 
 - **Quando nessun prodotto è in check list la pagina non scrive più «0/0 risposte».** Zero domande

@@ -597,6 +597,13 @@ export default async function ReportVerificaAmministrativaPage({
                   sono le strade che i fatti accertati rendono disponibili, con chi le decide.
                 </p>
 
+                <p className="doc-nota" style={{ marginBottom: '3mm' }}>
+                  Materiali dell’analisi: visura camerale, prospetti contabili e check list dei
+                  prodotti — quest’ultima con {sintesiProdotti?.positive ?? 0} risposte lette come
+                  positive e {sintesiProdotti?.negative ?? 0} come negative sulle{' '}
+                  {sintesiProdotti?.chiuse ?? 0} domande chiuse.
+                </p>
+
                 <div className="doc-blocco" style={{ marginBottom: '5mm' }}>
                   <p className="doc-occhiello">Lettura dei dati</p>
                   <p style={{ fontWeight: 700, fontSize: '11pt', marginBottom: '1.5mm' }}>

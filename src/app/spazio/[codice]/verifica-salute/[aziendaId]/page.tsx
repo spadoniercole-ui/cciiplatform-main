@@ -9,6 +9,7 @@ import { ottieniRaccomandazioneAction } from '@/app/actions/raccomandazioneVerif
 import { leggiChecklistProdottiAzienda } from '@/lib/prodotti/checklistAzienda';
 import { checklistProdottiCompleta } from '@/lib/checklist/pesoProdotti';
 import { PosizioneEnteScenario } from '@/components/spazio/PosizioneEnteScenario';
+import { ChecklistProdottiEsito } from '@/components/spazio/ChecklistProdottiEsito';
 import { DebitoMemorizzatoEnte } from '@/components/spazio/DebitoMemorizzatoEnte';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 
@@ -209,15 +210,29 @@ export default async function EsitoVerificaAmministrativaPage({
         </p>
       )}
 
+      {/* LA CHECK LIST DEI PRODOTTI STA FRA L'ESITO E IL DEBITO (0.223.0).
+          Non è una formalità del triage: è uno degli oggetti dell'analisi,
+          insieme alla visura e ai prospetti. Prima il debito e prima — a
+          maggior ragione — delle soglie, perché è da qui che la storia
+          dell'azienda prende forma; e si compila dove la verifica si legge. */}
+      <ChecklistProdottiEsito nomeSchema={contesto.nomeSchema} aziendaId={id} />
+
       <DebitoMemorizzatoEnte nomeSchema={contesto.nomeSchema} aziendaId={id} />
 
-      {/* IL SUPPORTO DECISIONALE, CHIUSO E IN POSIZIONE FISSA (0.221.0).
-          Sta alla fine della VERIFICA — dopo l'indicatore e il debito — e non
-          alla fine della pagina. In fondo alla pagina finiva sotto «Posizione
-          ente», che si apre in migliaia di pixel di tabelle: il blocco veniva
-          spinto fuori schermo mentre la pagina caricava, e sembrava sparire.
-          Qui invece non si muove: la check list dei prodotti decide quanto
-          pesa, non se il contenuto esiste. */}
+      <PosizioneEnteScenario
+        nomeSchema={contesto.nomeSchema}
+        aziendaId={id}
+        nomeAzienda={risultato.azienda.ragioneSociale}
+        tipoSpazio={contesto.tipoSpazio}
+        schedaIniziale={schedaIniziale}
+      />
+
+      {/* IL SUPPORTO DECISIONALE VA IN FONDO, DOPO TUTTO (0.223.0).
+          Dare il riscontro della lettura prima delle soglie non avrebbe senso,
+          né logico né pratico: il supporto arriva quando i materiali ci sono —
+          visura, prospetti, check list dei prodotti — e dopo che le soglie
+          hanno misurato il debito. Resta chiuso dietro il suo link: è una
+          lettura, non un verdetto. */}
       {raccomandazione && (
         <details className="group bg-white border border-slate-200 rounded-xl">
           <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-5">
@@ -243,6 +258,15 @@ export default async function EsitoVerificaAmministrativaPage({
             </span>
           </summary>
           <div className="border-t border-slate-200 p-5 space-y-3">
+            <p className="text-[10px] text-slate-600 leading-relaxed">
+              <strong className="text-slate-700">Materiali dell’analisi:</strong> visura camerale,
+              prospetti contabili,{' '}
+              {prodottiCompleti && sintesiProdotti
+                ? `check list dei prodotti (${sintesiProdotti.etichetta.toLowerCase()}, ${sintesiProdotti.risposte}/${sintesiProdotti.totale} risposte).`
+                : prodottiChiesti
+                  ? `check list dei prodotti non completa (${sintesiProdotti?.risposte ?? 0}/${sintesiProdotti?.totale ?? 0} risposte): non entra nella valutazione.`
+                  : 'check list dei prodotti senza domande: non entra nella valutazione.'}
+            </p>
             {!prodottiCompleti &&
               (prodottiChiesti ? (
                 <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-[10px] text-slate-600 leading-relaxed">
@@ -394,14 +418,6 @@ export default async function EsitoVerificaAmministrativaPage({
           </div>
         </details>
       )}
-
-      <PosizioneEnteScenario
-        nomeSchema={contesto.nomeSchema}
-        aziendaId={id}
-        nomeAzienda={risultato.azienda.ragioneSociale}
-        tipoSpazio={contesto.tipoSpazio}
-        schedaIniziale={schedaIniziale}
-      />
     </div>
   );
 }

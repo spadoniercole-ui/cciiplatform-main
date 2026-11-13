@@ -64,7 +64,7 @@ export function DebitoMemorizzatoEnte({
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
           <HandCoins className="w-3.5 h-3.5 text-blue-600" />
-          Debito consegnato alla verifica contabile
+          Debito consegnato alla verifica azienda
         </h3>
         <button
           type="button"
@@ -86,8 +86,8 @@ export function DebitoMemorizzatoEnte({
       {!debito ? (
         <p className="text-[11px] text-slate-500 leading-relaxed">
           Nessun debito memorizzato: la verifica amministrativa non è ancora stata chiusa, oppure
-          gli archivi dell’ente non portano posizioni per questa azienda. La verifica contabile non
-          ne ha bisogno; la verifica azienda sì, e leggerà la cifra da qui quando ci sarà.
+          gli archivi dell’ente non portano posizioni per questa azienda. È la verifica azienda a
+          leggerlo, e leggerà la cifra da qui quando ci sarà.
         </p>
       ) : (
         <>
