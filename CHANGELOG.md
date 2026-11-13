@@ -1,3 +1,17 @@
+## 0.218.0 — 2026-11-12
+
+- **Il supporto decisionale esce dalla verifica e si apre su richiesta, dopo la check list.** La
+  lettura dei dati, i tre percorsi e i loro esiti non stanno più in mezzo all’esito: sono in fondo
+  alla pagina, chiusi, e si aprono da un comando. Si aprono **solo se la check list ministeriale
+  dell’azienda è completa**, perché è dalle risposte che quella lettura prende peso nella
+  valutazione amministrativa; finché manca, il blocco dice quante domande restano e porta alla
+  check list.
+- **Nel report lo stesso discorso diventa l’Allegato A**, in fondo al documento: viene riportato
+  solo a check list completa, con il quadro qualitativo dichiarato; se non lo è, il documento dice
+  perché non c’è. Il quadro qualitativo (etichetta e percentuale di criticità pesata) entra anche
+  nella sezione dell’esito, con il numero di domande risposte sul totale.
+- Le sezioni del report sono riordinate: elementi letti (5), limiti (6), allegato A, sintesi finale.
+
 ## 0.217.0 — 2026-11-12
 
 - **Sintesi finale nel report: i numeri in trenta secondi.** Ultima pagina, su foglio suo: esito,

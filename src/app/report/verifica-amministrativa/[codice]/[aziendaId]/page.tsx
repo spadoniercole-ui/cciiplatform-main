@@ -8,6 +8,8 @@ import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { ottieniRaccomandazioneAction } from '@/app/actions/raccomandazioneVerifica';
 import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati';
 import { valutaSoglieAction } from '@/app/actions/soglie25novies';
+import { ottieniChecklistMinisterialeAzienda } from '@/app/actions/checklistMinisterialeAzienda';
+import { CHECKLIST_MINISTERIALE } from '@/lib/checklist/ministeriale';
 import { StampaDocumento } from '@/components/spazio/StampaDocumento';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 
@@ -85,6 +87,7 @@ const CSS = `
 .doc-firma { margin-top: 6mm; border-top: 1px solid #0f172a; padding-top: 2mm; font-size: 8pt; color: #475569; }
 .doc-firma .doc-riga-doc { display: flex; justify-content: space-between; gap: 10px; }
 .doc-finale { break-before: page; padding-top: 2mm; }
+.doc-allegato { break-before: page; padding-top: 2mm; }
 .doc-finale .doc-titolo { font-size: 14pt; border-bottom-width: 2px; }
 .doc-finale .doc-numero .doc-numero-valore { font-size: 12pt; }
 .doc-finale .doc-sintesi-riga { display: flex; justify-content: space-between; gap: 6mm;
@@ -153,19 +156,33 @@ export default async function ReportVerificaAmministrativaPage({
   // In uno spazio ENTE si valuta la soglia dell'ente, in uno REDIGENTE tutte:
   // lo decide il motore delle soglie, non questa pagina.
   const tipoSpazio = contesto.tipoSpazio === 'ENTE' ? 'ENTE' : 'NON_ENTE';
-  const [attenzioneRis, storicoRis, raccomandazioneRis, debitoRis, soglieRis] = await Promise.all([
-    ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
-    ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
-    ottieniRaccomandazioneAction(contesto.nomeSchema, id).catch(() => null),
-    debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
-    valutaSoglieAction(contesto.nomeSchema, id, tipoSpazio).catch(() => null),
-  ]);
+  const [attenzioneRis, storicoRis, raccomandazioneRis, debitoRis, soglieRis, checklistRis] =
+    await Promise.all([
+      ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
+      ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
+      ottieniRaccomandazioneAction(contesto.nomeSchema, id).catch(() => null),
+      debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
+      valutaSoglieAction(contesto.nomeSchema, id, tipoSpazio).catch(() => null),
+      ottieniChecklistMinisterialeAzienda(contesto.nomeSchema, id).catch(() => null),
+    ]);
   const attenzione = attenzioneRis?.success ? (attenzioneRis.attenzione ?? null) : null;
   const raccomandazione = raccomandazioneRis?.success
     ? (raccomandazioneRis.raccomandazione ?? null)
     : null;
   const debito = debitoRis?.success ? (debitoRis.debito ?? null) : null;
   const soglie = soglieRis?.success ? (soglieRis.esito ?? null) : null;
+
+  // LA CHECK LIST CHE QUALIFICA. Il supporto decisionale — la lettura, i
+  // percorsi, i loro esiti — non è un dato della verifica: è una lettura che
+  // pesa solo se il caso è stato qualificato. Si riporta nel documento come
+  // allegato quando la check list ministeriale dell'azienda è completa, e si
+  // tace quando non lo è, dichiarando quante domande mancano.
+  const checklist = checklistRis?.success ? checklistRis.stato : null;
+  const totaleDomande = CHECKLIST_MINISTERIALE.reduce((a, x) => a + x.domande.length, 0);
+  const risposteChecklist = (checklist?.risposte ?? []).filter((r) => r.risposta !== null).length;
+  const checklistCompleta = checklist !== null && risposteChecklist >= totaleDomande;
+  const quadro = checklist?.quadro ?? null;
+  const allegatoDisponibile = checklistCompleta && raccomandazione !== null;
   const righeSoglie = (soglie?.righe ?? []).filter((r) => r.applicabile);
   // I numeri della sintesi finale: le stesse righe del documento, contate.
   const soglieSuperate = righeSoglie.filter((r) => r.esito === 'sopra');
@@ -276,10 +293,9 @@ export default async function ReportVerificaAmministrativaPage({
                 <li>Esito e fatti accertati</li>
                 <li>Soglie di segnalazione (art. 25-novies)</li>
                 <li>Debito dell’ente</li>
-                {raccomandazione && <li>Lettura dei dati</li>}
-                {raccomandazione && <li>I percorsi, distinti, e i loro esiti</li>}
                 {raccomandazione && <li>Elementi letti</li>}
                 <li>Limiti e natura del documento</li>
+                <li>Allegato A — Supporto decisionale (se la check list è completa)</li>
                 <li>Sintesi finale — i numeri in trenta secondi</li>
               </ol>
             </div>
@@ -362,6 +378,25 @@ export default async function ReportVerificaAmministrativaPage({
                     </ul>
                   </>
                 )}
+                <div style={{ marginTop: '3mm' }}>
+                  <p className="doc-occhiello">Check list ministeriale — quadro qualitativo</p>
+                  {checklistCompleta && quadro ? (
+                    <p>
+                      <strong>{quadro.etichetta}</strong>
+                      {quadro.percentualeCriticitaComplessiva !== null
+                        ? ` · ${Math.round(quadro.percentualeCriticitaComplessiva)}% di criticità pesata`
+                        : ''}
+                      . {risposteChecklist}/{totaleDomande} domande risposte: il quadro entra nella
+                      valutazione amministrativa con il peso delle risposte date.
+                    </p>
+                  ) : (
+                    <p className="doc-nota">
+                      Non completa: {risposteChecklist}/{totaleDomande} domande risposte. Finché la
+                      check list non è compilata il quadro qualitativo non entra nella valutazione e
+                      il supporto decisionale resta fuori dal documento.
+                    </p>
+                  )}
+                </div>
                 <p className="doc-nota" style={{ marginTop: '3mm' }}>
                   Indicatore di priorità di attenzione, non di probabilità di insolvenza. La scelta
                   su come procedere resta al valutatore.
@@ -494,12 +529,72 @@ export default async function ReportVerificaAmministrativaPage({
           </section>
 
           {raccomandazione && (
-            <>
-              <section className="doc-sezione">
-                <h2 className="doc-titolo">
-                  <span className="doc-num">5</span> Lettura dei dati
-                </h2>
-                <div className="doc-blocco">
+            <section className="doc-sezione">
+              <h2 className="doc-titolo">
+                <span className="doc-num">5</span> Elementi letti
+              </h2>
+              <table className="doc-tabella">
+                <tbody>
+                  {raccomandazione.motivi.map((m, i) => (
+                    <tr key={i}>
+                      <td className="num" style={{ width: '8mm' }}>
+                        {i + 1}
+                      </td>
+                      <td>{m}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {/* 7 · LIMITI */}
+          <section className="doc-sezione">
+            <h2 className="doc-titolo">
+              <span className="doc-num">{raccomandazione ? '6' : '5'}</span> Limiti e natura del
+              documento
+            </h2>
+            <ul className="doc-elenco">
+              {(raccomandazione?.limiti ?? []).map((l, i) => (
+                <li key={i}>{l}</li>
+              ))}
+              <li>
+                I percorsi sono accostati, non scelti: la decisione su come procedere resta all’ente
+                e non dipende dalla piattaforma.
+              </li>
+              <li>
+                Il documento non sostituisce la valutazione del caso concreto né gli atti che ne
+                discendono.
+              </li>
+            </ul>
+            <div className="doc-firma">
+              <div className="doc-riga-doc">
+                <span>
+                  Documento generato dalla piattaforma il {oggi} · spazio {contesto.codice}
+                </span>
+                <span className="doc-cifra">{azienda.azienda.ragioneSociale}</span>
+              </div>
+            </div>
+          </section>
+
+          {/* ALLEGATO A · IL SUPPORTO DECISIONALE. Sta in fondo, come si
+              consulta un allegato: la lettura dei dati, i percorsi e i loro
+              esiti. Si riporta solo se la check list ministeriale che qualifica
+              il caso è completa, perché è da quelle risposte che la lettura
+              prende peso; altrimenti il documento dichiara perché manca. */}
+          <section className="doc-sezione doc-allegato">
+            <h2 className="doc-titolo">Allegato A — Supporto decisionale</h2>
+            {allegatoDisponibile && raccomandazione ? (
+              <>
+                <p className="doc-nota" style={{ marginBottom: '3mm' }}>
+                  Riportato perché la check list ministeriale è completa ({risposteChecklist}/
+                  {totaleDomande} domande) e il quadro qualitativo è «
+                  {quadro?.etichetta ?? 'non determinato'}». Non è una raccomandazione: sono le
+                  strade che i fatti accertati rendono disponibili, con chi le decide.
+                </p>
+
+                <div className="doc-blocco" style={{ marginBottom: '5mm' }}>
+                  <p className="doc-occhiello">Lettura dei dati</p>
                   <p style={{ fontWeight: 700, fontSize: '11pt', marginBottom: '1.5mm' }}>
                     {raccomandazione.titolo}
                   </p>
@@ -511,12 +606,10 @@ export default async function ReportVerificaAmministrativaPage({
                     </p>
                   )}
                 </div>
-              </section>
 
-              <section className="doc-sezione">
-                <h2 className="doc-titolo">
-                  <span className="doc-num">6</span> I percorsi, distinti, e i loro esiti
-                </h2>
+                <p className="doc-occhiello" style={{ marginBottom: '2mm' }}>
+                  I percorsi, distinti, e i loro esiti
+                </p>
                 {raccomandazione.percorsi.map((p) => (
                   <div
                     key={p.codice}
@@ -573,55 +666,15 @@ export default async function ReportVerificaAmministrativaPage({
                   </div>
                 ))}
                 <p className="doc-nota-forte">{raccomandazione.nonEquiparabili}</p>
-              </section>
-
-              <section className="doc-sezione">
-                <h2 className="doc-titolo">
-                  <span className="doc-num">7</span> Elementi letti
-                </h2>
-                <table className="doc-tabella">
-                  <tbody>
-                    {raccomandazione.motivi.map((m, i) => (
-                      <tr key={i}>
-                        <td className="num" style={{ width: '8mm' }}>
-                          {i + 1}
-                        </td>
-                        <td>{m}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
-            </>
-          )}
-
-          {/* 7 · LIMITI */}
-          <section className="doc-sezione">
-            <h2 className="doc-titolo">
-              <span className="doc-num">{raccomandazione ? '8' : '5'}</span> Limiti e natura del
-              documento
-            </h2>
-            <ul className="doc-elenco">
-              {(raccomandazione?.limiti ?? []).map((l, i) => (
-                <li key={i}>{l}</li>
-              ))}
-              <li>
-                I percorsi sono accostati, non scelti: la decisione su come procedere resta all’ente
-                e non dipende dalla piattaforma.
-              </li>
-              <li>
-                Il documento non sostituisce la valutazione del caso concreto né gli atti che ne
-                discendono.
-              </li>
-            </ul>
-            <div className="doc-firma">
-              <div className="doc-riga-doc">
-                <span>
-                  Documento generato dalla piattaforma il {oggi} · spazio {contesto.codice}
-                </span>
-                <span className="doc-cifra">{azienda.azienda.ragioneSociale}</span>
-              </div>
-            </div>
+              </>
+            ) : (
+              <p>
+                Non riportato: la check list ministeriale che qualifica il caso non è completa (
+                {risposteChecklist}/{totaleDomande} domande risposte). Senza quelle risposte il
+                quadro qualitativo non entra nella valutazione e le strade possibili restano fuori
+                dal documento.
+              </p>
+            )}
           </section>
 
           {/* PAGINA DI SINTESI FINALE — i numeri, in trenta secondi */}
