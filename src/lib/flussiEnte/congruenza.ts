@@ -64,6 +64,8 @@ export interface PeriodoRegolarizzato {
 }
 
 export interface EsitoCongruenza {
+  /** L'ente a cui il flusso appartiene. */
+  ente: string;
   flusso: string;
   etichette: { denuncia: string; pagamento: string };
   dal: string;
@@ -233,6 +235,7 @@ export function congruenzaFlussi(input: {
   scoperte.sort((a, b) => b.giorni - a.giorni || a.periodo.localeCompare(b.periodo));
 
   return {
+    ente: profilo.enteNome,
     flusso: profilo.flusso,
     etichette: { denuncia: profilo.etichettaDenuncia, pagamento: profilo.etichettaPagamento },
     dal,

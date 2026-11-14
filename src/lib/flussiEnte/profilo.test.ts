@@ -14,6 +14,8 @@ import {
 const profilo = (patch: Partial<ProfiloFlusso> = {}): ProfiloFlusso => ({
   ...PROFILI_PREDEFINITI[0],
   id: 1,
+  enteId: 1,
+  enteNome: 'INPS',
   ...patch,
 });
 

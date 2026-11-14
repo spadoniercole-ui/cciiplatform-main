@@ -3,13 +3,14 @@
 // I profili di flusso dell'ente, le sospensioni della matricola e il
 // confronto attesi/ricevuti.
 //
-// Il profilo è dello SPAZIO (vale per tutte le aziende che l'ente analizza);
-// la sospensione è dell'AZIENDA, perché la matricola è dell'azienda. Il
-// confronto si legge dall'archivio: nessun file nuovo da caricare, nessun
-// dato chiesto due volte.
+// Il flusso appartiene a un ENTE (tabella `enti` dello spazio) e si filtra per
+// ente: INPS, INAIL, Agenzia delle Entrate non sono un elenco indistinto di
+// righe. Il profilo vale per tutte le aziende che l'ente analizza; la
+// sospensione è dell'azienda, perché la matricola è dell'azienda. Il confronto
+// si legge dall'archivio: nessun file nuovo da caricare.
 
 import { pool } from '@/lib/db';
-import { assicuraTabelleFlussiEnte, assicuraTabelleVera } from '@/db/provision';
+import { assicuraTabelleFlussiEnte } from '@/db/provision';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import {
   PROFILI_PREDEFINITI,
@@ -17,12 +18,14 @@ import {
   type ProfiloFlusso,
   type TipoFlusso,
 } from '@/lib/flussiEnte/profilo';
+import type { EsitoCongruenza } from '@/lib/flussiEnte/congruenza';
 import {
-  congruenzaFlussi,
-  periodoDaTesto,
-  type EsitoCongruenza,
-  type SospensioneFlusso,
-} from '@/lib/flussiEnte/congruenza';
+  congruenzaAzienda,
+  leggiEnti,
+  leggiProfili,
+  leggiSospensioni,
+  type EnteFlusso,
+} from '@/lib/flussiEnte/leggiCongruenza';
 
 const schemaValido = (nomeSchema: string) => /^[a-z0-9_]+$/.test(nomeSchema);
 
@@ -40,50 +43,51 @@ const intero = (v: unknown, min: number, max: number, difetto: number) => {
 const PERIODICITA_AMMESSE: Periodicita[] = ['MENSILE', 'TRIMESTRALE', 'ANNUALE'];
 const TIPI_AMMESSI: TipoFlusso[] = ['INPS', 'INAIL', 'AGENZIA_ENTRATE', 'ALTRO'];
 
-function dallaRiga(r: Record<string, unknown>): ProfiloFlusso {
-  const periodicita = String(r.periodicita ?? 'MENSILE') as Periodicita;
-  const tipo = String(r.tipo ?? 'ALTRO') as TipoFlusso;
-  return {
-    id: Number(r.id),
-    tipo: TIPI_AMMESSI.includes(tipo) ? tipo : 'ALTRO',
-    flusso: String(r.flusso ?? ''),
-    etichettaDenuncia: String(r.etichetta_denuncia ?? 'denunce'),
-    etichettaPagamento: String(r.etichetta_pagamento ?? 'pagamenti'),
-    periodicita: PERIODICITA_AMMESSE.includes(periodicita) ? periodicita : 'MENSILE',
-    periodiPerAnno: Number(r.periodi_per_anno ?? 12),
-    scadenzaDenunciaGiorno: Number(r.scadenza_denuncia_giorno ?? 0),
-    scadenzaDenunciaMesiDopo: Number(r.scadenza_denuncia_mesi_dopo ?? 1),
-    scadenzaPagamentoGiorno: Number(r.scadenza_pagamento_giorno ?? 0),
-    scadenzaPagamentoMesiDopo: Number(r.scadenza_pagamento_mesi_dopo ?? 1),
-    rate: Number(r.rate ?? 1),
-    attivo: r.attivo !== false,
-  };
+/** L'anagrafica degli enti dello spazio: la testa a cui i flussi si agganciano. */
+export async function ottieniEntiFlusso(
+  nomeSchema: string
+): Promise<{ success: boolean; enti: EnteFlusso[]; error?: string }> {
+  try {
+    if (!schemaValido(nomeSchema)) return { success: false, enti: [], error: 'Schema non valido.' };
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    return { success: true, enti: await leggiEnti(nomeSchema) };
+  } catch (e) {
+    return {
+      success: false,
+      enti: [],
+      error: e instanceof Error ? e.message : 'Lettura degli enti non riuscita.',
+    };
+  }
 }
 
 /**
- * I profili dello spazio. Al primo accesso li semina dai predefiniti: una
- * configurazione vuota costringerebbe a compilare a mano un calendario che
- * l'operatore vuole soltanto confermare.
+ * I profili dello spazio. Al primo accesso li semina dai predefiniti,
+ * agganciando ciascuno al proprio ente: una configurazione vuota costringerebbe
+ * a compilare a mano un calendario che l'operatore vuole soltanto confermare.
  */
 export async function ottieniProfiliFlusso(
   nomeSchema: string
-): Promise<{ success: boolean; profili: ProfiloFlusso[]; error?: string }> {
+): Promise<{ success: boolean; profili: ProfiloFlusso[]; enti: EnteFlusso[]; error?: string }> {
   try {
     if (!schemaValido(nomeSchema))
-      return { success: false, profili: [], error: 'Schema non valido.' };
+      return { success: false, profili: [], enti: [], error: 'Schema non valido.' };
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     await assicuraTabelleFlussiEnte(nomeSchema);
 
-    let v = await pool.query(`SELECT * FROM "${nomeSchema}".flussi_ente_profili ORDER BY id`);
-    if (v.rows.length === 0) {
+    const enti = await leggiEnti(nomeSchema);
+    const esistenti = await leggiProfili(nomeSchema);
+
+    if (esistenti.length === 0 && enti.length > 0) {
       for (const p of PROFILI_PREDEFINITI) {
+        const ente = enti.find((e) => e.codice === p.tipo) ?? enti[0];
         await pool.query(
           `INSERT INTO "${nomeSchema}".flussi_ente_profili
-             (tipo, flusso, etichetta_denuncia, etichetta_pagamento, periodicita,
+             (ente_id, tipo, flusso, etichetta_denuncia, etichetta_pagamento, periodicita,
               periodi_per_anno, scadenza_denuncia_giorno, scadenza_denuncia_mesi_dopo,
               scadenza_pagamento_giorno, scadenza_pagamento_mesi_dopo, rate, attivo)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
           [
+            ente.id,
             p.tipo,
             p.flusso,
             p.etichettaDenuncia,
@@ -99,14 +103,14 @@ export async function ottieniProfiliFlusso(
           ]
         );
       }
-      v = await pool.query(`SELECT * FROM "${nomeSchema}".flussi_ente_profili ORDER BY id`);
     }
 
-    return { success: true, profili: v.rows.map(dallaRiga) };
+    return { success: true, profili: await leggiProfili(nomeSchema), enti };
   } catch (e) {
     return {
       success: false,
       profili: [],
+      enti: [],
       error: e instanceof Error ? e.message : 'Lettura dei profili non riuscita.',
     };
   }
@@ -125,6 +129,14 @@ export async function salvaProfiloFlusso(
     const flusso = testo(profilo.flusso);
     if (!flusso) return { success: false, profili: [], error: 'Indica il nome del flusso.' };
 
+    // Il flusso deve appartenere a un ente di questo spazio: la chiave non si
+    // prende dal browser senza controllarla.
+    const enti = await leggiEnti(nomeSchema);
+    const enteId = Number(profilo.enteId);
+    if (!enti.some((e) => e.id === enteId)) {
+      return { success: false, profili: [], error: 'Indica l’ente a cui il flusso appartiene.' };
+    }
+
     const tipo = TIPI_AMMESSI.includes(profilo.tipo as TipoFlusso)
       ? (profilo.tipo as TipoFlusso)
       : 'ALTRO';
@@ -132,6 +144,7 @@ export async function salvaProfiloFlusso(
       ? (profilo.periodicita as Periodicita)
       : 'MENSILE';
     const valori = [
+      enteId,
       tipo,
       flusso,
       testo(profilo.etichettaDenuncia) || 'denunce',
@@ -149,26 +162,25 @@ export async function salvaProfiloFlusso(
     if (profilo.id) {
       await pool.query(
         `UPDATE "${nomeSchema}".flussi_ente_profili
-            SET tipo=$3, flusso=$4, etichetta_denuncia=$5, etichetta_pagamento=$6,
+            SET ente_id=$2, tipo=$3, flusso=$4, etichetta_denuncia=$5, etichetta_pagamento=$6,
                 periodicita=$7, periodi_per_anno=$8, scadenza_denuncia_giorno=$9,
                 scadenza_denuncia_mesi_dopo=$10, scadenza_pagamento_giorno=$11,
                 scadenza_pagamento_mesi_dopo=$12, rate=$13, attivo=$14
-          WHERE id=$1 AND $2::text IS NOT NULL`,
-        [Number(profilo.id), nomeSchema, ...valori]
+          WHERE id=$1`,
+        [Number(profilo.id), ...valori]
       );
     } else {
       await pool.query(
         `INSERT INTO "${nomeSchema}".flussi_ente_profili
-           (tipo, flusso, etichetta_denuncia, etichetta_pagamento, periodicita,
+           (ente_id, tipo, flusso, etichetta_denuncia, etichetta_pagamento, periodicita,
             periodi_per_anno, scadenza_denuncia_giorno, scadenza_denuncia_mesi_dopo,
             scadenza_pagamento_giorno, scadenza_pagamento_mesi_dopo, rate, attivo)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
         valori
       );
     }
 
-    const v = await pool.query(`SELECT * FROM "${nomeSchema}".flussi_ente_profili ORDER BY id`);
-    return { success: true, profili: v.rows.map(dallaRiga) };
+    return { success: true, profili: await leggiProfili(nomeSchema) };
   } catch (e) {
     return {
       success: false,
@@ -187,8 +199,7 @@ export async function eliminaProfiloFlusso(
       return { success: false, profili: [], error: 'Schema non valido.' };
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     await pool.query(`DELETE FROM "${nomeSchema}".flussi_ente_profili WHERE id = $1`, [Number(id)]);
-    const v = await pool.query(`SELECT * FROM "${nomeSchema}".flussi_ente_profili ORDER BY id`);
-    return { success: true, profili: v.rows.map(dallaRiga) };
+    return { success: true, profili: await leggiProfili(nomeSchema) };
   } catch (e) {
     return {
       success: false,
@@ -204,28 +215,14 @@ export async function ottieniSospensioniFlusso(
   aziendaId: number
 ): Promise<{
   success: boolean;
-  sospensioni: ({ id: number } & SospensioneFlusso)[];
+  sospensioni: { id: number; dal: string; al: string; motivo: string }[];
   error?: string;
 }> {
   try {
     if (!schemaValido(nomeSchema))
       return { success: false, sospensioni: [], error: 'Schema non valido.' };
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
-    await assicuraTabelleFlussiEnte(nomeSchema);
-    const v = await pool.query(
-      `SELECT id, dal, al, motivo FROM "${nomeSchema}".flussi_sospensioni
-        WHERE azienda_id = $1 ORDER BY dal`,
-      [Number(aziendaId)]
-    );
-    return {
-      success: true,
-      sospensioni: v.rows.map((r) => ({
-        id: Number(r.id),
-        dal: String(r.dal),
-        al: String(r.al),
-        motivo: String(r.motivo ?? ''),
-      })),
-    };
+    return { success: true, sospensioni: await leggiSospensioni(nomeSchema, Number(aziendaId)) };
   } catch (e) {
     return {
       success: false,
@@ -296,14 +293,9 @@ export async function eliminaSospensioneFlusso(
 }
 
 /**
- * Il confronto attesi/ricevuti per un'azienda: per ogni profilo attivo, i
- * periodi che l'ente doveva ricevere, quelli arrivati, quelli mancanti con i
- * giorni di ritardo e quelli coperti da una sospensione o da una
- * regolarizzazione.
- *
- * Il perimetro si ricava dai dati in archivio (il primo e l'ultimo periodo
- * della certificazione dei debiti), ma l'operatore può restringerlo o
- * allargarlo: la finestra la decide chi conosce l'azienda, non il file.
+ * Il confronto attesi/ricevuti per un'azienda, per ogni profilo attivo, con
+ * l'ente di appartenenza. Il calcolo sta in `lib`, così il report PDF legge gli
+ * stessi numeri della schermata.
  */
 export async function calcolaCongruenzaFlussi(
   nomeSchema: string,
@@ -332,67 +324,22 @@ export async function calcolaCongruenzaFlussi(
       };
     }
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
-    await assicuraTabelleFlussiEnte(nomeSchema);
-    await assicuraTabelleVera(nomeSchema);
 
-    const righe = await pool.query(
-      `SELECT voce, periodo FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1`,
-      [Number(aziendaId)]
-    );
+    // L'arco confermato si salva: il report PDF legge lo stesso perimetro
+    // della schermata, e non un default diverso.
+    if (/^\d{4}-\d{2}$/.test(opzioni?.dal ?? '') && /^\d{4}-\d{2}$/.test(opzioni?.al ?? '')) {
+      await assicuraTabelleFlussiEnte(nomeSchema);
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".flussi_perimetri (azienda_id, dal, al, aggiornato_il)
+         VALUES ($1,$2,$3, now())
+         ON CONFLICT (azienda_id) DO UPDATE SET dal = EXCLUDED.dal, al = EXCLUDED.al,
+           aggiornato_il = now()`,
+        [Number(aziendaId), String(opzioni?.dal), String(opzioni?.al)]
+      );
+    }
 
-    const periodi = righe.rows
-      .map((r) => periodoDaTesto(String(r.periodo ?? '')))
-      .filter((p): p is string => Boolean(p))
-      .sort();
-
-    const dataVerifica = /^\d{4}-\d{2}-\d{2}$/.test(opzioni?.dataVerifica ?? '')
-      ? String(opzioni?.dataVerifica)
-      : oggi;
-    const dal = /^\d{4}-\d{2}$/.test(opzioni?.dal ?? '')
-      ? String(opzioni?.dal)
-      : (periodi[0] ?? null);
-    const al = /^\d{4}-\d{2}$/.test(opzioni?.al ?? '')
-      ? String(opzioni?.al)
-      : (periodi.at(-1) ?? null);
-
-    const profili = await pool.query(
-      `SELECT * FROM "${nomeSchema}".flussi_ente_profili WHERE attivo = TRUE ORDER BY id`
-    );
-    const sosp = await pool.query(
-      `SELECT dal, al, motivo FROM "${nomeSchema}".flussi_sospensioni WHERE azienda_id = $1 ORDER BY dal`,
-      [Number(aziendaId)]
-    );
-    const sospensioni: SospensioneFlusso[] = sosp.rows.map((r) => ({
-      dal: String(r.dal),
-      al: String(r.al),
-      motivo: String(r.motivo ?? ''),
-    }));
-
-    const esiti =
-      dal && al
-        ? profili.rows.map(dallaRiga).map((profilo) =>
-            congruenzaFlussi({
-              profilo,
-              righe: righe.rows.map((r) => ({
-                periodo: String(r.periodo ?? ''),
-                voce: String(r.voce ?? ''),
-              })),
-              sospensioni,
-              dal,
-              al,
-              dataVerifica,
-            })
-          )
-        : [];
-
-    return {
-      success: true,
-      esiti,
-      dal,
-      al,
-      dataVerifica,
-      periodiInArchivio: periodi.length,
-    };
+    const lettura = await congruenzaAzienda(nomeSchema, Number(aziendaId), opzioni);
+    return { success: true, ...lettura };
   } catch (e) {
     return {
       success: false,

@@ -3241,6 +3241,46 @@ export async function assicuraTabelleVerificaAzienda(nomeSchema: string): Promis
 }
 
 /**
+ * GLI ENTI DELLO SPAZIO.
+ *
+ * L'anagrafica degli enti creditori — INPS, INAIL, Agenzia delle Entrate,
+ * Agente della Riscossione, più quelli che un ente aggiunge — sta qui, prima
+ * dei flussi: un profilo di flusso appartiene a un ente, e senza l'ente non si
+ * saprebbe a chi il flusso arriva. È la tabella a cui `flussi_ente_profili`
+ * si aggancia con `ente_id`, così i flussi si filtrano per ente invece di
+ * essere un elenco indistinto.
+ *
+ * Idempotente e con i quattro enti di partenza già inseriti: uno spazio
+ * esistente apre la pagina dei flussi e trova l'anagrafica compilata.
+ */
+export async function assicuraTabellaEnti(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.enti (
+      id SERIAL PRIMARY KEY,
+      codice TEXT NOT NULL UNIQUE,
+      nome TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.enti ADD COLUMN IF NOT EXISTS note TEXT NOT NULL DEFAULT ''`
+  );
+  for (const e of [
+    { codice: 'INPS', nome: 'INPS' },
+    { codice: 'INAIL', nome: 'INAIL' },
+    { codice: 'AGENZIA_ENTRATE', nome: 'Agenzia delle Entrate' },
+    { codice: 'AGENTE_RISCOSSIONE', nome: 'Agente della Riscossione' },
+  ]) {
+    await eseguiDdlTenant(
+      sql`INSERT INTO ${s}.enti (codice, nome) VALUES (${e.codice}, ${e.nome})
+          ON CONFLICT (codice) DO NOTHING`
+    );
+  }
+}
+
+/**
  * PROFILI DI FLUSSO E SOSPENSIONI DELLA MATRICOLA.
  *
  * Il calendario con cui un ente riceve i flussi dall'azienda — che cosa,
@@ -3256,9 +3296,11 @@ export async function assicuraTabelleVerificaAzienda(nomeSchema: string): Promis
 export async function assicuraTabelleFlussiEnte(nomeSchema: string): Promise<void> {
   const s = sql.identifier(nomeSchema);
   await assicuraTabellaAziende(nomeSchema); // FK aziende
+  await assicuraTabellaEnti(nomeSchema); // FK enti
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.flussi_ente_profili (
       id SERIAL PRIMARY KEY,
+      ente_id INTEGER REFERENCES ${s}.enti(id) ON DELETE CASCADE,
       tipo TEXT NOT NULL DEFAULT 'ALTRO',
       flusso TEXT NOT NULL,
       etichetta_denuncia TEXT NOT NULL DEFAULT 'denunce',
@@ -3272,6 +3314,38 @@ export async function assicuraTabelleFlussiEnte(nomeSchema: string): Promise<voi
       rate INTEGER NOT NULL DEFAULT 1,
       attivo BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.flussi_ente_profili ADD COLUMN IF NOT EXISTS ente_id INTEGER REFERENCES ${s}.enti(id) ON DELETE CASCADE`
+  );
+  // I profili creati prima dell'anagrafica degli enti si riagganciano dal tipo:
+  // il tipo del flusso È l'ente che lo riceve (INPS, INAIL, Agenzia delle
+  // Entrate), e per «Altro» si prende il primo ente dello spazio. Nessun
+  // profilo resta orfano.
+  await eseguiDdlTenant(sql`
+    UPDATE ${s}.flussi_ente_profili p
+       SET ente_id = e.id
+      FROM ${s}.enti e
+     WHERE p.ente_id IS NULL AND e.codice = p.tipo`);
+  await eseguiDdlTenant(sql`
+    UPDATE ${s}.flussi_ente_profili p
+       SET ente_id = (SELECT id FROM ${s}.enti ORDER BY id LIMIT 1)
+     WHERE p.ente_id IS NULL AND EXISTS (SELECT 1 FROM ${s}.enti)`);
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_flussi_profili_ente ON ${s}.flussi_ente_profili (ente_id)`
+  );
+  // IL PERIMETRO SCELTO DALL'OPERATORE. L'arco dei periodi si ricava
+  // dall'archivio, ma chi conduce la verifica può restringerlo o allargarlo:
+  // senza salvarlo, il report PDF ripartirebbe dall'archivio e mostrerebbe
+  // numeri diversi dalla schermata. Qui resta l'ultimo arco confermato, e le
+  // due superfici leggono lo stesso.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.flussi_perimetri (
+      azienda_id INTEGER PRIMARY KEY REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      dal TEXT NOT NULL,
+      al TEXT NOT NULL,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
   await eseguiDdlTenant(

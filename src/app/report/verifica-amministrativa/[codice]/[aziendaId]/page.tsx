@@ -12,6 +12,7 @@ import { leggiChecklistProdottiAzienda } from '@/lib/prodotti/checklistAzienda';
 import { checklistProdottiCompleta } from '@/lib/checklist/pesoProdotti';
 import { StampaDocumento } from '@/components/spazio/StampaDocumento';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
+import { congruenzaAzienda } from '@/lib/flussiEnte/leggiCongruenza';
 
 // IL REPORT DELLA VERIFICA AMMINISTRATIVA — FUORI DAL GUSCIO (0.215.0).
 //
@@ -127,6 +128,15 @@ const CSS = `
 }
 `;
 
+/** «2025-06» → «06/2025», come si leggono i periodi nei documenti. */
+const mese = (p: string | null | undefined) => (p ? `${p.slice(5)}/${p.slice(0, 4)}` : '—');
+
+/** Un elenco lungo non si stampa intero: i primi otto e il resto in cifre. */
+const compatta = (periodi: string[], massimo = 8) =>
+  periodi.length <= massimo
+    ? periodi.map(mese).join(', ')
+    : `${periodi.slice(0, massimo).map(mese).join(', ')} e altri ${periodi.length - massimo}`;
+
 const euro = (valore: number) =>
   `${valore.toLocaleString('it-IT', { maximumFractionDigits: 0 })} €`;
 const data = (iso: string | null | undefined) =>
@@ -160,21 +170,44 @@ export default async function ReportVerificaAmministrativaPage({
   // In uno spazio ENTE si valuta la soglia dell'ente, in uno REDIGENTE tutte:
   // lo decide il motore delle soglie, non questa pagina.
   const tipoSpazio = contesto.tipoSpazio === 'ENTE' ? 'ENTE' : 'NON_ENTE';
-  const [attenzioneRis, storicoRis, raccomandazioneRis, debitoRis, soglieRis, checklistRis] =
-    await Promise.all([
-      ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
-      ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
-      ottieniRaccomandazioneAction(contesto.nomeSchema, id).catch(() => null),
-      debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
-      valutaSoglieAction(contesto.nomeSchema, id, tipoSpazio).catch(() => null),
-      leggiChecklistProdottiAzienda(contesto.nomeSchema, id).catch(() => null),
-    ]);
+  const [
+    attenzioneRis,
+    storicoRis,
+    raccomandazioneRis,
+    debitoRis,
+    soglieRis,
+    checklistRis,
+    flussiLetti,
+  ] = await Promise.all([
+    ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
+    ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
+    ottieniRaccomandazioneAction(contesto.nomeSchema, id).catch(() => null),
+    debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
+    valutaSoglieAction(contesto.nomeSchema, id, tipoSpazio).catch(() => null),
+    leggiChecklistProdottiAzienda(contesto.nomeSchema, id).catch(() => null),
+    congruenzaAzienda(contesto.nomeSchema, id).catch(() => null),
+  ]);
   const attenzione = attenzioneRis?.success ? (attenzioneRis.attenzione ?? null) : null;
   const raccomandazione = raccomandazioneRis?.success
     ? (raccomandazioneRis.raccomandazione ?? null)
     : null;
   const debito = debitoRis?.success ? (debitoRis.debito ?? null) : null;
   const soglie = soglieRis?.success ? (soglieRis.esito ?? null) : null;
+
+  // I FLUSSI DELL'ENTE (0.228.0). Lo stesso calcolo della verifica, letto dal
+  // Server Component: attesi contro ricevuti, periodo per periodo, con l'ente a
+  // cui ogni flusso appartiene. Se non c'è niente da dire, la sezione non c'è.
+  const flussi = flussiLetti && flussiLetti.esiti.length > 0 ? flussiLetti : null;
+  const scoperteFlussi = flussi
+    ? flussi.esiti.flatMap((e) =>
+        e.scoperte.slice(0, 4).map((sc) => ({
+          ...sc,
+          etichetta: sc.tipo === 'DENUNCIA' ? e.etichette.denuncia : e.etichette.pagamento,
+          flusso: e.flusso,
+        }))
+      )
+    : [];
+  const notaFlussi = flussi?.esiti[0]?.notaRitardi ?? null;
 
   // LA CHECK LIST CHE QUALIFICA È QUELLA DEI PRODOTTI (0.220.0). Si compila nel
   // triage, prima dell'esito: è da quelle risposte che la lettura prende peso.
@@ -316,6 +349,7 @@ export default async function ReportVerificaAmministrativaPage({
                 <li>Esito e fatti accertati</li>
                 <li>Soglie di segnalazione (art. 25-novies)</li>
                 <li>Debito dell’ente</li>
+                {flussi && <li>Flussi dell’ente — attesi e ricevuti</li>}
                 {raccomandazione && <li>Elementi letti</li>}
                 <li>Limiti e natura del documento</li>
                 <li>Allegato A — Supporto decisionale (se la check list è completa)</li>
@@ -550,10 +584,98 @@ export default async function ReportVerificaAmministrativaPage({
             )}
           </section>
 
+          {/* 5 · FLUSSI DELL'ENTE (0.228.0) — la fotografia del rapporto con
+              l'ente: non solo quanto si deve, anche che cosa l'azienda ha
+              trasmesso e quando. Breve per scelta: la tabella conta, l'elenco
+              dice dove manca qualcosa, la nota dichiara che il ritardo dei
+              flussi presenti non si misura. */}
+          {flussi && (
+            <section className="doc-sezione">
+              <h2 className="doc-titolo">
+                <span className="doc-num">5</span> Flussi dell’ente — attesi e ricevuti
+              </h2>
+              <div className="doc-blocco">
+                <table className="doc-tabella">
+                  <thead>
+                    <tr>
+                      <th>Ente · flusso</th>
+                      <th className="num">Attesi</th>
+                      <th className="num">Denunce</th>
+                      <th className="num">Pagamenti</th>
+                      <th className="num">Scoperti</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {flussi.esiti.map((e) => (
+                      <tr key={`${e.ente}-${e.flusso}`}>
+                        <td>
+                          {e.ente ? <strong>{e.ente}</strong> : null}
+                          {e.ente ? ' · ' : ''}
+                          {e.flusso}
+                        </td>
+                        <td className="num">{e.attesi}</td>
+                        <td className="num">{e.denunce}</td>
+                        <td className="num">{e.deleghe}</td>
+                        <td className="num">{e.senzaDenuncia.length + e.senzaDelega.length}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="doc-nota">
+                  Periodi di competenza da {mese(flussi.dal)} a {mese(flussi.al)}; ritardi misurati
+                  al {data(flussi.dataVerifica)}.
+                </p>
+
+                {flussi.esiti.some(
+                  (e) => e.senzaDenuncia.length > 0 || e.senzaDelega.length > 0
+                ) && (
+                  <div style={{ marginTop: '4mm' }}>
+                    <p className="doc-occhiello">Dove manca qualcosa</p>
+                    {flussi.esiti.map((e) => (
+                      <p key={`manca-${e.ente}-${e.flusso}`} style={{ marginTop: '2mm' }}>
+                        <strong>
+                          {e.ente ? `${e.ente} · ` : ''}
+                          {e.flusso}
+                        </strong>
+                        {e.senzaDenuncia.length > 0
+                          ? ` — senza ${e.etichette.denuncia}: ${compatta(e.senzaDenuncia)}.`
+                          : ''}
+                        {e.senzaDelega.length > 0
+                          ? ` — senza ${e.etichette.pagamento}: ${compatta(e.senzaDelega)}.`
+                          : ''}
+                        {e.regolarizzati.length > 0
+                          ? ` — coperti da una partita: ${compatta(
+                              e.regolarizzati.map((r) => r.periodo)
+                            )}.`
+                          : ''}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                {scoperteFlussi.length > 0 && (
+                  <div style={{ marginTop: '4mm' }}>
+                    <p className="doc-occhiello">Le attese più lunghe</p>
+                    <ul className="doc-elenco">
+                      {scoperteFlussi.slice(0, 6).map((sc) => (
+                        <li key={`sc-${sc.flusso}-${sc.periodo}-${sc.tipo}`}>
+                          {mese(sc.periodo)} · {sc.etichetta} — scadenza {data(sc.scadenza)},{' '}
+                          <strong>{sc.giorni} giorni</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {notaFlussi && <p className="doc-nota">{notaFlussi}</p>}
+              </div>
+            </section>
+          )}
+
           {raccomandazione && (
             <section className="doc-sezione">
               <h2 className="doc-titolo">
-                <span className="doc-num">5</span> Elementi letti
+                <span className="doc-num">6</span> Elementi letti
               </h2>
               <table className="doc-tabella">
                 <tbody>
@@ -573,7 +695,7 @@ export default async function ReportVerificaAmministrativaPage({
           {/* 7 · LIMITI */}
           <section className="doc-sezione">
             <h2 className="doc-titolo">
-              <span className="doc-num">{raccomandazione ? '6' : '5'}</span> Limiti e natura del
+              <span className="doc-num">{raccomandazione ? '7' : '6'}</span> Limiti e natura del
               documento
             </h2>
             <ul className="doc-elenco">

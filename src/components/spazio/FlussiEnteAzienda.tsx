@@ -56,6 +56,8 @@ export function FlussiEnteAzienda({
   const [caricamento, setCaricamento] = useState(true);
   const [errore, setErrore] = useState<string | null>(null);
   const [nuova, setNuova] = useState({ dal: '', al: '', motivo: '' });
+  /** Filtro per ente: i flussi appartengono a un ente, e si leggono per ente. */
+  const [enteFiltro, setEnteFiltro] = useState('');
 
   const carica = useCallback(
     async (finestra?: { dal?: string; al?: string }) => {
@@ -164,6 +166,23 @@ export function FlussiEnteAzienda({
         >
           <RefreshCw className="w-3.5 h-3.5" /> Ricalcola
         </button>
+        {esiti.length > 0 && (
+          <div>
+            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Ente</label>
+            <select
+              className={CLASSE_CAMPO}
+              value={enteFiltro}
+              onChange={(e) => setEnteFiltro(e.target.value)}
+            >
+              <option value="">Tutti gli enti</option>
+              {[...new Set(esiti.map((e) => e.ente))].map((ente) => (
+                <option key={ente} value={ente}>
+                  {ente}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {dataVerifica && (
           <span className="text-[10px] text-slate-500 pb-2">
             ritardi misurati al {dataVerifica.split('-').reverse().join('/')}
@@ -182,78 +201,86 @@ export function FlussiEnteAzienda({
           alla voce «Flusso che l’ente riceve».
         </p>
       ) : (
-        esiti.map((e) => (
-          <div key={e.flusso} className="border border-slate-200 rounded-lg p-3 space-y-2">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-xs font-bold text-slate-900">{e.flusso}</p>
-              <p className="text-[10px] text-slate-600">
-                {e.attesi} periodi attesi ({mese(e.dal)}–{mese(e.al)}) · {e.denunce}{' '}
-                {e.etichette.denuncia} · {e.deleghe} {e.etichette.pagamento}
-                {e.sospesi.length > 0 ? ` · ${e.sospesi.length} mesi sospesi` : ''}
-              </p>
-            </div>
-
-            {e.completo && (
-              <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
-                Ogni periodo atteso ha la sua denuncia e il suo pagamento.
-              </p>
-            )}
-
-            {e.senzaDenuncia.length > 0 && (
-              <p className="text-[11px] text-slate-700">
-                <strong>Periodi senza {e.etichette.denuncia}:</strong> {compatta(e.senzaDenuncia)}
-              </p>
-            )}
-
-            {e.senzaDelega.length > 0 && (
-              <p className="text-[11px] text-slate-700">
-                <strong>Periodi senza {e.etichette.pagamento}:</strong> {compatta(e.senzaDelega)}
-              </p>
-            )}
-
-            {e.regolarizzati.length > 0 && (
-              <p className="text-[11px] text-slate-700">
-                <strong>Coperti da una partita:</strong>{' '}
-                {compatta(e.regolarizzati.map((r) => r.periodo))}
-              </p>
-            )}
-
-            {e.fuoriPerimetro.denunce.length + e.fuoriPerimetro.deleghe.length > 0 && (
-              <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                <strong>Fuori dall’arco scelto:</strong>{' '}
-                {[
-                  ...e.fuoriPerimetro.denunce.map((p) => `${mese(p)} denuncia`),
-                  ...e.fuoriPerimetro.deleghe.map((p) => `${mese(p)} pagamento`),
-                ].join(', ')}
-              </p>
-            )}
-
-            {e.scoperte.length > 0 && (
-              <div>
-                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">
-                  Periodi scoperti, con il ritardo dalla scadenza
+        esiti
+          .filter((e) => !enteFiltro || e.ente === enteFiltro)
+          .map((e) => (
+            <div
+              key={`${e.ente}-${e.flusso}`}
+              className="border border-slate-200 rounded-lg p-3 space-y-2"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-xs font-bold text-slate-900">
+                  {e.ente ? <span className="text-slate-500 font-normal">{e.ente} · </span> : null}
+                  {e.flusso}
                 </p>
-                <ul className="space-y-0.5">
-                  {e.scoperte.slice(0, 12).map((s) => (
-                    <li key={`${s.periodo}-${s.tipo}`} className="text-[11px] text-slate-700">
-                      {mese(s.periodo)} ·{' '}
-                      {s.tipo === 'DENUNCIA' ? e.etichette.denuncia : e.etichette.pagamento} —
-                      scadenza {s.scadenza.split('-').reverse().join('/')},{' '}
-                      <strong>{s.giorni} giorni</strong>
-                    </li>
-                  ))}
-                  {e.scoperte.length > 12 && (
-                    <li className="text-[10px] text-slate-500">
-                      e altre {e.scoperte.length - 12} posizioni.
-                    </li>
-                  )}
-                </ul>
+                <p className="text-[10px] text-slate-600">
+                  {e.attesi} periodi attesi ({mese(e.dal)}–{mese(e.al)}) · {e.denunce}{' '}
+                  {e.etichette.denuncia} · {e.deleghe} {e.etichette.pagamento}
+                  {e.sospesi.length > 0 ? ` · ${e.sospesi.length} mesi sospesi` : ''}
+                </p>
               </div>
-            )}
 
-            <p className="text-[10px] text-slate-500 leading-relaxed">{e.notaRitardi}</p>
-          </div>
-        ))
+              {e.completo && (
+                <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+                  Ogni periodo atteso ha la sua denuncia e il suo pagamento.
+                </p>
+              )}
+
+              {e.senzaDenuncia.length > 0 && (
+                <p className="text-[11px] text-slate-700">
+                  <strong>Periodi senza {e.etichette.denuncia}:</strong> {compatta(e.senzaDenuncia)}
+                </p>
+              )}
+
+              {e.senzaDelega.length > 0 && (
+                <p className="text-[11px] text-slate-700">
+                  <strong>Periodi senza {e.etichette.pagamento}:</strong> {compatta(e.senzaDelega)}
+                </p>
+              )}
+
+              {e.regolarizzati.length > 0 && (
+                <p className="text-[11px] text-slate-700">
+                  <strong>Coperti da una partita:</strong>{' '}
+                  {compatta(e.regolarizzati.map((r) => r.periodo))}
+                </p>
+              )}
+
+              {e.fuoriPerimetro.denunce.length + e.fuoriPerimetro.deleghe.length > 0 && (
+                <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  <strong>Fuori dall’arco scelto:</strong>{' '}
+                  {[
+                    ...e.fuoriPerimetro.denunce.map((p) => `${mese(p)} denuncia`),
+                    ...e.fuoriPerimetro.deleghe.map((p) => `${mese(p)} pagamento`),
+                  ].join(', ')}
+                </p>
+              )}
+
+              {e.scoperte.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">
+                    Periodi scoperti, con il ritardo dalla scadenza
+                  </p>
+                  <ul className="space-y-0.5">
+                    {e.scoperte.slice(0, 12).map((s) => (
+                      <li key={`${s.periodo}-${s.tipo}`} className="text-[11px] text-slate-700">
+                        {mese(s.periodo)} ·{' '}
+                        {s.tipo === 'DENUNCIA' ? e.etichette.denuncia : e.etichette.pagamento} —
+                        scadenza {s.scadenza.split('-').reverse().join('/')},{' '}
+                        <strong>{s.giorni} giorni</strong>
+                      </li>
+                    ))}
+                    {e.scoperte.length > 12 && (
+                      <li className="text-[10px] text-slate-500">
+                        e altre {e.scoperte.length - 12} posizioni.
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              <p className="text-[10px] text-slate-500 leading-relaxed">{e.notaRitardi}</p>
+            </div>
+          ))
       )}
 
       <details className="group border-t border-slate-200 pt-2">

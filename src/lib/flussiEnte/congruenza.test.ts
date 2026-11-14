@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { congruenzaFlussi, famigliaDaVoce, mesiSospesi, periodoDaTesto } from './congruenza';
 import { PROFILI_PREDEFINITI, type ProfiloFlusso } from './profilo';
 
-const inps: ProfiloFlusso = { ...PROFILI_PREDEFINITI[0], id: 1 };
+const inps: ProfiloFlusso = { ...PROFILI_PREDEFINITI[0], id: 1, enteId: 1, enteNome: 'INPS' };
 
 describe('righe dei flussi — famiglia e periodo', () => {
   it('riconosce denunce e pagamenti dalla natura della voce', () => {

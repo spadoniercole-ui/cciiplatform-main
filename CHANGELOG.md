@@ -1,3 +1,22 @@
+## 0.228.0 — 2026-11-14
+
+- **Gli enti hanno una tabella, e i flussi si agganciano a quella.** Prima del profilo di flusso nasce
+  l’anagrafica `enti` dello spazio (INPS, INAIL, Agenzia delle Entrate, Agente della Riscossione già
+  inseriti, più quelli che l’ente aggiunge); `flussi_ente_profili` porta `ente_id` con la chiave
+  esterna e un indice. I profili creati prima si riagganciano da soli: il tipo del flusso è l’ente che
+  lo riceve. In schermata i flussi si leggono raggruppati per ente nei parametri e filtrati per ente
+  nella verifica.
+- **I flussi entrano nel report PDF.** Nuova sezione «Flussi dell’ente — attesi e ricevuti», dopo il
+  debito: una tabella con, per ogni ente e flusso, periodi attesi, denunce, pagamenti e periodi
+  scoperti; l’elenco compatto di dove manca qualcosa (con i periodi coperti da TS 27 o dall’Agente
+  della Riscossione), le attese più lunghe con la scadenza e i giorni, e la nota che dichiara perché il
+  ritardo dei flussi presenti non si misura. Le sezioni successive scalano di numero, indice compreso.
+- **L’arco dei periodi si salva.** Quando in verifica si conferma l’arco con «Ricalcola», resta
+  scritto per quell’azienda: il report PDF usa lo stesso perimetro, invece di ripartire
+  dall’archivio e mostrare numeri diversi dalla schermata.
+- Il numero e il calcolo restano gli stessi della verifica amministrativa: il report li legge dalla
+  stessa funzione, non da una seconda copia.
+
 ## 0.227.0 — 2026-11-14
 
 - **Il flusso che l’ente riceve diventa un parametro.** Nei Parametri dello spazio c’è la voce

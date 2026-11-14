@@ -23,6 +23,10 @@ export type TipoFlusso = 'INPS' | 'INAIL' | 'AGENZIA_ENTRATE' | 'ALTRO';
 
 export interface ProfiloFlusso {
   id: number;
+  /** L'ente a cui il flusso appartiene (tabella `enti` dello spazio). */
+  enteId: number | null;
+  /** Il nome dell'ente, per leggere il profilo senza un'altra query. */
+  enteNome: string;
   tipo: TipoFlusso;
   /** Il nome del flusso come lo chiama l'ente: «UNIEMENS», «Autoliquidazione premi». */
   flusso: string;
@@ -67,7 +71,10 @@ export const TIPI_FLUSSO: { codice: TipoFlusso; etichetta: string }[] = [
  * modificabili: sono il modo più rapido per partire da un calendario
  * plausibile, non un'affermazione su come stiano le cose per legge.
  */
-export const PROFILI_PREDEFINITI: Omit<ProfiloFlusso, 'id'>[] = [
+/** Un profilo senza i dati che dipendono dallo spazio (id ed ente). */
+export type ProfiloFlussoBase = Omit<ProfiloFlusso, 'id' | 'enteId' | 'enteNome'>;
+
+export const PROFILI_PREDEFINITI: ProfiloFlussoBase[] = [
   {
     tipo: 'INPS',
     flusso: 'UNIEMENS',
