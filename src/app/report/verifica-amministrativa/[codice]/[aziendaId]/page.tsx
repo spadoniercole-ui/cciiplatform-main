@@ -264,6 +264,33 @@ export default async function ReportVerificaAmministrativaPage({
 
             <div className="doc-numeri">
               <div className="doc-numero">
+                <span className="doc-numero-etichetta">Debito dell’ente</span>
+                <span className="doc-numero-valore doc-cifra">
+                  {debito ? euro(debito.totale) : '—'}
+                </span>
+                <span className="doc-numero-nota">
+                  {debito ? `dato certo · ${debito.righe} voci` : 'non memorizzato'}
+                </span>
+              </div>
+              <div className="doc-numero">
+                <span className="doc-numero-etichetta">Soglie superate</span>
+                <span className="doc-numero-valore doc-cifra">
+                  {soglieSuperate.length}/{righeSoglie.length}
+                </span>
+                <span className="doc-numero-nota">
+                  {totaleSoglieSuperate > 0
+                    ? `${euro(totaleSoglieSuperate)} di esposizione`
+                    : 'nessuna esposizione sopra soglia'}
+                </span>
+              </div>
+              <div className="doc-numero">
+                <span className="doc-numero-etichetta">Primo confronto</span>
+                <span className="doc-numero-valore">{oggetto?.etichetta ?? 'non disponibile'}</span>
+                <span className="doc-numero-nota">
+                  {oggetto ? `decide ${oggetto.chiDecide.toLowerCase()}` : '—'}
+                </span>
+              </div>
+              <div className="doc-numero">
                 <span className="doc-numero-etichetta">Copertura</span>
                 <span className="doc-numero-valore doc-cifra">
                   {attenzione
@@ -272,12 +299,15 @@ export default async function ReportVerificaAmministrativaPage({
                 </span>
                 <span className="doc-numero-nota">elementi determinati sul totale</span>
               </div>
-              <div className="doc-numero">
-                <span className="doc-numero-etichetta">Verifica eseguita</span>
-                <span className="doc-numero-valore doc-cifra">{data(riga?.eseguitaIl) ?? '—'}</span>
-                <span className="doc-numero-nota">{validita.etichetta}</span>
-              </div>
             </div>
+
+            <p className="doc-nota">
+              {riga?.eseguitaIl
+                ? `Verifica eseguita il ${data(riga.eseguitaIl)}${
+                    validita.etichetta ? ` · ${validita.etichetta}` : ''
+                  }`
+                : 'Verifica non ancora eseguita'}
+            </p>
 
             <div className="doc-indice">
               <span className="doc-occhiello">Contenuto del documento</span>
@@ -289,7 +319,7 @@ export default async function ReportVerificaAmministrativaPage({
                 {raccomandazione && <li>Elementi letti</li>}
                 <li>Limiti e natura del documento</li>
                 <li>Allegato A — Supporto decisionale (se la check list è completa)</li>
-                <li>Sintesi finale — i numeri in trenta secondi</li>
+                <li>Sintesi finale — le strade e i loro esiti</li>
               </ol>
             </div>
           </section>
@@ -675,81 +705,12 @@ export default async function ReportVerificaAmministrativaPage({
             )}
           </section>
 
-          {/* PAGINA DI SINTESI FINALE — i numeri, in trenta secondi */}
+          {/* PAGINA DI SINTESI FINALE — le strade e i loro esiti */}
           <section className="doc-sezione doc-finale">
-            <h2 className="doc-titolo">Sintesi finale — i numeri in trenta secondi</h2>
-
-            <div className="doc-numeri">
-              <div className="doc-numero">
-                <span className="doc-numero-etichetta">Debito dell’ente</span>
-                <span className="doc-numero-valore doc-cifra">
-                  {debito ? euro(debito.totale) : '—'}
-                </span>
-                <span className="doc-numero-nota">
-                  {debito ? `dato certo · ${debito.righe} voci` : 'non memorizzato'}
-                </span>
-              </div>
-              <div className="doc-numero">
-                <span className="doc-numero-etichetta">Soglie superate</span>
-                <span className="doc-numero-valore doc-cifra">
-                  {soglieSuperate.length}/{righeSoglie.length}
-                </span>
-                <span className="doc-numero-nota">
-                  {totaleSoglieSuperate > 0
-                    ? `${euro(totaleSoglieSuperate)} di esposizione`
-                    : 'nessuna esposizione sopra soglia'}
-                </span>
-              </div>
-              <div className="doc-numero">
-                <span className="doc-numero-etichetta">Primo confronto</span>
-                <span className="doc-numero-valore">{oggetto?.etichetta ?? 'non disponibile'}</span>
-                <span className="doc-numero-nota">
-                  {oggetto ? `decide ${oggetto.chiDecide.toLowerCase()}` : '—'}
-                </span>
-              </div>
-            </div>
-
-            {soglieSuperate.length > 0 && (
-              <div style={{ marginTop: '4mm' }}>
-                <p className="doc-occhiello">Soglie superate, con l’importo</p>
-                <ul className="doc-elenco">
-                  {soglieSuperate.map((r, i) => (
-                    <li key={`sint-sopra-${i}`}>
-                      <strong>{r.ambito}</strong>
-                      {r.esposizione === null ? '' : ` — ${euro(r.esposizione)}`}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {soglieNonDeterminabili.length > 0 && (
-              <div style={{ marginTop: '4mm' }}>
-                <p className="doc-occhiello">Soglie non calcolabili con i dati in archivio</p>
-                <ul className="doc-elenco vuoto">
-                  {soglieNonDeterminabili.map((r, i) => (
-                    <li key={`sint-nondet-${i}`}>
-                      <strong>{r.ambito}</strong> — {r.motivo}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {attenzione && attenzione.daAccertare.length > 0 && (
-              <div style={{ marginTop: '4mm' }}>
-                <p className="doc-occhiello">Da accertare prima di decidere</p>
-                <ul className="doc-elenco vuoto">
-                  {attenzione.daAccertare.map((voce, i) => (
-                    <li key={`sint-acc-${i}`}>{voce}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <h2 className="doc-titolo">Sintesi finale — le strade e i loro esiti</h2>
 
             {raccomandazione && (
               <div style={{ marginTop: '6mm' }}>
-                <p className="doc-occhiello">Dove porta ciascuna strada</p>
                 {raccomandazione.percorsi.map((p) => (
                   <div key={`sint-perc-${p.codice}`} className="doc-sintesi-riga">
                     <span>
@@ -768,6 +729,14 @@ export default async function ReportVerificaAmministrativaPage({
                   </div>
                 ))}
               </div>
+            )}
+
+            {!raccomandazione && (
+              <p className="doc-nota">
+                Nessuna strada è disponibile con i dati in archivio: la check list dei prodotti che
+                qualifica il caso non è completa, quindi il quadro qualitativo non entra nella
+                valutazione e le strade possibili restano fuori dal documento.
+              </p>
             )}
 
             <p className="doc-nota-forte" style={{ marginTop: '6mm' }}>

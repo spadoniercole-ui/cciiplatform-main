@@ -1,3 +1,13 @@
+## 0.226.0 — 2026-11-14
+
+- **I numeri chiave vanno in prima pagina.** La copertina ora dice, subito sotto l'esito: debito
+  dell'ente, soglie superate con l'esposizione, primo confronto con chi decide e copertura. La data
+  della verifica resta come riga di testo, senza riquadro.
+- **La sintesi finale torna a fare una cosa sola**: le strade possibili con i loro esiti e chi le
+  decide. Via i numeri ripetuti, via le soglie con l'importo e il «da accertare», che stanno già
+  nella sezione 3 e nella sezione 2. Se le strade non sono disponibili, la sintesi lo dice invece di
+  restare vuota.
+
 ## 0.225.0 — 2026-11-14
 
 - **I numeri del documento stanno in un posto solo.** La copertina ripeteva debito e primo confronto, che
