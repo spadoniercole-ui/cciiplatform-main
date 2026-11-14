@@ -102,6 +102,13 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
   ),
   documento(
     AZIENDA_MECCANICA,
+    'dispositivo-cram-down-meccanica-valsesia.pdf',
+    'PDF',
+    'Dispositivo di cram down — alternativa alla proposta',
+    'PROVVEDIMENTO'
+  ),
+  documento(
+    AZIENDA_MECCANICA,
     'checklist-prodotti-meccanica-valsesia.xlsx',
     'EXCEL',
     'Check list dei prodotti — compilata',
@@ -370,6 +377,17 @@ export function documentiProvvedimentoDemo(
   codiceFiscale: string,
   tipo?: 'PROPOSTA' | 'DECRETO_LIQUIDAZIONE' | 'CRAM_DOWN' | 'DA_CHIEDERE'
 ) {
+  if (codiceFiscale === '00000000101') {
+    // La Meccanica valuta due atti: l'accordo e, in alternativa, il cram down.
+    const proposta = perAzienda(AZIENDA_MECCANICA, 'proposta-meccanica-valsesia.pdf');
+    const dispositivo = perAzienda(
+      AZIENDA_MECCANICA,
+      'dispositivo-cram-down-meccanica-valsesia.pdf'
+    );
+    if (tipo === 'CRAM_DOWN') return dispositivo ? [dispositivo] : [];
+    if (tipo === 'PROPOSTA') return proposta ? [proposta] : [];
+    return [proposta, dispositivo].filter((d): d is DocumentoDemo => d !== null);
+  }
   if (codiceFiscale === '00000000102') {
     return [
       perAzienda(AZIENDA_TESSITURA, 'decreto-liquidazione-tessitura-lario.pdf'),

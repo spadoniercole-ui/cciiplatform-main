@@ -572,8 +572,32 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
         titolo: 'Analisi di inquadramento',
         tipo: 'testo',
         testo: scr.relazioneTesto,
-        nota,
+        // I numeri stanno nelle tabelle delle sezioni precedenti: qui c’è la
+        // lettura. Dirlo evita che il documento sembri dire due volte le
+        // stesse cifre — e che chi legge cerchi la versione «giusta» fra le
+        // due.
+        nota: [
+          nota,
+          'Lettura dell’analisi: i valori sono quelli delle sezioni precedenti, non una seconda misura.',
+        ]
+          .filter(Boolean)
+          .join(' · '),
       });
+      // UN’ANALISI VECCHIA NON SI SPACCA PER NUOVA (0.230.0). La relazione è
+      // generata prima che la verifica amministrativa chiuda: nel documento
+      // può dire che il debito non c’è mentre la sezione 2 lo riporta, ed è
+      // esattamente l’incongruenza che si vedeva nel report della SANMICHELE.
+      // Non si riscrive la relazione; si dichiara che è anteriore ai dati.
+      const generata = scr.generatoIl ? new Date(scr.generatoIl).getTime() : null;
+      const dopo = [fonti.amministrativa?.verificataIl, fonti.amministrativa?.debitoIl]
+        .filter((d): d is string => Boolean(d))
+        .map((d) => new Date(d).getTime())
+        .filter((t) => Number.isFinite(t));
+      if (generata && Number.isFinite(generata) && dopo.some((t) => t > generata)) {
+        avvisi.push(
+          'L’analisi di inquadramento è stata generata prima della verifica amministrativa o del debito memorizzato: alcune sue affermazioni possono non tenere conto dei dati che il report riporta. Va riletta o rigenerata prima di allegarla.'
+        );
+      }
       if (scr.validita && /da rivedere|scadenza/i.test(scr.validita)) {
         avvisi.push(
           `La valutazione non è aggiornata (${scr.validita}): va rigenerata sui documenti correnti prima di usarla come fotografia di oggi.`

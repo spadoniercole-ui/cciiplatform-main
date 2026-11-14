@@ -90,4 +90,28 @@ describe('percorso demo dell’ente', () => {
     expect(bundleDemo(PERCORSO_DEMO[0], 'precedente').severity).not.toBe('RED');
     expect(bundleDemo(PERCORSO_DEMO[1], 'precedente').severity).toBe('GREEN');
   });
+
+  it('tiene distinte le verifiche dell’azienda dalle nature degli scenari', () => {
+    // Le nature sono tutte e quattro rappresentate: accordo, liquidazione,
+    // cram down e il caso ancora da chiedere.
+    const nature = PERCORSO_DEMO.map((a) => a.tipoIstruttoria);
+    expect(new Set(nature)).toEqual(
+      new Set(['PROPOSTA', 'DECRETO_LIQUIDAZIONE', 'CRAM_DOWN', 'DA_CHIEDERE'])
+    );
+
+    // Un’azienda valuta due atti diversi, con le stesse verifiche: è la prova
+    // che la differenziazione sta sullo scenario e non sull’azienda.
+    const conDue = PERCORSO_DEMO.filter((a) => (a.scenariAggiuntivi ?? []).length > 0);
+    expect(conDue).toHaveLength(1);
+    expect(conDue[0].tipoIstruttoria).toBe('PROPOSTA');
+    expect(conDue[0].scenariAggiuntivi?.[0].tipoIstruttoria).not.toBe('PROPOSTA');
+
+    // La verifica amministrativa non si spegne mai: non esiste un campo per
+    // farlo. Le altre due sì, e una azienda della demo ne resta senza.
+    const senzaFacoltative = PERCORSO_DEMO.filter(
+      (a) => a.verifiche?.contabile === false || a.verifiche?.aziendale === false
+    );
+    expect(senzaFacoltative).toHaveLength(1);
+    for (const a of PERCORSO_DEMO) expect('amministrativa' in (a.verifiche ?? {})).toBe(false);
+  });
 });

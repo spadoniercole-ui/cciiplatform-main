@@ -73,7 +73,18 @@ describe('documenti del percorso demo', () => {
       'stato-passivo-tessitura-lario.pdf',
     ]);
     expect(cramDown.map((d) => d.nome)).toEqual(['dispositivo-cram-down-logistica-padana.pdf']);
-    expect(documentiProvvedimentoDemo('00000000101')).toHaveLength(0);
+  });
+
+  it('la stessa azienda può avere due atti, e ogni scenario vede il suo documento', () => {
+    // Meccanica Valsesia: accordo e cram down sono due scenari della stessa
+    // azienda, e il documento segue la natura dello scenario.
+    expect(documentiProvvedimentoDemo('00000000101', 'PROPOSTA').map((d) => d.nome)).toEqual([
+      'proposta-meccanica-valsesia.pdf',
+    ]);
+    expect(documentiProvvedimentoDemo('00000000101', 'CRAM_DOWN').map((d) => d.nome)).toEqual([
+      'dispositivo-cram-down-meccanica-valsesia.pdf',
+    ]);
+    expect(documentiProvvedimentoDemo('00000000101')).toHaveLength(2);
   });
 
   it('la valutazione aperta può ricevere entrambe le varianti del provvedimento', () => {

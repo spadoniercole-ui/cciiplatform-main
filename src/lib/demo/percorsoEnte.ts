@@ -119,6 +119,26 @@ export interface AziendaPercorsoDemo {
   /** Nome usato prima della 0.174.0, per rinominare senza duplicare. */
   scenarioPrecedente?: string;
   dataDepositoProposta: string;
+  /**
+   * LE VERIFICHE DELL’AZIENDA (0.230.0).
+   *
+   * La verifica amministrativa è obbligatoria: c’è sempre, su ogni azienda,
+   * perché è quella che dice quanto l’ente vanta. La contabile e l’aziendale
+   * sono facoltative, e la demo ne mostra una senza per far vedere che il
+   * documento lo dichiara invece di inventare una sezione. NON dipendono dalla
+   * natura dello scenario: quella sta sullo scenario, e un’azienda può
+   * valutare due atti diversi con le stesse verifiche già fatte.
+   */
+  verifiche?: { contabile?: boolean; aziendale?: boolean };
+  /**
+   * GLI ALTRI SCENARI DELLA STESSA AZIENDA (0.230.0).
+   *
+   * La differenziazione fra accordo, liquidazione e cram down è dello
+   * scenario, non dell’azienda: un’impresa può valutare l’accordo e, in
+   * parallelo, la liquidazione. La demo lo mostra su un’azienda, così
+   * l’impostazione del sistema si vede e non si deduce.
+   */
+  scenariAggiuntivi?: { nome: string; tipoIstruttoria: TipoIstruttoria }[];
 }
 
 /**
@@ -421,6 +441,11 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
     rango: 'PRIVILEGIATO',
     tipoIstruttoria: 'PROPOSTA',
     scenario: 'Proposta di concordato — Meccanica Valsesia Demo',
+    // Stessa azienda, stesse verifiche, un secondo atto in valutazione: è il
+    // punto che la demo deve rendere visibile.
+    scenariAggiuntivi: [
+      { nome: 'Cram down — alternativa alla proposta', tipoIstruttoria: 'CRAM_DOWN' },
+    ],
     dataDepositoProposta: '2026-09-18',
   },
   {
@@ -904,6 +929,11 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
     rango: 'CHIROGRAFARIO',
     tipoIstruttoria: 'DA_CHIEDERE',
     scenario: 'Valutazione aperta — Cantieri Brianza Demo',
+    // Qui la verifica amministrativa c’è (è obbligatoria) e le altre due no:
+    // serve a mostrare il documento che dichiara le sezioni mancanti invece di
+    // riempirle. Non è una demo incompleta: è il caso che il prodotto deve
+    // saper dire.
+    verifiche: { contabile: false, aziendale: false },
     dataDepositoProposta: '2026-11-02',
     aperta: true,
   },

@@ -1,3 +1,23 @@
+## 0.230.0 — 2026-11-14
+
+- **La demo prende l’impostazione del sistema: le verifiche sono dell’azienda, la natura è dello
+  scenario.** La verifica amministrativa ora c’è su ogni azienda demo — è obbligatoria, è quella che
+  dice quanto l’ente vanta — e la contabile e l’aziendale ci sono dove ha senso, con una azienda
+  (Cantieri Brianza) volutamente senza le due facoltative: il documento lo dichiara invece di
+  riempire le sezioni. Prima nessuna delle tre era eseguita e la scheda le mostrava tutte da fare.
+- **Una stessa azienda con due atti in valutazione.** Meccanica Valsesia ha l’accordo e, in
+  alternativa, il cram down: stessa azienda, stesse verifiche, natura diversa sullo scenario. Il
+  secondo scenario nasce in corso e senza istruttoria, con il suo dispositivo dimostrativo
+  (`dispositivo-cram-down-meccanica-valsesia.pdf`) e la sua voce nel pacchetto dei documenti.
+- **Il seed delle verifiche sta in un modulo suo** (`src/lib/demo/verificheDemo.ts`) ed è idempotente:
+  non sovrascrive una verifica già fatta, non duplica la simulazione aziendale, non ricrea lo scenario
+  aggiuntivo. Tre prove su Postgres in memoria coprono proprio questo.
+- **Report dell’azienda: quando l’analisi è più vecchia dei dati, lo dice.** Nella SANMICHELE la
+  relazione affermava che la posizione debitoria non era inserita mentre la sezione 2 riportava il
+  debito certificato: ora un avviso dichiara che l’analisi è stata generata prima della verifica
+  amministrativa o del debito e va riletta o rigenerata. Nella sezione dell’analisi è scritto anche
+  che i valori sono quelli delle sezioni precedenti, non una seconda misura.
+
 ## 0.229.0 — 2026-11-14
 
 - **Il cambio di natura riporta all’ingresso degli scenari.** Cambiare l’atto dello scenario lasciava

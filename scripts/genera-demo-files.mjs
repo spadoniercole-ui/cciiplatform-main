@@ -324,6 +324,28 @@ for (const a of aziende) {
         'La proposta è dimostrativa e non ha valore legale.',
       ],
     });
+    // Il secondo scenario della stessa azienda: la natura dell'atto sta sullo
+    // scenario, e la demo deve avere il documento anche per questa variante.
+    pdf({
+      file: 'dispositivo-cram-down-meccanica-valsesia.pdf',
+      titolo: 'Dispositivo di cram down — variante',
+      sottotitolo: 'Tribunale di Pavia — Sezione crisi d’impresa · procedura demo',
+      righe: [
+        '## Il Tribunale',
+        'Omologa il piano e dispone il cram down nei confronti dei creditori dissenzienti della società Meccanica Valsesia Demo S.r.l.',
+        '---',
+        '## Crediti riconosciuti',
+        'Contributi previdenziali scaduti: riconosciuto 150.000,00 euro sui 210.000,00 a ruolo, soddisfacimento 71,4%.',
+        'Sanzioni civili contributive: riconosciuto 14.000,00 euro sui 35.000,00 a ruolo, soddisfacimento 40%.',
+        '---',
+        '## Spese e tempi',
+        'Spese di procedura: 12% del realizzo lordo.',
+        'Durata stimata: 18 mesi.',
+        '---',
+        '## Avvertenza',
+        'Dispositivo dimostrativo: è la variante di cram down dello stesso scenario di accordo, e i dati sono inventati.',
+      ],
+    });
   }
 
   if (a.chiave === 'tessitura-lario') {

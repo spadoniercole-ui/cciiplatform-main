@@ -34,7 +34,9 @@ import {
   assicuraTabelleScreeningAzienda,
   assicuraTabelleTl,
   assicuraTabelleVera,
+  assicuraTabelleVerificaAzienda,
 } from '@/db/provision';
+import { assicuraScenariAggiuntivi, inserisciVerificheDemo } from './verificheDemo';
 import { ripristinaConfigurazione } from '@/lib/configurazioneSpazio/configurazione';
 import { assicuraTabelleProdotti } from '@/db/provisionProdotti';
 import {
@@ -754,6 +756,7 @@ export async function caricaPercorsoDemoEnte(
   await assicuraTabelleScenari(nomeSchema);
   await assicuraTabelleScenariTriage(nomeSchema);
   await assicuraTabelleVera(nomeSchema);
+  await assicuraTabelleVerificaAzienda(nomeSchema);
   await assicuraProdottiDemo(nomeSchema);
   await assicuraRepartiTriageDemo(nomeSchema);
   await aggiornaTriageDemo(nomeSchema);
@@ -819,6 +822,19 @@ export async function caricaPercorsoDemoEnte(
             ? await aggiornaScenarioDemo(client, nomeSchema, aziendaId, a)
             : await inserisciScenario(client, nomeSchema, aziendaId!, a);
         await inserisciIstruttoriaDemo(client, nomeSchema, scenarioId, a);
+        await inserisciVerificheDemo(
+          client,
+          nomeSchema,
+          aziendaId!,
+          a,
+          scenarioId,
+          a.tipoIstruttoria
+        );
+        // La natura sta sullo scenario: un secondo atto della stessa azienda
+        // porta le stesse verifiche, già fatte, e nessuna istruttoria pronta.
+        for (const extra of await assicuraScenariAggiuntivi(client, nomeSchema, aziendaId!, a)) {
+          await inserisciVerificheDemo(client, nomeSchema, aziendaId!, a, extra.id, extra.tipo);
+        }
       }
     }
 
