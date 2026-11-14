@@ -3239,3 +3239,49 @@ export async function assicuraTabelleVerificaAzienda(nomeSchema: string): Promis
     sql`ALTER TABLE ${s}.verifica_azienda_config ADD COLUMN IF NOT EXISTS anni_rientro_debito INTEGER NOT NULL DEFAULT 3`
   );
 }
+
+/**
+ * PROFILI DI FLUSSO E SOSPENSIONI DELLA MATRICOLA.
+ *
+ * Il calendario con cui un ente riceve i flussi dall'azienda — che cosa,
+ * ogni quanto, entro quale giorno, in quante rate — smette di essere una
+ * regola scritta nel codice e diventa un parametro dello spazio: un profilo
+ * per flusso. Le sospensioni sono dell'azienda, non dell'ente, perché la
+ * matricola è dell'azienda: mesi in cui non c'è obbligo di denuncia né di
+ * versamento, e che quindi non sono «periodi mancanti».
+ *
+ * Idempotente come le altre: gli spazi esistenti se le trovano alla prima
+ * apertura.
+ */
+export async function assicuraTabelleFlussiEnte(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaAziende(nomeSchema); // FK aziende
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.flussi_ente_profili (
+      id SERIAL PRIMARY KEY,
+      tipo TEXT NOT NULL DEFAULT 'ALTRO',
+      flusso TEXT NOT NULL,
+      etichetta_denuncia TEXT NOT NULL DEFAULT 'denunce',
+      etichetta_pagamento TEXT NOT NULL DEFAULT 'pagamenti',
+      periodicita TEXT NOT NULL DEFAULT 'MENSILE',
+      periodi_per_anno INTEGER NOT NULL DEFAULT 12,
+      scadenza_denuncia_giorno INTEGER NOT NULL DEFAULT 0,
+      scadenza_denuncia_mesi_dopo INTEGER NOT NULL DEFAULT 1,
+      scadenza_pagamento_giorno INTEGER NOT NULL DEFAULT 0,
+      scadenza_pagamento_mesi_dopo INTEGER NOT NULL DEFAULT 1,
+      rate INTEGER NOT NULL DEFAULT 1,
+      attivo BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.flussi_sospensioni (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      dal TEXT NOT NULL,
+      al TEXT NOT NULL,
+      motivo TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+}

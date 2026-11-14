@@ -11,6 +11,7 @@ import { checklistProdottiCompleta } from '@/lib/checklist/pesoProdotti';
 import { PosizioneEnteScenario } from '@/components/spazio/PosizioneEnteScenario';
 import { ChecklistProdottiEsito } from '@/components/spazio/ChecklistProdottiEsito';
 import { DebitoMemorizzatoEnte } from '@/components/spazio/DebitoMemorizzatoEnte';
+import { FlussiEnteAzienda } from '@/components/spazio/FlussiEnteAzienda';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 
 // L'ESITO DELLA VERIFICA AMMINISTRATIVA (0.194.0).
@@ -226,6 +227,13 @@ export default async function EsitoVerificaAmministrativaPage({
         tipoSpazio={contesto.tipoSpazio}
         schedaIniziale={schedaIniziale}
       />
+
+      {/* I FLUSSI DELL'ENTE CHIUDONO LA FOTOGRAFIA (0.227.0).
+          Dopo il debito e la posizione: il rapporto con l'ente non è solo
+          quanto si deve, è anche che cosa l'azienda ha trasmesso e quando.
+          Qui si vedono i periodi attesi, quelli arrivati, quelli mancanti con
+          il ritardo dalla scadenza e i mesi di matricola sospesa. */}
+      <FlussiEnteAzienda nomeSchema={contesto.nomeSchema} aziendaId={id} />
 
       {/* IL SUPPORTO DECISIONALE VA IN FONDO, DOPO TUTTO (0.223.0).
           Dare il riscontro della lettura prima delle soglie non avrebbe senso,

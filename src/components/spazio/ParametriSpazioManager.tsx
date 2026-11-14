@@ -24,6 +24,7 @@ import {
   Printer,
   ClipboardList,
   CalendarRange,
+  CalendarClock,
 } from 'lucide-react';
 import { ConfigurazioneSpazioFile } from '@/components/spazio/ConfigurazioneSpazioFile';
 
@@ -143,6 +144,13 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
           },
         ]
       : []),
+    {
+      href: `/spazio/${codice}/parametri/flusso-ente`,
+      icon: CalendarClock,
+      titolo: 'Flusso che l’ente riceve',
+      descrizione:
+        'Che cosa l’azienda trasmette all’ente, ogni quanto, entro quale giorno e in quante rate: da qui la verifica conta i periodi attesi e misura i ritardi.',
+    },
     {
       href: `/spazio/${codice}/parametri/soglie`,
       icon: Scale,

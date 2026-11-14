@@ -1,3 +1,28 @@
+## 0.227.0 — 2026-11-14
+
+- **Il flusso che l’ente riceve diventa un parametro.** Nei Parametri dello spazio c’è la voce
+  «Flusso che l’ente riceve»: per ogni flusso, che cosa l’azienda trasmette (denunce e pagamenti,
+  con i nomi che usa l’ente), la periodicità, quanti periodi cadono in un anno, il giorno e i mesi
+  di scadenza di denuncia e pagamento, quante rate. Arriva già compilato per INPS (UNIEMENS
+  mensile, scadenze a fine mese e al 15), INAIL (autoliquidazione annuale in quattro rate) e
+  Agenzia delle Entrate (dichiarazioni annuali, liquidazioni IVA): sono valori di partenza da
+  confermare, non una fonte normativa, e il documento lo dice.
+- **Il confronto attesi/ricevuti, periodo per periodo.** Nella verifica amministrativa dell’azienda
+  il nuovo blocco «Flussi dell’ente» conta i periodi che l’ente doveva ricevere in un arco scelto
+  (ricavato dai dati in archivio, modificabile), quanti ne ha ricevuti, quali denunce e quali
+  pagamenti mancano, con il ritardo misurato dalla scadenza alla data della verifica. I periodi
+  coperti da una partita già passata in TS 27 o all’Agente della Riscossione non si contano fra i
+  mancanti: si elencano a parte con la voce che li copre. I flussi fuori dall’arco scelto sono
+  segnalati, non nascosti.
+- **Le sospensioni della matricola le registra l’operatore**, come intervalli da mese a mese con il
+  motivo: quei mesi escono dal conteggio degli attesi invece di diventare periodi mancanti. Stanno
+  sull’azienda, perché la matricola è dell’azienda.
+- **Il limite è dichiarato, non aggirato**: il file della certificazione dei debiti non porta la data
+  di trasmissione né quella di versamento, quindi il ritardo dei flussi PRESENTI non è calcolabile e
+  il blocco lo scrive. Si misura solo quello dei periodi mancanti, che è un dato vero.
+- Il supporto decisionale resta in fondo alla verifica, chiuso: le indicazioni su accordo,
+  liquidazione e cram down arrivano a lettura conclusa, non prima.
+
 ## 0.226.0 — 2026-11-14
 
 - **I numeri chiave vanno in prima pagina.** La copertina ora dice, subito sotto l'esito: debito
