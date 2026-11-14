@@ -327,4 +327,19 @@ describe('proposte ed esiti valutati', () => {
     const { sezioni } = componiReport(fonti({ proposte: [] }), inclusioniTutte);
     expect(sezioni.some((s) => s.id === 'proposte')).toBe(false);
   });
+
+  it('numera i capitoli nell’ordine in cui compaiono, e lascia fuori allegato e metodo', () => {
+    const { sezioni } = componiReport(fonti(), { ...inclusioniTutte, questionario: true });
+    const capitoli = sezioni.filter((x) => !x.titolo.startsWith('Allegato'));
+    const numerati = capitoli.filter((x) => /^\d+\./.test(x.titolo));
+    // Se la forma del titolo cambiasse, questo controllo non deve passare a vuoto.
+    expect(numerati.length).toBeGreaterThanOrEqual(5);
+    // Ogni capitolo ha il suo numero, progressivo: nessun salto, nessun doppione.
+    expect(numerati.map((x) => x.titolo)).toEqual(
+      numerati.map((_, i) => `${i + 1}. ${numerati[i].titolo.replace(/^\d+\. /, '')}`)
+    );
+    // L'allegato di lavoro e i riferimenti di metodo restano senza numero.
+    expect(sezioni.some((x) => x.titolo === 'Allegato — Questionario per direttrici')).toBe(true);
+    expect(sezioni.some((x) => x.titolo === 'Riferimenti e metodo')).toBe(true);
+  });
 });

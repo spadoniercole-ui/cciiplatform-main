@@ -11,7 +11,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+// La navigazione è parte della richiesta: firmato il cambio si torna
+// all'ingresso degli scenari, quindi il finto router deve saper navigare.
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push }) }));
 
 vi.mock('@/app/actions/scenari', () => ({
   aggiornaSituazioneScenarioAction: vi.fn(),
@@ -68,6 +71,27 @@ describe('SituazioneScenario', () => {
     expect(screen.getByText(/anna@alfa\.it/)).toBeTruthy();
     // Senza il permesso di annullare il comando non compare.
     expect(screen.queryByText('Annulla ultimo cambio')).toBeNull();
+  });
+
+  it('firmato il cambio riporta all’ingresso degli scenari', async () => {
+    cambia.mockResolvedValue({ success: true, scenarioId: 4, rivedere: [] });
+
+    render(
+      <SituazioneScenario
+        nomeSchema="tenant_test"
+        scenarioId={4}
+        situazione="PROPOSTA"
+        origine="Azienda"
+        bloccato={false}
+        codice="SPAZIO-1"
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Liquidazione giudiziale' }));
+    fireEvent.change(await screen.findByPlaceholderText(/PIN/i), { target: { value: '731904' } });
+    fireEvent.click(screen.getByRole('button', { name: /Conferma/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/spazio/SPAZIO-1/scenari'));
   });
 
   it('al clic chiede il PIN, poi mostra cosa rivedere restituito dal server', async () => {

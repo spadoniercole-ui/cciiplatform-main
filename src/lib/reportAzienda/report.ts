@@ -336,7 +336,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
   }
   sezioni.push({
     id: 'identikit',
-    titolo: '1. Identikit dell’impresa',
+    titolo: 'Identikit dell’impresa',
     tipo: 'voci',
     voci: identikit,
     nota: 'Anagrafica e fatti della visura: sono dati riferiti ai documenti, non valutazioni.',
@@ -361,7 +361,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     }
     sezioni.push({
       id: 'amministrativa',
-      titolo: '2. Esito della verifica amministrativa',
+      titolo: 'Esito della verifica amministrativa',
       tipo: 'voci',
       voci,
       nota: 'In sola lettura: il report cita l’esito e non lo modifica. La verifica si chiude e si rinnova nella sua scheda.',
@@ -372,7 +372,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     );
     sezioni.push({
       id: 'amministrativa',
-      titolo: '2. Esito della verifica amministrativa',
+      titolo: 'Esito della verifica amministrativa',
       tipo: 'voci',
       voci: [],
       nota: 'Non disponibile: la verifica amministrativa non è ancora stata eseguita.',
@@ -473,7 +473,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     }
     sezioni.push({
       id: 'contabile',
-      titolo: '3. Verifica contabile',
+      titolo: 'Verifica contabile',
       tipo: 'voci',
       voci,
       nota: 'Il dato depositato, senza modifiche: la proiezione è materia della verifica azienda.',
@@ -482,7 +482,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     avvisi.push('La verifica contabile non è ancora stata aperta per questa azienda.');
     sezioni.push({
       id: 'contabile',
-      titolo: '3. Verifica contabile',
+      titolo: 'Verifica contabile',
       tipo: 'voci',
       voci: [],
       nota: 'Non disponibile: nessun dato storico acquisito.',
@@ -533,7 +533,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     const primaProiezione = m.colonne.find((c) => c.tipo === 'PROIEZIONE');
     sezioni.push({
       id: 'mappa',
-      titolo: '4. Verifica azienda — mappa a colonne',
+      titolo: 'Verifica azienda — mappa a colonne',
       tipo: 'mappa',
       anni: m.colonne.map((c) => c.anno),
       tipi: m.colonne.map((c) => c.tipo),
@@ -569,7 +569,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
         .join(' · ');
       sezioni.push({
         id: 'analisi',
-        titolo: '5. Analisi di inquadramento',
+        titolo: 'Analisi di inquadramento',
         tipo: 'testo',
         testo: scr.relazioneTesto,
         nota,
@@ -585,7 +585,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
       );
       sezioni.push({
         id: 'analisi',
-        titolo: '5. Analisi di inquadramento',
+        titolo: 'Analisi di inquadramento',
         tipo: 'testo',
         testo: '',
         nota: 'Non disponibile: nessuna relazione generata.',
@@ -649,7 +649,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
         : '';
       sezioni.push({
         id: 'riscontri',
-        titolo: '6. Riscontri normativi',
+        titolo: 'Riscontri normativi',
         tipo: 'elenco',
         voci,
         nota: `Calcolo deterministico sui dati disponibili.${
@@ -661,7 +661,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     } else {
       sezioni.push({
         id: 'riscontri',
-        titolo: '6. Riscontri normativi',
+        titolo: 'Riscontri normativi',
         tipo: 'elenco',
         voci: [],
         nota: 'Non calcolabili sui dati disponibili.',
@@ -719,7 +719,28 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     });
   }
 
-  return { avvisi, sezioni };
+  return { avvisi, sezioni: numeraSezioni(sezioni) };
+}
+
+/**
+ * LA NUMERAZIONE SI ASSEGNA ALLA FINE, NELL’ORDINE IN CUI LE SEZIONI STANNO
+ * (0.229.0). Prima era scritta a mano nei titoli: «1. Identikit», «2. Esito
+ * della verifica amministrativa», «3. Verifica contabile», «4. Verifica
+ * azienda», «5. Analisi», «6. Riscontri» — mentre fra il 2 e il 3 entravano
+ * tre sezioni senza numero (supporto decisionale, proposte, prospetto). Il
+ * documento contava fino a sei e mostrava nove titoli: chi lo legge non sa se
+ * «Supporto decisionale» è un capitolo o una nota del capitolo 2. Ora il numero
+ * è quello della posizione, e le sezioni non numerate sono solo l’allegato di
+ * lavoro e i riferimenti di metodo, che non sono capitoli della valutazione.
+ */
+function numeraSezioni(sezioni: SezioneReport[]): SezioneReport[] {
+  let n = 0;
+  return sezioni.map((s) => {
+    const senzaNumero = s.titolo.startsWith('Allegato') || s.titolo === 'Riferimenti e metodo';
+    if (senzaNumero) return s;
+    n += 1;
+    return { ...s, titolo: `${n}. ${s.titolo}` };
+  });
 }
 
 // ---- Stampa --------------------------------------------------------------

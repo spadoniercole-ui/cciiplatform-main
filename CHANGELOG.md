@@ -1,3 +1,28 @@
+## 0.229.0 — 2026-11-14
+
+- **Il cambio di natura riporta all’ingresso degli scenari.** Cambiare l’atto dello scenario lasciava
+  l’operatore dentro la scheda dell’atto precedente, che chiede passi e dati che a quell’atto non
+  servono più (il decreto di liquidazione pretende la posizione debitoria, l’accordo no). Ora, firmato
+  il cambio, si torna all’elenco degli scenari e da lì si riparte con la nuova formulazione.
+- **Il report della verifica amministrativa comincia dai materiali.** Nuova sezione 2 «Materiali
+  esaminati» — certificazione dei debiti, soglie, check list, flussi, con i conteggi di quello che è
+  stato letto davvero — prima dell’esito: chi legge trova le carte prima della conclusione, e quelle
+  che mancano non vengono date per lette. Le sezioni successive scalano di numero, indice compreso.
+- **Le soglie non si ripetono più.** L’elenco dei motivi stampava due volte la stessa soglia, perché
+  l’elenco arrivava con la voce duplicata: la tabella la mostrava una volta, i motivi due. Ora si
+  tiene una riga per ambito.
+- **Il report dell’azienda conta i capitoli nell’ordine in cui stanno.** La numerazione era scritta a
+  mano nei titoli (1 identikit, 2 esito, 3 contabile, 4 mappa, 5 analisi, 6 riscontri) mentre fra il 2
+  e il 3 entravano tre sezioni senza numero — supporto decisionale, proposte, prospetto — per nove
+  titoli e sei numeri. Ora il numero è la posizione: i capitoli si contano da soli, e restano senza
+  numero solo l’allegato di lavoro e i riferimenti di metodo, che non sono capitoli della valutazione.
+- La causale del cambio di natura non può più confondere il codice dello spazio con la natura scelta:
+  il comando locale che la leggeva si chiamava «codice» come il codice dello spazio, e la destinazione
+  dopo il cambio sarebbe finita su una rotta inesistente. Una prova lo copre.
+- I fatti accertati e quelli da accertare non stampano più titoli e puntini vuoti quando la voce è
+  vuota, e i nomi dei flussi nel documento vanno fra virgolette («senza «UNIEMENS»» si legge, «senza
+  UNIEMENS» no).
+
 ## 0.228.0 — 2026-11-14
 
 - **Gli enti hanno una tabella, e i flussi si agganciano a quella.** Prima del profilo di flusso nasce

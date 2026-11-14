@@ -225,7 +225,23 @@ export default async function ReportVerificaAmministrativaPage({
   const prodottiChiesti = totaleDomande > 0;
   const checklistCompleta = prodottiCompleti;
   const allegatoDisponibile = prodottiCompleti && raccomandazione !== null;
-  const righeSoglie = (soglie?.righe ?? []).filter((r) => r.applicabile);
+  // UNA SOGLIA, UNA RIGA (0.229.0). L'elenco delle soglie arrivava con la
+  // stessa voce due volte: la tabella la mostrava una volta sola, l'elenco dei
+  // motivi la ripeteva, e il documento sembrava dire due cose uguali. Si tengono
+  // la prima riga per ambito; le altre restano fuori dal documento, non dai
+  // conti (i totali si calcolano sulle righe, non su questa vista).
+  const righeSoglie = (() => {
+    const viste = new Set<string>();
+    return (soglie?.righe ?? []).filter((r) => {
+      if (!r.applicabile) return false;
+      if (viste.has(r.ambito)) return false;
+      viste.add(r.ambito);
+      return true;
+    });
+  })();
+  // Le voci vuote non sono fatti: non si stampano né il titolo né il puntino.
+  const fattiAccertati = (attenzione?.accertato ?? []).filter((v) => v.trim().length > 0);
+  const fattiDaAccertare = (attenzione?.daAccertare ?? []).filter((v) => v.trim().length > 0);
   // I numeri della sintesi finale: le stesse righe del documento, contate.
   const soglieSuperate = righeSoglie.filter((r) => r.esito === 'sopra');
   const soglieNonDeterminabili = righeSoglie.filter((r) => r.esito === 'non_determinabile');
@@ -346,6 +362,7 @@ export default async function ReportVerificaAmministrativaPage({
               <span className="doc-occhiello">Contenuto del documento</span>
               <ol>
                 <li>Dati della verifica</li>
+                <li>Materiali esaminati</li>
                 <li>Esito e fatti accertati</li>
                 <li>Soglie di segnalazione (art. 25-novies)</li>
                 <li>Debito dell’ente</li>
@@ -406,30 +423,78 @@ export default async function ReportVerificaAmministrativaPage({
             </dl>
           </section>
 
-          {/* 2 · ESITO */}
+          {/* 2 · MATERIALI ESAMINATI (0.229.0) — prima che cosa è stato letto,
+              poi che cosa dice. Il documento seguiva l'ordine dell'esito e
+              lasciava i materiali all'Allegato: chi legge trovava la conclusione
+              prima delle carte su cui poggia. */}
           <section className="doc-sezione">
             <h2 className="doc-titolo">
-              <span className="doc-num">2</span> Esito e fatti accertati
+              <span className="doc-num">2</span> Materiali esaminati
+            </h2>
+            <dl>
+              <div className="doc-riga">
+                <dt>Certificazione dei debiti</dt>
+                <dd>
+                  {debito
+                    ? `${debito.righe} voci · fonte: ${debito.fonte}`
+                    : 'non memorizzata in questa verifica'}
+                </dd>
+              </div>
+              <div className="doc-riga">
+                <dt>Soglie art. 25-novies</dt>
+                <dd>
+                  {righeSoglie.length > 0
+                    ? `${righeSoglie.length} ${righeSoglie.length === 1 ? 'soglia valutata' : 'soglie valutate'}`
+                    : 'nessuna soglia valutabile con i dati in archivio'}
+                </dd>
+              </div>
+              <div className="doc-riga">
+                <dt>Check list dei prodotti</dt>
+                <dd>
+                  {prodottiChiesti
+                    ? `${risposteChecklist}/${totaleDomande} risposte date`
+                    : 'nessun prodotto in check list'}
+                </dd>
+              </div>
+              <div className="doc-riga">
+                <dt>Flussi dell’ente</dt>
+                <dd>
+                  {flussi
+                    ? `${flussi.periodiInArchivio} periodi in archivio · ${flussi.esiti.length} ${flussi.esiti.length === 1 ? 'flusso confrontato' : 'flussi confrontati'}`
+                    : 'nessun periodo leggibile'}
+                </dd>
+              </div>
+            </dl>
+            <p className="doc-nota">
+              Sono i materiali che questa verifica ha letto davvero. Quelli che mancano non si danno
+              per letti: il documento lo dichiara nella sezione che li riguarda.
+            </p>
+          </section>
+
+          {/* 3 · ESITO */}
+          <section className="doc-sezione">
+            <h2 className="doc-titolo">
+              <span className="doc-num">3</span> Esito e fatti accertati
             </h2>
             {attenzione ? (
               <div className="doc-blocco">
-                {attenzione.accertato.length > 0 && (
+                {fattiAccertati.length > 0 && (
                   <>
                     <p className="doc-occhiello">Accertato</p>
                     <ul className="doc-elenco">
-                      {attenzione.accertato.map((voce, i) => (
+                      {fattiAccertati.map((voce, i) => (
                         <li key={i}>{voce}</li>
                       ))}
                     </ul>
                   </>
                 )}
-                {attenzione.daAccertare.length > 0 && (
+                {fattiDaAccertare.length > 0 && (
                   <>
                     <p className="doc-occhiello" style={{ marginTop: '4mm' }}>
                       Da accertare
                     </p>
                     <ul className="doc-elenco vuoto">
-                      {attenzione.daAccertare.map((voce, i) => (
+                      {fattiDaAccertare.map((voce, i) => (
                         <li key={i}>{voce}</li>
                       ))}
                     </ul>
@@ -469,7 +534,7 @@ export default async function ReportVerificaAmministrativaPage({
           {/* 3 · SOGLIE */}
           <section className="doc-sezione">
             <h2 className="doc-titolo">
-              <span className="doc-num">3</span> Soglie di segnalazione (art. 25-novies)
+              <span className="doc-num">4</span> Soglie di segnalazione (art. 25-novies)
             </h2>
             {righeSoglie.length > 0 ? (
               <div className="doc-blocco">
@@ -531,7 +596,7 @@ export default async function ReportVerificaAmministrativaPage({
           {/* 4 · DEBITO */}
           <section className="doc-sezione">
             <h2 className="doc-titolo">
-              <span className="doc-num">4</span> Debito dell’ente — dato certo
+              <span className="doc-num">5</span> Debito dell’ente — dato certo
             </h2>
             {debito ? (
               <div className="doc-blocco">
@@ -592,7 +657,7 @@ export default async function ReportVerificaAmministrativaPage({
           {flussi && (
             <section className="doc-sezione">
               <h2 className="doc-titolo">
-                <span className="doc-num">5</span> Flussi dell’ente — attesi e ricevuti
+                <span className="doc-num">6</span> Flussi dell’ente — attesi e ricevuti
               </h2>
               <div className="doc-blocco">
                 <table className="doc-tabella">
@@ -638,10 +703,10 @@ export default async function ReportVerificaAmministrativaPage({
                           {e.flusso}
                         </strong>
                         {e.senzaDenuncia.length > 0
-                          ? ` — senza ${e.etichette.denuncia}: ${compatta(e.senzaDenuncia)}.`
+                          ? ` — senza «${e.etichette.denuncia}»: ${compatta(e.senzaDenuncia)}.`
                           : ''}
                         {e.senzaDelega.length > 0
-                          ? ` — senza ${e.etichette.pagamento}: ${compatta(e.senzaDelega)}.`
+                          ? ` — senza «${e.etichette.pagamento}»: ${compatta(e.senzaDelega)}.`
                           : ''}
                         {e.regolarizzati.length > 0
                           ? ` — coperti da una partita: ${compatta(
@@ -675,7 +740,7 @@ export default async function ReportVerificaAmministrativaPage({
           {raccomandazione && (
             <section className="doc-sezione">
               <h2 className="doc-titolo">
-                <span className="doc-num">6</span> Elementi letti
+                <span className="doc-num">7</span> Elementi letti
               </h2>
               <table className="doc-tabella">
                 <tbody>
@@ -695,7 +760,7 @@ export default async function ReportVerificaAmministrativaPage({
           {/* 7 · LIMITI */}
           <section className="doc-sezione">
             <h2 className="doc-titolo">
-              <span className="doc-num">{raccomandazione ? '7' : '6'}</span> Limiti e natura del
+              <span className="doc-num">{raccomandazione ? '8' : '7'}</span> Limiti e natura del
               documento
             </h2>
             <ul className="doc-elenco">

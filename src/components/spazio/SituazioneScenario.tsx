@@ -101,11 +101,13 @@ export function SituazioneScenario({
 
   const confermaCambio = async () => {
     if (!daCambiare || inCorso || inAnnullamento) return;
-    const codice = daCambiare;
+    // Il nome è «nuovaSituazione» e non «codice»: «codice» è il codice dello
+    // spazio, che qui serve per la destinazione dopo il cambio.
+    const nuovaSituazione = daCambiare;
     setInCorso(true);
     setErrore(null);
     setMessaggio(null);
-    const r = await aggiornaSituazioneScenarioAction(nomeSchema, scenarioId, codice, pin);
+    const r = await aggiornaSituazioneScenarioAction(nomeSchema, scenarioId, nuovaSituazione, pin);
     setInCorso(false);
     if (!r.success) {
       setErrore(r.error ?? 'Situazione non aggiornata.');
@@ -117,7 +119,7 @@ export function SituazioneScenario({
     setCronologia((precedenti) => [
       {
         da: scelta,
-        a: codice,
+        a: nuovaSituazione,
         cambiataIl: new Date().toISOString(),
         autore: null,
         annullatoIl: null,
@@ -125,11 +127,18 @@ export function SituazioneScenario({
       },
       ...precedenti,
     ]);
-    setScelta(codice);
+    setScelta(nuovaSituazione);
     setDataCambio(new Date().toISOString().slice(0, 10));
     setDaRivedere(r.rivedere ?? []);
+    // IL CAMBIO DI NATURA RIPORTA ALL’INGRESSO DEGLI SCENARI (0.229.0).
+    // Lo scenario ha cambiato atto: la formulazione che ne discende non si
+    // gestisce dentro la scheda dell’atto precedente — che mostra passi,
+    // curricula e sezioni pensati per un’altra natura — ma dall’ingresso degli
+    // scenari, dove si sceglie da dove ripartire. Restare qui lascerebbe
+    // l’operatore davanti a una pagina che chiede dati di un atto che non è
+    // più quello.
     setMessaggio('Situazione aggiornata: lo scenario è tornato in bozza.');
-    router.refresh();
+    router.push(`/spazio/${codice}/scenari`);
   };
 
   const annulla = async (motivo?: string) => {
