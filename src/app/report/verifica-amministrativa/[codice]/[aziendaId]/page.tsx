@@ -117,7 +117,7 @@ const CSS = `
     justify-content: space-between; font-size: 7pt; color: #64748b;
     border-top: .3mm solid #cbd5e1; padding-top: 1.5mm;
   }
-  .doc-copertina { min-height: 0; break-after: page; }
+  .doc-copertina { min-height: 0; }
   .doc-copertina .doc-indice { margin-top: 12mm; }
   .doc-sezione { break-inside: avoid; }
   .doc-titolo { break-after: avoid; }
@@ -276,22 +276,6 @@ export default async function ReportVerificaAmministrativaPage({
                 <span className="doc-numero-etichetta">Verifica eseguita</span>
                 <span className="doc-numero-valore doc-cifra">{data(riga?.eseguitaIl) ?? '—'}</span>
                 <span className="doc-numero-nota">{validita.etichetta}</span>
-              </div>
-              <div className="doc-numero">
-                <span className="doc-numero-etichetta">Debito dell’ente</span>
-                <span className="doc-numero-valore doc-cifra">
-                  {debito ? euro(debito.totale) : '—'}
-                </span>
-                <span className="doc-numero-nota">
-                  {debito ? 'dato certo, non stimato' : 'non memorizzato'}
-                </span>
-              </div>
-              <div className="doc-numero">
-                <span className="doc-numero-etichetta">Primo confronto</span>
-                <span className="doc-numero-valore">{oggetto?.etichetta ?? 'non disponibile'}</span>
-                <span className="doc-numero-nota">
-                  {oggetto ? `decide ${oggetto.chiDecide.toLowerCase()}` : '—'}
-                </span>
               </div>
             </div>
 
@@ -696,15 +680,6 @@ export default async function ReportVerificaAmministrativaPage({
             <h2 className="doc-titolo">Sintesi finale — i numeri in trenta secondi</h2>
 
             <div className="doc-numeri">
-              <div className="doc-numero">
-                <span className="doc-numero-etichetta">Esito della verifica</span>
-                <span className="doc-numero-valore">
-                  {attenzione ? attenzione.etichetta : 'non leggibile'}
-                </span>
-                <span className="doc-numero-nota">
-                  {attenzione ? attenzione.fattoreDeterminante : 'verifica non completata'}
-                </span>
-              </div>
               <div className="doc-numero">
                 <span className="doc-numero-etichetta">Debito dell’ente</span>
                 <span className="doc-numero-valore doc-cifra">

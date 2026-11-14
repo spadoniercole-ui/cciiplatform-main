@@ -1,3 +1,12 @@
+## 0.225.0 — 2026-11-14
+
+- **I numeri del documento stanno in un posto solo.** La copertina ripeteva debito e primo confronto, che
+  tornavano nella «Sintesi finale»; la sintesi ripeteva l'esito, che è già in copertina. Ora la
+  divisione è netta: **copertina = esito** (con copertura e data della verifica), **sintesi finale =
+  numeri** (debito, soglie superate con il loro importo, primo confronto). Nessuna cifra ripetuta.
+- Il salto pagina dopo l'indice resta, ma con una sola forzatura (la prima sezione), invece di due
+  regole che chiedevano lo stesso salto.
+
 ## 0.224.0 — 2026-11-13
 
 - **La check list dei prodotti sta chiusa dietro un link, come il supporto decisionale.** Aperta
