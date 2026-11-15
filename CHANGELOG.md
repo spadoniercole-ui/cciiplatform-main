@@ -1,3 +1,18 @@
+## 0.233.0 — 2026-11-14
+
+- **L’atto di accordo ha i suoi numeri.** La demo caricava la proposta come documento ma senza le
+  righe dei creditori: nel confronto fra gli atti l’accordo restava una casella vuota, e la
+  differenza con la liquidazione non si poteva dire. Ora la Meccanica ha tre righe — banca, INPS
+  (l’unica «rilevante per l’ente», 245.000 euro al 55% in cinque rate), fornitori — scritte una
+  volta sola e mai sopra una proposta già lavorata.
+- **Il report legge l’accordo per quello che è.** Quando l’atto è una proposta, la riga dice
+  «offerta 55% di 245.000 €, 134.750 € all’ente, 5 rate, perdita 110.250 €»; quando è un
+  provvedimento, «riconosciuti 164.000 su 245.000, recupero atteso 155.600, 18 mesi». Il confronto
+  finale mette insieme i due modi e dice la differenza: 20.850 euro.
+- **Anche il secondo atto porta la sua istruttoria.** Il cram down della Meccanica ha il dispositivo
+  con gli stessi numeri del documento consegnato (150.000 su 210.000 di contributi, 14.000 su 35.000
+  di sanzioni, 12% di spese, diciotto mesi): senza, il confronto avrebbe avuto un solo termine.
+
 ## 0.232.0 — 2026-11-14
 
 - **Il report dice che cosa cambia per l’ente fra gli atti.** Quando la stessa azienda ne valuta più

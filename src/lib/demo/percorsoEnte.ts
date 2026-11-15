@@ -139,6 +139,23 @@ export interface AziendaPercorsoDemo {
    * l’impostazione del sistema si vede e non si deduce.
    */
   scenariAggiuntivi?: { nome: string; tipoIstruttoria: TipoIstruttoria }[];
+  /**
+   * LE RIGHE DELLA PROPOSTA DELL'ACCORDO (0.233.0).
+   *
+   * Senza righe l'atto di accordo resta senza numeri: il report può dire che
+   * esiste, non quanto offre all'ente. Le righe sono quelle che l'ente
+   * leggerebbe davvero — una sola «rilevante per l'ente», la sua — e le altre
+   * servono a mostrare il resto della proposta.
+   */
+  propostaCreditori?: {
+    categoria: string;
+    dovuto: number;
+    offerta: number;
+    modalita: 'UNICA_SOLUZIONE' | 'RATEALE';
+    rate: number | null;
+    rango: string;
+    rilevanteEnte: boolean;
+  }[];
 }
 
 /**
@@ -445,6 +462,40 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
     // punto che la demo deve rendere visibile.
     scenariAggiuntivi: [
       { nome: 'Cram down — alternativa alla proposta', tipoIstruttoria: 'CRAM_DOWN' },
+    ],
+    // L'accordo offre all'ente il 55% di 245.000 euro (contributi più
+    // sanzioni): 134.750 euro in cinque rate annuali. Il cram down, nello
+    // stesso set, riconosce 164.000 euro con realizzo del 71,4% sui contributi
+    // e del 40% sulle sanzioni — 155.600 euro. Il confronto del report ha così
+    // due termini veri, non due caselle vuote.
+    propostaCreditori: [
+      {
+        categoria: 'INPS',
+        dovuto: 245000,
+        offerta: 55,
+        modalita: 'RATEALE',
+        rate: 5,
+        rango: 'PRIVILEGIATO_GENERALE',
+        rilevanteEnte: true,
+      },
+      {
+        categoria: 'Banca Ipotecaria S.p.A.',
+        dovuto: 300000,
+        offerta: 100,
+        modalita: 'UNICA_SOLUZIONE',
+        rate: null,
+        rango: 'PRIVILEGIATO_IPOTECA',
+        rilevanteEnte: false,
+      },
+      {
+        categoria: 'Fornitori chirografari',
+        dovuto: 250000,
+        offerta: 25,
+        modalita: 'RATEALE',
+        rate: 6,
+        rango: 'CHIROGRAFARIO',
+        rilevanteEnte: false,
+      },
     ],
     dataDepositoProposta: '2026-09-18',
   },

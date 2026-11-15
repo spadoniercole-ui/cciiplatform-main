@@ -138,6 +138,26 @@ describe('la demo è completa: ogni azione ha il suo file', () => {
     }
   });
 
+  it('l’accordo della demo ha le sue righe, e una sola riguarda l’ente', () => {
+    const conProposta = PERCORSO_DEMO.filter((a) => (a.propostaCreditori ?? []).length > 0);
+    expect(conProposta.length).toBeGreaterThan(0);
+    for (const a of conProposta) {
+      const righe = a.propostaCreditori!;
+      const perEnte = righe.filter((r) => r.rilevanteEnte);
+      // Una e una sola: un ente guarda la propria posizione.
+      expect(perEnte, a.ragioneSociale).toHaveLength(1);
+      // Il dovuto dell'ente è quello delle posizioni demo: niente numeri
+      // scollegati dal resto del set.
+      const totale = a.debiti.reduce((t, d) => t + d.importo, 0);
+      expect(perEnte[0].dovuto, a.ragioneSociale).toBe(totale);
+      expect(perEnte[0].offerta, a.ragioneSociale).toBeGreaterThan(0);
+      expect(perEnte[0].offerta, a.ragioneSociale).toBeLessThanOrEqual(100);
+      expect(righe.length, a.ragioneSociale).toBeGreaterThan(1);
+      // L'accordo deve avere anche un termine di confronto: il secondo atto.
+      expect((a.scenariAggiuntivi ?? []).length, a.ragioneSociale).toBeGreaterThan(0);
+    }
+  });
+
   it('il set demo copre le nature e le verifiche che il prodotto distingue', () => {
     const nature = new Set(PERCORSO_DEMO.map((a) => a.tipoIstruttoria));
     expect(nature).toEqual(

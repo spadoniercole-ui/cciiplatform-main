@@ -391,11 +391,36 @@ async function raccogliFonti(
       const n = Number(v);
       return Number.isFinite(n) ? n : null;
     };
+    // Le righe dell'accordo che riguardano l'ente: una sola per proposta, la
+    // sua. Da qui il recupero offerto, che il provvedimento dà in un altro
+    // modo (importo ammesso e percentuale di realizzo).
+    const offerteEnte = new Map<number, { dovuto: number; offerta: number; rate: number | null }>();
+    try {
+      const ids = righe.map((x) => Number(x.id)).filter((n) => Number.isInteger(n));
+      if (ids.length > 0) {
+        const q = await pool.query(
+          `SELECT scenario_id, importo_dovuto, percentuale_offerta, numero_rate
+             FROM "${nomeSchema}".proposta_creditori
+            WHERE rilevante_per_ente = TRUE AND scenario_id = ANY($1::int[])`,
+          [ids]
+        );
+        for (const r of q.rows) {
+          offerteEnte.set(Number(r.scenario_id), {
+            dovuto: Number(r.importo_dovuto ?? 0),
+            offerta: Number(r.percentuale_offerta ?? 0),
+            rate: numero(r.numero_rate),
+          });
+        }
+      }
+    } catch {
+      // Tabella assente o riga non ancora inserita: l'atto resta senza cifre.
+    }
+
     proposte = righe.map((x) => {
       // I numeri dell'atto per l'ente: credito, ammesso, recupero, perdita,
       // tempi. Sono quelli già calcolati nel confronto, non un secondo conto.
       const c = (x.confronto ?? null) as Record<string, unknown> | null;
-      const ente =
+      const dalProvvedimento =
         c && numero(c.creditoEnte) !== null
           ? {
               creditoEnte: numero(c.creditoEnte)!,
@@ -405,6 +430,19 @@ async function raccogliFonti(
               tempiMesi: numero(c.tempiMesi),
             }
           : null;
+      const offerta = offerteEnte.get(Number(x.id));
+      const dallAccordo = offerta
+        ? {
+            creditoEnte: offerta.dovuto,
+            ammesso: offerta.dovuto,
+            recupero: Math.round(offerta.dovuto * (offerta.offerta / 100) * 100) / 100,
+            perdita: Math.round(offerta.dovuto * (1 - offerta.offerta / 100) * 100) / 100,
+            tempiMesi: null,
+            offertaPct: offerta.offerta,
+            rate: offerta.rate,
+          }
+        : null;
+      const ente = dalProvvedimento ?? dallAccordo;
       return {
         scenarioId: Number(x.id),
         nome: String(x.nome ?? 'Scenario'),

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { PERCORSO_DEMO } from './percorsoEnte';
 import { assicuraScenariAggiuntivi, inserisciVerificheDemo } from './verificheDemo';
+import { inserisciPropostaDemo } from './caricaPercorsoEnte';
 
 // IL SEED DELLE VERIFICHE, SUL DATABASE VERO (Postgres in memoria).
 //
@@ -30,6 +31,18 @@ beforeEach(async () => {
       simulazione_attiva BOOLEAN NOT NULL DEFAULT FALSE,
       verifica_amministrativa_il TIMESTAMP,
       verifica_contabile_il TIMESTAMP
+    );
+    CREATE TABLE ${SCHEMA}.proposta_creditori (
+      id SERIAL PRIMARY KEY,
+      scenario_id INTEGER NOT NULL,
+      categoria_creditore TEXT NOT NULL,
+      importo_dovuto NUMERIC NOT NULL DEFAULT 0,
+      percentuale_offerta NUMERIC NOT NULL DEFAULT 0,
+      modalita TEXT NOT NULL DEFAULT 'UNICA_SOLUZIONE',
+      numero_rate INTEGER,
+      note TEXT,
+      rango_legale TEXT,
+      rilevante_per_ente BOOLEAN NOT NULL DEFAULT FALSE
     );
     CREATE TABLE ${SCHEMA}.verifica_azienda_simulazioni (
       id SERIAL PRIMARY KEY,
@@ -127,5 +140,27 @@ describe('seed delle verifiche demo', () => {
     // Stessa azienda, due atti: è la differenziazione a livello di scenario.
     // L'ordine non conta (l'id esplicito del test non avanza la sequenza).
     expect(tutti.rows.map((r) => r.tipo).sort()).toEqual(['CRAM_DOWN', 'PROPOSTA']);
+  });
+
+  it('scrive le righe dell’accordo una volta sola, con una sola riga per l’ente', async () => {
+    await inserisciPropostaDemo(db, SCHEMA, 3, meccanica);
+    await inserisciPropostaDemo(db, SCHEMA, 3, meccanica);
+
+    const righe = await db.query<{
+      categoria_creditore: string;
+      importo_dovuto: string;
+      percentuale_offerta: string;
+      rilevante_per_ente: boolean;
+    }>(
+      `SELECT categoria_creditore, importo_dovuto, percentuale_offerta, rilevante_per_ente
+         FROM ${SCHEMA}.proposta_creditori WHERE scenario_id = 3 ORDER BY id`
+    );
+    // Il doppio giro non duplica: la proposta lavorata non si riscrive.
+    expect(righe.rows).toHaveLength(3);
+    const perEnte = righe.rows.filter((r) => r.rilevante_per_ente);
+    expect(perEnte).toHaveLength(1);
+    expect(perEnte[0].categoria_creditore).toBe('INPS');
+    expect(perEnte[0].importo_dovuto).toBe('245000');
+    expect(perEnte[0].percentuale_offerta).toBe('55');
   });
 });

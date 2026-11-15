@@ -388,6 +388,58 @@ describe('gli atti in valutazione', () => {
     expect(confronto.valore).toMatch(/Cram down: 18 mesi/);
   });
 
+  it('l’accordo porta la sua offerta in percentuale, confrontabile col cram down', () => {
+    const { sezioni } = componiReport(
+      fonti({
+        proposte: [
+          {
+            scenarioId: 21,
+            nome: 'Accordo Meccanica',
+            situazione: 'Proposta',
+            esito: 'DEFINIZIONE_ACCORDO',
+            archiviato: false,
+            ente: {
+              creditoEnte: 245000,
+              ammesso: 245000,
+              recupero: 134750,
+              perdita: 110250,
+              tempiMesi: null,
+              offertaPct: 55,
+              rate: 5,
+            },
+          },
+          {
+            scenarioId: 22,
+            nome: 'Cram down Meccanica',
+            situazione: 'Cram down',
+            esito: null,
+            archiviato: false,
+            ente: {
+              creditoEnte: 245000,
+              ammesso: 164000,
+              recupero: 155600,
+              perdita: 89400,
+              tempiMesi: 18,
+            },
+          },
+        ],
+      }),
+      inclusioniTutte
+    );
+    const sezione = sezioni.find((s) => s.id === 'proposte')!;
+    if (sezione.tipo !== 'voci') throw new Error('sezione atti non a voci');
+    const accordo = sezione.voci.find((v) => v.etichetta === 'Accordo Meccanica')!;
+    // L'accordo si legge come un'offerta, non come un'ammissione.
+    expect(accordo.valore).toMatch(/offerta 55% di/);
+    expect(accordo.valore).toMatch(/134\.750/);
+    expect(accordo.valore).toMatch(/5 rate/);
+
+    const confronto = sezione.voci.find((v) => v.etichetta === 'Che cosa cambia fra gli atti')!;
+    expect(confronto.valore).toMatch(/134\.750/);
+    expect(confronto.valore).toMatch(/155\.600/);
+    expect(confronto.valore).toMatch(/differenza di .*20\.850/);
+  });
+
   it('se solo un atto ha il confronto, lo dice invece di fingere un paragone', () => {
     const { sezioni } = componiReport(
       fonti({

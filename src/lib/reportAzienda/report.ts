@@ -173,10 +173,15 @@ export interface FonteSoglie25 {
  */
 export interface EsitoEnteAtto {
   creditoEnte: number;
+  /** Quanto l'atto riconosce all'ente (per l'accordo è il dovuto su cui offre). */
   ammesso: number;
   recupero: number | null;
   perdita: number | null;
   tempiMesi: number | null;
+  /** Percentuale offerta dall'accordo, quando l'atto è una proposta. */
+  offertaPct?: number | null;
+  /** Numero di rate dell'offerta, se rateale. */
+  rate?: number | null;
 }
 
 export interface FonteProposta {
@@ -457,13 +462,25 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
       const esito = p.esito ? ESITI_PROPOSTA.find((e) => e.codice === p.esito) : null;
       // I numeri dell'atto per l'ente: sono quelli del confronto in
       // istruttoria, citati come stanno.
+      // Due modi di leggere lo stesso dato: l'accordo offre una percentuale
+      // sul dovuto, il provvedimento riconosce un importo e una percentuale di
+      // realizzo. Il documento dice quello che l'atto contiene, senza
+      // uniformare per forza due cose diverse.
       const cifre = p.ente
-        ? [
-            `ente: riconosciuti ${euro(p.ente.ammesso)} su ${euro(p.ente.creditoEnte)}`,
-            p.ente.recupero === null ? null : `recupero atteso ${euro(p.ente.recupero)}`,
-            p.ente.perdita === null ? null : `perdita ${euro(p.ente.perdita)}`,
-            p.ente.tempiMesi === null ? null : `tempi stimati ${p.ente.tempiMesi} mesi`,
-          ]
+        ? (p.ente.offertaPct !== null && p.ente.offertaPct !== undefined
+            ? [
+                `offerta ${p.ente.offertaPct}% di ${euro(p.ente.creditoEnte)}`,
+                p.ente.recupero === null ? null : `${euro(p.ente.recupero)} all’ente`,
+                p.ente.rate ? `${p.ente.rate} rate` : null,
+                p.ente.perdita === null ? null : `perdita ${euro(p.ente.perdita)}`,
+              ]
+            : [
+                `ente: riconosciuti ${euro(p.ente.ammesso)} su ${euro(p.ente.creditoEnte)}`,
+                p.ente.recupero === null ? null : `recupero atteso ${euro(p.ente.recupero)}`,
+                p.ente.perdita === null ? null : `perdita ${euro(p.ente.perdita)}`,
+                p.ente.tempiMesi === null ? null : `tempi stimati ${p.ente.tempiMesi} mesi`,
+              ]
+          )
             .filter(Boolean)
             .join(' · ')
         : null;

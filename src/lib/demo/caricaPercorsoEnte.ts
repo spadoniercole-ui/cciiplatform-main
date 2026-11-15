@@ -32,6 +32,7 @@ import {
   assicuraTabelleScenari,
   assicuraTabelleScenariTriage,
   assicuraTabelleScreeningAzienda,
+  assicuraTabellaProposta,
   assicuraTabelleTl,
   assicuraTabelleVera,
   assicuraTabelleVerificaAzienda,
@@ -661,6 +662,44 @@ function letturaProvvedimentoDemo(
 ): LetturaProvvedimento {
   const chirografario = tipo === 'CRAM_DOWN';
   const cantieri = a.ragioneSociale === 'Cantieri Brianza Demo S.r.l.';
+
+  // LA MECCANICA HA DUE ATTI, CON I LORO NUMERI (0.233.0).
+  //
+  // Il dispositivo di cram down della Meccanica dice 150.000 su 210.000 di
+  // contributi (71,4%) e 14.000 su 35.000 di sanzioni (40%), spese 12%,
+  // diciotto mesi: gli stessi numeri del documento che la demo consegna, così
+  // il confronto con l'accordo non è finto.
+  if (a.ragioneSociale === 'Meccanica Valsesia Demo S.r.l.') {
+    return {
+      crediti: [
+        {
+          voce: 'Contributi previdenziali scaduti',
+          importo: 150_000,
+          rango: 'PRIVILEGIATO',
+          privilegio: 'Privilegio generale previdenziale',
+          percentualeRealizzo: 71.4,
+          documento: 'dispositivo-cram-down-meccanica-valsesia.pdf',
+          passo: 'Crediti riconosciuti',
+        },
+        {
+          voce: 'Sanzioni civili contributive',
+          importo: 14_000,
+          rango: 'CHIROGRAFARIO',
+          privilegio: null,
+          percentualeRealizzo: 40,
+          documento: 'dispositivo-cram-down-meccanica-valsesia.pdf',
+          passo: 'Crediti riconosciuti',
+        },
+      ],
+      speseProceduraPct: 12,
+      tempiMesi: 18,
+      dataAtto: '2026-11-06',
+      note: [
+        'Documento dimostrativo: crediti, percentuali e tempi sono fittizi.',
+        'È la variante di cram down dello stesso scenario di accordo.',
+      ],
+    };
+  }
   const file = cantieri
     ? chirografario
       ? 'dispositivo-cram-down-cantieri-brianza.pdf'
@@ -699,6 +738,37 @@ function letturaProvvedimentoDemo(
       'La lettura è già predisposta nella demo e non richiede una chiamata AI.',
     ],
   };
+}
+
+/**
+ * LE RIGHE DELL'ACCORDO (0.233.0).
+ *
+ * L'atto di accordo senza righe non ha numeri: il report poteva dire che
+ * esisteva, non quanto offriva all'ente. Le righe si scrivono solo se lo
+ * scenario non ne ha già: una proposta lavorata dall'operatore non si tocca.
+ */
+export async function inserisciPropostaDemo(
+  esegui: Esecutore,
+  nomeSchema: string,
+  scenarioId: number,
+  a: AziendaPercorsoDemo
+): Promise<void> {
+  const righe = a.propostaCreditori ?? [];
+  if (righe.length === 0) return;
+  const presenti = await esegui.query(
+    `SELECT 1 FROM "${nomeSchema}".proposta_creditori WHERE scenario_id = $1 LIMIT 1`,
+    [scenarioId]
+  );
+  if (presenti.rows.length > 0) return;
+  for (const r of righe) {
+    await esegui.query(
+      `INSERT INTO "${nomeSchema}".proposta_creditori
+         (scenario_id, categoria_creditore, importo_dovuto, percentuale_offerta,
+          modalita, numero_rate, rango_legale, rilevante_per_ente)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [scenarioId, r.categoria, r.dovuto, r.offerta, r.modalita, r.rate, r.rango, r.rilevanteEnte]
+    );
+  }
 }
 
 async function inserisciIstruttoriaDemo(
@@ -765,6 +835,7 @@ export async function caricaPercorsoDemoEnte(
   await assicuraTabelleScenariTriage(nomeSchema);
   await assicuraTabelleVera(nomeSchema);
   await assicuraTabelleVerificaAzienda(nomeSchema);
+  await assicuraTabellaProposta(nomeSchema);
   await assicuraProdottiDemo(nomeSchema);
   await assicuraRepartiTriageDemo(nomeSchema);
   await aggiornaTriageDemo(nomeSchema);
@@ -830,6 +901,7 @@ export async function caricaPercorsoDemoEnte(
             ? await aggiornaScenarioDemo(client, nomeSchema, aziendaId, a)
             : await inserisciScenario(client, nomeSchema, aziendaId!, a);
         await inserisciIstruttoriaDemo(client, nomeSchema, scenarioId, a);
+        await inserisciPropostaDemo(client, nomeSchema, scenarioId, a);
         await inserisciVerificheDemo(
           client,
           nomeSchema,
@@ -841,6 +913,18 @@ export async function caricaPercorsoDemoEnte(
         // La natura sta sullo scenario: un secondo atto della stessa azienda
         // porta le stesse verifiche, già fatte, e nessuna istruttoria pronta.
         for (const extra of await assicuraScenariAggiuntivi(client, nomeSchema, aziendaId!, a)) {
+          // Il secondo atto porta la sua istruttoria, quando il tipo la
+          // prevede: senza, il confronto fra gli atti non avrebbe il secondo
+          // termine.
+          await inserisciIstruttoriaDemo(
+            client,
+            nomeSchema,
+            extra.id,
+            a,
+            extra.tipo === 'DECRETO_LIQUIDAZIONE' || extra.tipo === 'CRAM_DOWN'
+              ? extra.tipo
+              : undefined
+          );
           await inserisciVerificheDemo(client, nomeSchema, aziendaId!, a, extra.id, extra.tipo);
         }
       }

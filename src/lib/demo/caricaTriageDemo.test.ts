@@ -32,6 +32,7 @@ vi.mock('@/db/provision', () => ({
   assicuraTabelleTl: async () => undefined,
   assicuraTabelleVera: async () => undefined,
   assicuraTabelleVerificaAzienda: async () => undefined,
+  assicuraTabellaProposta: async () => undefined,
 }));
 
 vi.mock('@/db/provisionProdotti', () => ({
