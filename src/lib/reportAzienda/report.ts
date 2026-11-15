@@ -428,26 +428,37 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     });
   }
 
-  // 2-ter. Le proposte dell'azienda e l'esito che si sta valutando. Non è un
-  //      doppione del supporto decisionale: quello dice quale strada valutare,
-  //      questo dice che cosa è stato messo in valutazione su questa azienda e
-  //      con quale esito dichiarato — un'ipotesi, non una previsione.
+  // 2-ter. GLI ATTI IN VALUTAZIONE (0.231.0).
+  //
+  // La natura dell'atto sta sullo scenario: un'azienda può valutare l'accordo
+  // e, in alternativa, la liquidazione o il cram down. Elencarli uno sotto
+  // l'altro come «proposte» faceva sembrare che fossero proposte diverse della
+  // stessa cosa, e lasciava fuori il fatto che le verifiche sono dell'azienda.
+  // Quando gli atti sono più di uno il documento li mette INSIEME, in un
+  // confronto, e dice che cosa li distingue — l'atto, non l'impresa.
   if (fonti.proposte && fonti.proposte.length > 0) {
+    const piuDiUno = fonti.proposte.length > 1;
     const voci: VociReport[] = fonti.proposte.map((p) => {
       const esito = p.esito ? ESITI_PROPOSTA.find((e) => e.codice === p.esito) : null;
       return {
-        etichetta: `${p.nome} — ${p.situazione}${p.archiviato ? ' (archiviato)' : ''}`,
-        valore: esito
-          ? `${esito.etichetta} · decide ${esito.chiDecide}`
-          : 'esito della proposta non dichiarato',
+        etichetta: p.nome,
+        valore: [
+          p.situazione,
+          esito ? `esito: ${esito.etichetta} — decide ${esito.chiDecide}` : 'esito non dichiarato',
+          p.archiviato ? 'archiviato' : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
       };
     });
     sezioni.push({
       id: 'proposte',
-      titolo: 'Proposte ed esiti valutati',
-      tipo: 'elenco',
+      titolo: piuDiUno ? 'Gli atti in valutazione' : 'Atto in valutazione',
+      tipo: 'voci',
       voci,
-      nota: 'Esiti dichiarati negli scenari: sono ipotesi da valutare, non previsioni. La definizione dell’accordo passa dal voto dei creditori; il cram down dal provvedimento del giudice.',
+      nota: piuDiUno
+        ? `Sono ${fonti.proposte.length} atti alternativi della stessa azienda: la differenza sta nell’atto, non nell’impresa. Verifica amministrativa, contabile e aziendale sono dell’azienda e valgono per tutti gli atti; ogni atto porta il suo esito dichiarato, che resta un’ipotesi da valutare. L’accordo passa dal voto dei creditori, il cram down dal provvedimento del giudice.`
+        : 'Esito dichiarato nello scenario: è un’ipotesi da valutare, non una previsione. La definizione dell’accordo passa dal voto dei creditori; il cram down dal provvedimento del giudice.',
     });
   }
 

@@ -270,7 +270,7 @@ describe('componiReport', () => {
   });
 });
 
-describe('proposte ed esiti valutati', () => {
+describe('gli atti in valutazione', () => {
   it('cita l’esito dichiarato con chi decide, senza confonderlo con l’accordo', () => {
     const { sezioni } = componiReport(
       fonti({
@@ -287,12 +287,15 @@ describe('proposte ed esiti valutati', () => {
       inclusioniTutte
     );
     const sezione = sezioni.find((s) => s.id === 'proposte')!;
-    expect(sezione.tipo).toBe('elenco');
+    expect(sezione.tipo).toBe('voci');
+    // Un atto solo: la sezione ne parla al singolare.
+    // Il numero del capitolo lo assegna il documento: qui conta la forma.
+    expect(sezione.titolo).toMatch(/(^|\. )Atto in valutazione$/);
     const testo = JSON.stringify(sezione);
     expect(testo).toContain('Accordo Sanmichele');
     expect(testo).toContain('Cram down');
     expect(testo).toContain('provvedimento');
-    expect(testo).toContain('non previsioni');
+    expect(testo).toContain('non una previsione');
   });
 
   it('se l’esito non è dichiarato lo dice, e la definizione dell’accordo resta dal voto', () => {
@@ -317,10 +320,18 @@ describe('proposte ed esiti valutati', () => {
       }),
       inclusioniTutte
     );
-    const testo = JSON.stringify(sezioni.find((s) => s.id === 'proposte'));
+    const sezione = sezioni.find((s) => s.id === 'proposte')!;
+    // Due atti della stessa azienda: il documento li mostra insieme e dice che
+    // cosa li distingue — l'atto, non l'impresa.
+    expect(sezione.titolo).toMatch(/(^|\. )Gli atti in valutazione$/);
+    if (sezione.tipo !== 'voci') throw new Error('sezione atti non a voci');
+    expect(sezione.voci).toHaveLength(2);
+    const testo = JSON.stringify(sezione);
     expect(testo).toContain('archiviato');
     expect(testo).toContain('voto');
-    expect(testo).toContain('esito della proposta non dichiarato');
+    expect(testo).toContain('esito non dichiarato');
+    expect(sezione.nota).toMatch(/atti alternativi della stessa azienda/i);
+    expect(sezione.nota).toMatch(/sono dell’azienda/i);
   });
 
   it('senza scenari la sezione non c’è', () => {

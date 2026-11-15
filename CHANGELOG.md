@@ -1,3 +1,14 @@
+## 0.231.0 — 2026-11-14
+
+- **Il report dell’azienda mette insieme i suoi atti.** Quando la stessa azienda valuta più di uno
+  scenario — l’accordo e, in alternativa, la liquidazione o il cram down — il documento li presenta in
+  un’unica sezione «Gli atti in valutazione», con nome, natura, esito dichiarato e stato di ciascuno.
+  Prima erano righe di «Proposte ed esiti valutati» che sembravano proposte diverse della stessa cosa.
+- La nota della sezione dice ciò che l’impostazione del sistema implica: la differenza sta nell’atto,
+  non nell’impresa, e verifica amministrativa, contabile e aziendale sono dell’azienda e valgono per
+  tutti gli atti. Con un atto solo la sezione resta al singolare («Atto in valutazione»), senza il
+  confronto che non servirebbe.
+
 ## 0.230.0 — 2026-11-14
 
 - **La demo prende l’impostazione del sistema: le verifiche sono dell’azienda, la natura è dello
