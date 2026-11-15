@@ -50,6 +50,7 @@ import {
   type AziendaPercorsoDemo,
   type AziendaTriageDemo,
 } from './percorsoEnte';
+import type { TipoIstruttoria } from '@/lib/giudice/lettura';
 import { PARAMETRI_DEMO, PRODOTTI_DEMO } from './parametriEnte';
 import { documentiProvvedimentoDemo } from './documenti';
 import { confrontaProvvedimento } from '@/lib/giudice/confronto';
@@ -741,6 +742,40 @@ function letturaProvvedimentoDemo(
 }
 
 /**
+ * Riallinea gli atti demo al loro tipo (0.235.0).
+ *
+ * La 0.234.0 scriveva le righe dell'accordo su OGNI scenario dell'azienda e
+ * copiava l'istruttoria del decreto anche sull'accordo: due errori che si
+ * vedono solo caricando la demo in uno spazio vero, perché nei dati erano
+ * coerenti. Qui si tolgono i due avanzi, senza toccare gli scenari giusti:
+ *  - righe dei creditori su uno scenario che non è un accordo;
+ *  - istruttoria con i documenti demo su uno scenario che è un accordo.
+ */
+export async function riallineaAttiDemo(
+  esegui: Esecutore,
+  nomeSchema: string,
+  aziendaId: number
+): Promise<void> {
+  await esegui.query(
+    `DELETE FROM "${nomeSchema}".proposta_creditori pc
+      USING "${nomeSchema}".scenari s
+      WHERE pc.scenario_id = s.id
+        AND s.azienda_id = $1
+        AND s.tipo_istruttoria <> 'PROPOSTA'`,
+    [aziendaId]
+  );
+  await esegui.query(
+    `DELETE FROM "${nomeSchema}".istruttoria_giudice ig
+      USING "${nomeSchema}".scenari s
+      WHERE ig.scenario_id = s.id
+        AND s.azienda_id = $1
+        AND s.tipo_istruttoria = 'PROPOSTA'
+        AND ig.documenti::text LIKE '%"/demo/%'`,
+    [aziendaId]
+  );
+}
+
+/**
  * LE RIGHE DELL'ACCORDO (0.233.0).
  *
  * L'atto di accordo senza righe non ha numeri: il report poteva dire che
@@ -776,8 +811,11 @@ async function inserisciIstruttoriaDemo(
   nomeSchema: string,
   scenarioId: number,
   a: AziendaPercorsoDemo,
-  tipoAtto?: 'DECRETO_LIQUIDAZIONE' | 'CRAM_DOWN'
+  tipoAtto?: TipoIstruttoria
 ): Promise<void> {
+  // Il tipo dell'atto è quello dello SCENARIO: su un accordo non c'è giudice e
+  // quindi non c'è istruttoria. Passare `undefined` significa «usa quello
+  // dell'azienda», che vale per il primo scenario e non per gli aggiuntivi.
   const tipo = tipoAtto ?? a.tipoIstruttoria;
   if (tipo !== 'DECRETO_LIQUIDAZIONE' && tipo !== 'CRAM_DOWN') return;
   const documenti = documentiProvvedimentoDemo(a.codiceFiscale, tipo).map((d) => ({
@@ -900,8 +938,13 @@ export async function caricaPercorsoDemoEnte(
           aziendaId && perNome.has(a.ragioneSociale)
             ? await aggiornaScenarioDemo(client, nomeSchema, aziendaId, a)
             : await inserisciScenario(client, nomeSchema, aziendaId!, a);
+        await riallineaAttiDemo(client, nomeSchema, aziendaId!);
         await inserisciIstruttoriaDemo(client, nomeSchema, scenarioId, a);
-        await inserisciPropostaDemo(client, nomeSchema, scenarioId, a);
+        // Le righe della proposta appartengono all'accordo: su un decreto o un
+        // cram down non hanno senso e falserebbero il confronto.
+        if (a.tipoIstruttoria === 'PROPOSTA') {
+          await inserisciPropostaDemo(client, nomeSchema, scenarioId, a);
+        }
         await inserisciVerificheDemo(
           client,
           nomeSchema,
@@ -921,9 +964,7 @@ export async function caricaPercorsoDemoEnte(
             nomeSchema,
             extra.id,
             a,
-            extra.tipo === 'DECRETO_LIQUIDAZIONE' || extra.tipo === 'CRAM_DOWN'
-              ? extra.tipo
-              : undefined
+            extra.tipo as TipoIstruttoria
           );
           // Se il secondo atto è l'accordo, porta le sue righe: altrimenti il
           // confronto avrebbe il provvedimento con i numeri e l'accordo senza.

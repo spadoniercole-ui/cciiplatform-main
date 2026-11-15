@@ -1,3 +1,19 @@
+## 0.235.0 — 2026-11-15
+
+- **Corretto un difetto che solo la demo vera mostrava.** Caricando lo spazio demo in un database
+  nuovo, le righe della proposta finivano su OGNI scenario dell’azienda — anche sul decreto e sul
+  cram down — e lo scenario di accordo di Tessitura e Logistica ereditava l’istruttoria del
+  decreto. Nei dati del set i due errori non si vedevano: si vedevano nel report, dove l’atto di
+  accordo mostrava i numeri del provvedimento. Ora le righe le ha solo l’accordo e l’istruttoria
+  solo il provvedimento, e il caricamento ripulisce gli avanzi rimasti negli spazi già creati.
+- **Numeri allineati al documento.** Il dispositivo di cram down della Meccanica ammette 150.000
+  euro di contributi al 71,4% e 14.000 di sanzioni al 40%: all’ente vanno 112.700 euro, non
+  155.600 come diceva la nota della 0.233.0 (corretta anche nel CHANGELOG).
+- **Verificato a mano, non solo nei test.** Spazio demo creato da zero in un Postgres locale,
+  ingresso come Admin di Spazio, report generato per Tessitura, Meccanica e Logistica: in tutti e
+  tre il confronto fra gli atti legge due termini veri (22.472 contro 36.800; 112.700 contro
+  134.750; 5.200 contro 8.100).
+
 ## 0.234.0 — 2026-11-15
 
 - **Anche Tessitura e Logistica hanno due atti.** La demo diceva nel nome dello scenario che prima
@@ -18,8 +34,8 @@
   volta sola e mai sopra una proposta già lavorata.
 - **Il report legge l’accordo per quello che è.** Quando l’atto è una proposta, la riga dice
   «offerta 55% di 245.000 €, 134.750 € all’ente, 5 rate, perdita 110.250 €»; quando è un
-  provvedimento, «riconosciuti 164.000 su 245.000, recupero atteso 155.600, 18 mesi». Il confronto
-  finale mette insieme i due modi e dice la differenza: 20.850 euro.
+  provvedimento, «riconosciuti 164.000 su 245.000, recupero atteso 112.700, 18 mesi». Il confronto
+  finale mette insieme i due modi e dice la differenza: 22.050 euro.
 - **Anche il secondo atto porta la sua istruttoria.** Il cram down della Meccanica ha il dispositivo
   con gli stessi numeri del documento consegnato (150.000 su 210.000 di contributi, 14.000 su 35.000
   di sanzioni, 12% di spese, diciotto mesi): senza, il confronto avrebbe avuto un solo termine.

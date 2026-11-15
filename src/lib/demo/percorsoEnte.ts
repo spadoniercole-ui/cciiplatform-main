@@ -465,9 +465,9 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
     ],
     // L'accordo offre all'ente il 55% di 245.000 euro (contributi più
     // sanzioni): 134.750 euro in cinque rate annuali. Il cram down, nello
-    // stesso set, riconosce 164.000 euro con realizzo del 71,4% sui contributi
-    // e del 40% sulle sanzioni — 155.600 euro. Il confronto del report ha così
-    // due termini veri, non due caselle vuote.
+    // stesso set, ammette 150.000 euro di contributi al 71,4% e 14.000 di
+    // sanzioni al 40%, cioè 112.700 euro all'ente. Il confronto del report ha
+    // così due termini veri, non due caselle vuote.
     propostaCreditori: [
       {
         categoria: 'INPS',

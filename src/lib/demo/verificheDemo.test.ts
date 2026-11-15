@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { PERCORSO_DEMO } from './percorsoEnte';
 import { assicuraScenariAggiuntivi, inserisciVerificheDemo } from './verificheDemo';
-import { inserisciPropostaDemo } from './caricaPercorsoEnte';
+import { inserisciPropostaDemo, riallineaAttiDemo } from './caricaPercorsoEnte';
 
 // IL SEED DELLE VERIFICHE, SUL DATABASE VERO (Postgres in memoria).
 //
@@ -162,5 +162,51 @@ describe('seed delle verifiche demo', () => {
     expect(perEnte[0].categoria_creditore).toBe('INPS');
     expect(perEnte[0].importo_dovuto).toBe('245000');
     expect(perEnte[0].percentuale_offerta).toBe('55');
+  });
+
+  it('toglie righe e istruttorie finite sull’atto sbagliato, senza toccare quelle giuste', async () => {
+    await db.query(
+      `CREATE TABLE IF NOT EXISTS ${SCHEMA}.scenari (
+         id SERIAL PRIMARY KEY,
+         azienda_id INTEGER NOT NULL,
+         nome TEXT NOT NULL,
+         tipo_istruttoria TEXT NOT NULL
+       )`
+    );
+    await db.query(
+      `CREATE TABLE IF NOT EXISTS ${SCHEMA}.istruttoria_giudice (
+         scenario_id INTEGER PRIMARY KEY,
+         documenti JSONB,
+         lettura JSONB
+       )`
+    );
+    await db.query(
+      `INSERT INTO ${SCHEMA}.scenari (id, azienda_id, nome, tipo_istruttoria) VALUES
+         (3, 100, 'Accordo', 'PROPOSTA'),
+         (4, 100, 'Decreto', 'DECRETO_LIQUIDAZIONE')`
+    );
+    // L'accordo con i numeri del decreto addosso, e il decreto con le righe
+    // della proposta: sono i due avanzi che la demo vera ha mostrato.
+    await db.query(
+      `INSERT INTO ${SCHEMA}.istruttoria_giudice (scenario_id, documenti, lettura)
+       VALUES (3, '[{"url":"/demo/decreto-liquidazione-tessitura-lario.pdf"}]', '{}')`
+    );
+    await db.query(
+      `INSERT INTO ${SCHEMA}.proposta_creditori
+         (scenario_id, categoria_creditore, importo_dovuto, percentuale_offerta, rilevante_per_ente)
+       VALUES (3, 'INPS', 92000, 40, TRUE), (4, 'INPS', 92000, 40, TRUE)`
+    );
+
+    await riallineaAttiDemo(db, SCHEMA, 100);
+
+    const righe = await db.query<{ scenario_id: number }>(
+      `SELECT scenario_id FROM ${SCHEMA}.proposta_creditori ORDER BY scenario_id`
+    );
+    const istruttorie = await db.query<{ scenario_id: number }>(
+      `SELECT scenario_id FROM ${SCHEMA}.istruttoria_giudice ORDER BY scenario_id`
+    );
+    // Restano solo quelle dell'accordo, e l'istruttoria del decreto non c'era.
+    expect(righe.rows.map((r) => Number(r.scenario_id))).toEqual([3]);
+    expect(istruttorie.rows).toHaveLength(0);
   });
 });
