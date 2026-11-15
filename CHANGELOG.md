@@ -1,3 +1,14 @@
+## 0.234.0 — 2026-11-15
+
+- **Anche Tessitura e Logistica hanno due atti.** La demo diceva nel nome dello scenario che prima
+  c’era un accordo, ma quell’accordo non esisteva: restavano il decreto (Tessitura) e il cram down
+  (Logistica) da soli, senza niente da confrontare. Ora l’accordo c’è come secondo scenario, con le
+  sue righe: Tessitura offre 36.800 euro su 92.000 al 40% in sei rate contro i 22.472 della
+  liquidazione; Logistica 8.100 su 13.500 al 60% contro 5.200 del cram down.
+- **Le righe seguono l’atto, non l’azienda.** Il seed scrive le righe dell’accordo anche quando
+  l’accordo è lo scenario aggiuntivo, e solo se quello scenario non ne ha già: la Meccanica resta
+  l’unica con l’accordo come primo atto, le altre due lo hanno come alternativa.
+
 ## 0.233.0 — 2026-11-14
 
 - **L’atto di accordo ha i suoi numeri.** La demo caricava la proposta come documento ma senza le

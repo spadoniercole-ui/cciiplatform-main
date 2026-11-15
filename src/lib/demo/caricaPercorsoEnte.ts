@@ -925,6 +925,11 @@ export async function caricaPercorsoDemoEnte(
               ? extra.tipo
               : undefined
           );
+          // Se il secondo atto è l'accordo, porta le sue righe: altrimenti il
+          // confronto avrebbe il provvedimento con i numeri e l'accordo senza.
+          if (extra.tipo === 'PROPOSTA') {
+            await inserisciPropostaDemo(client, nomeSchema, extra.id, a);
+          }
           await inserisciVerificheDemo(client, nomeSchema, aziendaId!, a, extra.id, extra.tipo);
         }
       }

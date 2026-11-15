@@ -99,12 +99,18 @@ describe('percorso demo dell’ente', () => {
       new Set(['PROPOSTA', 'DECRETO_LIQUIDAZIONE', 'CRAM_DOWN', 'DA_CHIEDERE'])
     );
 
-    // Un’azienda valuta due atti diversi, con le stesse verifiche: è la prova
-    // che la differenziazione sta sullo scenario e non sull’azienda.
+    // Tre aziende valutano due atti diversi con le stesse verifiche: è la prova
+    // che la differenziazione sta sullo scenario e non sull'azienda. L'accordo
+    // è il primo atto per la Meccanica, il secondo per Tessitura e Logistica.
     const conDue = PERCORSO_DEMO.filter((a) => (a.scenariAggiuntivi ?? []).length > 0);
-    expect(conDue).toHaveLength(1);
-    expect(conDue[0].tipoIstruttoria).toBe('PROPOSTA');
-    expect(conDue[0].scenariAggiuntivi?.[0].tipoIstruttoria).not.toBe('PROPOSTA');
+    expect(conDue).toHaveLength(3);
+    const accordoPrimo = conDue.filter((a) => a.tipoIstruttoria === 'PROPOSTA');
+    const accordoSecondo = conDue.filter((a) =>
+      (a.scenariAggiuntivi ?? []).some((s) => s.tipoIstruttoria === 'PROPOSTA')
+    );
+    expect(accordoPrimo).toHaveLength(1);
+    expect(accordoSecondo).toHaveLength(2);
+    for (const a of conDue) expect('verifiche' in a && a.verifiche).toBeFalsy();
 
     // La verifica amministrativa non si spegne mai: non esiste un campo per
     // farlo. Le altre due sì, e una azienda della demo ne resta senza.

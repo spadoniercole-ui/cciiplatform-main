@@ -158,6 +158,28 @@ describe('la demo è completa: ogni azione ha il suo file', () => {
     }
   });
 
+  it('ogni azienda con due atti ha l’accordo e le sue righe', () => {
+    const conDueAtti = PERCORSO_DEMO.filter((a) => (a.scenariAggiuntivi ?? []).length > 0).map(
+      (a) => a.ragioneSociale
+    );
+    expect(conDueAtti).toEqual([
+      'Meccanica Valsesia Demo S.r.l.',
+      'Tessitura Lario Demo S.p.A.',
+      'Logistica Padana Demo S.r.l.',
+    ]);
+    for (const a of PERCORSO_DEMO.filter((x) => (x.scenariAggiuntivi ?? []).length > 0)) {
+      const tipi = [a.tipoIstruttoria, ...a.scenariAggiuntivi!.map((s) => s.tipoIstruttoria)];
+      // L'accordo c'è, e accanto c'è un atto di natura diversa: senza il
+      // secondo termine il confronto non direbbe niente.
+      expect(tipi, a.ragioneSociale).toContain('PROPOSTA');
+      expect(
+        tipi.filter((t) => t !== 'PROPOSTA' && t !== 'DA_CHIEDERE').length,
+        a.ragioneSociale
+      ).toBeGreaterThan(0);
+      expect((a.propostaCreditori ?? []).length, a.ragioneSociale).toBeGreaterThan(1);
+    }
+  });
+
   it('il set demo copre le nature e le verifiche che il prodotto distingue', () => {
     const nature = new Set(PERCORSO_DEMO.map((a) => a.tipoIstruttoria));
     expect(nature).toEqual(

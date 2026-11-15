@@ -658,6 +658,42 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
     scenario: 'Decreto di liquidazione — Tessitura Lario Demo',
     scenarioPrecedente: 'Proposta di piano attestato — Tessitura Lario Demo',
     dataDepositoProposta: '2026-10-06',
+    // L'accordo che il decreto ha reso inutile è ancora in valutazione: la
+    // liquidazione realizza 22.472 euro (72.000 di contributi al 30,5% e 8.000
+    // di sanzioni al 6,4%), l'accordo ne offre 36.800 su 92.000 in sei rate.
+    // Sono i due termini che il confronto del report mette accanto.
+    scenariAggiuntivi: [
+      { nome: 'Proposta di piano attestato — Tessitura Lario Demo', tipoIstruttoria: 'PROPOSTA' },
+    ],
+    propostaCreditori: [
+      {
+        categoria: 'INPS',
+        dovuto: 92000,
+        offerta: 40,
+        modalita: 'RATEALE',
+        rate: 6,
+        rango: 'PRIVILEGIATO_GENERALE',
+        rilevanteEnte: true,
+      },
+      {
+        categoria: 'Banca Ipotecaria S.p.A.',
+        dovuto: 250000,
+        offerta: 100,
+        modalita: 'UNICA_SOLUZIONE',
+        rate: null,
+        rango: 'PRIVILEGIATO_IPOTECA',
+        rilevanteEnte: false,
+      },
+      {
+        categoria: 'Fornitori chirografari',
+        dovuto: 180000,
+        offerta: 20,
+        modalita: 'RATEALE',
+        rate: 8,
+        rango: 'CHIROGRAFARIO',
+        rilevanteEnte: false,
+      },
+    ],
   },
   {
     ragioneSociale: 'Logistica Padana Demo S.r.l.',
@@ -817,6 +853,44 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
     scenario: 'Cram down — Logistica Padana Demo',
     scenarioPrecedente: 'Proposta di accordo di ristrutturazione — Logistica Padana Demo',
     dataDepositoProposta: '2026-10-21',
+    // Stessa azienda, due atti: l'accordo offre 8.100 euro su 13.500 (60% in
+    // quattro rate), il cram down riconosce 10.000 di contributi al 50% e 1.000
+    // di sanzioni al 20% — 5.200 euro. Qui l'accordo rende più della procedura.
+    scenariAggiuntivi: [
+      {
+        nome: 'Proposta di accordo di ristrutturazione — Logistica Padana Demo',
+        tipoIstruttoria: 'PROPOSTA',
+      },
+    ],
+    propostaCreditori: [
+      {
+        categoria: 'INPS',
+        dovuto: 13500,
+        offerta: 60,
+        modalita: 'RATEALE',
+        rate: 4,
+        rango: 'PRIVILEGIATO_GENERALE',
+        rilevanteEnte: true,
+      },
+      {
+        categoria: 'Banca Ipotecaria S.p.A.',
+        dovuto: 150000,
+        offerta: 100,
+        modalita: 'UNICA_SOLUZIONE',
+        rate: null,
+        rango: 'PRIVILEGIATO_IPOTECA',
+        rilevanteEnte: false,
+      },
+      {
+        categoria: 'Fornitori chirografari',
+        dovuto: 90000,
+        offerta: 30,
+        modalita: 'RATEALE',
+        rate: 8,
+        rango: 'CHIROGRAFARIO',
+        rilevanteEnte: false,
+      },
+    ],
   },
   {
     // La quarta posizione è quella che l'utente ha chiesto: un'azienda
