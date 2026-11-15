@@ -12,7 +12,14 @@
 // alla verifica azienda, non a questa.
 
 import { pool } from '@/lib/db';
-import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
+import { assicuraTabellaXbrlAzienda } from '@/db/provision';
+import {
+  componiProiezione,
+  type AnnoContabile,
+  type ProiezioneContabile,
+} from '@/lib/contabile/proiezione';
+import { apriVerifica } from '@/lib/verificheApertura';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -126,6 +133,84 @@ export async function statoVerificaContabileAction(
       success: false,
       aziende: [],
       error: `Impossibile leggere lo stato della verifica contabile: ${(error as Error).message}`,
+    };
+  }
+}
+
+export interface RisultatoProiezioneContabile {
+  success: boolean;
+  /** Data d'apertura della verifica contabile (ISO): è la fine della serie. */
+  apertura: string | null;
+  /** L'anno in cui la serie si ferma: quello dell'apertura della verifica. */
+  annoVerifica: number;
+  proiezione: ProiezioneContabile | null;
+  error?: string;
+}
+
+/**
+ * LA PROIEZIONE DELLA CONTABILE, ALL'ANNO DELLA VERIFICA (0.236.0).
+ *
+ * Prende i bilanci in archivio, la data d'apertura della verifica contabile —
+ * la scrive se è la prima volta — e compone la serie degli scarti con la sua
+ * proiezione. La proiezione vive qui, non nella verifica azienda: lì i due dati
+ * (amministrativo attuale, contabile storico) devono arrivare già sullo stesso
+ * asse temporale.
+ *
+ * Nessun dato inventato: se la serie non si ricava, la voce resta ferma e la
+ * risposta dice quale e perché (le avvertenze sono nel risultato).
+ */
+export async function proiezioneContabileAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<RisultatoProiezioneContabile> {
+  try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    if (!schemaOk(nomeSchema)) {
+      return {
+        success: false,
+        apertura: null,
+        annoVerifica: new Date().getFullYear(),
+        proiezione: null,
+        error: 'Nome schema non valido.',
+      };
+    }
+
+    await assicuraTabellaXbrlAzienda(nomeSchema);
+    const bilanci: AnnoContabile[] = [];
+    await pool
+      .query(
+        `SELECT anno_bilancio, dati_finanziari
+           FROM "${nomeSchema}".xbrl_storico_azienda
+          WHERE azienda_id = $1 AND anno_bilancio IS NOT NULL
+          ORDER BY anno_bilancio ASC`,
+        [aziendaId]
+      )
+      .then((r) => {
+        for (const riga of r.rows) {
+          const dati = riga.dati_finanziari;
+          if (!dati || typeof dati !== 'object') continue;
+          bilanci.push({ anno: Number(riga.anno_bilancio), dati });
+        }
+      })
+      .catch(() => undefined);
+
+    const { apertaIl } = await apriVerifica(nomeSchema, aziendaId, 'CONTABILE');
+    const annoVerifica = apertaIl ? Number(apertaIl.slice(0, 4)) : new Date().getFullYear();
+
+    return {
+      success: true,
+      apertura: apertaIl,
+      annoVerifica,
+      proiezione: componiProiezione({ bilanci, annoVerifica }),
+    };
+  } catch (error: unknown) {
+    console.error('[proiezioneContabileAction] Errore:', error);
+    return {
+      success: false,
+      apertura: null,
+      annoVerifica: new Date().getFullYear(),
+      proiezione: null,
+      error: `Impossibile calcolare la proiezione contabile: ${(error as Error).message}`,
     };
   }
 }

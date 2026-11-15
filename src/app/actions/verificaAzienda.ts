@@ -24,6 +24,7 @@
 
 import { pool } from '@/lib/db';
 import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
+import { apriVerifica } from '@/lib/verificheApertura';
 import { assicuraTabelleVerificaAzienda } from '@/db/provision';
 import {
   ANNI_RIENTRO_DEBITO,
@@ -563,6 +564,11 @@ export async function calcolaVerificaAziendaAction(
       return { success: false, error: 'Profilo di simulazione non riconosciuto.' };
     }
     await assicuraTabelleVerificaAzienda(nomeSchema);
+
+    // La verifica azienda ha la sua data d'apertura, come la contabile: la
+    // prima simulazione la fissa, le successive la leggono. Serve a sapere con
+    // quali criteri è stata fatta la prima lettura (0.236.0).
+    await apriVerifica(nomeSchema, aziendaId, 'AZIENDALE').catch(() => undefined);
 
     const config = await ottieniConfigVerificaAziendaAction(nomeSchema);
     const propria = await leggiOrizzonteAzienda(nomeSchema, aziendaId);

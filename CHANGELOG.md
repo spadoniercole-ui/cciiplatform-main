@@ -1,3 +1,22 @@
+## 0.236.0 — 2026-11-15
+
+- **La proiezione dei dati contabili passa nella verifica contabile.** Gli indici sono una fotografia
+  di un anno: non guardano né avanti né indietro. Il dato depositato però arriva in colonne
+  affiancate, e la parte più vecchia della serie è quella che nessun file porta con sé. La verifica
+  contabile ha ora il riquadro «Proiezione all’anno della verifica»: base = il bilancio più vecchio
+  in archivio (quello senza un «-1» a coprirlo), scarti di ogni anno **sulla base** e non sull’anno
+  precedente, ragione geometrica fra ultimo e primo scarto, applicata fino all’anno di apertura
+  della verifica. Con 2022, 2023 e 2024 e verifica nel 2026, gli anni costruiti sono 2025 e 2026.
+- **La data di apertura di ogni verifica è conservata.** Nuova tabella `verifiche_apertura` (una
+  riga per azienda e tipo: amministrativa, contabile, aziendale): si scrive alla prima apertura e non
+  si sposta, così una verifica rifatta più avanti si può confrontare con gli stessi criteri di
+  partenza. La verifica contabile la usa come fine della serie; la verifica azienda la registra alla
+  prima simulazione.
+- **Nessun numero inventato.** Con un biennio in archivio il passo non si ricava: la voce resta
+  ferma all’ultimo dato e il riquadro dichiara quale voce e perché. Stessa cosa per una serie che
+  cambia segno. Il passo è limitato a 3 dichiaratamente, e note integrative e studi di settore sono
+  richiamati come materia di discussione dell’ipotesi, non come fonte di un tasso.
+
 ## 0.235.0 — 2026-11-15
 
 - **Corretto un difetto che solo la demo vera mostrava.** Caricando lo spazio demo in un database

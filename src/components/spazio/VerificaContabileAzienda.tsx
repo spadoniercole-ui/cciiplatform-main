@@ -5,9 +5,10 @@
 // Quattro acquisizioni, nell'ordine in cui servono: la visura storica (che qui
 // non racconta la vita dell'azienda ma fissa l'anagrafica su cui si innestano
 // i parametri dell'ente), i parametri dell'ente per questa azienda, i bilanci
-// XBRL, e infine il prospetto a scalare con gli indici. La verifica si chiude
-// con l'acquisizione del dato storico: nessuna simulazione, nessuna
-// conclusione — quella è materia della verifica azienda.
+// XBRL, il prospetto a scalare con gli indici, e infine la proiezione: gli anni
+// depositati portati fino all'anno di apertura della verifica con la serie
+// geometrica degli scarti (0.236.0). Nessuna conclusione nel merito: quella è
+// materia della verifica azienda, che ora riparte da dati allineati nel tempo.
 //
 // La certificazione dei debiti non si chiede e non si mostra: è il dato della
 // verifica amministrativa, che vive nel suo esito. Qui resta il solo dato
@@ -27,6 +28,7 @@ import {
 } from 'lucide-react';
 import { AziendaBilanciXbrl } from './AziendaBilanciXbrl';
 import { ProspettoContabileStorico } from './ProspettoContabileStorico';
+import { ProiezioneContabile } from './ProiezioneContabile';
 import { registraVisuraTriageAction } from '@/app/actions/visuraTriage';
 import { estraiAnagraficaDaVisuraAction } from '@/app/actions/visuraEstrazione';
 import {
@@ -404,9 +406,11 @@ export function VerificaContabileAzienda({
         />
       </section>
 
+      <ProiezioneContabile nomeSchema={nomeSchema} aziendaId={aziendaId} />
+
       <p className="text-[11px] text-slate-500">
-        La verifica contabile si chiude con l’acquisizione del dato storico: per la simulazione e le
-        proiezioni c’è la verifica azienda.{' '}
+        La verifica contabile porta il dato storico fino all’anno in cui è stata aperta: la verifica
+        aziendale riparte da qui, con i due dati già sullo stesso asse temporale.{' '}
         <Link
           href={
             ritorno && ritorno.startsWith('/spazio/')
