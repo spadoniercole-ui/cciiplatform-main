@@ -334,6 +334,96 @@ describe('gli atti in valutazione', () => {
     expect(sezione.nota).toMatch(/sono dell’azienda/i);
   });
 
+  it('con due atti dice che cosa cambia per l’ente, con i numeri del confronto', () => {
+    const { sezioni } = componiReport(
+      fonti({
+        proposte: [
+          {
+            scenarioId: 11,
+            nome: 'Accordo Meccanica',
+            situazione: 'Proposta',
+            esito: 'DEFINIZIONE_ACCORDO',
+            archiviato: false,
+            ente: {
+              creditoEnte: 245000,
+              ammesso: 210000,
+              recupero: 120000,
+              perdita: 125000,
+              tempiMesi: 48,
+            },
+          },
+          {
+            scenarioId: 12,
+            nome: 'Cram down Meccanica',
+            situazione: 'Cram down',
+            esito: 'CRAM_DOWN',
+            archiviato: false,
+            ente: {
+              creditoEnte: 245000,
+              ammesso: 164000,
+              recupero: 155000,
+              perdita: 90000,
+              tempiMesi: 18,
+            },
+          },
+        ],
+      }),
+      inclusioniTutte
+    );
+    const sezione = sezioni.find((s) => s.id === 'proposte')!;
+    if (sezione.tipo !== 'voci') throw new Error('sezione atti non a voci');
+
+    // Ogni atto porta le sue cifre, citate dal confronto.
+    const accordo = sezione.voci.find((v) => v.etichetta === 'Accordo Meccanica')!;
+    expect(accordo.valore).toMatch(/riconosciuti/);
+    expect(accordo.valore).toMatch(/recupero atteso/);
+    expect(accordo.valore).toMatch(/48 mesi/);
+
+    // E la sintesi dice la differenza, senza inventare un secondo conto.
+    const confronto = sezione.voci.find((v) => v.etichetta === 'Che cosa cambia fra gli atti')!;
+    expect(confronto).toBeTruthy();
+    expect(confronto.valore).toMatch(/120\.000/);
+    expect(confronto.valore).toMatch(/155\.000/);
+    expect(confronto.valore).toMatch(/differenza di .*35\.000/);
+    expect(confronto.valore).toMatch(/Cram down: 18 mesi/);
+  });
+
+  it('se solo un atto ha il confronto, lo dice invece di fingere un paragone', () => {
+    const { sezioni } = componiReport(
+      fonti({
+        proposte: [
+          {
+            scenarioId: 13,
+            nome: 'Decreto Tessitura',
+            situazione: 'Decreto di liquidazione giudiziale',
+            esito: null,
+            archiviato: false,
+            ente: {
+              creditoEnte: 92000,
+              ammesso: 80000,
+              recupero: 26000,
+              perdita: 66000,
+              tempiMesi: 36,
+            },
+          },
+          {
+            scenarioId: 14,
+            nome: 'Cram down Tessitura',
+            situazione: 'Cram down',
+            esito: null,
+            archiviato: false,
+            ente: null,
+          },
+        ],
+      }),
+      inclusioniTutte
+    );
+    const sezione = sezioni.find((s) => s.id === 'proposte')!;
+    if (sezione.tipo !== 'voci') throw new Error('sezione atti non a voci');
+    const confronto = sezione.voci.find((v) => v.etichetta === 'Che cosa cambia fra gli atti')!;
+    expect(confronto.valore).toMatch(/un solo atto ha un confronto/i);
+  });
+
   it('senza scenari la sezione non c’è', () => {
     const { sezioni } = componiReport(fonti({ proposte: [] }), inclusioniTutte);
     expect(sezioni.some((s) => s.id === 'proposte')).toBe(false);

@@ -1,3 +1,22 @@
+## 0.232.0 — 2026-11-14
+
+- **Il report dice che cosa cambia per l’ente fra gli atti.** Quando la stessa azienda ne valuta più
+  di uno, accanto a ciascuno il documento riporta i numeri del confronto già calcolato in istruttoria
+  — crediti riconosciuti sul credito dell’ente, recupero atteso, perdita, tempi — e chiude con la
+  differenza: il recupero va da X a Y, con lo scarto in euro e i tempi dichiarati da ogni atto. Se
+  solo un atto ha il confronto lo dice, invece di fingere un paragone.
+- **Le istanze XBRL della demo portano le note integrative.** Prima c’era una sola nota su otto voci
+  di sintesi: il Piano-ponte non aveva materiale per allineare il bilancio alla data della verifica e
+  l’azione restava zoppa. Ora le note sono otto (continuità, criteri, immobilizzazioni, crediti,
+  debiti, ricavi, personale, eventi successivi), con cifre coerenti con i fact dello stesso file.
+- **Il seed salva le note in `note_fatti`.** Il bilancio demo arrivava in archivio senza note: la
+  lettura del Piano-ponte trovava il vuoto. Le note vivono in `src/lib/demo/noteIntegrative.json`,
+  che il generatore dei file e il seed leggono dallo stesso posto, con l’impronta del file.
+- **Un check completo sulla demo** (`src/lib/demo/demoCompleto.test.ts`): ogni documento dichiarato
+  esiste e non è vuoto, ogni azienda ha fascicolo, bilancio XBRL e prospetto, certificazione e check
+  list, ogni natura che ne ha bisogno trova il suo provvedimento, ogni istanza porta le note e i
+  numeri che la simulazione legge. È il controllo che avrebbe fermato la demo zoppa.
+
 ## 0.231.0 — 2026-11-14
 
 - **Il report dell’azienda mette insieme i suoi atti.** Quando la stessa azienda valuta più di uno

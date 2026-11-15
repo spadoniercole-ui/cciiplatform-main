@@ -5,7 +5,7 @@
 // Ogni PDF porta la filigrana DEMO e la dicitura «documento fittizio»; gli
 // Excel hanno la stessa intestazione nel primo foglio.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
@@ -170,6 +170,19 @@ function pdf({ file, titolo, sottotitolo, righe }) {
 // gli indici né il Piano-ponte. I tag sono quelli della tassonomia ITCC-CI che
 // il motore riconosce (src/lib/xbrl/tagMapping.ts).
 function xbrl({ file, azienda, cf }) {
+  // LE NOTE INTEGRATIVE NON SONO UN DETTAGLIO (0.232.0).
+  //
+  // Il Piano-ponte non lavora solo sui numeri di sintesi: legge le note
+  // integrative (fatti testuali dell'istanza) per capire criteri, eventi e
+  // continuità. Con una sola nota la dimostrazione resta zoppa — l'azione
+  // «allinea il bilancio alla data verifica» non ha materiale su cui
+  // ragionare. Qui ci sono le note che un'istanza reale porta con sé, con
+  // cifre coerenti con i fact numerici dello stesso file.
+  // Le note stanno in un unico posto (src/lib/demo/noteIntegrative.json):
+  // le legge il seed e le legge questo generatore, così non possono divergere.
+  const note = JSON.parse(
+    readFileSync(join(process.cwd(), 'src', 'lib', 'demo', 'noteIntegrative.json'), 'utf8')
+  ).map((n) => [n.tag, n.testo]);
   const voci = [
     ['TotaleAttivo', 1100000, 1200000],
     ['TotaleAttivoCircolante', 600000, 650000],
@@ -223,7 +236,7 @@ function xbrl({ file, azienda, cf }) {
   <itcc-ci:Denominazione contextRef="C2025">${azienda}</itcc-ci:Denominazione>
   <itcc-ci:CodiceFiscale contextRef="C2025">${cf}</itcc-ci:CodiceFiscale>
 ${voci.map(fact).join('\n')}
-  <itcc-ci:NotaIntegrativaContinuitaAziendale contextRef="C2025">Documento dimostrativo: la nota riporta una valutazione di continuità aziendale fittizia, utile a mostrare come il Piano-ponte legge le note integrative e non solo i numeri di sintesi.</itcc-ci:NotaIntegrativaContinuitaAziendale>
+${note.map(([tag, testo]) => `  <itcc-ci:${tag} contextRef="C2025">${testo}</itcc-ci:${tag}>`).join('\n')}
 </xbrli:xbrl>
 `;
   writeFileSync(join(CARTELLA, file), contenuto, 'utf8');

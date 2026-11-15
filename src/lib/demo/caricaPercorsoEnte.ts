@@ -37,6 +37,7 @@ import {
   assicuraTabelleVerificaAzienda,
 } from '@/db/provision';
 import { assicuraScenariAggiuntivi, inserisciVerificheDemo } from './verificheDemo';
+import { noteIntegrativeDemoPer } from './noteXbrl';
 import { ripristinaConfigurazione } from '@/lib/configurazioneSpazio/configurazione';
 import { assicuraTabelleProdotti } from '@/db/provisionProdotti';
 import {
@@ -518,11 +519,15 @@ async function inserisciBilancio(
 ): Promise<void> {
   const anno = periodo === 'corrente' ? a.finanziario.anno : a.finanziario.anno - 1;
   const bundle = bundleDemo(a, periodo);
+  // Le note integrative dello stesso file che la demo consegna: senza, il
+  // Piano-ponte non ha nulla da leggere. Si salvano sull'anno corrente.
+  const note = noteIntegrativeDemoPer(a.ragioneSociale, anno);
   await esegui.query(
     `INSERT INTO "${nomeSchema}".xbrl_storico_azienda
        (azienda_id, anno_bilancio, nome_file, dati_finanziari, indici,
-        altri_indici, situazione_debitoria, severity)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        altri_indici, situazione_debitoria, severity, note_fatti, note_impronta,
+        note_estratte_il)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      ON CONFLICT (azienda_id, anno_bilancio) DO NOTHING`,
     [
       aziendaId,
@@ -533,6 +538,9 @@ async function inserisciBilancio(
       JSON.stringify(bundle.altriIndici),
       JSON.stringify(bundle.situazioneDebitoria),
       bundle.severity,
+      JSON.stringify(note.fatti),
+      note.impronta,
+      new Date(),
     ]
   );
 }

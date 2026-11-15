@@ -165,6 +165,20 @@ export interface FonteSoglie25 {
  * Uno scenario dell'azienda con l'esito che si sta valutando. Il report lo
  * cita com'è: l'esito è un'ipotesi dichiarata, non un calcolo del documento.
  */
+/**
+ * Che cosa resta all'ente in questo atto. Sono i numeri del confronto con il
+ * provvedimento/la proposta, già calcolati in istruttoria: il report li cita e
+ * non li rifà. Null quando l'atto non ha un confronto (scenario in corso,
+ * documento non ancora letto).
+ */
+export interface EsitoEnteAtto {
+  creditoEnte: number;
+  ammesso: number;
+  recupero: number | null;
+  perdita: number | null;
+  tempiMesi: number | null;
+}
+
 export interface FonteProposta {
   scenarioId: number;
   nome: string;
@@ -172,6 +186,7 @@ export interface FonteProposta {
   situazione: string;
   esito: EsitoProposta | null;
   archiviato: boolean;
+  ente?: EsitoEnteAtto | null;
 }
 
 export interface FontiReport {
@@ -440,17 +455,65 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     const piuDiUno = fonti.proposte.length > 1;
     const voci: VociReport[] = fonti.proposte.map((p) => {
       const esito = p.esito ? ESITI_PROPOSTA.find((e) => e.codice === p.esito) : null;
+      // I numeri dell'atto per l'ente: sono quelli del confronto in
+      // istruttoria, citati come stanno.
+      const cifre = p.ente
+        ? [
+            `ente: riconosciuti ${euro(p.ente.ammesso)} su ${euro(p.ente.creditoEnte)}`,
+            p.ente.recupero === null ? null : `recupero atteso ${euro(p.ente.recupero)}`,
+            p.ente.perdita === null ? null : `perdita ${euro(p.ente.perdita)}`,
+            p.ente.tempiMesi === null ? null : `tempi stimati ${p.ente.tempiMesi} mesi`,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : null;
       return {
         etichetta: p.nome,
         valore: [
           p.situazione,
           esito ? `esito: ${esito.etichetta} — decide ${esito.chiDecide}` : 'esito non dichiarato',
           p.archiviato ? 'archiviato' : null,
+          cifre,
         ]
           .filter(Boolean)
           .join(' · '),
       };
     });
+
+    // CHE COSA CAMBIA FRA GLI ATTI (0.232.0). Con due atti il documento non si
+    // limita a elencarli: dice la differenza, usando solo i numeri che ha già.
+    if (piuDiUno) {
+      const conRecupero = fonti.proposte.filter(
+        (p): p is FonteProposta & { ente: EsitoEnteAtto } =>
+          Boolean(p.ente) && p.ente!.recupero !== null
+      );
+      if (conRecupero.length > 1) {
+        const ordinati = [...conRecupero].sort(
+          (x, y) => (y.ente.recupero ?? 0) - (x.ente.recupero ?? 0)
+        );
+        const migliore = ordinati[0];
+        const peggiore = ordinati[ordinati.length - 1];
+        const delta = (migliore.ente.recupero ?? 0) - (peggiore.ente.recupero ?? 0);
+        const tempi = conRecupero
+          .filter((p) => p.ente.tempiMesi !== null)
+          .map((p) => `${p.situazione}: ${p.ente.tempiMesi} mesi`);
+        voci.push({
+          etichetta: 'Che cosa cambia fra gli atti',
+          valore: [
+            `il recupero atteso per l’ente va da ${euro(peggiore.ente.recupero)} (${peggiore.situazione}) a ${euro(migliore.ente.recupero)} (${migliore.situazione}), con una differenza di ${euro(delta)}`,
+            tempi.length > 0 ? `tempi dichiarati — ${tempi.join('; ')}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        });
+      } else if (fonti.proposte.some((p) => p.ente)) {
+        voci.push({
+          etichetta: 'Che cosa cambia fra gli atti',
+          valore:
+            'un solo atto ha un confronto con i crediti dell’ente: la differenza si potrà dire quando anche gli altri avranno i loro documenti letti.',
+        });
+      }
+    }
     sezioni.push({
       id: 'proposte',
       titolo: piuDiUno ? 'Gli atti in valutazione' : 'Atto in valutazione',

@@ -360,20 +360,60 @@ async function raccogliFonti(
   // in quel caso la sezione non c'è, e non è un errore.
   let proposte: FontiReport['proposte'] = null;
   try {
-    const r = await pool.query(
-      `SELECT id, nome, tipo_istruttoria, esito_proposta, archiviato
-         FROM "${nomeSchema}".scenari
-        WHERE azienda_id = $1
-        ORDER BY id DESC`,
-      [aziendaId]
-    );
-    proposte = r.rows.map((x) => ({
-      scenarioId: Number(x.id),
-      nome: String(x.nome ?? 'Scenario'),
-      situazione: etichettaIstruttoria(x.tipo_istruttoria as TipoIstruttoria),
-      esito: esitoPropostaValido(x.esito_proposta) ? x.esito_proposta : null,
-      archiviato: x.archiviato === true,
-    }));
+    // Ogni scenario porta con sé il confronto con il provvedimento, quando
+    // c'è: è da lì che il documento prende i numeri per dire che cosa cambia
+    // per l'ente fra un atto e l'altro. Se la tabella dell'istruttoria non
+    // esiste (tenant vecchio), si legge senza — la sezione resta, senza cifre.
+    let righe: Record<string, unknown>[];
+    try {
+      const conIstruttoria = await pool.query(
+        `SELECT s.id, s.nome, s.tipo_istruttoria, s.esito_proposta, s.archiviato,
+                i.confronto
+           FROM "${nomeSchema}".scenari s
+           LEFT JOIN "${nomeSchema}".istruttoria_giudice i ON i.scenario_id = s.id
+          WHERE s.azienda_id = $1
+          ORDER BY s.id DESC`,
+        [aziendaId]
+      );
+      righe = conIstruttoria.rows;
+    } catch {
+      const senzaIstruttoria = await pool.query(
+        `SELECT id, nome, tipo_istruttoria, esito_proposta, archiviato
+           FROM "${nomeSchema}".scenari
+          WHERE azienda_id = $1
+          ORDER BY id DESC`,
+        [aziendaId]
+      );
+      righe = senzaIstruttoria.rows;
+    }
+    const numero = (v: unknown): number | null => {
+      if (v === null || v === undefined || v === '') return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    proposte = righe.map((x) => {
+      // I numeri dell'atto per l'ente: credito, ammesso, recupero, perdita,
+      // tempi. Sono quelli già calcolati nel confronto, non un secondo conto.
+      const c = (x.confronto ?? null) as Record<string, unknown> | null;
+      const ente =
+        c && numero(c.creditoEnte) !== null
+          ? {
+              creditoEnte: numero(c.creditoEnte)!,
+              ammesso: numero(c.ammessoGiudice) ?? 0,
+              recupero: numero(c.recuperoAtteso),
+              perdita: numero(c.perditaTotale),
+              tempiMesi: numero(c.tempiMesi),
+            }
+          : null;
+      return {
+        scenarioId: Number(x.id),
+        nome: String(x.nome ?? 'Scenario'),
+        situazione: etichettaIstruttoria(x.tipo_istruttoria as TipoIstruttoria),
+        esito: esitoPropostaValido(x.esito_proposta) ? x.esito_proposta : null,
+        archiviato: x.archiviato === true,
+        ente,
+      };
+    });
   } catch {
     proposte = null;
   }

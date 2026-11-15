@@ -1,0 +1,34 @@
+[
+  {
+    "tag": "NotaIntegrativaContinuitaAziendale",
+    "testo": "La società redige il bilancio nella prospettiva della continuità aziendale. Documento dimostrativo: la valutazione è fittizia e serve a mostrare come il Piano-ponte legge le note integrative e non solo i numeri di sintesi."
+  },
+  {
+    "tag": "NotaIntegrativaCriteriDiValutazione",
+    "testo": "I criteri di valutazione applicati non sono variati rispetto all’esercizio precedente: immobilizzazioni al costo, crediti al presumibile valore di realizzo, debiti al valore nominale. Le voci sono esposte al netto delle rettifiche di valore."
+  },
+  {
+    "tag": "NotaIntegrativaImmobilizzazioni",
+    "testo": "Le immobilizzazioni ammontano a 500.000 euro e comprendono impianti e macchinari per 320.000 euro, attrezzature per 110.000 euro e altri beni per 70.000 euro. Gli ammortamenti dell’esercizio sono pari a 40.000 euro, calcolati a quote costanti sulla vita utile stimata."
+  },
+  {
+    "tag": "NotaIntegrativaCrediti",
+    "testo": "I crediti verso clienti ammontano a 320.000 euro e sono esposti al netto di un fondo svalutazione di 18.000 euro, ritenuto congruo rispetto allo storico delle perdite su crediti. Non risultano crediti di durata superiore a cinque anni."
+  },
+  {
+    "tag": "NotaIntegrativaDebiti",
+    "testo": "I debiti ammontano a 900.000 euro: verso banche 350.000 euro, verso fornitori 300.000 euro, tributari 150.000 euro e verso istituti di previdenza 100.000 euro. Non sono presenti debiti assistiti da garanzie reali su beni sociali oltre a quelli indicati."
+  },
+  {
+    "tag": "NotaIntegrativaRicavi",
+    "testo": "I ricavi delle vendite ammontano a 1.200.000 euro, in riduzione rispetto a 1.350.000 euro dell’esercizio precedente per effetto della contrazione degli ordini. Le prestazioni verso l’ente creditore sono contabilizzate per competenza."
+  },
+  {
+    "tag": "NotaIntegrativaPersonale",
+    "testo": "Il personale dipendente è composto da 24 addetti, invariati rispetto all’esercizio precedente. Il costo del personale è pari a 480.000 euro e non risultano retribuzioni differite oltre i termini contrattuali."
+  },
+  {
+    "tag": "NotaIntegrativaEventiSuccessivi",
+    "testo": "Successivamente alla chiusura dell’esercizio non si sono verificati eventi di rilievo tali da modificare la situazione patrimoniale, finanziaria ed economica rappresentata dal bilancio."
+  }
+]
