@@ -375,7 +375,9 @@ function DocumentoSovrascritture({
   const storiche = useMemo(
     () =>
       (base?.colonne ?? [])
-        .filter((c) => c.tipo === 'STORICO')
+        // Storico e calcolato sono entrambi il passato della mappa: la
+        // proiezione aziendale (0.237.0) invece parte da lì e non è una base.
+        .filter((c) => c.tipo !== 'PROIEZIONE')
         .slice()
         .sort((a, b) => a.anno - b.anno),
     [base]

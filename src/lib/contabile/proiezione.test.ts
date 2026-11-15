@@ -1,4 +1,5 @@
-// La proiezione contabile: la serie degli scarti sulla base, con i suoi casi.
+// La proiezione contabile: differenziali sulla base, applicati all'ultimo
+// bilancio utile, con la loro etichetta (storico / calcolato).
 
 import { describe, expect, it } from 'vitest';
 import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
@@ -31,9 +32,10 @@ function dati(parziale: Partial<DatiFinanziariPeriodo> = {}): DatiFinanziariPeri
 }
 
 describe('proiezione contabile', () => {
-  it('parte dal 2022, conta gli scarti sulla base e li porta al 2026', () => {
+  it('conta i differenziali sulla base e li applica ai valori del 2024 fino al 2026', () => {
     // L'esempio dichiarato: 2024 porta il 2023, il 2023 porta il 2022. La base
-    // è il 2022, perché nessun file lo porta come anno precedente.
+    // è il 2022, perché nessun file lo porta come anno precedente. I
+    // differenziali si contano sulla base e si applicano al 2024.
     const p = componiProiezione({
       bilanci: [
         { anno: 2022, dati: dati({ ricaviVendite: 100 }) },
@@ -44,25 +46,51 @@ describe('proiezione contabile', () => {
     });
 
     expect(p.annoBase).toBe(2022);
+    expect(p.annoUltimoBilancio).toBe(2024);
     expect(p.anniArchivio).toEqual([2022, 2023, 2024]);
-    expect(p.annualitaProiettate).toEqual([2025, 2026]);
+    expect(p.annualitaCalcolate).toEqual([2025, 2026]);
     expect(p.avvertenze.join(' ')).toMatch(/La base è il 2022/);
+    expect(p.avvertenze.join(' ')).toMatch(/applicati ai valori del 2024/);
 
     const ricavi = p.voci.find((v) => v.chiave === 'ricaviVendite')!;
-    // Gli scarti sono sulla base: 2024 è +50, non +30 sul 2023.
-    expect(ricavi.scarti).toEqual([
-      { anno: 2023, valore: 120, scarto: 20 },
-      { anno: 2024, valore: 150, scarto: 50 },
+    // I differenziali sono sulla base: il 2024 è +50 punti, non +30 sul 2023.
+    expect(ricavi.valoreBase).toBe(100);
+    expect(ricavi.valoreUltimo).toBe(150);
+    expect(ricavi.differenziali).toEqual([
+      { anno: 2023, valore: 120, scarto: 20, differenziale: 0.2 },
+      { anno: 2024, valore: 150, scarto: 50, differenziale: 0.5 },
     ]);
     expect(ricavi.proiettabile).toBe(true);
-    // Gli scarti sono a un anno di distanza: il passo è 50/20 = 2,5.
-    expect(ricavi.passo).toBeCloseTo(2.5, 5);
-    // 2025: 50 × 2,5 = 125 → 225; 2026: 50 × 6,25 = 312,5 → 412,5.
-    expect(ricavi.proiezioni[0].valore).toBeCloseTo(225, 1);
-    expect(ricavi.proiezioni[1].valore).toBeCloseTo(412.5, 1);
+    // Un solo anno fra i due differenziali: il passo è 0,5 / 0,2 = 2,5.
+    expect(ricavi.passo).toBeCloseTo(2.5, 4);
+    // 2025: 150 × (1 + 0,5 × 2,5) = 337,5.
+    expect(ricavi.proiezioni[0]).toMatchObject({ anno: 2025, differenziale: 1.25, valore: 337.5 });
+    // 2026: 150 × (1 + 0,5 × 6,25) = 618,75.
+    expect(ricavi.proiezioni[1].valore).toBeCloseTo(618.75, 2);
   });
 
-  it('con un solo scarto non inventa un passo, e lo dichiara', () => {
+  it('battezza ogni annualità: storico il depositato, calcolato il costruito', () => {
+    const p = componiProiezione({
+      bilanci: [
+        { anno: 2022, dati: dati() },
+        { anno: 2023, dati: dati({ ricaviVendite: 120 }) },
+        { anno: 2024, dati: dati({ ricaviVendite: 150 }) },
+      ],
+      annoVerifica: 2025,
+    });
+
+    expect(p.bilanciProiettati.map((b) => [b.anno, b.tipo])).toEqual([
+      [2022, 'STORICO'],
+      [2023, 'STORICO'],
+      [2024, 'STORICO'],
+      [2025, 'CALCOLATO'],
+    ]);
+    // L'anno calcolato porta il dato costruito, non quello dell'anno prima.
+    const ricavi = p.voci.find((v) => v.chiave === 'ricaviVendite')!;
+    expect(p.bilanciProiettati[3].dati.ricaviVendite).toBe(ricavi.proiezioni[0].valore);
+  });
+
+  it('con un solo differenziale non inventa un passo, e lo dichiara', () => {
     const p = componiProiezione({
       bilanci: [
         { anno: 2023, dati: dati({ ricaviVendite: 100 }) },
@@ -72,7 +100,7 @@ describe('proiezione contabile', () => {
     });
 
     const ricavi = p.voci.find((v) => v.chiave === 'ricaviVendite')!;
-    expect(ricavi.scarti).toHaveLength(1);
+    expect(ricavi.differenziali).toHaveLength(1);
     expect(ricavi.passo).toBeNull();
     expect(ricavi.proiettabile).toBe(false);
     expect(ricavi.motivo).toMatch(/triennio/);
@@ -82,6 +110,7 @@ describe('proiezione contabile', () => {
     const ultimo = p.bilanciProiettati[p.bilanciProiettati.length - 1];
     expect(ultimo.anno).toBe(2026);
     expect(ultimo.dati.ricaviVendite).toBe(130);
+    expect(ultimo.tipo).toBe('CALCOLATO');
   });
 
   it('non proietta una serie che cambia segno', () => {
@@ -108,7 +137,7 @@ describe('proiezione contabile', () => {
       ],
       annoVerifica: 2024,
     });
-    expect(p.annualitaProiettate).toEqual([]);
+    expect(p.annualitaCalcolate).toEqual([]);
     expect(p.avvertenze.join(' ')).toMatch(/dentro gli anni già in archivio/);
   });
 
@@ -129,6 +158,51 @@ describe('proiezione contabile', () => {
     expect(voce.motivo).toMatch(/non è valorizzata/);
   });
 
+  it('con base zero il differenziale percentuale non si calcola', () => {
+    const p = componiProiezione({
+      bilanci: [
+        { anno: 2022, dati: dati({ disponibilitaLiquide: 0 }) },
+        { anno: 2023, dati: dati({ disponibilitaLiquide: 40 }) },
+        { anno: 2024, dati: dati({ disponibilitaLiquide: 60 }) },
+      ],
+      annoVerifica: 2025,
+    });
+    const voce = p.voci.find((v) => v.chiave === 'disponibilitaLiquide')!;
+    expect(voce.differenziali.every((d) => d.differenziale === null)).toBe(true);
+    expect(voce.proiettabile).toBe(false);
+    expect(voce.motivo).toMatch(/base è zero/);
+  });
+
+  it('non porta avanti una voce il cui ultimo valore non è positivo', () => {
+    const p = componiProiezione({
+      bilanci: [
+        { anno: 2022, dati: dati({ utileEsercizio: 100 }) },
+        { anno: 2023, dati: dati({ utileEsercizio: -120 }) },
+        { anno: 2024, dati: dati({ utileEsercizio: -90 }) },
+      ],
+      annoVerifica: 2025,
+    });
+    const voce = p.voci.find((v) => v.chiave === 'utileEsercizio')!;
+    expect(voce.proiettabile).toBe(false);
+    expect(voce.motivo).toMatch(/non positiva/);
+    expect(voce.proiezioni).toEqual([]);
+  });
+
+  it('si ferma quando il differenziale porterebbe il valore a zero o sotto', () => {
+    const p = componiProiezione({
+      bilanci: [
+        { anno: 2022, dati: dati({ ricaviVendite: 100 }) },
+        { anno: 2023, dati: dati({ ricaviVendite: 40 }) },
+        { anno: 2024, dati: dati({ ricaviVendite: 20 }) },
+      ],
+      annoVerifica: 2025,
+    });
+    const voce = p.voci.find((v) => v.chiave === 'ricaviVendite')!;
+    expect(voce.proiettabile).toBe(false);
+    expect(voce.motivo).toMatch(/zero o sotto/);
+    expect(p.vociTenuteFerme).toContain('Ricavi delle vendite');
+  });
+
   it('senza bilanci non finge una base', () => {
     const p = componiProiezione({ bilanci: [], annoVerifica: 2026 });
     expect(p.annoBase).toBeNull();
@@ -136,14 +210,17 @@ describe('proiezione contabile', () => {
     expect(p.avvertenze[0]).toMatch(/Carica i bilanci XBRL/);
   });
 
-  it('il passo è la radice n-esima del rapporto fra ultimo e primo scarto', () => {
-    expect(
-      passoSerie([
-        { anno: 2023, valore: 0, scarto: 10 },
-        { anno: 2025, valore: 0, scarto: 40 },
-      ])
-    ).toBeCloseTo(2, 5);
-    // Un solo scarto: niente passo.
-    expect(passoSerie([{ anno: 2024, valore: 0, scarto: 30 }])).toBeNull();
+  it('il passo è la radice n-esima del rapporto fra ultimo e primo differenziale', () => {
+    const punto = (anno: number, differenziale: number) => ({
+      anno,
+      valore: 0,
+      scarto: 0,
+      differenziale,
+    });
+    expect(passoSerie([punto(2023, 0.1), punto(2025, 0.4)])).toBeCloseTo(2, 5);
+    // Un solo differenziale: niente passo.
+    expect(passoSerie([punto(2024, 0.3)])).toBeNull();
+    // Serie che cambia segno: non è geometrica.
+    expect(passoSerie([punto(2023, 0.2), punto(2024, -0.1)])).toBeNull();
   });
 });

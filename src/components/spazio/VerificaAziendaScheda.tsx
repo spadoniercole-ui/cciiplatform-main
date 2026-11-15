@@ -409,7 +409,7 @@ export function VerificaAziendaScheda({
             </div>
             <div className="flex flex-wrap items-end gap-2 pt-1 border-t border-slate-100">
               <label className="text-[10px] text-slate-600">
-                Annualità di proiezione
+                Annualità oltre la verifica
                 <input
                   type="number"
                   min={1}
@@ -438,7 +438,9 @@ export function VerificaAziendaScheda({
                 </button>
               )}
               <span className="text-[10px] text-slate-400 leading-relaxed">
-                Vale per questa azienda. Predefinito dello spazio: {orizzonteSpazio} annualità
+                Gli anni fino alla verifica contabile sono già costruiti lì: qui si sceglie quante
+                annualità aggiungere da lì in avanti. Vale per questa azienda. Predefinito dello
+                spazio: {orizzonteSpazio} annualità
                 {codice ? ' (Parametri di Spazio → Orizzonte di proiezione)' : ''}. Le simulazioni
                 già salvate restano con il loro orizzonte.
               </span>
@@ -452,6 +454,18 @@ export function VerificaAziendaScheda({
                   >
                     Vedi l’andamento del settore →
                   </Link>
+                )}
+                {risultato.asse && (
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    Asse della contabile: base {risultato.asse.annoBase ?? '—'}, ultimo bilancio{' '}
+                    {risultato.asse.annoUltimoBilancio ?? '—'}, verifica{' '}
+                    {risultato.asse.annoVerifica}
+                    {risultato.asse.annualitaCalcolate.length > 0
+                      ? ` · annualità calcolate: ${risultato.asse.annualitaCalcolate.join(', ')}`
+                      : ''}
+                    . «Storico» è il dato depositato, «calcolato» quello costruito dai differenziali
+                    sulla base, «proiezione» è la traiettoria aziendale che parte da lì.
+                  </p>
                 )}
                 <p className="text-[10px] text-slate-500 leading-relaxed">
                   {risultato.esito.fonteCrescita === 'SETTORE'
@@ -640,10 +654,18 @@ export function VerificaAziendaScheda({
                           {c.anno}
                           <span
                             className={`block text-[8px] font-normal ${
-                              c.tipo === 'PROIEZIONE' ? 'text-blue-600' : 'text-slate-400'
+                              c.tipo === 'PROIEZIONE'
+                                ? 'text-blue-600'
+                                : c.tipo === 'CALCOLATO'
+                                  ? 'text-blue-500'
+                                  : 'text-slate-400'
                             }`}
                           >
-                            {c.tipo === 'PROIEZIONE' ? 'proiezione' : 'storico'}
+                            {c.tipo === 'PROIEZIONE'
+                              ? 'proiezione'
+                              : c.tipo === 'CALCOLATO'
+                                ? 'calcolato'
+                                : 'storico'}
                           </span>
                         </th>
                       ))}

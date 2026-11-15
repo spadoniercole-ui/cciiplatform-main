@@ -241,7 +241,7 @@ export type SezioneReport =
       titolo: string;
       tipo: 'mappa';
       anni: number[];
-      tipi: ('STORICO' | 'PROIEZIONE')[];
+      tipi: ('STORICO' | 'CALCOLATO' | 'PROIEZIONE')[];
       righe: RigaProspetto[];
       debitiInseriti: number[];
       indici: IndiceProspetto[];

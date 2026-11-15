@@ -339,6 +339,32 @@ describe('colonneSimulazione', () => {
     expect(esito.motivo).toContain('Nessun bilancio XBRL');
   });
 
+  it('etichetta le annualità calcolate dalla contabile e non le conta come passato', () => {
+    const conCalcolato = [
+      ...anni,
+      { anno: 2025, dati: dati({ ricaviVendite: 2_000_000 }), calcolato: true },
+    ];
+    const esito = colonneSimulazione({
+      anni: conCalcolato,
+      profilo: 'STANDARD',
+      annualita: 1,
+      debitoEnte: 0,
+    });
+
+    // Una colonna, un'etichetta: depositato, costruito dalla contabile, e solo
+    // dopo la proiezione aziendale.
+    expect(esito.colonne.map((c) => [c.anno, c.tipo])).toEqual([
+      [2022, 'STORICO'],
+      [2023, 'STORICO'],
+      [2024, 'STORICO'],
+      [2025, 'CALCOLATO'],
+      [2026, 'PROIEZIONE'],
+    ]);
+    // La crescita storica resta quella dei bilanci depositati: il valore
+    // calcolato non è passato e non deve pesare come tale.
+    expect(esito.crescitaStoricaPct).toBeCloseTo(crescitaStorica(anni) ?? 0, 5);
+  });
+
   it('riconduce le annualità nell’intervallo ammesso', () => {
     expect(
       colonneSimulazione({ anni, profilo: 'STANDARD', annualita: 99, debitoEnte: 0 }).annualita

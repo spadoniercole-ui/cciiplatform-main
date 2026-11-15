@@ -25,6 +25,13 @@
 // impone alla lettura. Le disponibilità liquide seguono il risultato
 // dell'esercizio al netto dei rimborsi: nessun altro movimento ipotizzato.
 //
+// UN SOLO ASSE TEMPORALE (0.237.0). La proiezione contabile vive nella verifica
+// contabile: qui non si rifà. Gli anni depositati e quelli già costruiti dai
+// differenziali sulla base arrivano come `AnnoStorico`, con `calcolato: true`
+// sui secondi, e ogni colonna porta l'etichetta STORICO / CALCOLATO /
+// PROIEZIONE. La crescita storica si legge solo sugli anni depositati: il
+// dato costruito non è passato e non deve pesare come tale.
+//
 // Gli indici NON si ricalcolano con formule parallele: ogni colonna passa da
 // costruisciBundleIndici, lo stesso motore del resto della piattaforma.
 //
@@ -103,6 +110,8 @@ export type SorgenteCrescita = 'SETTORE' | 'STORICA' | 'NESSUNA';
 export interface AnnoStorico {
   anno: number;
   dati: DatiFinanziariPeriodo;
+  /** true per le annualità costruite dalla contabile: non sono passato. */
+  calcolato?: boolean;
 }
 
 export interface CrescitaAnno {
@@ -114,7 +123,8 @@ export interface CrescitaAnno {
 
 export interface ColonnaVerificaAzienda {
   anno: number;
-  tipo: 'STORICO' | 'PROIEZIONE';
+  /** STORICO = depositato; CALCOLATO = costruito dalla contabile; PROIEZIONE = qui. */
+  tipo: 'STORICO' | 'CALCOLATO' | 'PROIEZIONE';
   dati: DatiFinanziariPeriodo;
   indici: IndiceCcii[];
   altriIndici: IndiceCcii[];
@@ -181,7 +191,11 @@ function crescitaComposta(serie: { anno: number; valore: number }[]): number | n
  * zero e nessuna crescita inventata.
  */
 export function crescitaStorica(anni: AnnoStorico[]): number | null {
-  return crescitaComposta(anni.map((a) => ({ anno: a.anno, valore: a.dati?.ricaviVendite })));
+  return crescitaComposta(
+    anni
+      .filter((a) => a.calcolato !== true)
+      .map((a) => ({ anno: a.anno, valore: a.dati?.ricaviVendite }))
+  );
 }
 
 /**
@@ -190,7 +204,11 @@ export function crescitaStorica(anni: AnnoStorico[]): number | null {
  * diversa, e la proiezione deve partire da quella, non da un'unica curva.
  */
 export function crescitaStoricaCosti(anni: AnnoStorico[]): number | null {
-  return crescitaComposta(anni.map((a) => ({ anno: a.anno, valore: a.dati?.costiProduzione })));
+  return crescitaComposta(
+    anni
+      .filter((a) => a.calcolato !== true)
+      .map((a) => ({ anno: a.anno, valore: a.dati?.costiProduzione }))
+  );
 }
 
 /** Quanto crescono ricavi e costi nel profilo scelto, dato un tasso di base. */
@@ -313,9 +331,10 @@ function proiettaUnAnno(
 }
 
 /**
- * Le colonne della mappa: gli anni storici così come sono, poi le proiezioni
- * con la traiettoria del profilo scelto. Il debito dell'ente entra una volta
- * sola, nella prima annualità proiettata, e si estingue in rate costanti.
+ * Le colonne della mappa: gli anni d'archivio e quelli calcolati dalla
+ * contabile così come arrivano, poi le proiezioni con la traiettoria del
+ * profilo scelto. Il debito dell'ente entra una volta sola, nella prima
+ * annualità proiettata, e si estingue in rate costanti.
  */
 export function colonneSimulazione(input: {
   anni: AnnoStorico[];
@@ -422,7 +441,7 @@ export function colonneSimulazione(input: {
     const bundle = costruisciBundleIndici(a.dati);
     return {
       anno: a.anno,
-      tipo: 'STORICO',
+      tipo: a.calcolato === true ? 'CALCOLATO' : 'STORICO',
       dati: a.dati,
       indici: bundle.indici,
       altriIndici: bundle.altriIndici,

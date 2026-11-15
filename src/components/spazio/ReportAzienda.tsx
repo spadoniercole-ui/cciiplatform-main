@@ -423,10 +423,18 @@ function Sezione({ sezione, codice }: { sezione: SezioneReport; codice: string }
                     {a}
                     <span
                       className={`block text-[8px] font-normal ${
-                        sezione.tipi[k] === 'PROIEZIONE' ? 'text-blue-600' : 'text-slate-400'
+                        sezione.tipi[k] === 'PROIEZIONE'
+                          ? 'text-blue-600'
+                          : sezione.tipi[k] === 'CALCOLATO'
+                            ? 'text-blue-500'
+                            : 'text-slate-400'
                       }`}
                     >
-                      {sezione.tipi[k] === 'PROIEZIONE' ? 'proiezione' : 'storico'}
+                      {sezione.tipi[k] === 'PROIEZIONE'
+                        ? 'proiezione'
+                        : sezione.tipi[k] === 'CALCOLATO'
+                          ? 'calcolato'
+                          : 'storico'}
                     </span>
                   </th>
                 ))}

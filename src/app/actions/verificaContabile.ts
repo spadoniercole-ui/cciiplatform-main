@@ -16,7 +16,7 @@ import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazi
 import { assicuraTabellaXbrlAzienda } from '@/db/provision';
 import {
   componiProiezione,
-  type AnnoContabile,
+  type BilancioArchivio,
   type ProiezioneContabile,
 } from '@/lib/contabile/proiezione';
 import { apriVerifica } from '@/lib/verificheApertura';
@@ -176,7 +176,7 @@ export async function proiezioneContabileAction(
     }
 
     await assicuraTabellaXbrlAzienda(nomeSchema);
-    const bilanci: AnnoContabile[] = [];
+    const bilanci: BilancioArchivio[] = [];
     await pool
       .query(
         `SELECT anno_bilancio, dati_finanziari

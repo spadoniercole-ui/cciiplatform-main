@@ -1,3 +1,29 @@
+## 0.237.0 — 2026-11-15
+
+- **I differenziali si contano sulla base e si applicano all’ultimo bilancio.** Lo scarto di ogni
+  anno dalla base — in euro e in punti della base — non si somma alla base stessa: la serie
+  geometrica dei differenziali (ragione fra primo e ultimo) si applica ai valori dell’ultimo
+  bilancio utile, quello che nessun calcolo ha toccato. La contabile aveva il rischio opposto:
+  la serie cresceva sul punto più vecchio e il futuro partiva da lì. Ora la base resta il punto di
+  partenza della serie e il 2024 quello del futuro: con 2022, 2023 e 2024 e verifica nel 2026, il
+  2025 è 2024 × (1 + differenziale 2024 × passo) e il 2026 un passo più avanti.
+- **Due schede, perché sono due letture.** «Differenziali» mostra base, scarto in euro, differenziale
+  in punti e passo per voce; «Simulazione» mostra i valori anno per anno. La proiezione resta nella
+  verifica contabile: lì c’è il dato depositato e lì si apre la verifica.
+- **Storico e calcolato hanno un nome.** Ogni annualità porta la sua etichetta: «storico» è il
+  bilancio depositato, «calcolato» è quello costruito dai differenziali, «proiezione» è la sola
+  traiettoria della verifica azienda. Anche la mappa della verifica azienda e il report leggono le
+  tre etichette invece di trattare tutto ciò che non è proiezione come passato.
+- **La verifica azienda non proietta più il tratto che spetta alla contabile.** Prende gli anni
+  depositati e quelli calcolati dalla contabile, fino all’anno di apertura della verifica, e da lì
+  in avanti proietta lei: la crescita storica si legge solo sui bilanci depositati, perché un dato
+  costruito non è passato e non deve pesare come tale. Nel riquadro compare l’asse usato (base,
+  ultimo bilancio, anno della verifica) e l’orizzonte configurabile ora dice «annualità oltre la
+  verifica».
+- **Niente numeri inventati.** Base zero, ultimo valore non positivo, serie che cambia segno,
+  differenziale che porterebbe il valore a zero: la voce resta ferma e il prospetto dice quale e
+  perché. Il passo massimo ammesso resta 3, dichiarato.
+
 ## 0.236.0 — 2026-11-15
 
 - **La proiezione dei dati contabili passa nella verifica contabile.** Gli indici sono una fotografia

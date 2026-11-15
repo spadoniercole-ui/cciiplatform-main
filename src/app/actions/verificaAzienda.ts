@@ -24,7 +24,8 @@
 
 import { pool } from '@/lib/db';
 import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
-import { apriVerifica } from '@/lib/verificheApertura';
+import { apriVerifica, leggiAperturaVerifica } from '@/lib/verificheApertura';
+import { componiProiezione } from '@/lib/contabile/proiezione';
 import { assicuraTabelleVerificaAzienda } from '@/db/provision';
 import {
   ANNI_RIENTRO_DEBITO,
@@ -84,7 +85,17 @@ export interface RisultatoVerificaAzienda {
   orizzonte?: { annualita: number; personalizzato: boolean; spazio: number };
   /** Nota integrativa dell'ultimo bilancio, riassunta: contesto, non un tasso. */
   nota?: RiepilogoNota | null;
+  /** L'asse temporale della contabile: base, ultimo bilancio, anno della verifica. */
+  asse?: AsseContabileVerificaAzienda;
   error?: string;
+}
+
+export interface AsseContabileVerificaAzienda {
+  annoBase: number | null;
+  annoUltimoBilancio: number | null;
+  annoVerifica: number;
+  /** Gli anni costruiti dai differenziali sulla base: etichettati «calcolato». */
+  annualitaCalcolate: number[];
 }
 
 export interface RiepilogoNota {
@@ -589,14 +600,27 @@ export async function calcolaVerificaAziendaAction(
         ORDER BY anno_bilancio ASC`,
       [aziendaId]
     );
-    const anni: AnnoStorico[] = bilancioRis.rows
+    const bilanci = bilancioRis.rows
       .map((r) => ({
         anno: Number(r.anno_bilancio),
         dati: r.dati_finanziari as DatiFinanziariPeriodo,
       }))
-      .filter(
-        (a) => Number.isInteger(a.anno) && a.dati && typeof a.dati.ricaviVendite === 'number'
-      );
+      .filter((a) => Number.isInteger(a.anno) && a.dati);
+
+    // L'ASSE TEMPORALE È QUELLO DELLA CONTABILE (0.237.0). La verifica azienda
+    // non proietta più per conto suo gli anni che spettano alla contabile:
+    // prende gli anni depositati e quelli già costruiti dai differenziali
+    // sulla base, fino all'anno in cui la contabile è stata aperta. Da lì in
+    // avanti proietta lei, con il profilo scelto, ed è l'unico tratto che
+    // porta l'etichetta «proiezione».
+    const aperturaContabile = await leggiAperturaVerifica(nomeSchema, aziendaId, 'CONTABILE');
+    const annoVerifica = aperturaContabile
+      ? Number(aperturaContabile.slice(0, 4))
+      : new Date().getFullYear();
+    const asseContabile = componiProiezione({ bilanci, annoVerifica });
+    const anni: AnnoStorico[] = asseContabile.bilanciProiettati
+      .filter((b) => typeof b.dati.ricaviVendite === 'number')
+      .map((b) => ({ anno: b.anno, dati: b.dati, calcolato: b.tipo === 'CALCOLATO' }));
 
     const memorizzato = await leggiDebitoEnteMemorizzato(nomeSchema, aziendaId);
     const debito = memorizzato
@@ -688,6 +712,12 @@ export async function calcolaVerificaAziendaAction(
         spazio: config.annualita,
       },
       nota,
+      asse: {
+        annoBase: asseContabile.annoBase,
+        annoUltimoBilancio: asseContabile.annoUltimoBilancio,
+        annoVerifica,
+        annualitaCalcolate: asseContabile.annualitaCalcolate,
+      },
     };
   } catch (error: unknown) {
     console.error('[calcolaVerificaAziendaAction] Errore:', error);
