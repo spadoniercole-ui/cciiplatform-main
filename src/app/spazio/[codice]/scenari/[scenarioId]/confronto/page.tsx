@@ -5,7 +5,7 @@ import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { ottieniParametriScenariAction } from '@/app/actions/parametriScenari';
 import { valutaSoglieAziendaAction } from '@/app/actions/soglie25novies';
 import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
-import { leggiSimulazioneBase } from '@/lib/verificaAzienda/baseSimulazione';
+import { leggiFotografiaBase } from '@/lib/verificaAzienda/baseFotografia';
 import { ottieniSovrascrittureAction } from '@/app/actions/confrontoScenario';
 import { ConfrontoScenario } from '@/components/spazio/ConfrontoScenario';
 
@@ -99,7 +99,7 @@ export default async function ConfrontoScenarioPage({
   }
 
   const [simulazione, sovrascritture] = await Promise.all([
-    leggiSimulazioneBase(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
+    leggiFotografiaBase(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
     ottieniSovrascrittureAction(contesto.nomeSchema, scenario.id).catch(() => null),
   ]);
 

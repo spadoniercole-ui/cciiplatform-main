@@ -17,7 +17,7 @@
 // Il seed scrive esattamente questo, ed è idempotente: le verifiche non si
 // sovrascrivono e gli scenari aggiuntivi non si duplicano.
 
-import { colonneSimulazione } from '@/lib/verificaAzienda/simulazione';
+import { costruisciBundleIndici } from '@/lib/xbrl/indici';
 import type { AziendaPercorsoDemo } from './percorsoEnte';
 
 type Esecutore = {
@@ -68,15 +68,24 @@ export async function inserisciVerificheDemo(
   if (presente.rows.length > 0) return;
 
   const debitoEnte = a.debiti.reduce((t, d) => t + d.importo, 0);
-  const esito = colonneSimulazione({
-    anni: [
+  // La verifica aziendale è la fotografia del prospetto (0.240.0): la base
+  // della demo porta le due annualità depositate, non una proiezione.
+  const esito = {
+    colonne: [
       { anno: a.finanziario.anno - 1, dati: a.finanziario.precedente },
       { anno: a.finanziario.anno, dati: a.finanziario.corrente },
-    ],
-    profilo: 'STANDARD',
-    annualita: 3,
-    debitoEnte,
-  });
+    ].map((x) => {
+      const bundle = costruisciBundleIndici(x.dati);
+      return {
+        anno: x.anno,
+        tipo: 'STORICO' as const,
+        dati: x.dati,
+        indici: bundle.indici,
+        altriIndici: bundle.altriIndici,
+        severity: bundle.severity,
+      };
+    }),
+  };
   if (esito.colonne.length === 0) return;
 
   await esegui.query(
@@ -86,13 +95,13 @@ export async function inserisciVerificheDemo(
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
     [
       aziendaId,
-      esito.profilo,
-      esito.annualita,
-      esito.debitoEnte,
-      esito.crescitaStoricaPct,
-      esito.crescitaApplicataPct,
+      'FOTOGRAFIA',
+      esito.colonne.length,
+      debitoEnte,
+      null,
+      0,
       JSON.stringify(esito.colonne),
-      JSON.stringify(esito.avvertenze),
+      JSON.stringify([]),
       tipoScenario === 'PROPOSTA',
     ]
   );

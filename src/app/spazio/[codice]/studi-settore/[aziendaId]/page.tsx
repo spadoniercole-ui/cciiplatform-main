@@ -5,7 +5,10 @@ import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniDatiSettore } from '@/app/actions/datiSettore';
 import { crescitaDaSerie } from '@/lib/piano/automatico';
-import { ELASTICITA_COSTI } from '@/lib/verificaAzienda/simulazione';
+// La quota della crescita di settore che passa sui costi: era l'ipotesi
+// dichiarata del vecchio motore di simulazione, e resta la stessa qui perché la
+// pagina descrive la serie, non calcola più una traiettoria.
+const ELASTICITA_COSTI = 0.85;
 
 // L'ANDAMENTO DEL SETTORE DI UNA SOLA AZIENDA.
 //

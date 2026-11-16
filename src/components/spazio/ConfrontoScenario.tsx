@@ -18,7 +18,8 @@ import {
   type ParametriScenari,
   type RangoCredito,
 } from '@/lib/triage/scenari';
-import { VOCI_MAPPA, type ColonnaVerificaAzienda } from '@/lib/verificaAzienda/simulazione';
+import { VOCI_MAPPA } from '@/lib/verificaAzienda/voci';
+import type { ColonnaBase } from '@/lib/verificaAzienda/baseFotografia';
 import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
 import { riepilogaSovrascritture, type Sovrascrittura } from '@/lib/scenari/confronto';
 import { salvaSovrascrittureAction } from '@/app/actions/confrontoScenario';
@@ -40,7 +41,7 @@ export interface DatiSoglieDocumento {
 export interface SimulazioneBaseDocumento {
   profilo: string;
   annualita: number;
-  colonne: ColonnaVerificaAzienda[];
+  colonne: ColonnaBase[];
 }
 
 interface Props {

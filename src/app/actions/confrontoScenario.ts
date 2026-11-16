@@ -10,8 +10,8 @@
 import { pool } from '@/lib/db';
 import { richiediAccessoScenario } from '@/lib/autorizzazione';
 import { assicuraTabelleScenari } from '@/db/provision';
-import { leggiSimulazioneBase } from '@/lib/verificaAzienda/baseSimulazione';
-import { VOCI_MAPPA } from '@/lib/verificaAzienda/simulazione';
+import { leggiFotografiaBase } from '@/lib/verificaAzienda/baseFotografia';
+import { VOCI_MAPPA } from '@/lib/verificaAzienda/voci';
 import {
   differenza,
   riepilogaSovrascritture,
@@ -95,7 +95,7 @@ export async function salvaSovrascrittureAction(
     const aziendaId = Number(scenario.rows[0]?.azienda_id);
     if (!aziendaId) return { success: false, error: 'Scenario non trovato.' };
 
-    const base = await leggiSimulazioneBase(nomeSchema, aziendaId);
+    const base = await leggiFotografiaBase(nomeSchema, aziendaId);
     if (!base) {
       return {
         success: false,

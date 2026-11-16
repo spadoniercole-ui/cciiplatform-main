@@ -16,7 +16,7 @@
 // e dai test.
 
 import { markdownInHtml } from '@/lib/stampa/markdown';
-import { VOCI_MAPPA } from '@/lib/verificaAzienda/simulazione';
+import { VOCI_MAPPA } from '@/lib/verificaAzienda/voci';
 import type { Riscontri } from '@/lib/normativa/riscontri';
 import type { FattiVisura } from '@/lib/visura/fatti';
 import type { EsitoRaccomandazione } from '@/lib/verificaAmministrativa/raccomandazione';
@@ -611,12 +611,19 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
         });
       }
     }
+    // La base è la fotografia della verifica aziendale (0.240.0): non ha una
+    // traiettoria propria, quindi non si citano crescite applicate.
+    const fotografia = m.profilo === 'Fotografia contabile';
     const testata = [
-      `Profilo ${m.profilo} · ${m.annualita} annualità di proiezione`,
-      m.crescitaApplicataPct === null
-        ? null
-        : `crescita applicata ai ricavi ${m.crescitaApplicataPct}%`,
-      m.crescitaStoricaPct === null ? null : `crescita storica composta ${m.crescitaStoricaPct}%`,
+      fotografia
+        ? `${m.profilo} · ${m.annualita} annualità`
+        : `Profilo ${m.profilo} · ${m.annualita} annualità di proiezione`,
+      !fotografia && m.crescitaApplicataPct !== null
+        ? `crescita applicata ai ricavi ${m.crescitaApplicataPct}%`
+        : null,
+      !fotografia && m.crescitaStoricaPct !== null
+        ? `crescita storica composta ${m.crescitaStoricaPct}%`
+        : null,
       m.salvataIl ? `salvata come base il ${data(m.salvataIl)}` : null,
     ]
       .filter(Boolean)
@@ -637,7 +644,9 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
       indici,
       nota: `${testata}.${
         primaProiezione
-          ? ` Il debito dell’ente entra come «di cui» dei costi della produzione nella prima annualità proiettata (${primaProiezione.anno}); gli anni storici sono quelli depositati, senza modifiche.`
+          ? fotografia
+            ? ` Le annualità segnate come proiezione sono quelle costruite dai differenziali sulla base; il debito dell’ente è nella voce che il prospetto contabile porta in ${primaProiezione.anno}.`
+            : ` Il debito dell’ente entra come «di cui» dei costi della produzione nella prima annualità proiettata (${primaProiezione.anno}); gli anni storici sono quelli depositati, senza modifiche.`
           : ''
       }${m.avvertenze.length > 0 ? ` ${m.avvertenze.join(' ')}` : ''}`,
     });

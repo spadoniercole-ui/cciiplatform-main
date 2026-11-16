@@ -1,3 +1,26 @@
+## 0.240.0 — 2026-11-16
+
+- **La verifica azienda è una fotografia, non una seconda simulazione.** La scheda rifaceva il
+  calcolo della contabile: tre profili (standard, migliorativo, peggiorativo), un orizzonte scelto a
+  mano, una traiettoria di ricavi e costi costruita lì. Due motori potevano dire numeri diversi
+  sugli stessi bilanci. Ora legge il prospetto contabile già proiettato — depositati più annualità
+  costruite fino all'anno della verifica — e lo mostra con gli indici di ogni colonna.
+- **Tre scenari sul credito vantato.** L'accordo non misura un recupero: misura la capacità di
+  risposta dell'azienda (cassa alla data e flusso dell'esercizio) a fronte del credito accertato; se
+  non lo copre, la proposta è probabilmente destinata al rigetto. Liquidazione e cram down si
+  misurano sul credito vantato con le percentuali per rango di `parametri_scenari_rango`, meno le
+  spese di procedura nella sola liquidazione. Perdita = credito − recupero; una percentuale
+  mancante rende lo scenario non calcolabile, non una perdita zero.
+- **Smontato il motore.** Eliminati `simulazione.ts` e i suoi test, `baseSimulazione.ts`,
+  `ModelloProiezioneManager`, la pagina Parametri di Spazio → Modello di proiezione e le azioni di
+  profilo, orizzonte e flag. La base letta da ScenariManager e dal confronto scenario ora è la
+  fotografia (`baseFotografia.ts`), con le sue colonne; il report la cita come «Fotografia
+  contabile» e non le attribuisce crescite applicate.
+- Demo: la base della verifica aziendale porta le due annualità depositate.
+- Verificato: `tsc` 0 errori, `next lint` 0 errori, 1833 test verdi, `npm run build` verde; in
+  pagina fotografia 2023–2026 con voce dell'ente 22.000 €, accordo con scoperto 77.090 € su 152.000 €,
+  liquidazione 6,4% → 7.782 € (perdita 144.218 €), cram down 20% → 30.400 € (perdita 121.600 €).
+
 ## 0.239.2 — 2026-11-16
 
 - **Le righe del prospetto tornano a sommare.** «Costi della produzione» e «Totale debiti»

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ColonnaVerificaAzienda } from '@/lib/verificaAzienda/simulazione';
+import type { ColonnaBase } from '@/lib/verificaAzienda/baseFotografia';
 
 const salvaMock = vi.fn();
 vi.mock('@/app/actions/confrontoScenario', () => ({
@@ -20,7 +20,7 @@ const parametri = {
   ],
 };
 
-const colonna = (anno: number, ricavi: number): ColonnaVerificaAzienda => ({
+const colonna = (anno: number, ricavi: number): ColonnaBase => ({
   anno,
   tipo: 'STORICO',
   dati: {
@@ -45,14 +45,6 @@ const colonna = (anno: number, ricavi: number): ColonnaVerificaAzienda => ({
     passivoCorrente: 0,
     creditiClienti: 0,
   },
-  indici: [],
-  altriIndici: [],
-  severity: 'GREEN',
-  debitoEnteInserito: 0,
-  rimborsoDebitoEnte: 0,
-  debitoEnteResiduo: 0,
-  crescitaRicaviPct: 0,
-  crescitaCostiPct: 0,
 });
 
 describe('documento di confronto', () => {

@@ -47,7 +47,7 @@ import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { leggiIdentificativiEnte } from '@/lib/anagraficaEnte/identificativi';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 import type { Riscontri } from '@/lib/normativa/riscontri';
-import { PROFILI, VOCI_MAPPA } from '@/lib/verificaAzienda/simulazione';
+import { VOCI_MAPPA } from '@/lib/verificaAzienda/voci';
 import { valutaSoglieAction } from '@/app/actions/soglie25novies';
 import {
   raccomandaDecisione,
@@ -307,7 +307,8 @@ async function raccogliFonti(
         return [
           {
             anno,
-            tipo: (c.tipo === 'PROIEZIONE' ? 'PROIEZIONE' : 'STORICO') as 'STORICO' | 'PROIEZIONE',
+            tipo: (c.tipo === 'PROIEZIONE' || c.tipo === 'CALCOLATO' ? 'PROIEZIONE' : 'STORICO') as
+              'STORICO' | 'PROIEZIONE',
             valori,
             debitoEnteInserito: numeroONull(c.debitoEnteInserito) ?? 0,
             indici: indiciDelBilancio(c)
@@ -324,7 +325,7 @@ async function raccogliFonti(
       });
       const profilo = String(b.profilo ?? '');
       mappa = {
-        profilo: PROFILI.find((p) => p.codice === profilo)?.etichetta ?? profilo,
+        profilo: profilo === 'FOTOGRAFIA' ? 'Fotografia contabile' : profilo,
         annualita: Number(b.annualita ?? 0),
         debitoEnte: numeric(b.debito_ente) ?? 0,
         crescitaStoricaPct: numeric(b.crescita_storica_pct),

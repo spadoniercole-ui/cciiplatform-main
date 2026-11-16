@@ -208,13 +208,6 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
         ]
       : []),
     {
-      href: `/spazio/${codice}/parametri/proiezione`,
-      icon: CalendarRange,
-      titolo: 'Modello di proiezione',
-      descrizione:
-        'Annualità proiettate, decadimento della crescita verso il settore e rate di rientro del debito dell’ente: le ipotesi dichiarate della simulazione.',
-    },
-    {
       href: `/spazio/${codice}/parametri/visualizzazione`,
       icon: History,
       titolo: 'Storico XBRL a video',
