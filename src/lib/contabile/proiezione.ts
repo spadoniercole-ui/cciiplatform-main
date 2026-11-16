@@ -586,6 +586,14 @@ export function componiProiezione(input: {
   const quotaPonte = new Map<number, number>(
     (ponteEnte?.quote ?? []).map((q) => [q.anno, q.quota])
   );
+  // La quota che a fine anno è già iscritta nel passivo: serve alle righe del
+  // prospetto, perché il totale dei debiti porta la crescita accumulata.
+  const quotaAccumulataPerAnno = new Map<number, number>();
+  let accumulo = 0;
+  for (const anno of annualitaCalcolate) {
+    accumulo = arrotonda(accumulo + (quotaPonte.get(anno) ?? 0));
+    quotaAccumulataPerAnno.set(anno, accumulo);
+  }
   const tributariUltimo = numero(ultimoArchivio.dati.debitiTributari) ?? 0;
   const previdenzialiUltimo = numero(ultimoArchivio.dati.debitiPrevidenziali) ?? 0;
   const debitoEnteUltimo = tributariUltimo + previdenzialiUltimo;
@@ -769,6 +777,18 @@ export function componiProiezione(input: {
     const storico = bilanci.map((b) => ({ anno: b.anno, valore: numero(b.dati[voce.chiave]) }));
     if (voce.natura === 'MOTRICE') {
       const serie = motrici.get(voce.chiave)!;
+      // LE MOTRICI TOCCATE DAL PONTE PORTANO LA QUOTA. Costi della produzione e
+      // totale dei debiti, nell'anno calcolato, comprendono la voce dell'ente:
+      // se la riga mostrasse la sola serie, l'EBIT calcolato sui dati sarebbe
+      // diverso da quello che il lettore ricava sottraendo le due righe sopra —
+      // due numeri per la stessa voce, che è il difetto che questo prospetto
+      // esiste per non avere.
+      const quotaAnno = (anno: number) =>
+        voce.chiave === 'costiProduzione'
+          ? (quotaPonte.get(anno) ?? 0)
+          : voce.chiave === 'totaleDebiti'
+            ? (quotaAccumulataPerAnno.get(anno) ?? 0)
+            : 0;
       return {
         chiave: voce.chiave,
         etichetta: voce.etichetta,
@@ -781,9 +801,9 @@ export function componiProiezione(input: {
         passo: serie.passo === null ? null : arrotonda4(serie.passo),
         proiezioni: serie.proiezioni.map((p) => ({
           anno: p.anno,
-          valore: p.valore,
+          valore: arrotonda(p.valore + quotaAnno(p.anno)),
           differenziale: p.differenziale,
-          scarto: p.scarto,
+          scarto: arrotonda(p.scarto + quotaAnno(p.anno)),
         })),
         proiettabile: serie.passo !== null && serie.proiezioni.length === annualitaCalcolate.length,
         motivo: serie.motivo,

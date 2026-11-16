@@ -294,8 +294,12 @@ describe('proiezione contabile', () => {
       .reduce((a, b) => a + (b.dati.voceEnte ?? 0), 0);
     expect(Math.round(sommaVociEnte)).toBe(60);
     // Il debito entra anche nel totale, e l’onere nei costi: stessa cifra, due lati.
-    const totaleMotrice = p.voci.find((v) => v.chiave === 'totaleDebiti')!.proiezioni[1].valore;
-    expect(finali.totaleDebiti).toBeCloseTo(totaleMotrice + 60, 0);
+    // La riga del prospetto porta già la crescita accumulata (60).
+    const totaleRiga = p.voci.find((v) => v.chiave === 'totaleDebiti')!.proiezioni[1].valore;
+    expect(finali.totaleDebiti).toBeCloseTo(totaleRiga, 0);
+    // Il totale del 2026 è quello del 2024 (240) più la serie e più la quota:
+    // senza il ponte sarebbe 327,27, con il ponte 387,27.
+    expect(totaleRiga).toBeGreaterThan(380);
   });
 
   it('non ricostruisce una crescita che non c’è e lo dichiara', () => {
@@ -314,6 +318,24 @@ describe('proiezione contabile', () => {
     const p = componiProiezione({ bilanci: treBilanci(), annoVerifica: 2026 });
     expect(p.ponteEnte).toBeNull();
     expect(p.avvertenze.join(' ')).toMatch(/Nessun debito dell’ente memorizzato/);
+  });
+
+  it('le righe motrici toccate dal ponte portano la quota: il prospetto somma', () => {
+    const p = componiProiezione({
+      bilanci: treBilanci(),
+      annoVerifica: 2026,
+      debitoEnte: { totale: 130 },
+    });
+    const costi = p.voci.find((v) => v.chiave === 'costiProduzione')!;
+    const debiti = p.voci.find((v) => v.chiave === 'totaleDebiti')!;
+    const d = p.bilanciProiettati.find((b) => b.anno === 2026)!.dati;
+    const costi2026 = costi.proiezioni.find((x) => x.anno === 2026)!.valore;
+
+    // La riga del prospetto e il dato che alimenta l’EBIT sono lo stesso numero.
+    expect(costi2026).toBeCloseTo(d.costiProduzione!, 2);
+    expect(debiti.proiezioni.find((x) => x.anno === 2026)!.valore).toBeCloseTo(d.totaleDebiti!, 2);
+    // Il conto che il lettore fa sulle righe è quello del motore.
+    expect((d.valoreProduzione ?? 0) - costi2026).toBeCloseTo(d.ebit!, 2);
   });
 
   it('il passo è la radice n-esima del rapporto fra ultimo e primo differenziale', () => {

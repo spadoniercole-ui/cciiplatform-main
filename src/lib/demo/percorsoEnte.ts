@@ -199,29 +199,42 @@ export const DIRETTRICI_DEMO: DirettricePercorsoDemo[] = [
   { nome: 'Vigilanza documentale', prodotti: ['Bilanci', 'Visura'] },
 ];
 
-const dati = (parziale: Partial<DatiFinanziariPeriodo>): DatiFinanziariPeriodo => ({
-  ricaviVendite: 0,
-  valoreProduzione: 0,
-  costiProduzione: 0,
-  ebit: 0,
-  ammortamenti: 0,
-  ebitda: 0,
-  oneriFinanziari: 0,
-  utileEsercizio: 0,
-  totaleAttivo: 0,
-  attivoCircolante: 0,
-  disponibilitaLiquide: 0,
-  immobilizzazioni: 0,
-  patrimonioNetto: 0,
-  totaleDebiti: 0,
-  debitiBanche: 0,
-  debitiFornitori: 0,
-  debitiTributari: 0,
-  debitiPrevidenziali: 0,
-  passivoCorrente: 0,
-  creditiClienti: 0,
-  ...parziale,
-});
+const dati = (parziale: Partial<DatiFinanziariPeriodo>): DatiFinanziariPeriodo => {
+  // IL COSTO DEL PERSONALE NELLA DEMO (0.239.2). I bilanci dimostrativi
+  // dichiarano il personale come quota dei costi della produzione — 34%, di cui
+  // salari e stipendi 26,5% e oneri sociali 7,5% — così la scomposizione del
+  // B.9 si vede anche nella demo senza inventare un organico che non c’è. La
+  // somma delle due voci è il totale del personale, al centesimo.
+  const costi = parziale.costiProduzione ?? 0;
+  const costiPersonale = Math.round(costi * 0.34);
+  const salariStipendi = Math.round(costi * 0.265);
+  return {
+    ricaviVendite: 0,
+    valoreProduzione: 0,
+    costiProduzione: 0,
+    ebit: 0,
+    ammortamenti: 0,
+    ebitda: 0,
+    oneriFinanziari: 0,
+    utileEsercizio: 0,
+    totaleAttivo: 0,
+    attivoCircolante: 0,
+    disponibilitaLiquide: 0,
+    immobilizzazioni: 0,
+    patrimonioNetto: 0,
+    totaleDebiti: 0,
+    debitiBanche: 0,
+    debitiFornitori: 0,
+    debitiTributari: 0,
+    debitiPrevidenziali: 0,
+    passivoCorrente: 0,
+    creditiClienti: 0,
+    costiPersonale,
+    salariStipendi,
+    oneriSociali: costiPersonale - salariStipendi,
+    ...parziale,
+  };
+};
 
 /**
  * Compone sezioni e risposte dallo stesso elenco di domande.
@@ -577,6 +590,15 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
         tipo: 'DEBITO',
         nota: 'Posizione dimostrativa del triage',
       },
+      {
+        // La crescita del credito dell’ente nel periodo che la contabile
+        // ricostruisce: è quello che il ponte legge per differenza fra debito
+        // dichiarato nel bilancio e debito accertato alla data (0.239.2).
+        voce: 'Contributi 2026 maturati e non versati',
+        importo: 60_000,
+        tipo: 'DEBITO',
+        nota: 'Posizione dimostrativa: la crescita del debito nel periodo ricostruito',
+      },
     ],
     soglie: {
       conLavoratori: true,
@@ -660,7 +682,7 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
     dataDepositoProposta: '2026-10-06',
     // L'accordo che il decreto ha reso inutile è ancora in valutazione: la
     // liquidazione realizza 22.472 euro (72.000 di contributi al 30,5% e 8.000
-    // di sanzioni al 6,4%), l'accordo ne offre 36.800 su 92.000 in sei rate.
+    // di sanzioni al 6,4%), l'accordo ne offre 60.800 su 152.000 in sei rate.
     // Sono i due termini che il confronto del report mette accanto.
     scenariAggiuntivi: [
       { nome: 'Proposta di piano attestato — Tessitura Lario Demo', tipoIstruttoria: 'PROPOSTA' },
@@ -668,7 +690,9 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
     propostaCreditori: [
       {
         categoria: 'INPS',
-        dovuto: 92000,
+        // Il credito dell'ente comprende i contributi 2026 maturati e non
+        // versati: è la crescita che il ponte della contabile ricostruisce.
+        dovuto: 152000,
         offerta: 40,
         modalita: 'RATEALE',
         rate: 6,

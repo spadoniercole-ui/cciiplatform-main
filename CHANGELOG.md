@@ -1,3 +1,18 @@
+## 0.239.2 — 2026-11-16
+
+- **Le righe del prospetto tornano a sommare.** «Costi della produzione» e «Totale debiti»
+  mostravano la serie senza la quota del ponte: sulla riga si leggeva 2.726.850 e 1.733.760, mentre
+  EBIT e passivo usavano 2.748.850 e 1.755.760 — uno scarto di 22.000 fra il numero scritto e il
+  conto che il lettore rifà. Ora la riga della motrice porta la quota dell'anno (costi) e la quota
+  accumulata (debiti): 2.845.920 − 2.748.850 = 97.070, e il passivo chiude sul totale.
+- **La demo mostra il ponte senza smentire se stessa.** Il costo del personale si deriva come quota
+  dei costi (26,5% salari, 7,5% oneri) e il credito dell'ente verso Tessitura comprende i contributi
+  2026 maturati e non versati (152.000, offerta al 40%): prima l'accordo dichiarava 92.000 mentre le
+  posizioni ne sommavano 152.000.
+- Verificato in pagina: personale 927.129 (722.615 + 204.514), voce dell'ente 22.000, costi
+  2.748.850, EBIT 97.070, totale debiti 1.755.760, C5 0,09 (152.000 sul passivo); `tsc` 0 errori,
+  70 test verdi su demo e contabile, `npm run build` verde.
+
 ## 0.239.1 — 2026-11-16
 
 - **La voce dell’ente ha una riga sua.** Nel prospetto contabile la quota ricostruita per
