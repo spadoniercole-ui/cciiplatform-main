@@ -306,8 +306,9 @@ export function ProiezioneContabile({
                         {proiezione.ponteEnte.quote
                           .map((q) => `${q.anno} ${euro(q.quota)}`)
                           .join(' · ')}
-                        . L’onere va negli oneri sociali, il debito nel passivo: alla data della
-                        verifica le due voci tornano allo stock accertato.
+                        . L’onere è la riga «voce dell’ente», distinta dagli oneri sociali che
+                        restano quelli depositati; il debito è nel passivo. Alla data della verifica
+                        le due voci tornano allo stock accertato.
                       </p>
                     </div>
                   )}

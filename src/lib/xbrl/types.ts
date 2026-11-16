@@ -56,6 +56,11 @@ export interface DatiFinanziariPeriodo {
   costiPersonale?: number;
   salariStipendi?: number;
   oneriSociali?: number;
+  /**
+   * La voce dell’ente ricostruita per differenza: non è un valore depositato e
+   * non si confonde con gli oneri sociali, che restano quelli del bilancio.
+   */
+  voceEnte?: number;
   ebit: number; // differenza valore/costi produzione
   ammortamenti: number;
   ebitda: number;

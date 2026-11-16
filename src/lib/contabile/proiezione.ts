@@ -47,10 +47,12 @@
 // previdenziali, la verifica amministrativa accerta uno stock, e la differenza
 // è — per presunzione dichiarata — il debito cresciuto nel periodo che si
 // ricostruisce. Si ripartisce sulle annualità calcolate in proporzione agli
-// oneri sociali proiettati, si iscrive nel passivo e l’onere corrispondente va
-// nella voce del personale: alla data della verifica la somma delle due voci
-// torna esattamente al valore accertato, e il prospetto lo mostra invece di
-// lasciarlo dedurre.
+// oneri sociali proiettati, si iscrive nel passivo e l’onere corrispondente ha
+// una riga sua nel prospetto — la voce dell’ente (contribuzione, assicurazione,
+// fiscalità) — perché gli oneri sociali restano il valore depositato e non si
+// mescolano con una quota ricostruita: alla data della verifica la somma delle
+// due voci torna esattamente al valore accertato, e il prospetto lo mostra
+// invece di lasciarlo dedurre.
 //
 // Ogni annualità porta la sua etichetta: STORICO è il dato depositato,
 // CALCOLATO è quello costruito. Il prospetto non li mescola in silenzio.
@@ -105,7 +107,7 @@ export const VOCI_PROIEZIONE: {
     etichetta: 'Costo del personale',
     natura: 'DERIVATA',
     formula:
-      'costo del personale dell’ultimo bilancio, riportato nella proporzione dei costi della produzione, più la quota della voce dell’ente',
+      'costo del personale dell’ultimo bilancio, riportato nella proporzione dei costi della produzione',
   },
   {
     chiave: 'salariStipendi',
@@ -116,10 +118,17 @@ export const VOCI_PROIEZIONE: {
   },
   {
     chiave: 'oneriSociali',
-    etichetta: 'di cui oneri sociali e voce dell’ente',
+    etichetta: 'di cui oneri sociali',
     natura: 'DERIVATA',
     formula:
-      'oneri sociali dell’ultimo bilancio, riportati nella proporzione dei costi, più la quota annua della voce dell’ente ricostruita per differenza',
+      'oneri sociali dell’ultimo bilancio, riportati nella proporzione dei costi: è il valore depositato, senza aggiunte',
+  },
+  {
+    chiave: 'voceEnte',
+    etichetta: 'Voce dell’ente (contribuzione, assicurazione, fiscalità)',
+    natura: 'DERIVATA',
+    formula:
+      'quota ricostruita per differenza fra il debito accertato nella verifica amministrativa e quello dichiarato nell’ultimo bilancio, ripartita sulle annualità',
   },
   {
     chiave: 'ebitda',
@@ -262,7 +271,7 @@ export interface PonteEnte {
   /** La quota iscritta in ciascuna annualità calcolata. */
   quote: QuotaPonte[];
   /** Su quale voce del conto economico è stato iscritto l’onere. */
-  voceOnere: 'oneriSociali';
+  voceOnere: 'voceEnte';
   applicato: boolean;
   motivo: string | null;
   fonte: string | null;
@@ -439,7 +448,7 @@ function componiPonteEnte(input: {
     debitoContabileUltimo: contabile,
     debitoVerificato: verificato,
     differenza,
-    voceOnere: 'oneriSociali' as const,
+    voceOnere: 'voceEnte' as const,
     fonte: debito.fonte ?? null,
     accertatoIl: debito.accertatoIl ?? null,
   };
@@ -632,15 +641,19 @@ export function componiProiezione(input: {
     const oneriUltimo = numero(ultimoArchivio.dati.oneriSociali);
     const salariStipendi =
       salariUltimo === null ? null : arrotonda(salariUltimo * rapportoPersonale);
-    const oneriSociali =
-      oneriUltimo === null ? null : arrotonda(oneriUltimo * rapportoPersonale + quotaAnno);
+    // GLI ONERI SOCIALI RESTANO IL VALORE DEPOSITATO, riportato nella
+    // proporzione dei costi: la quota ricostruita non si somma qui, perché ha
+    // una riga sua (la voce dell’ente) e mescolarle renderebbe la voce del
+    // bilancio un numero che nel bilancio non c’è.
+    const oneriSociali = oneriUltimo === null ? null : arrotonda(oneriUltimo * rapportoPersonale);
     const personaleUltimo = numero(ultimoArchivio.dati.costiPersonale);
     const costiPersonale =
       personaleUltimo !== null
-        ? arrotonda(personaleUltimo * rapportoPersonale + quotaAnno)
+        ? arrotonda(personaleUltimo * rapportoPersonale)
         : salariStipendi === null || oneriSociali === null
           ? null
           : arrotonda(salariStipendi + oneriSociali);
+    const voceEnte = quotaPonte.has(anno) ? arrotonda(quotaAnno) : null;
     const ebitda = ebit === null ? null : arrotonda(ebit + ammortamenti);
     const utileEsercizio =
       ebit === null || oneriFinanziari === null ? null : arrotonda(ebit - oneriFinanziari);
@@ -699,6 +712,12 @@ export function componiProiezione(input: {
       oneriSociali === null ? 'Il bilancio non espone oneri sociali (B.9.b).' : null
     );
     derivateMotivo.set(
+      'voceEnte',
+      voceEnte === null
+        ? 'Nessuna quota ricostruita: il ponte con la verifica amministrativa non è applicato.'
+        : null
+    );
+    derivateMotivo.set(
       'costiPersonale',
       costiPersonale === null ? 'Il bilancio non espone il costo del personale (B.9).' : null
     );
@@ -721,6 +740,7 @@ export function componiProiezione(input: {
     if (salariStipendi !== null) datiAnno.salariStipendi = salariStipendi;
     if (oneriSociali !== null) datiAnno.oneriSociali = oneriSociali;
     if (costiPersonale !== null) datiAnno.costiPersonale = costiPersonale;
+    if (voceEnte !== null) datiAnno.voceEnte = voceEnte;
     if (quotaAnno > 0) {
       const quotaTributari =
         debitoEnteUltimo > 0 ? arrotonda(quotaAnno * (tributariUltimo / debitoEnteUltimo)) : 0;
@@ -828,7 +848,7 @@ export function componiProiezione(input: {
   const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
   if (ponteEnte?.applicato) {
     avvertenze.push(
-      `Voce dell’ente: il bilancio ${ultimoArchivio.anno} dichiara ${euro(ponteEnte.debitoContabileUltimo)} fra debiti tributari e previdenziali; la verifica amministrativa ne accerta ${euro(ponteEnte.debitoVerificato)}. La differenza di ${euro(ponteEnte.differenza)} è, per presunzione dichiarata, il debito cresciuto nel periodo ricostruito: si iscrive in ${ponteEnte.quote.length} ${ponteEnte.quote.length === 1 ? 'annualità' : 'annualità'} e l’onere va negli oneri sociali, così la voce del personale e il passivo raccontano la stessa cifra.`
+      `Voce dell’ente: il bilancio ${ultimoArchivio.anno} dichiara ${euro(ponteEnte.debitoContabileUltimo)} fra debiti tributari e previdenziali; la verifica amministrativa ne accerta ${euro(ponteEnte.debitoVerificato)}. La differenza di ${euro(ponteEnte.differenza)} è, per presunzione dichiarata, il debito cresciuto nel periodo ricostruito: si iscrive in ${ponteEnte.quote.length} annualità come voce dell’ente, distinta dagli oneri sociali che restano quelli depositati: l’onere e il passivo raccontano la stessa cifra.`
     );
   } else if (ponteEnte?.motivo) {
     avvertenze.push(`Voce dell’ente non ricostruita: ${ponteEnte.motivo}`);

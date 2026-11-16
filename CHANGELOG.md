@@ -1,3 +1,15 @@
+## 0.239.1 — 2026-11-16
+
+- **La voce dell’ente ha una riga sua.** Nel prospetto contabile la quota ricostruita per
+  differenza non si somma più agli oneri sociali: quelli restano il valore depositato — riportato
+  nella proporzione dei costi, senza aggiunte — e la quota compare come «Voce dell’ente
+  (contribuzione, assicurazione, fiscalità)». Serviva a tenere la voce puntuale: sommandola agli
+  oneri sociali, la riga del bilancio diventava un numero che nel bilancio non c’è.
+- **Il ponte resta lo stesso conto, letto meglio.** Il totale dei costi continua a comprendere la
+  quota, il debito continua ad accumularsi nel passivo, e alla data della verifica la somma delle
+  quote torna alla differenza accertata: il test lo verifica anche sulla nuova riga (60 su 60).
+- Verificato: `tsc --noEmit` 0 errori, 22 test verdi sul modulo contabile, `npm run build` verde.
+
 ## 0.239.0 — 2026-11-16
 
 - **Il costo del personale entra nel bilancio letto.** Salari e stipendi (B.9.a), oneri sociali

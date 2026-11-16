@@ -250,21 +250,22 @@ describe('proiezione contabile', () => {
     const perAnno = new Map(p.bilanciProiettati.map((b) => [b.anno, b.dati]));
     const d2025 = perAnno.get(2025)!;
     const d2026 = perAnno.get(2026)!;
-    const ratio2025 = (d2025.costiProduzione! - (p.ponteEnte!.quote[0]?.quota ?? 0)) / 130;
+    const quota2025 = p.ponteEnte!.quote[0]?.quota ?? 0;
+    const ratio2025 = (d2025.costiProduzione! - quota2025) / 130;
 
     // Salari e stipendi si riportano nella proporzione dei costi, senza la quota.
     expect(d2025.salariStipendi).toBeCloseTo(40 * ratio2025, 2);
-    // Gli oneri sociali sono quelli riportati più la quota annua dell’ente.
-    expect(d2025.oneriSociali).toBeCloseTo(12 * ratio2025 + (p.ponteEnte!.quote[0]?.quota ?? 0), 2);
-    // Il totale del personale è quello dell’ultimo bilancio, riportato, più la quota.
-    expect(d2025.costiPersonale).toBeCloseTo(
-      52 * ratio2025 + (p.ponteEnte!.quote[0]?.quota ?? 0),
-      2
-    );
-    // La scomposizione non contraddice il totale dei costi.
-    expect(d2025.costiProduzione!).toBeGreaterThan(d2025.costiPersonale!);
-    // E la quota è la stessa in tutti gli anni: le annualità la portano con sé.
+    // Gli oneri sociali restano il valore depositato, riportato: nessuna aggiunta.
+    expect(d2025.oneriSociali).toBeCloseTo(12 * ratio2025, 2);
+    expect(d2025.costiPersonale).toBeCloseTo(52 * ratio2025, 2);
+    // La quota ricostruita ha una riga sua, distinta dagli oneri sociali.
+    expect(d2025.voceEnte).toBeCloseTo(quota2025, 2);
+    expect(d2025.voceEnte).toBeGreaterThan(0);
+    // Il totale dei costi tiene conto di entrambe le cose: personale depositato più voce dell’ente.
+    expect(d2025.costiProduzione!).toBeCloseTo(130 * ratio2025 + quota2025, 2);
+    // Gli oneri sociali crescono con i costi, la quota con gli oneri proiettati.
     expect(d2026.oneriSociali!).toBeGreaterThan(d2025.oneriSociali!);
+    expect(d2026.voceEnte!).toBeGreaterThan(0);
   });
 
   it('la voce dell’ente chiude esattamente sullo stock accertato alla data della verifica', () => {
@@ -287,6 +288,11 @@ describe('proiezione contabile', () => {
     // Alla data della verifica le due voci del passivo tornano allo stock.
     const finali = p.bilanciProiettati.find((b) => b.anno === 2026)!.dati;
     expect((finali.debitiTributari ?? 0) + (finali.debitiPrevidenziali ?? 0)).toBe(130);
+    // La voce dell’ente nel conto economico somma esattamente alla differenza.
+    const sommaVociEnte = p.bilanciProiettati
+      .filter((b) => b.tipo === 'CALCOLATO')
+      .reduce((a, b) => a + (b.dati.voceEnte ?? 0), 0);
+    expect(Math.round(sommaVociEnte)).toBe(60);
     // Il debito entra anche nel totale, e l’onere nei costi: stessa cifra, due lati.
     const totaleMotrice = p.voci.find((v) => v.chiave === 'totaleDebiti')!.proiezioni[1].valore;
     expect(finali.totaleDebiti).toBeCloseTo(totaleMotrice + 60, 0);
