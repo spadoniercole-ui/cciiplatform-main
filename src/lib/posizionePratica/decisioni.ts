@@ -24,10 +24,21 @@ export type EsitoDecisione = (typeof ESITI_DECISIONE)[number]['codice'];
 
 export const MOTIVAZIONE_MINIMA = 20;
 
+/** Da quale tipo di utente arriva la firma: l'id da solo sarebbe ambiguo. */
+export type ModalitaAutore = 'ADMIN_SPAZIO' | 'OPERATORE' | 'SALVAGENTE';
+
 export interface BozzaDecisione {
   esito: EsitoDecisione;
   motivazione: string;
   autore: string;
+  /**
+   * L'id dell'utente dello spazio che firma (`admin_workspace` o
+   * `utenti_spazio`, secondo `autoreModalita`). Null solo per il Superadmin in
+   * salvagente, che non ha una riga utente nello spazio.
+   */
+  autoreId: number | null;
+  /** Null per le righe scritte prima della 0.242.4, che l'id non lo avevano. */
+  autoreModalita: ModalitaAutore | null;
   /** Il credito vantato al momento della decisione. */
   credito: number | null;
   /** La copertura dell'indicatore al momento della decisione, es. «4/4». */
@@ -92,6 +103,14 @@ export function validaDecisione(
       valida: false,
       errore: 'Manca chi decide: la traccia senza autore non è una traccia.',
     };
+  }
+
+  if (
+    bozza.autoreId !== null &&
+    bozza.autoreId !== undefined &&
+    (!Number.isInteger(bozza.autoreId) || bozza.autoreId <= 0)
+  ) {
+    return { valida: false, errore: 'L’id dell’utente che firma non è valido.' };
   }
 
   if (

@@ -50,18 +50,19 @@ export async function leggiDecisioniPraticaAction(
 export async function registraDecisionePraticaAction(
   nomeSchema: string,
   aziendaId: number,
-  bozza: Partial<Omit<BozzaDecisione, 'autore'>>
+  bozza: Partial<Omit<BozzaDecisione, 'autore' | 'autoreId' | 'autoreModalita'>>
 ): Promise<{ success: boolean; decisione?: Decisione; error?: string }> {
   try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) {
       return { success: false, error: 'Nome schema non valido.' };
     }
     if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
       return { success: false, error: 'Azienda non riconosciuta.' };
     }
-    // L'autore NON si accetta dal chiamante: si ricava dalla sessione, così
-    // nessuno può firmare una decisione con il nome di un altro.
+    // L'autore NON si accetta dal chiamante: nome dalla sessione e id
+    // dell'utente dello spazio dal contesto di accesso. Così nessuno può
+    // firmare una decisione con il nome di un altro.
     const autore = autoreDaSessione(await richiediSessione());
     if (!autore) {
       return {
@@ -69,7 +70,12 @@ export async function registraDecisionePraticaAction(
         error: 'La sessione non dice chi sta decidendo: autenticarsi di nuovo.',
       };
     }
-    return await registraDecisionePratica(nomeSchema, aziendaId, { ...bozza, autore });
+    return await registraDecisionePratica(nomeSchema, aziendaId, {
+      ...bozza,
+      autore,
+      autoreId: contesto.adminId ?? contesto.utenteId ?? null,
+      autoreModalita: contesto.modalita,
+    });
   } catch (error: unknown) {
     console.error('[registraDecisionePraticaAction] Errore:', error);
     return { success: false, error: `Decisione non registrata: ${(error as Error).message}` };

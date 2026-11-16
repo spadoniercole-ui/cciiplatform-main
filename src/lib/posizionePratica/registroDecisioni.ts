@@ -13,6 +13,7 @@ import {
   type BozzaDecisione,
   type Decisione,
   type EsitoDecisione,
+  type ModalitaAutore,
 } from './decisioni';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
@@ -26,10 +27,19 @@ export async function assicuraTabellaDecisioni(nomeSchema: string): Promise<void
        esito TEXT NOT NULL,
        motivazione TEXT NOT NULL,
        autore TEXT NOT NULL,
+       autore_id INTEGER,
+       autore_modalita TEXT,
        credito NUMERIC,
        copertura TEXT,
        decisa_il TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`
+  );
+  // La tabella della 0.242.0 non aveva l'id: si aggiunge senza toccare le
+  // righe già scritte (che restano con autore_id null e il nome di allora).
+  await pool.query(
+    `ALTER TABLE "${nomeSchema}".pratica_decisioni
+       ADD COLUMN IF NOT EXISTS autore_id INTEGER,
+       ADD COLUMN IF NOT EXISTS autore_modalita TEXT`
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS pratica_decisioni_azienda_idx
@@ -49,6 +59,8 @@ function rigaDecisione(r: Record<string, unknown>): Decisione {
     esito: String(r.esito) as EsitoDecisione,
     motivazione: String(r.motivazione),
     autore: String(r.autore),
+    autoreId: numeroONull(r.autore_id),
+    autoreModalita: (r.autore_modalita ?? null) as ModalitaAutore | null,
     credito: numeroONull(r.credito),
     copertura: r.copertura === null || r.copertura === undefined ? null : String(r.copertura),
     decisaIl: new Date(r.decisa_il as string).toISOString(),
@@ -64,7 +76,8 @@ export async function leggiDecisioniPratica(
   try {
     await assicuraTabellaDecisioni(nomeSchema);
     const r = await pool.query(
-      `SELECT id, esito, motivazione, autore, credito, copertura, decisa_il
+      `SELECT id, esito, motivazione, autore, autore_id, autore_modalita,
+              credito, copertura, decisa_il
          FROM "${nomeSchema}".pratica_decisioni
         WHERE azienda_id = $1
         ORDER BY decisa_il DESC, id DESC`,
@@ -93,14 +106,18 @@ export async function registraDecisionePratica(
     await assicuraTabellaDecisioni(nomeSchema);
     const r = await pool.query(
       `INSERT INTO "${nomeSchema}".pratica_decisioni
-         (azienda_id, esito, motivazione, autore, credito, copertura)
-       VALUES ($1,$2,$3,$4,$5,$6)
-       RETURNING id, esito, motivazione, autore, credito, copertura, decisa_il`,
+         (azienda_id, esito, motivazione, autore, autore_id, autore_modalita,
+          credito, copertura)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING id, esito, motivazione, autore, autore_id, autore_modalita,
+                 credito, copertura, decisa_il`,
       [
         aziendaId,
         bozza.esito,
         (bozza.motivazione ?? '').trim(),
         (bozza.autore ?? '').trim(),
+        bozza.autoreId ?? null,
+        bozza.autoreModalita ?? 'SALVAGENTE',
         bozza.credito ?? null,
         bozza.copertura ?? null,
       ]

@@ -13,6 +13,8 @@ const bozza = (patch: Partial<BozzaDecisione> = {}): BozzaDecisione => ({
   esito: 'PROSEGUI',
   motivazione: 'La cassa copre il credito e il piano in essere è rispettato.',
   autore: 'mario.rossi',
+  autoreId: 7,
+  autoreModalita: 'ADMIN_SPAZIO',
   credito: 80_000,
   copertura: '4/4',
   ...patch,
@@ -39,6 +41,12 @@ describe('decisione sulla posizione', () => {
     const v = validaDecisione(bozza({ autore: '   ' }));
     expect(v.valida).toBe(false);
     expect(v.errore).toContain('Manca chi decide');
+  });
+
+  it('l’id dell’utente che firma, se c’è, deve essere un id', () => {
+    expect(validaDecisione(bozza({ autoreId: null })).valida).toBe(true);
+    expect(validaDecisione(bozza({ autoreId: 0 })).valida).toBe(false);
+    expect(validaDecisione(bozza({ autoreId: 1.5 })).valida).toBe(false);
   });
 
   it('un credito negativo è un dato da correggere', () => {

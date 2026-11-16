@@ -1,3 +1,20 @@
+## 0.242.4 — 2026-11-16
+
+- **La traccia delle decisioni porta anche l'id di chi firma.** La 0.242.3 aveva tolto la casella
+  «chi decide» e ricavato l'autore dalla sessione, ma salvava solo il nome: due utenti omonimi, o
+  un utente rinominato, rendevano la riga indistinguibile. Ora `pratica_decisioni` ha
+  `autore_id` e `autore_modalita` (`ADMIN_SPAZIO` | `OPERATORE` | `SALVAGENTE`), valorizzati
+  dall'azione con `contesto.adminId ?? contesto.utenteId` e la modalità di accesso: l'id da solo
+  sarebbe ambiguo fra `admin_workspace` e `utenti_spazio`, la coppia no. Il modulo mostra
+  «utente #12» accanto alla data, o «sessione Superadmin» quando non c'è una riga utente (il
+  Superadmin in salvagente).
+- **Le tabelle esistenti si aggiornano da sole**, senza perdere le righe della 0.242.0:
+  `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`; le decisioni già scritte restano con id null e il
+  nome di allora.
+- Test: la bozza ora porta l'id, e un id impossibile (0 o frazionario) viene rifiutato dalla
+  validazione.
+- Verificato: `tsc` 0 errori, `next lint` 0 errori, 1915 test verdi, `npm run build` verde.
+
 ## 0.242.3 — 2026-11-16
 
 - **La decisione si firma con la sessione, non con una casella di testo.** Il modulo chiedeva

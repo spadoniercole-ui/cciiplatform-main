@@ -161,7 +161,14 @@ export function DecisioniPratica({
           {decisioni.map((d) => (
             <li key={d.id} className="rounded-lg border border-slate-200 bg-white p-3">
               <p className="text-[11px] font-bold text-slate-800">{riassuntoDecisione(d)}</p>
-              <p className="text-[10px] text-slate-500">{dataOra(d.decisaIl)}</p>
+              <p className="text-[10px] text-slate-500">
+                {dataOra(d.decisaIl)}
+                {d.autoreId
+                  ? ` · utente #${d.autoreId}`
+                  : d.autoreModalita === 'SALVAGENTE'
+                    ? ' · sessione Superadmin'
+                    : ' · senza id utente'}
+              </p>
               <p className="mt-1 text-[11px] text-slate-700 leading-relaxed">{d.motivazione}</p>
             </li>
           ))}
