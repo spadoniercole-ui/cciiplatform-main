@@ -1,4 +1,4 @@
-// LA PROIEZIONE CONTABILE — i differenziali sulla base, portati all'anno della verifica.
+// LA PROIEZIONE CONTABILE — voci motrici e voci derivate (0.238.0).
 //
 // PERCHÉ STA QUI E NON NELLA VERIFICA AZIENDA (0.236.0).
 //
@@ -7,35 +7,40 @@
 // ogni file XBRL porta l'anno e il precedente — e la parte più vecchia della
 // serie è quella che nessun file porta con sé. È da lì che si parte.
 //
-// IL METODO, COME È STATO CHIESTO (0.237.0).
+// IL DIFETTO CHE HA PORTATO ALLA RISCRITTURA (0.238.0).
 //
-// 1. BASE. L'anno di base è il più vecchio in archivio, quello che non ha un
-//    «-1» a coprirlo. Nell'esempio 2024 + 2023 il 2023 è già dentro il 2024,
-//    ma il 2022 no: la base è il 2022.
-// 2. DIFFERENZIALI SULLA BASE. Ogni anno successivo si confronta con la BASE,
-//    non con l'anno precedente: uno scarto calcolato sul 2023 racconterebbe il
-//    salto 2023→2024, e la serie perderebbe il suo punto di partenza. Il
-//    differenziale è quello scarto in punti della base: (anno − base) / |base|.
-// 3. PASSO. I differenziali crescono con una ragione geometrica: il passo è la
-//    radice ennesima del rapporto fra l'ultimo e il primo differenziale. Con un
-//    triennio in archivio ci sono due differenziali e il passo si ricava; con
-//    un biennio ce n'è uno solo, e il passo non si inventa: la voce resta
-//    ferma e la ragione è dichiarata.
-// 4. APPLICAZIONE ALL'ULTIMO BILANCIO. Il differenziale non si somma alla
-//    base: lo stesso passo si applica ai valori dell'ultimo bilancio utile
-//    (2024 nell'esempio), anno dopo anno, fino all'ANNO DELLA VERIFICA — la
-//    data di apertura della verifica contabile, conservata apposta per poter
-//    rifare il conto con gli stessi criteri — e non oltre. Così il 2024 resta
-//    il punto di partenza del futuro e la base resta il punto di partenza
-//    della serie: due cose diverse, dette entrambe.
+// Proiettare ogni riga per conto suo tratta un prospetto a scalare come dieci
+// serie indipendenti. In pagina si vedeva: EBIT «fermo» a 100.000 mentre il
+// valore della produzione cresceva del 34% e i costi del 36%; utile a 31.743
+// quando EBIT meno oneri faceva 69.790. Ogni riga era coerente con la sua
+// serie e incoerente con il prospetto. Un EBIT con passo 1 non è un'ipotesi:
+// è un conto economico che si contraddice.
+//
+// COME FUNZIONA ORA.
+//
+//   MOTRICI   hanno una serie propria e si proiettano: valore della
+//             produzione, costi della produzione, oneri finanziari, totale
+//             debiti, debiti verso banche. Il differenziale di ogni anno si
+//             conta sulla BASE — il bilancio più vecchio, quello che nessun
+//             file porta con sé come anno precedente — in punti della base; la
+//             ragione geometrica fra primo e ultimo differenziale si applica
+//             ai valori dell'ULTIMO BILANCIO UTILE fino all'anno della
+//             verifica.
+//
+//   DERIVATE  si calcolano dalle motrici, con le identità del prospetto:
+//             ricavi = valore produzione − margine non-ricavi dell'ultimo
+//             bilancio; EBIT = valore produzione − costi; EBITDA = EBIT +
+//             ammortamenti (fermi all'ultimo dato, non c'è una serie);
+//             utile = EBIT − oneri; patrimonio netto = patrimonio dell'anno
+//             prima + utile; liquidità = cassa dell'anno prima + utile.
+//
+// Se una motrice non ha una serie utilizzabile resta ferma all'ultimo dato e
+// il prospetto lo dichiara; le derivate restano comunque coerenti, perché
+// partono da quella. Nessun numero inventato, e nessuna riga che racconta una
+// storia diversa da quella delle righe sopra.
 //
 // Ogni annualità porta la sua etichetta: STORICO è il dato depositato,
 // CALCOLATO è quello costruito. Il prospetto non li mescola in silenzio.
-//
-// Quello che esce non è una previsione: è un'ipotesi dichiarata, con il suo
-// metodo scritto accanto ai numeri. Le note integrative e gli studi di settore
-// servono a discutere questa ipotesi, non a produrla: qui non si inventa un
-// tasso che i documenti non contengono.
 //
 // Logica pura, con i suoi test.
 
@@ -51,19 +56,70 @@ export interface AnnoContabile extends BilancioArchivio {
   tipo: 'STORICO' | 'CALCOLATO';
 }
 
-/** Le voci che il riquadro mostra, nell'ordine del prospetto a scalare. */
-export const VOCI_PROIEZIONE: { chiave: keyof DatiFinanziariPeriodo; etichetta: string }[] = [
-  { chiave: 'ricaviVendite', etichetta: 'Ricavi delle vendite' },
-  { chiave: 'valoreProduzione', etichetta: 'Valore della produzione' },
-  { chiave: 'costiProduzione', etichetta: 'Costi della produzione' },
-  { chiave: 'ebitda', etichetta: 'EBITDA' },
-  { chiave: 'ebit', etichetta: 'EBIT' },
-  { chiave: 'oneriFinanziari', etichetta: 'Oneri finanziari' },
-  { chiave: 'utileEsercizio', etichetta: 'Risultato d’esercizio' },
-  { chiave: 'patrimonioNetto', etichetta: 'Patrimonio netto' },
-  { chiave: 'totaleDebiti', etichetta: 'Totale debiti' },
-  { chiave: 'debitiBanche', etichetta: 'Debiti verso banche' },
-  { chiave: 'disponibilitaLiquide', etichetta: 'Disponibilità liquide' },
+export type NaturaVoce = 'MOTRICE' | 'DERIVATA';
+
+/**
+ * Le voci del prospetto, nell'ordine in cui si leggono. `motrice` = ha una
+ * serie propria; `derivata` = si calcola dalle motrici, e la formula sta
+ * scritta accanto.
+ */
+export const VOCI_PROIEZIONE: {
+  chiave: keyof DatiFinanziariPeriodo;
+  etichetta: string;
+  natura: NaturaVoce;
+  formula: string | null;
+}[] = [
+  {
+    chiave: 'valoreProduzione',
+    etichetta: 'Valore della produzione',
+    natura: 'MOTRICE',
+    formula: null,
+  },
+  {
+    chiave: 'ricaviVendite',
+    etichetta: 'Ricavi delle vendite',
+    natura: 'DERIVATA',
+    formula: 'valore della produzione meno il margine non-ricavi dell’ultimo bilancio',
+  },
+  {
+    chiave: 'costiProduzione',
+    etichetta: 'Costi della produzione',
+    natura: 'MOTRICE',
+    formula: null,
+  },
+  {
+    chiave: 'ebitda',
+    etichetta: 'EBITDA',
+    natura: 'DERIVATA',
+    formula: 'EBIT + ammortamenti, fermi all’ultimo bilancio',
+  },
+  {
+    chiave: 'ebit',
+    etichetta: 'EBIT',
+    natura: 'DERIVATA',
+    formula: 'valore della produzione − costi della produzione',
+  },
+  { chiave: 'oneriFinanziari', etichetta: 'Oneri finanziari', natura: 'MOTRICE', formula: null },
+  {
+    chiave: 'utileEsercizio',
+    etichetta: 'Risultato d’esercizio',
+    natura: 'DERIVATA',
+    formula: 'EBIT − oneri finanziari',
+  },
+  {
+    chiave: 'patrimonioNetto',
+    etichetta: 'Patrimonio netto',
+    natura: 'DERIVATA',
+    formula: 'patrimonio netto dell’anno prima + utile dell’esercizio',
+  },
+  { chiave: 'totaleDebiti', etichetta: 'Totale debiti', natura: 'MOTRICE', formula: null },
+  { chiave: 'debitiBanche', etichetta: 'Debiti verso banche', natura: 'MOTRICE', formula: null },
+  {
+    chiave: 'disponibilitaLiquide',
+    etichetta: 'Disponibilità liquide',
+    natura: 'DERIVATA',
+    formula: 'disponibilità dell’anno prima + utile dell’esercizio',
+  },
 ];
 
 /**
@@ -81,19 +137,33 @@ export interface PuntoDifferenziale {
   differenziale: number | null;
 }
 
+export interface ProiezioneVoce {
+  anno: number;
+  valore: number;
+  /** Solo per le motrici: il differenziale applicato. */
+  differenziale: number | null;
+  /** Solo per le motrici: quanto aggiunge al valore dell'ultimo bilancio. */
+  scarto: number | null;
+}
+
 export interface VoceSerie {
   chiave: keyof DatiFinanziariPeriodo;
   etichetta: string;
-  /** Valore dell'anno di base: il punto da cui si contano i differenziali. */
-  valoreBase: number;
-  /** Valore dell'ultimo bilancio in archivio: il punto su cui si applicano. */
+  natura: NaturaVoce;
+  /** Come si calcola, per le derivate. null per le motrici. */
+  formula: string | null;
+  /** Gli anni depositati, con il loro valore (anche null se la voce manca). */
+  storico: { anno: number; valore: number | null }[];
+  /** Valore dell'anno di base: da qui si contano i differenziali (motrici). */
+  valoreBase: number | null;
+  /** Valore dell'ultimo bilancio: qui si applicano i differenziali (motrici). */
   valoreUltimo: number | null;
-  /** I differenziali degli anni in archivio, dal primo successivo alla base. */
+  /** I differenziali degli anni in archivio, dal primo dopo la base (motrici). */
   differenziali: PuntoDifferenziale[];
-  /** Ragione geometrica dei differenziali, null se non si ricava. */
+  /** Ragione geometrica dei differenziali, null se non si ricava (motrici). */
   passo: number | null;
   /** I valori costruiti, anno per anno, dall'ultimo bilancio in poi. */
-  proiezioni: { anno: number; differenziale: number; scarto: number; valore: number }[];
+  proiezioni: ProiezioneVoce[];
   proiettabile: boolean;
   /** Perché la voce non è proiettabile (o il limite applicato). */
   motivo: string | null;
@@ -113,11 +183,10 @@ export interface ProiezioneContabile {
   voci: VoceSerie[];
   /**
    * Gli anni con i dati da usare a valle: quelli d'archivio (tipo STORICO) e
-   * quelli costruiti (tipo CALCOLATO). Le voci senza serie restano ferme
-   * all'ultimo dato letto, e l'elenco di quali sono è dichiarato.
+   * quelli costruiti (tipo CALCOLATO), già coerenti fra loro.
    */
   bilanciProiettati: AnnoContabile[];
-  /** Le voci tenute ferme per mancanza di serie, con il loro nome. */
+  /** Le voci motrici tenute ferme per mancanza di serie, con il loro nome. */
   vociTenuteFerme: string[];
   proiettabile: boolean;
   /** Il metodo, in una frase, come compare accanto ai numeri. */
@@ -151,6 +220,96 @@ export function passoSerie(differenziali: PuntoDifferenziale[]): number | null {
   if (!Number.isFinite(rapporto) || rapporto <= 0) return null;
   const passo = Math.pow(rapporto, 1 / anni);
   return Number.isFinite(passo) ? passo : null;
+}
+
+interface SerieMotrice {
+  passo: number | null;
+  differenziali: PuntoDifferenziale[];
+  proiezioni: { anno: number; differenziale: number; scarto: number; valore: number }[];
+  motivo: string | null;
+}
+
+/**
+ * La serie di una voce motrice, calcolata una volta sola: differenziali sulla
+ * base, passo geometrico, valori applicati all'ultimo bilancio. Lo stesso
+ * conto serve al prospetto e alla scheda dei differenziali.
+ */
+function serieMotrice(input: {
+  bilanci: BilancioArchivio[];
+  annoBase: number;
+  annualitaCalcolate: number[];
+  chiave: keyof DatiFinanziariPeriodo;
+}): SerieMotrice {
+  const base = input.bilanci[0];
+  const ultimo = input.bilanci[input.bilanci.length - 1];
+  const valoreBase = numero(base.dati[input.chiave]);
+  const valoreUltimo = numero(ultimo.dati[input.chiave]);
+
+  if (valoreBase === null) {
+    return {
+      passo: null,
+      differenziali: [],
+      proiezioni: [],
+      motivo: `La voce non è valorizzata nel bilancio ${base.anno}: non c’è un punto di partenza.`,
+    };
+  }
+
+  const differenziali: PuntoDifferenziale[] = [];
+  for (const b of input.bilanci.slice(1)) {
+    const valore = numero(b.dati[input.chiave]);
+    if (valore === null) continue;
+    const scarto = valore - valoreBase;
+    differenziali.push({
+      anno: b.anno,
+      valore: arrotonda(valore),
+      scarto: arrotonda(scarto),
+      differenziale: valoreBase === 0 ? null : arrotonda4(scarto / Math.abs(valoreBase)),
+    });
+  }
+
+  const passoCalcolato = passoSerie(differenziali);
+  let motivo: string | null = null;
+  let passo = passoCalcolato;
+  if (passo !== null && Math.abs(passo) > PASSO_MASSIMO) {
+    motivo = `Il passo ricavato (${arrotonda(passo).toLocaleString('it-IT')}) supera il limite dichiarato di ${PASSO_MASSIMO}: la proiezione usa il limite, non il valore grezzo.`;
+    passo = Math.sign(passo) * PASSO_MASSIMO;
+  } else if (passo === null) {
+    motivo =
+      valoreBase === 0
+        ? 'La base è zero: il differenziale percentuale non si calcola e la voce resta ferma.'
+        : differenziali.length < 2
+          ? 'Serve almeno un triennio in archivio per ricavare il passo: con un solo differenziale la serie non si ricava e la voce resta ferma.'
+          : 'I differenziali cambiano segno o partono da zero: la serie non è geometrica e non si proietta.';
+  } else if (valoreUltimo === null) {
+    motivo = `La voce non è valorizzata nel bilancio ${ultimo.anno}: non c’è un valore su cui applicare i differenziali.`;
+    passo = null;
+  }
+
+  const proiezioni: { anno: number; differenziale: number; scarto: number; valore: number }[] = [];
+  const ultimoDifferenziale =
+    differenziali.length > 0 ? differenziali[differenziali.length - 1] : null;
+
+  if (passo !== null && ultimoDifferenziale && ultimoDifferenziale.differenziale !== null) {
+    for (const [indice, anno] of input.annualitaCalcolate.entries()) {
+      const differenziale = arrotonda4(
+        (ultimoDifferenziale.differenziale as number) * Math.pow(passo, indice + 1)
+      );
+      if (differenziale <= -1) {
+        motivo = `Il differenziale calcolato per il ${anno} (${Math.round(differenziale * 100)}%) porterebbe il valore a zero o sotto: da lì la voce resta ferma.`;
+        passo = null;
+        break;
+      }
+      const valore = arrotonda((valoreUltimo as number) * (1 + differenziale));
+      proiezioni.push({
+        anno,
+        differenziale,
+        scarto: arrotonda(valore - (valoreUltimo as number)),
+        valore,
+      });
+    }
+  }
+
+  return { passo, differenziali, proiezioni, motivo };
 }
 
 /**
@@ -200,131 +359,195 @@ export function componiProiezione(input: {
     annualitaCalcolate.push(anno);
   }
 
-  const voci: VoceSerie[] = [];
-  const vociTenuteFerme: string[] = [];
-  const proiezioniPerAnno = new Map<number, Partial<DatiFinanziariPeriodo>>();
-
+  // LE MOTRICI. Ognuna con la sua serie; chi non ce l'ha resta fermo.
+  const motrici = new Map<keyof DatiFinanziariPeriodo, SerieMotrice>();
   for (const voce of VOCI_PROIEZIONE) {
-    const valoreBase = numero(base.dati[voce.chiave]);
-    const valoreUltimo = numero(ultimoArchivio.dati[voce.chiave]);
-    if (valoreBase === null) {
-      voci.push({
+    if (voce.natura !== 'MOTRICE') continue;
+    motrici.set(
+      voce.chiave,
+      serieMotrice({
+        bilanci,
+        annoBase: base.anno,
+        annualitaCalcolate,
         chiave: voce.chiave,
-        etichetta: voce.etichetta,
-        valoreBase: 0,
-        valoreUltimo,
-        differenziali: [],
-        passo: null,
-        proiezioni: [],
-        proiettabile: false,
-        motivo: `La voce non è valorizzata nel bilancio ${base.anno}: non c’è un punto di partenza.`,
-      });
-      continue;
-    }
+      })
+    );
+  }
 
-    // I DIFFERENZIALI SI CONTANO SULLA BASE, non sull'anno precedente. Il
-    // denominatore è la base in valore assoluto: con una base negativa il
-    // differenziale resta leggibile (il segno lo porta lo scarto).
-    const differenziali: PuntoDifferenziale[] = [];
-    for (const b of bilanci.slice(1)) {
-      const valore = numero(b.dati[voce.chiave]);
-      if (valore === null) continue;
-      const scarto = valore - valoreBase;
-      differenziali.push({
-        anno: b.anno,
-        valore: arrotonda(valore),
-        scarto: arrotonda(scarto),
-        differenziale: valoreBase === 0 ? null : arrotonda4(scarto / Math.abs(valoreBase)),
-      });
-    }
+  const vociTenuteFerme: string[] = [];
+  for (const voce of VOCI_PROIEZIONE) {
+    if (voce.natura !== 'MOTRICE') continue;
+    const serie = motrici.get(voce.chiave);
+    if (serie && serie.passo === null) vociTenuteFerme.push(voce.etichetta);
+  }
 
-    const passoCalcolato = passoSerie(differenziali);
-    let motivo: string | null = null;
-    let passo = passoCalcolato;
-    if (passo !== null && Math.abs(passo) > PASSO_MASSIMO) {
-      motivo = `Il passo ricavato (${arrotonda(passo).toLocaleString('it-IT')}) supera il limite dichiarato di ${PASSO_MASSIMO}: la proiezione usa il limite, non il valore grezzo.`;
-      passo = Math.sign(passo) * PASSO_MASSIMO;
-    } else if (passo === null) {
-      motivo =
-        valoreBase === 0
-          ? 'La base è zero: il differenziale percentuale non si calcola e la voce resta ferma.'
-          : differenziali.length < 2
-            ? 'Serve almeno un triennio in archivio per ricavare il passo: con un solo differenziale la serie non si ricava e la voce resta ferma.'
-            : 'I differenziali cambiano segno o partono da zero: la serie non è geometrica e non si proietta.';
-    } else if (valoreUltimo === null) {
-      motivo = `La voce non è valorizzata nel bilancio ${ultimoArchivio.anno}: non c’è un valore su cui applicare i differenziali.`;
-      passo = null;
-    } else if (valoreUltimo <= 0) {
-      motivo = `L’ultimo bilancio (${ultimoArchivio.anno}) ha la voce non positiva: un differenziale percentuale non la porta avanti, e la voce resta ferma.`;
-      passo = null;
-    }
+  // IL PROSPETTO, ANNO PER ANNO. Le derivate si calcolano dalle motrici di
+  // quell'anno e dai valori dell'anno prima: è così che EBIT, EBITDA, utile e
+  // patrimonio tornano fra loro.
+  const ammortamenti =
+    numero(ultimoArchivio.dati.ammortamenti) ?? numero(base.dati.ammortamenti) ?? 0;
+  const gapRicavi =
+    (numero(ultimoArchivio.dati.valoreProduzione) ?? 0) -
+    (numero(ultimoArchivio.dati.ricaviVendite) ?? 0);
 
-    const proiezioni: { anno: number; differenziale: number; scarto: number; valore: number }[] =
-      [];
-    const ultimoDifferenziale =
-      differenziali.length > 0 ? differenziali[differenziali.length - 1] : null;
+  const valoriPerAnno = new Map<number, Partial<DatiFinanziariPeriodo>>();
+  const derivateMotivo = new Map<keyof DatiFinanziariPeriodo, string | null>();
 
-    if (passo !== null && ultimoDifferenziale && ultimoDifferenziale.differenziale !== null) {
-      for (const [indice, anno] of annualitaCalcolate.entries()) {
-        const differenziale = arrotonda4(
-          (ultimoDifferenziale.differenziale as number) * Math.pow(passo, indice + 1)
-        );
-        if (differenziale <= -1) {
-          motivo = `Il differenziale calcolato per il ${anno} (${Math.round(differenziale * 100)}%) porterebbe il valore a zero o sotto: da lì la voce resta ferma.`;
-          passo = null;
-          break;
-        }
-        const valore = arrotonda((valoreUltimo as number) * (1 + differenziale));
-        proiezioni.push({
-          anno,
-          differenziale,
-          scarto: arrotonda(valore - (valoreUltimo as number)),
-          valore,
-        });
-        const annoDati = proiezioniPerAnno.get(anno) ?? {};
-        annoDati[voce.chiave] = valore;
-        proiezioniPerAnno.set(anno, annoDati);
-      }
-    }
+  let precedente: DatiFinanziariPeriodo = ultimoArchivio.dati;
+  for (const anno of annualitaCalcolate) {
+    const valoreMotrice = (chiave: keyof DatiFinanziariPeriodo): number | null => {
+      const serie = motrici.get(chiave);
+      const proiettata = serie?.proiezioni.find((p) => p.anno === anno)?.valore ?? null;
+      if (proiettata !== null) return proiettata;
+      // Ferma all'ultimo dato dell'anno prima (che, al primo giro, è l'ultimo
+      // bilancio depositato).
+      return numero(precedente[chiave]);
+    };
 
-    if (passo === null || proiezioni.length < annualitaCalcolate.length) {
-      vociTenuteFerme.push(voce.etichetta);
-      // Tenuta ferma all'ultimo dato letto: dichiarato, non silenzioso.
-      const fermo = proiezioni.length > 0 ? proiezioni[proiezioni.length - 1].valore : valoreUltimo;
-      for (const anno of annualitaCalcolate) {
-        if (proiezioni.some((p) => p.anno === anno)) continue;
-        if (fermo === null) continue;
-        const annoDati = proiezioniPerAnno.get(anno) ?? {};
-        annoDati[voce.chiave] = fermo;
-        proiezioniPerAnno.set(anno, annoDati);
-      }
-    }
+    const valoreProduzione = valoreMotrice('valoreProduzione');
+    const costiProduzione = valoreMotrice('costiProduzione');
+    const oneriFinanziari = valoreMotrice('oneriFinanziari');
+    const totaleDebiti = valoreMotrice('totaleDebiti');
+    const debitiBancheMotrice = valoreMotrice('debitiBanche');
 
-    voci.push({
-      chiave: voce.chiave,
-      etichetta: voce.etichetta,
-      valoreBase,
-      valoreUltimo,
-      differenziali,
-      passo: passo === null ? null : arrotonda4(passo),
-      proiezioni,
-      proiettabile: passo !== null && proiezioni.length === annualitaCalcolate.length,
-      motivo,
-    });
+    const ricaviVendite =
+      valoreProduzione === null ? null : arrotonda(valoreProduzione - gapRicavi);
+    const ebit =
+      valoreProduzione === null || costiProduzione === null
+        ? null
+        : arrotonda(valoreProduzione - costiProduzione);
+    const ebitda = ebit === null ? null : arrotonda(ebit + ammortamenti);
+    const utileEsercizio =
+      ebit === null || oneriFinanziari === null ? null : arrotonda(ebit - oneriFinanziari);
+
+    const patrimonioPrecedente = numero(precedente.patrimonioNetto);
+    const patrimonioNetto =
+      patrimonioPrecedente === null || utileEsercizio === null
+        ? null
+        : arrotonda(patrimonioPrecedente + utileEsercizio);
+
+    const cassaPrecedente = numero(precedente.disponibilitaLiquide);
+    const disponibilitaLiquide =
+      cassaPrecedente === null || utileEsercizio === null
+        ? null
+        : arrotonda(cassaPrecedente + utileEsercizio);
+
+    // I debiti verso banche non possono superare il totale dei debiti: se le
+    // due serie divergono, il prospetto taglia e lo dichiara.
+    const debitiBanche =
+      debitiBancheMotrice !== null && totaleDebiti !== null
+        ? arrotonda(Math.min(debitiBancheMotrice, totaleDebiti))
+        : debitiBancheMotrice;
+
+    derivateMotivo.set(
+      'ricaviVendite',
+      ricaviVendite === null ? 'Manca il valore della produzione da cui derivare i ricavi.' : null
+    );
+    derivateMotivo.set(
+      'ebit',
+      ebit === null ? 'Mancano valore della produzione o costi della produzione.' : null
+    );
+    derivateMotivo.set(
+      'ebitda',
+      ebitda === null ? 'Manca l’EBIT da cui sommare gli ammortamenti.' : null
+    );
+    derivateMotivo.set(
+      'utileEsercizio',
+      utileEsercizio === null ? 'Mancano EBIT o oneri finanziari.' : null
+    );
+    derivateMotivo.set(
+      'patrimonioNetto',
+      patrimonioNetto === null ? 'Manca il patrimonio netto dell’anno prima o l’utile.' : null
+    );
+    derivateMotivo.set(
+      'disponibilitaLiquide',
+      disponibilitaLiquide === null
+        ? 'Manca la disponibilità liquida dell’anno prima o l’utile.'
+        : null
+    );
+
+    const datiAnno: Partial<DatiFinanziariPeriodo> = {
+      valoreProduzione: valoreProduzione ?? numero(precedente.valoreProduzione) ?? undefined,
+      ricaviVendite: ricaviVendite ?? numero(precedente.ricaviVendite) ?? undefined,
+      costiProduzione: costiProduzione ?? numero(precedente.costiProduzione) ?? undefined,
+      ammortamenti,
+      ebitda: ebitda ?? numero(precedente.ebitda) ?? undefined,
+      ebit: ebit ?? numero(precedente.ebit) ?? undefined,
+      oneriFinanziari: oneriFinanziari ?? numero(precedente.oneriFinanziari) ?? undefined,
+      utileEsercizio: utileEsercizio ?? numero(precedente.utileEsercizio) ?? undefined,
+      patrimonioNetto: patrimonioNetto ?? numero(precedente.patrimonioNetto) ?? undefined,
+      totaleDebiti: totaleDebiti ?? numero(precedente.totaleDebiti) ?? undefined,
+      debitiBanche: debitiBanche ?? numero(precedente.debitiBanche) ?? undefined,
+      disponibilitaLiquide:
+        disponibilitaLiquide ?? numero(precedente.disponibilitaLiquide) ?? undefined,
+    };
+    valoriPerAnno.set(anno, datiAnno);
+    precedente = { ...precedente, ...datiAnno };
   }
 
   // Le annualità, con la loro etichetta: gli anni d'archivio sono STORICO, gli
   // anni costruiti sono CALCOLATO. Nessuna colonna senza nome.
   const bilanciProiettati: AnnoContabile[] = bilanci.map((b) => ({ ...b, tipo: 'STORICO' }));
   for (const anno of annualitaCalcolate) {
-    const parziale = proiezioniPerAnno.get(anno) ?? {};
-    const precedente = bilanciProiettati[bilanciProiettati.length - 1]?.dati ?? ultimoArchivio.dati;
-    const dati: DatiFinanziariPeriodo = { ...precedente, ...parziale };
-    bilanciProiettati.push({ anno, dati, tipo: 'CALCOLATO' });
+    const parziale = valoriPerAnno.get(anno) ?? {};
+    const precedenteAnno =
+      bilanciProiettati[bilanciProiettati.length - 1]?.dati ?? ultimoArchivio.dati;
+    bilanciProiettati.push({ anno, dati: { ...precedenteAnno, ...parziale }, tipo: 'CALCOLATO' });
   }
 
-  const proiettabili = voci.filter((v) => v.proiettabile);
-  const proiettabile = proiettabili.length > 0 && annualitaCalcolate.length > 0;
+  const voci: VoceSerie[] = VOCI_PROIEZIONE.map((voce) => {
+    const storico = bilanci.map((b) => ({ anno: b.anno, valore: numero(b.dati[voce.chiave]) }));
+    if (voce.natura === 'MOTRICE') {
+      const serie = motrici.get(voce.chiave)!;
+      return {
+        chiave: voce.chiave,
+        etichetta: voce.etichetta,
+        natura: voce.natura,
+        formula: null,
+        storico,
+        valoreBase: numero(base.dati[voce.chiave]),
+        valoreUltimo: numero(ultimoArchivio.dati[voce.chiave]),
+        differenziali: serie.differenziali,
+        passo: serie.passo === null ? null : arrotonda4(serie.passo),
+        proiezioni: serie.proiezioni.map((p) => ({
+          anno: p.anno,
+          valore: p.valore,
+          differenziale: p.differenziale,
+          scarto: p.scarto,
+        })),
+        proiettabile: serie.passo !== null && serie.proiezioni.length === annualitaCalcolate.length,
+        motivo: serie.motivo,
+      };
+    }
+    const proiezioni = annualitaCalcolate.map((anno) => {
+      const valore = numero(valoriPerAnno.get(anno)?.[voce.chiave]);
+      return {
+        anno,
+        valore: valore ?? 0,
+        differenziale: null,
+        scarto: null,
+      };
+    });
+    return {
+      chiave: voce.chiave,
+      etichetta: voce.etichetta,
+      natura: voce.natura,
+      formula: voce.formula,
+      storico,
+      valoreBase: null,
+      valoreUltimo: null,
+      differenziali: [],
+      passo: null,
+      proiezioni,
+      proiettabile: annualitaCalcolate.every((anno) =>
+        Number.isFinite(numero(valoriPerAnno.get(anno)?.[voce.chiave]))
+      ),
+      motivo: derivateMotivo.get(voce.chiave) ?? null,
+    };
+  });
+
+  const motriciProiettabili = Array.from(motrici.values()).filter((m) => m.passo !== null);
+  const proiettabile = motriciProiettabili.length > 0 && annualitaCalcolate.length > 0;
 
   avvertenze.push(
     `La base è il ${base.anno}: il più vecchio in archivio, quello che nessun file porta con sé come anno precedente.`
@@ -332,18 +555,21 @@ export function componiProiezione(input: {
   avvertenze.push(
     `I differenziali sono contati sul ${base.anno} in punti della base, e applicati ai valori del ${ultimoArchivio.anno}: la serie parte dalla base, il futuro parte dall’ultimo bilancio utile.`
   );
+  avvertenze.push(
+    'Solo valore della produzione, costi della produzione, oneri finanziari e debiti hanno una serie propria. EBIT, EBITDA, utile, patrimonio netto, ricavi e liquidità si ricavano da quelli con le identità del prospetto: un EBIT che cresce per conto suo mentre i costi corrono non è un’ipotesi, è un errore di lettura.'
+  );
   if (annualitaCalcolate.length === 0) {
     avvertenze.push(
       `La verifica è datata ${annoVerifica}, dentro gli anni già in archivio: non c’è nessuna annualità da costruire.`
     );
   } else if (!proiettabile) {
     avvertenze.push(
-      `Nessuna voce ha una serie utilizzabile: la proiezione si ferma al ${ultimoArchivio.anno}.`
+      `Nessuna voce motrice ha una serie utilizzabile: la proiezione si ferma al ${ultimoArchivio.anno}.`
     );
   }
   if (vociTenuteFerme.length > 0 && annualitaCalcolate.length > 0) {
     avvertenze.push(
-      `Voci tenute ferme all’ultimo dato (serie non ricavabile): ${vociTenuteFerme.join(', ')}. Non sono proiettate, e il prospetto lo dichiara invece di stimarle.`
+      `Voci motrici tenute ferme all’ultimo dato (serie non ricavabile): ${vociTenuteFerme.join(', ')}. Non sono proiettate, e il prospetto lo dichiara invece di stimarle.`
     );
   }
   avvertenze.push(
@@ -352,7 +578,7 @@ export function componiProiezione(input: {
 
   const metodo =
     annualitaCalcolate.length > 0
-      ? `Base ${base.anno}: differenziali di ogni anno dalla base, ragione geometrica fra primo e ultimo differenziale, applicata ai valori del ${ultimoArchivio.anno} fino al ${annoVerifica} (anno della verifica).`
+      ? `Base ${base.anno}: differenziali di ogni anno dalla base, ragione geometrica fra primo e ultimo differenziale, applicata ai valori del ${ultimoArchivio.anno} fino al ${annoVerifica} (anno della verifica). Le voci derivate seguono il prospetto.`
       : `Base ${base.anno}: gli anni in archivio arrivano già al ${ultimoArchivio.anno}, anno della verifica.`;
 
   return {

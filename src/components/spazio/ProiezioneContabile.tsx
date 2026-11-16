@@ -1,19 +1,23 @@
 'use client';
 
-// IL RIQUADRO DELLA PROIEZIONE CONTABILE (0.236.0, due schede dal 0.237.0).
+// IL RIQUADRO DELLA PROIEZIONE CONTABILE (0.236.0, due schede dal 0.237.0,
+// voci motrici e derivate dal 0.238.0).
 //
 // Sta nella verifica contabile perché è qui che vive il dato depositato, e
 // perché la serie dei differenziali si conta sulla base: il più vecchio
 // bilancio in archivio. Due schede, perché sono due letture diverse:
 //
 //   DIFFERENZIALI  lo scarto di ogni anno dalla base, in euro e in punti della
-//                  base, con il passo geometrico che se ne ricava.
+//                  base, con il passo geometrico che se ne ricava. Solo per le
+//                  voci che hanno una serie propria.
 //   SIMULAZIONE    i valori: gli anni depositati e quelli costruiti applicando
 //                  i differenziali all'ultimo bilancio utile, fino all'anno in
-//                  cui la verifica è stata aperta.
+//                  cui la verifica è stata aperta. EBIT, EBITDA, utile,
+//                  patrimonio netto, ricavi e liquidità si ricavano dalle
+//                  motrici: la formula sta scritta accanto.
 //
-// Ogni colonna porta il suo nome — «storico» o «calcolato» — e le voci che non
-// hanno una serie utilizzabile restano ferme, dichiarate: non si stimano.
+// Ogni colonna porta il suo nome — «storico» o «calcolato» — e le motrici che
+// non hanno una serie utilizzabile restano ferme, dichiarate: non si stimano.
 
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarRange, Loader2, TriangleAlert } from 'lucide-react';
@@ -53,6 +57,8 @@ export function ProiezioneContabile({
   const proiezione = dati?.success ? dati.proiezione : null;
   const anniCalcolati = proiezione?.annualitaCalcolate ?? [];
   const anniStorici = proiezione?.anniArchivio ?? [];
+  const motrici = proiezione?.voci.filter((v) => v.natura === 'MOTRICE') ?? [];
+  const derivate = proiezione?.voci.filter((v) => v.natura === 'DERIVATA') ?? [];
 
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
@@ -114,19 +120,20 @@ export function ProiezioneContabile({
               {scheda === 'DIFFERENZIALI' && (
                 <div className="space-y-2">
                   <p className="text-[10px] text-slate-500 leading-relaxed">
-                    Scarto di ogni anno dalla base, in euro e in punti della base. Il passo è la
-                    ragione geometrica fra primo e ultimo differenziale: è quello che, applicato ai
-                    valori dell’ultimo bilancio, costruisce gli anni nella scheda «Simulazione».
+                    Scarto di ogni anno dalla base, in euro e in punti della base, per le voci che
+                    hanno una serie propria. Il passo è la ragione geometrica fra primo e ultimo
+                    differenziale: è quello che, applicato ai valori dell’ultimo bilancio,
+                    costruisce gli anni nella scheda «Simulazione».
                   </p>
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-[11px] border-collapse">
                       <thead>
                         <tr className="text-left text-slate-500">
-                          <th className="py-1 pr-3 font-semibold">Voce</th>
+                          <th className="py-1 pr-3 font-semibold">Voce motrice</th>
                           <th className="py-1 px-2 text-right font-semibold">
                             Base {proiezione.annoBase}
                           </th>
-                          {(proiezione.voci[0]?.differenziali ?? []).map((d) => (
+                          {(motrici[0]?.differenziali ?? []).map((d) => (
                             <th key={d.anno} className="py-1 px-2 text-right font-semibold">
                               {d.anno}
                             </th>
@@ -135,13 +142,18 @@ export function ProiezioneContabile({
                         </tr>
                       </thead>
                       <tbody>
-                        {proiezione.voci.map((voce) => (
+                        {motrici.map((voce) => (
                           <tr key={voce.chiave} className="border-t border-slate-100">
-                            <td className="py-1 pr-3 text-slate-700">{voce.etichetta}</td>
-                            <td className="py-1 px-2 text-right tabular-nums text-slate-700">
-                              {euro(voce.valoreBase)}
+                            <td className="py-1 pr-3 text-slate-700">
+                              {voce.etichetta}
+                              {!voce.proiettabile && (
+                                <span className="ml-1.5 text-slate-400">(ferma)</span>
+                              )}
                             </td>
-                            {(proiezione.voci[0]?.differenziali ?? []).map((riga) => {
+                            <td className="py-1 px-2 text-right tabular-nums text-slate-700">
+                              {voce.valoreBase === null ? '—' : euro(voce.valoreBase)}
+                            </td>
+                            {(motrici[0]?.differenziali ?? []).map((riga) => {
                               const d = voce.differenziali.find((x) => x.anno === riga.anno);
                               return (
                                 <td
@@ -172,6 +184,18 @@ export function ProiezioneContabile({
                         ))}
                       </tbody>
                     </table>
+                  </div>
+
+                  <div className="pt-1 space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Voci derivate — non hanno una serie propria
+                    </p>
+                    {derivate.map((voce) => (
+                      <p key={voce.chiave} className="text-[10px] text-slate-600">
+                        <strong className="text-slate-700">{voce.etichetta}</strong> ={' '}
+                        {voce.formula}
+                      </p>
+                    ))}
                   </div>
                 </div>
               )}
@@ -206,54 +230,59 @@ export function ProiezioneContabile({
                         </tr>
                       </thead>
                       <tbody>
-                        {proiezione.voci.map((voce) => {
-                          const valoriStorici = anniStorici.map((anno) => {
-                            if (anno === proiezione.annoBase) return voce.valoreBase;
-                            const d = voce.differenziali.find((x) => x.anno === anno);
-                            return d ? d.valore : null;
-                          });
-                          return (
-                            <tr key={voce.chiave} className="border-t border-slate-100">
-                              <td className="py-1 pr-3 text-slate-700">
-                                {voce.etichetta}
-                                {!voce.proiettabile && (
-                                  <span className="ml-1.5 text-slate-400">(ferma)</span>
-                                )}
-                              </td>
-                              {valoriStorici.map((valore, i) => (
-                                <td
-                                  key={anniStorici[i]}
-                                  className="py-1 px-2 text-right text-slate-700 tabular-nums"
+                        {proiezione.voci.map((voce) => (
+                          <tr key={voce.chiave} className="border-t border-slate-100">
+                            <td className="py-1 pr-3 text-slate-700">
+                              {voce.etichetta}
+                              {voce.natura === 'DERIVATA' && (
+                                <span
+                                  className="ml-1.5 text-[9px] uppercase tracking-wider text-slate-400"
+                                  title={voce.formula ?? undefined}
                                 >
-                                  {valore === null ? '—' : euro(valore)}
+                                  derivata
+                                </span>
+                              )}
+                              {voce.natura === 'MOTRICE' && !voce.proiettabile && (
+                                <span className="ml-1.5 text-slate-400">(ferma)</span>
+                              )}
+                            </td>
+                            {voce.storico.map((s) => (
+                              <td
+                                key={s.anno}
+                                className="py-1 px-2 text-right text-slate-700 tabular-nums"
+                              >
+                                {s.valore === null ? '—' : euro(s.valore)}
+                              </td>
+                            ))}
+                            {anniCalcolati.map((anno) => {
+                              const p = voce.proiezioni.find((x) => x.anno === anno);
+                              const spenta =
+                                voce.natura === 'MOTRICE'
+                                  ? !voce.proiettabile
+                                  : voce.motivo !== null;
+                              return (
+                                <td
+                                  key={anno}
+                                  className={`py-1 px-2 text-right tabular-nums ${
+                                    spenta ? 'text-slate-400' : 'text-blue-800'
+                                  }`}
+                                >
+                                  {p ? euro(p.valore) : '—'}
                                 </td>
-                              ))}
-                              {anniCalcolati.map((anno) => {
-                                const p = voce.proiezioni.find((x) => x.anno === anno);
-                                return (
-                                  <td
-                                    key={anno}
-                                    className={`py-1 px-2 text-right tabular-nums ${
-                                      p && voce.proiettabile ? 'text-blue-800' : 'text-slate-400'
-                                    }`}
-                                  >
-                                    {p ? euro(p.valore) : '—'}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          );
-                        })}
+                              );
+                            })}
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
 
                   {anniCalcolati.length > 0 && (
                     <p className="text-[10px] text-slate-500 leading-relaxed">
-                      «Calcolato» non è «previsto»: sono le annualità costruite con la stessa
-                      ragione geometrica dei differenziali, applicata ai valori del{' '}
-                      {proiezione.annoUltimoBilancio} fino al {proiezione.annoVerifica}. «Storico» è
-                      il dato depositato, così com’è.
+                      «Calcolato» non è «previsto»: valore della produzione, costi, oneri e debiti
+                      seguono la stessa ragione geometrica dei differenziali, applicata ai valori
+                      del {proiezione.annoUltimoBilancio} fino al {proiezione.annoVerifica}; le voci
+                      derivate si ricavano da quelli. «Storico» è il dato depositato, così com’è.
                     </p>
                   )}
                 </div>
@@ -271,7 +300,7 @@ export function ProiezioneContabile({
           </ul>
 
           {proiezione.voci
-            .filter((v) => v.motivo !== null)
+            .filter((v) => v.motivo !== null && v.natura === 'MOTRICE')
             .slice(0, 4)
             .map((v) => (
               <p key={v.chiave} className="text-[10px] text-slate-500">

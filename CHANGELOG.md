@@ -1,3 +1,25 @@
+## 0.238.0 — 2026-11-16
+
+- **La proiezione contabile distingue voci motrici e voci derivate.** Proiettare ogni riga per conto
+  suo trattava il prospetto a scalare come dieci serie indipendenti: in pagina l’EBIT restava fermo
+  a 100.000 mentre il valore della produzione cresceva del 34% e i costi del 36%, e l’utile diceva
+  31.743 contro i 69.790 che EBIT meno oneri dava nella stessa colonna. Ora hanno una serie propria
+  solo valore della produzione, costi della produzione, oneri finanziari, totale debiti e debiti verso
+  banche; EBIT, EBITDA, utile, patrimonio netto, ricavi e liquidità si ricavano da quelle con le
+  identità del prospetto. Un EBIT che cresce mentre i costi corrono non era un’ipotesi: era un errore
+  di lettura travestito da riga di tabella.
+- **Il valore della produzione è la grandezza che guida.** I ricavi delle vendite non hanno più un
+  tasso proprio: seguono il valore della produzione con lo stesso margine non-ricavi dell’ultimo
+  bilancio, così non possono raccontare una storia diversa dalla riga che li contiene.
+- **Le derivate si dichiarano.** Nella scheda «Differenziali» compaiono solo le motrici, con scarto,
+  punti della base e passo; sotto, l’elenco delle derivate con la formula usata. Nella
+  «Simulazione» ogni riga derivata lo dice, e il patrimonio netto e la cassa si accumulano con
+  l’utile dell’anno invece di crescere con un tasso proprio.
+- **La coerenza ha i suoi test.** I test verificano le identità in ogni anno calcolato — EBIT =
+  valore della produzione − costi, EBITDA = EBIT + ammortamenti, utile = EBIT − oneri, patrimonio e
+  cassa accumulati, debiti verso banche entro il totale dei debiti — e sorvegliano il difetto: un
+  EBIT identico in due anni mentre valore e costi cambiano fa fallire la prova.
+
 ## 0.237.0 — 2026-11-15
 
 - **I differenziali si contano sulla base e si applicano all’ultimo bilancio.** Lo scarto di ogni
