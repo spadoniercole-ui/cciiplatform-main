@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { APP_VERSION } from '../appVersion';
 import {
   ambientiAttesi,
   ambientiNonAttesi,
@@ -389,5 +391,19 @@ describe('versioneCoerente', () => {
     const v = versioneCoerente('0.133.5', '0.133.4', '0.133.5');
     expect(v.coerente).toBe(false);
     expect(v.dettaglio).toContain('0.133.4');
+  });
+});
+
+describe('versione del prodotto', () => {
+  it('APP_VERSION è la stessa «version» del package.json', () => {
+    // Il bump si fa in due file, e nessuno dei due si accorge dell'altro: è
+    // già passato un push con appVersion.ts indietro di una versione, che il
+    // piè di pagina del login mostrava e la consegna leggeva. Il confronto fra
+    // le due fonti lo ferma qui, prima del push.
+    const pacchetto = JSON.parse(
+      readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')
+    ) as { version: string };
+
+    expect(APP_VERSION).toBe(pacchetto.version);
   });
 });
