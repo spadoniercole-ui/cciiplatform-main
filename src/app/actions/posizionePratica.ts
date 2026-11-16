@@ -11,12 +11,16 @@
 // Tutta la logica pura sta in src/lib/posizionePratica/decisioni.ts; qui si
 // autorizza e si scrive.
 
-import { richiediAccessoSchema } from '@/lib/autorizzazione';
+import { richiediAccessoSchema, richiediSessione } from '@/lib/autorizzazione';
 import {
   leggiDecisioniPratica,
   registraDecisionePratica,
 } from '@/lib/posizionePratica/registroDecisioni';
-import type { BozzaDecisione, Decisione } from '@/lib/posizionePratica/decisioni';
+import {
+  autoreDaSessione,
+  type BozzaDecisione,
+  type Decisione,
+} from '@/lib/posizionePratica/decisioni';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -46,7 +50,7 @@ export async function leggiDecisioniPraticaAction(
 export async function registraDecisionePraticaAction(
   nomeSchema: string,
   aziendaId: number,
-  bozza: Partial<BozzaDecisione>
+  bozza: Partial<Omit<BozzaDecisione, 'autore'>>
 ): Promise<{ success: boolean; decisione?: Decisione; error?: string }> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
@@ -56,7 +60,16 @@ export async function registraDecisionePraticaAction(
     if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
       return { success: false, error: 'Azienda non riconosciuta.' };
     }
-    return await registraDecisionePratica(nomeSchema, aziendaId, bozza);
+    // L'autore NON si accetta dal chiamante: si ricava dalla sessione, così
+    // nessuno può firmare una decisione con il nome di un altro.
+    const autore = autoreDaSessione(await richiediSessione());
+    if (!autore) {
+      return {
+        success: false,
+        error: 'La sessione non dice chi sta decidendo: autenticarsi di nuovo.',
+      };
+    }
+    return await registraDecisionePratica(nomeSchema, aziendaId, { ...bozza, autore });
   } catch (error: unknown) {
     console.error('[registraDecisionePraticaAction] Errore:', error);
     return { success: false, error: `Decisione non registrata: ${(error as Error).message}` };

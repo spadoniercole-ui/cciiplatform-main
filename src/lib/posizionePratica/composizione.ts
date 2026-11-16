@@ -52,15 +52,16 @@ export interface DatiPosizione {
   contabile: { completa: boolean; visuraIl: string | null; mancanti: string[] } | null;
 }
 
+// Si restituisce solo ciò che la pagina rende: il lettore della posizione ha
+// una sola forma (questa), e un campo in più sarebbe un campo che nessuno
+// aggiorna quando cambia la regola. Il quadro qualitativo e la copertura
+// arrivano già dentro `confronto` e `coperturaTesto`; la ragione sociale
+// serve alla richiesta, non alla posizione composta.
 export interface PosizioneComposta {
-  ragioneSociale: string;
-  dataRiferimento: string | null;
   validita: Validita;
-  copertura: { determinate: number; totali: number } | null;
   /** «4/4», oppure null se l'indicatore non si è potuto leggere. */
   coperturaTesto: string | null;
   quadratura: Quadratura;
-  qualitativo: { colore: 'verde' | 'giallo' | 'rosso' | null; dettaglio: string | null };
   confronto: ConfrontoLetture;
   richieste: Richiesta[];
   testoRichiesta: string;
@@ -232,15 +233,11 @@ export function componiPosizione(
   });
 
   return {
-    ragioneSociale: dati.ragioneSociale,
-    dataRiferimento: dati.eseguitaIl,
     validita,
-    copertura: attenzione?.copertura ?? null,
     coperturaTesto: attenzione
       ? `${attenzione.copertura.determinate}/${attenzione.copertura.totali}`
       : null,
     quadratura,
-    qualitativo,
     confronto,
     richieste,
     testoRichiesta: testoDellaRichiesta,

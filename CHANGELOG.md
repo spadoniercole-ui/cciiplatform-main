@@ -1,3 +1,21 @@
+## 0.242.3 — 2026-11-16
+
+- **La decisione si firma con la sessione, non con una casella di testo.** Il modulo chiedeva
+  «chi decide» in un campo libero: chiunque poteva scrivere il nome di un altro, e una traccia
+  compilabile con un nome falso non è una traccia. Ora `autoreDaSessione()` ricava l'autore
+  dall'utente autenticato (`username`, altrimenti l'email), l'azione
+  `registraDecisionePraticaAction` lo riapplica lato server e non accetta più un autore dal
+  browser, e il modulo mostra la firma invece di chiederla. Se la sessione non porta alcun nome
+  l'azione rifiuta: nessun autore inventato.
+- **La posizione composta restituisce solo ciò che la pagina rende.** `PosizioneComposta`
+  perdeva `ragioneSociale`, `dataRiferimento`, `copertura` e `qualitativo`: nessuno li leggeva,
+  e il quadro qualitativo era una seconda copia di quello che `confronto` già porta. Restano
+  `coperturaTesto` (per la testata), `credito` e `testoRichiesta` per le decisioni; la ragione
+  sociale resta un ingresso, perché serve alla richiesta all'azienda.
+- Test: tre casi su `autoreDaSessione` (username, email di riserva, nessun nome) e il caso della
+  check list incompleta ora legge il quadro dentro `confronto`.
+- Verificato: `tsc` 0 errori, `next lint` 0 errori, 1914 test verdi, `npm run build` verde.
+
 ## 0.242.2 — 2026-11-16
 
 - **La Posizione si compone in `src/lib`, non nella pagina.** Quadratura del credito, quadro

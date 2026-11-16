@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ESITI_DECISIONE_CODICI,
   MOTIVAZIONE_MINIMA,
+  autoreDaSessione,
   etichettaEsito,
   riassuntoDecisione,
   validaDecisione,
@@ -56,5 +57,23 @@ describe('decisione sulla posizione', () => {
     expect(r).toContain('mario.rossi');
     expect(r).toContain('80.000 €');
     expect(r).toContain('4/4');
+  });
+});
+
+describe('chi firma la decisione', () => {
+  it('l’autore è il nome della sessione, non un campo del modulo', () => {
+    expect(autoreDaSessione({ username: 'mario.rossi', email: 'mario@studio.it' })).toBe(
+      'mario.rossi'
+    );
+  });
+
+  it('senza username si usa l’email della sessione', () => {
+    expect(autoreDaSessione({ username: null, email: 'admin@spazio.it' })).toBe('admin@spazio.it');
+  });
+
+  it('senza sessione o senza alcun nome non si inventa un autore', () => {
+    expect(autoreDaSessione(null)).toBeNull();
+    expect(autoreDaSessione({ username: null, email: null })).toBeNull();
+    expect(autoreDaSessione({ username: '   ', email: '' })).toBeNull();
   });
 });

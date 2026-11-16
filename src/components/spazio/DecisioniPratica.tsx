@@ -14,9 +14,13 @@ import {
 
 // LA DECISIONE SI REGISTRA, NON SI SALVA IL GIUDIZIO (0.242.0).
 //
-// Il modulo non propone un esito «giusto»: chiede che cosa si fa, perché, e
-// chi lo decide. Gli esiti sono quattro e nessuno è preselezionato: la
-// piattaforma non decide, e un default sarebbe già una raccomandazione.
+// Il modulo non propone un esito «giusto»: chiede che cosa si fa e perché.
+// Gli esiti sono quattro e nessuno è preselezionato: la piattaforma non
+// decide, e un default sarebbe già una raccomandazione.
+//
+// Chi decide non si scrive (0.242.3): l'autore è l'utente della sessione. Il
+// modulo lo mostra e basta; l'azione lo rilegge dal server, perché un campo
+// del browser non è una firma.
 
 function dataOra(iso: string): string {
   const d = new Date(iso);
@@ -33,17 +37,19 @@ export function DecisioniPratica({
   decisioni,
   credito,
   copertura,
+  autore,
 }: {
   nomeSchema: string;
   aziendaId: number;
   decisioni: Decisione[];
   credito: number | null;
   copertura: string | null;
+  /** L'utente della sessione: la decisione si firma con questo nome. */
+  autore: string | null;
 }) {
   const router = useRouter();
   const [esito, setEsito] = useState<'' | EsitoDecisione>('');
   const [motivazione, setMotivazione] = useState('');
-  const [autore, setAutore] = useState('');
   const [errore, setErrore] = useState<string | null>(null);
   const [inCorso, setInCorso] = useState(false);
 
@@ -57,7 +63,6 @@ export function DecisioniPratica({
     const risposta = await registraDecisionePraticaAction(nomeSchema, aziendaId, {
       esito,
       motivazione,
-      autore,
       credito,
       copertura,
     });
@@ -95,17 +100,19 @@ export function DecisioniPratica({
               ))}
             </select>
           </label>
-          <label className="block">
+          <div>
             <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
               Chi decide
             </span>
-            <input
-              value={autore}
-              onChange={(e) => setAutore(e.target.value)}
-              placeholder="nome e cognome"
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-[12px] text-slate-800"
-            />
-          </label>
+            <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-800">
+              {autore ?? 'sessione senza nome'}
+            </p>
+            <p className="mt-1 text-[10px] text-slate-500">
+              {autore
+                ? 'La firma è l’utente con cui sei entrato: non si modifica da qui.'
+                : 'Senza nome nella sessione la decisione non si può registrare: rientra e riprova.'}
+            </p>
+          </div>
         </div>
         <label className="block">
           <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-600">
@@ -123,7 +130,7 @@ export function DecisioniPratica({
           <button
             type="button"
             onClick={registra}
-            disabled={inCorso}
+            disabled={inCorso || !autore}
             className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-white hover:bg-blue-800 disabled:opacity-60"
           >
             {inCorso ? (

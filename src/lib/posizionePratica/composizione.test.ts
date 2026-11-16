@@ -182,8 +182,11 @@ describe('composizione della posizione', () => {
       }),
       OGGI
     );
-    expect(p.qualitativo.colore).toBeNull();
-    expect(p.qualitativo.dettaglio).toContain('0/4');
+    // Il quadro qualitativo si legge dentro il confronto: è lì che la pagina
+    // lo rende, e non esiste una seconda copia da tenere allineata.
+    const checkList = p.confronto.letture.find((l) => l.nome === 'Check list');
+    expect(checkList?.esito).toBe('non valutabile');
+    expect(checkList?.dettaglio).toContain('0/4');
     // La mancanza cita il DURC: il dizionario la riconduce al documento, e la
     // frase originale resta come «chiude».
     expect(p.richieste.map((r) => r.documento)).toContain('DURC aggiornato');

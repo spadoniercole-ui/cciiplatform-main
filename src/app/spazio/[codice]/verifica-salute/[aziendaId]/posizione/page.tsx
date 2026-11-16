@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowLeft, FileText } from 'lucide-react';
+import { leggiSessione } from '@/lib/autorizzazione';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
@@ -14,6 +15,7 @@ import { leggiVerificaAzienda } from '@/lib/verificaAzienda/letturaVerifica';
 import { congruenzaAzienda } from '@/lib/flussiEnte/leggiCongruenza';
 import { leggiDecisioniPratica } from '@/lib/posizionePratica/registroDecisioni';
 import { componiPosizione } from '@/lib/posizionePratica/composizione';
+import { autoreDaSessione } from '@/lib/posizionePratica/decisioni';
 import { ETICHETTE_REGISTRATE, GLOSSARIO } from '@/lib/posizionePratica/glossario';
 import { DecisioniPratica } from '@/components/spazio/DecisioniPratica';
 import { StampaPosizione } from '@/components/spazio/StampaPosizione';
@@ -81,6 +83,7 @@ export default async function PosizionePage({
     congruenza,
     decisioni,
     snapshot,
+    sessione,
   ] = await Promise.all([
     ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
     ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
@@ -92,6 +95,7 @@ export default async function PosizionePage({
     congruenzaAzienda(contesto.nomeSchema, id).catch(() => null),
     leggiDecisioniPratica(contesto.nomeSchema, id).catch(() => []),
     leggiSnapshotDebito(contesto.nomeSchema, id).catch(() => null),
+    leggiSessione().catch(() => null),
   ]);
 
   const attenzione = attenzioneRis?.success ? (attenzioneRis.attenzione ?? null) : null;
@@ -140,6 +144,9 @@ export default async function PosizionePage({
     richieste,
   } = posizione;
   const testoDellaRichiesta = posizione.testoRichiesta;
+  // Chi firma le decisioni è la sessione: la stessa regola che l'azione
+  // applica quando scrive, mostrata prima del clic invece che dopo.
+  const autoreDecisione = autoreDaSessione(sessione);
   const stile = STILE_GRADO[prontezza.grado];
 
   return (
@@ -165,10 +172,7 @@ export default async function PosizionePage({
               ? new Date(eseguitaIl).toLocaleDateString('it-IT')
               : 'verifica non eseguita'}
             {' · '}
-            Copertura:{' '}
-            {attenzione
-              ? `${attenzione.copertura.determinate}/${attenzione.copertura.totali}`
-              : '—'}
+            Copertura: {posizione.coperturaTesto ?? '—'}
             {' · '}
             Validità: {validita.etichetta}
           </p>
@@ -411,6 +415,7 @@ export default async function PosizionePage({
           decisioni={decisioni}
           credito={posizione.credito}
           copertura={posizione.coperturaTesto}
+          autore={autoreDecisione}
         />
       </section>
 

@@ -46,6 +46,21 @@ export interface ValidazioneDecisione {
 
 export const ESITI_DECISIONE_CODICI: EsitoDecisione[] = ESITI_DECISIONE.map((e) => e.codice);
 
+/**
+ * Chi firma la decisione: l'identità della sessione, non un campo del browser
+ * (0.242.3). Un nome scritto a mano in una casella può essere quello di un
+ * altro, e una traccia che si può compilare con un nome falso non è una
+ * traccia. Resta null solo se la sessione non porta alcun nome: in quel caso
+ * l'azione rifiuta, invece di inventarne uno.
+ */
+export function autoreDaSessione(
+  sessione: { username: string | null; email: string | null } | null | undefined
+): string | null {
+  if (!sessione) return null;
+  const nome = (sessione.username ?? sessione.email ?? '').trim();
+  return nome.length > 0 ? nome : null;
+}
+
 export function etichettaEsito(codice: string): string {
   return ESITI_DECISIONE.find((e) => e.codice === codice)?.etichetta ?? codice;
 }
