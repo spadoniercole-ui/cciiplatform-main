@@ -1,3 +1,17 @@
+## 0.242.1 — 2026-11-16
+
+- **Il quadro qualitativo si legge una volta sola.** La regola dei due terzi, la valutazione pesata
+  al 50% e la decisione che il quadro pesa solo a check list completa erano scritte due volte:
+  nell'azione dell'indicatore e nella pagina della Posizione. Le due copie divergevano già — la
+  pagina mostrava il quadro anche su una check list a metà, l'indicatore no. Ora stanno in
+  `src/lib/checklist/letturaQualitativa.ts` (`componiLetturaQualitativa`,
+  `leggiQualitativaAzienda`), come la lettura della fotografia in `letturaVerifica.ts`: l'indicatore
+  e la Posizione chiamano la stessa funzione.
+- La lettura dichiara anche perché il quadro resta fuori (check list incompleta con i numeri,
+  nessun prodotto in elenco, nessuna domanda chiusa) e restituisce la sintesi letta, così la pagina
+  non la rilegge per comporre le richieste di documenti.
+- Verificato: `tsc` 0 errori, `next lint` 0 errori, 1902 test verdi, `npm run build` verde.
+
 ## 0.242.0 — 2026-11-16
 
 - **Una posizione, un documento.** Le quattro verifiche dicevano ciascuna se stessa; nessuna diceva

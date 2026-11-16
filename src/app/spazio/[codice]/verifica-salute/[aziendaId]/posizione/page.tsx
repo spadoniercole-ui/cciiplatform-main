@@ -7,12 +7,7 @@ import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreen
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati';
 import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
-import { leggiChecklistProdottiAzienda } from '@/lib/prodotti/checklistAzienda';
-import { leggiPercentualeCriticitaPesata } from '@/lib/checklist/pesataMinisteriale';
-import {
-  coloreQualitativoSommario,
-  dettaglioOrientamentoSommario,
-} from '@/lib/checklist/pesoProdotti';
+import { leggiQualitativaAzienda } from '@/lib/checklist/letturaQualitativa';
 import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 import { leggiSnapshotDebito } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 import { leggiVerificaAzienda } from '@/lib/verificaAzienda/letturaVerifica';
@@ -85,8 +80,7 @@ export default async function PosizionePage({
   const [
     attenzioneRis,
     storicoRis,
-    checklist,
-    pesata,
+    qualitativa,
     debitoRis,
     soglie,
     contabileRis,
@@ -97,8 +91,7 @@ export default async function PosizionePage({
   ] = await Promise.all([
     ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
     ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
-    leggiChecklistProdottiAzienda(contesto.nomeSchema, id).catch(() => null),
-    leggiPercentualeCriticitaPesata(contesto.nomeSchema, id).catch(() => null),
+    leggiQualitativaAzienda(contesto.nomeSchema, id).catch(() => null),
     debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
     leggiDatiSoglieAzienda(contesto.nomeSchema, id).catch(() => null),
     statoVerificaContabileAction(contesto.nomeSchema).catch(() => null),
@@ -145,12 +138,12 @@ export default async function PosizionePage({
   const quadratura = quadraturaCredito(vociCredito);
 
   // ---- Check list e letture ------------------------------------------------
+  // Il quadro qualitativo viene dalla stessa lettura che usa l'indicatore
+  // (0.242.1): se la check list è incompleta resta fuori da entrambi, e il
+  // motivo lo dice.
   const qualitativo = {
-    colore: coloreQualitativoSommario({
-      qualificazione: checklist?.qualificazione,
-      percentualeCriticitaPesata: pesata,
-    }),
-    dettaglio: checklist ? dettaglioOrientamentoSommario(checklist, pesata) : null,
+    colore: qualitativa?.colore ?? null,
+    dettaglio: qualitativa?.dettaglio ?? qualitativa?.motivo ?? null,
   };
 
   const confronto = confrontoLetture({
@@ -189,7 +182,7 @@ export default async function PosizionePage({
         ? 'dimensione portante: senza di essa il perimetro non è circoscrivibile'
         : null,
     })),
-    mancanzeChecklist: (checklist?.mancanze ?? []).map(String),
+    mancanzeChecklist: (qualitativa?.sintesi?.mancanze ?? []).map(String),
     flussi: congruenza
       ? {
           senzaDenuncia: congruenza.esiti.reduce((n, e) => n + e.senzaDenuncia.length, 0),
