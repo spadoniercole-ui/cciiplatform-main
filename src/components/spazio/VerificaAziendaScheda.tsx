@@ -26,6 +26,8 @@ import {
 import { VOCI_PROIEZIONE } from '@/lib/contabile/proiezione';
 import { RANGHI } from '@/lib/triage/scenari';
 import type { ColonnaFotografia, ScenarioFotografia } from '@/lib/verificaAzienda/fotografia';
+import { breakEvenAccordo } from '@/lib/posizionePratica/breakEven';
+import type { PianoInEssere } from '@/lib/posizionePratica/pianoInEssere';
 import { indiciVisibili, valoreIndice } from '@/lib/xbrl/indiciVisibili';
 
 const euro = (n: number | undefined | null) =>
@@ -114,6 +116,7 @@ export function VerificaAziendaScheda({
   amministrativa = null,
   contabile = null,
   indiciAbilitati = [],
+  pianoInEssere = null,
 }: {
   nomeSchema: string;
   aziendaId: number;
@@ -124,6 +127,8 @@ export function VerificaAziendaScheda({
   contabile?: RiepilogoContabile | null;
   /** Codici degli indici abilitati nello spazio: la fotografia mostra questi. */
   indiciAbilitati?: string[];
+  /** Il piano che l'azienda sta già eseguendo, letto dai flussi dell'ente. */
+  pianoInEssere?: PianoInEssere | null;
 }) {
   const [risultato, setRisultato] = useState<RisultatoVerificaAzienda | null>(null);
   const [inCorso, setInCorso] = useState(false);
@@ -482,6 +487,69 @@ export function VerificaAziendaScheda({
               {fotografia.confronto.testo}
             </p>
           )}
+
+          {/* IL PUNTO DI PAREGGIO (0.242.0).
+              Due conti, non due previsioni: sotto quale recupero l'accordo rende meno della
+              procedura, e quanta cassa manca perché stia in piedi. */}
+          {(() => {
+            const be = breakEvenAccordo({
+              credito: fotografia.credito,
+              disponibilita: fotografia.capacita.disponibilita,
+              flusso: fotografia.capacita.flusso,
+              liquidazioneNetta:
+                fotografia.scenari.find((s) => s.codice === 'LIQUIDAZIONE')?.recupero ?? null,
+              cramDownNetto:
+                fotografia.scenari.find((s) => s.codice === 'CRAM_DOWN')?.recupero ?? null,
+            });
+            return (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                  Punto di pareggio
+                </p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider text-slate-400">
+                      Recupero minimo
+                    </p>
+                    <p className="text-[12px] font-bold tabular-nums text-slate-900">
+                      {euro(be.recuperoMinimo)}
+                    </p>
+                    <p className="text-[9px] text-slate-500">
+                      {be.proceduraConfronto ?? 'nessuna procedura calcolabile'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider text-slate-400">
+                      Scoperto di cassa
+                    </p>
+                    <p className="text-[12px] font-bold tabular-nums text-slate-900">
+                      {euro(be.scoperto)}
+                    </p>
+                    <p className="text-[9px] text-slate-500">
+                      flusso necessario {euro(be.flussoNecessario)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider text-slate-400">
+                      Piano in essere
+                    </p>
+                    <p className="text-[12px] font-bold text-slate-900">
+                      {pianoInEssere?.stato ?? 'non disponibile'}
+                    </p>
+                    <p className="text-[9px] text-slate-500">
+                      {pianoInEssere?.dettaglio ?? 'nessun flusso dell’ente configurato'}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-600 leading-relaxed">{be.dettaglio}</p>
+                {pianoInEssere?.avvertenza && (
+                  <p className="text-[10px] text-amber-900 leading-relaxed">
+                    {pianoInEssere.avvertenza}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
           <p className="text-[10px] text-slate-500 leading-relaxed">
             L’accordo non è un recupero: è la capacità dell’azienda di rispondere del credito con la
             cassa che ha e con quella che l’esercizio produce. Se non copre l’importo dovuto, la

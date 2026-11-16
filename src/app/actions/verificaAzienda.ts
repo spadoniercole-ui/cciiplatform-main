@@ -18,28 +18,26 @@
 // Se un pezzo manca lo scenario si dichiara non calcolabile: niente zero
 // inventati. La logica pura sta in src/lib/verificaAzienda/fotografia.ts; qui
 // si autorizza, si legge e si conserva.
+//
+// La LETTURA sta in `src/lib/verificaAzienda/letturaVerifica.ts` (0.242.0):
+// anche la pagina della Posizione compone la stessa fotografia, e due copie
+// della stessa lettura sarebbero di nuovo due motori.
 
 import { pool } from '@/lib/db';
 import { richiediAccessoAzienda } from '@/lib/autorizzazione';
-import { apriVerifica, leggiAperturaVerifica } from '@/lib/verificheApertura';
-import { componiProiezione } from '@/lib/contabile/proiezione';
-import { assicuraTabelleScenariTriage, assicuraTabelleVerificaAzienda } from '@/db/provision';
-import {
-  componiFotografia,
-  type FotografiaVerificaAzienda,
-} from '@/lib/verificaAzienda/fotografia';
-import { RANGHI, type ParametriScenari, type RangoCredito } from '@/lib/triage/scenari';
-import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
-import { selezionaNote, type SezioneNota } from '@/lib/xbrl/note';
-import type { DatiFinanziariPeriodo, FactTestuale } from '@/lib/xbrl/types';
+import { apriVerifica } from '@/lib/verificheApertura';
+import { assicuraTabelleVerificaAzienda } from '@/db/provision';
+import { leggiVerificaAzienda } from '@/lib/verificaAzienda/letturaVerifica';
+import type { FotografiaVerificaAzienda } from '@/lib/verificaAzienda/fotografia';
+import type {
+  AsseContabileVerificaAzienda,
+  DebitoVerificaAzienda,
+  RiepilogoNota,
+} from '@/lib/verificaAzienda/letturaVerifica';
+
+export type { AsseContabileVerificaAzienda, DebitoVerificaAzienda, RiepilogoNota };
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
-
-export interface DebitoVerificaAzienda {
-  totale: number;
-  memorizzatoIl: string | null;
-  fonte: string;
-}
 
 export interface RisultatoSimulazioneBase {
   success: boolean;
@@ -63,100 +61,6 @@ export interface RisultatoVerificaAzienda {
   /** L'asse temporale della contabile: base, ultimo bilancio, anno della verifica. */
   asse?: AsseContabileVerificaAzienda;
   error?: string;
-}
-
-export interface AsseContabileVerificaAzienda {
-  annoBase: number | null;
-  annoUltimoBilancio: number | null;
-  annoVerifica: number;
-  /** Gli anni costruiti dai differenziali sulla base: etichettati «calcolato». */
-  annualitaCalcolate: number[];
-}
-
-export interface RiepilogoNota {
-  anno: number | null;
-  sezioni: string[];
-  continuita: string | null;
-  piani: string | null;
-}
-
-/** La nota integrativa dell'ultimo bilancio, ridotta a ciò che serve: sezioni e due testi. */
-function riepilogaNota(fatti: unknown, anno: number | null): RiepilogoNota | null {
-  if (!Array.isArray(fatti) || fatti.length === 0) return null;
-  const note = selezionaNote(fatti as FactTestuale[]);
-  const testo = (sezione: SezioneNota): string | null => {
-    const trovato = note.fatti.find((f) => f.sezione === sezione);
-    return trovato ? trovato.testo.slice(0, 600) : null;
-  };
-  return {
-    anno,
-    sezioni: note.sezioni.map((s) => s.sezione),
-    continuita: testo('CONTINUITA'),
-    piani: testo('PIANI'),
-  };
-}
-
-/**
- * Il rango del credito scelto nel triage dell'azienda. Una tabella assente o un
- * rango non riconosciuto valgono «non scelto»: le percentuali per rango non si
- * applicano, e la fotografia lo dice.
- */
-async function leggiRangoAzienda(
-  nomeSchema: string,
-  aziendaId: number
-): Promise<RangoCredito | null> {
-  try {
-    await assicuraTabelleScenariTriage(nomeSchema);
-    const r = await pool.query(
-      `SELECT rango FROM "${nomeSchema}".triage_scenario WHERE azienda_id = $1`,
-      [aziendaId]
-    );
-    const codice = r.rows[0]?.rango ? String(r.rows[0].rango) : null;
-    return RANGHI.find((x) => x.codice === codice)?.codice ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Le percentuali per rango fissate dall'ente. Nessun default: una riga
- * mancante resta null e lo scenario si dichiara non calcolabile.
- */
-async function leggiParametriScenari(nomeSchema: string): Promise<ParametriScenari> {
-  const vuoti: ParametriScenari = {
-    costiProceduraPct: null,
-    ranghi: RANGHI.map((r) => ({
-      rango: r.codice,
-      tassoLiquidazionePct: null,
-      cramDownPct: null,
-    })),
-  };
-  try {
-    await assicuraTabelleScenariTriage(nomeSchema);
-    const [config, righe] = await Promise.all([
-      pool.query(`SELECT costi_procedura_pct FROM "${nomeSchema}".parametri_scenari WHERE id = 1`),
-      pool.query(
-        `SELECT rango, tasso_liquidazione_pct, cram_down_pct
-           FROM "${nomeSchema}".parametri_scenari_rango`
-      ),
-    ]);
-    const num = (v: unknown): number | null =>
-      v === null || v === undefined || v === '' ? null : Number(v);
-    const perRango = new Map(righe.rows.map((r) => [String(r.rango), r]));
-    return {
-      costiProceduraPct: num(config.rows[0]?.costi_procedura_pct),
-      ranghi: RANGHI.map((r) => {
-        const salvata = perRango.get(r.codice);
-        return {
-          rango: r.codice,
-          tassoLiquidazionePct: num(salvata?.tasso_liquidazione_pct),
-          cramDownPct: num(salvata?.cram_down_pct),
-        };
-      }),
-    };
-  } catch {
-    return vuoti;
-  }
 }
 
 /**
@@ -184,89 +88,10 @@ export async function calcolaVerificaAziendaAction(
     // quali criteri è stata fatta la prima fotografia.
     await apriVerifica(nomeSchema, aziendaId, 'AZIENDALE').catch(() => undefined);
 
-    const bilancioRis = await pool.query(
-      `SELECT anno_bilancio, dati_finanziari FROM "${nomeSchema}".xbrl_storico_azienda
-        WHERE azienda_id = $1 AND anno_bilancio IS NOT NULL
-        ORDER BY anno_bilancio ASC`,
-      [aziendaId]
-    );
-    const bilanci = bilancioRis.rows
-      .map((r) => ({
-        anno: Number(r.anno_bilancio),
-        dati: r.dati_finanziari as DatiFinanziariPeriodo,
-      }))
-      .filter((a) => Number.isInteger(a.anno) && a.dati);
-
-    // L'asse temporale è quello della contabile: la serie si ferma all'anno in
-    // cui la verifica contabile è stata aperta. La verifica azienda non
-    // aggiunge annualità sue.
-    const aperturaContabile = await leggiAperturaVerifica(nomeSchema, aziendaId, 'CONTABILE');
-    const annoVerifica = aperturaContabile
-      ? Number(aperturaContabile.slice(0, 4))
-      : new Date().getFullYear();
-
-    // Il credito vantato è il debito accertato nell'amministrativa. Si legge
-    // prima dell'asse: la contabile chiude la voce dell'ente sullo stesso stock.
-    const memorizzato = await leggiDebitoEnteMemorizzato(nomeSchema, aziendaId);
-    const debito = memorizzato
-      ? {
-          totale: memorizzato.debito.totale,
-          memorizzatoIl: memorizzato.memorizzatoIl,
-          fonte: memorizzato.debito.fonte,
-        }
-      : null;
-
-    const asseContabile = componiProiezione({
-      bilanci,
-      annoVerifica,
-      debitoEnte: memorizzato
-        ? {
-            totale: memorizzato.debito.totale,
-            fonte: memorizzato.debito.fonte,
-            accertatoIl: memorizzato.memorizzatoIl,
-          }
-        : null,
-    });
-
-    const [rango, parametri] = await Promise.all([
-      leggiRangoAzienda(nomeSchema, aziendaId),
-      leggiParametriScenari(nomeSchema),
-    ]);
-
-    const fotografia = componiFotografia({
-      proiezione: asseContabile,
-      credito: debito?.totale ?? null,
-      rango,
-      parametri,
-    });
-
-    // La nota integrativa dell'ultimo bilancio: si mostra accanto alla
-    // fotografia, non diventa un tasso. Se i bilanci non la portano, non è un
-    // errore.
-    let nota: RiepilogoNota | null = null;
-    try {
-      const notaRis = await pool.query(
-        `SELECT anno_bilancio, note_fatti FROM "${nomeSchema}".xbrl_storico_azienda
-          WHERE azienda_id = $1 AND note_fatti IS NOT NULL
-          ORDER BY anno_bilancio DESC NULLS LAST
-          LIMIT 1`,
-        [aziendaId]
-      );
-      const riga = notaRis.rows[0];
-      if (riga) {
-        nota = riepilogaNota(
-          riga.note_fatti,
-          riga.anno_bilancio === null || riga.anno_bilancio === undefined
-            ? null
-            : Number(riga.anno_bilancio)
-        );
-      }
-    } catch {
-      nota = null;
-    }
+    const lettura = await leggiVerificaAzienda(nomeSchema, aziendaId);
 
     let fotografiaId: number | undefined;
-    if (fotografia.anni.length > 0) {
+    if (lettura.fotografia.anni.length > 0) {
       const inserita = await pool.query(
         `INSERT INTO "${nomeSchema}".verifica_azienda_simulazioni
            (azienda_id, profilo, annualita, debito_ente, crescita_storica_pct,
@@ -276,14 +101,14 @@ export async function calcolaVerificaAziendaAction(
         [
           aziendaId,
           'FOTOGRAFIA',
-          fotografia.anni.length,
-          fotografia.credito ?? 0,
+          lettura.fotografia.anni.length,
+          lettura.fotografia.credito ?? 0,
           null,
           // La fotografia non ha una crescita applicata: il campo resta a 0 e il
           // report lo ignora quando il profilo è «FOTOGRAFIA».
           0,
-          JSON.stringify(fotografia.anni),
-          JSON.stringify(fotografia.avvertenze),
+          JSON.stringify(lettura.fotografia.anni),
+          JSON.stringify(lettura.fotografia.avvertenze),
         ]
       );
       fotografiaId = Number(inserita.rows[0]?.id);
@@ -291,16 +116,11 @@ export async function calcolaVerificaAziendaAction(
 
     return {
       success: true,
-      fotografia,
-      debito,
+      fotografia: lettura.fotografia,
+      debito: lettura.debito,
       fotografiaId,
-      nota,
-      asse: {
-        annoBase: asseContabile.annoBase,
-        annoUltimoBilancio: asseContabile.annoUltimoBilancio,
-        annoVerifica,
-        annualitaCalcolate: asseContabile.annualitaCalcolate,
-      },
+      nota: lettura.nota,
+      asse: lettura.asse,
     };
   } catch (error: unknown) {
     console.error('[calcolaVerificaAziendaAction] Errore:', error);

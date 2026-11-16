@@ -173,7 +173,9 @@ describe('VerificaAziendaScheda — fotografia e tre scenari', () => {
     );
     expect(await screen.findByText('Liquidazione giudiziale')).toBeTruthy();
     // 32.400 € di recupero e 87.600 € di perdita sul credito di 120.000 €.
-    expect(screen.getByText('32.400 €')).toBeTruthy();
+    // 32.400 € compare due volte: nel recupero dello scenario e nel recupero
+    // minimo del punto di pareggio (è la stessa cifra, con due ruoli).
+    expect(screen.getAllByText('32.400 €').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('87.600 €')).toBeTruthy();
     expect(screen.getByText(/Non calcolabile: manca la percentuale di cram down/)).toBeTruthy();
     // L'accordo non mostra un recupero: mostra la capacità di risposta.
@@ -218,7 +220,11 @@ describe('VerificaAziendaScheda — fotografia e tre scenari', () => {
         ragioneSociale="Tessitura Lario Demo S.p.A."
       />
     );
-    expect(await screen.findByText(/credito vantato non è accertato/i)).toBeTruthy();
+    // Il testo compare due volte: nel punto di pareggio e nel riquadro del
+    // debito mancante. Entrambi dicono la stessa cosa, in due punti diversi.
+    expect(
+      (await screen.findAllByText(/credito vantato non è accertato/i)).length
+    ).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Non calcolabile/).length).toBeGreaterThanOrEqual(1);
   });
 });

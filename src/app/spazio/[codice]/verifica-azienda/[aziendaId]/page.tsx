@@ -6,6 +6,8 @@ import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
+import { congruenzaAzienda } from '@/lib/flussiEnte/leggiCongruenza';
+import { pianoInEssere } from '@/lib/posizionePratica/pianoInEssere';
 import { VerificaAziendaScheda } from '@/components/spazio/VerificaAziendaScheda';
 
 export const dynamic = 'force-dynamic';
@@ -31,15 +33,19 @@ export default async function VerificaAziendaSchedaPage({
   // Le due verifiche si leggono dalle loro fonti: l'esito amministrativo e lo
   // stato della contabile. La fotografia e i tre scenari li legge la scheda
   // quando si apre: non c'è più un orizzonte da scegliere prima.
-  const [statoContabile, attenzioneRis, debitoRis, storicoRis, indiciRis] = await Promise.all([
-    statoVerificaContabileAction(contesto.nomeSchema),
-    ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
-    debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
-    ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
-    // Gli indici abilitati nello spazio: la mappa mostra questi, non i primi
-    // cinque che il motore calcola.
-    ottieniIndiciSpazio(contesto.nomeSchema).catch(() => null),
-  ]);
+  const [statoContabile, attenzioneRis, debitoRis, storicoRis, indiciRis, congruenza] =
+    await Promise.all([
+      statoVerificaContabileAction(contesto.nomeSchema),
+      ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
+      debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
+      ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
+      // Gli indici abilitati nello spazio: la mappa mostra questi, non i primi
+      // cinque che il motore calcola.
+      ottieniIndiciSpazio(contesto.nomeSchema).catch(() => null),
+      // Il piano che l'azienda sta eseguendo: i flussi dell'ente dicono se i
+      // versamenti arrivano. Non è uno scenario numerico, è un'avvertenza (0.242.0).
+      congruenzaAzienda(contesto.nomeSchema, id).catch(() => null),
+    ]);
 
   const rigaContabile = statoContabile.success
     ? statoContabile.aziende.find((a) => a.aziendaId === id)
@@ -71,6 +77,17 @@ export default async function VerificaAziendaSchedaPage({
             }
           : null
       }
+      pianoInEssere={pianoInEssere({
+        esiti: (congruenza?.esiti ?? []).map((e) => ({
+          ente: e.ente,
+          flusso: e.flusso,
+          attesi: e.attesi,
+          senzaDenuncia: e.senzaDenuncia.length,
+          senzaDelega: e.senzaDelega.length,
+          sospesi: e.sospesi.length,
+          completo: e.completo,
+        })),
+      })}
       contabile={
         rigaContabile
           ? {

@@ -1,3 +1,49 @@
+## 0.242.0 — 2026-11-16
+
+- **Una posizione, un documento.** Le quattro verifiche dicevano ciascuna se stessa; nessuna diceva
+  la cosa che serve a chi decide. Nuova pagina *Posizione* della pratica
+  (`verifica-salute/[aziendaId]/posizione`), raggiungibile dalla verifica amministrativa e stampabile
+  così com'è: stato, credito e quadratura, date, letture a confronto, accordo e procedure, documenti
+  da chiedere, decisioni, glossario. Non ricalcola nulla per conto suo.
+- **Il credito quadra, o si dice che non quadra.** `quadraturaCredito` confronta il debito accertato,
+  la certificazione dei debiti e — senza farla entrare nel confronto — l'esposizione contributiva,
+  che è un sottoinsieme. Tolleranza un euro; oltre, la pagina dichiara lo scostamento invece di
+  mostrare due cifre vicine che sembrano la stessa. È la divergenza vera che resta dopo che la
+  0.240.0 ha eliminato quella finta.
+- **Quanto è pronta la posizione.** `valutaProntezza` distingue blocchi (amministrativa non chiusa,
+  credito divergente, contabile incompleta, fotografia che non si compone) da attenzioni (copertura
+  parziale, scenari non calcolabili, verifica scaduta, documenti mancanti) e indica il prossimo atto.
+  Un blocco ferma; un'attenzione lascia decidere sapendo che cosa manca.
+- **Le date e l'invecchiamento.** La validità a sei mesi valeva solo per il triage. Ora
+  `valutaInvecchiamento` confronta i dati (debito riaccertato, visura ricaricata) con la data della
+  verifica: se uno è più recente, la posizione è «da ricalcolare», e non è un errore — è un
+  aggiornamento mancante.
+- **Le letture a confronto, con la divergenza spiegata.** Indicatore, check list, fotografia e
+  scenari hanno nature diverse (accertato, dichiarato, proiezione, aritmetica) e possono
+  contraddirsi. `confrontoLetture` elenca le letture e, quando divergono, dice perché e quale errore
+  evita la spiegazione: la cassa che copre il credito non cancella una soglia superata, un quadro
+  dichiarativo favorevole non annulla un indice oltre soglia.
+- **La decisione lascia una traccia.** Tabella `pratica_decisioni` per spazio e modulo nella pagina:
+  esito, motivazione (almeno 20 caratteri), autore, credito e copertura del giorno. Il giudizio resta
+  ricalcolabile; l'atto resta scritto.
+- **Le lacune diventano una richiesta.** `richiesteDa` raccoglie da indicatore, dimensioni scoperte,
+  check list e flussi i documenti mancanti, senza duplicati, con la frase che sbloccano e chi li
+  produce; `testoRichiesta` compone il testo da copiare, senza valutazioni giuridiche.
+- **Punto di pareggio e piano in essere.** `breakEvenAccordo` dice sotto quale recupero l'accordo
+  rende meno della migliore procedura e quanto resta scoperto di cassa; `pianoInEssere` legge i
+  flussi dell'ente e aggiunge un'avvertenza all'accordo quando i versamenti non sono regolari. Sono
+  conti, non previsioni: senza credito o cassa il risultato è «non calcolabile».
+- **Il portafoglio dell'ente.** La pagina della verifica amministrativa apre con i conteggi dello
+  storico: posizioni verificate, da rivedere, rosse, contabile incompleta, e le prime da rinnovare.
+- **Un glossario solo.** `glossario.ts` registra le etichette della catena con ciò che significano e
+  ciò che NON significano, con un test di contratto: ogni parola mostrata ha la sua spiegazione, e
+  nessuna può essere aggiunta senza scriverla.
+- **Una lettura sola della fotografia.** La composizione della verifica azienda è uscita dall'azione
+  (`lib/verificaAzienda/letturaVerifica.ts`): la pagina della Posizione e la scheda leggono la stessa
+  funzione, e l'azione conserva solo la scrittura. Due copie della stessa lettura sarebbero stati di
+  nuovo due motori.
+- Verificato: `tsc` 0 errori, `next lint` 0 errori, 1897 test verdi, `npm run build` verde.
+
 ## 0.241.0 — 2026-11-16
 
 - **La check list è un orientamento sommario, non un verdetto.** Oltre i due terzi delle risposte
