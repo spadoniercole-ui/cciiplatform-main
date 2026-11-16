@@ -617,7 +617,7 @@ export function ImportaBilancino({ nomeSchema, aziendaId, file, onApplica, onChi
                         <tr key={c.chiave}>
                           <td className="py-1 text-slate-600">{c.etichetta}</td>
                           <td className="py-1 text-right font-mono text-slate-900">
-                            {euro(esito.dati[c.chiave])}
+                            {euro(esito.dati[c.chiave] ?? 0)}
                           </td>
                         </tr>
                       ))}

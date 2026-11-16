@@ -39,6 +39,19 @@
 // partono da quella. Nessun numero inventato, e nessuna riga che racconta una
 // storia diversa da quella delle righe sopra.
 //
+// LA VOCE DELL’ENTE SI ANCORA AL DATO ACCERTATO (0.239.0).
+//
+// La contabile è indietro rispetto al tempo presente; l’amministrativa
+// fotografa il debito verso l’ente alla data della verifica. Il ponte fra le
+// due non è una stima: l’ultimo bilancio dichiara i debiti tributari e
+// previdenziali, la verifica amministrativa accerta uno stock, e la differenza
+// è — per presunzione dichiarata — il debito cresciuto nel periodo che si
+// ricostruisce. Si ripartisce sulle annualità calcolate in proporzione agli
+// oneri sociali proiettati, si iscrive nel passivo e l’onere corrispondente va
+// nella voce del personale: alla data della verifica la somma delle due voci
+// torna esattamente al valore accertato, e il prospetto lo mostra invece di
+// lasciarlo dedurre.
+//
 // Ogni annualità porta la sua etichetta: STORICO è il dato depositato,
 // CALCOLATO è quello costruito. Il prospetto non li mescola in silenzio.
 //
@@ -86,6 +99,27 @@ export const VOCI_PROIEZIONE: {
     etichetta: 'Costi della produzione',
     natura: 'MOTRICE',
     formula: null,
+  },
+  {
+    chiave: 'costiPersonale',
+    etichetta: 'Costo del personale',
+    natura: 'DERIVATA',
+    formula:
+      'costo del personale dell’ultimo bilancio, riportato nella proporzione dei costi della produzione, più la quota della voce dell’ente',
+  },
+  {
+    chiave: 'salariStipendi',
+    etichetta: 'di cui salari e stipendi',
+    natura: 'DERIVATA',
+    formula:
+      'salari e stipendi dell’ultimo bilancio, riportati nella proporzione dei costi della produzione',
+  },
+  {
+    chiave: 'oneriSociali',
+    etichetta: 'di cui oneri sociali e voce dell’ente',
+    natura: 'DERIVATA',
+    formula:
+      'oneri sociali dell’ultimo bilancio, riportati nella proporzione dei costi, più la quota annua della voce dell’ente ricostruita per differenza',
   },
   {
     chiave: 'ebitda',
@@ -192,6 +226,47 @@ export interface ProiezioneContabile {
   /** Il metodo, in una frase, come compare accanto ai numeri. */
   metodo: string;
   avvertenze: string[];
+  /**
+   * Il ponte fra il debito dichiarato nell’ultimo bilancio e quello accertato
+   * nella verifica amministrativa. null quando non c’è un debito memorizzato:
+   * non è un valore a zero, è un dato che manca.
+   */
+  ponteEnte: PonteEnte | null;
+}
+
+/** Il debito verso l’ente accertato nella verifica amministrativa. */
+export interface DebitoEnteVerificato {
+  totale: number;
+  fonte?: string | null;
+  /** Quando è stato accertato, per dichiararlo accanto alla cifra. */
+  accertatoIl?: string | null;
+}
+
+/** Una quota della crescita del debito, iscritta in una annualità calcolata. */
+export interface QuotaPonte {
+  anno: number;
+  quota: number;
+}
+
+/**
+ * La ricostruzione della voce dell’ente: dal valore dichiarato nell’ultimo
+ * bilancio al valore accertato nella verifica amministrativa.
+ */
+export interface PonteEnte {
+  /** Debiti tributari + previdenziali dell’ultimo bilancio depositato. */
+  debitoContabileUltimo: number;
+  /** Lo stock accertato nella verifica amministrativa. */
+  debitoVerificato: number;
+  /** Quanto cresce nel periodo ricostruito: verificato − contabile. */
+  differenza: number;
+  /** La quota iscritta in ciascuna annualità calcolata. */
+  quote: QuotaPonte[];
+  /** Su quale voce del conto economico è stato iscritto l’onere. */
+  voceOnere: 'oneriSociali';
+  applicato: boolean;
+  motivo: string | null;
+  fonte: string | null;
+  accertatoIl: string | null;
 }
 
 const arrotonda = (n: number) => Math.round(n * 100) / 100;
@@ -313,13 +388,106 @@ function serieMotrice(input: {
 }
 
 /**
+ * Ripartisce un importo sulle annualità, con i pesi forniti.
+ *
+ * L'ultima annualità chiude il conto: la somma delle quote è esattamente il
+ * totale, senza residui da arrotondamento. Senza pesi utilizzabili si divide in
+ * parti uguali, e lo dichiara il chiamante.
+ */
+export function distribuisciQuote(anni: number[], totale: number, pesi: number[]): QuotaPonte[] {
+  if (anni.length === 0) return [];
+  const validi = pesi.map((p) => (Number.isFinite(p) && p > 0 ? p : 0));
+  const pesiEffettivi = validi.some((p) => p > 0) ? validi : anni.map(() => 1);
+  let resto = arrotonda(totale);
+  let sommaPesi = pesiEffettivi.reduce((a, b) => a + b, 0);
+  const quote: QuotaPonte[] = [];
+  anni.forEach((anno, indice) => {
+    const ultima = indice === anni.length - 1;
+    const quota = ultima
+      ? arrotonda(resto)
+      : sommaPesi > 0
+        ? arrotonda(resto * (pesiEffettivi[indice] / sommaPesi))
+        : 0;
+    quote.push({ anno, quota });
+    resto = arrotonda(resto - quota);
+    sommaPesi = arrotonda(sommaPesi - pesiEffettivi[indice]);
+  });
+  return quote;
+}
+
+/**
+ * Il ponte verso la verifica: dal debito dichiarato nell'ultimo bilancio allo
+ * stock accertato. La differenza si presume crescita del debito nel periodo
+ * ricostruito; si ripartisce come crescono gli oneri sociali proiettati, perché
+ * è la contribuzione a generare quel debito.
+ */
+function componiPonteEnte(input: {
+  debitoEnte: DebitoEnteVerificato | null | undefined;
+  ultimo: BilancioArchivio;
+  annualitaCalcolate: number[];
+  costiProiettati: Map<number, number>;
+}): PonteEnte | null {
+  const debito = input.debitoEnte;
+  if (!debito || !Number.isFinite(debito.totale) || debito.totale <= 0) return null;
+
+  const tributari = numero(input.ultimo.dati.debitiTributari) ?? 0;
+  const previdenziali = numero(input.ultimo.dati.debitiPrevidenziali) ?? 0;
+  const contabile = arrotonda(tributari + previdenziali);
+  const verificato = arrotonda(debito.totale);
+  const differenza = arrotonda(verificato - contabile);
+  const base = {
+    debitoContabileUltimo: contabile,
+    debitoVerificato: verificato,
+    differenza,
+    voceOnere: 'oneriSociali' as const,
+    fonte: debito.fonte ?? null,
+    accertatoIl: debito.accertatoIl ?? null,
+  };
+
+  if (input.annualitaCalcolate.length === 0) {
+    return {
+      ...base,
+      quote: [],
+      applicato: false,
+      motivo:
+        'La verifica cade dentro gli anni già in archivio: non c’è nessuna annualità da ricostruire.',
+    };
+  }
+  if (differenza <= 0) {
+    return {
+      ...base,
+      quote: [],
+      applicato: false,
+      motivo: `Il debito dichiarato nell’ultimo bilancio (${contabile.toLocaleString('it-IT')} €) non è inferiore a quello accertato (${verificato.toLocaleString('it-IT')} €): non c’è una crescita da ricostruire e la voce dell’ente resta quella depositata.`,
+    };
+  }
+
+  const oneriUltimo = numero(input.ultimo.dati.oneriSociali) ?? 0;
+  const costiUltimo = numero(input.ultimo.dati.costiProduzione) ?? 0;
+  const pesi = input.annualitaCalcolate.map((anno) => {
+    if (oneriUltimo <= 0 || costiUltimo <= 0) return 0;
+    const costiAnno = input.costiProiettati.get(anno) ?? costiUltimo;
+    return Math.max(0, oneriUltimo * (costiAnno / costiUltimo));
+  });
+
+  return {
+    ...base,
+    quote: distribuisciQuote(input.annualitaCalcolate, differenza, pesi),
+    applicato: true,
+    motivo: null,
+  };
+}
+
+/**
  * Compone la proiezione. `bilanci` sono gli anni in archivio (ne basta uno per
  * la base, ne servono tre per una serie); `annoVerifica` è l'anno della data di
- * apertura della verifica contabile.
+ * apertura della verifica contabile; `debitoEnte` è lo stock accertato nella
+ * verifica amministrativa, con cui si chiude la voce dell'ente alla data.
  */
 export function componiProiezione(input: {
   bilanci: BilancioArchivio[];
   annoVerifica: number;
+  debitoEnte?: DebitoEnteVerificato | null;
 }): ProiezioneContabile {
   const perAnno = new Map<number, BilancioArchivio>();
   for (const b of input.bilanci) {
@@ -349,6 +517,7 @@ export function componiProiezione(input: {
       avvertenze: [
         'Carica i bilanci XBRL nella verifica contabile: senza il dato depositato non c’è nulla da proiettare.',
       ],
+      ponteEnte: null,
     };
   }
 
@@ -390,10 +559,35 @@ export function componiProiezione(input: {
     (numero(ultimoArchivio.dati.valoreProduzione) ?? 0) -
     (numero(ultimoArchivio.dati.ricaviVendite) ?? 0);
 
+  // IL PONTE VERSO LA VERIFICA. I costi proiettati servono prima del giro,
+  // perché la crescita della voce dell’ente si ripartisce come crescono gli
+  // oneri sociali proiettati: chi genera più contribuzione genera più debito.
+  const costiProiettati = new Map<number, number>();
+  const serieCosti = motrici.get('costiProduzione');
+  for (const anno of annualitaCalcolate) {
+    const proiettato = serieCosti?.proiezioni.find((p) => p.anno === anno)?.valore;
+    costiProiettati.set(anno, proiettato ?? numero(ultimoArchivio.dati.costiProduzione) ?? 0);
+  }
+  const ponteEnte = componiPonteEnte({
+    debitoEnte: input.debitoEnte,
+    ultimo: ultimoArchivio,
+    annualitaCalcolate,
+    costiProiettati,
+  });
+  const quotaPonte = new Map<number, number>(
+    (ponteEnte?.quote ?? []).map((q) => [q.anno, q.quota])
+  );
+  const tributariUltimo = numero(ultimoArchivio.dati.debitiTributari) ?? 0;
+  const previdenzialiUltimo = numero(ultimoArchivio.dati.debitiPrevidenziali) ?? 0;
+  const debitoEnteUltimo = tributariUltimo + previdenzialiUltimo;
+
   const valoriPerAnno = new Map<number, Partial<DatiFinanziariPeriodo>>();
   const derivateMotivo = new Map<keyof DatiFinanziariPeriodo, string | null>();
 
   let precedente: DatiFinanziariPeriodo = ultimoArchivio.dati;
+  // La quota dell’ente si somma anno per anno al passivo: il totale dei debiti
+  // porta la crescita ACCUMULATA, non solo la rata dell’anno.
+  let quotaAccumulata = 0;
   for (const anno of annualitaCalcolate) {
     const valoreMotrice = (chiave: keyof DatiFinanziariPeriodo): number | null => {
       const serie = motrici.get(chiave);
@@ -405,10 +599,20 @@ export function componiProiezione(input: {
     };
 
     const valoreProduzione = valoreMotrice('valoreProduzione');
-    const costiProduzione = valoreMotrice('costiProduzione');
+    const costiProduzioneMotrice = valoreMotrice('costiProduzione');
     const oneriFinanziari = valoreMotrice('oneriFinanziari');
-    const totaleDebiti = valoreMotrice('totaleDebiti');
+    const totaleDebitiMotrice = valoreMotrice('totaleDebiti');
     const debitiBancheMotrice = valoreMotrice('debitiBanche');
+
+    // La quota della voce dell’ente entra nei costi e nel passivo: è la stessa
+    // cifra, letta dai due lati del prospetto, e alla data della verifica la
+    // somma torna esattamente allo stock accertato.
+    const quotaAnno = quotaPonte.get(anno) ?? 0;
+    quotaAccumulata = arrotonda(quotaAccumulata + quotaAnno);
+    const costiProduzione =
+      costiProduzioneMotrice === null ? null : arrotonda(costiProduzioneMotrice + quotaAnno);
+    const totaleDebiti =
+      totaleDebitiMotrice === null ? null : arrotonda(totaleDebitiMotrice + quotaAccumulata);
 
     const ricaviVendite =
       valoreProduzione === null ? null : arrotonda(valoreProduzione - gapRicavi);
@@ -416,6 +620,27 @@ export function componiProiezione(input: {
       valoreProduzione === null || costiProduzione === null
         ? null
         : arrotonda(valoreProduzione - costiProduzione);
+
+    // IL PERSONALE. Salari e stipendi seguono i costi della produzione nella
+    // stessa proporzione dell’ultimo bilancio; gli oneri sociali ricevono in
+    // più la quota annua della voce dell’ente. Il totale è la somma delle due,
+    // così la scomposizione non contraddice il totale che sta sopra.
+    const costiUltimo = numero(ultimoArchivio.dati.costiProduzione) ?? 0;
+    const rapportoPersonale =
+      costiUltimo > 0 && costiProduzioneMotrice !== null ? costiProduzioneMotrice / costiUltimo : 1;
+    const salariUltimo = numero(ultimoArchivio.dati.salariStipendi);
+    const oneriUltimo = numero(ultimoArchivio.dati.oneriSociali);
+    const salariStipendi =
+      salariUltimo === null ? null : arrotonda(salariUltimo * rapportoPersonale);
+    const oneriSociali =
+      oneriUltimo === null ? null : arrotonda(oneriUltimo * rapportoPersonale + quotaAnno);
+    const personaleUltimo = numero(ultimoArchivio.dati.costiPersonale);
+    const costiPersonale =
+      personaleUltimo !== null
+        ? arrotonda(personaleUltimo * rapportoPersonale + quotaAnno)
+        : salariStipendi === null || oneriSociali === null
+          ? null
+          : arrotonda(salariStipendi + oneriSociali);
     const ebitda = ebit === null ? null : arrotonda(ebit + ammortamenti);
     const utileEsercizio =
       ebit === null || oneriFinanziari === null ? null : arrotonda(ebit - oneriFinanziari);
@@ -465,6 +690,18 @@ export function componiProiezione(input: {
         ? 'Manca la disponibilità liquida dell’anno prima o l’utile.'
         : null
     );
+    derivateMotivo.set(
+      'salariStipendi',
+      salariStipendi === null ? 'Il bilancio non espone salari e stipendi (B.9.a).' : null
+    );
+    derivateMotivo.set(
+      'oneriSociali',
+      oneriSociali === null ? 'Il bilancio non espone oneri sociali (B.9.b).' : null
+    );
+    derivateMotivo.set(
+      'costiPersonale',
+      costiPersonale === null ? 'Il bilancio non espone il costo del personale (B.9).' : null
+    );
 
     const datiAnno: Partial<DatiFinanziariPeriodo> = {
       valoreProduzione: valoreProduzione ?? numero(precedente.valoreProduzione) ?? undefined,
@@ -481,6 +718,19 @@ export function componiProiezione(input: {
       disponibilitaLiquide:
         disponibilitaLiquide ?? numero(precedente.disponibilitaLiquide) ?? undefined,
     };
+    if (salariStipendi !== null) datiAnno.salariStipendi = salariStipendi;
+    if (oneriSociali !== null) datiAnno.oneriSociali = oneriSociali;
+    if (costiPersonale !== null) datiAnno.costiPersonale = costiPersonale;
+    if (quotaAnno > 0) {
+      const quotaTributari =
+        debitoEnteUltimo > 0 ? arrotonda(quotaAnno * (tributariUltimo / debitoEnteUltimo)) : 0;
+      datiAnno.debitiTributari = arrotonda(
+        (numero(precedente.debitiTributari) ?? 0) + quotaTributari
+      );
+      datiAnno.debitiPrevidenziali = arrotonda(
+        (numero(precedente.debitiPrevidenziali) ?? 0) + (quotaAnno - quotaTributari)
+      );
+    }
     valoriPerAnno.set(anno, datiAnno);
     precedente = { ...precedente, ...datiAnno };
   }
@@ -575,10 +825,26 @@ export function componiProiezione(input: {
   avvertenze.push(
     'Le annualità calcolate sono un’ipotesi dichiarata — la stessa ragione geometrica dei differenziali — non una previsione: note integrative e studi di settore servono a discuterle, non a sostituirle.'
   );
+  const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
+  if (ponteEnte?.applicato) {
+    avvertenze.push(
+      `Voce dell’ente: il bilancio ${ultimoArchivio.anno} dichiara ${euro(ponteEnte.debitoContabileUltimo)} fra debiti tributari e previdenziali; la verifica amministrativa ne accerta ${euro(ponteEnte.debitoVerificato)}. La differenza di ${euro(ponteEnte.differenza)} è, per presunzione dichiarata, il debito cresciuto nel periodo ricostruito: si iscrive in ${ponteEnte.quote.length} ${ponteEnte.quote.length === 1 ? 'annualità' : 'annualità'} e l’onere va negli oneri sociali, così la voce del personale e il passivo raccontano la stessa cifra.`
+    );
+  } else if (ponteEnte?.motivo) {
+    avvertenze.push(`Voce dell’ente non ricostruita: ${ponteEnte.motivo}`);
+  } else if (annualitaCalcolate.length > 0) {
+    avvertenze.push(
+      'Nessun debito dell’ente memorizzato: la verifica amministrativa non è ancora chiusa, quindi la voce dell’ente resta quella depositata. Chiudendola, il ponte si calcola da sé.'
+    );
+  }
 
   const metodo =
     annualitaCalcolate.length > 0
-      ? `Base ${base.anno}: differenziali di ogni anno dalla base, ragione geometrica fra primo e ultimo differenziale, applicata ai valori del ${ultimoArchivio.anno} fino al ${annoVerifica} (anno della verifica). Le voci derivate seguono il prospetto.`
+      ? `Base ${base.anno}: differenziali di ogni anno dalla base, ragione geometrica fra primo e ultimo differenziale, applicata ai valori del ${ultimoArchivio.anno} fino al ${annoVerifica} (anno della verifica). Le voci derivate seguono il prospetto${
+          ponteEnte?.applicato
+            ? ', e la voce dell’ente chiude sullo stock accertato nella verifica amministrativa'
+            : ''
+        }.`
       : `Base ${base.anno}: gli anni in archivio arrivano già al ${ultimoArchivio.anno}, anno della verifica.`;
 
   return {
@@ -593,5 +859,6 @@ export function componiProiezione(input: {
     proiettabile,
     metodo,
     avvertenze,
+    ponteEnte,
   };
 }

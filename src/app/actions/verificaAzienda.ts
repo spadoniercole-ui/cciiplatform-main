@@ -617,11 +617,9 @@ export async function calcolaVerificaAziendaAction(
     const annoVerifica = aperturaContabile
       ? Number(aperturaContabile.slice(0, 4))
       : new Date().getFullYear();
-    const asseContabile = componiProiezione({ bilanci, annoVerifica });
-    const anni: AnnoStorico[] = asseContabile.bilanciProiettati
-      .filter((b) => typeof b.dati.ricaviVendite === 'number')
-      .map((b) => ({ anno: b.anno, dati: b.dati, calcolato: b.tipo === 'CALCOLATO' }));
-
+    // Il debito accertato si legge PRIMA dell’asse: la contabile chiude la voce
+    // dell’ente sullo stock verificato, e la verifica azienda deve leggere lo
+    // stesso asse, non una sua variante (0.239.0).
     const memorizzato = await leggiDebitoEnteMemorizzato(nomeSchema, aziendaId);
     const debito = memorizzato
       ? {
@@ -630,6 +628,21 @@ export async function calcolaVerificaAziendaAction(
           fonte: memorizzato.debito.fonte,
         }
       : null;
+
+    const asseContabile = componiProiezione({
+      bilanci,
+      annoVerifica,
+      debitoEnte: memorizzato
+        ? {
+            totale: memorizzato.debito.totale,
+            fonte: memorizzato.debito.fonte,
+            accertatoIl: memorizzato.memorizzatoIl,
+          }
+        : null,
+    });
+    const anni: AnnoStorico[] = asseContabile.bilanciProiettati
+      .filter((b) => typeof b.dati.ricaviVendite === 'number')
+      .map((b) => ({ anno: b.anno, dati: b.dati, calcolato: b.tipo === 'CALCOLATO' }));
 
     // La crescita di settore viene dalla serie ISTAT già in archivio: la
     // funzione la legge dalla cache e non interroga ISTAT. Se manca, la

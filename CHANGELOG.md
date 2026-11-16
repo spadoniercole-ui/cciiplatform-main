@@ -1,3 +1,28 @@
+## 0.239.0 — 2026-11-16
+
+- **Il costo del personale entra nel bilancio letto.** Salari e stipendi (B.9.a), oneri sociali
+  (B.9.b) e totale del costo del personale (B.9) erano nei file XBRL ma non nella mappatura: il
+  parser li leggeva e li scartava, perché non erano chiavi canoniche. Ora sono tre campi del
+  periodo, con i loro alias nel seed e nel fallback, e la voce del personale si può scomporre invece
+  di leggere solo il totale dei costi.
+- **La voce dell’ente si ancora al dato accertato, per differenza.** La contabile è indietro nel
+  tempo, l’amministrativa fotografa il debito verso l’ente alla data della verifica. Il ponte non è
+  una stima: l’ultimo bilancio dichiara i debiti tributari e previdenziali, la verifica
+  amministrativa accerta uno stock, e la differenza è — per presunzione dichiarata — il debito
+  cresciuto nel periodo ricostruito. Si ripartisce sulle annualità calcolate in proporzione agli
+  oneri sociali proiettati, si iscrive nel passivo (accumulando nel totale dei debiti, non solo
+  nella rata dell’anno) e l’onere corrispondente va negli oneri sociali. Alla data della verifica le
+  due voci tornano esattamente allo stock accertato: il test lo verifica al centesimo, e il
+  prospetto lo dichiara invece di lasciarlo dedurre.
+- **Un solo asse per contabile e verifica azienda.** Il ponte si calcola dove si calcola
+  `componiProiezione`; la verifica azienda legge il debito memorizzato prima di comporre l’asse e
+  passa lo stesso dato, invece di ricostruire una variante per conto suo.
+- **Nessun dato inventato quando il ponte non si può fare.** Senza debito memorizzato il ponte è
+  `null`, non zero; se il debito dichiarato non è inferiore a quello accertato il ponte non si
+  applica e dice perché; le voci del personale restano `—` quando il bilancio non le espone.
+- Verificato: `tsc --noEmit` 0 errori, 139 test verdi sui moduli toccati (14 nel motore della
+  proiezione, 4 nuovi); lint e build eseguiti in consegna.
+
 ## 0.238.0 — 2026-11-16
 
 - **La proiezione contabile distingue voci motrici e voci derivate.** Proiettare ogni riga per conto

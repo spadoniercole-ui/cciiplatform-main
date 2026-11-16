@@ -47,6 +47,15 @@ export interface DatiFinanziariPeriodo {
   ricaviVendite: number;
   valoreProduzione: number;
   costiProduzione: number;
+  /**
+   * Costo del personale (B.9) e le sue due voci principali: salari e stipendi
+   * (B.9.a) e oneri sociali (B.9.b). Sono facoltativi perché molte istanze
+   * non li espongono o li espongono solo in parte: quando mancano, la
+   * ricostruzione lo dichiara invece di scrivere uno zero che sembra un dato.
+   */
+  costiPersonale?: number;
+  salariStipendi?: number;
+  oneriSociali?: number;
   ebit: number; // differenza valore/costi produzione
   ammortamenti: number;
   ebitda: number;

@@ -285,6 +285,37 @@ export function ProiezioneContabile({
                       derivate si ricavano da quelli. «Storico» è il dato depositato, così com’è.
                     </p>
                   )}
+
+                  {proiezione.ponteEnte?.applicato && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 space-y-1">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        Voce dell’ente — dal bilancio al dato accertato
+                      </p>
+                      <p className="text-[11px] text-slate-700 leading-relaxed">
+                        L’ultimo bilancio ({proiezione.annoUltimoBilancio}) dichiara{' '}
+                        {euro(proiezione.ponteEnte.debitoContabileUltimo)} fra debiti tributari e
+                        previdenziali; la verifica amministrativa ne accerta{' '}
+                        {euro(proiezione.ponteEnte.debitoVerificato)}
+                        {proiezione.ponteEnte.accertatoIl
+                          ? ` (${proiezione.ponteEnte.accertatoIl})`
+                          : ''}
+                        . La differenza di {euro(proiezione.ponteEnte.differenza)} è la crescita
+                        presunta nel periodo ricostruito, iscritta in{' '}
+                        {proiezione.ponteEnte.quote.length}{' '}
+                        {proiezione.ponteEnte.quote.length === 1 ? 'annualità' : 'annualità'}:{' '}
+                        {proiezione.ponteEnte.quote
+                          .map((q) => `${q.anno} ${euro(q.quota)}`)
+                          .join(' · ')}
+                        . L’onere va negli oneri sociali, il debito nel passivo: alla data della
+                        verifica le due voci tornano allo stock accertato.
+                      </p>
+                    </div>
+                  )}
+                  {proiezione.ponteEnte && !proiezione.ponteEnte.applicato && (
+                    <p className="text-[10px] text-amber-800 leading-relaxed">
+                      Voce dell’ente non ricostruita: {proiezione.ponteEnte.motivo}
+                    </p>
+                  )}
                 </div>
               )}
             </>

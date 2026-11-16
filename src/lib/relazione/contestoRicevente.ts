@@ -62,9 +62,13 @@ export function contestoRelazioneRicevente(i: IngressoContestoRicevente): string
   if (i.posizioneAggiornata && i.ultimoBilancio) {
     const pa = i.posizioneAggiornata;
     const ub = i.ultimoBilancio;
-    const righe = VOCI_CONFRONTO.filter(([k]) => pa.dati[k] !== 0 || ub.dati[k] !== 0).map(
+    // Le voci del personale sono facoltative (0 quando il bilancio non le
+    // espone): qui si legge il numero, non l’assenza del campo.
+    const righe = VOCI_CONFRONTO.filter(
+      ([k]) => (pa.dati[k] ?? 0) !== 0 || (ub.dati[k] ?? 0) !== 0
+    ).map(
       ([k, nome]) =>
-        `| ${nome} | ${euro(ub.dati[k])} | ${euro(pa.dati[k])} | ${euro(pa.dati[k] - ub.dati[k])} |`
+        `| ${nome} | ${euro(ub.dati[k] ?? 0)} | ${euro(pa.dati[k] ?? 0)} | ${euro((pa.dati[k] ?? 0) - (ub.dati[k] ?? 0))} |`
     );
     parti.push(
       `COSA È CAMBIATO — POSIZIONE AGGIORNATA${

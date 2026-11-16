@@ -34,6 +34,30 @@ const MAPPATURE: { alias: string; canonica: string; nota: string }[] = [
     nota: 'Conto economico B) totale',
   },
   { alias: 'differenzavalorecostiproduzione', canonica: 'ebit', nota: 'A-B, EBIT' },
+  // Il costo del personale, che è la cerniera fra la contabile e la verifica
+  // amministrativa (0.239.0): la ricostruzione deve poter leggere salari e
+  // stipendi e oneri sociali separati, non solo il totale dei costi.
+  {
+    alias: 'costiproduzionepersonaletotalecostipersonale',
+    canonica: 'costiPersonale',
+    nota: 'Conto economico B.9 — totale costo del personale',
+  },
+  {
+    alias: 'costiproduzionepersonalesalaristipendi',
+    canonica: 'salariStipendi',
+    nota: 'Conto economico B.9.a',
+  },
+  {
+    alias: 'salariestipendi',
+    canonica: 'salariStipendi',
+    nota: 'Variante tassonomia',
+  },
+  {
+    alias: 'costiproduzionepersonaleonerisociali',
+    canonica: 'oneriSociali',
+    nota: 'Conto economico B.9.b',
+  },
+  { alias: 'onerisociali', canonica: 'oneriSociali', nota: 'Variante tassonomia' },
   {
     alias: 'margineoperativolordo',
     canonica: 'ebitdaDichiarato',

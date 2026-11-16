@@ -20,6 +20,7 @@ import {
   type ProiezioneContabile,
 } from '@/lib/contabile/proiezione';
 import { apriVerifica } from '@/lib/verificheApertura';
+import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -197,11 +198,26 @@ export async function proiezioneContabileAction(
     const { apertaIl } = await apriVerifica(nomeSchema, aziendaId, 'CONTABILE');
     const annoVerifica = apertaIl ? Number(apertaIl.slice(0, 4)) : new Date().getFullYear();
 
+    // La voce dell’ente chiude sullo stock accertato nella verifica
+    // amministrativa: qui si legge il dato memorizzato e si passa al ponte.
+    // Senza dato il ponte dice che manca, invece di fingere uno zero.
+    const memorizzato = await leggiDebitoEnteMemorizzato(nomeSchema, aziendaId).catch(() => null);
+
     return {
       success: true,
       apertura: apertaIl,
       annoVerifica,
-      proiezione: componiProiezione({ bilanci, annoVerifica }),
+      proiezione: componiProiezione({
+        bilanci,
+        annoVerifica,
+        debitoEnte: memorizzato
+          ? {
+              totale: memorizzato.debito.totale,
+              fonte: memorizzato.debito.fonte,
+              accertatoIl: memorizzato.memorizzatoIl,
+            }
+          : null,
+      }),
     };
   } catch (error: unknown) {
     console.error('[proiezioneContabileAction] Errore:', error);

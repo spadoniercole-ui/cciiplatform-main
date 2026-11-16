@@ -236,6 +236,80 @@ describe('proiezione contabile', () => {
     expect(p.avvertenze[0]).toMatch(/Carica i bilanci XBRL/);
   });
 
+  it('split del personale: salari e stipendi seguono i costi, oneri sociali ricevono la quota dell’ente', () => {
+    const bilanci = treBilanci();
+    bilanci[2].dati.salariStipendi = 40;
+    bilanci[2].dati.oneriSociali = 12;
+    bilanci[2].dati.costiPersonale = 52;
+
+    const p = componiProiezione({
+      bilanci,
+      annoVerifica: 2026,
+      debitoEnte: { totale: 130, fonte: 'verifica amministrativa', accertatoIl: '2026-01-10' },
+    });
+    const perAnno = new Map(p.bilanciProiettati.map((b) => [b.anno, b.dati]));
+    const d2025 = perAnno.get(2025)!;
+    const d2026 = perAnno.get(2026)!;
+    const ratio2025 = (d2025.costiProduzione! - (p.ponteEnte!.quote[0]?.quota ?? 0)) / 130;
+
+    // Salari e stipendi si riportano nella proporzione dei costi, senza la quota.
+    expect(d2025.salariStipendi).toBeCloseTo(40 * ratio2025, 2);
+    // Gli oneri sociali sono quelli riportati più la quota annua dell’ente.
+    expect(d2025.oneriSociali).toBeCloseTo(12 * ratio2025 + (p.ponteEnte!.quote[0]?.quota ?? 0), 2);
+    // Il totale del personale è quello dell’ultimo bilancio, riportato, più la quota.
+    expect(d2025.costiPersonale).toBeCloseTo(
+      52 * ratio2025 + (p.ponteEnte!.quote[0]?.quota ?? 0),
+      2
+    );
+    // La scomposizione non contraddice il totale dei costi.
+    expect(d2025.costiProduzione!).toBeGreaterThan(d2025.costiPersonale!);
+    // E la quota è la stessa in tutti gli anni: le annualità la portano con sé.
+    expect(d2026.oneriSociali!).toBeGreaterThan(d2025.oneriSociali!);
+  });
+
+  it('la voce dell’ente chiude esattamente sullo stock accertato alla data della verifica', () => {
+    const p = componiProiezione({
+      bilanci: treBilanci(),
+      annoVerifica: 2026,
+      debitoEnte: { totale: 130, fonte: 'verifica amministrativa', accertatoIl: '2026-01-10' },
+    });
+    const ponte = p.ponteEnte!;
+
+    // L’ultimo bilancio dichiara 30 + 40 = 70: la differenza è 60.
+    expect(ponte.debitoContabileUltimo).toBe(70);
+    expect(ponte.debitoVerificato).toBe(130);
+    expect(ponte.differenza).toBe(60);
+    expect(ponte.applicato).toBe(true);
+    expect(ponte.quote.map((q) => q.anno)).toEqual([2025, 2026]);
+    // La somma delle quote è la differenza, senza residui di arrotondamento.
+    expect(ponte.quote.reduce((a, q) => a + q.quota, 0)).toBe(60);
+
+    // Alla data della verifica le due voci del passivo tornano allo stock.
+    const finali = p.bilanciProiettati.find((b) => b.anno === 2026)!.dati;
+    expect((finali.debitiTributari ?? 0) + (finali.debitiPrevidenziali ?? 0)).toBe(130);
+    // Il debito entra anche nel totale, e l’onere nei costi: stessa cifra, due lati.
+    const totaleMotrice = p.voci.find((v) => v.chiave === 'totaleDebiti')!.proiezioni[1].valore;
+    expect(finali.totaleDebiti).toBeCloseTo(totaleMotrice + 60, 0);
+  });
+
+  it('non ricostruisce una crescita che non c’è e lo dichiara', () => {
+    const p = componiProiezione({
+      bilanci: treBilanci(),
+      annoVerifica: 2026,
+      debitoEnte: { totale: 70 },
+    });
+    expect(p.ponteEnte?.applicato).toBe(false);
+    expect(p.ponteEnte?.differenza).toBe(0);
+    expect(p.ponteEnte?.motivo).toMatch(/non è inferiore/);
+    expect(p.avvertenze.join(' ')).toMatch(/Voce dell’ente non ricostruita/);
+  });
+
+  it('senza debito memorizzato il ponte è null, non zero', () => {
+    const p = componiProiezione({ bilanci: treBilanci(), annoVerifica: 2026 });
+    expect(p.ponteEnte).toBeNull();
+    expect(p.avvertenze.join(' ')).toMatch(/Nessun debito dell’ente memorizzato/);
+  });
+
   it('il passo è la radice n-esima del rapporto fra ultimo e primo differenziale', () => {
     const punto = (anno: number, differenziale: number) => ({
       anno,
