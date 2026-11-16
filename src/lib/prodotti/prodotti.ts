@@ -299,6 +299,13 @@ export interface SintesiChecklistProdotti {
   /** Le risposte chiuse lette secondo la polarità scelta in configurazione. */
   positive: number;
   negative: number;
+  /**
+   * Quota di risposte chiuse lette come negative, in percentuale (0–100).
+   * null quando non c'è nessuna risposta chiusa da contare.
+   */
+  percentualeNegative: number | null;
+  /** true quando le negative superano i due terzi delle risposte chiuse. */
+  sfavorevolePerDueTerzi: boolean;
   qualificazione: QualificazioneChecklist;
   etichetta: string;
   dettaglio: string;
@@ -352,9 +359,25 @@ export function sintesiChecklistProdotti(
   ).length;
   const positive = risposteChiuse.length - negative;
 
+  // L'ORIENTAMENTO SOMMARIO (0.241.0). La check list non è un accertamento: è
+  // un orientamento. Due regole, e vale la più severa:
+  //
+  //   - oltre i due terzi delle risposte chiuse lette come negative → quadro
+  //     sfavorevole, anche se qualche risposta positiva c'è;
+  //   - un quadro tutto positivo è sistemico, un quadro tutto negativo è
+  //     squilibrio, il resto è da approfondire.
+  //
+  // La soglia dei due terzi sta qui e non nel chiamante: è una regola del
+  // quadro, non una preferenza di una schermata.
+  const chiuseRisposte = positive + negative;
+  const percentualeNegative =
+    chiuseRisposte > 0 ? Math.round((negative / chiuseRisposte) * 100) : null;
+  const sfavorevolePerDueTerzi = chiuseRisposte > 0 && negative * 3 > chiuseRisposte * 2;
+
   let qualificazione: QualificazioneChecklist = 'NON_VALUTABILE';
   if (chiuseVoci.length > 0 && risposteDate > 0) {
-    if (negative === 0 && positive > 0) qualificazione = 'SISTEMICA';
+    if (sfavorevolePerDueTerzi) qualificazione = 'SQUILIBRIO';
+    else if (negative === 0 && positive > 0) qualificazione = 'SISTEMICA';
     else if (positive === 0 && negative > 0) qualificazione = 'SQUILIBRIO';
     else if (positive > 0 || negative > 0) qualificazione = 'DA_APPROFONDIRE';
   }
@@ -392,8 +415,15 @@ export function sintesiChecklistProdotti(
     no,
     positive,
     negative,
+    percentualeNegative,
+    sfavorevolePerDueTerzi,
     qualificazione,
     ...ETICHETTE[qualificazione],
+    // Il dettaglio porta la regola con i suoi numeri: «sfavorevole» senza il
+    // conteggio che l'ha prodotto non si può controllare.
+    dettaglio: sfavorevolePerDueTerzi
+      ? `${ETICHETTE[qualificazione].dettaglio} Le risposte chiuse lette come negative sono ${negative} su ${chiuseRisposte} (${percentualeNegative}%): oltre i due terzi, quindi l'orientamento è sfavorevole.`
+      : ETICHETTE[qualificazione].dettaglio,
     voci: voci.map((v) => {
       const r = risposte.find((x) => x.prodottoId === v.prodottoId && x.domandaId === v.domandaId);
       const siNo = r?.siNo;

@@ -284,6 +284,67 @@ describe('sintesi della check list', () => {
     expect(positiva.voci[0].lettura).toBe('POSITIVA');
   });
 
+  it('oltre i due terzi di risposte negative rende il quadro sfavorevole', () => {
+    const sette = vociChecklistProdotti([
+      prodotto({
+        id: 9,
+        nome: 'Rateizzazioni',
+        inChecklist: true,
+        domande: Array.from({ length: 7 }, (_, i) => ({
+          id: `q${i}`,
+          testo: `Domanda ${i}`,
+          tipo: 'SI_NO' as const,
+          maxCaratteri: null,
+        })),
+      }),
+    ]);
+    // Cinque negative su sette (71%): oltre i due terzi, anche se due sono positive.
+    const s = sintesiChecklistProdotti(
+      sette,
+      sette.map((v, i) => ({
+        prodottoId: 9,
+        domandaId: v.domandaId,
+        siNo: i < 5 ? false : true,
+        testo: null,
+      }))
+    );
+    expect(s.negative).toBe(5);
+    expect(s.positive).toBe(2);
+    expect(s.percentualeNegative).toBe(71);
+    expect(s.sfavorevolePerDueTerzi).toBe(true);
+    expect(s.qualificazione).toBe('SQUILIBRIO');
+    expect(s.dettaglio).toContain('oltre i due terzi');
+    expect(s.dettaglio).toContain('5 su 7');
+  });
+
+  it('due terzi esatti non bastano: la regola chiede «oltre»', () => {
+    const sei = vociChecklistProdotti([
+      prodotto({
+        id: 10,
+        nome: 'DURC',
+        inChecklist: true,
+        domande: Array.from({ length: 6 }, (_, i) => ({
+          id: `q${i}`,
+          testo: `Domanda ${i}`,
+          tipo: 'SI_NO' as const,
+          maxCaratteri: null,
+        })),
+      }),
+    ]);
+    const s = sintesiChecklistProdotti(
+      sei,
+      sei.map((v, i) => ({
+        prodottoId: 10,
+        domandaId: v.domandaId,
+        siNo: i < 4 ? false : true,
+        testo: null,
+      }))
+    );
+    expect(s.sfavorevolePerDueTerzi).toBe(false);
+    expect(s.percentualeNegative).toBe(67);
+    expect(s.qualificazione).toBe('DA_APPROFONDIRE');
+  });
+
   it('senza domande chiuse la qualificazione non è misurabile', () => {
     const libere = vociChecklistProdotti([
       prodotto({

@@ -48,6 +48,8 @@ describe('riepilogo del triage', () => {
         si: 1,
         no: 0,
         positive: 1,
+        percentualeNegative: 0,
+        sfavorevolePerDueTerzi: false,
         negative: 0,
         qualificazione: 'SISTEMICA',
         etichetta: 'Azione sistemica e voluta',

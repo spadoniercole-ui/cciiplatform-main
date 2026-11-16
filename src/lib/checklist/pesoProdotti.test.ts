@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  SOGLIA_QUADRO_PESATO_PCT,
   checklistProdottiCompleta,
   coloreDaQualificazione,
+  coloreQualitativoSommario,
+  dettaglioOrientamentoSommario,
   dettaglioQualificazioneProdotti,
 } from './pesoProdotti';
 import { sintesiChecklistProdotti, vociChecklistProdotti } from '@/lib/prodotti/prodotti';
@@ -63,6 +66,57 @@ describe('dalla qualificazione al colore dell’indicatore', () => {
   it('non valutabile → null, non «grigio»: una dimensione scoperta, non neutra', () => {
     expect(coloreDaQualificazione('NON_VALUTABILE')).toBeNull();
     expect(coloreDaQualificazione(null)).toBeNull();
+  });
+});
+
+describe('l’esito qualitativo sommario: due terzi e valutazione pesata', () => {
+  it('vince la lettura più severa fra le due', () => {
+    // Prodotti tutti positivi, ma quadro pesato oltre il 50%: rosso.
+    expect(
+      coloreQualitativoSommario({
+        qualificazione: 'SISTEMICA',
+        percentualeCriticitaPesata: 50,
+      })
+    ).toBe('rosso');
+    // Prodotti in squilibrio, quadro pesato contenuto: resta rosso.
+    expect(
+      coloreQualitativoSommario({
+        qualificazione: 'SQUILIBRIO',
+        percentualeCriticitaPesata: 5,
+      })
+    ).toBe('rosso');
+  });
+
+  it('misura il quadro pesato con le soglie che la Check List ha già', () => {
+    expect(
+      coloreQualitativoSommario({ qualificazione: 'SISTEMICA', percentualeCriticitaPesata: 0 })
+    ).toBe('verde');
+    expect(
+      coloreQualitativoSommario({ qualificazione: 'SISTEMICA', percentualeCriticitaPesata: 30 })
+    ).toBe('giallo');
+    expect(SOGLIA_QUADRO_PESATO_PCT).toBe(50);
+  });
+
+  it('senza nessuna delle due letture la dimensione resta scoperta', () => {
+    expect(
+      coloreQualitativoSommario({
+        qualificazione: 'NON_VALUTABILE',
+        percentualeCriticitaPesata: null,
+      })
+    ).toBeNull();
+  });
+
+  it('il dettaglio dice la quota delle negative, la regola e il peso', () => {
+    const voci = vociChecklistProdotti([prodotto(1, true), prodotto(2, true)]);
+    const sintesi = sintesiChecklistProdotti(voci, [
+      { prodottoId: 1, domandaId: 'd1', siNo: false, testo: null },
+      { prodottoId: 2, domandaId: 'd2', siNo: false, testo: null },
+    ]);
+    const testo = dettaglioOrientamentoSommario(sintesi, 12);
+    expect(testo).toContain('orientamento sommario');
+    expect(testo).toContain('2 risposte chiuse su 2 lette come negative (100%, oltre i due terzi');
+    expect(testo).toContain('valutazione pesata della Check List è al 12%');
+    expect(testo).toContain('50%');
   });
 });
 

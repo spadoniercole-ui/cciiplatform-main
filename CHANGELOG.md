@@ -1,3 +1,25 @@
+## 0.241.0 — 2026-11-16
+
+- **La check list è un orientamento sommario, non un verdetto.** Oltre i due terzi delle risposte
+  chiuse lette come negative l'orientamento è sfavorevole, anche se qualche risposta positiva c'è:
+  due terzi esatti non bastano, la regola dice «oltre». La soglia sta nella sintesi della check list
+  dei prodotti (`percentualeNegative`, `sfavorevolePerDueTerzi`), non in una schermata, e il
+  dettaglio porta i numeri che l'hanno prodotta («5 su 7, 71%»).
+- **La valutazione pesata resta la più conservativa, con la sua soglia al 50%.** Fra la quota di
+  risposte negative e la percentuale di criticità pesata della Check List si legge la più severa
+  (`coloreQualitativoSommario` in `src/lib/checklist/pesoProdotti.ts`): nessuna delle due può
+  migliorare l'altra. Se la pesata non è compilata vale la sola quota; se mancano entrambe la
+  dimensione resta scoperta, non verde. In `indicatore.ts` la dimensione qualitativa continua a
+  poter solo peggiorare l'esito e a fermarsi al giallo: la Check List è una dichiarazione, non un
+  fatto accertato.
+- **Collegata al prospetto dell'ente e alle soglie.** La percentuale pesata si legge con
+  `leggiPercentualeCriticitaPesata` (una lettura sola, senza i permessi da Admin di spazio che
+  l'azione della Check List ministeriale richiede) e confluisce nello stesso indicatore che misura
+  il debito dal prospetto e le soglie dell'art. 25-novies; la verifica amministrativa dice accanto
+  al supporto decisionale che l'orientamento entra «insieme al prospetto dell'ente e alle soglie».
+- Verificato: `tsc` 0 errori, `next lint` 0 errori, 1839 test verdi, `npm run build` verde; in
+  pagina la verifica amministrativa della demo.
+
 ## 0.240.0 — 2026-11-16
 
 - **La verifica azienda è una fotografia, non una seconda simulazione.** La scheda rifaceva il

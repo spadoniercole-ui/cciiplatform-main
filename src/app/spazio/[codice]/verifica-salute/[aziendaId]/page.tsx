@@ -7,7 +7,11 @@ import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreen
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { ottieniRaccomandazioneAction } from '@/app/actions/raccomandazioneVerifica';
 import { leggiChecklistProdottiAzienda } from '@/lib/prodotti/checklistAzienda';
-import { checklistProdottiCompleta } from '@/lib/checklist/pesoProdotti';
+import {
+  checklistProdottiCompleta,
+  dettaglioOrientamentoSommario,
+} from '@/lib/checklist/pesoProdotti';
+import { leggiPercentualeCriticitaPesata } from '@/lib/checklist/pesataMinisteriale';
 import { PosizioneEnteScenario } from '@/components/spazio/PosizioneEnteScenario';
 import { ChecklistProdottiEsito } from '@/components/spazio/ChecklistProdottiEsito';
 import { DebitoMemorizzatoEnte } from '@/components/spazio/DebitoMemorizzatoEnte';
@@ -73,12 +77,14 @@ export default async function EsitoVerificaAmministrativaPage({
     redirect(`/spazio/${codice}/verifica-salute`);
   }
 
-  const [attenzioneRis, storicoRis, raccomandazioneRis, checklistRis] = await Promise.all([
-    ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
-    ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
-    ottieniRaccomandazioneAction(contesto.nomeSchema, id).catch(() => null),
-    leggiChecklistProdottiAzienda(contesto.nomeSchema, id).catch(() => null),
-  ]);
+  const [attenzioneRis, storicoRis, raccomandazioneRis, checklistRis, pesataMinisteriale] =
+    await Promise.all([
+      ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
+      ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
+      ottieniRaccomandazioneAction(contesto.nomeSchema, id).catch(() => null),
+      leggiChecklistProdottiAzienda(contesto.nomeSchema, id).catch(() => null),
+      leggiPercentualeCriticitaPesata(contesto.nomeSchema, id).catch(() => null),
+    ]);
   const raccomandazione = raccomandazioneRis?.success
     ? (raccomandazioneRis.raccomandazione ?? null)
     : null;
@@ -252,7 +258,7 @@ export default async function EsitoVerificaAmministrativaPage({
                 La lettura dei dati, i percorsi e i loro esiti. Si apre su richiesta: non è un
                 consiglio.{' '}
                 {prodottiCompleti && sintesiProdotti
-                  ? `Il quadro della check list dei prodotti (${sintesiProdotti.etichetta}, ${sintesiProdotti.risposte}/${sintesiProdotti.totale} risposte) è già entrato nella valutazione amministrativa.`
+                  ? `${dettaglioOrientamentoSommario(sintesiProdotti, pesataMinisteriale)} Entra nella valutazione insieme al prospetto dell’ente e alle soglie dell’art. 25-novies.`
                   : prodottiChiesti
                     ? `La check list dei prodotti non è completa (${sintesiProdotti?.risposte ?? 0}/${sintesiProdotti?.totale ?? 0} risposte): il quadro qualitativo resta fuori dalla valutazione finché non lo è.`
                     : `Nessun prodotto è in check list, quindi non ci sono domande da porre: il quadro qualitativo non entra nella valutazione.`}
@@ -270,7 +276,7 @@ export default async function EsitoVerificaAmministrativaPage({
               <strong className="text-slate-700">Materiali dell’analisi:</strong> visura camerale,
               prospetti contabili,{' '}
               {prodottiCompleti && sintesiProdotti
-                ? `check list dei prodotti (${sintesiProdotti.etichetta.toLowerCase()}, ${sintesiProdotti.risposte}/${sintesiProdotti.totale} risposte).`
+                ? `check list dei prodotti (${sintesiProdotti.etichetta.toLowerCase()}, ${sintesiProdotti.risposte}/${sintesiProdotti.totale} risposte${sintesiProdotti.percentualeNegative !== null ? `, ${sintesiProdotti.percentualeNegative}% negative sulle chiuse` : ''}).`
                 : prodottiChiesti
                   ? `check list dei prodotti non completa (${sintesiProdotti?.risposte ?? 0}/${sintesiProdotti?.totale ?? 0} risposte): non entra nella valutazione.`
                   : 'check list dei prodotti senza domande: non entra nella valutazione.'}

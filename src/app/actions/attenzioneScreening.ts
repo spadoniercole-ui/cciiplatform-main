@@ -26,9 +26,10 @@ import { richiediAccessoSchema } from '@/lib/autorizzazione';
 import { leggiChecklistProdottiAzienda } from '@/lib/prodotti/checklistAzienda';
 import {
   checklistProdottiCompleta,
-  coloreDaQualificazione,
-  dettaglioQualificazioneProdotti,
+  coloreQualitativoSommario,
+  dettaglioOrientamentoSommario,
 } from '@/lib/checklist/pesoProdotti';
+import { leggiPercentualeCriticitaPesata } from '@/lib/checklist/pesataMinisteriale';
 
 export interface RisultatoAttenzione {
   success: boolean;
@@ -202,11 +203,24 @@ export async function ottieniAttenzioneScreeningAction(
       () => null
     );
     const prodottiCompleti = checklistProdottiCompleta(sintesiProdotti);
+    // LA CHECK LIST È UN ORIENTAMENTO SOMMARIO (0.241.0). Vale la regola dei
+    // due terzi sulle risposte chiuse dei prodotti; accanto resta la
+    // valutazione pesata della Check List, con la sua soglia più conservativa
+    // al 50%. Fra le due si legge la più severa: nessuna delle due può
+    // migliorare l'altra. La pesata si legge qui e non attraverso l'azione
+    // della Check List ministeriale, che chiede i permessi da Admin di spazio
+    // mentre questa scheda la vede anche un operatore.
+    const percentualePesata = await leggiPercentualeCriticitaPesata(nomeSchema, aziendaId);
     const coloreQualitativo = prodottiCompleti
-      ? coloreDaQualificazione(sintesiProdotti?.qualificazione)
+      ? coloreQualitativoSommario({
+          qualificazione: sintesiProdotti?.qualificazione,
+          percentualeCriticitaPesata: percentualePesata,
+        })
       : null;
     const dettaglioQualitativo =
-      prodottiCompleti && sintesiProdotti ? dettaglioQualificazioneProdotti(sintesiProdotti) : null;
+      prodottiCompleti && sintesiProdotti
+        ? dettaglioOrientamentoSommario(sintesiProdotti, percentualePesata)
+        : null;
 
     const attenzione = calcolaAttenzione({
       annoCostituzione: num(a.anno_costituzione),
