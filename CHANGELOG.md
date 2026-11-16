@@ -1,3 +1,21 @@
+## 0.242.2 — 2026-11-16
+
+- **La Posizione si compone in `src/lib`, non nella pagina.** Quadratura del credito, quadro
+  qualitativo, letture a confronto, richieste all'azienda, prontezza, invecchiamento, punto di
+  pareggio e piano in essere erano calcolati dentro il componente (569 righe): l'unico modo di
+  provarli era aprire la pagina con i dati giusti. Ora `componiPosizione(dati, adesso)` in
+  `src/lib/posizionePratica/composizione.ts` riceve ciò che le fonti hanno già letto e restituisce
+  la posizione composta; la pagina legge, chiama la funzione e rende (436 righe).
+- La funzione è pura: nessun accesso al database, nessun motore richiamato, e `adesso` è un
+  ingresso, così la validità di una posizione si prova senza aspettare sei mesi. Le stesse regole
+  restano nei loro moduli (`quadratura`, `prontezza`, `invecchiamento`, `divergenze`, `richieste`,
+  `breakEven`, `pianoInEssere`): `composizione.ts` le mette in fila, non le riscrive.
+- Nove test nuovi sulla composizione: posizione completa, credito divergente, check list
+  incompleta, fotografia assente, debito riaccertato dopo la verifica, flussi scoperti, verifica
+  scaduta, debito non accertato, copertura parziale.
+- Verificato: `tsc` 0 errori, `next lint` 0 errori, 1911 test verdi, `npm run build` verde; la
+  pagina della demo mostra gli stessi numeri di prima (scoperto 77.090 €, recupero minimo 30.400 €).
+
 ## 0.242.1 — 2026-11-16
 
 - **Il quadro qualitativo si legge una volta sola.** La regola dei due terzi, la valutazione pesata

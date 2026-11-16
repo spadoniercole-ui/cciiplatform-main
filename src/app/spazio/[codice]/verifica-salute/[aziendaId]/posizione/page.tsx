@@ -12,16 +12,9 @@ import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 import { leggiSnapshotDebito } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 import { leggiVerificaAzienda } from '@/lib/verificaAzienda/letturaVerifica';
 import { congruenzaAzienda } from '@/lib/flussiEnte/leggiCongruenza';
-import { valutaValidita } from '@/lib/screening/validitaVerifica';
 import { leggiDecisioniPratica } from '@/lib/posizionePratica/registroDecisioni';
+import { componiPosizione } from '@/lib/posizionePratica/composizione';
 import { ETICHETTE_REGISTRATE, GLOSSARIO } from '@/lib/posizionePratica/glossario';
-import { quadraturaCredito, type VoceQuadratura } from '@/lib/posizionePratica/quadratura';
-import { valutaProntezza } from '@/lib/posizionePratica/prontezza';
-import { valutaInvecchiamento } from '@/lib/posizionePratica/invecchiamento';
-import { confrontoLetture, indiciDaAccertato } from '@/lib/posizionePratica/divergenze';
-import { richiesteDa, testoRichiesta } from '@/lib/posizionePratica/richieste';
-import { breakEvenAccordo } from '@/lib/posizionePratica/breakEven';
-import { pianoInEssere } from '@/lib/posizionePratica/pianoInEssere';
 import { DecisioniPratica } from '@/components/spazio/DecisioniPratica';
 import { StampaPosizione } from '@/components/spazio/StampaPosizione';
 
@@ -104,166 +97,49 @@ export default async function PosizionePage({
   const attenzione = attenzioneRis?.success ? (attenzioneRis.attenzione ?? null) : null;
   const riga = storicoRis?.success ? storicoRis.righe?.find((v) => v.id === id) : undefined;
   const eseguitaIl = riga?.eseguitaIl ?? null;
-  const validita = valutaValidita(eseguitaIl);
-  const debito = debitoRis?.success ? (debitoRis.debito ?? null) : null;
-  const fotografia = letturaVerifica?.fotografia ?? null;
-  const scenari = fotografia?.scenari ?? [];
-  const netto = (codiceScenario: string) =>
-    scenari.find((s) => s.codice === codiceScenario)?.recupero ?? null;
-
-  // ---- Credito e quadratura ------------------------------------------------
-  const vociCredito: VoceQuadratura[] = [
-    {
-      fonte: 'amministrativa',
-      etichetta: 'Debito accertato (verifica amministrativa)',
-      valore: debito?.totale ?? null,
-      nota: debito
-        ? `Fonte ${debito.fonte}${debitoRis?.memorizzatoIl ? `, ${new Date(debitoRis.memorizzatoIl).toLocaleDateString('it-IT')}` : ''}.`
-        : 'La verifica amministrativa non ha ancora chiuso il debito.',
-    },
-    {
-      fonte: 'certificazione',
-      etichetta: 'Certificazione dei debiti',
-      valore: snapshot?.certificazione?.totale ?? null,
-      nota: 'La fonte a monte: il debito certo dell’ultima certificazione letta.',
-    },
-    {
-      fonte: 'soglie',
-      etichetta: 'Esposizione contributiva (soglie)',
-      valore: soglie?.esposizione ?? null,
-      confrontabile: false,
-      nota: 'Solo contributi, al netto di sanzioni e crediti già a ruolo: è un sottoinsieme del debito.',
-    },
-  ];
-  const quadratura = quadraturaCredito(vociCredito);
-
-  // ---- Check list e letture ------------------------------------------------
-  // Il quadro qualitativo viene dalla stessa lettura che usa l'indicatore
-  // (0.242.1): se la check list è incompleta resta fuori da entrambi, e il
-  // motivo lo dice.
-  const qualitativo = {
-    colore: qualitativa?.colore ?? null,
-    dettaglio: qualitativa?.dettaglio ?? qualitativa?.motivo ?? null,
-  };
-
-  const confronto = confrontoLetture({
-    amministrativa: attenzione
-      ? {
-          esito: attenzione.esito,
-          etichetta: attenzione.etichetta,
-          fattore: attenzione.fattoreDeterminante,
-          copertura: attenzione.copertura,
-        }
-      : null,
-    qualitativo,
-    indiciViolati: indiciDaAccertato(attenzione?.accertato),
-    fotografia: fotografia
-      ? {
-          capacita: fotografia.capacita.esito,
-          coperturaPct: fotografia.capacita.coperturaPct,
-          dettaglio: fotografia.capacita.dettaglio,
-        }
-      : null,
-    scenari: {
-      calcolabili: scenari.filter((s) => s.calcolabile).length,
-      totali: scenari.length,
-      liquidazione: netto('LIQUIDAZIONE'),
-      cramDown: netto('CRAM_DOWN'),
-      credito: fotografia?.credito ?? debito?.totale ?? null,
-    },
-  });
-
-  // ---- Richieste -----------------------------------------------------------
-  const richieste = richiesteDa({
-    daAccertare: attenzione?.daAccertare ?? [],
-    dimensioniScoperte: (attenzione?.dimensioniScoperte ?? []).map((d) => ({
-      nome: d.nome,
-      motivo: d.portante
-        ? 'dimensione portante: senza di essa il perimetro non è circoscrivibile'
-        : null,
-    })),
-    mancanzeChecklist: (qualitativa?.sintesi?.mancanze ?? []).map(String),
-    flussi: congruenza
-      ? {
-          senzaDenuncia: congruenza.esiti.reduce((n, e) => n + e.senzaDenuncia.length, 0),
-          senzaDelega: congruenza.esiti.reduce((n, e) => n + e.senzaDelega.length, 0),
-        }
-      : null,
-  });
-  const testoDellaRichiesta = testoRichiesta({
-    ragioneSociale: String(risultato.azienda.ragioneSociale),
-    richieste,
-  });
-
-  // ---- Prontezza -----------------------------------------------------------
   const rigaContabile = contabileRis?.success
     ? contabileRis.aziende.find((a) => a.aziendaId === id)
     : undefined;
-  const mancantiContabile = rigaContabile
-    ? [
-        !rigaContabile.visuraPresente ? 'la visura camerale' : null,
-        !rigaContabile.parametriPresenti ? 'l’anagrafica ente' : null,
-        rigaContabile.anniXbrl === 0 ? 'almeno un bilancio XBRL' : null,
-      ].filter((x): x is string => x !== null)
-    : ['lo stato della contabile'];
 
-  const prontezza = valutaProntezza({
-    amministrativa: {
-      eseguita: Boolean(eseguitaIl),
-      esito: attenzione?.esito ?? null,
-      copertura: attenzione?.copertura ?? null,
-    },
-    contabile: {
-      completa: Boolean(rigaContabile?.completa),
-      mancanti: mancantiContabile,
-    },
-    azienda: {
-      fotografata: Boolean(fotografia && fotografia.anni.length > 0),
-      motivo:
-        fotografia?.motivo ?? (letturaVerifica ? null : 'la fotografia non si è potuta leggere'),
-    },
-    scenari: {
-      calcolabili: scenari.filter((s) => s.calcolabile).length,
-      totali: scenari.length,
-    },
-    quadratura: quadratura.esito,
-    validita: { stato: validita.stato, etichetta: validita.etichetta },
-    richiesteAperte: richieste.length,
+  // LA POSIZIONE SI COMPONE IN src/lib/posizionePratica (0.242.2).
+  // La pagina legge le fonti e rende: quadratura, prontezza, richieste,
+  // invecchiamento, pareggio e piano in essere si provano nei test del modulo,
+  // non aprendo questa schermata con i dati giusti.
+  const posizione = componiPosizione({
+    ragioneSociale: String(risultato.azienda.ragioneSociale),
+    eseguitaIl,
+    attenzione,
+    debito: debitoRis?.success ? (debitoRis.debito ?? null) : null,
+    debitoMemorizzatoIl: debitoRis?.memorizzatoIl ?? null,
+    certificazioneTotale: snapshot?.certificazione?.totale ?? null,
+    esposizioneContributiva: soglie?.esposizione ?? null,
+    qualitativa,
+    fotografia: letturaVerifica?.fotografia ?? null,
+    congruenza,
+    contabile: rigaContabile
+      ? {
+          completa: rigaContabile.completa,
+          visuraIl: rigaContabile.visuraIl,
+          mancanti: [
+            !rigaContabile.visuraPresente ? 'la visura camerale' : null,
+            !rigaContabile.parametriPresenti ? 'l’anagrafica ente' : null,
+            rigaContabile.anniXbrl === 0 ? 'almeno un bilancio XBRL' : null,
+          ].filter((x): x is string => x !== null),
+        }
+      : null,
   });
 
-  // ---- Date e invecchiamento ----------------------------------------------
-  const invecchiamento = valutaInvecchiamento({
-    verifica: { fonte: 'amministrativa', data: eseguitaIl, cosa: 'verifica amministrativa' },
-    dati: [
-      { fonte: 'debito', data: debitoRis?.memorizzatoIl ?? null, cosa: 'debito riaccertato' },
-      {
-        fonte: 'visura',
-        data: rigaContabile?.visuraIl ?? null,
-        cosa: 'visura camerale ricaricata',
-      },
-    ],
-  });
-
-  // ---- Accordo e procedure -------------------------------------------------
-  const breakEven = breakEvenAccordo({
-    credito: fotografia?.credito ?? debito?.totale ?? null,
-    disponibilita: fotografia?.capacita.disponibilita ?? null,
-    flusso: fotografia?.capacita.flusso ?? null,
-    liquidazioneNetta: netto('LIQUIDAZIONE'),
-    cramDownNetto: netto('CRAM_DOWN'),
-  });
-  const piano = pianoInEssere({
-    esiti: (congruenza?.esiti ?? []).map((e) => ({
-      ente: e.ente,
-      flusso: e.flusso,
-      attesi: e.attesi,
-      senzaDenuncia: e.senzaDenuncia.length,
-      senzaDelega: e.senzaDelega.length,
-      sospesi: e.sospesi.length,
-      completo: e.completo,
-    })),
-  });
-
+  const {
+    validita,
+    prontezza,
+    quadratura,
+    invecchiamento,
+    confronto,
+    breakEven,
+    piano,
+    richieste,
+  } = posizione;
+  const testoDellaRichiesta = posizione.testoRichiesta;
   const stile = STILE_GRADO[prontezza.grado];
 
   return (
@@ -533,10 +409,8 @@ export default async function PosizionePage({
           nomeSchema={contesto.nomeSchema}
           aziendaId={id}
           decisioni={decisioni}
-          credito={fotografia?.credito ?? debito?.totale ?? null}
-          copertura={
-            attenzione ? `${attenzione.copertura.determinate}/${attenzione.copertura.totali}` : null
-          }
+          credito={posizione.credito}
+          copertura={posizione.coperturaTesto}
         />
       </section>
 

@@ -1,0 +1,253 @@
+// LA POSIZIONE GIÀ COMPOSTA (0.242.2).
+//
+// La pagina della Posizione leggeva sei fonti e poi componeva: quadratura del
+// credito, quadro qualitativo, letture a confronto, richieste all'azienda,
+// prontezza, invecchiamento, punto di pareggio, piano in essere. Con quella
+// logica dentro il componente, l'unico modo di verificarla era aprire la pagina
+// con i dati giusti — e nessun test poteva dire se una regola era cambiata.
+//
+// Qui la composizione è una funzione pura: riceve ciò che è stato letto e
+// restituisce la posizione. La pagina fa solo il rendering. Le fonti restano
+// dove sono (`leggiVerificaAzienda`, `leggiQualitativaAzienda`,
+// `leggiPercentualeCriticitaPesata`, …): questo modulo non legge il database e
+// non chiama motori.
+//
+// Una nota sul tempo: `adesso` è un ingresso, non un effetto collaterale, così
+// la validità di una posizione si può provare senza aspettare sei mesi.
+
+import { valutaValidita, type Validita } from '@/lib/screening/validitaVerifica';
+import type { Attenzione } from '@/lib/screening/indicatore';
+import type { DebitoMemorizzato } from '@/lib/debitiEnte/memorizzazione';
+import type { FotografiaVerificaAzienda } from '@/lib/verificaAzienda/fotografia';
+import type { LetturaCongruenza } from '@/lib/flussiEnte/leggiCongruenza';
+import type { LetturaQualitativa } from '@/lib/checklist/letturaQualitativa';
+import { quadraturaCredito, type Quadratura, type VoceQuadratura } from './quadratura';
+import { valutaProntezza, type EsitoProntezza } from './prontezza';
+import { valutaInvecchiamento, type Invecchiamento } from './invecchiamento';
+import { confrontoLetture, indiciDaAccertato, type ConfrontoLetture } from './divergenze';
+import { richiesteDa, testoRichiesta, type Richiesta } from './richieste';
+import { breakEvenAccordo, type BreakEvenAccordo } from './breakEven';
+import { pianoInEssere, type PianoInEssere } from './pianoInEssere';
+
+/**
+ * Ciò che le fonti hanno già letto. Nessun campo è obbligatorio: una fonte
+ * mancante non è un errore, è una lacuna che la composizione deve saper
+ * dichiarare.
+ */
+export interface DatiPosizione {
+  ragioneSociale: string;
+  /** Quando è stata eseguita la verifica amministrativa: la data di riferimento. */
+  eseguitaIl: string | null;
+  attenzione: Attenzione | null;
+  debito: DebitoMemorizzato | null;
+  debitoMemorizzatoIl: string | null;
+  /** Il totale della certificazione dei debiti, la fonte a monte. */
+  certificazioneTotale: number | null;
+  /** L'esposizione contributiva delle soglie: un sottoinsieme, fuori dalla quadratura. */
+  esposizioneContributiva: number | null;
+  qualitativa: LetturaQualitativa | null;
+  fotografia: FotografiaVerificaAzienda | null;
+  congruenza: LetturaCongruenza | null;
+  /** Lo stato della contabile per questa azienda; null se non si è potuto leggere. */
+  contabile: { completa: boolean; visuraIl: string | null; mancanti: string[] } | null;
+}
+
+export interface PosizioneComposta {
+  ragioneSociale: string;
+  dataRiferimento: string | null;
+  validita: Validita;
+  copertura: { determinate: number; totali: number } | null;
+  /** «4/4», oppure null se l'indicatore non si è potuto leggere. */
+  coperturaTesto: string | null;
+  quadratura: Quadratura;
+  qualitativo: { colore: 'verde' | 'giallo' | 'rosso' | null; dettaglio: string | null };
+  confronto: ConfrontoLetture;
+  richieste: Richiesta[];
+  testoRichiesta: string;
+  prontezza: EsitoProntezza;
+  invecchiamento: Invecchiamento;
+  breakEven: BreakEvenAccordo;
+  piano: PianoInEssere;
+  /** Il credito vantato: quello che la decisione annota. */
+  credito: number | null;
+}
+
+const euroData = (iso: string | null): string | null => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString('it-IT');
+};
+
+const netto = (
+  fotografia: FotografiaVerificaAzienda | null,
+  codice: 'LIQUIDAZIONE' | 'CRAM_DOWN'
+) => fotografia?.scenari.find((s) => s.codice === codice)?.recupero ?? null;
+
+export function componiPosizione(
+  dati: DatiPosizione,
+  adesso: Date = new Date()
+): PosizioneComposta {
+  const { attenzione, debito, fotografia, qualitativa, congruenza, contabile } = dati;
+
+  const validita = valutaValidita(dati.eseguitaIl, adesso);
+
+  // ---- Il credito e la sua quadratura -------------------------------------
+  const notaDebito = debito
+    ? `Fonte ${debito.fonte}${euroData(dati.debitoMemorizzatoIl) ? `, ${euroData(dati.debitoMemorizzatoIl)}` : ''}.`
+    : 'La verifica amministrativa non ha ancora chiuso il debito.';
+
+  const vociCredito: VoceQuadratura[] = [
+    {
+      fonte: 'amministrativa',
+      etichetta: 'Debito accertato (verifica amministrativa)',
+      valore: debito?.totale ?? null,
+      nota: notaDebito,
+    },
+    {
+      fonte: 'certificazione',
+      etichetta: 'Certificazione dei debiti',
+      valore: dati.certificazioneTotale,
+      nota: 'La fonte a monte: il debito certo dell’ultima certificazione letta.',
+    },
+    {
+      fonte: 'soglie',
+      etichetta: 'Esposizione contributiva (soglie)',
+      valore: dati.esposizioneContributiva,
+      confrontabile: false,
+      nota: 'Solo contributi, al netto di sanzioni e crediti già a ruolo: è un sottoinsieme del debito.',
+    },
+  ];
+  const quadratura = quadraturaCredito(vociCredito);
+
+  // ---- Il quadro qualitativo: dalla lettura unica -------------------------
+  const qualitativo = {
+    colore: qualitativa?.colore ?? null,
+    dettaglio: qualitativa?.dettaglio ?? qualitativa?.motivo ?? null,
+  };
+
+  const credito = fotografia?.credito ?? debito?.totale ?? null;
+  const scenari = fotografia?.scenari ?? [];
+
+  const confronto = confrontoLetture({
+    amministrativa: attenzione
+      ? {
+          esito: attenzione.esito,
+          etichetta: attenzione.etichetta,
+          fattore: attenzione.fattoreDeterminante,
+          copertura: attenzione.copertura,
+        }
+      : null,
+    qualitativo,
+    indiciViolati: indiciDaAccertato(attenzione?.accertato),
+    fotografia: fotografia
+      ? {
+          capacita: fotografia.capacita.esito,
+          coperturaPct: fotografia.capacita.coperturaPct,
+          dettaglio: fotografia.capacita.dettaglio,
+        }
+      : null,
+    scenari: {
+      calcolabili: scenari.filter((s) => s.calcolabile).length,
+      totali: scenari.length,
+      liquidazione: netto(fotografia, 'LIQUIDAZIONE'),
+      cramDown: netto(fotografia, 'CRAM_DOWN'),
+      credito,
+    },
+  });
+
+  // ---- Le lacune, in una richiesta ---------------------------------------
+  const richieste = richiesteDa({
+    daAccertare: attenzione?.daAccertare ?? [],
+    dimensioniScoperte: (attenzione?.dimensioniScoperte ?? []).map((d) => ({
+      nome: d.nome,
+      motivo: d.portante
+        ? 'dimensione portante: senza di essa il perimetro non è circoscrivibile'
+        : null,
+    })),
+    mancanzeChecklist: (qualitativa?.sintesi?.mancanze ?? []).map(String),
+    flussi: congruenza
+      ? {
+          senzaDenuncia: congruenza.esiti.reduce((n, e) => n + e.senzaDenuncia.length, 0),
+          senzaDelega: congruenza.esiti.reduce((n, e) => n + e.senzaDelega.length, 0),
+        }
+      : null,
+  });
+  const testoDellaRichiesta = testoRichiesta({
+    ragioneSociale: dati.ragioneSociale,
+    richieste,
+  });
+
+  // ---- Quanto è pronta la posizione --------------------------------------
+  const prontezza = valutaProntezza({
+    amministrativa: {
+      eseguita: Boolean(dati.eseguitaIl),
+      esito: attenzione?.esito ?? null,
+      copertura: attenzione?.copertura ?? null,
+    },
+    contabile: {
+      completa: Boolean(contabile?.completa),
+      mancanti: contabile ? contabile.mancanti : ['lo stato della contabile'],
+    },
+    azienda: {
+      fotografata: Boolean(fotografia && fotografia.anni.length > 0),
+      motivo: fotografia?.motivo ?? (fotografia ? null : 'la fotografia non si è potuta leggere'),
+    },
+    scenari: {
+      calcolabili: scenari.filter((s) => s.calcolabile).length,
+      totali: scenari.length,
+    },
+    quadratura: quadratura.esito,
+    validita: { stato: validita.stato, etichetta: validita.etichetta },
+    richiesteAperte: richieste.length,
+  });
+
+  // ---- Date e invecchiamento ---------------------------------------------
+  const invecchiamento = valutaInvecchiamento({
+    verifica: { fonte: 'amministrativa', data: dati.eseguitaIl, cosa: 'verifica amministrativa' },
+    dati: [
+      { fonte: 'debito', data: dati.debitoMemorizzatoIl, cosa: 'debito riaccertato' },
+      { fonte: 'visura', data: contabile?.visuraIl ?? null, cosa: 'visura camerale ricaricata' },
+    ],
+  });
+
+  // ---- Accordo, procedure, piano in essere -------------------------------
+  const breakEven = breakEvenAccordo({
+    credito,
+    disponibilita: fotografia?.capacita.disponibilita ?? null,
+    flusso: fotografia?.capacita.flusso ?? null,
+    liquidazioneNetta: netto(fotografia, 'LIQUIDAZIONE'),
+    cramDownNetto: netto(fotografia, 'CRAM_DOWN'),
+  });
+
+  const piano = pianoInEssere({
+    esiti: (congruenza?.esiti ?? []).map((e) => ({
+      ente: e.ente,
+      flusso: e.flusso,
+      attesi: e.attesi,
+      senzaDenuncia: e.senzaDenuncia.length,
+      senzaDelega: e.senzaDelega.length,
+      sospesi: e.sospesi.length,
+      completo: e.completo,
+    })),
+  });
+
+  return {
+    ragioneSociale: dati.ragioneSociale,
+    dataRiferimento: dati.eseguitaIl,
+    validita,
+    copertura: attenzione?.copertura ?? null,
+    coperturaTesto: attenzione
+      ? `${attenzione.copertura.determinate}/${attenzione.copertura.totali}`
+      : null,
+    quadratura,
+    qualitativo,
+    confronto,
+    richieste,
+    testoRichiesta: testoDellaRichiesta,
+    prontezza,
+    invecchiamento,
+    breakEven,
+    piano,
+    credito,
+  };
+}
