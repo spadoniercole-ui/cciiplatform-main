@@ -11,7 +11,8 @@ import { apriNuovoCiclo, elencaCicli, type CicloArchiviato } from '@/lib/cicloAz
 import { pool } from '@/lib/db';
 import { assicuraTabellaAziende } from '@/db/provision';
 import type { AnagraficaEstratta } from '@/app/actions/visuraEstrazione';
-import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
+import { leggiSessione, richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
+import { nomeDaSessione } from '@/lib/identitaSessione';
 import {
   allineaDebitoEnteMemorizzato,
   azzeraDebitoEnteMemorizzato,
@@ -237,13 +238,17 @@ export async function registraEsitoVerificaAction(
       typeof dataRiferimento === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dataRiferimento.trim())
         ? dataRiferimento.trim()
         : null;
+    // Chi ha eseguito la verifica resta scritto accanto alla data (0.243.0):
+    // una traccia che dice quando ma non da chi non è attribuibile.
+    const eseguitaDa = nomeDaSessione(await leggiSessione());
     await pool.query(
       `UPDATE "${nomeSchema}".aziende
           SET verifica_esito = $2,
               verifica_eseguita_il = now(),
-              verifica_riferita_al = COALESCE($3::date, verifica_riferita_al)
+              verifica_riferita_al = COALESCE($3::date, verifica_riferita_al),
+              verifica_eseguita_da = $4
         WHERE id = $1`,
-      [aziendaId, esito, giorno]
+      [aziendaId, esito, giorno, eseguitaDa]
     );
 
     // IL DEBITO DELLA VERIFICA RESTA ANCHE A SCHEDA CHIUSA.
@@ -415,6 +420,8 @@ export interface RigaVerifica {
   partitaIva: string | null;
   esito: string | null;
   eseguitaIl: string | null;
+  /** Chi ha eseguito la verifica; null per le verifiche anteriori alla 0.243.0. */
+  eseguitaDa: string | null;
 }
 
 /**
@@ -440,6 +447,7 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
     const r = await pool
       .query(
         `SELECT id, ragione_sociale, partita_iva, verifica_esito, verifica_eseguita_il,
+                verifica_eseguita_da,
                 in_verifica, verifica_archiviata, verifica_motivo
            FROM "${nomeSchema}".aziende
           WHERE verifica_eseguita_il IS NOT NULL
@@ -461,6 +469,7 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
         eseguitaIl: x.verifica_eseguita_il
           ? new Date(x.verifica_eseguita_il as string).toISOString()
           : null,
+        eseguitaDa: x.verifica_eseguita_da ? String(x.verifica_eseguita_da) : null,
         presaInCarico: !x.in_verifica,
         archiviata: Boolean(x.verifica_archiviata),
         motivo: x.verifica_motivo ? String(x.verifica_motivo) : null,

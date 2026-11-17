@@ -14,6 +14,8 @@ import { leggiSnapshotDebito } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 import { leggiVerificaAzienda } from '@/lib/verificaAzienda/letturaVerifica';
 import { congruenzaAzienda } from '@/lib/flussiEnte/leggiCongruenza';
 import { leggiDecisioniPratica } from '@/lib/posizionePratica/registroDecisioni';
+import { leggiApertureVerifiche } from '@/lib/verificheApertura';
+import { formattaEuro } from '@/lib/formato/numeri';
 import { componiPosizione } from '@/lib/posizionePratica/composizione';
 import { autoreDaSessione } from '@/lib/posizionePratica/decisioni';
 import { ETICHETTE_REGISTRATE, GLOSSARIO } from '@/lib/posizionePratica/glossario';
@@ -31,9 +33,6 @@ export const maxDuration = 180;
 // — si stampa così com'è — e non ricalcola nulla per conto suo: la fotografia
 // viene dalla stessa lettura della verifica azienda, il credito dallo stesso
 // debito memorizzato, l'indicatore dallo stesso motore.
-
-const euro = (n: number | null | undefined) =>
-  typeof n === 'number' && Number.isFinite(n) ? `${Math.round(n).toLocaleString('it-IT')} €` : '—';
 
 const STILE_GRADO = {
   PRONTA: {
@@ -84,6 +83,7 @@ export default async function PosizionePage({
     decisioni,
     snapshot,
     sessione,
+    aperture,
   ] = await Promise.all([
     ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
     ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
@@ -96,6 +96,7 @@ export default async function PosizionePage({
     leggiDecisioniPratica(contesto.nomeSchema, id).catch(() => []),
     leggiSnapshotDebito(contesto.nomeSchema, id).catch(() => null),
     leggiSessione().catch(() => null),
+    leggiApertureVerifiche(contesto.nomeSchema, id).catch(() => []),
   ]);
 
   const attenzione = attenzioneRis?.success ? (attenzioneRis.attenzione ?? null) : null;
@@ -104,6 +105,8 @@ export default async function PosizionePage({
   const rigaContabile = contabileRis?.success
     ? contabileRis.aziende.find((a) => a.aziendaId === id)
     : undefined;
+  const aperturaContabile = aperture.find((a) => a.tipo === 'CONTABILE');
+  const aperturaAziendale = aperture.find((a) => a.tipo === 'AZIENDALE');
 
   // LA POSIZIONE SI COMPONE IN src/lib/posizionePratica (0.242.2).
   // La pagina legge le fonti e rende: quadratura, prontezza, richieste,
@@ -129,8 +132,18 @@ export default async function PosizionePage({
             !rigaContabile.parametriPresenti ? 'l’anagrafica ente' : null,
             rigaContabile.anniXbrl === 0 ? 'almeno un bilancio XBRL' : null,
           ].filter((x): x is string => x !== null),
+          apertaIl: aperturaContabile?.apertaIl ?? null,
+          autore: aperturaContabile?.autore ?? null,
         }
       : null,
+    // CHI HA ESEGUITO LE VERIFICHE (0.243.0): la data dice quando, non da chi.
+    eseguitaDa: riga?.eseguitaDa ?? null,
+    // Le decisioni entrano nella cronologia: la pagina non le riordina da sé.
+    decisioni: decisioni.map((d) => ({
+      decisaIl: d.decisaIl,
+      esito: d.esito,
+      autore: d.autore,
+    })),
   });
 
   const {
@@ -142,6 +155,7 @@ export default async function PosizionePage({
     breakEven,
     piano,
     richieste,
+    cronologia,
   } = posizione;
   const testoDellaRichiesta = posizione.testoRichiesta;
   // Chi firma le decisioni è la sessione: la stessa regola che l'azione
@@ -173,15 +187,48 @@ export default async function PosizionePage({
               : 'verifica non eseguita'}
             {' · '}
             Copertura: {posizione.coperturaTesto ?? '—'}
+            {posizione.coperturaMancante.length > 0 && (
+              <> · fuori: {posizione.coperturaMancante.join(', ')}</>
+            )}
             {' · '}
             Validità: {validita.etichetta}
+            {aperturaAziendale?.autore && <> · fotografia di {aperturaAziendale.autore}</>}
           </p>
         </div>
         <StampaPosizione />
       </header>
 
+      {/* L'INDICE DELLE SEZIONI (0.243.0): un punto della posizione si cita in
+          una mail con un link, invece di rispiegarlo a voce. */}
+      <nav
+        aria-label="Sezioni della posizione"
+        className="flex flex-wrap gap-1.5 text-[9px] font-bold uppercase tracking-wider"
+      >
+        {[
+          ['stato', 'Stato'],
+          ['quadratura', 'Credito'],
+          ['date', 'Date'],
+          ['letture', 'Letture'],
+          ['accordo', 'Accordo'],
+          ['documenti', 'Documenti'],
+          ['decisioni', 'Decisioni'],
+          ['cronologia', 'Cronologia'],
+        ].map(([ancora, testo]) => (
+          <a
+            key={ancora}
+            href={`#${ancora}`}
+            className="rounded-full border border-slate-200 px-2 py-1 text-slate-600 hover:border-blue-300 hover:text-blue-700"
+          >
+            {testo}
+          </a>
+        ))}
+      </nav>
+
       {/* 1. STATO */}
-      <section className={`rounded-xl border p-5 space-y-3 ${stile.bordo} ${stile.sfondo}`}>
+      <section
+        id="stato"
+        className={`rounded-xl border p-5 space-y-3 ${stile.bordo} ${stile.sfondo}`}
+      >
         <div className="flex items-center gap-2">
           <span className={`h-2.5 w-2.5 rounded-full ${stile.pallino}`} />
           <p className={`text-[11px] font-bold uppercase tracking-wider ${stile.testo}`}>
@@ -215,7 +262,10 @@ export default async function PosizionePage({
       </section>
 
       {/* 2. CREDITO E QUADRATURA */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+      <section
+        id="quadratura"
+        className="rounded-xl border border-slate-200 bg-white p-5 space-y-3"
+      >
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
           Il credito e la sua quadratura
         </p>
@@ -234,7 +284,7 @@ export default async function PosizionePage({
                     )}
                   </td>
                   <td className="p-2 text-right align-top font-bold tabular-nums text-slate-900">
-                    {euro(v.valore)}
+                    {formattaEuro(v.valore)}
                   </td>
                 </tr>
               ))}
@@ -255,7 +305,7 @@ export default async function PosizionePage({
       </section>
 
       {/* 3. DATE */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-2">
+      <section id="date" className="rounded-xl border border-slate-200 bg-white p-5 space-y-2">
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
           Date e aggiornamento
         </p>
@@ -274,7 +324,7 @@ export default async function PosizionePage({
       </section>
 
       {/* 4. LETTURE A CONFRONTO */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+      <section id="letture" className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
           Le letture a confronto
         </p>
@@ -318,7 +368,7 @@ export default async function PosizionePage({
       </section>
 
       {/* 5. ACCORDO E PROCEDURE */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-2">
+      <section id="accordo" className="rounded-xl border border-slate-200 bg-white p-5 space-y-2">
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
           Accordo, procedure e piano in essere
         </p>
@@ -329,7 +379,7 @@ export default async function PosizionePage({
               Recupero minimo
             </p>
             <p className="text-[13px] font-bold tabular-nums text-slate-900">
-              {euro(breakEven.recuperoMinimo)}
+              {formattaEuro(breakEven.recuperoMinimo)}
             </p>
             <p className="text-[9px] text-slate-500">
               {breakEven.proceduraConfronto ?? 'nessuna procedura calcolabile'}
@@ -340,7 +390,7 @@ export default async function PosizionePage({
               Scoperto di cassa
             </p>
             <p className="text-[13px] font-bold tabular-nums text-slate-900">
-              {euro(breakEven.scoperto)}
+              {formattaEuro(breakEven.scoperto)}
             </p>
             <p className="text-[9px] text-slate-500">
               {breakEven.sostenibile === null
@@ -358,6 +408,11 @@ export default async function PosizionePage({
             <p className="text-[9px] text-slate-500">{piano.dettaglio}</p>
           </div>
         </div>
+        {breakEven.mancanti.length > 0 && (
+          <p className="text-[10px] text-amber-800 leading-relaxed">
+            <strong>Perché un conto manca:</strong> {breakEven.mancanti.join(', ')}.
+          </p>
+        )}
         {piano.avvertenza && (
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900 leading-relaxed">
             {piano.avvertenza}
@@ -366,7 +421,7 @@ export default async function PosizionePage({
       </section>
 
       {/* 6. DOCUMENTI DA CHIEDERE */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+      <section id="documenti" className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
           Documenti da chiedere
         </p>
@@ -402,7 +457,7 @@ export default async function PosizionePage({
       </section>
 
       {/* 7. DECISIONI */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+      <section id="decisioni" className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
         <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-700">
           <FileText className="w-3.5 h-3.5" /> Decisioni sulla posizione
         </p>
@@ -416,10 +471,47 @@ export default async function PosizionePage({
           credito={posizione.credito}
           copertura={posizione.coperturaTesto}
           autore={autoreDecisione}
+          salvagente={contesto.modalita === 'SALVAGENTE'}
         />
       </section>
 
-      {/* 8. GLOSSARIO */}
+      {/* 8. CRONOLOGIA DEGLI ATTI */}
+      <section
+        id="cronologia"
+        className="rounded-xl border border-slate-200 bg-white p-5 space-y-2"
+      >
+        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+          La cronologia degli atti
+        </p>
+        <p className="text-[10px] text-slate-500 leading-relaxed">
+          Le stesse cose, in ordine di tempo: la pagina è ordinata per argomento, questa riga dice
+          che cosa è successo prima e che cosa dopo.
+        </p>
+        {cronologia.length === 0 ? (
+          <p className="text-[11px] text-slate-600">
+            Nessun atto datato: la verifica amministrativa non è ancora stata eseguita.
+          </p>
+        ) : (
+          <ol className="space-y-2">
+            {cronologia.map((a) => (
+              <li
+                key={`${a.fonte}-${a.data}-${a.cosa}`}
+                className="flex flex-wrap items-baseline gap-x-2 border-l-2 border-slate-200 pl-3"
+              >
+                <span className="text-[10px] font-bold tabular-nums text-slate-500">
+                  {new Date(a.data).toLocaleDateString('it-IT')}
+                </span>
+                <span className="text-[11px] text-slate-800">{a.cosa}</span>
+                <span className="text-[10px] text-slate-500">
+                  {a.autore ?? 'autore non registrato'}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      {/* 9. GLOSSARIO */}
       <details className="rounded-xl border border-slate-200 bg-white p-5">
         <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wider text-slate-700">
           Che cosa significano le parole usate qui ({ETICHETTE_REGISTRATE.length})

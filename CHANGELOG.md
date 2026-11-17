@@ -1,3 +1,51 @@
+## 0.243.0 — 2026-11-17
+
+- **In salvagente la decisione non si firma più.** Nella prova della 0.242.4 una decisione era
+  finita in traccia come «superadmin · sessione Superadmin»: tecnicamente corretta, ma era un
+  atto dell'ente firmato dall'assistenza. Ora l'azione rifiuta la registrazione in ispezione e il
+  modulo spiega perché, invece di offrire un pulsante che produce una firma sbagliata.
+- **La traccia non si modifica né si cancella.** Un trigger `BEFORE UPDATE OR DELETE` su
+  `pratica_decisioni` rifiuta la correzione a mano: una traccia modificabile non è una prova.
+  Le righe già scritte restano, e la funzione si ricrea a ogni apertura senza duplicare il
+  trigger.
+- **L'autore resta leggibile nel tempo.** `leggiDecisioniPratica` verifica se la riga utente che
+  ha firmato esiste ancora: l'elenco mostra «utente #12 · non più attivo» invece di far sparire o
+  confondere un firmatario disattivato. Le decisioni senza id (salvagente, righe anteriori alla
+  0.242.4) restano dichiarate come tali.
+- **La traccia si cerca.** Filtri per autore, motivo, esito e periodo (`filtraDecisioni`, pura e
+  testata) con il conteggio «quante di quante»: un registro che si può solo scorrere non serve a
+  chi deve mostrare «tutte le decisioni di giugno».
+- **Anche le verifiche hanno un autore.** `verifiche_apertura` guadagna `aperta_da`,
+  `aperta_da_id` e `aperta_da_modalita` (idempotenti), e `aziende.verifica_eseguita_da` registra
+  chi ha chiuso la verifica amministrativa. La pagina della Posizione lo mostra nella testata e
+  nella cronologia; le verifiche anteriori restano senza autore e lo dichiarano.
+- **La cronologia degli atti.** `componiPosizione` restituisce gli atti in ordine di tempo —
+  verifica amministrativa, contabile, visura, flussi, debito riaccertato e decisioni — con data e
+  autore. La pagina era ordinata per argomento: nessuno poteva dire che cosa era successo prima.
+- **La copertura dice quale dimensione manca.** La testata mostra «fuori: …» con i nomi delle
+  dimensioni scoperte, non solo «3/4»: l'informazione c'era già e non si vedeva.
+- **Ogni «non calcolabile» dice che cosa manca.** `BreakEvenAccordo` porta `mancanti` (credito,
+  disponibilità, percentuali del rango, flusso) e la pagina lo scrive: chi legge sa che documento
+  chiedere invece di indovinare.
+- **Un solo formattatore per gli importi.** `src/lib/formato/numeri.ts` scrive numeri, euro e
+  date; la locale italiana non separa le quattro cifre (7782 accanto a 77.090), quindi il
+  raggruppamento è esplicito. Un test verifica che i file della Posizione non chiamino più
+  `toLocaleString` per conto loro.
+- **La demo e i test usano gli stessi numeri.** `src/lib/demo/numeriPosizioneDemo.ts` è la fonte
+  unica di credito, cassa, scoperto e recupero minimo della demo: i test della composizione li
+  importano e un test di coerenza li confronta con il percorso demo, così la pagina non può
+  mostrare numeri che i test non conoscono.
+- **`npm run demo` ricrea l'ambiente locale in un comando.** Script `scripts/demo-locale.mjs`:
+  PGlite cifrato in `.dati-demo/` (nessun Postgres da installare, i dati sopravvivono al riavvio
+  del runner), due spazi portable e — con `PORTABLE_SEED_ENTE_DEMO=1` — il percorso demo
+  dell'ente con Tessitura Lario già pronta. Usa la build di produzione, perché in questo
+  ambiente `next dev` non compila `pg`; se la build manca la costruisce una volta.
+- **Ancore alle sezioni della posizione.** Un indice in testa e gli `id` sulle sezioni: un punto
+  della posizione si cita in una mail con un link, invece di rispiegarlo a voce.
+- Test: 29 nuovi (formattatore, filtri, cause del non calcolabile, cronologia, demo coerente,
+  registro su PGlite con immutabilità e autore attivo). Verificato: `tsc` 0 errori, `next lint` 0
+  errori, 1944 test verdi, `npm run build` verde; `npm run demo` avviato e login 200.
+
 ## 0.242.4 — 2026-11-16
 
 - **La traccia delle decisioni porta anche l'id di chi firma.** La 0.242.3 aveva tolto la casella

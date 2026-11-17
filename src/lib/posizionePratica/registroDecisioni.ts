@@ -5,6 +5,16 @@
 // dell'atto. Nessuna guardia qui: le azioni chiamano questo modulo dopo aver
 // verificato il chiamante.
 //
+// LA TRACCIA NON SI MODIFICA (0.243.0). La tabella non aveva difese: una riga
+// poteva essere corretta o cancellata a mano, e una traccia modificabile non è
+// una prova. Un trigger BEFORE UPDATE OR DELETE rifiuta l'operazione, così il
+// registro resta quello che era nel momento in cui è stato scritto. Il trigger
+// non tocca l'archivio (backup/ripristino) né le DDL: protegge le righe.
+//
+// L'AUTORE RESTA LEGGIBILE NEL TEMPO: `autoreAttivo` dice se la riga utente che
+// ha firmato esiste ancora ed è attiva — un firmatario disattivato non sparisce
+// e non viene scambiato per un utente corrente.
+//
 // Il nome dello schema entra nell'SQL, quindi si valida prima di usarlo.
 
 import { pool } from '@/lib/db';
@@ -18,9 +28,17 @@ import {
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
-export async function assicuraTabellaDecisioni(nomeSchema: string): Promise<void> {
+/** Quello che serve a questo modulo: basta il Pool di `pg` o un PGlite nei test. */
+export type EsecutoreDecisioni = {
+  query: (sql: string, valori?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+};
+
+export async function assicuraTabellaDecisioni(
+  nomeSchema: string,
+  db: EsecutoreDecisioni = pool
+): Promise<void> {
   if (!schemaOk(nomeSchema)) throw new Error('Nome schema non valido.');
-  await pool.query(
+  await db.query(
     `CREATE TABLE IF NOT EXISTS "${nomeSchema}".pratica_decisioni (
        id SERIAL PRIMARY KEY,
        azienda_id INTEGER NOT NULL,
@@ -36,15 +54,55 @@ export async function assicuraTabellaDecisioni(nomeSchema: string): Promise<void
   );
   // La tabella della 0.242.0 non aveva l'id: si aggiunge senza toccare le
   // righe già scritte (che restano con autore_id null e il nome di allora).
-  await pool.query(
+  await db.query(
     `ALTER TABLE "${nomeSchema}".pratica_decisioni
        ADD COLUMN IF NOT EXISTS autore_id INTEGER,
        ADD COLUMN IF NOT EXISTS autore_modalita TEXT`
   );
-  await pool.query(
+  await db.query(
     `CREATE INDEX IF NOT EXISTS pratica_decisioni_azienda_idx
        ON "${nomeSchema}".pratica_decisioni (azienda_id, decisa_il DESC)`
   );
+  await assicuraTriggerImmutabile(nomeSchema, db);
+}
+
+/**
+ * Il trigger che rende la traccia immutabile. È idempotente: la funzione si
+ * sostituisce, il trigger si crea solo se non c'è. Se il database non
+ * supportasse PL/pgSQL (edizione molto vecchia) la tabella resta usabile e
+ * l'errore si dichiara nel log invece di impedire la lettura delle decisioni.
+ */
+async function assicuraTriggerImmutabile(
+  nomeSchema: string,
+  db: EsecutoreDecisioni
+): Promise<void> {
+  try {
+    await db.query(
+      `CREATE OR REPLACE FUNCTION "${nomeSchema}".pratica_decisioni_immutabile()
+         RETURNS trigger LANGUAGE plpgsql AS $fn$
+       BEGIN
+         RAISE EXCEPTION 'La traccia delle decisioni non si modifica né si cancella (operazione % su pratica_decisioni).', TG_OP;
+       END
+       $fn$`
+    );
+    await db.query(
+      `DO $do$
+       BEGIN
+         IF NOT EXISTS (
+           SELECT 1 FROM pg_trigger
+            WHERE tgname = 'pratica_decisioni_immutabile'
+              AND tgrelid = '"${nomeSchema}".pratica_decisioni'::regclass
+         ) THEN
+           CREATE TRIGGER pratica_decisioni_immutabile
+             BEFORE UPDATE OR DELETE ON "${nomeSchema}".pratica_decisioni
+             FOR EACH ROW EXECUTE FUNCTION "${nomeSchema}".pratica_decisioni_immutabile();
+         END IF;
+       END
+       $do$`
+    );
+  } catch (error) {
+    console.error('[registroDecisioni] Trigger di immutabilità non creato:', error);
+  }
 }
 
 const numeroONull = (v: unknown): number | null => {
@@ -64,18 +122,69 @@ function rigaDecisione(r: Record<string, unknown>): Decisione {
     credito: numeroONull(r.credito),
     copertura: r.copertura === null || r.copertura === undefined ? null : String(r.copertura),
     decisaIl: new Date(r.decisa_il as string).toISOString(),
+    autoreAttivo: null,
   };
+}
+
+/**
+ * Quali utenti che hanno firmato esistono ancora. L'id da solo è ambiguo fra
+ * `admin_workspace` e `utenti_spazio`: la modalità dice in quale tabella
+ * cercare. Un errore di lettura non nasconde la decisione: `autoreAttivo`
+ * resta null, cioè «non si è potuto dire».
+ */
+async function autoriAttivi(
+  nomeSchema: string,
+  decisioni: Decisione[],
+  db: EsecutoreDecisioni
+): Promise<Map<string, boolean>> {
+  const risultato = new Map<string, boolean>();
+  const adminIds = decisioni
+    .filter((d) => d.autoreModalita === 'ADMIN_SPAZIO' && d.autoreId !== null)
+    .map((d) => d.autoreId as number);
+  const utenteIds = decisioni
+    .filter((d) => d.autoreModalita === 'OPERATORE' && d.autoreId !== null)
+    .map((d) => d.autoreId as number);
+
+  try {
+    if (adminIds.length > 0) {
+      const r = await db.query(
+        `SELECT id FROM "${nomeSchema}".admin_workspace WHERE id = ANY($1::int[])`,
+        [adminIds]
+      );
+      const presenti = new Set(r.rows.map((x) => Number(x.id)));
+      for (const id of adminIds) risultato.set(`ADMIN_SPAZIO:${id}`, presenti.has(id));
+    }
+  } catch {
+    // Tabella assente: non si può dire, non si inventa.
+  }
+
+  try {
+    if (utenteIds.length > 0) {
+      const r = await db.query(
+        `SELECT id, COALESCE(attivo, TRUE) AS attivo
+           FROM "${nomeSchema}".utenti_spazio WHERE id = ANY($1::int[])`,
+        [utenteIds]
+      );
+      const attive = new Map(r.rows.map((x) => [Number(x.id), x.attivo !== false]));
+      for (const id of utenteIds) risultato.set(`OPERATORE:${id}`, attive.get(id) === true);
+    }
+  } catch {
+    // Tabella assente: come sopra.
+  }
+
+  return risultato;
 }
 
 export async function leggiDecisioniPratica(
   nomeSchema: string,
-  aziendaId: number
+  aziendaId: number,
+  db: EsecutoreDecisioni = pool
 ): Promise<Decisione[]> {
   if (!schemaOk(nomeSchema)) return [];
   if (!Number.isInteger(aziendaId) || aziendaId <= 0) return [];
   try {
-    await assicuraTabellaDecisioni(nomeSchema);
-    const r = await pool.query(
+    await assicuraTabellaDecisioni(nomeSchema, db);
+    const r = await db.query(
       `SELECT id, esito, motivazione, autore, autore_id, autore_modalita,
               credito, copertura, decisa_il
          FROM "${nomeSchema}".pratica_decisioni
@@ -83,7 +192,15 @@ export async function leggiDecisioniPratica(
         ORDER BY decisa_il DESC, id DESC`,
       [aziendaId]
     );
-    return r.rows.map(rigaDecisione);
+    const decisioni = r.rows.map(rigaDecisione);
+    const attivi = await autoriAttivi(nomeSchema, decisioni, db);
+    return decisioni.map((d) => ({
+      ...d,
+      autoreAttivo:
+        d.autoreId === null || d.autoreModalita === null
+          ? null
+          : (attivi.get(`${d.autoreModalita}:${d.autoreId}`) ?? null),
+    }));
   } catch {
     return [];
   }
@@ -92,7 +209,8 @@ export async function leggiDecisioniPratica(
 export async function registraDecisionePratica(
   nomeSchema: string,
   aziendaId: number,
-  bozza: Partial<BozzaDecisione>
+  bozza: Partial<BozzaDecisione>,
+  db: EsecutoreDecisioni = pool
 ): Promise<{ success: boolean; decisione?: Decisione; error?: string }> {
   if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
   if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
@@ -103,8 +221,8 @@ export async function registraDecisionePratica(
     return { success: false, error: validazione.errore ?? 'Decisione non valida.' };
 
   try {
-    await assicuraTabellaDecisioni(nomeSchema);
-    const r = await pool.query(
+    await assicuraTabellaDecisioni(nomeSchema, db);
+    const r = await db.query(
       `INSERT INTO "${nomeSchema}".pratica_decisioni
          (azienda_id, esito, motivazione, autore, autore_id, autore_modalita,
           credito, copertura)
@@ -122,7 +240,9 @@ export async function registraDecisionePratica(
         bozza.copertura ?? null,
       ]
     );
-    return { success: true, decisione: rigaDecisione(r.rows[0]) };
+    // Chi ha appena firmato esiste per definizione: la riga è stata autorizzata
+    // da quella sessione.
+    return { success: true, decisione: { ...rigaDecisione(r.rows[0]), autoreAttivo: true } };
   } catch (error: unknown) {
     return { success: false, error: `Decisione non registrata: ${(error as Error).message}` };
   }

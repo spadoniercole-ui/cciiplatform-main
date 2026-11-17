@@ -512,4 +512,24 @@ export async function bootstrapPortable(): Promise<void> {
   // Demo coerente sui due lati (stessa azienda; parte ente completa sul
   // Ricevente). Non blocca l'avvio in caso di errore.
   await seedDemoPortable(redCreato, enteCreato);
+
+  // IL PERCORSO DEMO DELL'ENTE (0.243.0). Con PORTABLE_SEED_ENTE_DEMO=1 lo
+  // spazio Ricevente riceve le quattro posizioni complete e la quinta ferma al
+  // triage, cioè la stessa demo che si carica dal pannello Superadmin. Serve
+  // all'ambiente locale: un comando (`npm run demo`) e la pagina Posizione è
+  // già leggibile, senza Postgres e senza dodici passaggi a mano. Il
+  // caricamento è idempotente: un riavvio non duplica né riscrive.
+  if ((process.env.PORTABLE_SEED_ENTE_DEMO || '0') === '1') {
+    try {
+      const { pool } = await import('@/lib/db');
+      const { caricaPercorsoDemoEnte } = await import('@/lib/demo/caricaPercorsoEnte');
+      const esito = await caricaPercorsoDemoEnte(enteCreato.nomeSchema);
+      await pool.query('UPDATE spazi SET demo = TRUE WHERE id = $1', [enteCreato.spazioId]);
+      console.info(
+        `[portable] Percorso demo ente: ${esito.creati} aziende create, ${esito.esistenti} già presenti.`
+      );
+    } catch (e) {
+      console.error('[portable] Percorso demo ente non caricato (non blocca l’avvio):', e);
+    }
+  }
 }

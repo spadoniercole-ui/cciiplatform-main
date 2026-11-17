@@ -33,11 +33,19 @@ export interface BreakEvenAccordo {
   flussoNecessario: number | null;
   /** true quando disponibilità + flusso coprono il credito. */
   sostenibile: boolean | null;
+  /**
+   * Che cosa manca perché i conti si chiudano (0.243.0): un «non calcolabile»
+   * senza causa costringe a indovinare, e chi legge non sa che documento
+   * chiedere.
+   */
+  mancanti: string[];
   dettaglio: string;
 }
 
+import { formattaEuro } from '@/lib/formato/numeri';
+
 const arrotonda = (n: number) => Math.round(n * 100) / 100;
-const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
+const euro = (n: number) => formattaEuro(n);
 const numero = (v: unknown): number | null =>
   typeof v === 'number' && Number.isFinite(v) ? v : null;
 
@@ -53,6 +61,8 @@ export function breakEvenAccordo(input: {
   const flusso = numero(input.flusso);
 
   if (credito === null || credito <= 0) {
+    const mancanti = ['il credito vantato'];
+    if (disponibilita === null) mancanti.push('la disponibilità liquide');
     return {
       credito: null,
       disponibilita,
@@ -62,6 +72,7 @@ export function breakEvenAccordo(input: {
       proceduraConfronto: null,
       flussoNecessario: null,
       sostenibile: null,
+      mancanti,
       dettaglio:
         'Il credito vantato non è accertato: senza di esso né il recupero minimo né lo scoperto di cassa si calcolano.',
     };
@@ -119,6 +130,11 @@ export function breakEvenAccordo(input: {
     );
   }
 
+  const mancanti: string[] = [];
+  if (disponibilita === null) mancanti.push('la disponibilità liquide');
+  if (procedure.length === 0) mancanti.push('una procedura calcolabile (percentuali del rango)');
+  if (disponibilita === null && flusso === null) mancanti.push('il flusso d’esercizio');
+
   return {
     credito: arrotonda(credito),
     disponibilita,
@@ -128,6 +144,7 @@ export function breakEvenAccordo(input: {
     proceduraConfronto,
     flussoNecessario,
     sostenibile,
+    mancanti,
     dettaglio: pezzi.join(' '),
   };
 }

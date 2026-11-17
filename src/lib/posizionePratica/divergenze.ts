@@ -44,8 +44,7 @@ export const NATURA_ETICHETTA: Record<NaturaLettura, string> = {
   ARITMETICA: 'aritmetica',
 };
 
-const euro = (n: number | null) =>
-  typeof n === 'number' && Number.isFinite(n) ? `${Math.round(n).toLocaleString('it-IT')} €` : null;
+import { formattaEuroONull as euro } from '@/lib/formato/numeri';
 
 const parolaColore = (c: 'verde' | 'giallo' | 'rosso' | null): string =>
   c === 'rosso'

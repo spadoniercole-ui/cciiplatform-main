@@ -11,7 +11,14 @@
 // copertura e il credito si annotano perché fra sei mesi i numeri saranno
 // diversi, e senza quelli la decisione sarebbe illeggibile.
 //
+// La traccia si legge anche quando l'utente non c'è più (0.243.0): l'id resta
+// e `autoreAttivo` dice se la riga utente esiste ancora, così un firmatario
+// disattivato non sparisce e non viene scambiato per un utente corrente.
+//
 // Logica pura, con i suoi test. La tabella e le azioni stanno altrove.
+
+import { formattaEuro, soloGiorno } from '@/lib/formato/numeri';
+import { nomeDaSessione } from '@/lib/identitaSessione';
 
 export const ESITI_DECISIONE = [
   { codice: 'PROSEGUI', etichetta: 'Proseguire' },
@@ -48,6 +55,11 @@ export interface BozzaDecisione {
 export interface Decisione extends BozzaDecisione {
   id: number;
   decisaIl: string;
+  /**
+   * La riga utente che ha firmato esiste ancora ed è attiva? null per le
+   * decisioni senza id (salvagente, righe anteriori alla 0.242.4).
+   */
+  autoreAttivo: boolean | null;
 }
 
 export interface ValidazioneDecisione {
@@ -67,13 +79,27 @@ export const ESITI_DECISIONE_CODICI: EsitoDecisione[] = ESITI_DECISIONE.map((e) 
 export function autoreDaSessione(
   sessione: { username: string | null; email: string | null } | null | undefined
 ): string | null {
-  if (!sessione) return null;
-  const nome = (sessione.username ?? sessione.email ?? '').trim();
-  return nome.length > 0 ? nome : null;
+  return nomeDaSessione(sessione);
 }
 
 export function etichettaEsito(codice: string): string {
   return ESITI_DECISIONE.find((e) => e.codice === codice)?.etichetta ?? codice;
+}
+
+/**
+ * Chi ha firmato, in una riga leggibile: «utente #12», «utente #12 · non più
+ * attivo», «sessione Superadmin» o «senza id utente». L'etichetta non dice
+ * solo un numero: dice se quella riga utente esiste ancora.
+ */
+export function etichettaAutore(
+  d: Pick<Decisione, 'autoreId' | 'autoreModalita' | 'autoreAttivo'>
+): string {
+  if (d.autoreId === null || d.autoreId === undefined) {
+    return d.autoreModalita === 'SALVAGENTE' ? 'sessione Superadmin' : 'senza id utente';
+  }
+  return d.autoreAttivo === false
+    ? `utente #${d.autoreId} · non più attivo`
+    : `utente #${d.autoreId}`;
 }
 
 /**
@@ -126,8 +152,45 @@ export function validaDecisione(
 
 /** Il riassunto di una decisione in una riga, per l'elenco. */
 export function riassuntoDecisione(d: Decisione): string {
-  const credito =
-    d.credito === null ? '' : ` · credito ${Math.round(d.credito).toLocaleString('it-IT')} €`;
+  const credito = d.credito === null ? '' : ` · credito ${formattaEuro(d.credito)}`;
   const copertura = d.copertura ? ` · copertura ${d.copertura}` : '';
   return `${etichettaEsito(d.esito)} — ${d.autore}${credito}${copertura}`;
+}
+
+export interface FiltriDecisioni {
+  /** Ricerca libera su autore, motivazione ed esito. */
+  testo?: string;
+  esito?: EsitoDecisione | '';
+  /** AAAA-MM-GG, estremi inclusi. */
+  dal?: string;
+  al?: string;
+}
+
+const giornoValido = (v: string | undefined): string | null =>
+  v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+
+/**
+ * La traccia si cerca, non solo si scorre (0.243.0): filtrare per persona,
+ * esito e periodo è ciò che serve a un ente che deve mostrare «tutte le
+ * decisioni di giugno». Filtro puro, così la regola si prova senza montare la
+ * schermata; l'ordine della traccia resta quello ricevuto.
+ */
+export function filtraDecisioni(decisioni: Decisione[], filtri: FiltriDecisioni = {}): Decisione[] {
+  const testo = (filtri.testo ?? '').trim().toLowerCase();
+  const dal = giornoValido(filtri.dal);
+  const al = giornoValido(filtri.al);
+
+  return decisioni.filter((d) => {
+    if (filtri.esito && d.esito !== filtri.esito) return false;
+
+    const giorno = soloGiorno(d.decisaIl) ?? d.decisaIl.slice(0, 10);
+    if (dal && giorno < dal) return false;
+    if (al && giorno > al) return false;
+
+    if (testo) {
+      const paglia = `${d.autore} ${d.motivazione} ${etichettaEsito(d.esito)}`.toLowerCase();
+      if (!paglia.includes(testo)) return false;
+    }
+    return true;
+  });
 }

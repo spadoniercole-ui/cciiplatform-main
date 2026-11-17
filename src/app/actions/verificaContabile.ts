@@ -12,7 +12,8 @@
 // alla verifica azienda, non a questa.
 
 import { pool } from '@/lib/db';
-import { richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
+import { leggiSessione, richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
+import { nomeDaSessione } from '@/lib/identitaSessione';
 import { assicuraTabellaXbrlAzienda } from '@/db/provision';
 import {
   componiProiezione,
@@ -165,7 +166,7 @@ export async function proiezioneContabileAction(
   aziendaId: number
 ): Promise<RisultatoProiezioneContabile> {
   try {
-    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    const contesto = await richiediAccessoAzienda(nomeSchema, aziendaId);
     if (!schemaOk(nomeSchema)) {
       return {
         success: false,
@@ -195,7 +196,11 @@ export async function proiezioneContabileAction(
       })
       .catch(() => undefined);
 
-    const { apertaIl } = await apriVerifica(nomeSchema, aziendaId, 'CONTABILE');
+    const { apertaIl } = await apriVerifica(nomeSchema, aziendaId, 'CONTABILE', {
+      nome: nomeDaSessione(await leggiSessione()) ?? '',
+      id: contesto.adminId ?? contesto.utenteId ?? null,
+      modalita: contesto.modalita,
+    });
     const annoVerifica = apertaIl ? Number(apertaIl.slice(0, 4)) : new Date().getFullYear();
 
     // La voce dell’ente chiude sullo stock accertato nella verifica

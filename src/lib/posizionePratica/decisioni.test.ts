@@ -60,7 +60,12 @@ describe('decisione sulla posizione', () => {
   });
 
   it('il riassunto porta autore, credito e copertura', () => {
-    const r = riassuntoDecisione({ ...bozza(), id: 1, decisaIl: '2026-11-16T10:00:00.000Z' });
+    const r = riassuntoDecisione({
+      ...bozza(),
+      id: 1,
+      decisaIl: '2026-11-16T10:00:00.000Z',
+      autoreAttivo: true,
+    });
     expect(r).toContain('Proseguire');
     expect(r).toContain('mario.rossi');
     expect(r).toContain('80.000 €');

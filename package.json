@@ -1,6 +1,6 @@
 {
   "name": "cciiplatform",
-  "version": "0.242.4",
+  "version": "0.243.0",
   "type": "module",
   "private": true,
   "engines": {
@@ -21,7 +21,8 @@
     "test": "vitest run",
     "check:autorizzazione": "node scripts/check-autorizzazione.mjs",
     "check:archil": "node scripts/check-archil.mjs",
-    "consegna": "node scripts/attendi-consegna.mjs"
+    "consegna": "node scripts/attendi-consegna.mjs",
+    "demo": "node scripts/demo-locale.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

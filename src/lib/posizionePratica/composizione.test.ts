@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { componiPosizione, type DatiPosizione } from './composizione';
+import { NUMERI_POSIZIONE_DEMO as DEMO } from '@/lib/demo/numeriPosizioneDemo';
 import type { Attenzione } from '@/lib/screening/indicatore';
 import type { DebitoMemorizzato } from '@/lib/debitiEnte/memorizzazione';
 import type { FotografiaVerificaAzienda } from '@/lib/verificaAzienda/fotografia';
@@ -24,7 +25,7 @@ const attenzione = (patch: Partial<Attenzione> = {}): Attenzione =>
     ...patch,
   }) as Attenzione;
 
-const debito = (totale: number | null = 152_000): DebitoMemorizzato | null =>
+const debito = (totale: number | null = DEMO.credito): DebitoMemorizzato | null =>
   totale === null
     ? null
     : ({ totale, contabilizzato: totale, fonte: 'certificazione' } as unknown as DebitoMemorizzato);
@@ -46,14 +47,14 @@ const fotografia = (patch: Partial<FotografiaVerificaAzienda> = {}): FotografiaV
     ],
     annoVerifica: 2026,
     annoUltimoBilancio: 2024,
-    credito: 152_000,
+    credito: DEMO.credito,
     rango: 'CHIROGRAFARIO',
     capacita: {
-      credito: 152_000,
-      disponibilita: 74_910,
-      flusso: 44_910,
+      credito: DEMO.credito,
+      disponibilita: DEMO.disponibilita,
+      flusso: DEMO.flusso,
       coperturaPct: 49.28,
-      scoperto: 77_090,
+      scoperto: DEMO.scoperto,
       anniCopertura: 2,
       esito: 'PARZIALE',
       dettaglio: 'La cassa non copre il credito.',
@@ -126,7 +127,13 @@ const congruenza = (patch: Partial<LetturaCongruenza> = {}): LetturaCongruenza =
   }) as unknown as LetturaCongruenza;
 
 const contabile = (
-  patch: Partial<{ completa: boolean; visuraIl: string | null; mancanti: string[] }> = {}
+  patch: Partial<{
+    completa: boolean;
+    visuraIl: string | null;
+    mancanti: string[];
+    apertaIl: string | null;
+    autore: string | null;
+  }> = {}
 ) => ({ completa: true, visuraIl: '2026-11-16', mancanti: [], ...patch });
 
 const dati = (patch: Partial<DatiPosizione> = {}): DatiPosizione => ({
@@ -135,7 +142,7 @@ const dati = (patch: Partial<DatiPosizione> = {}): DatiPosizione => ({
   attenzione: attenzione(),
   debito: debito(),
   debitoMemorizzatoIl: '2026-11-16T08:00:00.000Z',
-  certificazioneTotale: 152_000,
+  certificazioneTotale: DEMO.certificazione,
   esposizioneContributiva: 80_000,
   qualitativa: qualitativa(),
   fotografia: fotografia(),
@@ -151,8 +158,9 @@ describe('composizione della posizione', () => {
     expect(p.quadratura.esito).toBe('COERENTE');
     expect(p.quadratura.voci).toHaveLength(3);
     expect(p.richieste).toHaveLength(0);
-    expect(p.credito).toBe(152_000);
+    expect(p.credito).toBe(DEMO.credito);
     expect(p.coperturaTesto).toBe('4/4');
+    expect(p.coperturaMancante).toEqual([]);
     expect(p.validita.stato).toBe('recente');
     expect(p.piano.stato).toBe('RISPETTATO');
   });
@@ -245,7 +253,7 @@ describe('composizione della posizione', () => {
   it('senza debito accertato la quadratura resta non verificabile ma il credito resta quello della fotografia', () => {
     const p = componiPosizione(dati({ debito: null, certificazioneTotale: null }), OGGI);
     expect(p.quadratura.esito).toBe('NON_VERIFICABILE');
-    expect(p.credito).toBe(152_000);
+    expect(p.credito).toBe(DEMO.credito);
     // Non è un blocco: la dimensione del credito resta scoperta e viene
     // dichiarata fra le attenzioni, non silenziosamente ignorata.
     expect(p.prontezza.grado).toBe('QUASI');
@@ -265,5 +273,54 @@ describe('composizione della posizione', () => {
     expect(p.coperturaTesto).toBe('3/4');
     expect(p.richieste[0].documento).toBe('Elenco Deleghe (F24) con le date di versamento');
     expect(p.prontezza.attenzioni.join(' ')).toContain('3 dimensioni su 4');
+  });
+
+  it('la copertura dice quali dimensioni restano fuori, non solo quante', () => {
+    const p = componiPosizione(
+      dati({
+        attenzione: attenzione({
+          copertura: { determinate: 3, totali: 4 },
+          dimensioniScoperte: [{ nome: 'Equilibrio di bilancio (XBRL)', portante: true }],
+        }),
+      }),
+      OGGI
+    );
+    expect(p.coperturaTesto).toBe('3/4');
+    expect(p.coperturaMancante).toEqual(['Equilibrio di bilancio (XBRL)']);
+  });
+
+  it('i numeri della demo sono gli stessi che la composizione calcola', () => {
+    // Il legame che la demo aveva perso: credito, cassa, scoperto e recupero
+    // minimo vengono dal dataset condiviso, non da due copie.
+    const p = componiPosizione(dati(), OGGI);
+    expect(p.credito).toBe(DEMO.credito);
+    expect(p.breakEven.disponibilita).toBe(DEMO.disponibilita);
+    expect(p.breakEven.scoperto).toBe(DEMO.scoperto);
+    expect(p.breakEven.recuperoMinimo).toBe(DEMO.recuperoMinimo);
+    expect(p.breakEven.mancanti).toEqual([]);
+  });
+
+  it('la cronologia mette in fila gli atti con chi li ha compiuti, dal più recente', () => {
+    const p = componiPosizione(
+      dati({
+        eseguitaDa: 'anna.verdi',
+        contabile: contabile({ apertaIl: '2026-11-15', autore: 'marco.rossi' }),
+        decisioni: [
+          { decisaIl: '2026-11-17T09:00:00.000Z', esito: 'PROSEGUI', autore: 'anna.verdi' },
+          { decisaIl: '2026-11-10T09:00:00.000Z', esito: 'RIMANDA', autore: 'anna.verdi' },
+        ],
+      }),
+      OGGI
+    );
+    expect(p.cronologia[0].fonte).toBe('decisione');
+    expect(p.cronologia[0].cosa).toBe('Decisione: Proseguire');
+    expect(p.cronologia[0].autore).toBe('anna.verdi');
+    // La verifica amministrativa porta l'autore, la contabile la sua data.
+    expect(p.cronologia.find((a) => a.fonte === 'amministrativa')?.autore).toBe('anna.verdi');
+    expect(p.cronologia.find((a) => a.fonte === 'contabile')?.data).toContain('2026-11-15');
+    expect(p.cronologia.find((a) => a.fonte === 'contabile')?.autore).toBe('marco.rossi');
+    // L'ordine è decrescente: l'ultimo atto è la prima riga.
+    const date = p.cronologia.map((a) => new Date(a.data).getTime());
+    expect(date).toEqual([...date].sort((x, y) => y - x));
   });
 });

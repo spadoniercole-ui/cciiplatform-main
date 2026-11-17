@@ -28,6 +28,7 @@ import { confrontoLetture, indiciDaAccertato, type ConfrontoLetture } from './di
 import { richiesteDa, testoRichiesta, type Richiesta } from './richieste';
 import { breakEvenAccordo, type BreakEvenAccordo } from './breakEven';
 import { pianoInEssere, type PianoInEssere } from './pianoInEssere';
+import { etichettaEsito, type EsitoDecisione } from './decisioni';
 
 /**
  * Ciò che le fonti hanno già letto. Nessun campo è obbligatorio: una fonte
@@ -48,8 +49,32 @@ export interface DatiPosizione {
   qualitativa: LetturaQualitativa | null;
   fotografia: FotografiaVerificaAzienda | null;
   congruenza: LetturaCongruenza | null;
+  /** Chi ha eseguito la verifica amministrativa (0.243.0). */
+  eseguitaDa?: string | null;
   /** Lo stato della contabile per questa azienda; null se non si è potuto leggere. */
-  contabile: { completa: boolean; visuraIl: string | null; mancanti: string[] } | null;
+  contabile: {
+    completa: boolean;
+    visuraIl: string | null;
+    mancanti: string[];
+    /** Quando è stata aperta e da chi: la cronologia degli atti. */
+    apertaIl?: string | null;
+    autore?: string | null;
+  } | null;
+  /** Le decisioni già registrate, per la cronologia (data, esito, autore). */
+  decisioni?: { decisaIl: string; esito: EsitoDecisione; autore: string }[];
+}
+
+/**
+ * Un atto della pratica, con la sua data e chi l'ha compiuto (0.243.0).
+ * La pagina era ordinata per argomento: nessuno poteva dire che cosa era
+ * successo prima e che cosa dopo.
+ */
+export interface AttoPosizione {
+  fonte: 'amministrativa' | 'contabile' | 'azienda' | 'flussi' | 'debito' | 'visura' | 'decisione';
+  cosa: string;
+  /** ISO: si ordina per istante, si mostra per giorno. */
+  data: string;
+  autore: string | null;
 }
 
 // Si restituisce solo ciò che la pagina rende: il lettore della posizione ha
@@ -61,6 +86,8 @@ export interface PosizioneComposta {
   validita: Validita;
   /** «4/4», oppure null se l'indicatore non si è potuto leggere. */
   coperturaTesto: string | null;
+  /** Le dimensioni che restano fuori: la pagina dice quali, non solo quante. */
+  coperturaMancante: string[];
   quadratura: Quadratura;
   confronto: ConfrontoLetture;
   richieste: Richiesta[];
@@ -69,6 +96,8 @@ export interface PosizioneComposta {
   invecchiamento: Invecchiamento;
   breakEven: BreakEvenAccordo;
   piano: PianoInEssere;
+  /** Gli atti della pratica, dal più recente al più vecchio. */
+  cronologia: AttoPosizione[];
   /** Il credito vantato: quello che la decisione annota. */
   credito: number | null;
 }
@@ -232,11 +261,51 @@ export function componiPosizione(
     })),
   });
 
+  // ---- La cronologia degli atti -----------------------------------------
+  const atti: AttoPosizione[] = [];
+  const aggiungiAtto = (
+    fonte: AttoPosizione['fonte'],
+    cosa: string,
+    data: string | null | undefined,
+    autore: string | null | undefined
+  ) => {
+    if (!data) return;
+    const quando = new Date(data);
+    if (Number.isNaN(quando.getTime())) return;
+    atti.push({ fonte, cosa, data: quando.toISOString(), autore: autore ?? null });
+  };
+  aggiungiAtto(
+    'amministrativa',
+    'Verifica amministrativa eseguita',
+    dati.eseguitaIl,
+    dati.eseguitaDa ?? null
+  );
+  aggiungiAtto(
+    'contabile',
+    'Verifica contabile aperta',
+    contabile?.apertaIl ?? null,
+    contabile?.autore ?? null
+  );
+  aggiungiAtto('visura', 'Visura camerale ricaricata', contabile?.visuraIl ?? null, null);
+  aggiungiAtto(
+    'flussi',
+    'Congruenza dei flussi verificata',
+    congruenza?.dataVerifica ?? null,
+    null
+  );
+  aggiungiAtto('debito', 'Debito riaccertato', dati.debitoMemorizzatoIl, null);
+  for (const d of dati.decisioni ?? []) {
+    aggiungiAtto('decisione', `Decisione: ${etichettaEsito(d.esito)}`, d.decisaIl, d.autore);
+  }
+  // Dal più recente: la prima riga è l'ultimo atto, che è quello che conta.
+  atti.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+
   return {
     validita,
     coperturaTesto: attenzione
       ? `${attenzione.copertura.determinate}/${attenzione.copertura.totali}`
       : null,
+    coperturaMancante: (attenzione?.dimensioniScoperte ?? []).map((d) => d.nome),
     quadratura,
     confronto,
     richieste,
@@ -245,6 +314,7 @@ export function componiPosizione(
     invecchiamento,
     breakEven,
     piano,
+    cronologia: atti,
     credito,
   };
 }

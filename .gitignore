@@ -13,6 +13,9 @@ portable-dist/
 # digitato in bash): Windows non le accetta e il pull fallirebbe.
 /*:*
 
+# Database dell'ambiente demo locale (npm run demo): si ricrea, non si committa
+/.dati-demo/
+
 # Variabili d'ambiente e segreti
 .env
 .env*.local

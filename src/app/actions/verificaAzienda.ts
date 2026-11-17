@@ -24,7 +24,8 @@
 // della stessa lettura sarebbero di nuovo due motori.
 
 import { pool } from '@/lib/db';
-import { richiediAccessoAzienda } from '@/lib/autorizzazione';
+import { leggiSessione, richiediAccessoAzienda } from '@/lib/autorizzazione';
+import { nomeDaSessione } from '@/lib/identitaSessione';
 import { apriVerifica } from '@/lib/verificheApertura';
 import { assicuraTabelleVerificaAzienda } from '@/db/provision';
 import { leggiVerificaAzienda } from '@/lib/verificaAzienda/letturaVerifica';
@@ -76,7 +77,7 @@ export async function calcolaVerificaAziendaAction(
   aziendaId: number
 ): Promise<RisultatoVerificaAzienda> {
   try {
-    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    const contesto = await richiediAccessoAzienda(nomeSchema, aziendaId);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
       return { success: false, error: 'Azienda non riconosciuta.' };
@@ -86,7 +87,11 @@ export async function calcolaVerificaAziendaAction(
     // La verifica azienda ha la sua data d'apertura, come la contabile: la
     // prima lettura la fissa, le successive la leggono. Serve a sapere con
     // quali criteri è stata fatta la prima fotografia.
-    await apriVerifica(nomeSchema, aziendaId, 'AZIENDALE').catch(() => undefined);
+    await apriVerifica(nomeSchema, aziendaId, 'AZIENDALE', {
+      nome: nomeDaSessione(await leggiSessione()) ?? '',
+      id: contesto.adminId ?? contesto.utenteId ?? null,
+      modalita: contesto.modalita,
+    }).catch(() => undefined);
 
     const lettura = await leggiVerificaAzienda(nomeSchema, aziendaId);
 

@@ -51,8 +51,10 @@ export interface Quadratura {
 
 export const TOLLERANZA_QUADRATURA_EURO = 1;
 
+import { formattaEuro } from '@/lib/formato/numeri';
+
 const arrotonda = (n: number) => Math.round(n * 100) / 100;
-const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
+const euro = (n: number) => formattaEuro(n);
 
 /**
  * Confronta le cifre del credito fra loro. Il riferimento è la prima voce

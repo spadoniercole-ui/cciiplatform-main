@@ -60,6 +60,18 @@ export async function registraDecisionePraticaAction(
     if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
       return { success: false, error: 'Azienda non riconosciuta.' };
     }
+    // LA DECISIONE SI FIRMA DA ENTE, NON IN ISPEZIONE (0.243.0).
+    // In salvagente il Superadmin opera per guardare, non per decidere: la
+    // firma sarebbe la sua, non quella dell'ente, e fra sei mesi il registro
+    // mostrerebbe un atto dell'organizzazione che l'organizzazione non ha
+    // compiuto. L'azione rifiuta; la pagina lo spiega prima del clic.
+    if (contesto.modalita === 'SALVAGENTE') {
+      return {
+        success: false,
+        error:
+          'Stai operando in salvagente: la decisione spetta all’ente. Entra con un’utenza dello spazio per firmarla.',
+      };
+    }
     // L'autore NON si accetta dal chiamante: nome dalla sessione e id
     // dell'utente dello spazio dal contesto di accesso. Così nessuno può
     // firmare una decisione con il nome di un altro.
