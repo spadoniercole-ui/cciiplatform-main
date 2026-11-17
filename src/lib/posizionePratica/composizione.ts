@@ -51,6 +51,8 @@ export interface DatiPosizione {
   congruenza: LetturaCongruenza | null;
   /** Chi ha eseguito la verifica amministrativa (0.243.0). */
   eseguitaDa?: string | null;
+  /** true quando la verifica amministrativa è stata eseguita in ispezione (0.244.0). */
+  eseguitaInIspezione?: boolean;
   /** Lo stato della contabile per questa azienda; null se non si è potuto leggere. */
   contabile: {
     completa: boolean;
@@ -59,6 +61,8 @@ export interface DatiPosizione {
     /** Quando è stata aperta e da chi: la cronologia degli atti. */
     apertaIl?: string | null;
     autore?: string | null;
+    /** true quando è stata aperta in salvagente: non è un atto dell'ente. */
+    inIspezione?: boolean;
   } | null;
   /** Le decisioni già registrate, per la cronologia (data, esito, autore). */
   decisioni?: { decisaIl: string; esito: EsitoDecisione; autore: string }[];
@@ -75,6 +79,8 @@ export interface AttoPosizione {
   /** ISO: si ordina per istante, si mostra per giorno. */
   data: string;
   autore: string | null;
+  /** L'atto è stato compiuto in ispezione, non dall'ente. */
+  ispezione: boolean;
 }
 
 // Si restituisce solo ciò che la pagina rende: il lettore della posizione ha
@@ -100,6 +106,27 @@ export interface PosizioneComposta {
   cronologia: AttoPosizione[];
   /** Il credito vantato: quello che la decisione annota. */
   credito: number | null;
+}
+
+/**
+ * L'IMPRONTA DELLA POSIZIONE (0.244.0).
+ *
+ * Credito, copertura, grado, blocchi, quadratura e scoperto: i numeri su cui
+ * si firma. La pagina la mostra al modulo, l'azione la ricalcola e rifiuta se
+ * non coincide — così una decisione non può essere annotata con i numeri di
+ * una posizione che nel frattempo è cambiata. Stringa leggibile e non hash:
+ * se un giorno va confrontata a mano, si legge.
+ */
+export function improntaPosizione(p: PosizioneComposta): string {
+  return [
+    `credito:${p.credito ?? 'non accertato'}`,
+    `copertura:${p.coperturaTesto ?? '—'}`,
+    `fuori:${p.coperturaMancante.join('|') || '—'}`,
+    `grado:${p.prontezza.grado}`,
+    `blocchi:${p.prontezza.blocchi.length}`,
+    `quadratura:${p.quadratura.esito}`,
+    `scoperto:${p.breakEven.scoperto ?? '—'}`,
+  ].join('\n');
 }
 
 const euroData = (iso: string | null): string | null => {
@@ -267,24 +294,27 @@ export function componiPosizione(
     fonte: AttoPosizione['fonte'],
     cosa: string,
     data: string | null | undefined,
-    autore: string | null | undefined
+    autore: string | null | undefined,
+    ispezione = false
   ) => {
     if (!data) return;
     const quando = new Date(data);
     if (Number.isNaN(quando.getTime())) return;
-    atti.push({ fonte, cosa, data: quando.toISOString(), autore: autore ?? null });
+    atti.push({ fonte, cosa, data: quando.toISOString(), autore: autore ?? null, ispezione });
   };
   aggiungiAtto(
     'amministrativa',
     'Verifica amministrativa eseguita',
     dati.eseguitaIl,
-    dati.eseguitaDa ?? null
+    dati.eseguitaDa ?? null,
+    dati.eseguitaInIspezione === true
   );
   aggiungiAtto(
     'contabile',
     'Verifica contabile aperta',
     contabile?.apertaIl ?? null,
-    contabile?.autore ?? null
+    contabile?.autore ?? null,
+    contabile?.inIspezione === true
   );
   aggiungiAtto('visura', 'Visura camerale ricaricata', contabile?.visuraIl ?? null, null);
   aggiungiAtto(

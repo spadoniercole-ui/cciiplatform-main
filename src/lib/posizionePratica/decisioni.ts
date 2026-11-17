@@ -34,6 +34,9 @@ export const MOTIVAZIONE_MINIMA = 20;
 /** Da quale tipo di utente arriva la firma: l'id da solo sarebbe ambiguo. */
 export type ModalitaAutore = 'ADMIN_SPAZIO' | 'OPERATORE' | 'SALVAGENTE';
 
+/** Il grado della posizione al momento dell'atto. */
+export type GradoPosizione = 'PRONTA' | 'QUASI' | 'BLOCCATA';
+
 export interface BozzaDecisione {
   esito: EsitoDecisione;
   motivazione: string;
@@ -50,6 +53,13 @@ export interface BozzaDecisione {
   credito: number | null;
   /** La copertura dell'indicatore al momento della decisione, es. «4/4». */
   copertura: string | null;
+  /**
+   * Il grado e i blocchi della posizione al momento della firma (0.244.0).
+   * Sono annotati dal server, non dal browser: la riga dice su che cosa si è
+   * deciso, non che cosa il modulo credeva.
+   */
+  statoGrado?: GradoPosizione | null;
+  statoBlocchi?: number | null;
 }
 
 export interface Decisione extends BozzaDecisione {
@@ -147,6 +157,31 @@ export function validaDecisione(
     return { valida: false, errore: 'Il credito annotato non è un importo valido.' };
   }
 
+  return { valida: true, errore: null };
+}
+
+/**
+ * LA DECISIONE DEVE STARE IN PIEDI CON LA POSIZIONE (0.244.0).
+ *
+ * Il modulo accettava «Proseguire» anche su una posizione bloccata: la traccia
+ * avrebbe registrato un atto che i numeri smentiscono. Non è una questione di
+ * forma — chi rilegge la posizione fra sei mesi vede un blocco e una decisione
+ * che lo ignora, senza sapere quale credere. Gli altri esiti restano sempre
+ * possibili: chiedere documenti, rimandare, archiviare sono modi legittimi di
+ * decidere anche quando la posizione è ferma.
+ */
+export function validaCoerenzaDecisione(
+  esito: EsitoDecisione | undefined,
+  stato: { grado: GradoPosizione; blocchi: string[] }
+): ValidazioneDecisione {
+  if (!esito) return { valida: true, errore: null };
+  if (stato.grado === 'BLOCCATA' && esito === 'PROSEGUI') {
+    const primo = stato.blocchi[0] ? ` Primo blocco: ${stato.blocchi[0]}` : '';
+    return {
+      valida: false,
+      errore: `La posizione è bloccata: non si può proseguire finché i blocchi restano. Risolvili, oppure rimanda o archivia con il motivo.${primo}`,
+    };
+  }
   return { valida: true, errore: null };
 }
 

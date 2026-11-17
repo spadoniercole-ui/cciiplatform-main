@@ -1,24 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowLeft, FileText } from 'lucide-react';
-import { leggiSessione } from '@/lib/autorizzazione';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
-import { ottieniAziendaPerId } from '@/app/actions/aziende';
-import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
-import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
-import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati';
-import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
-import { leggiQualitativaAzienda } from '@/lib/checklist/letturaQualitativa';
-import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
-import { leggiSnapshotDebito } from '@/lib/debitiEnte/memorizzaDebitoEnte';
-import { leggiVerificaAzienda } from '@/lib/verificaAzienda/letturaVerifica';
-import { congruenzaAzienda } from '@/lib/flussiEnte/leggiCongruenza';
-import { leggiDecisioniPratica } from '@/lib/posizionePratica/registroDecisioni';
-import { leggiApertureVerifiche } from '@/lib/verificheApertura';
 import { formattaEuro } from '@/lib/formato/numeri';
-import { componiPosizione } from '@/lib/posizionePratica/composizione';
-import { autoreDaSessione } from '@/lib/posizionePratica/decisioni';
+import { componiPosizione, improntaPosizione } from '@/lib/posizionePratica/composizione';
 import { ETICHETTE_REGISTRATE, GLOSSARIO } from '@/lib/posizionePratica/glossario';
+import { leggiPosizioneAzienda } from '@/lib/posizionePratica/letturaPosizione';
 import { DecisioniPratica } from '@/components/spazio/DecisioniPratica';
 import { StampaPosizione } from '@/components/spazio/StampaPosizione';
 
@@ -68,83 +55,13 @@ export default async function PosizionePage({
   const id = Number(aziendaId);
   if (!Number.isInteger(id) || id <= 0) redirect(`/spazio/${codice}/verifica-salute`);
 
-  const risultato = await ottieniAziendaPerId(contesto.nomeSchema, id);
-  if (!risultato.success || !risultato.azienda) redirect(`/spazio/${codice}/verifica-salute`);
+  const lettura = await leggiPosizioneAzienda(contesto.nomeSchema, id);
+  if (!lettura.azienda || !lettura.dati) redirect(`/spazio/${codice}/verifica-salute`);
+  const azienda = lettura.azienda;
 
-  const [
-    attenzioneRis,
-    storicoRis,
-    qualitativa,
-    debitoRis,
-    soglie,
-    contabileRis,
-    letturaVerifica,
-    congruenza,
-    decisioni,
-    snapshot,
-    sessione,
-    aperture,
-  ] = await Promise.all([
-    ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
-    ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
-    leggiQualitativaAzienda(contesto.nomeSchema, id).catch(() => null),
-    debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
-    leggiDatiSoglieAzienda(contesto.nomeSchema, id).catch(() => null),
-    statoVerificaContabileAction(contesto.nomeSchema).catch(() => null),
-    leggiVerificaAzienda(contesto.nomeSchema, id).catch(() => null),
-    congruenzaAzienda(contesto.nomeSchema, id).catch(() => null),
-    leggiDecisioniPratica(contesto.nomeSchema, id).catch(() => []),
-    leggiSnapshotDebito(contesto.nomeSchema, id).catch(() => null),
-    leggiSessione().catch(() => null),
-    leggiApertureVerifiche(contesto.nomeSchema, id).catch(() => []),
-  ]);
-
-  const attenzione = attenzioneRis?.success ? (attenzioneRis.attenzione ?? null) : null;
-  const riga = storicoRis?.success ? storicoRis.righe?.find((v) => v.id === id) : undefined;
-  const eseguitaIl = riga?.eseguitaIl ?? null;
-  const rigaContabile = contabileRis?.success
-    ? contabileRis.aziende.find((a) => a.aziendaId === id)
-    : undefined;
-  const aperturaContabile = aperture.find((a) => a.tipo === 'CONTABILE');
-  const aperturaAziendale = aperture.find((a) => a.tipo === 'AZIENDALE');
-
-  // LA POSIZIONE SI COMPONE IN src/lib/posizionePratica (0.242.2).
-  // La pagina legge le fonti e rende: quadratura, prontezza, richieste,
-  // invecchiamento, pareggio e piano in essere si provano nei test del modulo,
-  // non aprendo questa schermata con i dati giusti.
-  const posizione = componiPosizione({
-    ragioneSociale: String(risultato.azienda.ragioneSociale),
-    eseguitaIl,
-    attenzione,
-    debito: debitoRis?.success ? (debitoRis.debito ?? null) : null,
-    debitoMemorizzatoIl: debitoRis?.memorizzatoIl ?? null,
-    certificazioneTotale: snapshot?.certificazione?.totale ?? null,
-    esposizioneContributiva: soglie?.esposizione ?? null,
-    qualitativa,
-    fotografia: letturaVerifica?.fotografia ?? null,
-    congruenza,
-    contabile: rigaContabile
-      ? {
-          completa: rigaContabile.completa,
-          visuraIl: rigaContabile.visuraIl,
-          mancanti: [
-            !rigaContabile.visuraPresente ? 'la visura camerale' : null,
-            !rigaContabile.parametriPresenti ? 'l’anagrafica ente' : null,
-            rigaContabile.anniXbrl === 0 ? 'almeno un bilancio XBRL' : null,
-          ].filter((x): x is string => x !== null),
-          apertaIl: aperturaContabile?.apertaIl ?? null,
-          autore: aperturaContabile?.autore ?? null,
-        }
-      : null,
-    // CHI HA ESEGUITO LE VERIFICHE (0.243.0): la data dice quando, non da chi.
-    eseguitaDa: riga?.eseguitaDa ?? null,
-    // Le decisioni entrano nella cronologia: la pagina non le riordina da sé.
-    decisioni: decisioni.map((d) => ({
-      decisaIl: d.decisaIl,
-      esito: d.esito,
-      autore: d.autore,
-    })),
-  });
+  const posizione = componiPosizione(lettura.dati);
+  const { decisioni, aperturaContabile, aperturaAziendale } = lettura;
+  const eseguitaIl = lettura.dati.eseguitaIl;
 
   const {
     validita,
@@ -160,7 +77,7 @@ export default async function PosizionePage({
   const testoDellaRichiesta = posizione.testoRichiesta;
   // Chi firma le decisioni è la sessione: la stessa regola che l'azione
   // applica quando scrive, mostrata prima del clic invece che dopo.
-  const autoreDecisione = autoreDaSessione(sessione);
+  const autoreDecisione = lettura.autoreSessione;
   const stile = STILE_GRADO[prontezza.grado];
 
   return (
@@ -177,9 +94,7 @@ export default async function PosizionePage({
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
             Posizione della pratica
           </p>
-          <h1 className="text-xl font-bold text-slate-900">
-            {String(risultato.azienda.ragioneSociale)}
-          </h1>
+          <h1 className="text-xl font-bold text-slate-900">{String(azienda.ragioneSociale)}</h1>
           <p className="text-[11px] text-slate-500">
             Data di riferimento:{' '}
             {eseguitaIl
@@ -192,7 +107,13 @@ export default async function PosizionePage({
             )}
             {' · '}
             Validità: {validita.etichetta}
-            {aperturaAziendale?.autore && <> · fotografia di {aperturaAziendale.autore}</>}
+            {aperturaAziendale?.autore && (
+              <>
+                {' '}
+                · fotografia di {aperturaAziendale.autore}
+                {aperturaAziendale.modalita === 'SALVAGENTE' ? ' (in ispezione)' : ''}
+              </>
+            )}
           </p>
         </div>
         <StampaPosizione />
@@ -471,6 +392,7 @@ export default async function PosizionePage({
           credito={posizione.credito}
           copertura={posizione.coperturaTesto}
           autore={autoreDecisione}
+          impronta={improntaPosizione(posizione)}
           salvagente={contesto.modalita === 'SALVAGENTE'}
         />
       </section>
@@ -504,6 +426,7 @@ export default async function PosizionePage({
                 <span className="text-[11px] text-slate-800">{a.cosa}</span>
                 <span className="text-[10px] text-slate-500">
                   {a.autore ?? 'autore non registrato'}
+                  {a.ispezione ? ' · in ispezione' : ''}
                 </span>
               </li>
             ))}

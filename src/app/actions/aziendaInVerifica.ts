@@ -232,7 +232,7 @@ export async function registraEsitoVerificaAction(
   dataRiferimento?: string
 ): Promise<RisultatoVerifica> {
   try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    const contesto = await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     const giorno =
       typeof dataRiferimento === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dataRiferimento.trim())
@@ -246,9 +246,10 @@ export async function registraEsitoVerificaAction(
           SET verifica_esito = $2,
               verifica_eseguita_il = now(),
               verifica_riferita_al = COALESCE($3::date, verifica_riferita_al),
-              verifica_eseguita_da = $4
+              verifica_eseguita_da = $4,
+              verifica_eseguita_da_modalita = $5
         WHERE id = $1`,
-      [aziendaId, esito, giorno, eseguitaDa]
+      [aziendaId, esito, giorno, eseguitaDa, contesto.modalita]
     );
 
     // IL DEBITO DELLA VERIFICA RESTA ANCHE A SCHEDA CHIUSA.
@@ -422,6 +423,8 @@ export interface RigaVerifica {
   eseguitaIl: string | null;
   /** Chi ha eseguito la verifica; null per le verifiche anteriori alla 0.243.0. */
   eseguitaDa: string | null;
+  /** SALVAGENTE quando la verifica è stata eseguita in ispezione (0.244.0). */
+  eseguitaDaModalita: string | null;
 }
 
 /**
@@ -447,7 +450,7 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
     const r = await pool
       .query(
         `SELECT id, ragione_sociale, partita_iva, verifica_esito, verifica_eseguita_il,
-                verifica_eseguita_da,
+                verifica_eseguita_da, verifica_eseguita_da_modalita,
                 in_verifica, verifica_archiviata, verifica_motivo
            FROM "${nomeSchema}".aziende
           WHERE verifica_eseguita_il IS NOT NULL
@@ -470,6 +473,9 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
           ? new Date(x.verifica_eseguita_il as string).toISOString()
           : null,
         eseguitaDa: x.verifica_eseguita_da ? String(x.verifica_eseguita_da) : null,
+        eseguitaDaModalita: x.verifica_eseguita_da_modalita
+          ? String(x.verifica_eseguita_da_modalita)
+          : null,
         presaInCarico: !x.in_verifica,
         archiviata: Boolean(x.verifica_archiviata),
         motivo: x.verifica_motivo ? String(x.verifica_motivo) : null,

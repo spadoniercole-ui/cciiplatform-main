@@ -23,6 +23,7 @@ import {
   type BozzaDecisione,
   type Decisione,
   type EsitoDecisione,
+  type GradoPosizione,
   type ModalitaAutore,
 } from './decisioni';
 
@@ -49,6 +50,8 @@ export async function assicuraTabellaDecisioni(
        autore_modalita TEXT,
        credito NUMERIC,
        copertura TEXT,
+       stato_grado TEXT,
+       stato_blocchi INTEGER,
        decisa_il TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`
   );
@@ -57,7 +60,9 @@ export async function assicuraTabellaDecisioni(
   await db.query(
     `ALTER TABLE "${nomeSchema}".pratica_decisioni
        ADD COLUMN IF NOT EXISTS autore_id INTEGER,
-       ADD COLUMN IF NOT EXISTS autore_modalita TEXT`
+       ADD COLUMN IF NOT EXISTS autore_modalita TEXT,
+       ADD COLUMN IF NOT EXISTS stato_grado TEXT,
+       ADD COLUMN IF NOT EXISTS stato_blocchi INTEGER`
   );
   await db.query(
     `CREATE INDEX IF NOT EXISTS pratica_decisioni_azienda_idx
@@ -121,6 +126,8 @@ function rigaDecisione(r: Record<string, unknown>): Decisione {
     autoreModalita: (r.autore_modalita ?? null) as ModalitaAutore | null,
     credito: numeroONull(r.credito),
     copertura: r.copertura === null || r.copertura === undefined ? null : String(r.copertura),
+    statoGrado: (r.stato_grado ?? null) as GradoPosizione | null,
+    statoBlocchi: numeroONull(r.stato_blocchi),
     decisaIl: new Date(r.decisa_il as string).toISOString(),
     autoreAttivo: null,
   };
@@ -186,7 +193,7 @@ export async function leggiDecisioniPratica(
     await assicuraTabellaDecisioni(nomeSchema, db);
     const r = await db.query(
       `SELECT id, esito, motivazione, autore, autore_id, autore_modalita,
-              credito, copertura, decisa_il
+              credito, copertura, stato_grado, stato_blocchi, decisa_il
          FROM "${nomeSchema}".pratica_decisioni
         WHERE azienda_id = $1
         ORDER BY decisa_il DESC, id DESC`,
@@ -225,10 +232,10 @@ export async function registraDecisionePratica(
     const r = await db.query(
       `INSERT INTO "${nomeSchema}".pratica_decisioni
          (azienda_id, esito, motivazione, autore, autore_id, autore_modalita,
-          credito, copertura)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          credito, copertura, stato_grado, stato_blocchi)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING id, esito, motivazione, autore, autore_id, autore_modalita,
-                 credito, copertura, decisa_il`,
+                 credito, copertura, stato_grado, stato_blocchi, decisa_il`,
       [
         aziendaId,
         bozza.esito,
@@ -238,6 +245,8 @@ export async function registraDecisionePratica(
         bozza.autoreModalita ?? 'SALVAGENTE',
         bozza.credito ?? null,
         bozza.copertura ?? null,
+        bozza.statoGrado ?? null,
+        bozza.statoBlocchi ?? null,
       ]
     );
     // Chi ha appena firmato esiste per definizione: la riga è stata autorizzata

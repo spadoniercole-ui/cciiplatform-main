@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { componiPosizione, type DatiPosizione } from './composizione';
+import { componiPosizione, improntaPosizione, type DatiPosizione } from './composizione';
 import { NUMERI_POSIZIONE_DEMO as DEMO } from '@/lib/demo/numeriPosizioneDemo';
 import type { Attenzione } from '@/lib/screening/indicatore';
 import type { DebitoMemorizzato } from '@/lib/debitiEnte/memorizzazione';
@@ -322,5 +322,45 @@ describe('composizione della posizione', () => {
     // L'ordine è decrescente: l'ultimo atto è la prima riga.
     const date = p.cronologia.map((a) => new Date(a.data).getTime());
     expect(date).toEqual([...date].sort((x, y) => y - x));
+  });
+});
+
+describe('l’impronta della posizione e gli atti in ispezione', () => {
+  it('non cambia se cambia solo il momento in cui si guarda', () => {
+    const a = componiPosizione(dati(), OGGI);
+    const b = componiPosizione(dati(), new Date('2026-11-16T18:00:00.000Z'));
+    expect(improntaPosizione(b)).toBe(improntaPosizione(a));
+  });
+
+  it('cambia quando cambia un numero su cui si firma', () => {
+    const base = improntaPosizione(componiPosizione(dati(), OGGI));
+    expect(improntaPosizione(componiPosizione(dati({ debito: debito(150_000) }), OGGI))).not.toBe(
+      base
+    );
+    expect(improntaPosizione(componiPosizione(dati({ fotografia: null }), OGGI))).not.toBe(base);
+  });
+
+  it('dichiara in cronologia gli atti compiuti in ispezione', () => {
+    const p = componiPosizione(
+      dati({
+        eseguitaInIspezione: true,
+        contabile: {
+          completa: true,
+          visuraIl: '2026-11-16',
+          mancanti: [],
+          apertaIl: '2026-11-16',
+          autore: 'superadmin',
+          inIspezione: true,
+        },
+      }),
+      OGGI
+    );
+    expect(p.cronologia.find((a) => a.fonte === 'amministrativa')?.ispezione).toBe(true);
+    expect(p.cronologia.find((a) => a.fonte === 'contabile')?.ispezione).toBe(true);
+  });
+
+  it('non dichiara ispezione per gli atti dell’ente', () => {
+    const p = componiPosizione(dati(), OGGI);
+    expect(p.cronologia.every((a) => a.ispezione === false)).toBe(true);
   });
 });

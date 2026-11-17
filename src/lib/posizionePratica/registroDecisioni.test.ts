@@ -132,3 +132,24 @@ describe('registro delle decisioni sul database', () => {
     expect(lette[0].motivazione).toBe('Il credito quadra e la documentazione è completa.');
   });
 });
+
+describe('lo stato della posizione annotato con la decisione', () => {
+  it('scrive e rilegge grado e numero di blocchi', async () => {
+    await registraDecisionePratica(
+      SCHEMA,
+      501,
+      bozza({ statoGrado: 'QUASI', statoBlocchi: 1 }),
+      esecutore
+    );
+    const [letta] = await leggiDecisioniPratica(SCHEMA, 501, esecutore);
+    expect(letta.statoGrado).toBe('QUASI');
+    expect(letta.statoBlocchi).toBe(1);
+  });
+
+  it('lascia null lo stato per le decisioni registrate prima', async () => {
+    await registraDecisionePratica(SCHEMA, 501, bozza(), esecutore);
+    const [letta] = await leggiDecisioniPratica(SCHEMA, 501, esecutore);
+    expect(letta.statoGrado).toBeNull();
+    expect(letta.statoBlocchi).toBeNull();
+  });
+});

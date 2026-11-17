@@ -19,13 +19,21 @@ export const TIPI_VERIFICA: TipoVerifica[] = ['AMMINISTRATIVA', 'CONTABILE', 'AZ
 
 const schemaOk = (nome: string) => /^[a-z0-9_]+$/.test(nome);
 
+/** Basta il Pool di `pg` o un PGlite nei test. */
+export type EsecutoreVerifiche = {
+  query: (sql: string, valori?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+};
+
 /**
  * Crea la tabella, se non c'è. Idempotente: le verifiche già aperte non si
  * toccano, e uno spazio vecchio guadagna solo la tabella.
  */
-export async function assicuraTabellaVerificheApertura(nomeSchema: string): Promise<void> {
+export async function assicuraTabellaVerificheApertura(
+  nomeSchema: string,
+  db: EsecutoreVerifiche = pool
+): Promise<void> {
   if (!schemaOk(nomeSchema)) throw new Error('Nome schema non valido.');
-  await pool.query(
+  await db.query(
     `CREATE TABLE IF NOT EXISTS "${nomeSchema}".verifiche_apertura (
        azienda_id INTEGER NOT NULL REFERENCES "${nomeSchema}".aziende(id) ON DELETE CASCADE,
        tipo TEXT NOT NULL,
@@ -38,7 +46,7 @@ export async function assicuraTabellaVerificheApertura(nomeSchema: string): Prom
   );
   // Chi ha aperto la verifica (0.243.0): la data da sola dice quando, non da
   // chi. Le righe aperte prima restano con l'autore null e la pagina lo dice.
-  await pool.query(
+  await db.query(
     `ALTER TABLE "${nomeSchema}".verifiche_apertura
        ADD COLUMN IF NOT EXISTS aperta_da TEXT,
        ADD COLUMN IF NOT EXISTS aperta_da_id INTEGER,
@@ -64,14 +72,15 @@ export async function apriVerifica(
   nomeSchema: string,
   aziendaId: number,
   tipo: TipoVerifica,
-  autore?: AutoreApertura
+  autore?: AutoreApertura,
+  db: EsecutoreVerifiche = pool
 ): Promise<{ apertaIl: string | null; riaperta: boolean }> {
   if (!schemaOk(nomeSchema)) throw new Error('Nome schema non valido.');
   if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
     return { apertaIl: null, riaperta: false };
   }
-  await assicuraTabellaVerificheApertura(nomeSchema);
-  const inserita = await pool.query(
+  await assicuraTabellaVerificheApertura(nomeSchema, db);
+  const inserita = await db.query(
     `INSERT INTO "${nomeSchema}".verifiche_apertura
        (azienda_id, tipo, aperta_da, aperta_da_id, aperta_da_modalita)
      VALUES ($1, $2, $3, $4, $5)
@@ -88,7 +97,7 @@ export async function apriVerifica(
   if (inserita.rows.length > 0) {
     return { apertaIl: String(inserita.rows[0].aperta_il), riaperta: true };
   }
-  const letta = await pool.query(
+  const letta = await db.query(
     `SELECT to_char(aperta_il, 'YYYY-MM-DD') AS aperta_il
        FROM "${nomeSchema}".verifiche_apertura
       WHERE azienda_id = $1 AND tipo = $2`,
@@ -108,17 +117,21 @@ export interface AperturaConAutore {
   tipo: TipoVerifica;
   apertaIl: string | null;
   autore: string | null;
+  /** SALVAGENTE quando la verifica è stata aperta in ispezione (0.244.0). */
+  modalita: string | null;
 }
 
 export async function leggiApertureVerifiche(
   nomeSchema: string,
-  aziendaId: number
+  aziendaId: number,
+  db: EsecutoreVerifiche = pool
 ): Promise<AperturaConAutore[]> {
   if (!schemaOk(nomeSchema)) return [];
   if (!Number.isInteger(aziendaId) || aziendaId <= 0) return [];
   try {
-    const r = await pool.query(
-      `SELECT tipo, to_char(aperta_il, 'YYYY-MM-DD') AS aperta_il, aperta_da
+    const r = await db.query(
+      `SELECT tipo, to_char(aperta_il, 'YYYY-MM-DD') AS aperta_il, aperta_da,
+              aperta_da_modalita
          FROM "${nomeSchema}".verifiche_apertura
         WHERE azienda_id = $1`,
       [aziendaId]
@@ -127,6 +140,7 @@ export async function leggiApertureVerifiche(
       tipo: String(x.tipo) as TipoVerifica,
       apertaIl: x.aperta_il ? String(x.aperta_il) : null,
       autore: x.aperta_da ? String(x.aperta_da) : null,
+      modalita: x.aperta_da_modalita ? String(x.aperta_da_modalita) : null,
     }));
   } catch {
     return [];

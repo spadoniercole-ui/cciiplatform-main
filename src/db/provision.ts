@@ -257,6 +257,9 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS verifica_eseguita_da TEXT`
   );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS verifica_eseguita_da_modalita TEXT`
+  );
   // DATA DI RIFERIMENTO della verifica: il giorno a cui si riferiscono i conti
   // (esigibilità dei periodi, anno precedente per il 30%, anzianità del
   // ritardo). Non è la data in cui si è premuto «Conferma e valuta»:

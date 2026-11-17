@@ -1,3 +1,27 @@
+## 0.244.0 — 2026-11-17
+
+- **La decisione deve stare in piedi con la posizione.** «Proseguire» su una posizione bloccata
+  ora si rifiuta: la traccia avrebbe annotato un atto che i numeri smentiscono. Gli altri esiti —
+  chiedere documenti, rimandare, archiviare — restano sempre possibili, anche quando la posizione
+  è ferma. La regola è pura e testata (`validaCoerenzaDecisione`), e il messaggio elenca il primo
+  blocco che la impedisce.
+- **La firma verifica la posizione, non il modulo.** La pagina manda un'impronta dei numeri su cui
+  si firma — credito, copertura, dimensioni fuori, grado, numero di blocchi, quadratura, scoperto.
+  Prima di scrivere, l'azione rilegge la posizione con la stessa lettura della pagina, ricalcola
+  l'impronta e rifiuta se è diversa: meglio un rifiuto che una decisione annotata con numeri che
+  nessuno ha visto. Il modulo ricarica i numeri nuovi lasciando scritto il motivo.
+- **Credito e copertura non arrivano più dal browser.** Li legge il server al momento della firma,
+  insieme al grado e al numero di blocchi, e li annota in `pratica_decisioni` (`stato_grado`,
+  `stato_blocchi`, aggiunte idempotenti). La traccia mostra «firmata con 1 blocco»: chi rilegge sa
+  su che cosa si è deciso.
+- **Le verifiche in ispezione si dichiarano.** Anche la verifica amministrativa registra la
+  modalità di chi la esegue (`aziende.verifica_eseguita_da_modalita`), non solo il nome. La
+  testata e la cronologia della Posizione scrivono «in ispezione» accanto all'atto: un documento
+  letto in salvagente non diventa un atto dell'ente.
+- **Una lettura sola per pagina e azione.** Le dodici fonti della posizione si leggono in
+  `src/lib/posizionePratica/letturaPosizione.ts`: la posizione mostrata e quella verificata alla
+  firma non possono più essere due posizioni diverse.
+
 ## 0.243.0 — 2026-11-17
 
 - **In salvagente la decisione non si firma più.** Nella prova della 0.242.4 una decisione era

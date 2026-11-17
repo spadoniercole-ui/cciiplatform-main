@@ -40,6 +40,7 @@ export function DecisioniPratica({
   credito,
   copertura,
   autore,
+  impronta,
   salvagente = false,
 }: {
   nomeSchema: string;
@@ -49,6 +50,8 @@ export function DecisioniPratica({
   copertura: string | null;
   /** L'utente della sessione: la decisione si firma con questo nome. */
   autore: string | null;
+  /** L'impronta della posizione mostrata: l'azione la ricalcola e la confronta. */
+  impronta: string;
   /** true quando si sta operando in ispezione (Superadmin in salvagente). */
   salvagente?: boolean;
 }) {
@@ -76,15 +79,21 @@ export function DecisioniPratica({
       return;
     }
     setInCorso(true);
-    const risposta = await registraDecisionePraticaAction(nomeSchema, aziendaId, {
-      esito,
-      motivazione,
-      credito,
-      copertura,
-    });
+    // Credito, copertura e stato non si mandano: li rilegge l'azione. Qui si
+    // manda l'impronta, cioè il diritto di dire «la posizione che ho visto è
+    // questa»; se nel frattempo è cambiata, l'azione rifiuta (0.244.0).
+    const risposta = await registraDecisionePraticaAction(
+      nomeSchema,
+      aziendaId,
+      { esito, motivazione },
+      impronta
+    );
     setInCorso(false);
     if (!risposta.success) {
       setErrore(risposta.error ?? 'Decisione non registrata.');
+      // La posizione è cambiata sotto il modulo: si rilegge la pagina (i numeri
+      // e l'impronta nuova), lasciando l'errore e il motivo già scritti.
+      if (risposta.error?.includes('cambiata')) router.refresh();
       return;
     }
     setMotivazione('');
@@ -170,7 +179,8 @@ export function DecisioniPratica({
             </button>
             <span className="text-[10px] text-slate-500">
               Credito {credito === null ? 'non accertato' : formattaEuro(credito)}
-              {copertura ? ` · copertura ${copertura}` : ''} — annotati con la decisione.
+              {copertura ? ` · copertura ${copertura}` : ''} — l’azione li rilegge prima di
+              annotarli.
             </span>
           </div>
           {errore && <p className="text-[11px] font-bold text-red-700">{errore}</p>}
@@ -254,6 +264,9 @@ export function DecisioniPratica({
                   <p className="text-[11px] font-bold text-slate-800">{riassuntoDecisione(d)}</p>
                   <p className="text-[10px] text-slate-500">
                     {formattaGiornoOra(d.decisaIl)} · {etichettaAutore(d)}
+                    {typeof d.statoBlocchi === 'number' && d.statoBlocchi > 0
+                      ? ` · firmata con ${d.statoBlocchi} ${d.statoBlocchi === 1 ? 'blocco' : 'blocchi'}`
+                      : ''}
                   </p>
                   <p className="mt-1 text-[11px] text-slate-700 leading-relaxed">{d.motivazione}</p>
                 </li>
