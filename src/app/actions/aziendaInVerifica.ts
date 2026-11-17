@@ -13,6 +13,7 @@ import { assicuraTabellaAziende } from '@/db/provision';
 import type { AnagraficaEstratta } from '@/app/actions/visuraEstrazione';
 import { leggiSessione, richiediAccessoAzienda, richiediAccessoSchema } from '@/lib/autorizzazione';
 import { nomeDaSessione } from '@/lib/identitaSessione';
+import { leggiRigheStorico } from '@/lib/verificaAzienda/storico';
 import {
   allineaDebitoEnteMemorizzato,
   azzeraDebitoEnteMemorizzato,
@@ -447,29 +448,15 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
   try {
     const contesto = await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    // UNO SPAZIO VECCHIO NON PERDE LO STORICO (0.244.1).
-    // Le colonne dell'autore arrivano con `assicuraTabellaAziende`, ma questa
-    // lettura non la invoca: se lo spazio non è ancora stato riallineato, la
-    // query con `verifica_eseguita_da_modalita` fallisce e — com'era prima — lo
-    // storico tornava vuoto, come se nessuna verifica fosse mai stata eseguita.
-    // Si rilegge senza le colonne dell'autore: le righe restano, l'autore
-    // compare come «non registrato» e la pagina lo dichiara.
-    const seleziona = (conAutore: boolean) =>
-      `SELECT id, ragione_sociale, partita_iva, verifica_esito, verifica_eseguita_il,
-              ${conAutore ? 'verifica_eseguita_da, verifica_eseguita_da_modalita,' : ''}
-              in_verifica, verifica_archiviata, verifica_motivo
-         FROM "${nomeSchema}".aziende
-        WHERE verifica_eseguita_il IS NOT NULL
-        ORDER BY verifica_eseguita_il DESC`;
-    const r: { rows: Record<string, unknown>[] } = await pool
-      .query(seleziona(true))
-      .catch(() => pool.query(seleziona(false)))
-      .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+    // UNO SPAZIO VECCHIO NON PERDE LO STORICO (0.244.1): il ripiego senza le
+    // colonne dell'autore sta in src/lib/verificaAzienda/storico.ts, dove i
+    // test lo provano su un database vero.
+    const righeGrezze = await leggiRigheStorico(nomeSchema, pool);
     // Operatori: solo le aziende assegnate dall'Admin di Spazio.
     const righe =
       contesto.modalita === 'OPERATORE'
-        ? r.rows.filter((x) => contesto.aziendeConsentite?.includes(Number(x.id)))
-        : r.rows;
+        ? righeGrezze.filter((x) => contesto.aziendeConsentite?.includes(Number(x.id)))
+        : righeGrezze;
     return {
       success: true,
       righe: righe.map((x) => ({
