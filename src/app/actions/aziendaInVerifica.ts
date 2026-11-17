@@ -447,15 +447,23 @@ export async function ottieniStoricoVerificheAction(nomeSchema: string): Promise
   try {
     const contesto = await richiediAccessoSchema(nomeSchema);
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
-    const r = await pool
-      .query(
-        `SELECT id, ragione_sociale, partita_iva, verifica_esito, verifica_eseguita_il,
-                verifica_eseguita_da, verifica_eseguita_da_modalita,
-                in_verifica, verifica_archiviata, verifica_motivo
-           FROM "${nomeSchema}".aziende
-          WHERE verifica_eseguita_il IS NOT NULL
-          ORDER BY verifica_eseguita_il DESC`
-      )
+    // UNO SPAZIO VECCHIO NON PERDE LO STORICO (0.244.1).
+    // Le colonne dell'autore arrivano con `assicuraTabellaAziende`, ma questa
+    // lettura non la invoca: se lo spazio non è ancora stato riallineato, la
+    // query con `verifica_eseguita_da_modalita` fallisce e — com'era prima — lo
+    // storico tornava vuoto, come se nessuna verifica fosse mai stata eseguita.
+    // Si rilegge senza le colonne dell'autore: le righe restano, l'autore
+    // compare come «non registrato» e la pagina lo dichiara.
+    const seleziona = (conAutore: boolean) =>
+      `SELECT id, ragione_sociale, partita_iva, verifica_esito, verifica_eseguita_il,
+              ${conAutore ? 'verifica_eseguita_da, verifica_eseguita_da_modalita,' : ''}
+              in_verifica, verifica_archiviata, verifica_motivo
+         FROM "${nomeSchema}".aziende
+        WHERE verifica_eseguita_il IS NOT NULL
+        ORDER BY verifica_eseguita_il DESC`;
+    const r: { rows: Record<string, unknown>[] } = await pool
+      .query(seleziona(true))
+      .catch(() => pool.query(seleziona(false)))
       .catch(() => ({ rows: [] as Record<string, unknown>[] }));
     // Operatori: solo le aziende assegnate dall'Admin di Spazio.
     const righe =

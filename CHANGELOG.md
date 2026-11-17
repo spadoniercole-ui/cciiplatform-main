@@ -1,3 +1,15 @@
+## 0.244.1 — 2026-11-17
+
+- **Lo storico della Posizione non si svuota più se una colonna manca.** `ottieniStoricoVerificheAction`
+  leggeva autore e modalità in un colpo solo: su uno spazio creato prima della 0.244.0 e non ancora
+  riallineato la query falliva e la pagina mostrava «nessun atto datato», come se le verifiche non
+  fossero mai state eseguite. Ora, se la lettura con le colonne dell'autore fallisce, si rilegge
+  senza: le righe restano, l'autore compare come «non registrato» e la pagina lo dice.
+- **La colonna della modalità si aggiunge dove si aggiunge quella dell'autore.** In
+  `assicuraTabellaAziende` l'`ALTER TABLE … ADD COLUMN IF NOT EXISTS verifica_eseguita_da_modalita`
+  sta accanto a `verifica_eseguita_da`: ogni spazio esistente la riceve alla prima apertura, senza
+  toccare le verifiche già registrate, che restano con modalità null.
+
 ## 0.244.0 — 2026-11-17
 
 - **La decisione deve stare in piedi con la posizione.** «Proseguire» su una posizione bloccata
