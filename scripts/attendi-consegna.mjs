@@ -665,6 +665,26 @@ async function main() {
     esci(errore.message || String(errore));
   }
 
+  // IL COMMIT PUÒ ESSERE SU `main` ANCHE SE IL RAMO LOCALE È UN ALTRO (0.245.0).
+  // È il caso di una consegna fatta da un ramo e portata su `main` con un
+  // fast-forward: il ramo locale direbbe «anteprima», e lo script resterebbe in
+  // attesa di un deployment che per quel commit non esiste — dichiarando «in
+  // corso» una consegna già verificata. Si guarda la testa di `main`: se è
+  // questo commit, la consegna è di produzione.
+  if (!contesto.produzione) {
+    try {
+      const testa = await api(`/repos/${contesto.repo}/commits/${RAMO_PRODUZIONE}`);
+      if (testa && testa.sha === contesto.sha) {
+        contesto.produzione = true;
+        contesto.ramo = RAMO_PRODUZIONE;
+        console.info(`  il commit è la testa di ${RAMO_PRODUZIONE}: consegna di produzione`);
+      }
+    } catch {
+      // Se la testa di main non si legge (limite di richieste, permessi) resta
+      // la lettura del ramo locale: la consegna si valuta come prima.
+    }
+  }
+
   const ciAttesa = await pullRequestAperta(contesto.repo, proprietario, contesto.ramo);
   const dominio = contesto.produzione ? dominioProduzione(opzioni) : '';
   const versioneAttesa = versioneApp(contesto.sha);
