@@ -47,6 +47,7 @@ describe('riepilogo del triage', () => {
         chiuse: 1,
         si: 1,
         no: 0,
+        polaritaInvertite: 0,
         positive: 1,
         percentualeNegative: 0,
         sfavorevolePerDueTerzi: false,

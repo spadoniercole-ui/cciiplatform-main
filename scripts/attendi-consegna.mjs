@@ -674,7 +674,8 @@ async function main() {
   );
   if (contesto.produzione) {
     console.info(
-      '  attendo anteprime, produzioni e CI' + (dominio ? `, poi la versione su ${dominio}` : '')
+      '  attendo le produzioni e la CI (su main le anteprime non esistono)' +
+        (dominio ? `, poi la versione su ${dominio}` : '')
     );
   } else {
     console.info(

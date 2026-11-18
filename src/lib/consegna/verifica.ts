@@ -63,11 +63,20 @@ export function normalizzaAmbiente(valore: string): string {
     .trim();
 }
 
-/** Gli ambienti Vercel attesi per un commit, nell'ordine in cui si guardano. */
+/**
+ * Gli ambienti Vercel attesi per un commit, nell'ordine in cui si guardano.
+ *
+ * SU UN RAMO DI LAVORO si attende l'anteprima: è lì che il commit si prova
+ * prima di entrare in produzione. SU `main` si attendono le produzioni e non le
+ * anteprime: Vercel non crea un deployment di anteprima per un push su `main`,
+ * quindi aspettarlo significava restare in attesa per sempre di due ambienti
+ * che non possono esistere — nessuna consegna su `main` poteva chiudere verde.
+ * Un'anteprima che comparisse comunque per quel commit non è un errore: non è
+ * attesa e non si guarda (vedi `ambientiNonAttesi` per la diagnosi).
+ */
 export function ambientiAttesi(progetti: string[], produzione: boolean): string[] {
-  const anteprime = progetti.map((p) => `Preview – ${p}`);
-  if (!produzione) return anteprime;
-  return [...anteprime, ...progetti.map((p) => `Production – ${p}`)];
+  if (!produzione) return progetti.map((p) => `Preview – ${p}`);
+  return progetti.map((p) => `Production – ${p}`);
 }
 
 /**
@@ -201,6 +210,14 @@ export function valutaConsegna(ingresso: IngressoVerifica): EsitoVerifica {
   const mancanti: string[] = [];
   let rosso = false;
   let incompleto = false;
+
+  // Su main l'anteprima non esiste per costruzione: dirlo, invece di lasciar
+  // credere che sia stata controllata e non trovata.
+  if (produzione) {
+    righe.push(
+      '· Anteprime: su main il push non ne produce (Vercel pubblica in produzione); si attendono le produzioni'
+    );
+  }
 
   for (const ambiente of attesi) {
     const deployment = trovaDeployment(ingresso.deployments, ambiente, ingresso.sha);

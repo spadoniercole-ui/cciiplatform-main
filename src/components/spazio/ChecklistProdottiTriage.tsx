@@ -307,7 +307,11 @@ export function ChecklistProdottiTriage({
               <p className="text-[10px] text-slate-400 tabular-nums">
                 {sintesi.risposte} risposte su {sintesi.totale} domande · {sintesi.positive}{' '}
                 positive e {sintesi.negative} negative sulle {sintesi.chiuse} domande a risposta
-                chiusa.
+                chiusa
+                {sintesi.polaritaInvertite > 0
+                  ? ` (${sintesi.polaritaInvertite} leggono il «Sì» come negativa)`
+                  : ''}
+                .
               </p>
             </div>
           )}

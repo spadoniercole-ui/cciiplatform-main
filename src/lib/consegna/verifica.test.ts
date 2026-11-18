@@ -52,10 +52,8 @@ describe('ambientiAttesi', () => {
     ]);
   });
 
-  it('su main attende prima le anteprime e poi le produzioni', () => {
+  it('su main attende solo le produzioni: le anteprime non esistono per un push su main', () => {
     expect(ambientiAttesi(['cciiplatform-main', 'cciiweb-40'], true)).toEqual([
-      'Preview – cciiplatform-main',
-      'Preview – cciiweb-40',
       'Production – cciiplatform-main',
       'Production – cciiweb-40',
     ]);
@@ -170,12 +168,26 @@ describe('valutaConsegna', () => {
     ciAttesa: true,
   };
 
-  it('è OK solo con anteprime, produzioni e CI verdi', () => {
-    const v = valutaConsegna(base);
+  it('su main è OK con le produzioni e la CI verdi, senza anteprime', () => {
+    // È il caso reale: un push su main non produce alcuna anteprima, e la
+    // consegna deve poter chiudere verde lo stesso.
+    const v = valutaConsegna({
+      ...base,
+      deployments: base.deployments.filter((d) => d.ambiente.startsWith('Production')),
+      stati: { 3: base.stati[3], 4: base.stati[4] },
+    });
     expect(v.esito).toBe('OK');
     expect(v.mancanti).toEqual([]);
-    expect(v.righe).toHaveLength(5);
-    expect(v.righe[0]).toContain('Preview – cciiplatform-main: pronto');
+    expect(v.righe).toHaveLength(4);
+    expect(v.righe[0]).toContain('Anteprime');
+    expect(v.righe[1]).toContain('Production – cciiplatform-main: pronto');
+    expect(v.righe.some((r) => r.includes('Preview'))).toBe(false);
+  });
+
+  it('su main un’anteprima comparsa per caso non entra nel verdetto', () => {
+    const v = valutaConsegna(base);
+    expect(v.esito).toBe('OK');
+    expect(v.righe.some((r) => r.includes('Preview'))).toBe(false);
   });
 
   it('su main la produzione mancante tiene la consegna in corso', () => {

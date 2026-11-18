@@ -44,9 +44,11 @@ quindi autorizzati come parte ordinaria del lavoro, senza chiederli di nuovo.
 1. **GitHub** — commit in italiano sul ramo di lavoro (messaggio che dice *perché*: cosa
    cambia e per chi), poi `git push origin <ramo>`. Nessun lavoro resta non committato:
    se un file è di troppo, lo si toglie dal commit, non lo si lascia fuori in silenzio.
-2. **Anteprima** — il push fa partire il deploy *Preview* su Vercel. Va atteso fino allo stato
-   **Ready** del commit appena pushato (non di uno precedente), e le correzioni si fanno nel
-   ramo, non direttamente online.
+2. **Anteprima** — il push su un ramo di lavoro fa partire il deploy *Preview* su Vercel. Va
+   atteso fino allo stato **Ready** del commit appena pushato (non di uno precedente), e le
+   correzioni si fanno nel ramo, non direttamente online. Su `main` l'anteprima non esiste:
+   Vercel non ne crea per un push su `main`, e la consegna non la attende (vedi
+   `ambientiAttesi` in `src/lib/consegna/verifica.ts`).
 3. **Produzione** — lo stesso commit arriva su `main` (il ramo di produzione) e diventa il
    deploy *Production*. Si verifica la versione in fondo alla pagina di login: deve coincidere
    con `APP_VERSION` e con l'ultima voce di `CHANGELOG.md`. La legge lo script, dalla pagina
@@ -57,8 +59,9 @@ I passi 2 e 3 non si guardano a occhio: dopo il push si lancia **`npm run conseg
 dice riga per riga se ogni ambiente Vercel è pronto e se la CI è verde: esce **0** quando la
 consegna è verificata, **1** se qualcosa è rosso o se scade il tempo (20 minuti, `--timeout=`),
 **2** con `--una-volta` se è ancora in corso. Su un ramo di lavoro attende le sole anteprime e
-non pretende la CI, che parte solo con una pull request aperta; su `main` pretende anche le due
-produzioni. Se un deployment o una run è rosso si ferma subito invece di aspettare: è il caso
+non pretende la CI, che parte solo con una pull request aperta; su `main` attende le due
+produzioni, e non le anteprime — che per un push su `main` Vercel non crea (prima le si aspettava
+lo stesso, e nessuna consegna poteva chiudere verde). Se un deployment o una run è rosso si ferma subito invece di aspettare: è il caso
 in cui non si dichiara «fatto» nulla. Una CI rossa non si lascia a metà: lo script legge i job
 della run e dice a quale passo si è fermata (con il link al job, per il log), così non serve
 aprire GitHub per sapere cosa è caduto; se quel dettaglio non si legge (limite di richieste,

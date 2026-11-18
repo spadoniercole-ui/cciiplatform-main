@@ -20,6 +20,7 @@ import { NextResponse } from 'next/server';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { prefissoFileSpazio, rifiutaSeNonAutorizzato } from '@/lib/autorizzazione';
 import { limiteUploadByte } from '@/lib/edizioneServer';
+import { CorpoTroppoGrande, formDataDalCorpo, leggiCorpoLimitato } from '@/lib/file/corpoLimitato';
 
 // 4MB su Vercel (prudente sotto il tetto reale di 4,5MB), 20MB su disco locale.
 const DIMENSIONE_MASSIMA = limiteUploadByte();
@@ -27,22 +28,31 @@ const LIMITE_MB = DIMENSIONE_MASSIMA / 1024 / 1024;
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    // Prima la sessione, poi la dimensione dichiarata, e solo dopo si legge il
-    // corpo: chi non è autenticato non deve poter far caricare in memoria al
-    // server un corpo arbitrario (le route non hanno il limite delle server
-    // action). Il margine copre l'involucro multipart.
+    // Prima la sessione, poi il corpo: chi non è autenticato non deve poter far
+    // caricare in memoria al server un corpo arbitrario (le route non hanno il
+    // limite delle server action).
     const rifiuto = await rifiutaSeNonAutorizzato('SESSIONE');
     if (rifiuto) return rifiuto as NextResponse;
-    const dichiarata = Number(request.headers.get('content-length') || 0);
-    if (!dichiarata || dichiarata > DIMENSIONE_MASSIMA + 64 * 1024) {
-      return NextResponse.json(
-        {
-          error: `File troppo grande o dimensione non dichiarata — il limite è di ${LIMITE_MB}MB.`,
-        },
-        { status: 413 }
-      );
+    // IL TETTO VALE PER IL CORPO, NON PER UN'INTESTAZIONE (0.245.0). Qui si
+    // pretendeva `Content-Length`, e un proxy che ricompone il corpo a pezzi lo
+    // omette: ogni upload dall'anteprima cloud veniva respinto con 413 anche
+    // con un PDF di poche decine di KB. Il margine copre l'involucro multipart.
+    let corpo: Uint8Array;
+    try {
+      corpo = await leggiCorpoLimitato(request, DIMENSIONE_MASSIMA + 64 * 1024);
+    } catch (errore) {
+      if (errore instanceof CorpoTroppoGrande) {
+        return NextResponse.json(
+          { error: `File troppo grande — il limite è di ${LIMITE_MB}MB.` },
+          { status: 413 }
+        );
+      }
+      throw errore;
     }
-    const formData = await request.formData();
+    if (corpo.byteLength === 0) {
+      return NextResponse.json({ error: 'Nessun file ricevuto.' }, { status: 400 });
+    }
+    const formData = await formDataDalCorpo(corpo, request.headers.get('content-type'));
     const file = formData.get('file') as File | null;
     const codiceSpazio = formData.get('codice') as string | null;
 

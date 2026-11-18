@@ -188,17 +188,31 @@ export const PRODOTTI_DEMO: ProdottoDemoParametri[] = [
     nome: 'Rateizzazione',
     inChecklist: true,
     ordine: 10,
+    // LE DOMANDE SONO SCRITTE PER ESSERE LETTE, NON SOLO RISPOSTE (0.245.0).
+    // Ognuna chiede un fatto verificabile, e la polarità dice quale risposta è
+    // quella che pesa: qui il negativo è il «No» (non ha chiesto, non ha
+    // pagato). Il testo libero chiede il fatto e il suo risultato, non un
+    // parere: è quello che entra nel quadro qualitativo e nella decisione.
     domande: [
       {
         id: 'rateizzazione-richiesta',
-        testo: 'L’azienda ha presentato una richiesta di rateizzazione prima dell’avviso?',
+        testo:
+          'L’azienda ha chiesto una rateizzazione all’ente prima che scadesse l’avviso di pagamento?',
+        tipo: 'SI_NO',
+        maxCaratteri: null,
+        rispostaNegativa: 'NO',
+      },
+      {
+        id: 'rateizzazione-mantenute',
+        testo: 'Le rate concordate sono state pagate alle scadenze, senza solleciti?',
         tipo: 'SI_NO',
         maxCaratteri: null,
         rispostaNegativa: 'NO',
       },
       {
         id: 'rateizzazione-misure',
-        testo: 'Quali misure ha adottato per ridurre la posizione debitoria?',
+        testo:
+          'Quali misure ha adottato l’azienda per ridurre la posizione debitoria, e quale risultato hanno prodotto?',
         tipo: 'TESTO_LIBERO',
         maxCaratteri: 600,
         rispostaNegativa: 'NO',
@@ -218,6 +232,14 @@ export const PRODOTTI_DEMO: ProdottoDemoParametri[] = [
         maxCaratteri: null,
         rispostaNegativa: 'NO',
       },
+      {
+        id: 'durc-continuita',
+        testo:
+          'La regolarità contributiva è stata continua negli ultimi dodici mesi, senza sospensioni?',
+        tipo: 'SI_NO',
+        maxCaratteri: null,
+        rispostaNegativa: 'NO',
+      },
     ],
   },
   {
@@ -228,10 +250,21 @@ export const PRODOTTI_DEMO: ProdottoDemoParametri[] = [
     domande: [
       {
         id: 'bilanci-depositati',
-        testo: 'I bilanci degli ultimi due esercizi sono stati depositati?',
+        testo: 'I bilanci degli ultimi due esercizi sono stati depositati nei termini?',
         tipo: 'SI_NO',
         maxCaratteri: null,
         rispostaNegativa: 'NO',
+      },
+      {
+        // La polarità invertita: qui è il «Sì» a descrivere il fatto negativo.
+        // Serve a ricordare che la parola non è il giudizio, e che il quadro
+        // conta le risposte secondo la polarità scelta in configurazione.
+        id: 'bilanci-interruzioni',
+        testo:
+          'Negli ultimi tre esercizi c’è stato un anno senza deposito del bilancio, anche per proroga non richiesta?',
+        tipo: 'SI_NO',
+        maxCaratteri: null,
+        rispostaNegativa: 'SI',
       },
     ],
   },

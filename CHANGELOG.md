@@ -1,3 +1,36 @@
+## 0.245.0 — 2026-11-18
+
+- **In portable una riga trovata non è più «nessuna riga».** PGlite restituisce `affectedRows: 0`
+  anche per un `SELECT` che trova righe; il wrapper ne ricavava `rowCount` e ogni controllo
+  `rowCount === 0` concludeva che la riga non c'era. Effetto osservabile: la check list dei
+  prodotti mostrava le domande e al primo salvataggio rispondeva «Prodotto non trovato.» con il
+  prodotto nella tabella. Ora le righe lette valgono sempre più di `affectedRows`
+  (`src/lib/portable/risultato.ts`, con i suoi test), e vale per ogni azione che controlla
+  `rowCount` dopo una lettura, non solo per la check list.
+- **La check list dei prodotti si legge meglio.** Le domande demo sono riscritte su fatti
+  verificabili (`… prima che scadesse l'avviso`, `… senza solleciti`, un anno senza deposito) e
+  una legge il «Sì» come risposta negativa: il quadro conta le risposte secondo la polarità scelta
+  in configurazione, non secondo la parola, e il riepilogo dichiara quante domande hanno la
+  polarità invertita.
+- **L'upload non richiede più `Content-Length`.** Le route `blob-upload` e `xbrl/parse`
+  rifiutavano con 413 un corpo senza lunghezza dichiarata: è il caso di un corpo trasmesso a pezzi
+  dietro un proxy — l'anteprima cloud — dove ogni PDF veniva respinto. Ora il tetto si applica al
+  corpo letto, a blocchi, e si ferma appena lo supera (`src/lib/file/corpoLimitato.ts`).
+- **La consegna su `main` può chiudere verde.** `npm run consegna` su `main` attendeva anche le due
+  anteprime Vercel, che per un push su `main` non esistono: la consegna restava in corso per
+  sempre. Su `main` ora si attendono le produzioni e la CI; le anteprime restano attese sui rami di
+  lavoro, dove il push le genera davvero.
+- **Il credito dei servizi a pagamento ha un pannello.** `Superadmin › Servizi a pagamento` chiede
+  al fornitore lo stato di Anthropic (chiave, credito, limiti), GitHub (richieste residue e
+  rinnovo), archivio file e database, con il rimedio per ogni stato; sotto, i consumi AI delle
+  ultime 24 ore. «Credito esaurito», «limite raggiunto» e «chiave non valida» non sono la stessa
+  cosa e non hanno lo stesso rimedio: il pannello li distingue invece di riportare un generico
+  errore.
+- **La dashboard dice a che punto è ogni posizione.** Un riepilogo unisce i quattro pannelli in una
+  riga per azienda con quattro tappe (amministrativa, contabile, completa aziendale, scenari) e la
+  simbologia piena/mezza/vuota: chi ha dieci aziende in verifica vede subito chi ha finito e chi è
+  fermo, senza riconoscere la stessa azienda in quattro elenchi.
+
 ## 0.244.1 — 2026-11-17
 
 - **Lo storico della Posizione non si svuota più se una colonna manca.** `ottieniStoricoVerificheAction`

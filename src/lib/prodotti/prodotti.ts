@@ -296,6 +296,13 @@ export interface SintesiChecklistProdotti {
   /** I conteggi grezzi delle parole «sì» e «no», utili solo come statistica. */
   si: number;
   no: number;
+  /**
+   * Quante domande a risposta chiusa leggono il «Sì» come risposta negativa.
+   * Il numero serve a spiegare perché il conteggio delle negative non coincide
+   * con quello dei «no»: senza, il quadro sembra sbagliato a chi conta le
+   * parole invece delle polarità.
+   */
+  polaritaInvertite: number;
   /** Le risposte chiuse lette secondo la polarità scelta in configurazione. */
   positive: number;
   negative: number;
@@ -358,6 +365,10 @@ export function sintesiChecklistProdotti(
     voce.rispostaNegativa === 'SI' ? siNo === true : siNo === false
   ).length;
   const positive = risposteChiuse.length - negative;
+  // Le domande che leggono il «Sì» come negativo: il quadro le conta dalla
+  // parte giusta, ma va detto, altrimenti il numero delle negative sembra
+  // incoerente con quello dei «no».
+  const polaritaInvertite = chiuseVoci.filter((v) => v.rispostaNegativa === 'SI').length;
 
   // L'ORIENTAMENTO SOMMARIO (0.241.0). La check list non è un accertamento: è
   // un orientamento. Due regole, e vale la più severa:
@@ -413,6 +424,7 @@ export function sintesiChecklistProdotti(
     chiuse: chiuseVoci.length,
     si,
     no,
+    polaritaInvertite,
     positive,
     negative,
     percentualeNegative,
@@ -421,9 +433,13 @@ export function sintesiChecklistProdotti(
     ...ETICHETTE[qualificazione],
     // Il dettaglio porta la regola con i suoi numeri: «sfavorevole» senza il
     // conteggio che l'ha prodotto non si può controllare.
-    dettaglio: sfavorevolePerDueTerzi
-      ? `${ETICHETTE[qualificazione].dettaglio} Le risposte chiuse lette come negative sono ${negative} su ${chiuseRisposte} (${percentualeNegative}%): oltre i due terzi, quindi l'orientamento è sfavorevole.`
-      : ETICHETTE[qualificazione].dettaglio,
+    dettaglio:
+      (sfavorevolePerDueTerzi
+        ? `${ETICHETTE[qualificazione].dettaglio} Le risposte chiuse lette come negative sono ${negative} su ${chiuseRisposte} (${percentualeNegative}%): oltre i due terzi, quindi l'orientamento è sfavorevole.`
+        : ETICHETTE[qualificazione].dettaglio) +
+      (polaritaInvertite > 0
+        ? ` Fra le domande a risposta chiusa, ${polaritaInvertite === 1 ? 'una legge' : `${polaritaInvertite} leggono`} il «Sì» come risposta negativa: il conteggio segue la polarità scelta per ciascuna, non la parola.`
+        : ''),
     voci: voci.map((v) => {
       const r = risposte.find((x) => x.prodottoId === v.prodottoId && x.domandaId === v.domandaId);
       const siNo = r?.siNo;

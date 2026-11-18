@@ -2,6 +2,12 @@
 
 import Link from 'next/link';
 import { Building2, FolderOpen, Gauge, Stethoscope } from 'lucide-react';
+import {
+  avanzamentoPosizioni,
+  conteggioFasi,
+  type AvanzamentoPosizione,
+  type Stadio,
+} from '@/lib/dashboard/avanzamento';
 
 export interface RigaVerificaDashboard {
   id: number;
@@ -46,6 +52,119 @@ interface Props {
 }
 
 const MAX = 4;
+
+/**
+ * La simbologia del riepilogo: pieno = fatto, mezzo = cominciato, vuoto = da
+ * fare, trattino = non leggibile con questo accesso. La legenda è stampata
+ * accanto, perché un simbolo senza legenda è un enigma.
+ */
+const SIMBOLO: Record<Stadio, { segno: string; classe: string; parola: string }> = {
+  COMPLETO: { segno: '●', classe: 'text-emerald-600', parola: 'completata' },
+  PARZIALE: { segno: '◐', classe: 'text-amber-500', parola: 'cominciata' },
+  MANCANTE: { segno: '○', classe: 'text-slate-300', parola: 'da fare' },
+  NON_DISPONIBILE: { segno: '–', classe: 'text-slate-300', parola: 'non leggibile' },
+};
+
+const TAPPE: {
+  chiave: keyof Pick<
+    AvanzamentoPosizione,
+    'amministrativa' | 'contabile' | 'aziendale' | 'scenari'
+  >;
+  nome: string;
+}[] = [
+  { chiave: 'amministrativa', nome: 'Verifica amministrativa' },
+  { chiave: 'contabile', nome: 'Verifica contabile' },
+  { chiave: 'aziendale', nome: 'Completa aziendale' },
+  { chiave: 'scenari', nome: 'Scenari' },
+];
+
+function RiepilogoPosizioni({
+  posizioni,
+  codice,
+}: {
+  posizioni: AvanzamentoPosizione[];
+  codice: string;
+}) {
+  if (posizioni.length === 0) return null;
+  const conteggi = conteggioFasi(posizioni);
+  return (
+    <section className="bg-white border border-slate-200 rounded-xl p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+          Posizioni in verifica — a che punto sono
+        </h2>
+        <span className="text-[10px] text-slate-400 tabular-nums">
+          {posizioni.length} posizioni ·{' '}
+          {conteggi
+            .filter((c) => c.quante > 0)
+            .map((c) => `${c.quante} ${c.fase.toLowerCase()}`)
+            .join(' · ')}
+        </span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-500">
+        {TAPPE.map((t, i) => (
+          <span key={t.chiave} className="inline-flex items-center gap-1">
+            <span className="font-bold text-slate-700 tabular-nums">{i + 1}.</span> {t.nome}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5 border-l border-slate-200 pl-3">
+          <span className="text-emerald-600">●</span> completata
+          <span className="text-amber-500">◐</span> cominciata
+          <span className="text-slate-400">○</span> da fare
+        </span>
+      </div>
+
+      <div className="mt-3 divide-y divide-slate-100">
+        {posizioni.slice(0, 10).map((p) => (
+          <Link
+            key={`${p.aziendaId ?? p.ragioneSociale}`}
+            href={
+              p.aziendaId ? `/spazio/${codice}/aziende/${p.aziendaId}` : `/spazio/${codice}/scenari`
+            }
+            className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
+          >
+            <span className="min-w-0">
+              <span className="block font-bold text-slate-900 text-xs truncate">
+                {p.ragioneSociale}
+              </span>
+              <span className="block text-[10px] text-slate-400">
+                {p.fase}
+                {p.scenariCreati > 0
+                  ? ` · ${p.scenariCreati} ${p.scenariCreati === 1 ? 'scenario' : 'scenari'}`
+                  : ''}
+              </span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1.5">
+              {TAPPE.map((t) => {
+                const stadio = p[t.chiave];
+                const s = SIMBOLO[stadio];
+                return (
+                  <span
+                    key={t.chiave}
+                    title={`${t.nome}: ${s.parola}`}
+                    aria-label={`${t.nome}: ${s.parola}`}
+                    className={`text-sm leading-none ${s.classe}`}
+                  >
+                    {s.segno}
+                  </span>
+                );
+              })}
+            </span>
+          </Link>
+        ))}
+      </div>
+      {posizioni.length > 10 && (
+        <Link
+          href={`/spazio/${codice}/verifica-azienda`}
+          className="mt-2 block border-t border-slate-100 pt-2 text-[10px] font-bold uppercase tracking-wider text-blue-600 hover:text-blue-700"
+        >
+          Vedi le altre {posizioni.length - 10} posizioni →
+        </Link>
+      )}
+    </section>
+  );
+}
 
 /** Intestazione comune delle card: icona, etichetta e conteggio. */
 function Intestazione({
@@ -101,219 +220,232 @@ export function DashboardPannelli({
   scenari,
   totaleScenari,
 }: Props) {
+  // Il riepilogo unisce i quattro pannelli in una riga per azienda: è la
+  // prima cosa da guardare, perché dice chi ha finito e chi è fermo senza
+  // dover riconoscere la stessa azienda in quattro elenchi diversi.
+  const posizioni = avanzamentoPosizioni({
+    verifiche,
+    contabile,
+    azienda,
+    scenari: scenari.map((s) => ({ aziendaRagioneSociale: s.aziendaRagioneSociale })),
+  });
+
   // I numeri contano le posizioni che la card mostra, con lo stesso criterio
   // degli scenari: un «0» accanto a una riga elencata sembrava un errore di
   // conteggio. A dire cosa resta da fare sono le etichette delle righe.
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Verifica amministrativa — il triage: posizioni guardate ma non ancora
+    <div className="space-y-4">
+      <RiepilogoPosizioni posizioni={posizioni} codice={codice} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Verifica amministrativa — il triage: posizioni guardate ma non ancora
           prese in carico. In dashboard serve più sapere cosa aspetta una
           decisione che l'elenco degli utenti, che ha già la sua pagina. */}
-      <Card>
-        <Intestazione
-          icon={Stethoscope}
-          colore="text-amber-600 bg-amber-50"
-          label="Verifica amministrativa"
-          totale={verifiche.length}
-        />
-        {verifiche.length === 0 ? (
-          <Vuoto testo="Nessuna verifica eseguita." />
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {/* Si mostrano TUTTE le verifiche, non solo quelle in sospeso: una
+        <Card>
+          <Intestazione
+            icon={Stethoscope}
+            colore="text-amber-600 bg-amber-50"
+            label="Verifica amministrativa"
+            totale={verifiche.length}
+          />
+          {verifiche.length === 0 ? (
+            <Vuoto testo="Nessuna verifica eseguita." />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {/* Si mostrano TUTTE le verifiche, non solo quelle in sospeso: una
                 verifica conclusa spariva dalla dashboard, e la traccia
                 promessa a schermo non era da nessuna parte. Il numero in testa
                 conta le posizioni della card; è l'etichetta «Triage — da
                 decidere» a dire che cosa aspetta ancora una decisione. */}
-            {verifiche.slice(0, MAX).map((v) => (
-              <a
-                key={v.id}
-                // Una verifica in sospeso si riapre NEL TRIAGE: è lì che ci sono
-                // le comunicazioni già preparate e la decisione da prendere.
-                href={
-                  !v.presaInCarico && !v.archiviata
-                    ? `/spazio/${codice}/verifica-salute?azienda=${v.id}`
-                    : `/spazio/${codice}/aziende/${v.id}`
-                }
-                className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
-              >
-                <span className="min-w-0">
-                  <span className="block font-bold text-slate-900 text-xs truncate">
-                    {v.ragioneSociale}
+              {verifiche.slice(0, MAX).map((v) => (
+                <a
+                  key={v.id}
+                  // Una verifica in sospeso si riapre NEL TRIAGE: è lì che ci sono
+                  // le comunicazioni già preparate e la decisione da prendere.
+                  href={
+                    !v.presaInCarico && !v.archiviata
+                      ? `/spazio/${codice}/verifica-salute?azienda=${v.id}`
+                      : `/spazio/${codice}/aziende/${v.id}`
+                  }
+                  className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-bold text-slate-900 text-xs truncate">
+                      {v.ragioneSociale}
+                    </span>
+                    {v.partitaIva && (
+                      <span className="block text-[10px] text-slate-400 font-mono truncate">
+                        P.IVA {v.partitaIva}
+                      </span>
+                    )}
+                    {!v.presaInCarico && !v.archiviata && (
+                      <span className="mt-0.5 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-700">
+                        Triage — da decidere
+                      </span>
+                    )}
                   </span>
-                  {v.partitaIva && (
-                    <span className="block text-[10px] text-slate-400 font-mono truncate">
-                      P.IVA {v.partitaIva}
+                  {v.esito && (
+                    <span
+                      className={`text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 whitespace-nowrap ${
+                        v.esito === 'ROSSO'
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : v.esito === 'GIALLO'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}
+                    >
+                      {v.esito === 'ATTENZIONE_MINIMA' ? 'Minima' : v.esito.toLowerCase()}
                     </span>
                   )}
-                  {!v.presaInCarico && !v.archiviata && (
-                    <span className="mt-0.5 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-700">
-                      Triage — da decidere
-                    </span>
-                  )}
-                </span>
-                {v.esito && (
-                  <span
-                    className={`text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 whitespace-nowrap ${
-                      v.esito === 'ROSSO'
-                        ? 'bg-red-50 text-red-700 border-red-200'
-                        : v.esito === 'GIALLO'
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    }`}
-                  >
-                    {v.esito === 'ATTENZIONE_MINIMA' ? 'Minima' : v.esito.toLowerCase()}
-                  </span>
-                )}
-              </a>
-            ))}
-          </div>
-        )}
-        <VediTutti
-          href={`/spazio/${codice}/verifica-salute`}
-          testo="Tutte le verifiche amministrative"
-        />
-      </Card>
+                </a>
+              ))}
+            </div>
+          )}
+          <VediTutti
+            href={`/spazio/${codice}/verifica-salute`}
+            testo="Tutte le verifiche amministrative"
+          />
+        </Card>
 
-      {/* Verifica contabile — il dato storico dell'azienda: visura, parametri
+        {/* Verifica contabile — il dato storico dell'azienda: visura, parametri
           dell'ente, bilanci. Il numero in testa conta le aziende della card;
           «Da completare» segnala quelle che aspettano un lavoro. */}
-      <Card>
-        <Intestazione
-          icon={Building2}
-          colore="text-emerald-600 bg-emerald-50"
-          label="Verifica contabile"
-          totale={contabile ? contabile.length : '—'}
-        />
-        {contabile === null ? (
-          <Vuoto testo="Riservata all’Admin di Spazio." />
-        ) : contabile.length === 0 ? (
-          <Vuoto testo="Nessuna azienda attiva." />
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {[...contabile]
-              .sort((a, b) => Number(a.completa) - Number(b.completa))
-              .slice(0, MAX)
-              .map((a) => (
-                <Link
-                  key={a.id}
-                  href={`/spazio/${codice}/verifica-contabile/${a.id}`}
-                  className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
-                >
-                  <span className="min-w-0">
-                    <span className="block font-bold text-slate-900 text-xs truncate">
-                      {a.ragioneSociale}
+        <Card>
+          <Intestazione
+            icon={Building2}
+            colore="text-emerald-600 bg-emerald-50"
+            label="Verifica contabile"
+            totale={contabile ? contabile.length : '—'}
+          />
+          {contabile === null ? (
+            <Vuoto testo="Riservata all’Admin di Spazio." />
+          ) : contabile.length === 0 ? (
+            <Vuoto testo="Nessuna azienda attiva." />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {[...contabile]
+                .sort((a, b) => Number(a.completa) - Number(b.completa))
+                .slice(0, MAX)
+                .map((a) => (
+                  <Link
+                    key={a.id}
+                    href={`/spazio/${codice}/verifica-contabile/${a.id}`}
+                    className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-bold text-slate-900 text-xs truncate">
+                        {a.ragioneSociale}
+                      </span>
+                      <span className="block text-[10px] text-slate-400 truncate">
+                        {a.anniXbrl > 0
+                          ? `${a.anniXbrl} ${a.anniXbrl === 1 ? 'annualità XBRL' : 'annualità XBRL'}`
+                          : 'Bilanci da caricare'}
+                        {a.visuraPresente ? ' · visura acquisita' : ' · visura da acquisire'}
+                      </span>
                     </span>
-                    <span className="block text-[10px] text-slate-400 truncate">
-                      {a.anniXbrl > 0
-                        ? `${a.anniXbrl} ${a.anniXbrl === 1 ? 'annualità XBRL' : 'annualità XBRL'}`
-                        : 'Bilanci da caricare'}
-                      {a.visuraPresente ? ' · visura acquisita' : ' · visura da acquisire'}
-                    </span>
-                  </span>
-                  {!a.completa && (
-                    <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 bg-amber-50 text-amber-700 border-amber-200">
-                      Da completare
-                    </span>
-                  )}
-                </Link>
-              ))}
-          </div>
-        )}
-        <VediTutti
-          href={`/spazio/${codice}/verifica-contabile`}
-          testo="Tutte le verifiche contabili"
-        />
-      </Card>
+                    {!a.completa && (
+                      <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 bg-amber-50 text-amber-700 border-amber-200">
+                        Da completare
+                      </span>
+                    )}
+                  </Link>
+                ))}
+            </div>
+          )}
+          <VediTutti
+            href={`/spazio/${codice}/verifica-contabile`}
+            testo="Tutte le verifiche contabili"
+          />
+        </Card>
 
-      {/* Verifica azienda — le due verifiche lette insieme. Il numero in testa
+        {/* Verifica azienda — le due verifiche lette insieme. Il numero in testa
           conta le aziende della card; «Da memorizzare» segnala il debito
           dell'ente che manca perché la mappa sia leggibile. */}
-      <Card>
-        <Intestazione
-          icon={Gauge}
-          colore="text-violet-600 bg-violet-50"
-          label="Verifica azienda"
-          totale={azienda ? azienda.length : '—'}
-        />
-        {azienda === null ? (
-          <Vuoto testo="Riservata all’Admin di Spazio." />
-        ) : azienda.length === 0 ? (
-          <Vuoto testo="Nessuna azienda attiva." />
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {[...azienda]
-              .sort(
-                (a, b) =>
-                  Number(a.debitoMemorizzato !== null) - Number(b.debitoMemorizzato !== null)
-              )
-              .slice(0, MAX)
-              .map((a) => (
+        <Card>
+          <Intestazione
+            icon={Gauge}
+            colore="text-violet-600 bg-violet-50"
+            label="Verifica azienda"
+            totale={azienda ? azienda.length : '—'}
+          />
+          {azienda === null ? (
+            <Vuoto testo="Riservata all’Admin di Spazio." />
+          ) : azienda.length === 0 ? (
+            <Vuoto testo="Nessuna azienda attiva." />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {[...azienda]
+                .sort(
+                  (a, b) =>
+                    Number(a.debitoMemorizzato !== null) - Number(b.debitoMemorizzato !== null)
+                )
+                .slice(0, MAX)
+                .map((a) => (
+                  <Link
+                    key={a.id}
+                    href={`/spazio/${codice}/verifica-azienda/${a.id}`}
+                    className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-bold text-slate-900 text-xs truncate">
+                        {a.ragioneSociale}
+                      </span>
+                      <span className="block text-[10px] text-slate-400 truncate">
+                        {a.debitoMemorizzato !== null
+                          ? `Debito ente ${Math.round(a.debitoMemorizzato).toLocaleString('it-IT')} €`
+                          : 'Debito ente da memorizzare'}
+                        {a.anniXbrl > 0
+                          ? ` · ${a.anniXbrl} annualità XBRL`
+                          : ' · bilanci da caricare'}
+                      </span>
+                    </span>
+                    {a.debitoMemorizzato === null && (
+                      <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 bg-amber-50 text-amber-700 border-amber-200">
+                        Da memorizzare
+                      </span>
+                    )}
+                  </Link>
+                ))}
+            </div>
+          )}
+          <VediTutti
+            href={`/spazio/${codice}/verifica-azienda`}
+            testo="Tutte le aziende in verifica"
+          />
+        </Card>
+
+        {/* Scenari */}
+        <Card>
+          <Intestazione
+            icon={FolderOpen}
+            colore="text-blue-600 bg-blue-50"
+            label="Scenari"
+            totale={totaleScenari}
+          />
+          {scenari.length === 0 ? (
+            <Vuoto testo="Nessuno scenario creato." />
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {scenari.slice(0, MAX).map((s) => (
                 <Link
-                  key={a.id}
-                  href={`/spazio/${codice}/verifica-azienda/${a.id}`}
-                  className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
+                  key={s.id}
+                  href={`/spazio/${codice}/scenari/${s.id}`}
+                  className="flex items-center justify-between gap-3 py-2 group"
                 >
                   <span className="min-w-0">
-                    <span className="block font-bold text-slate-900 text-xs truncate">
-                      {a.ragioneSociale}
+                    <span className="block font-bold text-slate-900 text-xs group-hover:text-blue-600 transition-colors truncate">
+                      {s.nome}
                     </span>
                     <span className="block text-[10px] text-slate-400 truncate">
-                      {a.debitoMemorizzato !== null
-                        ? `Debito ente ${Math.round(a.debitoMemorizzato).toLocaleString('it-IT')} €`
-                        : 'Debito ente da memorizzare'}
-                      {a.anniXbrl > 0
-                        ? ` · ${a.anniXbrl} annualità XBRL`
-                        : ' · bilanci da caricare'}
+                      {s.aziendaRagioneSociale}
                     </span>
                   </span>
-                  {a.debitoMemorizzato === null && (
-                    <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider border rounded px-1.5 py-0.5 bg-amber-50 text-amber-700 border-amber-200">
-                      Da memorizzare
-                    </span>
-                  )}
                 </Link>
               ))}
-          </div>
-        )}
-        <VediTutti
-          href={`/spazio/${codice}/verifica-azienda`}
-          testo="Tutte le aziende in verifica"
-        />
-      </Card>
-
-      {/* Scenari */}
-      <Card>
-        <Intestazione
-          icon={FolderOpen}
-          colore="text-blue-600 bg-blue-50"
-          label="Scenari"
-          totale={totaleScenari}
-        />
-        {scenari.length === 0 ? (
-          <Vuoto testo="Nessuno scenario creato." />
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {scenari.slice(0, MAX).map((s) => (
-              <Link
-                key={s.id}
-                href={`/spazio/${codice}/scenari/${s.id}`}
-                className="flex items-center justify-between gap-3 py-2 group"
-              >
-                <span className="min-w-0">
-                  <span className="block font-bold text-slate-900 text-xs group-hover:text-blue-600 transition-colors truncate">
-                    {s.nome}
-                  </span>
-                  <span className="block text-[10px] text-slate-400 truncate">
-                    {s.aziendaRagioneSociale}
-                  </span>
-                </span>
-              </Link>
-            ))}
-          </div>
-        )}
-        <VediTutti href={`/spazio/${codice}/scenari`} testo="Tutti gli scenari" />
-      </Card>
+            </div>
+          )}
+          <VediTutti href={`/spazio/${codice}/scenari`} testo="Tutti gli scenari" />
+        </Card>
+      </div>
     </div>
   );
 }

@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { cifra, decifra } from '@/lib/portableCrypto';
+import { normalizzaRisultato } from '@/lib/portable/risultato';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -189,11 +190,9 @@ export async function initPortableDb(): Promise<void> {
   return stato.inizializzazione;
 }
 
-function normalizzaRisultato(r: any) {
-  const rows = r?.rows ?? [];
-  const rowCount = typeof r?.affectedRows === 'number' ? r.affectedRows : rows.length;
-  return { rows, rowCount, fields: r?.fields ?? [] };
-}
+// La normalizzazione vive in `src/lib/portable/risultato.ts`: è lì che sta la
+// regola (le righe lette contano più di `affectedRows`, che per un SELECT è 0)
+// e lì ci sono i suoi test.
 
 /**
  * Il testo contiene più di un'istruzione SQL?

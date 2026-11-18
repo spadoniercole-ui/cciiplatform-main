@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analizzaFileXbrl } from '@/lib/xbrl';
 import { rifiutaSeNonAutorizzato } from '@/lib/autorizzazione';
+import { CorpoTroppoGrande, formDataDalCorpo, leggiCorpoLimitato } from '@/lib/file/corpoLimitato';
 
 export const runtime = 'nodejs';
 
@@ -24,11 +25,22 @@ export async function POST(req: NextRequest) {
     if (rifiuto) return rifiuto;
     // Un'istanza XBRL di bilancio pesa qualche centinaio di KB: 15MB sono un
     // margine ampio e impediscono di far leggere al server corpi arbitrari.
-    const dichiarata = Number(req.headers.get('content-length') || 0);
-    if (!dichiarata || dichiarata > LIMITE_BYTE) {
-      return NextResponse.json({ error: 'File troppo grande (limite 15MB).' }, { status: 413 });
+    // Il tetto si applica al corpo letto, non a `Content-Length`: un proxy può
+    // trasmettere il multipart a pezzi senza dichiararne la lunghezza, e prima
+    // quel caso — legittimo — veniva respinto con 413 (0.245.0).
+    let corpo: Uint8Array;
+    try {
+      corpo = await leggiCorpoLimitato(req, LIMITE_BYTE + 64 * 1024);
+    } catch (errore) {
+      if (errore instanceof CorpoTroppoGrande) {
+        return NextResponse.json({ error: 'File troppo grande (limite 15MB).' }, { status: 413 });
+      }
+      throw errore;
     }
-    const formData = await req.formData();
+    if (corpo.byteLength === 0) {
+      return NextResponse.json({ error: 'Nessun file caricato.' }, { status: 400 });
+    }
+    const formData = await formDataDalCorpo(corpo, req.headers.get('content-type'));
     const file = formData.get('file') as File | null;
 
     if (!file) {

@@ -74,6 +74,12 @@ export const Sidebar = ({
       href: '/superadmin/ManutenzioneSpazi',
       icon: '🛠️',
     },
+    {
+      label: 'Servizi a pagamento',
+      desc: 'Credito e limiti delle API',
+      href: '/superadmin/ServiziEsterni',
+      icon: '💳',
+    },
   ];
 
   return (
