@@ -57,17 +57,9 @@ interface Props {
   aziendaId: number;
   codice: string;
   tipoSpazio: 'ENTE' | 'NON_ENTE';
-  /** Il Piano-ponte esiste già: senza, la valutazione completa non parte. */
-  ponteEsiste?: boolean;
 }
 
-export function ScreeningAziendaScenario({
-  nomeSchema,
-  aziendaId,
-  codice,
-  tipoSpazio,
-  ponteEsiste,
-}: Props) {
+export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSpazio }: Props) {
   const router = useRouter();
   const demo = useDemo();
   const [stato, setStato] = useState<StatoScreeningAzienda | null>(null);
@@ -363,7 +355,11 @@ export function ScreeningAziendaScenario({
         aziendaId,
         urlDaUsare,
         nomeDaUsare,
-        istruzioniAI
+        istruzioniAI,
+        'MANUALE',
+        // La dichiarazione vale anche lato server: senza bilancio si procede
+        // solo se l'operatore l'ha detto (0.248.0).
+        procediSenzaXbrl
       );
       if (risultato.success) {
         await carica();
@@ -745,35 +741,15 @@ export function ScreeningAziendaScenario({
             </span>
           </p>
         )}
-        {tipoSpazio === 'ENTE' && ponteEsiste === false && (
-          <p className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
-            <span className="font-bold">Prima il Piano-ponte.</span> La valutazione completa
-            confronta il Piano-ponte con il percorso dell&apos;azienda.{' '}
-            <a
-              href={`/spazio/${codice}/aziende/${aziendaId}/ponte`}
-              className="font-bold text-sky-700 hover:underline"
-            >
-              Apri il Piano-ponte e calcolalo
-            </a>
-            : finché non c&apos;è, la valutazione non parte.
-          </p>
-        )}
         <button
           type="button"
           onClick={handleGenera}
           disabled={
             generazioneInCorso ||
             !haFascicolo ||
-            (tipoSpazio === 'ENTE' && ponteEsiste === false) ||
             (tipoSpazio !== 'NON_ENTE' && (stato?.identificativiEnte.length ?? 0) === 0)
           }
-          title={
-            tipoSpazio === 'ENTE' && ponteEsiste === false
-              ? 'Prima calcola il Piano-ponte'
-              : !haFascicolo
-                ? 'Carica prima il fascicolo storico (PDF)'
-                : undefined
-          }
+          title={!haFascicolo ? 'Carica prima il fascicolo storico (PDF)' : undefined}
           className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold uppercase tracking-wider rounded-lg text-xs transition-colors"
         >
           {generazioneInCorso ? (
@@ -783,15 +759,13 @@ export function ScreeningAziendaScenario({
           )}
           {generazioneInCorso
             ? `Analisi in corso… ${secondiGenerazione}s`
-            : tipoSpazio === 'ENTE' && ponteEsiste === false
-              ? 'Calcola prima il Piano-ponte'
-              : !haFascicolo
-                ? 'Carica il fascicolo storico per generare'
-                : tipoSpazio === 'NON_ENTE'
-                  ? 'Pre-compila Check List Ministeriale'
-                  : stato?.esiste
-                    ? 'Rigenera la valutazione'
-                    : 'Avvia la valutazione completa'}
+            : !haFascicolo
+              ? 'Carica il fascicolo storico per generare'
+              : tipoSpazio === 'NON_ENTE'
+                ? 'Pre-compila Check List Ministeriale'
+                : stato?.esiste
+                  ? 'Rigenera la valutazione'
+                  : 'Avvia la valutazione completa'}
         </button>
         {generazioneInCorso && (
           <div className="text-[11px] text-slate-700 bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">

@@ -79,9 +79,9 @@ export default async function AziendaLayout({
     (xbrlRis?.storico?.length ?? 0) > 0 ||
     (!!statoAnalisiBilancio?.stato.xbrlConfigVista && !!statoAnalisiBilancio?.stato.indiciVisti);
   const screeningGenerato = pendenteScreening.esiste;
-  // Il Piano-ponte viene PRIMA della valutazione completa: la valutazione
-  // confronta il ponte con il percorso dell'azienda, e senza il ponte non ha
-  // una base contabile da confrontare.
+  // Il Piano-ponte non è più un prerequisito della valutazione completa
+  // (0.248.0): la valutazione parte dal dato contabile. Il passo resta a
+  // disposizione, e il suo stato dice solo se il ponte è già calcolato.
   const ponteEsiste = statoPonte.esiste;
   const checklistCompleta =
     screeningGenerato && pendenteScreening.totali > 0 && domandeMancanti === 0;
@@ -109,29 +109,21 @@ export default async function AziendaLayout({
     motivo: "Completa prima l'Anagrafica azienda.",
   });
   // Il Piano-ponte sta a livello azienda, dopo i dati di base: non richiede
-  // uno Scenario e non è la Check List. Per l'ENTE è il passo che porta il
-  // bilancio storico alla Data verifica, e precede la valutazione completa.
+  // uno Scenario e non è la Check List. Non è più una tappa obbligata
+  // (0.248.0): si può aprire sempre, e se il ponte c'è il passo è verde.
   if (isEnte) {
     steps.push({
       id: 'ponte',
       label: 'Piano-ponte',
-      stato: !passi123Verdi ? 'bloccato' : ponteEsiste ? 'completo' : 'attivo',
-      motivo: 'Completa prima Anagrafica e Analisi Bilancio.',
+      stato: ponteEsiste ? 'completo' : 'attivo',
     });
   }
   steps.push({
     id: 'screening',
     label: 'Valutazione completa',
-    stato:
-      !passi123Verdi || (isEnte && !ponteEsiste)
-        ? 'bloccato'
-        : screeningGenerato
-          ? 'completo'
-          : 'attivo',
+    stato: !passi123Verdi ? 'bloccato' : screeningGenerato ? 'completo' : 'attivo',
     motivo: isEnte
-      ? ponteEsiste
-        ? 'Completa prima Anagrafica, Anagrafica Ente e Analisi Bilancio.'
-        : 'Prima calcola il Piano-ponte: la valutazione completa si lancia dopo.'
+      ? 'Completa prima Anagrafica, Anagrafica Ente e Analisi Bilancio.'
       : 'Completa prima Anagrafica e Analisi Bilancio.',
   });
   // La Check List dello screening non è più un passo dell'Azienda: si genera

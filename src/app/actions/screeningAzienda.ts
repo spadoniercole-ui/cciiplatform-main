@@ -30,7 +30,7 @@ import {
   verificaFileDelloSpazio,
   type ContestoAccessoSpazio,
 } from '@/lib/autorizzazione';
-import { esistePonteAzienda } from '@/lib/ponte/persistenza';
+import { puoValutareCompleta } from '@/lib/screening/prerequisitiValutazione';
 import { assicuraTabelleScreeningAzienda } from '@/db/provision';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
@@ -469,7 +469,9 @@ export async function generaScreeningAziendaAction(
   nomeFileVisura: string,
   istruzioniOperatore?: string,
   /** AUTOMATICA quando parte dal salvataggio dei parametri dell'ente. */
-  origine: 'AUTOMATICA' | 'MANUALE' = 'MANUALE'
+  origine: 'AUTOMATICA' | 'MANUALE' = 'MANUALE',
+  /** L'operatore ha scelto di procedere senza bilancio XBRL (0.248.0). */
+  procediSenzaBilancio = false
 ): Promise<RisultatoGenerazioneScreening> {
   // Verifica fuori dal try: il `finally` sotto elimina il blob `visuraUrl`
   // e non deve mai girare per un chiamante non autorizzato.
@@ -491,20 +493,30 @@ export async function generaScreeningAziendaAction(
     }
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
 
-    // VINCOLO: la valutazione completa si lancia DOPO il Piano-ponte. Il ponte
-    // porta il bilancio storico alla Data verifica ed è la base contabile che
-    // la valutazione confronta: senza, l'analisi partirebbe su un'altra
-    // fotografia. Il vincolo vale per il lancio dalla scheda azienda; la prima
-    // elaborazione automatica al salvataggio dei parametri dell'ente resta
-    // possibile, perché avviene nel triage, prima che il ponte esista.
+    // IL VINCOLO È IL DATO CONTABILE, NON IL PIANO-PONTE (0.248.0).
+    //
+    // Fino alla 0.247.0 la valutazione completa dell'ente non partiva senza il
+    // Piano-ponte. Il ponte faceva un lavoro che oggi fa la contabile nuova —
+    // portare il bilancio alla Data verifica — ma il vincolo legava una
+    // funzione nuova a una vecchia: chi aveva i bilanci in archivio e non aveva
+    // calcolato il ponte restava fermo. La condizione ora è la presenza della
+    // contabile: almeno un bilancio XBRL, oppure la dichiarazione esplicita
+    // dell'operatore di procedere senza (l'assenza resta scritta nella
+    // relazione). La prima elaborazione automatica non ha vincoli: avviene nel
+    // triage, senza un operatore davanti.
     if (contesto.tipoSpazio === 'ENTE' && origine === 'MANUALE') {
-      const ponte = await esistePonteAzienda(nomeSchema, aziendaId);
-      if (!ponte.esiste) {
-        return {
-          success: false,
-          error:
-            'Prima della valutazione completa serve il Piano-ponte: apri la scheda «Piano-ponte» di questa azienda e calcolalo. Il ponte porta il bilancio alla Data verifica ed è la base contabile su cui la valutazione si confronta.',
-        };
+      const xbrl = await ottieniStoricoXbrlAzienda(nomeSchema, aziendaId).catch(() => null);
+      const anniContabile = xbrl?.success
+        ? xbrl.storico.filter((b) => b.annoBilancio !== null).length
+        : 0;
+      const condizioni = puoValutareCompleta({
+        tipoSpazio: 'ENTE',
+        origine: 'MANUALE',
+        anniContabile,
+        senzaBilancio: procediSenzaBilancio,
+      });
+      if (!condizioni.puo) {
+        return { success: false, error: condizioni.motivo ?? 'Valutazione non avviabile.' };
       }
     }
 

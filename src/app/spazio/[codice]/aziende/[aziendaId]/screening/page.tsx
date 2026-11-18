@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ScreeningAziendaScenario } from '@/components/spazio/ScreeningAziendaScenario';
 import { IstruttoriePrecedenti } from '@/components/spazio/IstruttoriePrecedenti';
-import { esistePonteAzienda } from '@/lib/ponte/persistenza';
 
 // Due chiamate AI in parallelo (questionario + relazione), ciascuna con
 // timeout di 150s (vedi screeningAzienda.ts) — margine sopra quello,
@@ -23,13 +22,8 @@ export default async function ScreeningAziendaPage({
   if (!contesto) redirect('/');
   if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
 
-  // Il ponte è il presupposto della valutazione completa: la pagina lo dice
-  // prima di mostrare il pulsante, e l'azione lo riverifica comunque.
-  const ponte =
-    contesto.tipoSpazio === 'ENTE'
-      ? await esistePonteAzienda(contesto.nomeSchema, Number(aziendaId))
-      : null;
-
+  // La valutazione completa non aspetta più il Piano-ponte (0.248.0): il
+  // presupposto è il dato contabile, e la scheda lo chiede con «Bilanci XBRL».
   return (
     <div className="space-y-5">
       <ScreeningAziendaScenario
@@ -37,7 +31,6 @@ export default async function ScreeningAziendaPage({
         aziendaId={Number(aziendaId)}
         codice={codice}
         tipoSpazio={contesto.tipoSpazio}
-        ponteEsiste={ponte ? ponte.esiste : undefined}
       />
       <IstruttoriePrecedenti nomeSchema={contesto.nomeSchema} aziendaId={Number(aziendaId)} />
     </div>

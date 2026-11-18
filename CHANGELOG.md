@@ -1,3 +1,18 @@
+## 0.248.0 — 2026-11-18
+
+- **La valutazione completa dell'ente non aspetta più il Piano-ponte** (primo passo del piano di
+  rimozione). Il vincolo legava una funzione nuova a una vecchia: chi aveva i bilanci in archivio ma
+  non aveva calcolato il ponte restava fermo, e il ponte lo si poteva non volere. La condizione ora è
+  la presenza della contabile — almeno un bilancio XBRL — oppure la dichiarazione esplicita di
+  procedere senza («Procedi senza bilancio XBRL»), che arriva anche al server e lascia l'assenza
+  scritta nella relazione. La regola è pura e testata
+  (`src/lib/screening/prerequisitiValutazione.ts`): l'azione la applica, la schermata la mostra, e la
+  prima elaborazione automatica al salvataggio dei parametri resta senza vincoli.
+- **Il tab Piano-ponte non è più una tappa obbligata.** Si apre sempre e diventa verde quando il
+  ponte è calcolato; la valutazione completa non dipende più da lui. Nulla è stato cancellato: il
+  ponte, le sue azioni e i suoi dati sono ancora lì — questo è il primo passo, la rimozione viene
+  dopo, nell'ordine già scritto.
+
 ## 0.247.0 — 2026-11-18
 
 - **Il report conclusivo dice che cosa resta da decidere.** Il documento si chiudeva con le strade
