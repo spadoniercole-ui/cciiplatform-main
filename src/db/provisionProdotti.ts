@@ -95,4 +95,18 @@ export async function assicuraTabelleProdotti(nomeSchema: string): Promise<void>
       PRIMARY KEY (azienda_id, prodotto_id, domanda_id)
     )`
   );
+  // LA CHIAVE STABILE ACCANTO ALL'ID (0.246.0). `prodotto_id` è un SERIAL:
+  // se il prodotto viene ricreato cambia, e le risposte resterebbero scritte
+  // sotto un numero che non esiste più. La coppia direttrice + nome è
+  // l'identità vera del prodotto — la stessa dell'indice unico qui sopra — e
+  // permette di ritrovare la risposta dopo quel cambio. Le righe scritte prima
+  // restano con la colonna vuota: la prima lettura la compila, senza perdere
+  // nessuna risposta.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.checklist_prodotti_risposte ADD COLUMN IF NOT EXISTS prodotto_chiave TEXT`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_checklist_prodotti_chiave
+        ON ${s}.checklist_prodotti_risposte (azienda_id, prodotto_chiave)`
+  );
 }

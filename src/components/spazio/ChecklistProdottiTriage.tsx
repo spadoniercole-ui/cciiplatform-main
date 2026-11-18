@@ -38,7 +38,7 @@ import {
   salvaRispostaProdottoAction,
   type StatoChecklistProdotti,
 } from '@/app/actions/checklistProdottiTriage';
-import type { SintesiChecklistProdotti } from '@/lib/prodotti/prodotti';
+import { chiaveProdotto, type SintesiChecklistProdotti } from '@/lib/prodotti/prodotti';
 
 interface Props {
   nomeSchema: string;
@@ -103,7 +103,9 @@ export function ChecklistProdottiTriage({
     prodottoId: number,
     domandaId: string,
     siNo: boolean | null,
-    testo: string | null
+    testo: string | null,
+    direttrice: string,
+    prodotto: string
   ) => {
     const chiave = `${prodottoId}|${domandaId}`;
     setInCorso(chiave);
@@ -114,7 +116,10 @@ export function ChecklistProdottiTriage({
       prodottoId,
       domandaId,
       siNo,
-      testo
+      testo,
+      // La chiave stabile del prodotto: se l'id è cambiato sotto i piedi, la
+      // risposta va comunque sul prodotto giusto invece di perdersi.
+      chiaveProdotto(direttrice, prodotto)
     );
     if (r.success && r.stato) applica(r.stato);
     else setErrore(r.error ?? 'Risposta non salvata.');
@@ -227,7 +232,14 @@ export function ChecklistProdottiTriage({
                             onBlur={() => {
                               const testo = valoreBozza.trim();
                               if (testo === (r?.testo ?? '').trim()) return;
-                              void salva(d.prodottoId, d.domandaId, null, testo || null);
+                              void salva(
+                                d.prodottoId,
+                                d.domandaId,
+                                null,
+                                testo || null,
+                                d.direttrice,
+                                d.prodotto
+                              );
                             }}
                             placeholder="Risposta sintetica e puntuale"
                             className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -251,7 +263,9 @@ export function ChecklistProdottiTriage({
                                 d.prodottoId,
                                 d.domandaId,
                                 r?.siNo === true ? null : true,
-                                null
+                                null,
+                                d.direttrice,
+                                d.prodotto
                               )
                             }
                             disabled={inCorso === chiave}
@@ -270,7 +284,9 @@ export function ChecklistProdottiTriage({
                                 d.prodottoId,
                                 d.domandaId,
                                 r?.siNo === false ? null : false,
-                                null
+                                null,
+                                d.direttrice,
+                                d.prodotto
                               )
                             }
                             disabled={inCorso === chiave}

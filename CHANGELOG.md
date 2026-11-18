@@ -1,3 +1,17 @@
+## 0.246.0 — 2026-11-18
+
+- **La risposta della check list non dipende più dal numero di riga del prodotto.** `prodotti_ente.id`
+  è una SERIAL: ricreare il prodotto (un ripristino, una configurazione rinnovata, due ambienti con
+  la stessa configurazione e id diversi) cambia il numero, e le risposte restavano scritte sotto un
+  id che non esiste più — la check list sembrava vuota e il salvataggio rispondeva «Prodotto non
+  trovato.» con la domanda davanti. Accanto alla risposta si conserva ora la chiave stabile del
+  prodotto (direttrice + nome, la stessa dell'indice unico) e ogni lettura riporta la riga sul
+  prodotto di adesso (`src/lib/prodotti/risposteProdotti.ts`, con i suoi test). Il salvataggio cerca
+  il prodotto per id e, se l'id non c'è più, per la chiave che la scheda porta con sé: la risposta
+  finisce sulla riga giusta invece di perdersi, e la riga vecchia non resta a contare due volte.
+  Le righe senza chiave e con un id sparito restano scritte e fuori dal quadro: non si attribuiscono
+  a caso. La colonna `prodotto_chiave` si aggiunge da sola agli spazi già attivi, senza migrazioni.
+
 ## 0.245.0 — 2026-11-18
 
 - **In portable una riga trovata non è più «nessuna riga».** PGlite restituisce `affectedRows: 0`
