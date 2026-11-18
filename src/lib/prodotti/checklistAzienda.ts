@@ -50,10 +50,11 @@ export async function leggiProdottiAzienda(nomeSchema: string): Promise<Prodotto
  * La riga di risposta, riscritta sul prodotto che il prodotto è adesso.
  *
  * Non è una migrazione: è la manutenzione di una lettura. Se l'id è cambiato
- * la riga vecchia si toglie dopo aver salvato quella sul prodotto attuale;
- * se l'id è giusto ma la chiave manca, la chiave si annota e basta. Una
- * risposta scritta resta scritta: se la scrittura non riesce si registra
- * l'errore e la lettura continua con i dati che ci sono.
+ * la riga si scrive PRIMA sul prodotto attuale e SOLO DOPO si toglie quella
+ * vecchia: se la scrittura fallisce, la risposta resta dov'era e la lettura
+ * la ritrova al giro dopo. Togliere per primi, con un errore in scrittura,
+ * significherebbe averla persa per sempre. Se l'id è giusto ma la chiave
+ * manca, la chiave si annota e basta.
  */
 async function riallineaRisposte(
   nomeSchema: string,
@@ -61,13 +62,6 @@ async function riallineaRisposte(
   esito: AllineamentoRisposte
 ): Promise<void> {
   for (const r of esito.riallineamenti) {
-    if (r.origine.prodottoId !== r.destinazione.prodottoId) {
-      await pool.query(
-        `DELETE FROM "${nomeSchema}".checklist_prodotti_risposte
-          WHERE azienda_id = $1 AND prodotto_id = $2 AND domanda_id = $3`,
-        [aziendaId, r.origine.prodottoId, r.origine.domandaId]
-      );
-    }
     await pool.query(
       `INSERT INTO "${nomeSchema}".checklist_prodotti_risposte
          (azienda_id, prodotto_id, domanda_id, prodotto_chiave, si_no, testo, aggiornato_il)
@@ -83,6 +77,15 @@ async function riallineaRisposte(
         r.testo,
       ]
     );
+    // Solo ora la riga vecchia è di troppo: la risposta è già al sicuro sul
+    // prodotto attuale.
+    if (r.origine.prodottoId !== r.destinazione.prodottoId) {
+      await pool.query(
+        `DELETE FROM "${nomeSchema}".checklist_prodotti_risposte
+          WHERE azienda_id = $1 AND prodotto_id = $2 AND domanda_id = $3`,
+        [aziendaId, r.origine.prodottoId, r.origine.domandaId]
+      );
+    }
   }
 }
 

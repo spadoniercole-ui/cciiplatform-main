@@ -55,6 +55,13 @@ import {
 } from '@/lib/verificaAmministrativa/raccomandazione';
 import { etichettaIstruttoria, type TipoIstruttoria } from '@/lib/giudice/lettura';
 import { esitoPropostaValido } from '@/lib/scenari/esitoProposta';
+import type {
+  DocumentoPesato,
+  FonteDecisioneFinale,
+  ProceduraDecisione,
+  StatoPiano,
+} from '@/lib/reportAzienda/decisioneFinale';
+import { leggiVerificaAzienda } from '@/lib/verificaAzienda/letturaVerifica';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -457,6 +464,91 @@ async function raccogliFonti(
     proposte = null;
   }
 
+  // 2-bis-bis. I FATTI DELLA DECISIONE (0.247.0).
+  //
+  // Il piano dell'azienda è per scenario, non per azienda: esiste se almeno
+  // uno degli scenari di questa azienda ce l'ha. Se la tabella non c'è (tenant
+  // vecchio) non è «manca il piano»: è «non si può dire», che è un'altra cosa
+  // e il documento la scrive così.
+  let piano: StatoPiano = 'NON_VALUTABILE';
+  try {
+    const q = await pool.query(
+      `SELECT COUNT(*)::int AS n
+         FROM "${nomeSchema}".piano_aziendale p
+         JOIN "${nomeSchema}".scenari s ON s.id = p.scenario_id
+        WHERE s.azienda_id = $1`,
+      [aziendaId]
+    );
+    piano = Number(q.rows[0]?.n ?? 0) > 0 ? 'PRESENTE' : 'ASSENTE';
+  } catch {
+    piano = 'NON_VALUTABILE';
+  }
+
+  // I recuperi delle due procedure rimaste: quelli della verifica azienda,
+  // calcolati sulle percentuali di rango dell'ente. Non un secondo conto.
+  const verifica = await leggiVerificaAzienda(nomeSchema, aziendaId).catch(() => null);
+  const procedura = (codice: 'LIQUIDAZIONE' | 'CRAM_DOWN'): ProceduraDecisione | null => {
+    const s = verifica?.fotografia.scenari.find((x) => x.codice === codice);
+    return s
+      ? {
+          recupero: s.recupero,
+          perdita: s.perdita,
+          calcolabile: s.calcolabile,
+          motivo: s.motivo,
+        }
+      : null;
+  };
+
+  // La documentazione fondamentale, pesata. «Alto» quando senza quel documento
+  // la conclusione cambia; «medio» quando la rende meno solida. I pesi sono una
+  // convenzione dichiarata, non una misura di legge.
+  const documentiMancanti: DocumentoPesato[] = [];
+  if (piano === 'ASSENTE') {
+    documentiMancanti.push({
+      nome: 'Piano dell’azienda',
+      peso: 'ALTO',
+      perche: 'senza, si valuta un accordo ipotizzato',
+    });
+  }
+  if (!proposte || proposte.length === 0) {
+    documentiMancanti.push({
+      nome: 'Atto in valutazione (proposta, decreto o cram down)',
+      peso: 'ALTO',
+      perche: 'il documento non ha un atto da leggere',
+    });
+  }
+  if ((rigaContabile?.anniXbrl ?? 0) === 0) {
+    documentiMancanti.push({
+      nome: 'Bilanci XBRL',
+      peso: 'ALTO',
+      perche: 'senza il dato depositato la contabile non si compone',
+    });
+  }
+  if ((debitoRis?.debito?.totale ?? null) === null) {
+    documentiMancanti.push({
+      nome: 'Debito dell’ente accertato',
+      peso: 'ALTO',
+      perche: 'senza il credito vantato gli scenari non si misurano',
+    });
+  }
+  if (verifica && verifica.nota === null) {
+    documentiMancanti.push({
+      nome: 'Nota integrativa',
+      peso: 'MEDIO',
+      perche: 'continuità e piani non si leggono dal bilancio',
+    });
+  }
+
+  const decisione: FonteDecisioneFinale = {
+    piano,
+    credito: verifica?.fotografia.credito ?? debitoRis?.debito?.totale ?? null,
+    patrimonioNetto,
+    indiciViolati,
+    liquidazione: procedura('LIQUIDAZIONE'),
+    cramDown: procedura('CRAM_DOWN'),
+    documentiMancanti,
+  };
+
   const risposte = new Map((stato?.risposte ?? []).map((r) => [r.domandaId, r.risposta]));
   const questionario = inclusioni.questionario
     ? (stato?.sezioni ?? []).map((sezione) => ({
@@ -503,6 +595,7 @@ async function raccogliFonti(
     mappa,
     questionario,
     proposte,
+    decisione,
     // La raccomandazione si compone dagli stessi fatti già letti qui: nessuna
     // interrogazione in più, e il documento la riporta com'era al momento
     // dell'emissione.

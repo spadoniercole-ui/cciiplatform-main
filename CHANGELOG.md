@@ -1,3 +1,19 @@
+## 0.247.0 — 2026-11-18
+
+- **Il report conclusivo dice che cosa resta da decidere.** Il documento si chiudeva con le strade
+  possibili, ma non con la domanda che chi legge porta con sé: se lo scenario valutato sta in piedi
+  e, se non ci sta, quale strada lascia all'ente la perdita minore. La nuova sezione «La decisione
+  che resta» (`src/lib/reportAzienda/decisioneFinale.ts`, con i suoi test) dichiara il piano
+  mancante o non leggibile, l'impraticabilità quando la contabile la sostiene (patrimonio netto
+  negativo, indici oltre soglia), accosta i recuperi già calcolati dalla verifica azienda di
+  liquidazione giudiziale e cram down indicando la perdita minore, e pesa la documentazione
+  mancante (peso alto quando senza quel documento la conclusione cambia, medio quando toglie forza
+  alla lettura). Nessuna conclusione giuridica: il confronto è sui numeri configurati nell'ente.
+- **La risposta della check list si riscrive prima di cancellare la vecchia.** Il riallineamento al
+  prodotto attuale inserisce la riga nuova e solo dopo toglie quella scritta sotto l'id vecchio: un
+  errore in scrittura lascia la risposta dov'era, invece di perderla. La lettura successiva la
+  ritrova.
+
 ## 0.246.0 — 2026-11-18
 
 - **La risposta della check list non dipende più dal numero di riga del prodotto.** `prodotti_ente.id`

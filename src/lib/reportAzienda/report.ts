@@ -21,6 +21,11 @@ import type { Riscontri } from '@/lib/normativa/riscontri';
 import type { FattiVisura } from '@/lib/visura/fatti';
 import type { EsitoRaccomandazione } from '@/lib/verificaAmministrativa/raccomandazione';
 import { ESITI_PROPOSTA, type EsitoProposta } from '@/lib/scenari/esitoProposta';
+import {
+  componiDecisioneFinale,
+  NOTA_DECISIONE_FINALE,
+  type FonteDecisioneFinale,
+} from './decisioneFinale';
 
 // ---- Cosa includere ------------------------------------------------------
 
@@ -214,6 +219,12 @@ export interface FontiReport {
   raccomandazione?: EsitoRaccomandazione | null;
   /** Gli scenari dell'azienda, con l'esito della proposta se dichiarato. */
   proposte?: FonteProposta[] | null;
+  /**
+   * I fatti che chiudono il documento: piano, impraticabilità, confronto fra
+   * le due procedure e documentazione mancante. Assente quando la lettura non
+   * si compone: il blocco non compare, invece di comparire vuoto.
+   */
+  decisione?: FonteDecisioneFinale | null;
 }
 
 // ---- Il report composto --------------------------------------------------
@@ -445,6 +456,24 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
       tipo: 'testo',
       testo,
       nota: 'Ordine di priorità fra le strade possibili, non una conclusione giuridica: la scelta resta all’ente.',
+    });
+  }
+
+  // 2-bis-bis. LA DECISIONE CHE RESTA (0.247.0).
+  //
+  // È l'ultima cosa che chi legge cerca: se lo scenario sta in piedi e, se non
+  // ci sta, quale strada lascia all'ente la perdita minore. I fatti sono già
+  // tutti nel documento — piano, patrimonio netto, indici, recuperi delle due
+  // procedure — ma sparsi in capitoli diversi: qui si mettono in fila, con la
+  // documentazione mancante pesata. Il testo si compone nel modulo puro.
+  if (fonti.decisione) {
+    const d = componiDecisioneFinale(fonti.decisione);
+    sezioni.push({
+      id: 'decisione',
+      titolo: d.titolo,
+      tipo: 'testo',
+      testo: d.righe.join('\n\n'),
+      nota: NOTA_DECISIONE_FINALE,
     });
   }
 
