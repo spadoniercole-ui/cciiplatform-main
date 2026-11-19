@@ -9,6 +9,9 @@
 
 import type { DatiFinanziariPeriodo, FactTestuale } from '@/lib/xbrl/types';
 import type { FattiVisura } from '@/lib/visura/fatti';
+// Il debito dell'ente non è un tipo del Ponte: vive in `lib/debitiEnte`, da cui
+// nasce, e qui si usa soltanto.
+import type { DebitoEntePonte } from '@/lib/debitiEnte/types';
 import type { EsitoScenari, ParametriScenari, RangoCredito } from '@/lib/triage/scenari';
 
 export type StatoPonte = 'BOZZA' | 'CALCOLATO' | 'CONFERMATO' | 'SUPERATO' | 'ARCHIVIATO';
@@ -24,36 +27,6 @@ export interface EsercizioPonte {
   dati: DatiFinanziariPeriodo;
   /** Impronta del file XBRL da cui vengono i dati e le note. */
   noteImpronta?: string | null;
-}
-
-export interface DebitoEntePonte {
-  /** Contabilizzato + da contabilizzare: il debito certo che il Ponte usa. */
-  totale: number;
-  contributi: number;
-  sanzioni: number;
-  creditiAgente: number;
-  /** Posizioni che formano il totale. */
-  righe: number;
-  /**
-   * Il dettaglio dei tre stati. Presente nei Ponte calcolati da 0.178.0;
-   * assente nelle versioni salvate prima, che restano leggibili.
-   */
-  contabilizzato?: number;
-  daContabilizzare?: number;
-  /** Posizioni segnalate alle unità operative, fuori dal totale. */
-  segnalato?: number;
-  righeSegnalate?: number;
-  /**
-   * Le posizioni del triage non hanno il riparto contributi/sanzioni: lo zero
-   * di `sanzioni` è un'assenza dichiarata, non una misura.
-   */
-  sanzioniNonDistinte?: boolean;
-  /**
-   * Da dove viene lo snapshot: la certificazione dei debiti, oppure le
-   * posizioni del triage quando la prima non è arrivata alla posizione
-   * dell'azienda. La scheda lo dichiara, così la cifra non è anonima.
-   */
-  fonte: string;
 }
 
 export interface SettorePonte {

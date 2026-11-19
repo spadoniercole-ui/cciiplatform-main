@@ -1,3 +1,13 @@
+## 0.249.0 — 2026-11-19
+
+- **Il debito dell'ente esce dal Piano-ponte** (secondo passo del piano di rimozione). Il calcolo
+  degli snapshot — certificazione dei debiti, posizioni del triage, scala di ripiego — e il tipo del
+  debito (`DebitoEntePonte`) vivevano in `src/lib/ponte`, ma non sono una nozione del ponte: nascono
+  dalla verifica amministrativa e da lì servono alla contabile e alla memorizzazione. Ora stanno in
+  `src/lib/debitiEnte` (`debitoEnte.ts`, `types.ts`), con i loro test, e il ponte li importa come
+  chiunque altro. Nessun comportamento cambia: sono gli stessi calcoli, spostati; il ponte, le sue
+  azioni e i suoi dati restano al loro posto, e la rimozione prosegue nei passi successivi.
+
 ## 0.248.0 — 2026-11-18
 
 - **La valutazione completa dell'ente non aspetta più il Piano-ponte** (primo passo del piano di

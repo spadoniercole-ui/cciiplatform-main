@@ -13,8 +13,8 @@
 // dice se la contabile è agganciabile — e se non lo è, che cosa manca. Non
 // legge il database e non inventa: la lettura sta nella server action.
 
-import type { SnapshotDebitoEnte } from '@/lib/ponte/debitoEnte';
-import type { DebitoEntePonte } from '@/lib/ponte/types';
+import type { SnapshotDebitoEnte } from './debitoEnte';
+import type { DebitoEntePonte } from './types';
 
 export interface DebitoContabile {
   contabilizzato: number;

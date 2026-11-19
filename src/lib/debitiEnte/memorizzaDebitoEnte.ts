@@ -21,8 +21,8 @@ import {
   snapshotDebitoEnte,
   snapshotDebitoEnteDaTriage,
   type SnapshotDebitoEnte,
-} from '@/lib/ponte/debitoEnte';
-import type { DebitoEntePonte } from '@/lib/ponte/types';
+} from './debitoEnte';
+import type { DebitoEntePonte } from './types';
 import type { RigaVera, TrattamentoVera } from './veraImport';
 import type { StatoDuplicatoVera } from './duplicatiVera';
 import { debitoDaMemorizzare, type DebitoMemorizzato } from './memorizzazione';

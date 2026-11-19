@@ -5,7 +5,7 @@ import {
   snapshotDebitoEnte,
   snapshotDebitoEnteDaTriage,
 } from './debitoEnte';
-import type { RigaVera } from '@/lib/debitiEnte/veraImport';
+import type { RigaVera } from './veraImport';
 
 function riga(p: Partial<RigaVera>): RigaVera {
   return {

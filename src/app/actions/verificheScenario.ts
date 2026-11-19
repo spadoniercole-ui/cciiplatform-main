@@ -21,8 +21,8 @@ import {
   type VisuraContabile,
 } from '@/lib/debitiEnte/aggancioContabile';
 import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
-import type { SnapshotDebitoEnte } from '@/lib/ponte/debitoEnte';
-import type { DebitoEntePonte } from '@/lib/ponte/types';
+import type { SnapshotDebitoEnte } from '@/lib/debitiEnte/debitoEnte';
+import type { DebitoEntePonte } from '@/lib/debitiEnte/types';
 import type { RigaVera, TrattamentoVera } from '@/lib/debitiEnte/veraImport';
 import type { StatoDuplicatoVera } from '@/lib/debitiEnte/duplicatiVera';
 
@@ -56,7 +56,8 @@ function numero(v: unknown): number {
  */
 async function leggiAggancio(nomeSchema: string, aziendaId: number): Promise<AggancioContabile> {
   const { pool } = await import('@/lib/db');
-  const { snapshotDebitoEnte, snapshotDebitoEnteDaTriage } = await import('@/lib/ponte/debitoEnte');
+  const { snapshotDebitoEnte, snapshotDebitoEnteDaTriage } =
+    await import('@/lib/debitiEnte/debitoEnte');
 
   let visura: VisuraContabile = { presente: false, nomeFile: null, caricataIl: null };
   try {

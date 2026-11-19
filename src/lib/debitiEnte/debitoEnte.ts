@@ -1,4 +1,4 @@
-// src/lib/ponte/debitoEnte.ts
+// src/lib/debitiEnte/debitoEnte.ts
 //
 // LO SNAPSHOT DEL DEBITO VERSO L'ENTE — tre stati separati, mai fusi.
 //
@@ -20,8 +20,8 @@
 // leggerla come zero azzerava il debito ente di un'azienda con posizioni
 // aperte. Qui l'importo si prende dal primo campo che lo contiene davvero.
 
-import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
-import type { RigaVera } from '@/lib/debitiEnte/veraImport';
+import { denunceDuplicateVera, insiemeEsclusi } from './duplicatiVera';
+import type { RigaVera } from './veraImport';
 import type { DebitoEntePonte } from './types';
 
 export interface SnapshotDebitoEnte {

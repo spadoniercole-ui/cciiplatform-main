@@ -35,7 +35,8 @@ import {
   snapshotDebitoEnte,
   snapshotDebitoEnteDaTriage,
   type SnapshotDebitoEnte,
-} from '@/lib/ponte/debitoEnte';
+} from '@/lib/debitiEnte/debitoEnte';
+import type { DebitoEntePonte } from '@/lib/debitiEnte/types';
 import type { DatiFinanziariPeriodo, FactTestuale } from '@/lib/xbrl/types';
 import { calcolaPonte, costruisciAssunzioni, ErrorePonte } from '@/lib/ponte/motore';
 import { calcolaHashInput, calcolaHashOutput } from '@/lib/ponte/hash';
@@ -43,7 +44,6 @@ import type {
   AssunzionePonte,
   AvvisoPonte,
   DatiPonte,
-  DebitoEntePonte,
   EsercizioPonte,
   InputPonte,
   PonteSalvato,

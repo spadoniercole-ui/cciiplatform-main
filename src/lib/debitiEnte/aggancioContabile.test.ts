@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AGGANGIO_VUOTO, aggancioContabile, debitoContabile } from './aggancioContabile';
-import type { SnapshotDebitoEnte } from '@/lib/ponte/debitoEnte';
+import type { SnapshotDebitoEnte } from './debitoEnte';
 
 const visura = { presente: true, nomeFile: 'VISURA.pdf', caricataIl: '2026-11-09' };
 

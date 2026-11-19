@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { debitoDaMemorizzare, descrizioneMemorizzazione } from './memorizzazione';
-import type { SnapshotDebitoEnte } from '@/lib/ponte/debitoEnte';
-import type { DebitoEntePonte } from '@/lib/ponte/types';
+import type { SnapshotDebitoEnte } from './debitoEnte';
+import type { DebitoEntePonte } from './types';
 
 const certificazione = (p: Partial<SnapshotDebitoEnte> = {}): SnapshotDebitoEnte => ({
   totale: 300_000,

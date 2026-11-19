@@ -17,8 +17,8 @@
 // Logica pura: non legge il database e non scrive. La lettura e il salvataggio
 // stanno in `memorizzaDebitoEnte.ts`, la regola qui.
 
-import { debitoEnteConRipiego, type SnapshotDebitoEnte } from '@/lib/ponte/debitoEnte';
-import type { DebitoEntePonte } from '@/lib/ponte/types';
+import { debitoEnteConRipiego, type SnapshotDebitoEnte } from './debitoEnte';
+import type { DebitoEntePonte } from './types';
 
 /** Da dove arriva la cifra memorizzata. */
 export type FonteDebitoMemorizzato = 'certificazione' | 'triage' | 'segnalato';
