@@ -21,7 +21,11 @@ import {
   type ProiezioneContabile,
 } from '@/lib/contabile/proiezione';
 import { apriVerifica } from '@/lib/verificheApertura';
-import { assicuraTabelleVerificaAzienda } from '@/db/provision';
+import {
+  assicuraTabellaSpiegazioniContabili,
+  assicuraTabelleVerificaAzienda,
+} from '@/db/provision';
+import { CHIAVI_TABELLE } from '@/lib/contabile/reportContabile';
 import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
@@ -137,6 +141,116 @@ export async function statoVerificaContabileAction(
       aziende: [],
       error: `Impossibile leggere lo stato della verifica contabile: ${(error as Error).message}`,
     };
+  }
+}
+
+export interface SpiegazioneContabile {
+  testo: string;
+  aggiornataIl: string | null;
+}
+
+export type SpiegazioniContabili = Record<string, SpiegazioneContabile>;
+
+export interface RisultatoSpiegazioni {
+  success: boolean;
+  spiegazioni: SpiegazioniContabili;
+  error?: string;
+}
+
+/**
+ * LE SPIEGAZIONI DELLE TRE TABELLE.
+ *
+ * Il report mostra i valori; qui si legge il testo con cui il valutatore li
+ * spiega. Una tabella senza spiegazione non è un errore: il report stampa lo
+ * spazio bianco, così chi firma sa che quella riga è ancora da dire.
+ */
+export async function spiegazioniContabiliAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<RisultatoSpiegazioni> {
+  try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    if (!schemaOk(nomeSchema)) {
+      return { success: false, spiegazioni: {}, error: 'Nome schema non valido.' };
+    }
+    if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
+      return { success: false, spiegazioni: {}, error: 'Azienda non riconosciuta.' };
+    }
+    await assicuraTabellaSpiegazioniContabili(nomeSchema);
+    const r = await pool.query(
+      `SELECT tabella, testo, to_char(aggiornata_il, 'YYYY-MM-DD') AS il
+         FROM "${nomeSchema}".verifica_contabile_spiegazioni
+        WHERE azienda_id = $1`,
+      [aziendaId]
+    );
+    const spiegazioni: SpiegazioniContabili = {};
+    for (const riga of r.rows) {
+      spiegazioni[String(riga.tabella)] = {
+        testo: String(riga.testo ?? ''),
+        aggiornataIl: riga.il ? String(riga.il) : null,
+      };
+    }
+    return { success: true, spiegazioni };
+  } catch (error: unknown) {
+    console.error('[spiegazioniContabiliAction] Errore:', error);
+    return {
+      success: false,
+      spiegazioni: {},
+      error: `Impossibile leggere le spiegazioni: ${(error as Error).message}`,
+    };
+  }
+}
+
+/**
+ * UNA SPIEGAZIONE SI SALVA SOLO SE HA UN TESTO.
+ *
+ * Il testo vuoto cancella la riga: una spiegazione tolta non deve restare a
+ * stampare nel report. Il limite è dichiarato — quattromila caratteri — perché
+ * il documento è un atto, non un archivio.
+ */
+export async function salvaSpiegazioneContabileAction(
+  nomeSchema: string,
+  aziendaId: number,
+  tabella: string,
+  testo: string
+): Promise<{ success: boolean; aggiornataIl?: string | null; error?: string }> {
+  try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
+      return { success: false, error: 'Azienda non riconosciuta.' };
+    }
+    if (!CHIAVI_TABELLE.includes(tabella as never)) {
+      return { success: false, error: 'Tabella non riconosciuta.' };
+    }
+    const pulito = String(testo ?? '').trim();
+    if (pulito.length > 4000) {
+      return { success: false, error: 'La spiegazione supera i 4.000 caratteri.' };
+    }
+    await assicuraTabellaSpiegazioniContabili(nomeSchema);
+
+    if (pulito.length === 0) {
+      await pool.query(
+        `DELETE FROM "${nomeSchema}".verifica_contabile_spiegazioni
+          WHERE azienda_id = $1 AND tabella = $2`,
+        [aziendaId, tabella]
+      );
+      return { success: true, aggiornataIl: null };
+    }
+
+    const r = await pool.query(
+      `INSERT INTO "${nomeSchema}".verifica_contabile_spiegazioni
+         (azienda_id, tabella, testo, aggiornata_il)
+       VALUES ($1,$2,$3, now())
+       ON CONFLICT (azienda_id, tabella)
+       DO UPDATE SET testo = EXCLUDED.testo, aggiornata_il = now()
+       RETURNING to_char(aggiornata_il, 'YYYY-MM-DD') AS il`,
+      [aziendaId, tabella, pulito]
+    );
+    return { success: true, aggiornataIl: r.rows[0]?.il ? String(r.rows[0].il) : null };
+  } catch (error: unknown) {
+    console.error('[salvaSpiegazioneContabileAction] Errore:', error);
+    return { success: false, error: `Spiegazione non salvata: ${(error as Error).message}` };
   }
 }
 

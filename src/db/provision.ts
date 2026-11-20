@@ -3206,6 +3206,29 @@ export async function assicuraTabelleVerificaAzienda(nomeSchema: string): Promis
 }
 
 /**
+ * LE SPIEGAZIONI DELLE TABELLE DELLA VERIFICA CONTABILE.
+ *
+ * Prospetto, differenziali e simulazione mostrano i numeri; la spiegazione è
+ * il testo con cui il valutatore dice che cosa li ha mossi. Vive a livello
+ * azienda e tabella — una riga per coppia — perché è la stessa spiegazione a
+ * servire al report unico e al report della singola tabella. Il testo vuoto
+ * cancella la riga: una spiegazione tolta non deve restare a stampare.
+ */
+export async function assicuraTabellaSpiegazioniContabili(nomeSchema: string): Promise<void> {
+  const s = sql.identifier(nomeSchema);
+  await assicuraTabellaAziende(nomeSchema);
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.verifica_contabile_spiegazioni (
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      tabella TEXT NOT NULL,
+      testo TEXT NOT NULL,
+      aggiornata_il TIMESTAMP NOT NULL DEFAULT now(),
+      PRIMARY KEY (azienda_id, tabella)
+    )`
+  );
+}
+
+/**
  * GLI ENTI DELLO SPAZIO.
  *
  * L'anagrafica degli enti creditori — INPS, INAIL, Agenzia delle Entrate,

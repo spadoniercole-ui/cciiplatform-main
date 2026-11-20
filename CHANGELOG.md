@@ -26,6 +26,26 @@ il terzo per correzioni.
 
 ---
 
+## 0.251.0 — 2026-11-20
+
+- **Un report per ogni tabella, e uno che le tiene insieme.** La verifica contabile produce tre
+  tabelle che dicono cose diverse: prospetto depositato, differenziali (scarto di ogni anno dalla
+  base, in euro e in punti, con il passo) e simulazione (valori storico e calcolato fino all'anno
+  della verifica). Ognuna ha ora il suo documento stampabile — `/verifica-contabile/[id]/report/`
+  `prospetto`, `differenziali`, `simulazione` — con i valori e lo spazio per la spiegazione.
+  Il report contabile (`/verifica-contabile/[id]/report`) le mette in fila e ci aggiunge le note
+  integrative del bilancio: si legge come un documento solo e non rimanda più alla fotografia per
+  i numeri che lo sostengono. Composizione pura in `src/lib/contabile/reportContabile.ts`, con i
+  suoi test.
+- **La spiegazione dei valori si scrive e si stampa.** Accanto a ogni tabella il valutatore dice
+  che cosa spiegano quei numeri (`verifica_contabile_spiegazioni`, una riga per azienda e tabella,
+  creata a runtime). Il testo salvato entra nel report stampato; quando manca, sulla carta resta lo
+  spazio per scriverlo a mano, così chi firma vede che quella riga è ancora da dire. Il testo vuoto
+  cancella la riga: una spiegazione tolta non resta a stampare.
+- **Le note integrative sono il documento, non una sintesi.** Il report le legge dall'istanza XBRL
+  con `selezionaNote` (sezioni rilevanti, testi ripuliti, taglio dichiarato) e le accosta ai numeri
+  che spiegano. Senza note il documento lo dice, invece di riassumere una nota che non c'è.
+
 ## 0.250.0 — 2026-11-20
 
 - **Le tre direttrici si leggono come tre cose diverse.** La dashboard mandava ogni posizione

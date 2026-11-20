@@ -288,17 +288,35 @@ export function VerificaContabileAzienda({
           <FileText className="w-3.5 h-3.5 text-blue-600" /> 4. Report contabile
         </h2>
         <p className="text-[11px] text-slate-500 leading-relaxed">
-          Il report contabile è la fotografia stampabile della posizione: i documenti in possesso,
-          il prospetto a scalare, gli indici di ogni annualità e la diagnosi. Racconta i numeri, non
-          la vita dell’azienda: quella la racconta la verifica amministrativa, e le due si leggono
-          insieme nella verifica aziendale.
+          Il report contabile mette in fila le tre tabelle — prospetto, differenziali, simulazione —
+          con accanto la spiegazione dei valori e le note integrative del bilancio. Ogni tabella si
+          può stampare anche da sola; il documento racconta i numeri, non la vita dell’azienda:
+          quella la racconta la verifica amministrativa, e le due si leggono insieme nella verifica
+          aziendale.
         </p>
-        <Link
-          href={`/spazio/${codice}/verifica-contabile/${aziendaId}/fotografia`}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-slate-800"
-        >
-          <FileText className="w-3 h-3" /> Apri il report contabile
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/spazio/${codice}/verifica-contabile/${aziendaId}/report`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-slate-800"
+          >
+            <FileText className="w-3 h-3" /> Apri il report contabile
+          </Link>
+          {(
+            [
+              ['prospetto', 'Prospetto'],
+              ['differenziali', 'Differenziali'],
+              ['simulazione', 'Simulazione'],
+            ] as const
+          ).map(([slug, etichetta]) => (
+            <Link
+              key={slug}
+              href={`/spazio/${codice}/verifica-contabile/${aziendaId}/report/${slug}`}
+              className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+            >
+              {etichetta} →
+            </Link>
+          ))}
+        </div>
       </section>
 
       {/* CORREDO — non è la verifica: sono l'identificazione dell'azienda
