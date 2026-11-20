@@ -26,6 +26,28 @@ il terzo per correzioni.
 
 ---
 
+## 0.252.0 — 2026-11-20
+
+- **La verifica aziendale non affianca più le due verifiche: le incrocia.** Cinque letture
+  attraversano amministrativa e contabile — il credito dell'ente contro il debito dichiarato nel
+  bilancio, l'esito amministrativo contro gli indici oltre soglia, la continuità dichiarata dagli
+  amministratori contro il patrimonio netto, la capacità di risposta contro il credito vantato, il
+  perimetro delle dimensioni coperte dall'una e dall'altra. Ogni incrocio dichiara che cosa vede
+  ciascuna verifica, se concordano o divergono, che cosa significa leggerle insieme e — quando
+  divergono — l'errore che la spiegazione evita. Composizione pura e testata
+  (`src/lib/verificaAzienda/interpolazione.ts`, 8 test).
+- **Una fotografia complessiva da rilasciare all'ente.** La nuova pagina
+  `verifica-azienda/[id]/fotografia` stampa il documento che l'ente porta con sé: la sintesi della
+  posizione, gli incroci con le loro nature, ciò che l'ente vanta, ciò che dicono i numeri, ciò che
+  l'azienda può rispondere, dove le due letture divergono e ciò che manca per chiudere la
+  fotografia. La scheda della verifica aziendale mostra lo stesso contenuto: una sola lettura
+  (`leggiFotografiaComplessiva`), non due copie.
+- **Le divergenze non si spengono.** Una dichiarazione di continuità accanto a un patrimonio netto
+  negativo, un'esito amministrativo rosso accanto a indici in soglia, una cassa che copre il
+  credito accanto a una segnalazione: ogni caso resta scritto con la sua natura (fatto accertato,
+  dichiarazione, proiezione, aritmetica) e con la ragione per cui le due letture possono divergere
+  senza che una sia sbagliata. Nessuna conclusione giuridica: la scelta resta al valutatore.
+
 ## 0.251.0 — 2026-11-20
 
 - **Un report per ogni tabella, e uno che le tiene insieme.** La verifica contabile produce tre

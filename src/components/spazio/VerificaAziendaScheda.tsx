@@ -29,6 +29,8 @@ import type { ColonnaFotografia, ScenarioFotografia } from '@/lib/verificaAziend
 import { breakEvenAccordo } from '@/lib/posizionePratica/breakEven';
 import type { PianoInEssere } from '@/lib/posizionePratica/pianoInEssere';
 import { indiciVisibili, valoreIndice } from '@/lib/xbrl/indiciVisibili';
+import type { FotografiaComplessiva } from '@/lib/verificaAzienda/interpolazione';
+import { FotografiaComplessivaView } from './FotografiaComplessiva';
 
 const euro = (n: number | undefined | null) =>
   typeof n === 'number' && Number.isFinite(n) ? `${Math.round(n).toLocaleString('it-IT')} €` : '—';
@@ -117,6 +119,7 @@ export function VerificaAziendaScheda({
   contabile = null,
   indiciAbilitati = [],
   pianoInEssere = null,
+  complessiva = null,
 }: {
   nomeSchema: string;
   aziendaId: number;
@@ -129,6 +132,8 @@ export function VerificaAziendaScheda({
   indiciAbilitati?: string[];
   /** Il piano che l'azienda sta già eseguendo, letto dai flussi dell'ente. */
   pianoInEssere?: PianoInEssere | null;
+  /** Le due verifiche incrociate: la fotografia che si rilascia all'ente. */
+  complessiva?: FotografiaComplessiva | null;
 }) {
   const [risultato, setRisultato] = useState<RisultatoVerificaAzienda | null>(null);
   const [inCorso, setInCorso] = useState(false);
@@ -304,6 +309,25 @@ export function VerificaAziendaScheda({
           )}
         </div>
       </div>
+
+      {complessiva && (
+        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+              Fotografia complessiva — le due verifiche incrociate
+            </h2>
+            {codice && (
+              <Link
+                href={`/spazio/${codice}/verifica-azienda/${aziendaId}/fotografia`}
+                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+              >
+                Documento da rilasciare <ArrowRight className="w-3 h-3" />
+              </Link>
+            )}
+          </div>
+          <FotografiaComplessivaView complessiva={complessiva} />
+        </div>
+      )}
 
       {errore && (
         <p className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">

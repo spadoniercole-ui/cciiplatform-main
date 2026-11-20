@@ -13,7 +13,7 @@
 
 import { pool } from '@/lib/db';
 import { leggiAperturaVerifica } from '@/lib/verificheApertura';
-import { componiProiezione } from '@/lib/contabile/proiezione';
+import { componiProiezione, type PonteEnte } from '@/lib/contabile/proiezione';
 import { assicuraTabelleScenariTriage } from '@/db/provision';
 import {
   componiFotografia,
@@ -50,6 +50,8 @@ export interface LetturaVerificaAzienda {
   debito: DebitoVerificaAzienda | null;
   nota: RiepilogoNota | null;
   asse: AsseContabileVerificaAzienda;
+  /** Il ponte fra il debito dichiarato e quello accertato: serve all'interpolazione. */
+  ponte: PonteEnte | null;
 }
 
 /** La nota integrativa dell'ultimo bilancio, ridotta a ciò che serve: sezioni e due testi. */
@@ -225,6 +227,7 @@ export async function leggiVerificaAzienda(
     fotografia,
     debito,
     nota,
+    ponte: asseContabile.ponteEnte,
     asse: {
       annoBase: asseContabile.annoBase,
       annoUltimoBilancio: asseContabile.annoUltimoBilancio,

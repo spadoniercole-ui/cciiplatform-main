@@ -8,6 +8,8 @@ import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { congruenzaAzienda } from '@/lib/flussiEnte/leggiCongruenza';
 import { pianoInEssere } from '@/lib/posizionePratica/pianoInEssere';
+import { leggiFotografiaComplessiva } from '@/lib/verificaAzienda/fotografiaComplessiva';
+import type { LetturaAmministrativa } from '@/lib/verificaAzienda/interpolazione';
 import { VerificaAziendaScheda } from '@/components/spazio/VerificaAziendaScheda';
 
 export const dynamic = 'force-dynamic';
@@ -55,6 +57,29 @@ export default async function VerificaAziendaSchedaPage({
     ? (storicoRis.righe?.find((v) => v.id === id)?.eseguitaIl ?? null)
     : null;
 
+  // L'INTERPOLAZIONE DELLE DUE VERIFICHE (0.252.0). La scheda affiancava le
+  // due letture; qui si incrociano, e la fotografia complessiva è ciò che si
+  // rilascia all'ente. Una sola lettura, condivisa con il documento stampabile.
+  const letturaAmministrativa: LetturaAmministrativa | null = attenzione
+    ? {
+        esito: attenzione.esito,
+        etichetta: attenzione.etichetta,
+        fattore: attenzione.fattoreDeterminante,
+        copertura: attenzione.copertura,
+        credito: debitoRis?.debito?.totale ?? null,
+        debitoIl: debitoRis?.memorizzatoIl ?? null,
+        accertato: attenzione.accertato ?? [],
+        daAccertare: attenzione.daAccertare ?? [],
+      }
+    : null;
+  const complessiva = await leggiFotografiaComplessiva(
+    contesto.nomeSchema,
+    id,
+    letturaAmministrativa
+  )
+    .then((r) => r.complessiva)
+    .catch(() => null);
+
   return (
     <VerificaAziendaScheda
       nomeSchema={contesto.nomeSchema}
@@ -88,6 +113,7 @@ export default async function VerificaAziendaSchedaPage({
           completo: e.completo,
         })),
       })}
+      complessiva={complessiva}
       contabile={
         rigaContabile
           ? {
