@@ -7,8 +7,8 @@ export type Periodo = 'corrente' | 'precedente';
 
 /**
  * Un fact testuale dell'istanza XBRL: note integrative, commenti, descrizioni.
- * Non è un numero e non deve mai entrare nei totali: è la materia prima del
- * Piano-ponte per capire ciò che il bilancio racconta oltre le cifre.
+ * Non è un numero e non deve mai entrare nei totali: è la materia prima della
+ * verifica azienda per capire ciò che il bilancio racconta oltre le cifre.
  */
 export interface FactTestuale {
   tagPulito: string;

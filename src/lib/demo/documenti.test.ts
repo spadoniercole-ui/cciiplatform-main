@@ -124,8 +124,8 @@ describe('documenti del percorso demo', () => {
       expect(estratto.annoBilancio, azienda).toBe(2025);
       expect(estratto.facts.length, azienda).toBeGreaterThan(15);
 
-      // Il file non basta: deve arrivare ai campi del bilancio che il
-      // Piano-ponte legge. Un tag scritto male darebbe una demo di zeri.
+      // Il file non basta: deve arrivare ai campi del bilancio che la
+      // verifica azienda legge. Un tag scritto male darebbe una demo di zeri.
       const analisi = await analizzaFileXbrl(xml, istanze[0].nome);
       expect(analisi.corrente.totaleAttivo, azienda).toBe(1_100_000);
       expect(analisi.corrente.totaleDebiti, azienda).toBe(900_000);

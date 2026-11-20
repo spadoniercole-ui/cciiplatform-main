@@ -3,7 +3,7 @@
 // LE NOTE INTEGRATIVE DELLA DEMO (0.232.0).
 //
 // Il seed caricava il bilancio XBRL con i soli dati di sintesi: `note_fatti`
-// restava vuoto e il Piano-ponte — che si appoggia alle note per allineare il
+// restava vuoto e la verifica azienda — che si appoggia alle note per allineare
 // bilancio alla data della verifica — non aveva nulla da leggere. La demo
 // mostrava un'azione che funziona a metà senza dirlo.
 //

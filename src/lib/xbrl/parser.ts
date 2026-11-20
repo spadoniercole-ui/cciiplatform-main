@@ -44,7 +44,7 @@ function parseNumeroItaliano(raw: unknown): number | null {
   const str = getNodeText(raw);
   if (!str) return null;
   // Una nota non è uno zero. Prima questa funzione restituiva 0 per qualunque
-  // testo non numerico, e il parser lo salvava come fact: il Piano-ponte
+  // testo non numerico, e il parser lo salvava come fact: la verifica azienda
   // avrebbe letto «nessun dato» dove c'era una frase. Il null è la differenza
   // fra «non c'è» e «vale zero».
   if (!/[-+]?\d/.test(str)) return null;

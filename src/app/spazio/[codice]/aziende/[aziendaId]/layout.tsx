@@ -7,7 +7,6 @@ import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniConteggioScreeningPendente } from '@/app/actions/screeningAzienda';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniStatoAnalisiBilancioStep } from '@/app/actions/analisiBilancioStep';
-import { esistePonteAzienda } from '@/lib/ponte/persistenza';
 import { anagraficaAziendaCompleta } from '@/lib/anagraficaAzienda';
 import { leggiIdentificativiEnte } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
@@ -48,13 +47,10 @@ export default async function AziendaLayout({
   const isEnte = contesto.tipoSpazio === 'ENTE';
 
   // Segnali di completamento, tutti in parallelo.
-  const [pendenteScreening, xbrlRis, statoAnalisiBilancio, statoPonte] = await Promise.all([
+  const [pendenteScreening, xbrlRis, statoAnalisiBilancio] = await Promise.all([
     ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
     ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
     ottieniStatoAnalisiBilancioStep(contesto.nomeSchema, aziendaNum),
-    isEnte
-      ? esistePonteAzienda(contesto.nomeSchema, aziendaNum)
-      : Promise.resolve({ esiste: false, stato: null, versione: null }),
   ]);
   const domandeMancanti = pendenteScreening.totali - pendenteScreening.risposte;
   // Identificativi presso l'ente: in testata, in evidenza, appena salvati.
@@ -79,10 +75,6 @@ export default async function AziendaLayout({
     (xbrlRis?.storico?.length ?? 0) > 0 ||
     (!!statoAnalisiBilancio?.stato.xbrlConfigVista && !!statoAnalisiBilancio?.stato.indiciVisti);
   const screeningGenerato = pendenteScreening.esiste;
-  // Il Piano-ponte non è più un prerequisito della valutazione completa
-  // (0.248.0): la valutazione parte dal dato contabile. Il passo resta a
-  // disposizione, e il suo stato dice solo se il ponte è già calcolato.
-  const ponteEsiste = statoPonte.esiste;
   const checklistCompleta =
     screeningGenerato && pendenteScreening.totali > 0 && domandeMancanti === 0;
 
@@ -108,16 +100,6 @@ export default async function AziendaLayout({
     stato: !anagraficaCompleta ? 'bloccato' : analisiBilancioCompleta ? 'completo' : 'attivo',
     motivo: "Completa prima l'Anagrafica azienda.",
   });
-  // Il Piano-ponte sta a livello azienda, dopo i dati di base: non richiede
-  // uno Scenario e non è la Check List. Non è più una tappa obbligata
-  // (0.248.0): si può aprire sempre, e se il ponte c'è il passo è verde.
-  if (isEnte) {
-    steps.push({
-      id: 'ponte',
-      label: 'Piano-ponte',
-      stato: ponteEsiste ? 'completo' : 'attivo',
-    });
-  }
   steps.push({
     id: 'screening',
     label: 'Valutazione completa',

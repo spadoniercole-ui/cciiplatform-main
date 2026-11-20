@@ -4,7 +4,7 @@
 //
 // Una tassonomia ITCC-CI mette la nota integrativa dentro fact testuali con
 // l'HTML dentro (`&lt;p style=...&gt;`): prenderli così come arrivano significa
-// portare nel prompt del Piano-ponte migliaia di caratteri di `margin:0cm`,
+// portare nel prompt della verifica azienda migliaia di caratteri di `margin:0cm`,
 // e perdere per strada ciò che conta — continuità aziendale, fatti di rilievo
 // dopo la chiusura, impegni, parti correlate.
 //
@@ -14,7 +14,7 @@
 
 import type { FactTestuale } from './types';
 
-/** Le sezioni che il Piano-ponte sa leggere. `ALTRO` è ciò che resta. */
+/** Le sezioni che la verifica azienda sa leggere. `ALTRO` è ciò che resta. */
 export type SezioneNota =
   | 'CONTINUITA'
   | 'FATTI_RILIEVO'
@@ -164,7 +164,7 @@ export interface OpzioniNote {
 
 /**
  * Tetti del primo taglio. Un'istanza reale porta decine di testi e centinaia di
- * migliaia di caratteri: al Piano-ponte servono le sezioni che cambiano le
+ * migliaia di caratteri: alla verifica azienda servono le sezioni che cambiano le
  * assunzioni, e una citazione che si possa leggere.
  */
 export const LIMITI_NOTE = {

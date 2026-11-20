@@ -2,15 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Sparkles,
-  RefreshCw,
-  Upload,
-  FileText,
-  AlertTriangle,
-  Printer,
-  Landmark,
-} from 'lucide-react';
+import { Sparkles, RefreshCw, Upload, FileText, AlertTriangle, Printer } from 'lucide-react';
 import {
   ottieniScreeningAzienda,
   generaScreeningAziendaAction,
@@ -422,25 +414,6 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
           )}
         </p>
       </div>
-
-      {tipoSpazio !== 'NON_ENTE' && (
-        <a
-          href={`/spazio/${codice}/aziende/${aziendaId}/ponte`}
-          className="flex items-start gap-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl p-4 transition-colors"
-        >
-          <Landmark className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>
-            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-300">
-              Dopo lo Screening
-            </span>
-            <span className="block text-sm font-bold mt-0.5">Apri il Piano-ponte</span>
-            <span className="block text-[11px] text-slate-300 mt-1 leading-relaxed">
-              Allinea il bilancio storico alla Data verifica: note integrative, visura, settore e
-              debito ente. Il Ponte resta a livello azienda e alimenta il confronto dello Scenario.
-            </span>
-          </span>
-        </a>
-      )}
 
       {tipoSpazio !== 'NON_ENTE' && (stato?.identificativiEnte.length ?? 0) > 0 && (
         <p className="text-[11px] text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1">

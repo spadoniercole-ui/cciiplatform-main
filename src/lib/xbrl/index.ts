@@ -173,7 +173,7 @@ export async function analizzaFileXbrl(
 
   // Le note non sono numeri e non entrano nei totali. Si tengono per sezione,
   // ripulite dall'HTML che le tassonomie ci mettono dentro (vedi note.ts), con
-  // un tetto dichiarato: il Piano-ponte ha bisogno della continuità aziendale,
+  // un tetto dichiarato: la verifica azienda ha bisogno della continuità aziendale,
   // dei fatti di rilievo e degli impegni, non di trascinare l'intero documento
   // nel database e nel prompt.
   const selezioneNote = selezionaNote(factTestuali);

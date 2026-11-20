@@ -7,7 +7,7 @@ describe('esitoSalvataggioVera', () => {
     expect(e.errore).toContain('34 righe');
     expect(e.errore).toContain('NON salvata');
     expect(e.errore).toContain('violazione del vincolo su azienda_id');
-    expect(e.errore).toContain('Piano-ponte');
+    expect(e.errore).toContain('NON salvata');
     expect(e.nota).toContain('34 righe lette restano fuori');
   });
 

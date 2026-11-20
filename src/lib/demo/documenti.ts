@@ -271,7 +271,7 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
   // Impianti Adriatica — la posizione ferma al triage: visura, certificazione,
   // denunce DM10 e deleghe di pagamento. Non ci sono proposta o provvedimento,
   // perché il percorso non è ancora arrivato allo scenario; il bilancio XBRL
-  // invece c'è, ed è quello che permette di provare il Piano-ponte su una
+  // invece c'è, ed è quello che permette di provare la verifica azienda su una
   // posizione non precostituita.
   documento(
     AZIENDA_IMPIANTI,

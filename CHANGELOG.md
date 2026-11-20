@@ -1,3 +1,31 @@
+# Changelog
+
+Ogni consegna riporta qui il numero di versione e le modifiche incluse.
+Per verificare quale versione è davvero online: guarda in fondo alla
+pagina di login, oppure confronta questo file con quello nel repository al
+commit che Vercel mostra come "Production".
+
+**Due linee di versione, indipendenti** (per non confondere le due
+situazioni):
+
+- **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
+  (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
+  release cloud: **0.249.0**. (I numeri 0.102–0.104 non sono stati riusati
+  per il cloud: erano già comparsi su build portable consegnate, così
+  nessun numero è mai condiviso tra le due linee.)
+- **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
+  proprio (`Portable X.Y.Z`, mostrato con l'etichetta "Portable" nella
+  barra di stato), che avanza solo per il lavoro portable e **non** tocca
+  il numero cloud. Le voci qui sotto che nel passato erano numerate
+  0.102–0.104 appartengono in realtà a questa linea e sono state
+  ri-etichettate di conseguenza.
+
+Versionamento libero (non segue semver in senso stretto): il primo numero
+sale per cambi strutturali importanti, il secondo per funzionalità nuove,
+il terzo per correzioni.
+
+---
+
 ## 0.249.0 — 2026-11-19
 
 - **Il debito dell'ente esce dal Piano-ponte** (secondo passo del piano di rimozione). Il calcolo

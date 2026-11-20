@@ -521,8 +521,8 @@ async function inserisciBilancio(
 ): Promise<void> {
   const anno = periodo === 'corrente' ? a.finanziario.anno : a.finanziario.anno - 1;
   const bundle = bundleDemo(a, periodo);
-  // Le note integrative dello stesso file che la demo consegna: senza, il
-  // Piano-ponte non ha nulla da leggere. Si salvano sull'anno corrente.
+  // Le note integrative dello stesso file che la demo consegna: senza, la
+  // verifica azienda non ha note da leggere. Si salvano sull'anno corrente.
   const note = noteIntegrativeDemoPer(a.ragioneSociale, anno);
   await esegui.query(
     `INSERT INTO "${nomeSchema}".xbrl_storico_azienda

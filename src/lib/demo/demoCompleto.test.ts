@@ -22,7 +22,7 @@ import { noteIntegrativeDemoPer } from './noteXbrl';
 // La demo non è un riempitivo: è la prova che lo strumento funziona, e ogni
 // sua azione si appoggia a un file. Se manca un documento, o un'istanza XBRL
 // arriva senza note integrative, l'azione non fallisce in modo visibile —
-// funziona «zoppa»: il Piano-ponte non ha materiale, la simulazione mostra
+// funziona «zoppa»: la lettura del bilancio non ha materiale, la simulazione mostra
 // indicatori che non spiegano nulla, la verifica amministrativa parte senza
 // certificazione. Qui si controlla, azienda per azienda, che cosa la demo
 // mette in mano a chi la guarda.
@@ -65,7 +65,7 @@ describe('la demo è completa: ogni azione ha il suo file', () => {
       const istanza = documentiDemoPerAzienda(azienda, '.xbrl')[0];
       const xml = readFileSync(join(RADICE, istanza.percorso), 'utf8');
       const letto = parseIstanzaXbrl(xml);
-      // Le note sono ciò che il Piano-ponte legge per allineare il bilancio:
+      // Le note sono ciò che la verifica azienda legge per allineare il bilancio:
       // con una sola nota l'azione è zoppa.
       expect(letto.factTestuali.length, azienda).toBeGreaterThanOrEqual(6);
       const testo = letto.factTestuali.map((f) => f.testo).join(' ');
@@ -91,7 +91,7 @@ describe('la demo è completa: ogni azione ha il suo file', () => {
   });
 
   it('il seed ha le note da salvare, lette dal file e non inventate', () => {
-    // Il Piano-ponte legge `note_fatti` dal database: se il seed non le
+    // La verifica azienda legge `note_fatti` dal database: se il seed non le
     // scrive, la demo mostra un'azione che non ha materiale. Le note arrivano
     // dallo stesso file che la demo consegna, con la sua impronta.
     for (const azienda of AZIENDE) {

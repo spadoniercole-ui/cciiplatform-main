@@ -167,12 +167,12 @@ function pdf({ file, titolo, sottotitolo, righe }) {
 // Bilancio in formato XBRL: è il file che il campo «Carica i bilanci XBRL»
 // propone nella simulazione. Deve essere un'istanza vera (contesti + fact con
 // contextRef), altrimenti il parser la rifiuta e la demo non può mostrare né
-// gli indici né il Piano-ponte. I tag sono quelli della tassonomia ITCC-CI che
+// gli indici né la lettura della verifica. I tag sono quelli della tassonomia ITCC-CI che
 // il motore riconosce (src/lib/xbrl/tagMapping.ts).
 function xbrl({ file, azienda, cf }) {
   // LE NOTE INTEGRATIVE NON SONO UN DETTAGLIO (0.232.0).
   //
-  // Il Piano-ponte non lavora solo sui numeri di sintesi: legge le note
+  // La verifica azienda non lavora solo sui numeri di sintesi: legge le note
   // integrative (fatti testuali dell'istanza) per capire criteri, eventi e
   // continuità. Con una sola nota la dimostrazione resta zoppa — l'azione
   // «allinea il bilancio alla data verifica» non ha materiale su cui
@@ -290,7 +290,7 @@ for (const a of aziende) {
 
   // Ogni azienda demo ha il suo bilancio XBRL, anche quella ferma al triage:
   // è il file che la simulazione di acquisizione propone nel campo XBRL, e
-  // senza di esso il Piano-ponte di quella posizione non si può mostrare.
+  // senza di esso la verifica azienda di quella posizione non si può mostrare.
   xbrl({
     file: `bilancio-${a.chiave}-2025.xbrl`,
     azienda: a.nome,
