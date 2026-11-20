@@ -22,8 +22,8 @@ export default async function ScreeningAziendaPage({
   if (!contesto) redirect('/');
   if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
 
-  // La valutazione completa non aspetta più il Piano-ponte (0.248.0): il
-  // presupposto è il dato contabile, e la scheda lo chiede con «Bilanci XBRL».
+  // La valutazione completa parte dal dato contabile: il presupposto è almeno
+  // un bilancio XBRL, e la scheda lo chiede con «Bilanci XBRL».
   return (
     <div className="space-y-5">
       <ScreeningAziendaScenario

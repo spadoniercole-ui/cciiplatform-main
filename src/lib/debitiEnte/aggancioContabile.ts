@@ -60,10 +60,9 @@ export const AGGANGIO_VUOTO: AggancioContabile = {
 };
 
 /**
- * Il debito dell'ente nella forma che serve alla contabile, con la stessa
- * scala di ripiego del Ponte: base certa (contabilizzato + da contabilizzare),
- * poi le posizioni del triage, poi le segnalate alle unità operative. Mai zero
- * davanti a un debito accertato.
+ * Il debito dell'ente nella forma che serve alla contabile: base certa
+ * (contabilizzato + da contabilizzare), poi le posizioni del triage, poi le
+ * segnalate alle unità operative. Mai zero davanti a un debito accertato.
  */
 export function debitoContabile(
   certificazione: SnapshotDebitoEnte | null,

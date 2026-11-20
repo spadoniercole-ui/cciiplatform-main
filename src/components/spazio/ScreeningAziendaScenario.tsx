@@ -210,8 +210,8 @@ export function ScreeningAziendaScenario({ nomeSchema, aziendaId, codice, tipoSp
       }
       const analisi: AnalisiXbrlResult = corpo;
       // La stessa impronta lega il bilancio e le note integrative al file: se
-      // il file viene sostituito, l'impronta dice che il Ponte è costruito su
-      // un'altra fonte e non può essere spacciato per lo stesso documento.
+      // il file viene sostituito, l'impronta dice che il bilancio è costruito
+      // su un'altra fonte e non può essere spacciato per lo stesso documento.
       const improntaXbrl = await improntaFile(file);
       const regX = await registraDocumentoOrigineAction(
         nomeSchema,

@@ -1,16 +1,15 @@
-// LA VALUTAZIONE COMPLETA PARTE DAL DATO CONTABILE, NON DAL PONTE (0.248.0).
+// LA VALUTAZIONE COMPLETA PARTE DAL DATO CONTABILE (0.248.0).
 //
-// Fino alla 0.247.0 la valutazione completa dell'ente non partiva senza il
-// Piano-ponte: il ponte portava il bilancio storico alla Data verifica, e senza
-// quella base contabile l'analisi avrebbe confrontato un'altra fotografia. Il
-// vincolo però legava una funzione nuova a una vecchia: chi non aveva calcolato
-// il ponte non poteva usare la valutazione, anche con i bilanci in archivio e
-// la contabile pronta.
+// Senza una base contabile l'analisi confronterebbe un'altra fotografia: il
+// bilancio storico va portato alla Data verifica, ed è quello che fa la
+// contabile nuova (il prospetto proiettato). Il vincolo però non può legare
+// una funzione nuova a un passaggio in più: chi ha i bilanci in archivio e la
+// contabile pronta deve poter partire, senza dover prima calcolare altro.
 //
-// Ora la condizione è il dato contabile: la valutazione parte quando c'è almeno
-// un bilancio XBRL, che è la base che la contabile nuova (il prospetto
-// proiettato) sa leggere. L'operatore può comunque procedere senza, ma deve
-// dichiararlo: l'assenza resta scritta nella relazione, non passa in silenzio.
+// La condizione è quindi la presenza del dato contabile: la valutazione parte
+// quando c'è almeno un bilancio XBRL, che è la base che la contabile sa
+// leggere. L'operatore può comunque procedere senza, ma deve dichiararlo:
+// l'assenza resta scritta nella relazione, non passa in silenzio.
 //
 // La regola sta qui, pura, così l'azione e la schermata dicono la stessa cosa.
 

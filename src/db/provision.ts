@@ -72,6 +72,24 @@ export async function eseguiDdlTenant(istruzione: ReturnType<typeof sql>) {
 }
 
 /**
+ * Elimina le tabelle del Piano-ponte dai tenant provisionati prima che il
+ * Piano-ponte uscisse dal codice: nessuna funzione le legge più, ma restano
+ * nello schema e finiscono nei backup. Una volta per processo e per schema,
+ * come gli altri DDL garantiti; la chiama `assicuraTabellaAziende`, che ogni
+ * spazio attraversa aprendo le aziende, quindi arriva anche agli spazi già
+ * provisionati.
+ */
+async function eliminaTabellePianoPonte(nomeSchema: string): Promise<void> {
+  if (giaGarantita(nomeSchema, 'tabelle_piano_ponte')) return;
+  const s = sql.identifier(nomeSchema);
+  // Prima gli eventi, che portano la chiave esterna verso ponte_temporale.
+  for (const tabella of ['ponte_temporale_eventi', 'ponte_temporale']) {
+    await eseguiDdlTenant(sql`DROP TABLE IF EXISTS ${s}.${sql.identifier(tabella)}`);
+  }
+  segnaGarantita(nomeSchema, 'tabelle_piano_ponte');
+}
+
+/**
  * STEP 1 di 2: crea lo schema Postgres isolato per uno spazio di lavoro e le
  * sue tabelle (parametri_workspace, indici_master, admin_workspace, aziende),
  * senza creare ancora nessun record admin — quello è lo step 2, una
@@ -349,6 +367,10 @@ export async function assicuraTabellaAziende(nomeSchema: string): Promise<void> 
       sql`ALTER TABLE ${s}.aziende ADD COLUMN IF NOT EXISTS ${sql.raw(colonna)}`
     );
   }
+
+  // Il Piano-ponte non è più nel codice: le sue tabelle si eliminano qui, al
+  // primo accesso dello spazio alle aziende.
+  await eliminaTabellePianoPonte(nomeSchema);
 }
 
 /**

@@ -10,9 +10,9 @@
 //     ancora determinato (o non è ancora stato affidato). Si dà per certo che
 //     lo diventerà, ma allo stato dell'analisi non lo è.
 //
-// Il Ponte usa le prime due: sommare anche la terza farebbe entrare nella base
-// contabile un debito che non è ancora un debito iscritto. La terza si mostra,
-// non si contabilizza.
+// La base contabile usa le prime due: sommare anche la terza farebbe entrare
+// un debito che non è ancora un debito iscritto. La terza si mostra, non si
+// contabilizza.
 //
 // SECONDA REGOLA: una cifra a zero non è una cifra assente. La certificazione
 // dei debiti porta l'importo in colonne diverse (importo, contributi, sanzioni,
@@ -25,7 +25,7 @@ import type { RigaVera } from './veraImport';
 import type { DebitoEntePonte } from './types';
 
 export interface SnapshotDebitoEnte {
-  /** Contabilizzato + da contabilizzare: il debito certo che il Ponte usa. */
+  /** Contabilizzato + da contabilizzare: il debito certo. */
   totale: number;
   contabilizzato: number;
   daContabilizzare: number;
@@ -178,7 +178,7 @@ export function snapshotDebitoEnteDaTriage(righe: RigaTriagePonte[]): DebitoEnte
  *
  * La base certa resta contabilizzato + da contabilizzare. Se però vale zero
  * mentre la certificazione porta posizioni segnalate alle unità operative, o
- * il triage ha posizioni qualificate, il Ponte usa quelle e dichiara la fonte:
+ * il triage ha posizioni qualificate, la cifra usa quelle e dichiara la fonte:
  * mostrare «debito ente 0 €» su un'azienda con contributi scaduti accertati è
  * una contraddizione, non una misura.
  *

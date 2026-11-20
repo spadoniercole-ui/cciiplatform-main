@@ -493,17 +493,16 @@ export async function generaScreeningAziendaAction(
     }
     if (!validaSchema(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
 
-    // IL VINCOLO È IL DATO CONTABILE, NON IL PIANO-PONTE (0.248.0).
+    // IL VINCOLO È IL DATO CONTABILE (0.248.0).
     //
-    // Fino alla 0.247.0 la valutazione completa dell'ente non partiva senza il
-    // Piano-ponte. Il ponte faceva un lavoro che oggi fa la contabile nuova —
-    // portare il bilancio alla Data verifica — ma il vincolo legava una
-    // funzione nuova a una vecchia: chi aveva i bilanci in archivio e non aveva
-    // calcolato il ponte restava fermo. La condizione ora è la presenza della
-    // contabile: almeno un bilancio XBRL, oppure la dichiarazione esplicita
-    // dell'operatore di procedere senza (l'assenza resta scritta nella
-    // relazione). La prima elaborazione automatica non ha vincoli: avviene nel
-    // triage, senza un operatore davanti.
+    // La valutazione completa dell'ente non parte senza una base contabile: la
+    // contabile nuova porta il bilancio alla Data verifica, e senza quel dato
+    // l'analisi confronterebbe un'altra fotografia. Il vincolo però non è più
+    // stretto di così: chi ha i bilanci in archivio non resta fermo. La
+    // condizione è la presenza della contabile — almeno un bilancio XBRL,
+    // oppure la dichiarazione esplicita dell'operatore di procedere senza
+    // (l'assenza resta scritta nella relazione). La prima elaborazione
+    // automatica non ha vincoli: avviene nel triage, senza un operatore davanti.
     if (contesto.tipoSpazio === 'ENTE' && origine === 'MANUALE') {
       const xbrl = await ottieniStoricoXbrlAzienda(nomeSchema, aziendaId).catch(() => null);
       const anniContabile = xbrl?.success

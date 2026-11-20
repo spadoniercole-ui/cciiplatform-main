@@ -8,7 +8,7 @@
 // potevano divergere.
 //
 // Qui il dato prende una forma sola, quella che si memorizza: la stessa scala
-// di ripiego del Ponte, con i tre stati dichiarati separatamente. Il debito
+// di ripiego della contabile, con i tre stati dichiarati separatamente. Il debito
 // certo resta contabilizzato + da contabilizzare; le posizioni segnalate alle
 // unità operative si conservano e restano fuori dal totale. Quando il dato non
 // distingue gli stati — posizioni del triage o segnalate — lo dice `ripartito:
