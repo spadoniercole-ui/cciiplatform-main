@@ -26,6 +26,34 @@ il terzo per correzioni.
 
 ---
 
+## 0.250.0 — 2026-11-20
+
+- **Le tre direttrici si leggono come tre cose diverse.** La dashboard mandava ogni posizione
+  sulla scheda dell'azienda — la vecchia sequenza «Anagrafica → Analisi Bilancio → Verifica
+  contabile → Check List» — e chi arrivava da «Verifica amministrativa» o da «Scenari» finiva in un
+  punto che non c'entrava. Ora la riga del riepilogo apre dove la posizione si sta lavorando: la
+  prima tappa cominciata (contabile, poi aziendale), altrimenti il triage, e quando le tre verifiche
+  sono chiuse la verifica aziendale, che è la fotografia completa. La regola è pura e testata
+  (`hrefPosizione` in `src/lib/dashboard/avanzamento.ts`).
+- **La scheda dell'azienda non è più il percorso dello screening.** La barra dei passi è sostituita
+  dalle tre direttrici: verifica amministrativa (il triage), contabile (il dato XBRL) e aziendale
+  (le due lette insieme). Le vecchie sotto-pagine restano al loro URL finché non si ripuliscono, ma
+  non sono più una tappa da attraversare, e la verifica amministrativa di una posizione già presa in
+  carico si riapre nella sua Posizione, non nella scheda dell'anagrafica.
+- **La verifica contabile comincia dai numeri.** L'ordine è quello della direttrice: 1. bilanci XBRL,
+  2. prospetto a scalare e indici, 3. differenziali e simulazione fino all'anno della verifica,
+  4. report contabile stampabile. Visura storica e parametri dell'ente scendono in fondo come
+  corredo dichiarato: identificano l'azienda presso l'ente e non sono la verifica.
+- **I parametri dell'ente hanno un nome solo.** La sezione mostrava «Parametro 1…10» e poi le
+  mascherava con le voci configurate nello spazio, così sembravano due cose. Ora compaiono solo i
+  campi attivi con l'etichetta dell'ente; se lo spazio non ne ha configurati la sezione lo dice e
+  manda a configurarli, invece di inventare nomi.
+- **La simulazione si salva per la verifica azienda.** La simulazione alla data della verifica non è
+  più un calcolo da guardare e perdere: `salvaSimulazioneContabileAction` la ricalcola dal dato
+  (mai da ciò che manda il browser) e la conserva in `verifica_azienda_simulazioni` come base della
+  posizione, con le colonne storico/calcolato e le avvertenze. Le simulazioni precedenti restano
+  scritte e perdono solo il ruolo di base.
+
 ## 0.249.0 — 2026-11-19
 
 - **Il debito dell'ente esce dal Piano-ponte** (secondo passo del piano di rimozione). Il calcolo

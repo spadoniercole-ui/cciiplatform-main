@@ -163,6 +163,38 @@ export function avanzamentoPosizioni(input: {
   );
 }
 
+/**
+ * DOVE SI APRE UNA POSIZIONE (0.250.0).
+ *
+ * Il riepilogo della dashboard mandava ogni azienda sulla scheda
+ * `/aziende/[id]`: la vecchia scheda dello screening, con le tab Anagrafica e
+ * Analisi Bilancio. Chi arrivava da «1. Verifica amministrativa» o da
+ * «4. Scenari» finiva in un punto che non c'entrava, e doveva ricominciare a
+ * cercare. Ora la riga porta dove la posizione si sta lavorando: la prima
+ * tappa non chiusa, nell'ordine del lavoro.
+ *
+ * Se nulla è cominciato si apre il triage, che è la prima porta; quando le tre
+ * verifiche sono chiuse si apre la verifica aziendale, che è la fotografia
+ * completa della posizione — anche se gli scenari mancano, perché è lì che si
+ * legge insieme tutto il resto.
+ */
+export function hrefPosizione(p: AvanzamentoPosizione, codice: string): string {
+  const base = `/spazio/${codice}`;
+  if (p.aziendaId === null) return `${base}/scenari`;
+  const id = p.aziendaId;
+
+  // Una tappa cominciata vince sull'ordine: è lì che si sta lavorando.
+  if (p.contabile === 'PARZIALE') return `${base}/verifica-contabile/${id}`;
+  if (p.aziendale === 'PARZIALE') return `${base}/verifica-azienda/${id}`;
+
+  if (p.amministrativa !== 'COMPLETO') return `${base}/verifica-salute?azienda=${id}`;
+  // «Non disponibile» non è «mancante»: a un accesso che non legge la
+  // contabile non si manda la riga su una pagina che gli risponderà 403.
+  if (p.contabile === 'MANCANTE') return `${base}/verifica-contabile/${id}`;
+  if (p.aziendale === 'MANCANTE') return `${base}/verifica-azienda/${id}`;
+  return `${base}/verifica-azienda/${id}`;
+}
+
 /** Quante posizioni sono arrivate a ciascuna fase, per il conteggio in testa. */
 export function conteggioFasi(
   posizioni: AvanzamentoPosizione[]

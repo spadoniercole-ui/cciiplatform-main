@@ -1,18 +1,19 @@
 'use client';
 
-// VERIFICA CONTABILE — il percorso a livello azienda.
+// VERIFICA CONTABILE — il percorso a livello azienda, sui numeri.
 //
-// Quattro acquisizioni, nell'ordine in cui servono: la visura storica (che qui
-// non racconta la vita dell'azienda ma fissa l'anagrafica su cui si innestano
-// i parametri dell'ente), i parametri dell'ente per questa azienda, i bilanci
-// XBRL, il prospetto a scalare con gli indici, e infine la proiezione: gli anni
-// depositati portati fino all'anno di apertura della verifica con la serie
-// geometrica degli scarti (0.236.0). Nessuna conclusione nel merito: quella è
-// materia della verifica azienda, che ora riparte da dati allineati nel tempo.
+// L'ordine è quello della direttrice contabile, non quello del vecchio
+// screening: si acquisiscono i bilanci XBRL, si legge il prospetto a scalare
+// con gli indici, si contano i differenziali e si simula l'assetto alla data
+// della verifica, e il report contabile raccoglie il risultato stampabile.
+// Le note integrative danno la spiegazione dei numeri; la certificazione dei
+// debiti non si chiede, è il dato della verifica amministrativa.
 //
-// La certificazione dei debiti non si chiede e non si mostra: è il dato della
-// verifica amministrativa, che vive nel suo esito. Qui resta il solo dato
-// storico dell'azienda.
+// Visura storica e parametri dell'ente non sono la verifica: sono il corredo
+// che identifica l'azienda presso l'ente, e stanno in fondo, dichiarati come
+// tali. Le etichette dei parametri sono solo quelle configurate nello spazio
+// (Parametri di Spazio → Anagrafica Ente): prima comparivano come «Parametro
+// 1…10» e poi venivano mascherate dal nome vero, e sembravano due cose.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -55,31 +56,6 @@ interface Props {
   ritorno?: string | null;
 }
 
-// Ripiego usato solo se la configurazione delle etichette non si legge: in
-// condizioni normali i campi visibili sono quelli attivi, con le etichette
-// configurate nello spazio (Parametri di Spazio → Anagrafica Ente).
-const campiAnagrafica: { chiave: keyof AnagraficaEnte; etichetta: string }[] = [
-  { chiave: 'idEnte', etichetta: 'ID ente' },
-  ...Array.from({ length: 10 }, (_, i) => ({
-    chiave: `campo${i + 1}` as keyof AnagraficaEnte,
-    etichetta: `Parametro ${i + 1}`,
-  })),
-];
-
-const vuota: AnagraficaEnte = {
-  idEnte: null,
-  campo1: null,
-  campo2: null,
-  campo3: null,
-  campo4: null,
-  campo5: null,
-  campo6: null,
-  campo7: null,
-  campo8: null,
-  campo9: null,
-  campo10: null,
-};
-
 export function VerificaContabileAzienda({
   nomeSchema,
   codice,
@@ -106,31 +82,35 @@ export function VerificaContabileAzienda({
       const r = await ottieniAnagraficaEnte(nomeSchema, aziendaId);
       if (r.success) setParametri(r.dati);
       const e = await ottieniEtichetteAnagraficaEnte(nomeSchema);
-      if (e.success && e.etichette.length > 0) setEtichette(e.etichette);
+      if (e.success) setEtichette(e.etichette);
     })();
   }, [nomeSchema, aziendaId]);
 
-  const parametriCompilati = useMemo(
-    () => campiAnagrafica.some((c) => (parametri[c.chiave] ?? '').trim() !== ''),
-    [parametri]
-  );
-
   // I campi attivi, con il nome che l'ente dà loro (matricola, CSC, CA…).
-  const campiEnte = useMemo(() => {
-    if (!etichette) return campiAnagrafica.filter((c) => c.chiave !== 'idEnte');
-    const attivi = etichette.filter((e) => e.attivo);
-    const visibili = attivi.length > 0 ? attivi : etichette;
-    return visibili.map((e) => ({
-      chiave: `campo${e.campo}` as keyof AnagraficaEnte,
-      etichetta: e.etichetta,
-    }));
-  }, [etichette]);
+  // Nessun ripiego «Parametro N»: se lo spazio non ha configurato le etichette
+  // la sezione lo dice e manda a configurarle, invece di mostrare nomi che
+  // l'ente non usa.
+  const campiEnte = useMemo(
+    () =>
+      (etichette ?? [])
+        .filter((e) => e.attivo)
+        .map((e) => ({
+          chiave: `campo${e.campo}` as keyof AnagraficaEnte,
+          etichetta: e.etichetta,
+        })),
+    [etichette]
+  );
+  const etichettePronte = etichette !== null;
+
+  const parametriCompilati = useMemo(() => {
+    const chiavi: (keyof AnagraficaEnte)[] = [...campiEnte.map((c) => c.chiave), 'idEnte'];
+    return chiavi.some((k) => (parametri[k] ?? '').trim() !== '');
+  }, [parametri, campiEnte]);
 
   const passi = useMemo(
     () => [
-      { etichetta: 'Visura storica', fatto: Boolean(visura) },
-      { etichetta: 'Parametri ente', fatto: parametriCompilati },
       { etichetta: 'Bilanci XBRL', fatto: anniXbrl > 0 },
+      { etichetta: 'Corredo (visura e parametri)', fatto: Boolean(visura) && parametriCompilati },
     ],
     [visura, parametriCompilati, anniXbrl]
   );
@@ -165,7 +145,7 @@ export function VerificaContabileAzienda({
         nome: fileVisura.name,
         caricataIl: new Date().toISOString().slice(0, 10),
       });
-      setMessaggio('Visura storica acquisita: è la base dell’anagrafica della verifica contabile.');
+      setMessaggio('Visura storica acquisita: è il corredo dell’anagrafica della verifica.');
       setFileVisura(null);
     } catch (e) {
       setErrore(`Caricamento non riuscito: ${(e as Error).message}`);
@@ -220,10 +200,11 @@ export function VerificaContabileAzienda({
           </h1>
         </div>
         <p className="text-xs text-slate-500 leading-relaxed">
-          Il percorso parte dalla visura storica, che qui serve a fissare l’anagrafica su cui si
-          innestano i parametri dell’ente; prosegue con i parametri e con i bilanci XBRL, e si
-          chiude con il prospetto a scalare e gli indici del dato depositato. La certificazione dei
-          debiti non è richiesta: è il dato della verifica amministrativa.
+          La verifica contabile legge i bilanci XBRL depositati, ne ricava il prospetto a scalare e
+          gli indici, conta i differenziali e simula l’assetto alla data della verifica. Il report
+          raccoglie i numeri, gli indici, i differenziali e la proiezione; le note integrative danno
+          la spiegazione delle voci. La certificazione dei debiti non è richiesta: è il dato della
+          verifica amministrativa.
         </p>
         <div className="flex flex-wrap gap-1.5 pt-1">
           {passi.map((p) => (
@@ -266,12 +247,69 @@ export function VerificaContabileAzienda({
         </p>
       )}
 
+      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+          <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" /> 1. Bilanci XBRL
+        </h2>
+        <p className="text-[11px] text-slate-500">
+          Le istanze depositate sono il dato della verifica: da qui nascono prospetto, indici e
+          serie dei differenziali. Una nuova istanza si aggiunge all’archivio, non lo sostituisce.
+        </p>
+        <AziendaBilanciXbrl
+          nomeSchema={nomeSchema}
+          aziendaId={aziendaId}
+          hrefConfigurazione={`${base}/xbrl`}
+        />
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+            2. Prospetto a scalare e indici
+          </h2>
+          <Link
+            href={`/spazio/${codice}/verifica-contabile/${aziendaId}/fotografia`}
+            className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+          >
+            Fotografia contabile (stampabile) →
+          </Link>
+        </div>
+        <ProspettoContabileStorico
+          nomeSchema={nomeSchema}
+          aziendaId={aziendaId}
+          indiciAbilitati={indiciAbilitati}
+        />
+      </section>
+
+      <ProiezioneContabile nomeSchema={nomeSchema} aziendaId={aziendaId} />
+
+      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-2">
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+          <FileText className="w-3.5 h-3.5 text-blue-600" /> 4. Report contabile
+        </h2>
+        <p className="text-[11px] text-slate-500 leading-relaxed">
+          Il report contabile è la fotografia stampabile della posizione: i documenti in possesso,
+          il prospetto a scalare, gli indici di ogni annualità e la diagnosi. Racconta i numeri, non
+          la vita dell’azienda: quella la racconta la verifica amministrativa, e le due si leggono
+          insieme nella verifica aziendale.
+        </p>
+        <Link
+          href={`/spazio/${codice}/verifica-contabile/${aziendaId}/fotografia`}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-slate-800"
+        >
+          <FileText className="w-3 h-3" /> Apri il report contabile
+        </Link>
+      </section>
+
+      {/* CORREDO — non è la verifica: sono l'identificazione dell'azienda
+        presso l'ente. Sta in fondo, dichiarato, per non aprire il percorso con
+        documenti che sembrano la verifica stessa. */}
       <section
         id="visura-storica"
         className="scroll-mt-4 bg-white border border-slate-200 rounded-xl p-5 space-y-3"
       >
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-          <FileText className="w-3.5 h-3.5 text-blue-600" /> 1. Visura storica
+          <FileText className="w-3.5 h-3.5 text-slate-500" /> Corredo — Visura storica
         </h2>
         {visura ? (
           <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
@@ -280,9 +318,9 @@ export function VerificaContabileAzienda({
           </p>
         ) : (
           <p className="text-[11px] text-slate-500">
-            La visura della verifica contabile è quella storica dell’azienda: serve a fissare
-            l’anagrafica su cui si innestano i parametri dell’ente. Non sostituisce quella della
-            verifica amministrativa.
+            La visura storica identifica l’azienda (denominazione, sede, organi, eventi iscritti) e
+            non entra nei numeri della verifica. Non sostituisce quella della verifica
+            amministrativa.
           </p>
         )}
         <div className="flex flex-wrap items-center gap-2">
@@ -329,7 +367,7 @@ export function VerificaContabileAzienda({
             </ul>
             <p className="mt-1 text-[10px] text-slate-400">
               Lettura del modello sulla visura: i valori non sono stati salvati. L’anagrafica
-              dell’azienda si modifica dalla sua scheda Anagrafica.
+              dell’azienda si modifica dalla sua scheda.
             </p>
           </div>
         )}
@@ -337,79 +375,64 @@ export function VerificaContabileAzienda({
 
       <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-          2. Parametri dell’ente per questa azienda
+          Corredo — Parametri dell’ente per questa azienda
         </h2>
         <p className="text-[11px] text-slate-500">
-          I campi che caratterizzano l’azienda dentro l’ente: restano a livello azienda, non di
-          scenario. Compila quelli che servono — l’etichetta dei campi è quella configurata nello
-          spazio, e compaiono solo i campi attivi.
+          I campi con cui l’ente identifica l’azienda (matricola, CSC, CA…): restano a livello
+          azienda, non di scenario, e non entrano nei numeri della verifica.
         </p>
-        <div className="grid sm:grid-cols-2 gap-2">
-          {campiEnte.map((c) => (
-            <label key={c.chiave} className="text-[10px] text-slate-600">
-              {c.etichetta}
+        {!etichettePronte ? (
+          <p className="text-[11px] text-slate-400">Lettura delle etichette in corso…</p>
+        ) : campiEnte.length === 0 ? (
+          <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+            Nessun campo dell’ente è configurato per questo spazio: qui non si mostrano nomi
+            generici.{' '}
+            <Link
+              href={`/spazio/${codice}/parametri/anagrafica-ente`}
+              className="font-bold text-blue-700 hover:text-blue-800"
+            >
+              Configura i campi dell’ente
+            </Link>
+            .
+          </p>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-2">
+            {campiEnte.map((c) => (
+              <label key={c.chiave} className="text-[10px] text-slate-600">
+                {c.etichetta}
+                <input
+                  type="text"
+                  value={parametri[c.chiave] ?? ''}
+                  onChange={(e) =>
+                    setParametri((p) => ({ ...p, [c.chiave]: e.target.value || null }))
+                  }
+                  className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-900"
+                />
+              </label>
+            ))}
+            <label className="text-[10px] text-slate-600 sm:col-span-2">
+              ID ente (riferimento interno, facoltativo)
               <input
                 type="text"
-                value={parametri[c.chiave] ?? ''}
-                onChange={(e) =>
-                  setParametri((p) => ({ ...p, [c.chiave]: e.target.value || null }))
-                }
+                value={parametri.idEnte ?? ''}
+                onChange={(e) => setParametri((p) => ({ ...p, idEnte: e.target.value || null }))}
                 className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-900"
               />
             </label>
-          ))}
-          <label className="text-[10px] text-slate-600 sm:col-span-2">
-            ID ente (riferimento interno, facoltativo)
-            <input
-              type="text"
-              value={parametri.idEnte ?? ''}
-              onChange={(e) => setParametri((p) => ({ ...p, idEnte: e.target.value || null }))}
-              className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-900"
-            />
-          </label>
-        </div>
-        <button
-          type="button"
-          onClick={salvaParametri}
-          disabled={salvataggioParametri}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-blue-800 disabled:opacity-50"
-        >
-          {salvataggioParametri && <Loader2 className="w-3 h-3 animate-spin" />}
-          Salva i parametri
-        </button>
-      </section>
-
-      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-          <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" /> 3. Bilanci XBRL
-        </h2>
-        <AziendaBilanciXbrl
-          nomeSchema={nomeSchema}
-          aziendaId={aziendaId}
-          hrefConfigurazione={`${base}/xbrl`}
-        />
-      </section>
-
-      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-            4. Prospetto a scalare e indici
-          </h2>
-          <Link
-            href={`/spazio/${codice}/verifica-contabile/${aziendaId}/fotografia`}
-            className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+          </div>
+        )}
+        {campiEnte.length > 0 && (
+          <button
+            type="button"
+            onClick={salvaParametri}
+            disabled={salvataggioParametri}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-blue-800 disabled:opacity-50"
           >
-            Fotografia contabile (stampabile) →
-          </Link>
-        </div>
-        <ProspettoContabileStorico
-          nomeSchema={nomeSchema}
-          aziendaId={aziendaId}
-          indiciAbilitati={indiciAbilitati}
-        />
+            {salvataggioParametri && <Loader2 className="w-3 h-3 animate-spin" />}
+            Salva i parametri
+          </button>
+        )}
       </section>
-
-      <ProiezioneContabile nomeSchema={nomeSchema} aziendaId={aziendaId} />
 
       <p className="text-[11px] text-slate-500">
         La verifica contabile porta il dato storico fino all’anno in cui è stata aperta: la verifica

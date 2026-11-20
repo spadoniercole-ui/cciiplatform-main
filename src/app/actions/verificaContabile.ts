@@ -21,6 +21,7 @@ import {
   type ProiezioneContabile,
 } from '@/lib/contabile/proiezione';
 import { apriVerifica } from '@/lib/verificheApertura';
+import { assicuraTabelleVerificaAzienda } from '@/db/provision';
 import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
@@ -135,6 +136,88 @@ export async function statoVerificaContabileAction(
       success: false,
       aziende: [],
       error: `Impossibile leggere lo stato della verifica contabile: ${(error as Error).message}`,
+    };
+  }
+}
+
+export interface RisultatoSalvataggioSimulazione {
+  success: boolean;
+  /** Quando la simulazione è stata salvata (ISO), per mostrarlo in pagina. */
+  salvataIl?: string;
+  error?: string;
+}
+
+/**
+ * LA SIMULAZIONE CONTABILE SI SALVA PER LA VERIFICA AZIENDA.
+ *
+ * La simulazione alla data della verifica non è un calcolo da guardare e
+ * perdere: la verifica aziendale la legge come base della posizione. Qui si
+ * ricalcola dal dato — mai da ciò che manda il browser — e si conserva la riga
+ * con le sue colonne (storico e calcolato) e le avvertenze, fissandola come
+ * base. Le simulazioni precedenti restano scritte e perdono solo il ruolo di
+ * base: la memoria storica su cui misurare gli scostamenti non si cancella.
+ */
+export async function salvaSimulazioneContabileAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<RisultatoSalvataggioSimulazione> {
+  try {
+    await richiediAccessoAzienda(nomeSchema, aziendaId);
+    if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
+    if (!Number.isInteger(aziendaId) || aziendaId <= 0) {
+      return { success: false, error: 'Azienda non riconosciuta.' };
+    }
+    await assicuraTabelleVerificaAzienda(nomeSchema);
+
+    const risultato = await proiezioneContabileAction(nomeSchema, aziendaId);
+    if (!risultato.success || !risultato.proiezione) {
+      return { success: false, error: risultato.error ?? 'Simulazione non calcolabile.' };
+    }
+    const proiezione = risultato.proiezione;
+    if (proiezione.bilanciProiettati.length === 0) {
+      return {
+        success: false,
+        error: 'Nessun bilancio XBRL in archivio: non c’è una simulazione da salvare.',
+      };
+    }
+
+    const colonne = proiezione.bilanciProiettati.map((b) => ({
+      anno: b.anno,
+      tipo: b.tipo,
+      dati: b.dati,
+    }));
+
+    // Una sola base per azienda: le altre righe restano, senza il ruolo di base.
+    await pool.query(
+      `UPDATE "${nomeSchema}".verifica_azienda_simulazioni
+          SET base_per_proposta = FALSE
+        WHERE azienda_id = $1`,
+      [aziendaId]
+    );
+    const inserita = await pool.query(
+      `INSERT INTO "${nomeSchema}".verifica_azienda_simulazioni
+         (azienda_id, profilo, annualita, debito_ente, crescita_storica_pct,
+          crescita_applicata_pct, colonne, avvertenze, base_per_proposta)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE)
+       RETURNING to_char(created_at, 'YYYY-MM-DD') AS il`,
+      [
+        aziendaId,
+        'SIMULAZIONE_CONTABILE',
+        colonne.length,
+        proiezione.ponteEnte?.debitoVerificato ?? 0,
+        null,
+        0,
+        JSON.stringify(colonne),
+        JSON.stringify(proiezione.avvertenze),
+      ]
+    );
+
+    return { success: true, salvataIl: String(inserita.rows[0]?.il ?? '').slice(0, 10) };
+  } catch (error: unknown) {
+    console.error('[salvaSimulazioneContabileAction] Errore:', error);
+    return {
+      success: false,
+      error: `Simulazione non salvata: ${(error as Error).message}`,
     };
   }
 }

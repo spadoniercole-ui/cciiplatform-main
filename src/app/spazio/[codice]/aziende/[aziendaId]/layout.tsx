@@ -4,10 +4,9 @@ import Link from 'next/link';
 import { ArrowLeft, Check, Lock, Users } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
-import { ottieniConteggioScreeningPendente } from '@/app/actions/screeningAzienda';
 import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
-import { ottieniStatoAnalisiBilancioStep } from '@/app/actions/analisiBilancioStep';
-import { anagraficaAziendaCompleta } from '@/lib/anagraficaAzienda';
+import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
+import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati';
 import { leggiIdentificativiEnte } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
@@ -48,86 +47,54 @@ export default async function AziendaLayout({
   const aziendaNum = Number(aziendaId);
   const isEnte = contesto.tipoSpazio === 'ENTE';
 
-  // Segnali di completamento, tutti in parallelo.
-  const [pendenteScreening, xbrlRis, statoAnalisiBilancio] = await Promise.all([
-    ottieniConteggioScreeningPendente(contesto.nomeSchema, aziendaNum),
+  // Segnali di completamento delle tre verifiche, tutti in parallelo.
+  const [storicoVerifiche, xbrlRis, debitoRis] = await Promise.all([
+    ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
     ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
-    ottieniStatoAnalisiBilancioStep(contesto.nomeSchema, aziendaNum),
+    debitoEnteMemorizzatoAction(contesto.nomeSchema, aziendaNum).catch(() => null),
   ]);
-  const domandeMancanti = pendenteScreening.totali - pendenteScreening.risposte;
   // Identificativi presso l'ente: in testata, in evidenza, appena salvati.
   const identificativi = isEnte
     ? await leggiIdentificativiEnte(contesto.nomeSchema, aziendaNum).catch(() => [])
     : [];
 
-  // Completamento dei passi (unica fonte del semaforo).
-  const anagraficaCompleta = anagraficaAziendaCompleta(
-    azienda as unknown as Record<string, unknown>
+  const amministrativaFatta = Boolean(
+    storicoVerifiche?.success && storicoVerifiche.righe?.some((v) => v.id === aziendaNum)
   );
-  // La Posizione Ente (certificazione dei debiti e soglie di segnalazione)
-  // non è più un passo di questa scheda: vive nell'esito della verifica
-  // amministrativa, dove nasce. Qui restano l'Anagrafica azienda, il dato
-  // storico e la valutazione.
-  // "Analisi Bilancio" verde: la parte XBRL (caricamento in Bilanci XBRL o
-  // configurazione delle tab) e gli Indici sono sotto-sezioni dello stesso
-  // passo. Basta che l'operatore le abbia aperte (presa visione registrata
-  // lato server), e resta verde in ogni caso con un bilancio in archivio —
-  // che è il segnale più forte, perché lo Screening lo legge da lì.
-  const analisiBilancioCompleta =
-    (xbrlRis?.storico?.length ?? 0) > 0 ||
-    (!!statoAnalisiBilancio?.stato.xbrlConfigVista && !!statoAnalisiBilancio?.stato.indiciVisti);
-  const screeningGenerato = pendenteScreening.esiste;
-  const checklistCompleta =
-    screeningGenerato && pendenteScreening.totali > 0 && domandeMancanti === 0;
-
-  // Prerequisiti di attivazione (semaforo/gating richiesti da INPS):
-  //  - Screening si attiva solo se Anagrafica e Analisi Bilancio sono verdi.
-  //  - Check List è bloccata finché lo Screening non è stato generato.
-  const passi123Verdi = anagraficaCompleta && analisiBilancioCompleta;
+  const contabileFatta = (xbrlRis?.storico?.length ?? 0) > 0;
+  const aziendaleFatta = (debitoRis?.debito?.totale ?? null) !== null;
 
   const base = `/spazio/${codice}/aziende/${aziendaId}`;
 
-  // Sequenza dei passi di analisi (Operatori è a parte, spinto a destra).
-  const steps: Step[] = [];
-  steps.push({
-    id: '',
-    label: 'Anagrafica',
-    stato: anagraficaCompleta ? 'completo' : 'attivo',
-  });
-  steps.push({
-    // Si apre sugli indici calcolati: è quello che si cerca entrando. La
-    // configurazione delle schede XBRL è la seconda sotto-scheda.
-    id: 'indici',
-    label: 'Analisi Bilancio',
-    stato: !anagraficaCompleta ? 'bloccato' : analisiBilancioCompleta ? 'completo' : 'attivo',
-    motivo: "Completa prima l'Anagrafica azienda.",
-  });
-  // UNA VERIFICA, NON DUE. La «Valutazione completa» era un secondo percorso
-  // sugli stessi documenti (visura e bilanci si caricavano due volte) e con un
-  // secondo giudizio sulla stessa posizione. Ora è la parte scritta della
-  // verifica contabile: qui c'è un solo passo, che porta alla verifica intera
-  // — documenti, esito e relazione.
-  steps.push({
-    id: 'verifica-contabile',
-    href: `/spazio/${codice}/verifica-contabile/${aziendaId}`,
-    label: 'Verifica contabile',
-    stato: !passi123Verdi ? 'bloccato' : screeningGenerato ? 'completo' : 'attivo',
-    motivo: isEnte
-      ? 'Completa prima Anagrafica e Analisi Bilancio.'
-      : 'Completa prima Anagrafica e Analisi Bilancio.',
-  });
-  // La Check List dello screening non è più un passo dell'Azienda: si genera
-  // e si risponde dentro il triage (0.154.0). Il passo resta per il Redigente,
-  // dove la stessa scheda ospita il Test pratico e la Ministeriale.
-  if (!isEnte) {
-    steps.push({
-      id: 'checklist',
-      label: 'Check List',
-      stato: !screeningGenerato ? 'bloccato' : checklistCompleta ? 'completo' : 'attivo',
-      motivo: 'Genera prima lo Screening.',
-      badge: screeningGenerato && domandeMancanti > 0 ? domandeMancanti : undefined,
-    });
-  }
+  // TRE VERIFICHE, NON LE TAB DELLO SCREENING. La barra di questa scheda
+  // portava «Anagrafica → Analisi Bilancio → Verifica contabile → Check List»:
+  // era il percorso del vecchio screening, e chi entrava da qui mescolava
+  // verifica amministrativa e contabile. Ora la scheda è l'Anagrafica
+  // dell'azienda, e da qui si aprono le tre direttrici del prodotto:
+  // amministrativa (il triage), contabile (il dato XBRL) e aziendale (le due
+  // lette insieme). Le vecchie sotto-pagine restano raggiungibili dal loro URL
+  // (XBRL, indici, bilanci) finché non si ripuliscono, ma non sono più
+  // una tappa da attraversare.
+  const steps: Step[] = [
+    {
+      id: 'amministrativa',
+      href: `/spazio/${codice}/verifica-salute?azienda=${aziendaId}`,
+      label: 'Verifica amministrativa',
+      stato: amministrativaFatta ? 'completo' : 'attivo',
+    },
+    {
+      id: 'contabile',
+      href: `/spazio/${codice}/verifica-contabile/${aziendaId}`,
+      label: 'Verifica contabile',
+      stato: contabileFatta ? 'completo' : 'attivo',
+    },
+    {
+      id: 'aziendale',
+      href: `/spazio/${codice}/verifica-azienda/${aziendaId}`,
+      label: 'Verifica aziendale',
+      stato: aziendaleFatta ? 'completo' : 'attivo',
+    },
+  ];
 
   const classePerStato = (stato: StatoStep): string => {
     if (stato === 'completo')
@@ -198,8 +165,8 @@ export default async function AziendaLayout({
           Se non c'è mai stata una verifica non si mostra nulla. */}
         <CruscottoAzienda nomeSchema={contesto.nomeSchema} aziendaId={aziendaNum} codice={codice} />
 
-        {/* Barra dei passi: sequenza logica dell'analisi a sinistra, Operatori a
-          destra. Semaforo: grigio = bloccato, arancione = da fare, verde = fatto. */}
+        {/* Barra delle direttrici: le tre verifiche a sinistra, Operatori a
+          destra. Semaforo: arancione = da fare, verde = fatto. */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {steps.map((step) => {
             const contenuto = (

@@ -20,9 +20,10 @@
 // non hanno una serie utilizzabile restano ferme, dichiarate: non si stimano.
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarRange, Loader2, TriangleAlert } from 'lucide-react';
+import { CalendarRange, Loader2, Save, TriangleAlert } from 'lucide-react';
 import {
   proiezioneContabileAction,
+  salvaSimulazioneContabileAction,
   type RisultatoProiezioneContabile,
 } from '@/app/actions/verificaContabile';
 
@@ -42,6 +43,9 @@ export function ProiezioneContabile({
   const [dati, setDati] = useState<RisultatoProiezioneContabile | null>(null);
   const [caricamento, setCaricamento] = useState(true);
   const [scheda, setScheda] = useState<Scheda>('SIMULAZIONE');
+  const [salvataggio, setSalvataggio] = useState(false);
+  const [salvataIl, setSalvataIl] = useState<string | null>(null);
+  const [erroreSalvataggio, setErroreSalvataggio] = useState<string | null>(null);
 
   const carica = useCallback(async () => {
     setCaricamento(true);
@@ -54,6 +58,20 @@ export function ProiezioneContabile({
     void carica();
   }, [carica]);
 
+  // La simulazione si salva per la verifica azienda: è lì che diventa la base
+  // della posizione. Il calcolo lo rifà il server dal dato, non dal browser.
+  const salva = async () => {
+    setSalvataggio(true);
+    setErroreSalvataggio(null);
+    const r = await salvaSimulazioneContabileAction(nomeSchema, aziendaId);
+    setSalvataggio(false);
+    if (!r.success) {
+      setErroreSalvataggio(r.error ?? 'Simulazione non salvata.');
+      return;
+    }
+    setSalvataIl(r.salvataIl ?? '');
+  };
+
   const proiezione = dati?.success ? dati.proiezione : null;
   const anniCalcolati = proiezione?.annualitaCalcolate ?? [];
   const anniStorici = proiezione?.anniArchivio ?? [];
@@ -64,7 +82,7 @@ export function ProiezioneContabile({
     <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-          <CalendarRange className="w-3.5 h-3.5 text-blue-600" /> 5. Differenziali e simulazione
+          <CalendarRange className="w-3.5 h-3.5 text-blue-600" /> 3. Differenziali e simulazione
           fino all’anno della verifica
         </h2>
         {dati?.apertura && (
@@ -321,6 +339,30 @@ export function ProiezioneContabile({
               )}
             </>
           )}
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
+            <button
+              type="button"
+              onClick={salva}
+              disabled={salvataggio || anniStorici.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-slate-800 disabled:opacity-40"
+            >
+              {salvataggio ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Save className="w-3 h-3" />
+              )}
+              Salva per la verifica azienda
+            </button>
+            {salvataIl && (
+              <span className="text-[10px] font-bold text-emerald-700">
+                È la base della verifica azienda dal {salvataIl.split('-').reverse().join('/')}.
+              </span>
+            )}
+            {erroreSalvataggio && (
+              <span className="text-[10px] text-red-700">{erroreSalvataggio}</span>
+            )}
+          </div>
 
           <ul className="space-y-1">
             {proiezione.avvertenze.map((a) => (

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { avanzamentoPosizioni, conteggioFasi } from './avanzamento';
+import {
+  avanzamentoPosizioni,
+  conteggioFasi,
+  hrefPosizione,
+  type AvanzamentoPosizione,
+} from './avanzamento';
 
 const verifiche = [
   { id: 1, ragioneSociale: 'Alfa S.r.l.' },
@@ -76,6 +81,63 @@ describe('avanzamentoPosizioni', () => {
     expect(gamma.aziendaId).toBeNull();
     expect(gamma.scenari).toBe('COMPLETO');
     expect(gamma.amministrativa).toBe('MANCANTE');
+  });
+});
+
+describe('hrefPosizione', () => {
+  const stato = (
+    s: Partial<
+      Pick<
+        AvanzamentoPosizione,
+        'aziendaId' | 'amministrativa' | 'contabile' | 'aziendale' | 'scenari'
+      >
+    >
+  ) =>
+    ({
+      aziendaId: 7,
+      ragioneSociale: 'Alfa S.r.l.',
+      amministrativa: 'MANCANTE',
+      contabile: 'MANCANTE',
+      aziendale: 'MANCANTE',
+      scenari: 'MANCANTE',
+      scenariCreati: 0,
+      tappeComplete: 0,
+      fase: 'Da iniziare',
+      ...s,
+    }) as AvanzamentoPosizione;
+
+  it('apre la prima tappa cominciata, non la vecchia scheda', () => {
+    // Contabile a metà: è lì che si sta lavorando, anche con
+    // l'amministrativa già chiusa.
+    const p = stato({ amministrativa: 'COMPLETO', contabile: 'PARZIALE' });
+    expect(hrefPosizione(p, 'demo')).toBe('/spazio/demo/verifica-contabile/7');
+  });
+
+  it('senza nulla di cominciato apre il triage', () => {
+    expect(hrefPosizione(stato({}), 'demo')).toBe('/spazio/demo/verifica-salute?azienda=7');
+  });
+
+  it('con le tre verifiche chiuse porta alla verifica aziendale, anche senza scenari', () => {
+    const p = stato({
+      amministrativa: 'COMPLETO',
+      contabile: 'COMPLETO',
+      aziendale: 'COMPLETO',
+    });
+    expect(hrefPosizione(p, 'demo')).toBe('/spazio/demo/verifica-azienda/7');
+  });
+
+  it('non manda in contabile chi non può leggerla', () => {
+    const p = stato({
+      amministrativa: 'COMPLETO',
+      contabile: 'NON_DISPONIBILE',
+      aziendale: 'NON_DISPONIBILE',
+    });
+    expect(hrefPosizione(p, 'demo')).toBe('/spazio/demo/verifica-azienda/7');
+  });
+
+  it('una posizione che esiste solo come scenario apre gli scenari', () => {
+    const p = stato({ aziendaId: null, scenari: 'COMPLETO' });
+    expect(hrefPosizione(p, 'demo')).toBe('/spazio/demo/scenari');
   });
 });
 

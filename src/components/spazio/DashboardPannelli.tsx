@@ -5,6 +5,7 @@ import { Building2, FolderOpen, Gauge, Stethoscope } from 'lucide-react';
 import {
   avanzamentoPosizioni,
   conteggioFasi,
+  hrefPosizione,
   type AvanzamentoPosizione,
   type Stadio,
 } from '@/lib/dashboard/avanzamento';
@@ -119,9 +120,10 @@ function RiepilogoPosizioni({
         {posizioni.slice(0, 10).map((p) => (
           <Link
             key={`${p.aziendaId ?? p.ragioneSociale}`}
-            href={
-              p.aziendaId ? `/spazio/${codice}/aziende/${p.aziendaId}` : `/spazio/${codice}/scenari`
-            }
+            // La riga porta dove la posizione si sta lavorando, non sulla
+            // vecchia scheda dello screening: da qui si arriva alla verifica
+            // giusta senza ricominciare a cercarla.
+            href={hrefPosizione(p, codice)}
             className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
           >
             <span className="min-w-0">
@@ -259,12 +261,13 @@ export function DashboardPannelli({
               {verifiche.slice(0, MAX).map((v) => (
                 <a
                   key={v.id}
-                  // Una verifica in sospeso si riapre NEL TRIAGE: è lì che ci sono
-                  // le comunicazioni già preparate e la decisione da prendere.
+                  // Una verifica in sospeso si riapre NEL TRIAGE; una già in
+                  // carico si legge nella Posizione, che è il suo documento.
+                  // La vecchia scheda dello screening non è più una destinazione.
                   href={
                     !v.presaInCarico && !v.archiviata
                       ? `/spazio/${codice}/verifica-salute?azienda=${v.id}`
-                      : `/spazio/${codice}/aziende/${v.id}`
+                      : `/spazio/${codice}/verifica-salute/${v.id}/posizione`
                   }
                   className="flex items-center justify-between gap-3 py-2 hover:bg-slate-50 -mx-2 px-2 rounded"
                 >
