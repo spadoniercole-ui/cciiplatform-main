@@ -17,6 +17,8 @@ type StatoStep = 'bloccato' | 'attivo' | 'completo';
 
 interface Step {
   id: string; // segmento URL ('' = anagrafica root)
+  /** Destinazione quando non è una sotto-pagina di questa scheda. */
+  href?: string;
   label: string;
   stato: StatoStep;
   motivo?: string; // perché è bloccato (tooltip)
@@ -100,12 +102,18 @@ export default async function AziendaLayout({
     stato: !anagraficaCompleta ? 'bloccato' : analisiBilancioCompleta ? 'completo' : 'attivo',
     motivo: "Completa prima l'Anagrafica azienda.",
   });
+  // UNA VERIFICA, NON DUE. La «Valutazione completa» era un secondo percorso
+  // sugli stessi documenti (visura e bilanci si caricavano due volte) e con un
+  // secondo giudizio sulla stessa posizione. Ora è la parte scritta della
+  // verifica contabile: qui c'è un solo passo, che porta alla verifica intera
+  // — documenti, esito e relazione.
   steps.push({
-    id: 'screening',
-    label: 'Valutazione completa',
+    id: 'verifica-contabile',
+    href: `/spazio/${codice}/verifica-contabile/${aziendaId}`,
+    label: 'Verifica contabile',
     stato: !passi123Verdi ? 'bloccato' : screeningGenerato ? 'completo' : 'attivo',
     motivo: isEnte
-      ? 'Completa prima Anagrafica, Anagrafica Ente e Analisi Bilancio.'
+      ? 'Completa prima Anagrafica e Analisi Bilancio.'
       : 'Completa prima Anagrafica e Analisi Bilancio.',
   });
   // La Check List dello screening non è più un passo dell'Azienda: si genera
@@ -220,7 +228,11 @@ export default async function AziendaLayout({
               );
             }
             return (
-              <Link key={step.id} href={step.id ? `${base}/${step.id}` : base} className={classi}>
+              <Link
+                key={step.id}
+                href={step.href ?? (step.id ? `${base}/${step.id}` : base)}
+                className={classi}
+              >
                 {contenuto}
                 {badge}
               </Link>

@@ -124,8 +124,8 @@ export function ReportAzienda({
         </h1>
         <p className="text-xs text-slate-500 leading-relaxed max-w-3xl">
           Un documento solo, che mette insieme l’esito della verifica amministrativa (in sola
-          lettura), il dato della verifica contabile e l’analisi della valutazione completa. Si
-          sceglie che cosa includere prima di emetterlo; il report emesso non si modifica, si
+          lettura), il dato della verifica contabile, il suo esito e la relazione di inquadramento.
+          Si sceglie che cosa includere prima di emetterlo; il report emesso non si modifica, si
           rigenera.
         </p>
       </div>

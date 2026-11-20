@@ -102,7 +102,10 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
   },
   { nome: 'parametri_confronto_piano', descrizione: 'Confronto con il piano' },
   { nome: 'parametri_stampa', descrizione: 'Stampa (intestazione, piè di pagina, logo)' },
-  { nome: 'parametri_iai', descrizione: 'Indice IAI' },
+  // `parametri_iai` non si esporta più: la tabella non esiste (pesi e vincoli
+  // di un indice che dalla fusione della verifica contabile non gradua più
+  // nulla). Un file salvato da una versione precedente la porta con sé: il
+  // ripristino la dichiara fra le tabelle ignorate, senza errori.
   { nome: 'anagrafica_ente_config', descrizione: 'Etichette dell’Anagrafica Ente' },
   { nome: 'categorie_tipo_debito', descrizione: 'Categorie di debito' },
   { nome: 'tipo_debito_config', descrizione: 'Etichette dei tipi di debito' },

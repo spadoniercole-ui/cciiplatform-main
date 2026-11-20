@@ -20,7 +20,6 @@ import {
   Scale,
   Sparkles,
   History,
-  Gauge,
   Printer,
   ClipboardList,
   CalendarRange,
@@ -134,13 +133,6 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
             titolo: 'Stampa',
             descrizione:
               'Margini, intestazione, piè di pagina e logo dell’ente su ogni documento stampato.',
-          },
-          {
-            href: `/spazio/${codice}/parametri/indice-iai`,
-            icon: Gauge,
-            titolo: 'Indice di Attenzione Istruttoria',
-            descrizione:
-              'Pesi delle dimensioni e minimi dei vincoli, con la nota metodologica stampabile.',
           },
         ]
       : []),

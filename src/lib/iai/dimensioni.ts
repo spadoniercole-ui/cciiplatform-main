@@ -1,21 +1,32 @@
-// src/lib/iai/indice.ts
+// src/lib/iai/dimensioni.ts
 //
-// INDICE DI ATTENZIONE ISTRUTTORIA (IAI) — la copertina dello Screening.
+// LE CINQUE DIMENSIONI — la spiegazione del giudizio, non un secondo giudizio.
 //
-// Indice composito 0-100 costruito secondo i passi del manuale OCSE-JRC sugli
-// indicatori compositi (Nardo, Saisana, Saltelli, Tarantola, 2005/2008):
-// indicatori scelti, normalizzazione per distanza dall'obiettivo,
-// ponderazione dichiarata, aggregazione con vincoli di NON compensabilita'
-// (Munda 2005). Per la struttura di bilancio si usa lo Z''-score di Altman
-// (1995, versione per societa' non quotate e non manifatturiere).
+// Fino alla 0.2xx questo file produceva anche un Indice di Attenzione
+// Istruttoria: un numero da 0 a 100, con pesi configurabili dall'ente, vincoli
+// di non compensabilità e fasce di lettura («da monitorare», «da sottoporre con
+// urgenza»). Accanto al semaforo della verifica — fatti accertati, lacune,
+// copertura informativa — quel numero diceva un'altra cosa sulla stessa
+// posizione: 41 «da monitorare» sotto un «criticità rilevante». Due giudizi
+// sulla stessa materia non sono una ricchezza: chi decide non sa a quale dei
+// due credere, e la schermata che li mostra uno sopra l'altro è la confusione
+// che questo modulo chiude.
 //
-// Che cosa NON e': un accertamento. Dice quanta attenzione la posizione
-// merita dal livello decisionale successivo. Lessico di Libra: niente
-// «crisi» o «insolvenza» come esito, niente «solido».
+// Il numero non c'è più. Resta ciò che il motore misura davvero, dimensione
+// per dimensione, con i suoi determinanti e le sue lacune: cinque righe che
+// spiegano DA DOVE viene l'attenzione. L'esito resta uno solo e sta in
+// `src/lib/screening/indicatore.ts` — soglie di legge, gerarchia non
+// compensatoria, ciò che è accertato e ciò che manca.
 //
-// Logica pura e deterministica: stessi dati, stesso numero. Ogni parametro
-// (obiettivo, saturazione, peso, vincolo) e' un dato, con i valori proposti
-// da Claude come default e destinato ai Parametri di Spazio.
+// Perché le dimensioni si tengono comunque: misurano cose che il semaforo non
+// legge (procedura concorsuale in visura, stato dell'attività, età della
+// visura, dinamica dei ricavi, patrimonio netto sotto il capitale sociale) e le
+// misurano con numeri. Sono il «perché» del giudizio, non un punteggio
+// alternativo.
+//
+// Logica pura e deterministica: stessi dati, stesse righe. Nessun parametro
+// dell'ente: le soglie normative stanno nei Parametri di Spazio, i pesi non
+// esistono più.
 
 export type Dimensione = 'A' | 'B' | 'C' | 'D' | 'E';
 
@@ -25,50 +36,6 @@ export const NOME_DIMENSIONE: Record<Dimensione, string> = {
   C: 'Dinamica',
   D: 'Affidabilità dei dati',
   E: 'Quadro procedurale',
-};
-
-export interface ParametriIai {
-  pesi: Record<Dimensione, number>;
-  /** Vincoli di non compensabilita': l'indice non scende sotto il minimo se il vincolo scatta. */
-  vincoli: {
-    proceduraPendente: number;
-    denunceAssentiConAddetti: number;
-    sogliaEnteSuperata: number;
-  };
-  fasce: { fine: number; nome: string; lettura: string }[];
-  /** La nota metodologica va in coda al PDF dello Screening (default: si'). */
-  notaNelReport: boolean;
-}
-
-export const PARAMETRI_IAI_PREDEFINITI: ParametriIai = {
-  pesi: { A: 30, B: 25, C: 15, D: 15, E: 15 },
-  vincoli: { proceduraPendente: 70, denunceAssentiConAddetti: 75, sogliaEnteSuperata: 56 },
-  notaNelReport: true,
-  fasce: [
-    {
-      fine: 30,
-      nome: 'Attenzione contenuta',
-      lettura:
-        'Non si sottopone: la posizione non presenta, sui dati disponibili, elementi che richiedano un passaggio al livello successivo.',
-    },
-    {
-      fine: 55,
-      nome: 'Da monitorare',
-      lettura:
-        'Si tiene la posizione sotto osservazione, con un nuovo Screening alla prossima scadenza utile.',
-    },
-    {
-      fine: 75,
-      nome: 'Da sottoporre al dirigente',
-      lettura: 'Si sottopone al dirigente per un confronto con l’azienda.',
-    },
-    {
-      fine: 100,
-      nome: 'Da sottoporre con urgenza',
-      lettura:
-        'Si sottopone con urgenza al dirigente, per valutare anche la richiesta di liquidazione giudiziale.',
-    },
-  ],
 };
 
 /** Normalizzazione per distanza dall'obiettivo: 0 all'obiettivo, 100 alla saturazione, lineare in mezzo. */
@@ -140,28 +107,25 @@ export interface DatiIai {
 
 export interface Componente {
   dimensione: Dimensione;
+  /**
+   * Intensità dei determinanti su questa dimensione, 0-100: serve alla barra e
+   * all'ordine. NON è un voto da leggere da solo, e non si somma alle altre.
+   */
   punteggio: number;
-  /** Determinanti in chiaro, dal piu' pesante. */
+  /** Determinanti in chiaro, dal più pesante. */
   motivi: string[];
   /** Dati mancanti che hanno limitato la misura. */
   lacune: string[];
 }
 
-export interface EsitoIai {
-  indice: number;
-  fascia: { nome: string; lettura: string; indiceFascia: number };
-  componenti: Componente[];
-  vincoliScattati: { nome: string; minimo: number }[];
-  /** Tre righe generate dai numeri, non dall'AI. */
-  sintesi: string;
-  parametri: ParametriIai;
-}
-
 const arrot = (n: number) => Math.round(n);
 
-export function calcolaIai(d: DatiIai, p: ParametriIai = PARAMETRI_IAI_PREDEFINITI): EsitoIai {
+/**
+ * Le cinque dimensioni, con determinanti e lacune. Nessun esito complessivo:
+ * il giudizio è quello del semaforo della verifica.
+ */
+export function diagnosticaDimensioni(d: DatiIai): Componente[] {
   const comp: Componente[] = [];
-  const vincoli: { nome: string; minimo: number }[] = [];
 
   // ---- A. Esposizione verso l'ente -----------------------------------------
   {
@@ -172,10 +136,6 @@ export function calcolaIai(d: DatiIai, p: ParametriIai = PARAMETRI_IAI_PREDEFINI
       if (s.esito === 'sopra') {
         punti.push(100);
         motivi.push(`${s.ambito}: presupposti oggettivi rilevati`);
-        vincoli.push({
-          nome: `Presupposti dell’art. 25-novies rilevati (${s.ambito})`,
-          minimo: p.vincoli.sogliaEnteSuperata,
-        });
       } else if (s.esito === 'non_determinabile') {
         punti.push(s.esposizione && s.esposizione > 0 ? 60 : 30);
         lacune.push(`${s.ambito}: esito non esprimibile per dati mancanti`);
@@ -186,10 +146,6 @@ export function calcolaIai(d: DatiIai, p: ParametriIai = PARAMETRI_IAI_PREDEFINI
     if (d.ente.denunceAssenti === true && (d.ente.addetti ?? 0) > 0) {
       punti.push(100);
       motivi.unshift(`nessuna denuncia Uniemens con ${d.ente.addetti} addetti in visura`);
-      vincoli.push({
-        nome: 'Denunce Uniemens assenti con addetti dichiarati',
-        minimo: p.vincoli.denunceAssentiConAddetti,
-      });
     } else if (d.ente.denunceAssenti === null) {
       lacune.push('esito del triage sulle denunce non conservato');
     }
@@ -266,7 +222,7 @@ export function calcolaIai(d: DatiIai, p: ParametriIai = PARAMETRI_IAI_PREDEFINI
     }
   }
 
-  // ---- C. Dinamica ------------------------------------------------------
+  // ---- C. Dinamica ---------------------------------------------------------
   {
     const c = d.bilancio.corrente;
     const pr = d.bilancio.precedente;
@@ -301,7 +257,7 @@ export function calcolaIai(d: DatiIai, p: ParametriIai = PARAMETRI_IAI_PREDEFINI
     });
   }
 
-  // ---- D. Affidabilita' dei dati --------------------------------------------
+  // ---- D. Affidabilita' dei dati -------------------------------------------
   {
     const motivi: string[] = [];
     const lacune: string[] = [];
@@ -331,7 +287,7 @@ export function calcolaIai(d: DatiIai, p: ParametriIai = PARAMETRI_IAI_PREDEFINI
     comp.push({ dimensione: 'D', punteggio: Math.min(100, arrot(punti)), motivi, lacune });
   }
 
-  // ---- E. Quadro procedurale --------------------------------------------
+  // ---- E. Quadro procedurale ----------------------------------------------
   {
     const motivi: string[] = [];
     const lacune: string[] = [];
@@ -340,10 +296,6 @@ export function calcolaIai(d: DatiIai, p: ParametriIai = PARAMETRI_IAI_PREDEFINI
     if (d.visura.proceduraPendente) {
       punti = 100;
       motivi.push(`procedura concorsuale risultante dalla visura: ${d.visura.proceduraPendente}`);
-      vincoli.push({
-        nome: 'Procedura concorsuale pendente in visura',
-        minimo: p.vincoli.proceduraPendente,
-      });
     }
     if (d.visura.statoAttivitaAnomalo) {
       punti = Math.max(punti, 80);
@@ -368,58 +320,21 @@ export function calcolaIai(d: DatiIai, p: ParametriIai = PARAMETRI_IAI_PREDEFINI
     comp.push({ dimensione: 'E', punteggio: arrot(punti), motivi, lacune });
   }
 
-  // ---- Aggregazione con vincoli ------------------------------------------------
-  const sommaPesi = (Object.values(p.pesi) as number[]).reduce((s, x) => s + x, 0);
-  const media = comp.reduce((s, c) => s + c.punteggio * p.pesi[c.dimensione], 0) / sommaPesi;
-  const minimo = vincoli.reduce((m, v) => Math.max(m, v.minimo), 0);
-  const indice = arrot(Math.min(100, Math.max(media, minimo)));
-  const indiceFascia = p.fasce.findIndex((f) => indice <= f.fine);
-  const fascia = p.fasce[indiceFascia === -1 ? p.fasce.length - 1 : indiceFascia];
-
-  const determinanti = comp
-    .filter((c) => c.punteggio >= 50 && c.motivi.length)
-    .sort((a, b) => b.punteggio * p.pesi[b.dimensione] - a.punteggio * p.pesi[a.dimensione])
-    .slice(0, 3)
-    .map((c) => `${c.motivi[0]} (${c.dimensione})`);
-  const lacune = comp.flatMap((c) => c.lacune).slice(0, 2);
-  const sintesi = [
-    `IAI ${indice}, fascia «${fascia.nome}»${vincoli.length ? ` — ${vincoli.length === 1 ? 'un vincolo scattato' : `${vincoli.length} vincoli scattati`}` : ''}.`,
-    determinanti.length
-      ? `Determinano l’esito: ${determinanti.join('; ')}.`
-      : 'Nessuna componente sopra la metà della scala.',
-    lacune.length ? `Limiti della misura: ${lacune.join('; ')}.` : 'Nessuna lacuna nei dati usati.',
-  ].join('\n');
-
-  return {
-    indice,
-    fascia: { ...fascia, indiceFascia: Math.max(0, indiceFascia) },
-    componenti: comp,
-    vincoliScattati: vincoli,
-    sintesi,
-    parametri: p,
-  };
+  return comp;
 }
 
-export const DICHIARAZIONE_IAI =
-  'Indicatore composito di orientamento istruttorio, costruito secondo la metodologia OCSE-JRC per gli indicatori compositi (normalizzazione per distanza dall’obiettivo, ponderazione dichiarata, aggregazione con vincoli di non compensabilità); struttura di bilancio misurata con lo Z’’-score di Altman (1995). Non costituisce accertamento di crisi o insolvenza né giudizio sulla proposta: rileva soltanto come criterio di priorità del fascicolo per il livello decisionale successivo, senza valore probatorio autonomo (l’art. 3 CCII impone la rilevazione tempestiva degli squilibri, non attribuisce a un punteggio automatico la prova dello stato di crisi). I vincoli di non compensabilità sono regole metodologiche interne, non presunzioni normative. Parametri e pesi sono dichiarati e modificabili dall’ente.';
+export const DICHIARAZIONE_DIMENSIONI =
+  'Le cinque dimensioni spiegano da dove viene l’attenzione: sono determinanti e lacune, non un punteggio complessivo e non un giudizio. L’esito della verifica è quello del semaforo — fatti accertati, dati mancanti, copertura informativa — e non si compensa con una dimensione favorevole: i presupposti di legge e il patrimonio netto negativo sono fatti, non pesi. La struttura di bilancio è misurata con lo Z’’-score di Altman (1995); gli indici diagnostici sono strumenti operativi, non parametri normativi (il sistema dell’originario art. 13 CCII è abrogato).';
 
-/** Basi metodologiche dell'indice, da stampare in copertina. */
+/** Basi metodologiche delle dimensioni, da stampare in allegato. */
 export const BASI_METODOLOGICHE_IAI: { rif: string; uso: string }[] = [
-  {
-    rif: 'OECD/JRC (Nardo M., Saisana M., Saltelli A., Tarantola S., Hoffman A., Giovannini E.), Handbook on Constructing Composite Indicators: Methodology and User Guide, OECD Publishing, 2008.',
-    uso: 'impianto dell’indice: scelta degli indicatori, normalizzazione per distanza dall’obiettivo, ponderazione dichiarata, aggregazione, analisi di sensibilità.',
-  },
   {
     rif: 'Altman E.I., Hartzell J., Peck M., Emerging Markets Corporate Bonds: A Scoring System, Salomon Brothers, 1995 (Z’’-score per società non quotate e non manifatturiere; da Altman E.I., Financial Ratios, Discriminant Analysis and the Prediction of Corporate Bankruptcy, Journal of Finance, 1968).',
     uso: 'dimensione B: struttura patrimoniale e finanziaria (zona di sicurezza sopra 2,6; zona di pericolo sotto 1,1).',
   },
   {
-    rif: 'Munda G., “Measuring Sustainability”: A Multi-Criterion Framework, Environment, Development and Sustainability, 7, 2005; Munda G., Social Multi-Criteria Evaluation for a Sustainable Economy, Springer, 2008.',
-    uso: 'aggregazione non compensativa: i vincoli fissano un minimo che il resto non può compensare.',
-  },
-  {
-    rif: 'Saaty T.L., The Analytic Hierarchy Process, McGraw-Hill, 1980.',
-    uso: 'ponderazione: i pesi delle dimensioni si definiscono con il confronto a coppie da parte dell’ente (in corso di taratura).',
+    rif: 'OECD/JRC (Nardo M., Saisana M., Saltelli A., Tarantola S., Hoffman A., Giovannini E.), Handbook on Constructing Composite Indicators: Methodology and User Guide, OECD Publishing, 2008.',
+    uso: 'normalizzazione per distanza dall’obiettivo delle misure di dimensione: rende confrontabili grandezze diverse, senza aggregarle in un indice.',
   },
   {
     rif: 'CNDCEC, Crisi d’impresa. Gli indici dell’allerta, ottobre 2019.',
@@ -427,7 +342,7 @@ export const BASI_METODOLOGICHE_IAI: { rif: string; uso: string }[] = [
   },
 ];
 
-/** Riferimenti normativi che entrano nelle dimensioni, per la copertina. */
+/** Riferimenti normativi che entrano nelle dimensioni, per l'allegato. */
 export const RIFERIMENTI_NORMATIVI_IAI: { dimensione: Dimensione; rif: string }[] = [
   {
     dimensione: 'A',
@@ -458,46 +373,3 @@ export const RIFERIMENTI_NORMATIVI_IAI: { dimensione: Dimensione; rif: string }[
     rif: 'Perimetro dei dati dichiarato in testa all’elaborato: dati di provenienza aziendale riportati come proposti; crediti dell’ente acquisiti sul presupposto degli atti che li fondano.',
   },
 ];
-
-/** Parametri dell'ente sopra i predefiniti: pesi e minimi dei vincoli, validati. Fasce fisse. */
-export function parametriDaEnte(grezzo: unknown): ParametriIai {
-  const g = grezzo && typeof grezzo === 'object' ? (grezzo as Record<string, unknown>) : {};
-  const pesiG = (g.pesi && typeof g.pesi === 'object' ? g.pesi : {}) as Record<string, unknown>;
-  const vinG = (g.vincoli && typeof g.vincoli === 'object' ? g.vincoli : {}) as Record<
-    string,
-    unknown
-  >;
-  const n = (v: unknown, def: number, min: number, max: number) =>
-    typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.round(v))) : def;
-  const base = PARAMETRI_IAI_PREDEFINITI;
-  const pesi = {
-    A: n(pesiG.A, base.pesi.A, 0, 100),
-    B: n(pesiG.B, base.pesi.B, 0, 100),
-    C: n(pesiG.C, base.pesi.C, 0, 100),
-    D: n(pesiG.D, base.pesi.D, 0, 100),
-    E: n(pesiG.E, base.pesi.E, 0, 100),
-  };
-  // Tutti a zero = nessun indice: si torna ai predefiniti.
-  const somma = pesi.A + pesi.B + pesi.C + pesi.D + pesi.E;
-  return {
-    pesi: somma > 0 ? pesi : base.pesi,
-    vincoli: {
-      proceduraPendente: n(vinG.proceduraPendente, base.vincoli.proceduraPendente, 0, 100),
-      denunceAssentiConAddetti: n(
-        vinG.denunceAssentiConAddetti,
-        base.vincoli.denunceAssentiConAddetti,
-        0,
-        100
-      ),
-      sogliaEnteSuperata: n(vinG.sogliaEnteSuperata, base.vincoli.sogliaEnteSuperata, 0, 100),
-    },
-    fasce: base.fasce,
-    notaNelReport: typeof g.notaNelReport === 'boolean' ? g.notaNelReport : base.notaNelReport,
-  };
-}
-
-export const NOME_VINCOLO: Record<keyof ParametriIai['vincoli'], string> = {
-  proceduraPendente: 'Procedura concorsuale pendente in visura',
-  denunceAssentiConAddetti: 'Denunce Uniemens assenti con addetti dichiarati',
-  sogliaEnteSuperata: 'Presupposti dell’art. 25-novies rilevati',
-};

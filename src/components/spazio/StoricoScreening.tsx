@@ -36,7 +36,7 @@ export function StoricoScreening({ nomeSchema, aziendaId, versione }: Props) {
   return (
     <section
       className="bg-white border border-slate-200 rounded-xl p-5 space-y-3"
-      aria-label="Storico dello Screening"
+      aria-label="Storico della relazione"
     >
       <div className="flex items-start gap-2 border-b border-slate-100 pb-3">
         <History className="w-4 h-4 text-slate-500 mt-0.5" />
@@ -87,7 +87,7 @@ export function StoricoScreening({ nomeSchema, aziendaId, versione }: Props) {
                   onClick={() =>
                     stampaSeConsegnabile(
                       'RELAZIONE_SCREENING',
-                      `Relazione di Screening — generazione del ${new Date(v.generatoIl).toLocaleString('it-IT')} (piattaforma ${v.appVersion ?? '?'})`,
+                      `Relazione di inquadramento — generazione del ${new Date(v.generatoIl).toLocaleString('it-IT')} (piattaforma ${v.appVersion ?? '?'})`,
                       v.relazioneTesto!,
                       v.generatoIl
                     )

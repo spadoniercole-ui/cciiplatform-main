@@ -46,7 +46,13 @@ export function AnagraficaEnteScenario({ nomeSchema, aziendaId, onSalvato }: Pro
     { stato: 'in_corso' } | { stato: 'fatta' } | { stato: 'errore'; motivo: string } | null
   >(null);
   const pathname = usePathname();
-  const urlScreening = pathname.replace(/\/posizione-ente(\/.*)?$/, '/screening');
+  // La parte scritta della verifica vive nella verifica contabile: la vecchia
+  // pagina «Screening» reindirizza lì, ma il collegamento va al punto giusto.
+  const idDalPercorso = pathname.match(/\/aziende\/(\d+)\//)?.[1] ?? String(aziendaId);
+  const urlVerifica = pathname.replace(
+    /\/aziende\/\d+\/.*$/,
+    `/verifica-contabile/${idDalPercorso}`
+  );
 
   useDichiaraContestoAssistente({ pagina: 'anagrafica-ente', nomeSchema, scenarioId: aziendaId });
 
@@ -209,7 +215,7 @@ export function AnagraficaEnteScenario({ nomeSchema, aziendaId, onSalvato }: Pro
           <p className="text-[11px] text-slate-700 bg-blue-50 border border-blue-200 rounded-lg p-2.5 flex items-start gap-2">
             <RefreshCw className="w-3.5 h-3.5 mt-0.5 shrink-0 animate-spin" />
             <span>
-              <span className="font-bold">Prima elaborazione dello screening in corso</span> con la
+              <span className="font-bold">Prima elaborazione della relazione in corso</span> con la
               visura raccolta nella verifica e i parametri dell’ente appena salvati — fino a due
               minuti e mezzo. Puoi restare qui o continuare con le altre schede.
             </span>
@@ -217,19 +223,19 @@ export function AnagraficaEnteScenario({ nomeSchema, aziendaId, onSalvato }: Pro
         )}
         {primaElab?.stato === 'fatta' && (
           <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
-            Prima elaborazione dello screening completata: il PDF è già disponibile in{' '}
-            <a href={urlScreening} className="font-bold underline">
-              Screening
+            Prima elaborazione della relazione completata: il PDF è già disponibile nella{' '}
+            <a href={urlVerifica} className="font-bold underline">
+              verifica contabile
             </a>
             , e la Check List è sbloccata.
           </p>
         )}
         {primaElab?.stato === 'errore' && (
           <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
-            La prima elaborazione dello screening non è riuscita: {primaElab.motivo} — puoi
-            lanciarla da{' '}
-            <a href={urlScreening} className="font-bold underline">
-              Screening
+            La prima elaborazione della relazione non è riuscita: {primaElab.motivo} — puoi
+            lanciarla dalla{' '}
+            <a href={urlVerifica} className="font-bold underline">
+              verifica contabile
             </a>
             ; la visura resta disponibile.
           </p>

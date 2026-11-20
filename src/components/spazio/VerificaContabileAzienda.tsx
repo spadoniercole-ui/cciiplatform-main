@@ -266,7 +266,10 @@ export function VerificaContabileAzienda({
         </p>
       )}
 
-      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+      <section
+        id="visura-storica"
+        className="scroll-mt-4 bg-white border border-slate-200 rounded-xl p-5 space-y-3"
+      >
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
           <FileText className="w-3.5 h-3.5 text-blue-600" /> 1. Visura storica
         </h2>

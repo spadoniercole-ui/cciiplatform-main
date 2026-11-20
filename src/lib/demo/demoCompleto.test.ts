@@ -74,6 +74,11 @@ describe('la demo è completa: ogni azione ha il suo file', () => {
       expect(testo, azienda).toMatch(/crediti/i);
       expect(testo, azienda).toMatch(/immobilizzazioni/i);
       expect(testo, azienda).toMatch(/eventi di rilievo/i);
+      // Il Piano-ponte non esiste più: una nota che lo citasse mostrerebbe a
+      // chi guarda la demo un passaggio che nel prodotto non c'è. Il controllo
+      // vale anche per `noteIntegrative.json`, perché il test del seed qui sotto
+      // verifica che le due copie dicano la stessa cosa.
+      expect(testo, azienda).not.toMatch(/piano[\s-]*ponte/i);
 
       // E i numeri che la simulazione legge devono esserci davvero: gli
       // ammortamenti a zero sono l'esempio di un dato che rende inutile il

@@ -46,6 +46,8 @@ import { ottieniIndiciSpazio } from '@/app/actions/parametriSpazio';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { leggiIdentificativiEnte } from '@/lib/anagraficaEnte/identificativi';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
+import { componiEsitoVerifica } from '@/lib/verifica/esito';
+import { diagnosticaIaiAction } from '@/app/actions/iai';
 import type { Riscontri } from '@/lib/normativa/riscontri';
 import { VOCI_MAPPA } from '@/lib/verificaAzienda/voci';
 import { valutaSoglieAction } from '@/app/actions/soglie25novies';
@@ -179,16 +181,27 @@ async function raccogliFonti(
   const azienda = await ottieniAziendaPerId(nomeSchema, aziendaId);
   if (!azienda.success || !azienda.azienda) return 'Azienda non trovata.';
 
-  const [statoContabile, attenzioneRis, debitoRis, storicoRis, screeningRis, xbrlRis, indiciRis] =
-    await Promise.all([
-      statoVerificaContabileAction(nomeSchema).catch(() => null),
-      ottieniAttenzioneScreeningAction(nomeSchema, aziendaId).catch(() => null),
-      debitoEnteMemorizzatoAction(nomeSchema, aziendaId).catch(() => null),
-      ottieniStoricoVerificheAction(nomeSchema).catch(() => null),
-      ottieniScreeningAzienda(nomeSchema, aziendaId).catch(() => null),
-      ottieniStoricoXbrlAzienda(nomeSchema, aziendaId).catch(() => null),
-      ottieniIndiciSpazio(nomeSchema).catch(() => null),
-    ]);
+  const [
+    statoContabile,
+    attenzioneRis,
+    debitoRis,
+    storicoRis,
+    screeningRis,
+    xbrlRis,
+    indiciRis,
+    dimensioniRis,
+  ] = await Promise.all([
+    statoVerificaContabileAction(nomeSchema).catch(() => null),
+    ottieniAttenzioneScreeningAction(nomeSchema, aziendaId).catch(() => null),
+    debitoEnteMemorizzatoAction(nomeSchema, aziendaId).catch(() => null),
+    ottieniStoricoVerificheAction(nomeSchema).catch(() => null),
+    ottieniScreeningAzienda(nomeSchema, aziendaId).catch(() => null),
+    ottieniStoricoXbrlAzienda(nomeSchema, aziendaId).catch(() => null),
+    ottieniIndiciSpazio(nomeSchema).catch(() => null),
+    // Le dimensioni spiegano il giudizio: si leggono una volta e il documento
+    // le cita, invece di ricalcolarle nella composizione.
+    diagnosticaIaiAction(nomeSchema, aziendaId, tipoSpazio).catch(() => null),
+  ]);
 
   const identificativi = await leggiIdentificativiEnte(nomeSchema, aziendaId).catch(() => []);
 
@@ -588,6 +601,15 @@ async function raccogliFonti(
           completa: rigaContabile.completa,
         }
       : null,
+    // L'ESITO È UNO. La stessa composizione della pagina: semaforo come
+    // giudizio, dimensioni come spiegazione. Nessun secondo indice.
+    esito: attenzione
+      ? componiEsitoVerifica({
+          giudizio: attenzione,
+          dimensioni:
+            dimensioniRis?.success && dimensioniRis.dimensioni ? dimensioniRis.dimensioni : [],
+        })
+      : null,
     screening,
     prospetto,
     riscontri,
@@ -727,7 +749,7 @@ export async function generaReportAziendaAction(
         return {
           success: false,
           error:
-            'Per rigenerare l’analisi serve la visura trattenuta: ricaricala nella Valutazione completa, oppure scegli «riusa la relazione esistente».',
+            'Per rigenerare l’analisi serve la visura trattenuta: ricaricala nella verifica contabile (sezione 1), oppure scegli «riusa la relazione esistente».',
         };
       }
       const g = await generaScreeningAziendaAction(

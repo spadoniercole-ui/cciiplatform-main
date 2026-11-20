@@ -1,28 +1,21 @@
 'use server';
 
-// Indice di Attenzione Istruttoria: raccoglie i dati che la piattaforma ha
-// gia' (soglie dell'ente, bilanci, fascicolo, fatti della visura) e li passa
-// al motore puro (src/lib/iai/indice.ts). Nessuna AI.
+// LE CINQUE DIMENSIONI DELLA VERIFICA — raccolta dei dati e diagnostica.
+//
+// La piattaforma ha già tutto: soglie dell'ente, bilanci, fascicolo, fatti
+// della visura. Qui si legge e si passa al motore puro
+// (src/lib/iai/dimensioni.ts). Nessuna AI, nessun punteggio complessivo: le
+// dimensioni spiegano l'esito del semaforo, che vive in
+// `src/app/actions/attenzioneScreening.ts` e si compone in
+// `src/lib/verifica/esito.ts`.
 
 import { pool } from '@/lib/db';
-import {
-  assicuraTabellaXbrlAzienda,
-  assicuraTabelleScreeningAzienda,
-  assicuraTabelleParametriSpazio,
-} from '@/db/provision';
+import { assicuraTabellaXbrlAzienda, assicuraTabelleScreeningAzienda } from '@/db/provision';
 import { valutaSoglieAction } from '@/app/actions/soglie25novies';
 import { ottieniFascicoloAction } from '@/app/actions/fascicoloEvidenza';
 import { riepilogoFascicolo } from '@/lib/fascicolo/evidenza';
 import { avvisiDaFattiVisura, normalizzaFattiVisura, proceduraPendente } from '@/lib/visura/fatti';
-import {
-  calcolaIai,
-  parametriDaEnte,
-  PARAMETRI_IAI_PREDEFINITI,
-  type DatiIai,
-  type EsitoIai,
-  type ParametriIai,
-} from '@/lib/iai/indice';
-import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
+import { diagnosticaDimensioni, type Componente, type DatiIai } from '@/lib/iai/dimensioni';
 import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
@@ -33,24 +26,17 @@ const num = (v: unknown): number | null =>
       ? Number(v)
       : null;
 
-export async function calcolaIaiAction(
+export async function diagnosticaIaiAction(
   nomeSchema: string,
   aziendaId: number,
   tipoSpazio: 'ENTE' | 'NON_ENTE'
-): Promise<{ success: boolean; esito?: EsitoIai; dati?: DatiIai; error?: string }> {
+): Promise<{ success: boolean; dimensioni?: Componente[]; dati?: DatiIai; error?: string }> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabellaXbrlAzienda(nomeSchema);
     await assicuraTabelleScreeningAzienda(nomeSchema);
-    await assicuraTabelleParametriSpazio(nomeSchema);
-    const par = await pool.query(
-      `SELECT parametri FROM "${nomeSchema}".parametri_iai WHERE id = 1`
-    );
-    const parametri = par.rows[0]?.parametri
-      ? parametriDaEnte(par.rows[0].parametri)
-      : PARAMETRI_IAI_PREDEFINITI;
 
     // A. soglie dell'ente
     const soglie = await valutaSoglieAction(nomeSchema, aziendaId, tipoSpazio);
@@ -146,86 +132,17 @@ export async function calcolaIaiAction(
         capitaleSociale: fatti?.capitaleSociale ?? null,
       },
     };
-    return { success: true, esito: calcolaIai(dati, parametri), dati };
+    return { success: true, dimensioni: diagnosticaDimensioni(dati), dati };
   } catch (error: unknown) {
-    console.error('[calcolaIaiAction]', error);
+    console.error('[diagnosticaIaiAction]', error);
     return {
       success: false,
-      error: `Impossibile calcolare l’indice: ${(error as Error).message || error}`,
+      error: `Impossibile leggere le dimensioni: ${(error as Error).message || error}`,
     };
   }
 }
 
-export async function ottieniParametriIaiAction(
-  nomeSchema: string
-): Promise<{ success: boolean; parametri: ParametriIai; personalizzati: boolean; error?: string }> {
-  try {
-    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
-    if (!/^[a-z0-9_]+$/.test(nomeSchema))
-      return {
-        success: false,
-        parametri: PARAMETRI_IAI_PREDEFINITI,
-        personalizzati: false,
-        error: 'Nome schema non valido.',
-      };
-    await assicuraTabelleParametriSpazio(nomeSchema);
-    const r = await pool.query(`SELECT parametri FROM "${nomeSchema}".parametri_iai WHERE id = 1`);
-    const p = r.rows[0]?.parametri;
-    return {
-      success: true,
-      parametri: p ? parametriDaEnte(p) : PARAMETRI_IAI_PREDEFINITI,
-      personalizzati: !!p,
-    };
-  } catch (error: unknown) {
-    return {
-      success: false,
-      parametri: PARAMETRI_IAI_PREDEFINITI,
-      personalizzati: false,
-      error: `Lettura non riuscita: ${(error as Error).message || error}`,
-    };
-  }
-}
-
-/** Salva pesi e minimi dei vincoli dell'ente; null = torna ai predefiniti. */
-export async function salvaParametriIaiAction(
-  codiceSpazio: string,
-  parametri: {
-    pesi: ParametriIai['pesi'];
-    vincoli: ParametriIai['vincoli'];
-    notaNelReport: boolean;
-  } | null
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
-    if (!contesto || contesto.modalita === 'OPERATORE')
-      return { success: false, error: 'Operazione riservata all’Admin di Spazio.' };
-    await assicuraTabelleParametriSpazio(contesto.nomeSchema);
-    if (parametri === null) {
-      await pool.query(`DELETE FROM "${contesto.nomeSchema}".parametri_iai WHERE id = 1`);
-      return { success: true };
-    }
-    const validi = parametriDaEnte(parametri);
-    await pool.query(
-      `INSERT INTO "${contesto.nomeSchema}".parametri_iai (id, parametri, aggiornato_il) VALUES (1, $1, now())
-       ON CONFLICT (id) DO UPDATE SET parametri = $1, aggiornato_il = now()`,
-      [
-        JSON.stringify({
-          pesi: validi.pesi,
-          vincoli: validi.vincoli,
-          notaNelReport: validi.notaNelReport,
-        }),
-      ]
-    );
-    return { success: true };
-  } catch (error: unknown) {
-    return {
-      success: false,
-      error: `Salvataggio non riuscito: ${(error as Error).message || error}`,
-    };
-  }
-}
-
-/** I dati per l'allegato «Riferimenti e metodo» di un'azienda (Screening) o di uno scenario. */
+/** I dati per l'allegato «Riferimenti e metodo» di un'azienda (verifica) o di uno scenario. */
 export async function datiRiferimentiAction(
   nomeSchema: string,
   aziendaId: number,
@@ -242,15 +159,12 @@ export async function datiRiferimentiAction(
     confermataIl: string | null;
     codici: string[];
   }[];
-  parametriIai?: ParametriIai;
-  parametriPersonalizzati?: boolean;
   error?: string;
 }> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
       return { success: false, error: 'Nome schema non valido.' };
-    await assicuraTabelleParametriSpazio(nomeSchema);
     const docs = await pool.query(
       `SELECT tipo, nome_file, impronta, caricato_il FROM "${nomeSchema}".documenti_origine WHERE azienda_id = $1 ORDER BY caricato_il`,
       [aziendaId]
@@ -264,9 +178,6 @@ export async function datiRiferimentiAction(
         : [];
     const mat = await pool.query(
       `SELECT m.*, (SELECT string_agg(t.codice, ', ' ORDER BY t.codice) FROM "${nomeSchema}".titoli_ente t WHERE t.materia_id = m.id) AS codici FROM "${nomeSchema}".materie_ente m ORDER BY m.nome`
-    );
-    const par = await pool.query(
-      `SELECT parametri FROM "${nomeSchema}".parametri_iai WHERE id = 1`
     );
     return {
       success: true,
@@ -285,10 +196,6 @@ export async function datiRiferimentiAction(
         confermataIl: m.confermata_il ? new Date(m.confermata_il).toISOString() : null,
         codici: m.codici ? String(m.codici).split(', ') : [],
       })),
-      parametriIai: par.rows[0]?.parametri
-        ? parametriDaEnte(par.rows[0].parametri)
-        : PARAMETRI_IAI_PREDEFINITI,
-      parametriPersonalizzati: !!par.rows[0]?.parametri,
     };
   } catch (error: unknown) {
     return {

@@ -1,10 +1,12 @@
 // src/lib/iai/riferimentiHtml.ts
 //
-// «RIFERIMENTI E METODO» — l'allegato unico in coda a ogni PDF (scelta di
-// Ercole): perimetro, documenti di origine con impronta, fonti normative dal
-// registro, titoli dell'ente, parametri dell'indice, basi metodologiche,
-// rilievi residui della revisione. Cosi' ogni affermazione ha la sua fonte
-// identificata in un posto solo, e la copertina resta pulita.
+// «RIFERIMENTI E METODO» — l'allegato unico in coda a ogni PDF: perimetro,
+// documenti di origine con impronta, fonti normative dal registro, titoli
+// dell'ente, basi metodologiche delle dimensioni, rilievi residui della
+// revisione. Cosi' ogni affermazione ha la sua fonte identificata in un posto
+// solo, e la prima pagina resta pulita.
+//
+// Non ci sono più pesi e vincoli da dichiarare: l'indice composito non esiste.
 //
 // Logica pura: riceve i dati raccolti dalle azioni e produce HTML.
 
@@ -13,8 +15,7 @@ import { riscontraCitazioni } from '@/lib/registroFonti/citazioni';
 import { dichiarazionePerimetro, type FaseElaborato } from '@/lib/revisore/perimetro';
 import { appendiceRilievi } from '@/lib/revisore/correzione';
 import type { Revisione } from '@/lib/revisore/revisore';
-import { htmlNotaMetodologica } from './notaHtml';
-import { BASI_METODOLOGICHE_IAI, RIFERIMENTI_NORMATIVI_IAI, type ParametriIai } from './indice';
+import { BASI_METODOLOGICHE_IAI, RIFERIMENTI_NORMATIVI_IAI } from './dimensioni';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -41,8 +42,6 @@ export interface DatiRiferimenti {
   /** Testo dell'elaborato: le citazioni si riscontrano sul registro. */
   testo: string;
   materie: MateriaRiferimento[];
-  parametriIai: ParametriIai | null;
-  parametriPersonalizzati: boolean;
   revisione: Revisione | null;
   /** Identificativi dell'azienda presso l'ente (matricola, posizioni…). */
   identificativi?: { etichetta: string; valore: string }[];
@@ -56,8 +55,8 @@ const ETICHETTA_TIPO_DOC: Record<string, string> = {
   PROPOSTA: 'Excel della proposta',
 };
 
-function rigaFonte(f: Fonte, dimensione?: string): string {
-  return `<tr><td><code>${esc(f.id)}</code></td><td>${esc(f.norma)}${dimensione ? ` <span class="dim">(${esc(dimensione)})</span>` : ''}</td><td>${esc(f.stato)}${f.verificata ? '' : ' — non riscontrata'}</td><td>${esc(f.verifica)}</td></tr>`;
+function rigaFonte(f: Fonte): string {
+  return `<tr><td><code>${esc(f.id)}</code></td><td>${esc(f.norma)}</td><td>${esc(f.stato)}${f.verificata ? '' : ' — non riscontrata'}</td><td>${esc(f.verifica)}</td></tr>`;
 }
 
 export function htmlRiferimentiEMetodo(d: DatiRiferimenti): string {
@@ -98,8 +97,6 @@ export function htmlRiferimentiEMetodo(d: DatiRiferimenti): string {
   const cit = riscontraCitazioni(d.testo);
   for (const r of cit.riscontrate) ids.add(r.fonte.id);
   for (const r of cit.nonSostenibili) ids.add(r.fonte.id);
-  const dimensionePerRif = new Map<string, string>();
-  for (const r of RIFERIMENTI_NORMATIVI_IAI) dimensionePerRif.set(r.rif, r.dimensione);
   const fontiRighe = Array.from(ids)
     .map((id) => FONTI.find((f) => f.id === id))
     .filter((f): f is Fonte => !!f)
@@ -114,9 +111,7 @@ export function htmlRiferimentiEMetodo(d: DatiRiferimenti): string {
       (fontiRighe
         ? `<table><thead><tr><th>Id</th><th>Fonte</th><th>Stato</th><th>Verifica</th></tr></thead><tbody>${fontiRighe}</tbody></table>`
         : `<p class="note">Nessuna fonte del registro richiamata dal motore o dal testo.</p>`) +
-      (d.parametriIai
-        ? `<p class="note">Riferimenti per dimensione dell’indice:</p><ul style="font-size:10px">${perDimensione}</ul>`
-        : '') +
+      `<p class="note">Riferimenti per dimensione della lettura:</p><ul style="font-size:10px">${perDimensione}</ul>` +
       (cit.nonInRegistro.length
         ? `<p class="note">Riferimenti citati nel testo e non presenti nel registro delle fonti (non verificati): ${cit.nonInRegistro.map((c) => esc(c.testo)).join('; ')}.</p>`
         : '')
@@ -134,20 +129,12 @@ export function htmlRiferimentiEMetodo(d: DatiRiferimenti): string {
     );
   }
 
-  // 5-6. Indice e basi
-  if (d.parametriIai)
-    parti.push(
-      htmlNotaMetodologica(d.parametriIai, d.parametriPersonalizzati).replace(
-        'Nota metodologica — Indice di Attenzione Istruttoria',
-        '5. Indice di Attenzione Istruttoria — parametri e metodo'
-      )
-    );
-  else
-    parti.push(
-      `<h3 style="font-size:12px">5. Basi metodologiche</h3><ul style="font-size:10px">${BASI_METODOLOGICHE_IAI.map((b) => `<li>${esc(b.rif)} <em>— ${esc(b.uso)}</em></li>`).join('')}</ul>`
-    );
+  // 5. Basi metodologiche delle dimensioni
+  parti.push(
+    `<h3 style="font-size:12px">5. Basi metodologiche</h3><ul style="font-size:10px">${BASI_METODOLOGICHE_IAI.map((b) => `<li>${esc(b.rif)} <em>— ${esc(b.uso)}</em></li>`).join('')}</ul>`
+  );
 
-  // 7. Revisione
+  // 6. Revisione
   if (d.revisione) {
     const app = appendiceRilievi(d.revisione).trim();
     parti.push(

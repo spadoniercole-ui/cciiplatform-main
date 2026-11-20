@@ -1245,14 +1245,13 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
     )`
   );
   // Parametri dell'Indice di Attenzione Istruttoria (0.109.104): pesi delle
-  // dimensioni e minimi dei vincoli, dell'ente. NULL = valori predefiniti.
-  await eseguiDdlTenant(
-    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_iai (
-      id INTEGER PRIMARY KEY DEFAULT 1,
-      parametri JSONB,
-      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
-    )`
-  );
+  // dimensioni e minimi dei vincoli, dell'ente. Dalla fusione della verifica
+  // contabile l'IAI non è più un punteggio da graduare: è la diagnostica delle
+  // cinque dimensioni (`src/lib/iai/dimensioni.ts`), che spiega l'esito senza
+  // concorrere a formarlo. Nessuna riga del codice legge questa tabella, quindi
+  // non si crea più e si elimina anche dai tenant che l'hanno già: una
+  // configurazione che non produce nulla è un residuo, non una riserva.
+  await eseguiDdlTenant(sql`DROP TABLE IF EXISTS ${s}.parametri_iai`);
 }
 
 /**

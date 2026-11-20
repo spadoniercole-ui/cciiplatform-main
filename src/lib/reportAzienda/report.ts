@@ -16,6 +16,8 @@
 // e dai test.
 
 import { markdownInHtml } from '@/lib/stampa/markdown';
+import { NOME_DIMENSIONE } from '@/lib/iai/dimensioni';
+import type { EsitoVerifica } from '@/lib/verifica/esito';
 import { VOCI_MAPPA } from '@/lib/verificaAzienda/voci';
 import type { Riscontri } from '@/lib/normativa/riscontri';
 import type { FattiVisura } from '@/lib/visura/fatti';
@@ -206,6 +208,11 @@ export interface FontiReport {
   identificativi: { etichetta: string; valore: string }[];
   amministrativa: FonteAmministrativa | null;
   contabile: FonteContabile | null;
+  /**
+   * L'esito della verifica contabile: uno solo, con le dimensioni che lo
+   * spiegano. Prima il documento ne citava due (semaforo e indice 0-100).
+   */
+  esito?: EsitoVerifica | null;
   screening: FonteScreening | null;
   prospetto: FonteProspetto | null;
   riscontri: Riscontri | null;
@@ -609,6 +616,63 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
     });
   }
 
+  // 3-bis. L'ESITO DELLA VERIFICA — uno solo.
+  //
+  // Il documento riporta ciò che la schermata mostra: il semaforo (fatti
+  // accertati, dati che mancano, copertura) e, sotto, le cinque dimensioni che
+  // lo spiegano. Prima qui arrivavano due letture diverse — il semaforo e
+  // l'indice composito 0-100 — e chi leggeva doveva scegliere quale credere.
+  if (fonti.esito) {
+    const e = fonti.esito;
+    const parolaEsito =
+      e.giudizio.esito === 'ROSSO'
+        ? 'attenzione alta'
+        : e.giudizio.esito === 'GIALLO'
+          ? 'attenzione'
+          : 'attenzione contenuta';
+    const righe: string[] = [
+      `${e.giudizio.etichetta} (${parolaEsito})`,
+      '',
+      `Fattore determinante: ${e.giudizio.fattoreDeterminante}.`,
+      `Copertura informativa: ${e.giudizio.copertura.determinate} dimensioni su ${e.giudizio.copertura.totali}${
+        e.giudizio.copertura.determinate < e.giudizio.copertura.totali
+          ? ' — il giudizio è limitato ai dati disponibili'
+          : ''
+      }.`,
+      '',
+      'Accertato',
+      ...(e.giudizio.accertato.length > 0
+        ? e.giudizio.accertato.map((x) => `— ${x}`)
+        : ['— nessun elemento accertato.']),
+      '',
+      'Da accertare',
+      ...(e.giudizio.daAccertare.length > 0
+        ? e.giudizio.daAccertare.map((x) => `— ${x}`)
+        : ['— nulla da integrare.']),
+    ];
+    if (e.dimensioni.length > 0) {
+      righe.push('', 'Dove si concentra l’attenzione (spiegazione, non punteggio)');
+      for (const c of e.dimensioni) {
+        righe.push(
+          `— ${c.dimensione} · ${NOME_DIMENSIONE[c.dimensione]}: ${
+            c.motivi.length > 0 ? c.motivi.join('; ') : 'nessun determinante'
+          }${c.lacune.length > 0 ? `. Lacune: ${c.lacune.join('; ')}` : ''}`
+        );
+      }
+    }
+    sezioni.push({
+      id: 'esito',
+      titolo: 'Esito della verifica contabile',
+      tipo: 'testo',
+      testo: righe.join('\n'),
+      nota: 'Un solo giudizio: i presupposti di legge e il patrimonio netto negativo sono fatti e non si compensano con una dimensione favorevole. Le cinque dimensioni spiegano l’esito, non lo sostituiscono.',
+    });
+  } else if (fonti.contabile) {
+    avvisi.push(
+      'L’esito della verifica contabile non è calcolabile con i dati disponibili: il documento riporta i dati ma non il giudizio.'
+    );
+  }
+
   if (fonti.prospetto && fonti.prospetto.righe.length > 0) {
     sezioni.push({
       id: 'prospetto',
@@ -853,7 +917,7 @@ export function componiReport(fonti: FontiReport, inclusioni: InclusioniReport):
   // 7. Riferimenti e metodo: che cosa è entrato nel documento e da dove.
   if (inclusioni.riferimenti) {
     const righe: string[] = [
-      'Fonti utilizzate: verifica amministrativa (esito e debito memorizzato), verifica contabile (visura, parametri dell’ente, bilanci XBRL), valutazione completa (relazione e questionario).',
+      'Fonti utilizzate: verifica amministrativa (esito e debito memorizzato), verifica contabile (visura, parametri dell’ente, bilanci XBRL, esito e sue cinque dimensioni), relazione di inquadramento e questionario.',
       'I numeri sono prodotti dal motore deterministico della piattaforma; l’assistente scrive la sola analisi di inquadramento, già passata dal revisore.',
       'Il report non conclude nel merito, non accerta lo stato di crisi e non sostituisce la valutazione dell’organo competente.',
     ];

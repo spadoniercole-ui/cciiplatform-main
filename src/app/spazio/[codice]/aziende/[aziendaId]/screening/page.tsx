@@ -1,38 +1,20 @@
 import { redirect } from 'next/navigation';
-import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
-import { ScreeningAziendaScenario } from '@/components/spazio/ScreeningAziendaScenario';
-import { IstruttoriePrecedenti } from '@/components/spazio/IstruttoriePrecedenti';
 
-// Due chiamate AI in parallelo (questionario + relazione), ciascuna con
-// timeout di 150s (vedi screeningAzienda.ts) — margine sopra quello,
-// non il default implicito della piattaforma.
-export const maxDuration = 180;
-
-// L'esistenza dell'azienda e i controlli di accesso di base sono già
-// garantiti dal layout condiviso (layout.tsx in questa stessa cartella)
-// — se questa pagina viene renderizzata, l'azienda esiste già. Non
-// ripetuto qui per non duplicare la stessa query due volte.
+// LA «VALUTAZIONE COMPLETA» NON È PIÙ UNA PROCEDURA A SÉ.
+//
+// Aveva una pagina sua, i suoi caricamenti della visura e dei bilanci, e due
+// giudizi propri (il semaforo e l'Indice di Attenzione Istruttoria) accanto a
+// quelli della verifica contabile: gli stessi documenti entravano due volte e
+// la stessa posizione usciva con verdetti che potevano non coincidere.
+//
+// La relazione e il questionario ora stanno dentro la verifica contabile, che è
+// una sola. L'indirizzo resta vivo e porta lì: chi aveva un segnalibro non
+// trova un 404, trova la verifica.
 export default async function ScreeningAziendaPage({
   params,
 }: {
   params: Promise<{ codice: string; aziendaId: string }>;
 }) {
   const { codice, aziendaId } = await params;
-  const contesto = await ottieniContestoAccessoSpazio(codice);
-  if (!contesto) redirect('/');
-  if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
-
-  // La valutazione completa parte dal dato contabile: il presupposto è almeno
-  // un bilancio XBRL, e la scheda lo chiede con «Bilanci XBRL».
-  return (
-    <div className="space-y-5">
-      <ScreeningAziendaScenario
-        nomeSchema={contesto.nomeSchema}
-        aziendaId={Number(aziendaId)}
-        codice={codice}
-        tipoSpazio={contesto.tipoSpazio}
-      />
-      <IstruttoriePrecedenti nomeSchema={contesto.nomeSchema} aziendaId={Number(aziendaId)} />
-    </div>
-  );
+  redirect(`/spazio/${codice}/verifica-contabile/${aziendaId}`);
 }

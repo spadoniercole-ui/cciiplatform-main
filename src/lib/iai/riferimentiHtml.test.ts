@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { htmlRiferimentiEMetodo } from './riferimentiHtml';
-import { PARAMETRI_IAI_PREDEFINITI } from './indice';
 import { revisionaTesto } from '@/lib/revisore/revisore';
 
 describe('allegato «Riferimenti e metodo»', () => {
-  it('riunisce perimetro, documenti, fonti del registro (dal motore e dal testo), materie, parametri e revisione', () => {
+  it('riunisce perimetro, documenti, fonti del registro (dal motore e dal testo), materie, basi e revisione', () => {
     const testo =
       'Ai sensi dell’art. 25-novies CCII i presupposti risultano rilevati. L’obbligo Uniemens discende dal D.M. 26 ottobre 2009.';
     const h = htmlRiferimentiEMetodo({
@@ -29,8 +28,6 @@ describe('allegato «Riferimenti e metodo»', () => {
           codici: ['27', '10'],
         },
       ],
-      parametriIai: PARAMETRI_IAI_PREDEFINITI,
-      parametriPersonalizzati: false,
       revisione: revisionaTesto(testo, 'RELAZIONE_SCREENING'),
     });
     for (const atteso of [
@@ -44,12 +41,15 @@ describe('allegato «Riferimenti e metodo»', () => {
       '4. Titoli di credito',
       'Denunce Uniemens',
       '27, 10',
-      '5. Indice di Attenzione Istruttoria',
-      'Handbook',
+      '5. Basi metodologiche',
+      'Altman',
       '6. Revisione automatica',
     ]) {
       expect(h).toContain(atteso);
     }
+    // I pesi dell'indice composito non si dichiarano più: non esistono.
+    expect(h).not.toContain('Pesi delle dimensioni');
+    expect(h).not.toContain('Vincoli di non compensabilità');
     expect(h).not.toContain('a'.repeat(20));
   });
 });

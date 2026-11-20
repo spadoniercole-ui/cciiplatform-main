@@ -255,8 +255,10 @@ redirect per non rompere i link.
    confronto con l'ultimo bilancio depositato.
 5. **Dati di settore**: cache globale ISTAT (`dati_settore_cache`,
    `dati_settore_ultima_chiamata`), crescita per ATECO.
-6. **IAI** (`src/lib/iai`): indice composito 0–100, non compensatorio, con vincoli; è la
-   copertina dello Screening.
+6. **Diagnostica IAI** (`src/lib/iai/dimensioni.ts`): le cinque dimensioni come
+   *spiegazione* dell'esito — determinanti e lacune — senza punteggio 0–100, senza pesi e
+   senza vincoli. Non è un secondo giudizio: dalla fusione della verifica contabile
+   concorre a spiegare l'esito, non a formarlo.
 7. **Indicatore di attenzione** (`src/lib/screening/indicatore.ts`): regola **gerarchica e
    non compensatoria**. Un superamento dell'art. 25-novies non può essere "compensato" da
    un buon patrimonio netto: è un fatto giuridico. L'esito migliore possibile è "nessuna
@@ -394,7 +396,8 @@ più d'una → si nominano tutte e la scelta resta all'ente, perché possono ess
 3. **Blocco**: generata la relazione, lo scenario diventa **sola lettura permanente**
    (`bloccato_il`); le versioni sono salvate in `relazione_generazioni` /
    `scenario_sblocchi` (sblocco tracciato).
-4. **Documenti di corredo**, **fascicolo**, **stampa** (markdown/PDF), **copertina IAI**.
+4. **Documenti di corredo**, **fascicolo**, **stampa** (markdown/PDF), **copertina
+dell'esito** (`src/lib/iai/esitoHtml.ts`).
 
 ### Fase 10 — Esercizio e manutenzione
 
@@ -469,7 +472,7 @@ più d'una → si nominano tutte e la scelta resta all'ente, perché possono ess
 | Regole normative | `src/lib/registroFonti/regole.ts`, `src/lib/registroFonti/fonti.ts` |
 | Proposta | `src/lib/proposta/inquadramento.ts`, `src/lib/proposta/ricevibilita.ts` |
 | Piano | `src/lib/piano/ricevente.ts`, `src/lib/piano/piano.ts`, `src/lib/piano/confronto.ts` |
-| Screening | `src/lib/screening/indicatore.ts`, `src/lib/iai/indice.ts` |
+| Verifica contabile (esito unico) | `src/lib/screening/indicatore.ts` (giudizio), `src/lib/iai/dimensioni.ts` (spiegazione), `src/lib/verifica/esito.ts` (composizione) |
 | Comunicazioni ai colleghi | `src/lib/lavorazioni/comunicazioni.ts` |
 | Ciò che i documenti elencano e ciò che si dichiara | `src/lib/lavorazioni/daLavorare.ts` |
 | Documenti per i reparti (PDF, dal triage) | `src/lib/lavorazioni/reparti.ts`, `src/lib/lavorazioni/pdfReparto.ts` |
@@ -503,8 +506,8 @@ la descrive.
 **Per tenant (`tenant_<codice>`), per area**:
 
 - identità e configurazione: `admin_workspace`, `utenti_spazio`, `utenti_aziende`,
-  `permessi_utente`, `parametri_workspace`, `parametri_visualizzazione`, `parametri_stampa`,
-  `parametri_iai`, `parametri_soglie_25novies`, `indici_master`, `indici_abilitati`,
+  `permessi_utente`,   `parametri_workspace`, `parametri_visualizzazione`, `parametri_stampa`,
+  `parametri_soglie_25novies`, `indici_master`, `indici_abilitati`,
   `xbrl_tab_abilitate`;
 - azienda: `aziende`, `anagrafica_ente`, `anagrafica_ente_config`,
   `azienda_cicli_archivio`, `azienda_screening`, `azienda_screening_storico`,
