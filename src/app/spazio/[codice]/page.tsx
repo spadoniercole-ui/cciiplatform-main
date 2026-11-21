@@ -67,6 +67,7 @@ export default async function DashboardSpazioPage({
         ragioneSociale: a.ragioneSociale,
         debitoMemorizzato: a.debitoMemorizzato,
         anniXbrl: a.anniXbrl,
+        baseAziendaleSalvata: a.baseAziendaleSalvata,
       }))
     : null;
 

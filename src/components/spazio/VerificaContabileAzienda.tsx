@@ -82,7 +82,9 @@ export function VerificaContabileAzienda({
       const r = await ottieniAnagraficaEnte(nomeSchema, aziendaId);
       if (r.success) setParametri(r.dati);
       const e = await ottieniEtichetteAnagraficaEnte(nomeSchema);
-      if (e.success) setEtichette(e.etichette);
+      // Anche quando la lettura non riesce le etichette sono «lette»: resta
+      // l'invito a configurarle, non un «in corso…» che non finisce più.
+      setEtichette(e.success ? e.etichette : []);
     })();
   }, [nomeSchema, aziendaId]);
 
@@ -249,7 +251,7 @@ export function VerificaContabileAzienda({
 
       <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-          <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" /> 1. Bilanci XBRL
+          <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" /> Bilanci XBRL
         </h2>
         <p className="text-[11px] text-slate-500">
           Le istanze depositate sono il dato della verifica: da qui nascono prospetto, indici e
@@ -263,17 +265,9 @@ export function VerificaContabileAzienda({
       </section>
 
       <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-            2. Prospetto a scalare e indici
-          </h2>
-          <Link
-            href={`/spazio/${codice}/verifica-contabile/${aziendaId}/fotografia`}
-            className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
-          >
-            Fotografia contabile (stampabile) →
-          </Link>
-        </div>
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+          Prospetto a scalare e indici
+        </h2>
         <ProspettoContabileStorico
           nomeSchema={nomeSchema}
           aziendaId={aziendaId}
@@ -285,7 +279,7 @@ export function VerificaContabileAzienda({
 
       <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-2">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-          <FileText className="w-3.5 h-3.5 text-blue-600" /> 4. Report contabile
+          <FileText className="w-3.5 h-3.5 text-blue-600" /> Report contabile
         </h2>
         <p className="text-[11px] text-slate-500 leading-relaxed">
           Il report contabile mette in fila le tre tabelle — prospetto, differenziali, simulazione —

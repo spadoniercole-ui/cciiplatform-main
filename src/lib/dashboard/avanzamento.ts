@@ -6,7 +6,7 @@
 // ha dieci aziende in verifica doveva leggere quattro elenchi e ricomporre a
 // mente la stessa azienda. Qui i quattro elenchi diventano una riga per
 // azienda, con quattro tappe: verifica amministrativa, verifica contabile,
-// verifica azienda (le due lette insieme, col debito dell'ente memorizzato) e
+// verifica azienda (le due lette insieme, con la fotografia salvata) e
 // analisi di scenari.
 //
 // TRE STATI, NON DUE. «Mancante» e «parziale» non sono la stessa cosa: una
@@ -16,9 +16,19 @@
 // contabili, e dire «mancante» di ciò che non si può leggere sarebbe una
 // bugia.
 //
+// LE TAPPE SI DECIDONO IN UN PUNTO SOLO. Quale delle tre verifiche è fatta lo
+// dice `statoDirettrici` (lib/verificaAzienda/direttrici): la scheda azienda e
+// questo riepilogo leggono la stessa regola e non possono dire verdi diversi.
+//
 // Logica pura: nessun accesso al database, si prova con i test.
 
-export type Stadio = 'COMPLETO' | 'PARZIALE' | 'MANCANTE' | 'NON_DISPONIBILE';
+import {
+  statoDirettrici,
+  type SegnaliDirettrici,
+  type Stadio,
+} from '@/lib/verificaAzienda/direttrici';
+
+export type { Stadio };
 
 export interface AziendaAmministrativa {
   id: number;
@@ -36,8 +46,8 @@ export interface AziendaContabile {
 export interface AziendaCompleta {
   id: number;
   ragioneSociale: string;
-  debitoMemorizzato: number | null;
-  anniXbrl: number;
+  /** Esiste la fotografia salvata come base della proposta. */
+  baseAziendaleSalvata: boolean;
 }
 
 export interface ScenarioPosizione {
@@ -60,6 +70,13 @@ export interface AvanzamentoPosizione {
 }
 
 const ORDINE_FASI = ['Da iniziare', 'Amministrativa', 'Contabile', 'Completa aziendale', 'Scenari'];
+
+/** I segnali di chi non ha ancora nulla: conta solo cosa è leggibile. */
+const senzaSegnali = (contabile: AziendaContabile[] | null): SegnaliDirettrici => ({
+  amministrativaLetta: false,
+  contabile: contabile === null ? null : { completa: false, anniXbrl: 0, visuraPresente: false },
+  baseAziendaleSalvata: false,
+});
 
 /**
  * Lo stato delle quattro tappe per ogni azienda dello spazio.
@@ -97,18 +114,34 @@ export function avanzamentoPosizioni(input: {
     return nuova;
   };
 
-  for (const v of input.verifiche) riga(v.id, v.ragioneSociale).amministrativa = 'COMPLETO';
+  // I segnali grezzi, raccolti per azienda: le tre tappe si decidono tutte in
+  // `statoDirettrici`, non qui.
+  const segnali = new Map<number, SegnaliDirettrici>();
+  const segnaleDi = (id: number): SegnaliDirettrici => {
+    const gia = segnali.get(id);
+    if (gia) return gia;
+    const nuovo = senzaSegnali(input.contabile);
+    segnali.set(id, nuovo);
+    return nuovo;
+  };
+
+  for (const v of input.verifiche) {
+    riga(v.id, v.ragioneSociale);
+    segnaleDi(v.id).amministrativaLetta = true;
+  }
 
   for (const c of input.contabile ?? []) {
-    const r = riga(c.id, c.ragioneSociale);
-    if (c.completa) r.contabile = 'COMPLETO';
-    else if (c.anniXbrl > 0 || c.visuraPresente) r.contabile = 'PARZIALE';
+    riga(c.id, c.ragioneSociale);
+    segnaleDi(c.id).contabile = {
+      completa: c.completa,
+      anniXbrl: c.anniXbrl,
+      visuraPresente: c.visuraPresente,
+    };
   }
 
   for (const a of input.azienda ?? []) {
-    const r = riga(a.id, a.ragioneSociale);
-    if (a.debitoMemorizzato !== null) r.aziendale = 'COMPLETO';
-    else if (a.anniXbrl > 0 && r.contabile === 'COMPLETO') r.aziendale = 'PARZIALE';
+    riga(a.id, a.ragioneSociale);
+    segnaleDi(a.id).baseAziendaleSalvata = a.baseAziendaleSalvata;
   }
 
   // Gli scenari si legano all'azienda per nome: la riga dello scenario non
@@ -141,18 +174,24 @@ export function avanzamentoPosizioni(input: {
   }
 
   const tutte = [...perId.values(), ...senzaId.values()].map((r) => {
-    const tappeComplete = [r.amministrativa, r.contabile, r.aziendale, r.scenari].filter(
-      (s) => s === 'COMPLETO'
-    ).length;
+    const stato = statoDirettrici(
+      r.aziendaId === null ? senzaSegnali(input.contabile) : segnaleDi(r.aziendaId)
+    );
+    const tappeComplete = [
+      stato.amministrativa,
+      stato.contabile,
+      stato.aziendale,
+      r.scenari,
+    ].filter((s) => s === 'COMPLETO').length;
     // La fase è l'ultima tappa raggiunta nell'ordine del lavoro: si scende
     // dalla più avanzata, così «Scenari» vince su tutto.
     const raggiunta = [
       { stadio: r.scenari, nome: ORDINE_FASI[4] },
-      { stadio: r.aziendale, nome: ORDINE_FASI[3] },
-      { stadio: r.contabile, nome: ORDINE_FASI[2] },
-      { stadio: r.amministrativa, nome: ORDINE_FASI[1] },
+      { stadio: stato.aziendale, nome: ORDINE_FASI[3] },
+      { stadio: stato.contabile, nome: ORDINE_FASI[2] },
+      { stadio: stato.amministrativa, nome: ORDINE_FASI[1] },
     ].find((x) => x.stadio === 'COMPLETO' || x.stadio === 'PARZIALE');
-    return { ...r, tappeComplete, fase: raggiunta ? raggiunta.nome : ORDINE_FASI[0] };
+    return { ...r, ...stato, tappeComplete, fase: raggiunta ? raggiunta.nome : ORDINE_FASI[0] };
   });
 
   // In testa chi è più avanti, poi per nome: il riepilogo serve a decidere, e
@@ -191,7 +230,8 @@ export function hrefPosizione(p: AvanzamentoPosizione, codice: string): string {
   // «Non disponibile» non è «mancante»: a un accesso che non legge la
   // contabile non si manda la riga su una pagina che gli risponderà 403.
   if (p.contabile === 'MANCANTE') return `${base}/verifica-contabile/${id}`;
-  if (p.aziendale === 'MANCANTE') return `${base}/verifica-azienda/${id}`;
+  // Chiusa la contabile non resta che la verifica aziendale: sia che manchi
+  // sia che sia completa, è lì che la posizione si legge.
   return `${base}/verifica-azienda/${id}`;
 }
 

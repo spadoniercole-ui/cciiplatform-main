@@ -82,8 +82,8 @@ export function ProiezioneContabile({
     <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-          <CalendarRange className="w-3.5 h-3.5 text-blue-600" /> 3. Differenziali e simulazione
-          fino all’anno della verifica
+          <CalendarRange className="w-3.5 h-3.5 text-blue-600" /> Differenziali e simulazione fino
+          all’anno della verifica
         </h2>
         {dati?.apertura && (
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">

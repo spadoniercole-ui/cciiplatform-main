@@ -4,9 +4,9 @@ import Link from 'next/link';
 import { ArrowLeft, Check, Lock, Users } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
-import { ottieniStoricoXbrlAzienda } from '@/app/actions/xbrlAzienda';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
-import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati';
+import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
+import { statoDirettrici, type Stadio } from '@/lib/verificaAzienda/direttrici';
 import { leggiIdentificativiEnte } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
@@ -47,22 +47,34 @@ export default async function AziendaLayout({
   const aziendaNum = Number(aziendaId);
   const isEnte = contesto.tipoSpazio === 'ENTE';
 
-  // Segnali di completamento delle tre verifiche, tutti in parallelo.
-  const [storicoVerifiche, xbrlRis, debitoRis] = await Promise.all([
+  // Segnali delle tre direttrici, tutti in parallelo. La regola che decide i
+  // verdi è una sola (`statoDirettrici`), la stessa che usa la dashboard.
+  const [storicoVerifiche, statoContabile] = await Promise.all([
     ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
-    ottieniStoricoXbrlAzienda(contesto.nomeSchema, aziendaNum),
-    debitoEnteMemorizzatoAction(contesto.nomeSchema, aziendaNum).catch(() => null),
+    statoVerificaContabileAction(contesto.nomeSchema).catch(() => null),
   ]);
   // Identificativi presso l'ente: in testata, in evidenza, appena salvati.
   const identificativi = isEnte
     ? await leggiIdentificativiEnte(contesto.nomeSchema, aziendaNum).catch(() => [])
     : [];
 
-  const amministrativaFatta = Boolean(
-    storicoVerifiche?.success && storicoVerifiche.righe?.some((v) => v.id === aziendaNum)
-  );
-  const contabileFatta = (xbrlRis?.storico?.length ?? 0) > 0;
-  const aziendaleFatta = (debitoRis?.debito?.totale ?? null) !== null;
+  const rigaContabile = statoContabile?.success
+    ? statoContabile.aziende.find((a) => a.aziendaId === aziendaNum)
+    : undefined;
+  const direttrici = statoDirettrici({
+    amministrativaLetta: Boolean(
+      storicoVerifiche?.success && storicoVerifiche.righe?.some((v) => v.id === aziendaNum)
+    ),
+    contabile: rigaContabile
+      ? {
+          completa: rigaContabile.completa,
+          anniXbrl: rigaContabile.anniXbrl,
+          visuraPresente: rigaContabile.visuraPresente,
+        }
+      : null,
+    baseAziendaleSalvata: rigaContabile?.baseAziendaleSalvata ?? false,
+  });
+  const aPasso = (stato: Stadio): StatoStep => (stato === 'COMPLETO' ? 'completo' : 'attivo');
 
   const base = `/spazio/${codice}/aziende/${aziendaId}`;
 
@@ -72,27 +84,27 @@ export default async function AziendaLayout({
   // verifica amministrativa e contabile. Ora la scheda è l'Anagrafica
   // dell'azienda, e da qui si aprono le tre direttrici del prodotto:
   // amministrativa (il triage), contabile (il dato XBRL) e aziendale (le due
-  // lette insieme). Le vecchie sotto-pagine restano raggiungibili dal loro URL
-  // (XBRL, indici, bilanci) finché non si ripuliscono, ma non sono più
-  // una tappa da attraversare.
+  // lette insieme, con la fotografia salvata). Le vecchie sotto-pagine restano
+  // raggiungibili dal loro URL (XBRL, indici, bilanci) finché non si ripuliscono,
+  // ma non sono più una tappa da attraversare.
   const steps: Step[] = [
     {
       id: 'amministrativa',
       href: `/spazio/${codice}/verifica-salute?azienda=${aziendaId}`,
       label: 'Verifica amministrativa',
-      stato: amministrativaFatta ? 'completo' : 'attivo',
+      stato: aPasso(direttrici.amministrativa),
     },
     {
       id: 'contabile',
       href: `/spazio/${codice}/verifica-contabile/${aziendaId}`,
       label: 'Verifica contabile',
-      stato: contabileFatta ? 'completo' : 'attivo',
+      stato: aPasso(direttrici.contabile),
     },
     {
       id: 'aziendale',
       href: `/spazio/${codice}/verifica-azienda/${aziendaId}`,
       label: 'Verifica aziendale',
-      stato: aziendaleFatta ? 'completo' : 'attivo',
+      stato: aPasso(direttrici.aziendale),
     },
   ];
 

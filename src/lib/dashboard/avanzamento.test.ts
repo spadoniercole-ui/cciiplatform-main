@@ -15,8 +15,8 @@ const contabile = [
   { id: 2, ragioneSociale: 'Beta S.r.l.', completa: false, anniXbrl: 0, visuraPresente: true },
 ];
 const azienda = [
-  { id: 1, ragioneSociale: 'Alfa S.r.l.', debitoMemorizzato: 205000, anniXbrl: 3 },
-  { id: 2, ragioneSociale: 'Beta S.r.l.', debitoMemorizzato: null, anniXbrl: 0 },
+  { id: 1, ragioneSociale: 'Alfa S.r.l.', baseAziendaleSalvata: true },
+  { id: 2, ragioneSociale: 'Beta S.r.l.', baseAziendaleSalvata: false },
 ];
 
 describe('avanzamentoPosizioni', () => {
@@ -37,6 +37,20 @@ describe('avanzamentoPosizioni', () => {
     // l'amministrativa già chiusa.
     expect(beta.contabile).toBe('PARZIALE');
     expect(beta.fase).toBe('Contabile');
+  });
+
+  it('i due lati pronti non bastano: senza la fotografia la aziendale è cominciata', () => {
+    // Prima il verde della terza tappa arrivava col debito memorizzato in
+    // amministrativa, cioè con un dato in ingresso e non con la lettura.
+    const righe = avanzamentoPosizioni({
+      verifiche,
+      contabile,
+      azienda: [{ id: 1, ragioneSociale: 'Alfa S.r.l.', baseAziendaleSalvata: false }],
+      scenari: [],
+    });
+    const alfa = righe.find((r) => r.aziendaId === 1)!;
+    expect(alfa.aziendale).toBe('PARZIALE');
+    expect(alfa.tappeComplete).toBe(2);
   });
 
   it('ordina in testa chi ha fatto più tappe', () => {

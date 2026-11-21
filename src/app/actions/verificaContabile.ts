@@ -43,6 +43,12 @@ export interface StatoContabileAzienda {
   parametriPresenti: boolean;
   debitoMemorizzato: number | null;
   debitoMemorizzatoIl: string | null;
+  /**
+   * Esiste la fotografia salvata come base della proposta: la verifica
+   * aziendale è stata letta davvero. Il debito memorizzato non basta — è un
+   * dato in ingresso della verifica amministrativa.
+   */
+  baseAziendaleSalvata: boolean;
   /** Visura, parametri e almeno un bilancio: la contabile ha tutto. */
   completa: boolean;
 }
@@ -112,6 +118,17 @@ export async function statoVerificaContabileAction(
       )
       .catch(() => undefined);
 
+    // La terza tappa è verde sulla fotografia salvata, non sul debito.
+    const basi = new Set<number>();
+    await pool
+      .query(
+        `SELECT DISTINCT azienda_id
+           FROM "${nomeSchema}".verifica_azienda_simulazioni
+          WHERE base_per_proposta = TRUE`
+      )
+      .then((r) => r.rows.forEach((x) => basi.add(Number(x.azienda_id))))
+      .catch(() => undefined);
+
     const aziende: StatoContabileAzienda[] = base.rows.map((r) => {
       const id = Number(r.id);
       const visuraPresente = Boolean(r.visura_triage_url);
@@ -129,6 +146,7 @@ export async function statoVerificaContabileAction(
         parametriPresenti,
         debitoMemorizzato: debito?.totale ?? null,
         debitoMemorizzatoIl: debito?.il ?? null,
+        baseAziendaleSalvata: basi.has(id),
         completa: visuraPresente && parametriPresenti && anniXbrl > 0,
       };
     });
@@ -308,19 +326,20 @@ export async function salvaSimulazioneContabileAction(
         WHERE azienda_id = $1`,
       [aziendaId]
     );
+    // La crescita è quella già applicata dal motore e resta dentro le colonne:
+    // le due quote percentuali della vecchia simulazione non si scrivono, e
+    // valgono i loro difetti (nessuna crescita storica, zero applicata).
     const inserita = await pool.query(
       `INSERT INTO "${nomeSchema}".verifica_azienda_simulazioni
-         (azienda_id, profilo, annualita, debito_ente, crescita_storica_pct,
-          crescita_applicata_pct, colonne, avvertenze, base_per_proposta)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE)
+         (azienda_id, profilo, annualita, debito_ente, colonne, avvertenze,
+          base_per_proposta)
+       VALUES ($1,$2,$3,$4,$5,$6,TRUE)
        RETURNING to_char(created_at, 'YYYY-MM-DD') AS il`,
       [
         aziendaId,
         'SIMULAZIONE_CONTABILE',
         colonne.length,
         proiezione.ponteEnte?.debitoVerificato ?? 0,
-        null,
-        0,
         JSON.stringify(colonne),
         JSON.stringify(proiezione.avvertenze),
       ]

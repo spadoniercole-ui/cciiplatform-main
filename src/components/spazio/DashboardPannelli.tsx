@@ -39,6 +39,8 @@ export interface RigaAziendaDashboard {
   ragioneSociale: string;
   debitoMemorizzato: number | null;
   anniXbrl: number;
+  /** Fotografia salvata come base: è ciò che rende «fatta» la terza tappa. */
+  baseAziendaleSalvata: boolean;
 }
 
 interface Props {

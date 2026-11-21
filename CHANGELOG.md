@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.249.0**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.253.0**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,32 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.253.0 — 2026-11-21
+
+- **La terza direttrice si accende quando la verifica aziendale è stata letta, non quando arriva il
+  debito.** Il verde di «Verifica aziendale» scattava appena la verifica amministrativa memorizzava
+  il debito dell'ente: il debito è un dato in ingresso, non la lettura incrociata, e la barra
+  dichiarava fatto un lavoro che nessuno aveva ancora fatto. Ora il verde vuole la fotografia
+  salvata come base della proposta (`verifica_azienda_simulazioni.base_per_proposta`), e la
+  direttrice resta parziale finché la contabile non è completa. La contabile, dal canto suo, mostra
+  il suo stato vero: completa con visura, parametri e almeno un bilancio; parziale con uno dei tre.
+- **I tre semafori hanno una regola sola.** La scheda azienda li calcolava per conto suo e la
+  dashboard per un altro: due modi di dire la stessa cosa. La regola vive in
+  `src/lib/verificaAzienda/direttrici.ts` (pura, 4 test) e la leggono entrambe, così non possono
+  più accendersi su segnali diversi. `avanzamento.ts` non guarda più il debito né gli anni XBRL
+  sciolti: riceve i segnali e li passa alla regola (12 test, compreso il caso «contabile completa
+  ma base non salvata → parziale»).
+- **La verifica contabile non numera più le sue sezioni.** Le intestazioni dicevano 1–4 su sei
+  blocchi: la numerazione è tolta da «Bilanci XBRL», «Prospetto a scalare e indici», «Report
+  contabile» e «Differenziali e simulazione», e resta solo l'ordine di lettura. Sparisce anche la
+  seconda copia del documento: quello che il pulsante chiama «report contabile» era «fotografia»
+  nell'URL, con un motore che ristampava gli stessi numeri. Ora c'è un nome solo, il percorso
+  `/fotografia` rinvia a `/report` per non spezzare i segnalibri, e `src/lib/contabile/fotografia.ts`
+  con il suo test è eliminato.
+- **La simulazione contabile si salva senza le due quote di crescita.** Il motore la applica già
+  dentro le colonne: le colonne `crescita_storica_pct` e `crescita_applicata_pct` non venivano più
+  lette e ora restano ai loro difetti, con un test PGlite che copre il salvataggio.
 
 ## 0.252.0 — 2026-11-20
 
