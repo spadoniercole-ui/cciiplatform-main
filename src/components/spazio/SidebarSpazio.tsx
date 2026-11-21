@@ -21,6 +21,7 @@ import {
   Stethoscope,
   Gauge,
   TrendingUp,
+  Eye,
 } from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
 
@@ -84,6 +85,17 @@ const VOCI_MENU: {
     id: 'verifica-azienda',
     label: 'Verifica azienda',
     icon: Gauge,
+    stato: 'pronta',
+    soloAdmin: true,
+  },
+  // Il ritratto sta dopo tutte le verifiche e prima degli scenari: legge
+  // quello che le tre direttrici hanno già accertato, mentre gli scenari
+  // rappresentano il futuro («che cosa accadrebbe se»). Per questo non ha
+  // una voce fra le cose da fare, ma una sua, in chiusura del percorso.
+  {
+    id: 'ritratti',
+    label: 'Ritratti',
+    icon: Eye,
     stato: 'pronta',
     soloAdmin: true,
   },

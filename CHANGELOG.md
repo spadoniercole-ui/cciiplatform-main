@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.253.0**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.254.0**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -23,6 +23,32 @@ situazioni):
 Versionamento libero (non segue semver in senso stretto): il primo numero
 sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
+
+---
+
+## 0.254.0 — 2026-11-21
+
+- **Il ritratto aziendale, prima versione.** Una pagina per azienda
+  (`/spazio/[codice]/aziende/[id]/ritratto`) che mette in quattro riquadri quello che il sistema ha
+  già sviluppato: l'impresa e i dati acquisiti, le tre
+  direttrici con il loro stadio e ciò che manca a ciascuna, l'esito unico della verifica con la
+  copertura e le due liste (accertato / da accertare), le cinque dimensioni che spiegano l'esito con
+  determinanti e lacune.
+- **Nessun numero nuovo e nessun totale.** Il modulo puro `src/lib/ritratto/ritratto.ts` (con i suoi
+  test) non ricalcola nulla: legge lo stato delle direttrici da `statoDirettrici` e il giudizio da
+  `componiEsitoVerifica`. Le barre delle dimensioni dicono quanto pesa ciascuna, non sono un voto e
+  non si sommano: il giudizio resta quello del semaforo, e la copertura resta un elemento di primo
+  piano.
+- **Che cosa il ritratto non dice.** Un riquadro in chiusura dichiara le parti mancanti — verifica
+  amministrativa non eseguita, contabile incompleta o non leggibile, fotografia non salvata,
+  dimensioni non misurate — invece di lasciare che una fotografia sintetica sembri completa.
+- **Una voce di menù sua: «Ritratti».** Sta dopo «Verifica azienda» e prima di «Scenari» perché è
+  l'ultima lettura del percorso: legge ciò che le tre verifiche hanno già accertato, mentre gli
+  scenari rappresentano il futuro. La pagina elenca le aziende attive con lo stadio di ciascuna
+  direttrice: quelle che hanno chiuso tutte e tre le attività aprono il ritratto completo, le
+  altre trovano scritto che cosa manca (con il link per andarci) e possono leggere il ritratto
+  parziale, che dichiara le proprie lacune. Il ritratto non si apre più dalla testata della
+  scheda: la sua casa è questa voce, in chiusura del percorso.
 
 ---
 
