@@ -155,7 +155,7 @@ export function RitrattoAzienda({ ritratto }: Props) {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-base font-black text-slate-900">Ritratto aziendale</h1>
+        <h1 className="text-base font-black text-slate-900">Iconografia aziendale</h1>
         <p className="mt-0.5 max-w-2xl text-[11px] leading-relaxed text-slate-500">
           Quanto il sistema ha sviluppato su questa posizione, in quattro riquadri. Nessun punteggio
           nuovo: il giudizio è quello della verifica e le dimensioni lo spiegano.
@@ -324,7 +324,7 @@ export function RitrattoAzienda({ ritratto }: Props) {
       {mancanze.length > 0 && (
         <section className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
           <h2 className="text-[10px] font-black uppercase tracking-widest text-amber-900">
-            Che cosa il ritratto non dice
+            Che cosa l’iconografia non dice
           </h2>
           <ul className="mt-1.5 space-y-1">
             {mancanze.map((m, i) => (

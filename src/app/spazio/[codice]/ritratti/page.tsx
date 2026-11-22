@@ -1,20 +1,22 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { Eye } from 'lucide-react';
+import { Eye, FileDown } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { statoDirettrici, type Stadio } from '@/lib/verificaAzienda/direttrici';
 
-// I RITRATTI — l'ultima lettura del percorso, prima degli scenari.
+// LE ICONOGRAFIE — l'ultima lettura del percorso, prima degli scenari.
 //
-// Le tre verifiche accertano; il ritratto mette insieme ciò che è stato
+// Le tre verifiche accertano; l'iconografia mette insieme ciò che è stato
 // accertato; gli scenari, che vengono dopo, rappresentano il futuro. La voce
 // sta quindi in chiusura del percorso, e ogni riga dice a che punto sono le
-// tre attività: chi le ha chiuse apre il ritratto completo, chi no trova
-// scritto che cosa resta, con il link per andarci, e può leggere il ritratto
-// parziale — il riquadro «Che cosa il ritratto non dice» dichiara le lacune.
-// Come la pagina del ritratto, questa non salva niente: legge le fonti a
+// tre attività: chi le ha chiuse apre l'iconografia completa, chi no trova
+// scritto che cosa resta, con il link per andarci, e può leggerla parziale —
+// il riquadro «Che cosa l'iconografia non dice» dichiara le lacune.
+// Ogni riga porta anche il report: un foglio A4 con tabelle e grafici, che
+// non ricalcola nulla e riduce la stessa lettura.
+// Come la pagina dell'iconografia, questa non salva niente: legge le fonti a
 // ogni apertura.
 export const dynamic = 'force-dynamic';
 
@@ -85,12 +87,13 @@ export default async function RitrattiPage({ params }: { params: Promise<{ codic
   return (
     <div className="max-w-4xl space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Ritratti</h1>
+        <h1 className="text-xl font-bold text-slate-900">Iconografie</h1>
         <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-2xl">
-          Il ritratto è l’ultima lettura del percorso: arriva dopo la verifica amministrativa,
+          L’iconografia è l’ultima lettura del percorso: arriva dopo la verifica amministrativa,
           quella contabile e quella aziendale, e prima degli scenari, che proiettano nel futuro ciò
           che qui è già stato accertato. Si legge a percorso chiuso; finché qualche verifica è
-          aperta, il ritratto è parziale e dichiara da sé che cosa non dice.
+          aperta, l’iconografia è parziale e dichiara da sé che cosa non dice. Da ogni posizione si
+          scarica il report: un solo foglio A4, con le tabelle e i grafici della stessa lettura.
         </p>
       </div>
 
@@ -108,8 +111,8 @@ export default async function RitrattiPage({ params }: { params: Promise<{ codic
 
       {aziende.length > 0 && (
         <p className="text-[11px] text-slate-500">
-          {pronte} su {aziende.length} con tutte e tre le verifiche chiuse: il ritratto è completo.
-          Per le altre, prima c’è ancora un’attività da chiudere.
+          {pronte} su {aziende.length} con tutte e tre le verifiche chiuse: l’iconografia è
+          completa. Per le altre, prima c’è ancora un’attività da chiudere.
         </p>
       )}
 
@@ -152,21 +155,29 @@ export default async function RitrattiPage({ params }: { params: Promise<{ codic
                 </p>
               )}
             </div>
-            {a.pronto ? (
+            <div className="shrink-0 flex flex-col items-stretch gap-1">
+              {a.pronto ? (
+                <Link
+                  href={`/spazio/${codice}/aziende/${a.aziendaId}/ritratto`}
+                  className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded bg-slate-900 text-white text-[9px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors"
+                >
+                  <Eye className="w-3 h-3" /> Apri l’iconografia
+                </Link>
+              ) : (
+                <Link
+                  href={`/spazio/${codice}/aziende/${a.aziendaId}/ritratto`}
+                  className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded border border-slate-200 bg-white text-slate-500 text-[9px] font-bold uppercase tracking-wider hover:border-blue-300 hover:text-blue-600 transition-colors"
+                >
+                  <Eye className="w-3 h-3" /> Iconografia parziale
+                </Link>
+              )}
               <Link
-                href={`/spazio/${codice}/aziende/${a.aziendaId}/ritratto`}
-                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-900 text-white text-[9px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors"
+                href={`/report/iconografia/${codice}/${a.aziendaId}?stampa=1`}
+                className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded border border-slate-200 bg-white text-slate-500 text-[9px] font-bold uppercase tracking-wider hover:border-blue-300 hover:text-blue-600 transition-colors"
               >
-                <Eye className="w-3 h-3" /> Apri il ritratto
+                <FileDown className="w-3 h-3" /> Report PDF
               </Link>
-            ) : (
-              <Link
-                href={`/spazio/${codice}/aziende/${a.aziendaId}/ritratto`}
-                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded border border-slate-200 bg-white text-slate-500 text-[9px] font-bold uppercase tracking-wider hover:border-blue-300 hover:text-blue-600 transition-colors"
-              >
-                <Eye className="w-3 h-3" /> Ritratto parziale
-              </Link>
-            )}
+            </div>
           </div>
         ))}
       </div>

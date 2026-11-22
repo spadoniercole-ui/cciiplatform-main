@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FileDown } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ritrattoAziendaAction } from '@/app/actions/ritratto';
 import { RitrattoAzienda } from '@/components/spazio/RitrattoAzienda';
@@ -26,12 +26,20 @@ export default async function RitrattoAziendaPage({
 
   return (
     <div className="space-y-3">
-      <Link
-        href={`/spazio/${codice}/aziende/${id}`}
-        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700"
-      >
-        <ArrowLeft className="w-3 h-3" /> Scheda azienda
-      </Link>
+      <div className="flex items-center justify-between gap-3 print:hidden">
+        <Link
+          href={`/spazio/${codice}/aziende/${id}`}
+          className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700"
+        >
+          <ArrowLeft className="w-3 h-3" /> Scheda azienda
+        </Link>
+        <Link
+          href={`/report/iconografia/${codice}/${id}?stampa=1`}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-slate-800"
+        >
+          <FileDown className="w-3.5 h-3.5" /> Report PDF
+        </Link>
+      </div>
 
       {esito.success && esito.ritratto ? (
         <RitrattoAzienda ritratto={esito.ritratto} />

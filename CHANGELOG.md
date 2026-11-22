@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.254.0**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.255.3**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,74 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.255.3 — 2026-11-22
+
+- **Lo stile della carta sta in un posto solo.** Canvas, foglio 210×297, barra dei comandi,
+  margini di `@page` e regole di stampa del report dell'iconografia duplicavano quelli del
+  report della verifica amministrativa: ora li produce `stileFoglioA4`
+  (`src/lib/stampe/foglioA4.ts`), che i due documenti chiamano con i propri margini. Le
+  tipografie restano nelle due pagine, dove si leggono insieme al contenuto.
+- **Meno rami nel report dell'iconografia.** Il tono del semaforo e la parola da stampare accanto
+  all'etichetta li decide il modello (`componiReportIconografia`) invece della pagina, che non ha
+  più mappe dell'esito né il caso «Attenzione (attenzione)». L'arco della copertura usa
+  `pathLength`, quindi la percentuale è il trattino e non si ricalcola la circonferenza; il campo
+  `cosa` delle direttrici, mai stampato, è uscito dal modello.
+- **La posizione incompleta si stampa con le sue lacune scritte.** Provato il foglio su una
+  posizione mai verificata: le direttrici dicono che cosa manca, il riquadro finale elenca le
+  quattro lacune e il giudizio dichiara la copertura 0/4. Due punti si leggevano male e sono
+  corretti: l'elenco «Accertato» vuoto stampava un trattino isolato — ora dice «Nessun elemento
+  accertato.» — e le cinque barre a zero, tutte «non misurate», sembravano un'intensità nulla:
+  accanto al grafico una riga dichiara che manca il dato.
+- **I nomi tornano quelli della piattaforma.** Il bottone del report si chiama «Report PDF», come
+  quello della verifica amministrativa, e non più «Report A4»: è lo stesso gesto, e due nomi per
+  lo stesso gesto confondono. Sul foglio lo stato delle direttrici si colora sul codice della
+  verifica (COMPLETO/PARZIALE…), non sull'etichetta tradotta; il riquadro delle lacune riprende
+  il titolo dell'iconografia a schermo, «Che cosa l'iconografia non dice».
+
+## 0.255.2 — 2026-11-22
+
+- **La voce di menu «Ritratti» si chiama «Iconografie»**, e con lei il titolo della pagina,
+  i bottoni delle posizioni e il titolo della scheda. Il percorso resta `/ritratti`: è un
+  indirizzo, non un'etichetta, e cambiarlo romperebbe i collegamenti già in giro.
+- **Ogni iconografia ha il suo report A4.** Un foglio solo, con tabelle e due grafici: impresa
+  e posizione, il giudizio con l'arco della copertura, le tre direttrici con lo stato e ciò che
+  resta, le cinque dimensioni come barre d'intensità, l'elenco di ciò che è accertato e di ciò
+  che resta da accertare, e in coda le mancanze dichiarate. Si apre dalla posizione e
+  dall'elenco, e parte direttamente in stampa (Stampa → Salva come PDF).
+- **Il report non ricalcola nulla.** `componiReportIconografia` riduce il ritratto già composto:
+  esiti, date, coperture e intensità entrano ed escono identici. Gli elenchi che non starebbero
+  sul foglio si riducono alle prime voci, con «e altre N voci» scritto nel documento e il
+  rimando al testo integrale a schermo: nessun taglio silenzioso.
+
+## 0.255.1 — 2026-11-22
+
+- **Il debito memorizzato non si perde più sulle posizioni dell'ente.** Il riallineamento della verifica
+  amministrativa legge solo la certificazione dei debiti e le posizioni del triage: quando la cifra
+  stava nelle posizioni registrate per l'azienda (`debiti_ente`) non la trovava e la toglieva, così
+  il ritratto tornava a dire «nessun debito memorizzato» pur con la verifica fatta. Ora quella
+  tabella è la terza lettura — dopo certificazione e triage, e senza contare le copie su scenario —
+  con la fonte «posizioni» dichiarata e contributi e sanzioni distinti.
+- **Il seed della demo usa la stessa regola.** Il debito delle aziende demo viene composto dalla
+  funzione che usa il prodotto (`snapshotDebitoEnteDaPosizioni`), quindi la cifra del seed e quella
+  ricavabile dagli archivi coincidono: per Tessitura Lario 152.000 € (contributi 140.000, sanzioni
+  12.000), coerente con le posizioni INPS della posizione.
+
+## 0.255.0 — 2026-11-22
+
+- **La demo nasce con una posizione al ritratto completo.** Il seed del percorso ente chiude ora
+  contabile e verifica aziendale di Tessitura Lario: visura del fascicolo demo, parametri dell'ente
+  (matricola INPS, posizione Gestione Separata, codice CSC, codice autorizzazione, sede competente)
+  e fotografia salvata come base della proposta. Cancellando `.dati-demo` il ritratto completo si
+  rivede senza rifare le verifiche a mano; le altre posizioni restano a metà di proposito, così si
+  vedono entrambi i rami.
+- **Il debito memorizzato c'è.** Il seed scrive `debiti_ente_memorizzati` dalle posizioni dell'ente
+  (contributi e sanzioni distinti, fonte «triage» dichiarata, ripartizione non inventata): i ritratti
+  non dicono più «nessun debito memorizzato» e la contabile trova la cifra per il ponte.
+- **Perché una verifica aziendale è chiusa, ora è dichiarato.** La base della proposta è un dato
+  dell'azienda (`verifiche.baseAziendale`) e non più dedotta dalla natura dello scenario: anche una
+  liquidazione con le due verifiche pronte può chiudere l'aziendale. Il seed resta idempotente e non
+  sovrascrive visure, parametri e cifre già presenti.
 
 ## 0.254.0 — 2026-11-21
 
@@ -390,7 +458,7 @@ il terzo per correzioni.
 ## 0.242.0 — 2026-11-16
 
 - **Una posizione, un documento.** Le quattro verifiche dicevano ciascuna se stessa; nessuna diceva
-  la cosa che serve a chi decide. Nuova pagina *Posizione* della pratica
+  la cosa che serve a chi decide. Nuova pagina _Posizione_ della pratica
   (`verifica-salute/[aziendaId]/posizione`), raggiungibile dalla verifica amministrativa e stampabile
   così com'è: stato, credito e quadratura, date, letture a confronto, accordo e procedure, documenti
   da chiedere, decisioni, glossario. Non ricalcola nulla per conto suo.
@@ -919,7 +987,7 @@ il terzo per correzioni.
 
 - **Ricavi e costi non crescono più della stessa misura.** Il profilo della simulazione applicava
   ai costi la stessa percentuale dei ricavi, con un solo scostamento di profilo: le due colonne
-  erano la stessa curva. Ora i costi partono dalla *loro* crescita storica (letta dai bilanci) e
+  erano la stessa curva. Ora i costi partono dalla _loro_ crescita storica (letta dai bilanci) e
   arrivano alla crescita di settore ridotta da un'elasticità dichiarata (85%): solo la parte
   variabile segue i volumi. La scheda e la mappa mostrano due traiettorie, e l'avvertenza dice
   perché.
@@ -1005,7 +1073,7 @@ il terzo per correzioni.
   0% converge subito, 90% resta a lungo vicina al passato) e **rate di rientro del debito
   dell'ente**. Predefiniti invariati — 3 annualità, 60%, 3 rate — ma ora si vedono e si cambiano.
 - **Gli spazi esistenti non richiedono migrazioni.** Le due colonne nascono con un `ALTER TABLE …
-  ADD COLUMN IF NOT EXISTS` su `verifica_azienda_config`, come le altre aggiunte idempotenti; il
+ADD COLUMN IF NOT EXISTS` su `verifica_azienda_config`, come le altre aggiunte idempotenti; il
   motore continua a limitare i valori al proprio intervallo, anche se arrivassero da fuori.
 - **Le simulazioni già salvate restano com'erano.** Le ipotesi nuove valgono per i calcoli
   successivi: cambiare il modello non riscrive le valutazioni emesse.

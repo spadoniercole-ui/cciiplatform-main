@@ -88,13 +88,15 @@ const VOCI_MENU: {
     stato: 'pronta',
     soloAdmin: true,
   },
-  // Il ritratto sta dopo tutte le verifiche e prima degli scenari: legge
+  // L'iconografia sta dopo tutte le verifiche e prima degli scenari: legge
   // quello che le tre direttrici hanno già accertato, mentre gli scenari
   // rappresentano il futuro («che cosa accadrebbe se»). Per questo non ha
   // una voce fra le cose da fare, ma una sua, in chiusura del percorso.
+  // Il percorso resta `/ritratti`: è un indirizzo, non un'etichetta, e
+  // cambiarlo romperebbe i collegamenti già in giro.
   {
     id: 'ritratti',
-    label: 'Ritratti',
+    label: 'Iconografie',
     icon: Eye,
     stato: 'pronta',
     soloAdmin: true,

@@ -11,6 +11,7 @@ import { valutaSoglieAction } from '@/app/actions/soglie25novies';
 import { leggiChecklistProdottiAzienda } from '@/lib/prodotti/checklistAzienda';
 import { checklistProdottiCompleta } from '@/lib/checklist/pesoProdotti';
 import { StampaDocumento } from '@/components/spazio/StampaDocumento';
+import { stileFoglioA4 } from '@/lib/stampe/foglioA4';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 import { congruenzaAzienda } from '@/lib/flussiEnte/leggiCongruenza';
 
@@ -31,16 +32,19 @@ import { congruenzaAzienda } from '@/lib/flussiEnte/leggiCongruenza';
 export const dynamic = 'force-dynamic';
 
 const CSS = `
-.doc-canvas { background: #e2e8f0; min-height: 100vh; padding: 20px 12px 56px; }
-.doc-foglio {
-  width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; color: #0f172a;
-  box-shadow: 0 10px 30px rgba(15,23,42,.18); padding: 22mm 18mm 20mm;
-  font-family: var(--font-body), system-ui, sans-serif; font-size: 9.5pt; line-height: 1.45;
-}
-.doc-foglio h1, .doc-foglio h2, .doc-foglio h3 { font-family: var(--font-display), system-ui, sans-serif; margin: 0; }
+${stileFoglioA4({
+  marginePagina: '24mm 18mm 20mm',
+  riempimento: '22mm 18mm 20mm',
+  tipografia:
+    'font-family: var(--font-body), system-ui, sans-serif; font-size: 9.5pt; line-height: 1.45;',
+  ricorrenti: { sopra: '-18mm', sotto: '-14mm' },
+  stampa: `.doc-copertina { min-height: 0; }
+  .doc-copertina .doc-indice { margin-top: 12mm; }
+  .doc-titolo { break-after: avoid; }
+  .doc-tabella tr { break-inside: avoid; }`,
+})}
+.foglio h1, .foglio h2, .foglio h3 { font-family: var(--font-display), system-ui, sans-serif; margin: 0; }
 .doc-cifra { font-family: var(--font-mono), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-
-.doc-testata, .doc-piede { display: none; }
 .doc-intestazione { border-bottom: 2px solid #0f172a; padding-bottom: 6px; margin-bottom: 14px;
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .doc-marchio { font-size: 7.5pt; letter-spacing: .22em; text-transform: uppercase; color: #64748b; font-weight: 700; }
@@ -64,7 +68,6 @@ const CSS = `
 .doc-indice li { margin-bottom: .8mm; }
 
 .doc-sezione { margin: 0 0 7mm; break-inside: avoid; }
-.doc-sezione + .doc-sezione { break-before: auto; }
 .doc-titolo { font-size: 12pt; margin-bottom: 2mm; padding-bottom: 1.2mm; border-bottom: 1px solid #0f172a; }
 .doc-titolo .doc-num { color: #94a3b8; margin-right: 2.5mm; font-size: 9pt; font-family: var(--font-mono), monospace; }
 .doc-blocco { break-inside: avoid; }
@@ -99,33 +102,6 @@ const CSS = `
   border-bottom: 1px solid #e2e8f0; padding: 1.4mm 0; font-size: 9pt; }
 .doc-finale .doc-sintesi-riga strong { font-weight: 700; }
 
-.doc-barra { position: fixed; top: 14px; right: 16px; display: flex; gap: 8px; z-index: 20; }
-
-@media print {
-  @page { size: A4; margin: 24mm 18mm 20mm; }
-  html, body { background: #fff !important; }
-  .doc-canvas { background: #fff; padding: 0; min-height: 0; }
-  .doc-foglio { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; font-size: 9.5pt; }
-  .doc-barra, .doc-non-stampare { display: none !important; }
-  .doc-testata {
-    display: flex; position: fixed; top: -18mm; left: 0; right: 0;
-    justify-content: space-between; align-items: baseline;
-    font-size: 7pt; letter-spacing: .12em; text-transform: uppercase; color: #64748b;
-    border-bottom: .3mm solid #cbd5e1; padding-bottom: 1.5mm;
-  }
-  .doc-piede {
-    display: flex; position: fixed; bottom: -14mm; left: 0; right: 0;
-    justify-content: space-between; font-size: 7pt; color: #64748b;
-    border-top: .3mm solid #cbd5e1; padding-top: 1.5mm;
-  }
-  .doc-copertina { min-height: 0; }
-  .doc-copertina .doc-indice { margin-top: 12mm; }
-  .doc-sezione { break-inside: avoid; }
-  .doc-titolo { break-after: avoid; }
-  .doc-tabella tr { break-inside: avoid; }
-  .doc-copertina .doc-numeri { grid-template-columns: repeat(2, 1fr); }
-  a { color: inherit; text-decoration: none; }
-}
 `;
 
 /** «2025-06» → «06/2025», come si leggono i periodi nei documenti. */
@@ -258,8 +234,8 @@ export default async function ReportVerificaAmministrativaPage({
     <>
       <style>{CSS}</style>
 
-      <div className="doc-canvas">
-        <div className="doc-barra">
+      <div className="foglio-canvas">
+        <div className="foglio-barra">
           <Link
             href={`/spazio/${codice}/verifica-salute/${id}`}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-600"
@@ -269,13 +245,13 @@ export default async function ReportVerificaAmministrativaPage({
           <StampaDocumento etichetta="Stampa / PDF" auto={stampa === '1'} />
         </div>
 
-        <div className="doc-foglio">
+        <div className="foglio">
           {/* TESTATA E PIEDE RICORRENTI — solo in stampa, a ogni pagina */}
-          <div className="doc-testata">
+          <div className="foglio-testata">
             <span>Report di supporto · verifica amministrativa</span>
             <span>{azienda.azienda.ragioneSociale}</span>
           </div>
-          <div className="doc-piede">
+          <div className="foglio-piede">
             <span>
               Spazio {contesto.codice} · documento generato il {oggi}
             </span>
