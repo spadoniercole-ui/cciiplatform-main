@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.255.3**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.255.4**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,21 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.255.4 — 2026-11-22
+
+- **Il foglio dell’iconografia ha un budget di righe.** Le lacune entravano tutte e nessun
+  conto verificava che il contenuto restasse su un A4: bastava una posizione con molte
+  mancanze perché il foglio sforasse in silenzio, contro la promessa scritta in testata. Il
+  modello ora costa le righe di ogni blocco — titoli e margini compresi, per stare larghi —
+  contro `RIGHE_FOGLIO` (66: i 279 mm utili di un A4 divisi per i 4,2 mm di una riga media) e
+  tiene le
+  lacune finché il conto regge. Quelle che restano fuori si contano (`mancanzeOltre`) e la
+  pagina le dichiara — «e altre N lacune: stanno nell’iconografia a schermo» — invece di
+  perderle o di allungare il foglio.
+- **Un test difende la pagina unica.** Quaranta lacune lunghe non devono far superare il
+  budget; una lacuna più lunga del budget restante non deve fermare quelle brevi che seguono;
+  una posizione normale non deve perdere nemmeno una lacuna.
 
 ## 0.255.3 — 2026-11-22
 
@@ -202,9 +217,7 @@ il terzo per correzioni.
   (le due lette insieme). Le vecchie sotto-pagine restano al loro URL finché non si ripuliscono, ma
   non sono più una tappa da attraversare, e la verifica amministrativa di una posizione già presa in
   carico si riapre nella sua Posizione, non nella scheda dell'anagrafica.
-- **La verifica contabile comincia dai numeri.** L'ordine è quello della direttrice: 1. bilanci XBRL,
-  2. prospetto a scalare e indici, 3. differenziali e simulazione fino all'anno della verifica,
-  4. report contabile stampabile. Visura storica e parametri dell'ente scendono in fondo come
+- **La verifica contabile comincia dai numeri.** L'ordine è quello della direttrice: 1. bilanci XBRL, 2. prospetto a scalare e indici, 3. differenziali e simulazione fino all'anno della verifica, 4. report contabile stampabile. Visura storica e parametri dell'ente scendono in fondo come
   corredo dichiarato: identificano l'azienda presso l'ente e non sono la verifica.
 - **I parametri dell'ente hanno un nome solo.** La sezione mostrava «Parametro 1…10» e poi le
   mascherava con le voci configurate nello spazio, così sembravano due cose. Ora compaiono solo i

@@ -4,7 +4,7 @@ import type { Attenzione } from '@/lib/screening/indicatore';
 import type { StatoDirettrici } from '@/lib/verificaAzienda/direttrici';
 import { componiEsitoVerifica } from '@/lib/verifica/esito';
 import { componiRitratto, type FontiRitratto } from './ritratto';
-import { componiReportIconografia } from './reportIconografia';
+import { RIGHE_FOGLIO, componiReportIconografia } from './reportIconografia';
 
 const ATTENZIONE: Attenzione = {
   esito: 'GIALLO',
@@ -167,5 +167,60 @@ describe('componiReportIconografia', () => {
     const r = report();
     expect(r.notaRiduzione).toContain('Nessuna voce è stata ridotta');
     expect(r.giudizio?.accertatoOltre).toBe(0);
+  });
+
+  it('tiene il foglio entro il budget di righe anche con molte lacune', () => {
+    const base = componiRitratto(fonti());
+    const molte = Array.from(
+      { length: 40 },
+      (_, i) => `Lacuna ${i + 1}: ${'una frase lunga che occupa spazio sul foglio '.repeat(3)}`
+    );
+    const r = componiReportIconografia({ ...base, mancanze: molte }, '22/11/2026');
+
+    expect(r.budget.disponibili).toBe(RIGHE_FOGLIO);
+    expect(r.budget.usate).toBeLessThanOrEqual(RIGHE_FOGLIO);
+    expect(r.budget.tagliato).toBe(true);
+    expect(r.mancanze.length).toBeGreaterThan(0);
+    expect(r.mancanzeOltre).toBe(40 - r.mancanze.length);
+    // Il taglio conta le lacune, non le perde: tenute e oltre sono tutte quelle.
+    expect(r.mancanze.length + r.mancanzeOltre).toBe(40);
+  });
+
+  it('prende le lacune brevi anche quando una lunga non entra', () => {
+    const base = componiRitratto(fonti());
+    // Una lacuna più lunga del budget restante non blocca le successive.
+    const lunghissima = 'L'.repeat(4000);
+    const r = componiReportIconografia(
+      {
+        ...base,
+        mancanze: Array.from({ length: 3 }, () => lunghissima).concat(['lacuna breve']),
+      },
+      '22/11/2026'
+    );
+    expect(r.mancanze).toContain('lacuna breve');
+    expect(r.budget.usate).toBeLessThanOrEqual(RIGHE_FOGLIO);
+  });
+
+  it('non taglia nulla e non sfora quando il foglio basta', () => {
+    // Una posizione mai verificata: è il caso con più lacune reali (quattro).
+    const incompleta = componiRitratto(
+      fonti({
+        esito: null,
+        amministrativa: null,
+        contabile: null,
+        direttrici: {
+          amministrativa: 'MANCANTE',
+          contabile: 'NON_DISPONIBILE',
+          aziendale: 'NON_DISPONIBILE',
+        },
+      })
+    );
+    expect(incompleta.mancanze.length).toBeGreaterThanOrEqual(4);
+
+    const r = componiReportIconografia(incompleta, '22/11/2026');
+    expect(r.budget.tagliato).toBe(false);
+    expect(r.mancanzeOltre).toBe(0);
+    expect(r.budget.usate).toBeLessThanOrEqual(RIGHE_FOGLIO);
+    expect(r.mancanze).toEqual(incompleta.mancanze);
   });
 });

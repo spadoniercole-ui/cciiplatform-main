@@ -335,6 +335,12 @@ export default async function ReportIconografiaPage({
               {report.mancanze.map((m, i) => (
                 <p key={i}>— {m}</p>
               ))}
+              {report.mancanzeOltre > 0 && (
+                <p>
+                  … e altre {report.mancanzeOltre} lacune: stanno nell’iconografia a schermo, dove
+                  il testo non ha il limite del foglio.
+                </p>
+              )}
             </section>
           )}
 
