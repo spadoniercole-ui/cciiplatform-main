@@ -61,6 +61,30 @@ describe('debitoDaMemorizzare', () => {
     expect(d!.ripartito).toBe(false);
   });
 
+  it('usa le posizioni dell’ente quando certificazione e triage non hanno cifre', () => {
+    const posizioni: DebitoEntePonte = {
+      totale: 152_000,
+      contributi: 140_000,
+      sanzioni: 12_000,
+      creditiAgente: 0,
+      righe: 3,
+      fonte: 'Posizioni dell’ente registrate per l’azienda.',
+    };
+    const d = debitoDaMemorizzare(null, null, posizioni);
+    expect(d!.totale).toBe(152_000);
+    expect(d!.contributi).toBe(140_000);
+    expect(d!.sanzioni).toBe(12_000);
+    expect(d!.fonteTipo).toBe('posizioni');
+    expect(d!.ripartito).toBe(false);
+    expect(d!.sanzioniNonDistinte).toBe(false);
+    // La certificazione resta la prima scelta: le posizioni non la scavalcano.
+    expect(debitoDaMemorizzare(certificazione(), null, posizioni)!.fonteTipo).toBe(
+      'certificazione'
+    );
+    // E il triage viene prima delle posizioni.
+    expect(debitoDaMemorizzare(null, triage(), posizioni)!.fonteTipo).toBe('triage');
+  });
+
   it('non memorizza nulla quando non c’è alcun debito', () => {
     expect(debitoDaMemorizzare(null, null)).toBeNull();
     expect(debitoDaMemorizzare(certificazione({ totale: 0, segnalato: 0 }), null)).toBeNull();
@@ -96,6 +120,24 @@ describe('descrizioneMemorizzazione', () => {
   it('dichiara che il triage non distingue gli stati', () => {
     const testo = descrizioneMemorizzazione(debitoDaMemorizzare(null, triage())!, null);
     expect(testo).toContain('triage');
+    expect(testo).toContain('non distingue');
+  });
+
+  it('dichiara contributi e sanzioni quando la cifra viene dalle posizioni', () => {
+    const testo = descrizioneMemorizzazione(
+      debitoDaMemorizzare(null, null, {
+        totale: 152_000,
+        contributi: 140_000,
+        sanzioni: 12_000,
+        creditiAgente: 0,
+        righe: 3,
+        fonte: 'Posizioni dell’ente registrate per l’azienda.',
+      })!,
+      '2026-10-15'
+    );
+    expect(testo).toContain('152.000 €');
+    expect(testo).toContain('140.000 €');
+    expect(testo).toContain('12.000 €');
     expect(testo).toContain('non distingue');
   });
 

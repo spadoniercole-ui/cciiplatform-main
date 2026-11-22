@@ -3,6 +3,7 @@ import {
   debitoEnteConRipiego,
   importoRigaVera,
   snapshotDebitoEnte,
+  snapshotDebitoEnteDaPosizioni,
   snapshotDebitoEnteDaTriage,
 } from './debitoEnte';
 import type { RigaVera } from './veraImport';
@@ -118,6 +119,26 @@ describe('snapshotDebitoEnteDaTriage', () => {
       ])
     ).toBeNull();
     expect(snapshotDebitoEnteDaTriage([])).toBeNull();
+  });
+});
+
+describe('snapshotDebitoEnteDaPosizioni', () => {
+  it('somma le posizioni, distingue le sanzioni e dichiara la fonte', () => {
+    const d = snapshotDebitoEnteDaPosizioni([
+      { voce: 'Contributi previdenziali scaduti', importo: 80_000 },
+      { voce: 'Sanzioni civili contributive', importo: 12_000 },
+      { voce: 'Contributi 2026 maturati e non versati', importo: 60_000 },
+    ]);
+    expect(d!.totale).toBe(152_000);
+    expect(d!.contributi).toBe(140_000);
+    expect(d!.sanzioni).toBe(12_000);
+    expect(d!.righe).toBe(3);
+    expect(d!.fonte).toContain('Posizioni dell’ente');
+  });
+
+  it('senza importi non produce un debito', () => {
+    expect(snapshotDebitoEnteDaPosizioni([])).toBeNull();
+    expect(snapshotDebitoEnteDaPosizioni([{ voce: 'Contributi', importo: 0 }])).toBeNull();
   });
 });
 

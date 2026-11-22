@@ -19,6 +19,7 @@ import { pool } from '@/lib/db';
 import { assicuraTabellaDebitoEnteMemorizzato, assicuraTabelleVera } from '@/db/provision';
 import {
   snapshotDebitoEnte,
+  snapshotDebitoEnteDaPosizioni,
   snapshotDebitoEnteDaTriage,
   type SnapshotDebitoEnte,
 } from './debitoEnte';
@@ -58,14 +59,20 @@ export async function anniBilancioAzienda(
 }
 
 /**
- * Il debito grezzo dagli archivi: la certificazione dei debiti e, se quella
- * non porta una base certa, le posizioni del triage. Ogni lettura è
- * indipendente da quella dell'altra tabella.
+ * Il debito grezzo dagli archivi: la certificazione dei debiti, le posizioni
+ * del triage e — se nessuna delle due porta una cifra — le posizioni registrate
+ * per l'azienda nelle posizioni dell'ente (`debiti_ente`, a livello azienda, non
+ * per scenario: le copie di scenario sarebbero lo stesso debito due volte).
+ * Ogni lettura è indipendente dalle altre.
  */
 export async function leggiSnapshotDebito(
   nomeSchema: string,
   aziendaId: number
-): Promise<{ certificazione: SnapshotDebitoEnte | null; triage: DebitoEntePonte | null }> {
+): Promise<{
+  certificazione: SnapshotDebitoEnte | null;
+  triage: DebitoEntePonte | null;
+  posizioni: DebitoEntePonte | null;
+}> {
   let certificazione: SnapshotDebitoEnte | null = null;
   try {
     const risposta = await pool.query(
@@ -119,7 +126,27 @@ export async function leggiSnapshotDebito(
     }
   }
 
-  return { certificazione, triage };
+  // Le posizioni dell'ente sono l'archivio più diretto del credito: se né la
+  // certificazione né il triage dicono nulla, la cifra è quella registrata qui.
+  let posizioni: DebitoEntePonte | null = null;
+  if (!(certificazione && certificazione.totale > 0) && !(triage && triage.totale > 0)) {
+    try {
+      const risposta = await pool.query(
+        `SELECT voce, importo
+           FROM "${nomeSchema}".debiti_ente
+          WHERE azienda_id = $1 AND scenario_id IS NULL
+          ORDER BY id ASC`,
+        [aziendaId]
+      );
+      posizioni = snapshotDebitoEnteDaPosizioni(
+        risposta.rows.map((r) => ({ voce: String(r.voce ?? ''), importo: numero(r.importo) }))
+      );
+    } catch {
+      // Tabella assente o posizioni non ancora caricate.
+    }
+  }
+
+  return { certificazione, triage, posizioni };
 }
 
 /**
@@ -136,8 +163,8 @@ export async function memorizzaDebitoEnte(
   await assicuraTabellaDebitoEnteMemorizzato(nomeSchema);
   await assicuraTabelleVera(nomeSchema);
 
-  const { certificazione, triage } = await leggiSnapshotDebito(nomeSchema, aziendaId);
-  const debito = debitoDaMemorizzare(certificazione, triage);
+  const { certificazione, triage, posizioni } = await leggiSnapshotDebito(nomeSchema, aziendaId);
+  const debito = debitoDaMemorizzare(certificazione, triage, posizioni);
   if (!debito) return null;
 
   await pool.query(

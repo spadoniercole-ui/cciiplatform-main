@@ -18,6 +18,8 @@
 // sovrascrivono e gli scenari aggiuntivi non si duplicano.
 
 import { costruisciBundleIndici } from '@/lib/xbrl/indici';
+import { snapshotDebitoEnteDaPosizioni } from '@/lib/debitiEnte/debitoEnte';
+import { fascicoloDemoPerCodiceFiscale } from './documenti';
 import type { AziendaPercorsoDemo } from './percorsoEnte';
 
 type Esecutore = {
@@ -102,7 +104,100 @@ export async function inserisciVerificheDemo(
       0,
       JSON.stringify(esito.colonne),
       JSON.stringify([]),
-      tipoScenario === 'PROPOSTA',
+      // La base è quella dichiarata dall'azienda; se non lo è, vale la natura
+      // dello scenario: l'accordo si appoggia alla proiezione.
+      a.verifiche?.baseAziendale ?? tipoScenario === 'PROPOSTA',
+    ]
+  );
+}
+
+/**
+ * IL CORREDO DELLA CONTABILE (0.255.0).
+ *
+ * Visura storica e parametri dell'ente: le due cose che rendono «completa» la
+ * verifica contabile oltre ai bilanci. La visura è il fascicolo demo della
+ * stessa azienda (un file statico con la filigrana DEMO, come i provvedimenti),
+ * quindi non serve caricare niente e il seed funziona uguale in cloud, in
+ * portable e nei test.
+ *
+ * Idempotente: una visura già acquisita e dei parametri già compilati
+ * restano quelli. Il seed non riscrive un lavoro fatto a mano.
+ */
+export async function inserisciCorredoContabileDemo(
+  esegui: Esecutore,
+  nomeSchema: string,
+  aziendaId: number,
+  a: AziendaPercorsoDemo
+): Promise<void> {
+  const corredo = a.verifiche?.corredoContabile;
+  if (!corredo) return;
+
+  const fascicolo = fascicoloDemoPerCodiceFiscale(a.codiceFiscale);
+  if (fascicolo) {
+    await esegui.query(
+      `UPDATE "${nomeSchema}".aziende
+          SET visura_triage_url = COALESCE(visura_triage_url, $2),
+              visura_triage_nome = COALESCE(visura_triage_nome, $3),
+              visura_triage_il = COALESCE(visura_triage_il, $4::timestamp)
+        WHERE id = $1`,
+      [aziendaId, fascicolo.percorso, fascicolo.nome, `${a.dataVerifica}T09:00:00`]
+    );
+  }
+
+  const campi = corredo.campi.slice(0, 10);
+  const colonne = ['azienda_id', 'id_ente', ...campi.map((_, i) => `campo_${i + 1}`)];
+  const segnaposti = colonne.map((_, i) => `$${i + 1}`).join(', ');
+  await esegui.query(
+    `INSERT INTO "${nomeSchema}".anagrafica_ente (${colonne.join(', ')})
+     VALUES (${segnaposti})
+     ON CONFLICT (azienda_id) DO NOTHING`,
+    [aziendaId, corredo.idEnte, ...campi]
+  );
+}
+
+/**
+ * IL DEBITO MEMORIZZATO DALLA VERIFICA AMMINISTRATIVA (0.255.0).
+ *
+ * La demo dichiarava la verifica amministrativa «fatta» ma non memorizzava la
+ * cifra: ogni ritratto diceva «nessun debito memorizzato», e la contabile non
+ * trovava il debito dell'ente per il ponte. Il numero è la somma delle
+ * posizioni demo dell'azienda, con contributi e sanzioni distinti come li
+ * distingue la certificazione.
+ *
+ * La fonte dichiarata sono le posizioni dell'ente: la demo non ha una
+ * certificazione per queste posizioni, e il campo «ripartito» resta falso —
+ * una posizione non separa contabilizzato e da contabilizzare. Meglio dirlo che
+ * mostrare uno zero che sembra una misura.
+ *
+ * Idempotente: una cifra già memorizzata non si sovrascrive.
+ */
+export async function inserisciDebitoMemorizzatoDemo(
+  esegui: Esecutore,
+  nomeSchema: string,
+  aziendaId: number,
+  a: AziendaPercorsoDemo
+): Promise<void> {
+  // La stessa lettura che fa il prodotto quando riallinea la verifica: così
+  // la cifra del seed e quella che l'app ricaverebbe sono identiche, e
+  // risalvare l'esito non la cancella.
+  const debito = snapshotDebitoEnteDaPosizioni(a.debiti);
+  if (!debito) return;
+
+  await esegui.query(
+    `INSERT INTO "${nomeSchema}".debiti_ente_memorizzati
+       (azienda_id, totale, contabilizzato, da_contabilizzare, segnalato, contributi,
+        sanzioni, crediti_agente, righe, righe_segnalate, ripartito,
+        sanzioni_non_distinte, fonte, fonte_tipo, memorizzato_il)
+     VALUES ($1,$2,0,0,0,$3,$4,0,$5,0,FALSE,FALSE,$6,'posizioni',$7::timestamp)
+     ON CONFLICT (azienda_id) DO NOTHING`,
+    [
+      aziendaId,
+      debito.totale,
+      debito.contributi,
+      debito.sanzioni,
+      debito.righe,
+      debito.fonte,
+      `${a.dataVerifica}T09:00:00`,
     ]
   );
 }

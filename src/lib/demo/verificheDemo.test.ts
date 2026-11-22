@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { PERCORSO_DEMO } from './percorsoEnte';
-import { assicuraScenariAggiuntivi, inserisciVerificheDemo } from './verificheDemo';
+import {
+  assicuraScenariAggiuntivi,
+  inserisciCorredoContabileDemo,
+  inserisciDebitoMemorizzatoDemo,
+  inserisciVerificheDemo,
+} from './verificheDemo';
 import { inserisciPropostaDemo, riallineaAttiDemo } from './caricaPercorsoEnte';
 
 // IL SEED DELLE VERIFICHE, SUL DATABASE VERO (Postgres in memoria).
@@ -44,6 +49,40 @@ beforeEach(async () => {
       rango_legale TEXT,
       rilevante_per_ente BOOLEAN NOT NULL DEFAULT FALSE
     );
+    CREATE TABLE ${SCHEMA}.aziende (
+      id SERIAL PRIMARY KEY,
+      ragione_sociale TEXT NOT NULL,
+      visura_triage_url TEXT,
+      visura_triage_nome TEXT,
+      visura_triage_il TIMESTAMP
+    );
+    CREATE TABLE ${SCHEMA}.anagrafica_ente (
+      azienda_id INTEGER PRIMARY KEY,
+      id_ente TEXT,
+      campo_1 TEXT,
+      campo_2 TEXT,
+      campo_3 TEXT,
+      campo_4 TEXT,
+      campo_5 TEXT,
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE TABLE ${SCHEMA}.debiti_ente_memorizzati (
+      azienda_id INTEGER PRIMARY KEY,
+      totale NUMERIC(16,2) NOT NULL,
+      contabilizzato NUMERIC(16,2) NOT NULL DEFAULT 0,
+      da_contabilizzare NUMERIC(16,2) NOT NULL DEFAULT 0,
+      segnalato NUMERIC(16,2) NOT NULL DEFAULT 0,
+      contributi NUMERIC(16,2) NOT NULL DEFAULT 0,
+      sanzioni NUMERIC(16,2) NOT NULL DEFAULT 0,
+      crediti_agente NUMERIC(16,2) NOT NULL DEFAULT 0,
+      righe INTEGER NOT NULL DEFAULT 0,
+      righe_segnalate INTEGER NOT NULL DEFAULT 0,
+      ripartito BOOLEAN NOT NULL DEFAULT FALSE,
+      sanzioni_non_distinte BOOLEAN NOT NULL DEFAULT FALSE,
+      fonte TEXT NOT NULL,
+      fonte_tipo TEXT NOT NULL DEFAULT 'certificazione',
+      memorizzato_il TIMESTAMP NOT NULL DEFAULT now()
+    );
     CREATE TABLE ${SCHEMA}.verifica_azienda_simulazioni (
       id SERIAL PRIMARY KEY,
       azienda_id INTEGER NOT NULL,
@@ -61,6 +100,7 @@ beforeEach(async () => {
 
 const meccanica = PERCORSO_DEMO.find((a) => a.tipoIstruttoria === 'PROPOSTA')!;
 const senzaFacoltative = PERCORSO_DEMO.find((a) => a.verifiche?.aziendale === false)!;
+const tessitura = PERCORSO_DEMO.find((a) => a.ragioneSociale === 'Tessitura Lario Demo S.p.A.')!;
 
 async function scenario(id: number, aziendaId: number, nome: string, tipo: string) {
   await db.query(
@@ -102,6 +142,69 @@ describe('seed delle verifiche demo', () => {
       `SELECT COUNT(*)::int AS n FROM ${SCHEMA}.verifica_azienda_simulazioni WHERE azienda_id = 100`
     );
     expect(dopo.rows[0].n).toBe(1);
+  });
+
+  it('chiude contabile e aziendale di Tessitura anche con la liquidazione come atto', async () => {
+    await db.query(`
+      INSERT INTO ${SCHEMA}.aziende (id, ragione_sociale)
+      VALUES (300, 'Tessitura Lario Demo S.p.A.')
+    `);
+    await scenario(5, 300, tessitura.scenario, 'DECRETO_LIQUIDAZIONE');
+
+    await inserisciVerificheDemo(db, SCHEMA, 300, tessitura, 5, 'DECRETO_LIQUIDAZIONE');
+    await inserisciCorredoContabileDemo(db, SCHEMA, 300, tessitura);
+    await inserisciDebitoMemorizzatoDemo(db, SCHEMA, 300, tessitura);
+
+    // La fotografia è base della proposta per dichiarazione dell'azienda, non
+    // per la natura dello scenario.
+    const sim = await db.query<{ base: boolean }>(
+      `SELECT bool_or(base_per_proposta) AS base
+         FROM ${SCHEMA}.verifica_azienda_simulazioni WHERE azienda_id = 300`
+    );
+    expect(sim.rows[0].base).toBe(true);
+
+    // Visura del fascicolo demo e parametri dell'ente: la contabile ha tutto.
+    const az = await db.query<{ visura: string | null; nome: string | null }>(
+      `SELECT visura_triage_url AS visura, visura_triage_nome AS nome
+         FROM ${SCHEMA}.aziende WHERE id = 300`
+    );
+    expect(az.rows[0].visura).toBe('/demo/fascicolo-storico-tessitura-lario.pdf');
+    expect(az.rows[0].nome).toBe('fascicolo-storico-tessitura-lario.pdf');
+
+    const parametri = await db.query<{ id_ente: string; campi: number }>(
+      `SELECT id_ente, num_nonnulls(campo_1, campo_2, campo_3, campo_4, campo_5) AS campi
+         FROM ${SCHEMA}.anagrafica_ente WHERE azienda_id = 300`
+    );
+    expect(parametri.rows[0].id_ente).toBe('INPS');
+    expect(Number(parametri.rows[0].campi)).toBe(5);
+
+    // Il debito dell'ente è quello delle posizioni demo, con le sanzioni
+    // distinte e la fonte dichiarata.
+    const debito = await db.query<{
+      totale: string;
+      contributi: string;
+      sanzioni: string;
+      fonte_tipo: string;
+      ripartito: boolean;
+    }>(
+      `SELECT totale, contributi, sanzioni, fonte_tipo, ripartito
+         FROM ${SCHEMA}.debiti_ente_memorizzati WHERE azienda_id = 300`
+    );
+    expect(Number(debito.rows[0].totale)).toBe(152000);
+    expect(Number(debito.rows[0].contributi)).toBe(140000);
+    expect(Number(debito.rows[0].sanzioni)).toBe(12000);
+    expect(debito.rows[0].fonte_tipo).toBe('posizioni');
+    expect(debito.rows[0].ripartito).toBe(false);
+
+    // Un secondo giro non duplica né riscrive: il lavoro dell'operatore resta.
+    await inserisciCorredoContabileDemo(db, SCHEMA, 300, tessitura);
+    await inserisciDebitoMemorizzatoDemo(db, SCHEMA, 300, tessitura);
+    const conteggi = await db.query<{ parametri: number; debiti: number; sim: number }>(
+      `SELECT (SELECT count(*)::int FROM ${SCHEMA}.anagrafica_ente WHERE azienda_id = 300) AS parametri,
+              (SELECT count(*)::int FROM ${SCHEMA}.debiti_ente_memorizzati WHERE azienda_id = 300) AS debiti,
+              (SELECT count(*)::int FROM ${SCHEMA}.verifica_azienda_simulazioni WHERE azienda_id = 300) AS sim`
+    );
+    expect(conteggi.rows[0]).toEqual({ parametri: 1, debiti: 1, sim: 1 });
   });
 
   it('sull’azienda senza facoltative lascia contabile vuota e nessuna simulazione', async () => {

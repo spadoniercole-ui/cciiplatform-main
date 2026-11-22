@@ -49,6 +49,14 @@ beforeEach(async () => {
       periodo TEXT,
       duplicato_stato TEXT
     );
+    CREATE TABLE ${SCHEMA}.debiti_ente (
+      id SERIAL PRIMARY KEY,
+      azienda_id INTEGER NOT NULL,
+      scenario_id INTEGER,
+      voce TEXT NOT NULL,
+      importo NUMERIC NOT NULL DEFAULT 0,
+      tipo TEXT NOT NULL DEFAULT 'DEBITO'
+    );
     CREATE TABLE ${SCHEMA}.debiti_triage (
       id SERIAL PRIMARY KEY,
       azienda_id INTEGER NOT NULL,
@@ -118,6 +126,48 @@ describe('allineaDebitoEnteMemorizzato', () => {
     expect(dopo).toEqual({ debito: null, azzerato: true });
     expect(await totaleMemorizzato()).toBeNull();
     expect(await leggiDebitoEnteMemorizzato(SCHEMA, AZIENDA)).toBeNull();
+  });
+
+  it('rilegge le posizioni dell’ente quando certificazione e triage non ne hanno', async () => {
+    // È il caso della demo: le posizioni del percorso stanno in `debiti_ente`,
+    // non in `debiti_vera`. Prima il riallineamento le ignorava e toglieva la
+    // cifra, lasciando il ritratto con «nessun debito memorizzato».
+    await db.query(
+      `INSERT INTO ${SCHEMA}.debiti_ente (azienda_id, voce, importo, tipo) VALUES
+         ($1, 'Contributi previdenziali scaduti', 80000, 'DEBITO'),
+         ($1, 'Sanzioni civili contributive', 12000, 'DEBITO'),
+         ($1, 'Contributi 2026 maturati e non versati', 60000, 'DEBITO')`,
+      [AZIENDA]
+    );
+
+    const esito = await allineaDebitoEnteMemorizzato(SCHEMA, AZIENDA);
+
+    expect(esito.azzerato).toBe(false);
+    expect(esito.debito?.totale).toBe(152_000);
+    expect(esito.debito?.contributi).toBe(140_000);
+    expect(esito.debito?.sanzioni).toBe(12_000);
+    expect(esito.debito?.fonteTipo).toBe('posizioni');
+    expect(esito.debito?.ripartito).toBe(false);
+    expect(await totaleMemorizzato()).toBe(152_000);
+
+    // E il secondo riallineamento non tocca la cifra: è ricavabile, non muore.
+    const dopo = await allineaDebitoEnteMemorizzato(SCHEMA, AZIENDA);
+    expect(dopo.azzerato).toBe(false);
+    expect(await totaleMemorizzato()).toBe(152_000);
+  });
+
+  it('non conta due volte le posizioni copiate su uno scenario', async () => {
+    await db.query(
+      `INSERT INTO ${SCHEMA}.debiti_ente (azienda_id, scenario_id, voce, importo) VALUES
+         ($1, NULL, 'Contributi previdenziali scaduti', 80000),
+         ($1, 4, 'Contributi previdenziali scaduti', 80000)`,
+      [AZIENDA]
+    );
+
+    const esito = await allineaDebitoEnteMemorizzato(SCHEMA, AZIENDA);
+
+    expect(esito.debito?.totale).toBe(80_000);
+    expect(esito.debito?.righe).toBe(1);
   });
 
   it('non dichiara di aver tolto nulla quando non c’era una cifra da togliere', async () => {

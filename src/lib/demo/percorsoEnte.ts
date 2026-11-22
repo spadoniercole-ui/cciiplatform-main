@@ -129,7 +129,29 @@ export interface AziendaPercorsoDemo {
    * natura dello scenario: quella sta sullo scenario, e un’azienda può
    * valutare due atti diversi con le stesse verifiche già fatte.
    */
-  verifiche?: { contabile?: boolean; aziendale?: boolean };
+  verifiche?: {
+    contabile?: boolean;
+    aziendale?: boolean;
+    /**
+     * IL CORREDO DELLA CONTABILE (0.255.0).
+     *
+     * Visura storica e parametri dell'ente non sono la verifica: sono ciò che
+     * la rende possibile. Senza, la contabile resta «in corso» anche quando i
+     * bilanci ci sono, e nessuna azienda della demo arriva mai al ritratto
+     * completo. Si dichiara qui, azienda per azienda, perché la demo mostra
+     * anche posizioni a metà: il corredo non è un difetto di tutte.
+     */
+    corredoContabile?: { idEnte: string; campi: string[] };
+    /**
+     * LA FOTOGRAFIA È BASE DELLA PROPOSTA (0.255.0).
+     *
+     * È il segnale con cui si chiude la verifica aziendale. Prima il seed lo
+     * deduceva dalla natura dello scenario: la posizione con l'accordo era
+     * «fatta», quella con il decreto no, anche con le stesse due verifiche
+     * pronte. Qui è un dato dell'azienda, dichiarato dove serve.
+     */
+    baseAziendale?: boolean;
+  };
   /**
    * GLI ALTRI SCENARI DELLA STESSA AZIENDA (0.230.0).
    *
@@ -675,6 +697,20 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
       'Tessitura e nobilitazione di filati per l’abbigliamento.',
       62
     ),
+    // Tessitura è la posizione che arriva al ritratto completo: ha la visura
+    // del fascicolo demo, i parametri INPS e la fotografia come base della
+    // proposta. Le altre restano a metà di proposito, così si vedono entrambi
+    // i rami.
+    verifiche: {
+      corredoContabile: {
+        idEnte: 'INPS',
+        // Matricola INPS, posizione Gestione Separata, codice CSC, codice
+        // autorizzazione (CA), sede competente: le etichette configurate
+        // nello spazio demo.
+        campi: ['4412880091', 'GS-0011442', '11305', 'CO-2026-0004', 'Como'],
+      },
+      baseAziendale: true,
+    },
     rango: 'CHIROGRAFARIO',
     tipoIstruttoria: 'DECRETO_LIQUIDAZIONE',
     scenario: 'Decreto di liquidazione — Tessitura Lario Demo',

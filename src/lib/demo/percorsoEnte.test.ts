@@ -110,7 +110,16 @@ describe('percorso demo dell’ente', () => {
     );
     expect(accordoPrimo).toHaveLength(1);
     expect(accordoSecondo).toHaveLength(2);
-    for (const a of conDue) expect('verifiche' in a && a.verifiche).toBeFalsy();
+
+    // Le verifiche sono dell'azienda, non dell'atto: chi dichiara corredo
+    // della contabile e base della proposta lo fa una volta per l'azienda, e
+    // nella demo è una sola posizione — quella con il ritratto completo.
+    const conRitrattoCompleto = conDue.filter(
+      (a) => a.verifiche?.corredoContabile && a.verifiche?.baseAziendale
+    );
+    expect(conRitrattoCompleto.map((a) => a.ragioneSociale)).toEqual([
+      'Tessitura Lario Demo S.p.A.',
+    ]);
 
     // La verifica amministrativa non si spegne mai: non esiste un campo per
     // farlo. Le altre due sì, e una azienda della demo ne resta senza.

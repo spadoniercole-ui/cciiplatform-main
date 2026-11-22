@@ -174,6 +174,49 @@ export function snapshotDebitoEnteDaTriage(righe: RigaTriagePonte[]): DebitoEnte
 }
 
 /**
+ * LO STESSO SNAPSHOT, MA DALLE POSIZIONI DELL'ENTE (0.255.1).
+ *
+ * Le posizioni registrate per l'azienda (`debiti_ente`, quelle che il triage e
+ * la certificazione alimentano) sono l'archivio più diretto del credito
+ * dell'ente. Prima non entravano nella memorizzazione: un'azienda con le
+ * posizioni caricate ma senza la certificazione importata restava senza cifra,
+ * e il riallineamento della verifica poteva togliere quella già scritta. Era il
+ * caso della demo, dove le posizioni del percorso stanno solo qui.
+ *
+ * Le voci si leggono come sono registrate: la distinzione contributi/sanzioni
+ * è quella del testo della voce, e la posizione non dice se il debito è
+ * contabilizzato. Meglio dichiararlo che inventare una ripartizione.
+ */
+export interface RigaPosizioneEnte {
+  voce: string;
+  importo: number;
+}
+
+export function snapshotDebitoEnteDaPosizioni(righe: RigaPosizioneEnte[]): DebitoEntePonte | null {
+  let totale = 0;
+  let sanzioni = 0;
+  let posizioni = 0;
+  for (const r of righe) {
+    const importo = typeof r.importo === 'number' && Number.isFinite(r.importo) ? r.importo : 0;
+    if (Math.abs(importo) < 0.005) continue;
+    totale += importo;
+    posizioni += 1;
+    if (/sanzion|interess/i.test(r.voce)) sanzioni += importo;
+  }
+  if (posizioni === 0) return null;
+  return {
+    totale: arrotonda(totale),
+    contributi: arrotonda(totale - sanzioni),
+    sanzioni: arrotonda(sanzioni),
+    creditiAgente: 0,
+    righe: posizioni,
+    fonte:
+      'Posizioni dell’ente registrate per l’azienda — contributi e sanzioni come registrati; ' +
+      'la posizione non distingue contabilizzato e da contabilizzare.',
+  };
+}
+
+/**
  * LA CIFRA DEL DEBITO, SENZA ZERO DAVANTI A UN DEBITO ACCERTATO.
  *
  * La base certa resta contabilizzato + da contabilizzare. Se però vale zero

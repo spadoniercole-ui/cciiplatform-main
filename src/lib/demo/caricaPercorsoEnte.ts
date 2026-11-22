@@ -33,11 +33,18 @@ import {
   assicuraTabelleScenariTriage,
   assicuraTabelleScreeningAzienda,
   assicuraTabellaProposta,
+  assicuraTabellaDebitoEnteMemorizzato,
+  assicuraTabelleAnagraficaEnte,
   assicuraTabelleTl,
   assicuraTabelleVera,
   assicuraTabelleVerificaAzienda,
 } from '@/db/provision';
-import { assicuraScenariAggiuntivi, inserisciVerificheDemo } from './verificheDemo';
+import {
+  assicuraScenariAggiuntivi,
+  inserisciCorredoContabileDemo,
+  inserisciDebitoMemorizzatoDemo,
+  inserisciVerificheDemo,
+} from './verificheDemo';
 import { noteIntegrativeDemoPer } from './noteXbrl';
 import { ripristinaConfigurazione } from '@/lib/configurazioneSpazio/configurazione';
 import { assicuraTabelleProdotti } from '@/db/provisionProdotti';
@@ -874,6 +881,8 @@ export async function caricaPercorsoDemoEnte(
   await assicuraTabelleVera(nomeSchema);
   await assicuraTabelleVerificaAzienda(nomeSchema);
   await assicuraTabellaProposta(nomeSchema);
+  await assicuraTabelleAnagraficaEnte(nomeSchema);
+  await assicuraTabellaDebitoEnteMemorizzato(nomeSchema);
   await assicuraProdottiDemo(nomeSchema);
   await assicuraRepartiTriageDemo(nomeSchema);
   await aggiornaTriageDemo(nomeSchema);
@@ -930,6 +939,11 @@ export async function caricaPercorsoDemoEnte(
           await inserisciPosizioni(client, nomeSchema, aziendaId, a);
           creati += 1;
         }
+        // Il corredo della contabile (visura e parametri dell'ente) e la cifra
+        // che la verifica amministrativa ha memorizzato: valgono per l'azienda,
+        // non per lo scenario, e il seed non sovrascrive ciò che c'è già.
+        await inserisciCorredoContabileDemo(client, nomeSchema, aziendaId!, a);
+        await inserisciDebitoMemorizzatoDemo(client, nomeSchema, aziendaId!, a);
         // Anche sulle aziende già presenti si riallinea lo scenario: la demo
         // della 0.173.x ne aveva uno solo, sempre «proposta». Riapplicare il
         // percorso deve aggiornare il tipo senza duplicare lo scenario né

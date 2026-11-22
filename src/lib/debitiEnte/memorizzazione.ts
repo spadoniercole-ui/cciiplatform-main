@@ -21,7 +21,7 @@ import { debitoEnteConRipiego, type SnapshotDebitoEnte } from './debitoEnte';
 import type { DebitoEntePonte } from './types';
 
 /** Da dove arriva la cifra memorizzata. */
-export type FonteDebitoMemorizzato = 'certificazione' | 'triage' | 'segnalato';
+export type FonteDebitoMemorizzato = 'certificazione' | 'triage' | 'posizioni' | 'segnalato';
 
 export interface DebitoMemorizzato {
   /** Contabilizzato + da contabilizzare: il debito certo, o la stima dichiarata. */
@@ -54,21 +54,29 @@ const numero = (v: unknown): number => (typeof v === 'number' && Number.isFinite
  */
 export function debitoDaMemorizzare(
   certificazione: SnapshotDebitoEnte | null,
-  triage: DebitoEntePonte | null
+  triage: DebitoEntePonte | null,
+  /** Le posizioni dell'ente: la terza lettura, dopo certificazione e triage. */
+  posizioni: DebitoEntePonte | null = null
 ): DebitoMemorizzato | null {
-  const debito = debitoEnteConRipiego(certificazione, triage);
+  const daCertificazione = certificazione && certificazione.totale > 0 ? certificazione : null;
+  const dallePosizioni = posizioni && posizioni.totale > 0 ? posizioni : null;
+  const debito =
+    daCertificazione ?? triage ?? dallePosizioni ?? debitoEnteConRipiego(certificazione, triage);
   if (!debito || !(debito.totale > 0)) return null;
 
-  const fonteTipo: FonteDebitoMemorizzato =
-    certificazione && certificazione.totale > 0
-      ? 'certificazione'
-      : triage
-        ? 'triage'
+  const fonteTipo: FonteDebitoMemorizzato = daCertificazione
+    ? 'certificazione'
+    : triage
+      ? 'triage'
+      : dallePosizioni
+        ? 'posizioni'
         : 'segnalato';
 
   // Solo la certificazione porta i tre stati; il ripiego del triage e le
   // posizioni segnalate hanno una cifra sola, e non si scompone.
   const dettaglio = fonteTipo === 'certificazione' ? (debito as SnapshotDebitoEnte) : null;
+  // Le posizioni dell'ente hanno già contributi e sanzioni distinti: lo zero
+  // non è un'assenza dichiarata, e la fonte lo dice.
 
   return {
     totale: arrotonda(debito.totale),
@@ -111,6 +119,13 @@ export function descrizioneMemorizzazione(
     return (
       `Debito dell’ente memorizzato${quando}: ${euro(debito.totale)} dalle posizioni del triage. ` +
       'Il triage non distingue contabilizzato e da contabilizzare: il totale è dichiarato, la ripartizione no.'
+    );
+  }
+  if (debito.fonteTipo === 'posizioni') {
+    return (
+      `Debito dell’ente memorizzato${quando}: ${euro(debito.totale)} dalle posizioni registrate ` +
+      `per l’azienda (contributi ${euro(debito.contributi)}, sanzioni ${euro(debito.sanzioni)}). ` +
+      'La posizione non distingue contabilizzato e da contabilizzare.'
     );
   }
   return (
