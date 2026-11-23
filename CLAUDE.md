@@ -27,6 +27,7 @@ npm run lint         # next lint (0 errori richiesti; i warning sono tollerati)
 npm test             # vitest run (tutti i test)
 npx vitest run src/lib/xbrl/indici.test.ts   # un singolo file
 npm run build        # build cloud (non richiede segreti)
+npm run consegna:subito   # dopo ogni push: anteprima/produzione, CI e versione online
 npm run build:portable
 npm run consegna     # attende anteprima, produzione e CI del commit pushato (dopo il push)
 ```
@@ -92,6 +93,13 @@ Regole pratiche:
   serve il login in chiaro: è lì che lo script legge la versione, e `--dominio=` (o
   `CONSEGNA_DOMINIO`) punta al dominio proprio quando c'è. Senza `GH_TOKEN` si usano le API
   pubbliche (60 richieste l'ora, le risposte 304 non si contano); col token si è più al sicuro.
+- **Dopo ogni push si esegue `npm run consegna:subito`** (è `consegna -- --una-volta`: un
+  controllo solo, senza attendere). Deve finire verde su tre cose: produzione pronta, CI
+  verde, versione online uguale a `APP_VERSION` del commit. Un alias che risponde **404**
+  (`DEPLOYMENT_NOT_FOUND`) è una consegna **fallita**, non «illeggibile»: è il caso in cui
+  si controlla per ore un nome di progetto sbagliato (una «i» di meno) e il verdetto tace.
+  Lo dice la riga `✖ alias inesistente: …` e l'uscita è 1. Una pagina protetta (401/403)
+  resta invece un caso a parte e non boccia la consegna.
 - Restano soggetti ad autorizzazione esplicita soltanto gli atti distruttivi
   (`reset_database.sql`, `azzeraDatabase`, ripristini del database) e ogni altra azione
   irreversibile sui dati.

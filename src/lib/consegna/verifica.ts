@@ -365,6 +365,33 @@ export function estraiVersioneDaHtml(html: string): { versione: string | null; f
   return { versione: null, fonte: 'nessuna versione riconoscibile' };
 }
 
+/**
+ * CHE COSA HA RISPOSTO IL SITO DI PRODUZIONE.
+ *
+ * Un alias sbagliato non risponde «non riesco a leggere»: risponde 404, e con
+ * `DEPLOYMENT_NOT_FOUND` dice proprio che quel nome non ha un deployment
+ * dietro. Trattarlo come «illeggibile» lasciava passare una consegna su un
+ * sito che non esiste — ed è così che si può controllare per ore l'alias
+ * scritto male (una «i» di meno) senza che nulla si accenda.
+ *
+ * La pagina protetta (401/403) resta un caso a parte: non è la prova di una
+ * versione sbagliata, e non deve bocciare la consegna.
+ */
+export function esitoRispostaSito(
+  stato: number,
+  vercelErrore?: string | null
+): { esito: 'ALIAS_ASSENTE' | 'PROTETTO' | 'ILLEGGIBILE' | null; dettaglio: string | null } {
+  if (stato === 401 || stato === 403) return { esito: 'PROTETTO', dettaglio: null };
+  if (stato === 404) {
+    const marca = (vercelErrore || '').trim();
+    return { esito: 'ALIAS_ASSENTE', dettaglio: marca || null };
+  }
+  if (stato === 0 || stato >= 400) {
+    return { esito: 'ILLEGGIBILE', dettaglio: `risponde ${stato || 'nulla'}` };
+  }
+  return { esito: null, dettaglio: null };
+}
+
 export interface EsitoVersioneOnline {
   esito: 'OK' | 'DIVERSA' | 'ASSENTE';
   versione: string | null;

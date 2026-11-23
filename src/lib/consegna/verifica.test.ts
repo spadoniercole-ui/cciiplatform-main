@@ -4,6 +4,7 @@ import { APP_VERSION } from '../appVersion';
 import {
   ambientiAttesi,
   ambientiNonAttesi,
+  esitoRispostaSito,
   estraiVersioneDaHtml,
   normalizzaAmbiente,
   parseRemoteGit,
@@ -372,6 +373,31 @@ describe('estraiVersioneDaHtml', () => {
 
   it('senza versioni dice che non c’è', () => {
     expect(estraiVersioneDaHtml('<html>login</html>').versione).toBeNull();
+  });
+});
+
+describe('esitoRispostaSito', () => {
+  it('un 404 è un alias che non esiste, non una lettura fallita', () => {
+    expect(esitoRispostaSito(404, 'DEPLOYMENT_NOT_FOUND')).toEqual({
+      esito: 'ALIAS_ASSENTE',
+      dettaglio: 'DEPLOYMENT_NOT_FOUND',
+    });
+    expect(esitoRispostaSito(404).esito).toBe('ALIAS_ASSENTE');
+  });
+
+  it('una pagina protetta resta a parte e non boccia la consegna', () => {
+    expect(esitoRispostaSito(401).esito).toBe('PROTETTO');
+    expect(esitoRispostaSito(403).esito).toBe('PROTETTO');
+  });
+
+  it('un guasto del sito è «illeggibile», non un rosso di consegna', () => {
+    expect(esitoRispostaSito(500).esito).toBe('ILLEGGIBILE');
+    expect(esitoRispostaSito(0).esito).toBe('ILLEGGIBILE');
+  });
+
+  it('una risposta buona non è un problema', () => {
+    expect(esitoRispostaSito(200).esito).toBeNull();
+    expect(esitoRispostaSito(304).esito).toBeNull();
   });
 });
 

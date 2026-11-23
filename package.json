@@ -22,6 +22,7 @@
     "check:autorizzazione": "node scripts/check-autorizzazione.mjs",
     "check:archil": "node scripts/check-archil.mjs",
     "consegna": "node scripts/attendi-consegna.mjs",
+    "consegna:subito": "node scripts/attendi-consegna.mjs --una-volta",
     "demo": "node scripts/demo-locale.mjs"
   },
   "dependencies": {

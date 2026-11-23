@@ -59,6 +59,7 @@ import {
   RAMO_PRODUZIONE,
   ambientiAttesi,
   ambientiNonAttesi,
+  esitoRispostaSito,
   parseRemoteGit,
   righeCiRossa,
   shaBreve,
@@ -550,7 +551,12 @@ async function testoDa(url) {
     'User-Agent': 'cciiplatform-attendi-consegna',
   };
   const risposta = await richiesta(url, headers, true);
-  return { stato: risposta.stato, testo: risposta.corpo, errore: risposta.errore };
+  return {
+    stato: risposta.stato,
+    testo: risposta.corpo,
+    errore: risposta.errore,
+    intestazioni: risposta.intestazioni || {},
+  };
 }
 
 /**
@@ -568,16 +574,28 @@ async function testoDa(url) {
   if (risposta.errore) {
     return { esito: 'ILLEGGIBILE', riga: `· versione online non letta (${risposta.errore})` };
   }
-  if (risposta.stato === 401 || risposta.stato === 403) {
+  // L'alias che non esiste è un rosso, non un «non leggibile»: è l'errore che
+  // fa cercare per ore il nome giusto del progetto.
+  const problema = esitoRispostaSito(risposta.stato, risposta.intestazioni['x-vercel-error']);
+  if (problema.esito === 'PROTETTO') {
     return {
       esito: 'ILLEGGIBILE',
       riga: `· versione online non letta: ${dominio} è protetto (${risposta.stato})`,
     };
   }
-  if (risposta.stato >= 400 || !risposta.testo) {
+  if (problema.esito === 'ALIAS_ASSENTE') {
+    const marca = problema.dettaglio ? ` (${problema.dettaglio})` : '';
+    return {
+      esito: 'ALIAS_ASSENTE',
+      riga:
+        `✖ alias inesistente: ${dominio} risponde 404${marca} — ` +
+        'controlla il nome del progetto su Vercel: è quello che si digita',
+    };
+  }
+  if (problema.esito === 'ILLEGGIBILE' || !risposta.testo) {
     return {
       esito: 'ILLEGGIBILE',
-      riga: `· versione online non letta: ${dominio} risponde ${risposta.stato || 'nulla'}`,
+      riga: `· versione online non letta: ${dominio} ${problema.dettaglio || 'risponde nulla'}`,
     };
   }
   const confronto = versioneOnline(attesa, risposta.testo);
@@ -796,7 +814,7 @@ async function main() {
             avvisoAttesa = true;
           }
         } else {
-          const rosso = online.esito === 'DIVERSA';
+          const rosso = online.esito === 'DIVERSA' || online.esito === 'ALIAS_ASSENTE';
           process.exit(
             chiudi(rosso ? 'FALLITO' : 'OK', inizio, contesto.sha, online.riga ?? ultimaRigaOnline)
           );
