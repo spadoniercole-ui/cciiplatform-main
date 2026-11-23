@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.255.11**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.255.12**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,20 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.255.12 — 2026-11-23
+
+- **Liquidazione e cram down non chiedono più la posizione debitoria.** Il debito è quello
+  accertato nella verifica amministrativa: la lettura del provvedimento parte dalle righe a
+  livello azienda (le righe di scenario restano solo come riserva per gli scenari vecchi) e il
+  banner dell’istruttoria rimanda alla verifica, non al passo di inserimento. Il passo
+  `/scenari/[id]/situazione-debitoria` resta raggiungibile solo per gli scenari che hanno righe
+  proprie, ed è motivato in `scripts/porte-rotte.json`.
+- **Il documento di confronto diventa il report di supporto.** La pagina `/confronto` porta ora
+  il confronto fra quanto dichiarato (crediti letti nel provvedimento), quanto accertato
+  (posizione amministrativa) e quanto calcolato con i parametri dello spazio: voci con esito,
+  recupero atteso, perdita, totali per rango, avvisi ed elementi contestabili, con legenda dei
+  colori e stampa. Se il provvedimento non è ancora stato letto lo dice, senza inventare numeri.
 
 ## 0.255.11 — 2026-11-23
 

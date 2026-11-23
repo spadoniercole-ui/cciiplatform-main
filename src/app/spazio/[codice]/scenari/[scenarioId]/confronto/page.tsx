@@ -7,6 +7,7 @@ import { valutaSoglieAziendaAction } from '@/app/actions/soglie25novies';
 import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 import { leggiFotografiaBase } from '@/lib/verificaAzienda/baseFotografia';
 import { ottieniSovrascrittureAction } from '@/app/actions/confrontoScenario';
+import { ottieniIstruttoriaGiudiceAction } from '@/app/actions/istruttoriaGiudice';
 import { ConfrontoScenario } from '@/components/spazio/ConfrontoScenario';
 
 export const dynamic = 'force-dynamic';
@@ -58,12 +59,16 @@ export default async function ConfrontoScenarioPage({
   }
 
   if (scenario.baseVerifica === 'AMMINISTRATIVA') {
-    const [debito, parametri, soglie] = await Promise.all([
+    const [debito, parametri, soglie, istruttoria] = await Promise.all([
       leggiDebitoEnteMemorizzato(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
       ottieniParametriScenariAction(contesto.nomeSchema).catch(() => null),
       valutaSoglieAziendaAction(contesto.nomeSchema, scenario.aziendaId, contesto.tipoSpazio).catch(
         () => null
       ),
+      // Il provvedimento e la posizione amministrativa: se l'atto è stato letto,
+      // il documento porta anche il confronto voce per voce, senza rimandare a
+      // un'altra pagina per vederlo o stamparlo.
+      ottieniIstruttoriaGiudiceAction(contesto.nomeSchema, scenario.id).catch(() => null),
     ]);
 
     return (
@@ -77,6 +82,17 @@ export default async function ConfrontoScenarioPage({
           credito={debito?.debito.totale ?? null}
           memorizzatoIl={debito?.memorizzatoIl ?? null}
           parametri={parametri?.success ? parametri.parametri : undefined}
+          confrontoProvvedimento={istruttoria?.success ? (istruttoria.confronto ?? null) : null}
+          letturaProvvedimento={
+            istruttoria?.success && istruttoria.lettura
+              ? {
+                  dataAtto: istruttoria.lettura.dataAtto ?? null,
+                  speseProceduraPct: istruttoria.lettura.speseProceduraPct ?? null,
+                  tempiMesi: istruttoria.lettura.tempiMesi ?? null,
+                  crediti: istruttoria.lettura.crediti.length,
+                }
+              : null
+          }
           soglie={
             soglie?.success && soglie.esito
               ? {

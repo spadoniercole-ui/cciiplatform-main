@@ -23,6 +23,9 @@ import type { ColonnaBase } from '@/lib/verificaAzienda/baseFotografia';
 import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
 import { riepilogaSovrascritture, type Sovrascrittura } from '@/lib/scenari/confronto';
 import { salvaSovrascrittureAction } from '@/app/actions/confrontoScenario';
+import type { ConfrontoProvvedimento, EsitoVoce } from '@/lib/giudice/confronto';
+import { LegendaColori } from '@/components/spazio/LegendaColori';
+import type { Tono } from '@/lib/colori/significato';
 
 const euro = (n: number | null) =>
   n === null
@@ -54,6 +57,15 @@ interface Props {
   parametri?: ParametriScenari;
   soglie?: DatiSoglieDocumento | null;
   memorizzatoIl?: string | null;
+  /** Il confronto fra provvedimento e posizione amministrativa, se il provvedimento è stato letto. */
+  confrontoProvvedimento?: ConfrontoProvvedimento | null;
+  /** L'atto da cui vengono i crediti confrontati: data, spese, tempi. */
+  letturaProvvedimento?: {
+    dataAtto: string | null;
+    speseProceduraPct: number | null;
+    tempiMesi: number | null;
+    crediti: number;
+  } | null;
   base?: SimulazioneBaseDocumento | null;
   sovrascritture?: Sovrascrittura[];
 }
@@ -89,6 +101,8 @@ export function ConfrontoScenario(props: Props) {
           credito={props.credito ?? null}
           parametri={props.parametri}
           soglie={props.soglie ?? null}
+          confronto={props.confrontoProvvedimento ?? null}
+          lettura={props.letturaProvvedimento ?? null}
         />
       ) : (
         <DocumentoSovrascritture
@@ -112,10 +126,19 @@ function DocumentoLiquidazione({
   credito,
   parametri,
   soglie,
+  confronto,
+  lettura,
 }: {
   credito: number | null;
   parametri: ParametriScenari | undefined;
   soglie: DatiSoglieDocumento | null;
+  confronto: ConfrontoProvvedimento | null;
+  lettura: {
+    dataAtto: string | null;
+    speseProceduraPct: number | null;
+    tempiMesi: number | null;
+    crediti: number;
+  } | null;
 }) {
   const [rango, setRango] = useState<RangoCredito>('CHIROGRAFARIO');
 
@@ -222,6 +245,8 @@ function DocumentoLiquidazione({
           </ul>
         )}
       </div>
+
+      <ReportSupporto confronto={confronto} lettura={lettura} />
 
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -639,5 +664,236 @@ function DocumentoSovrascritture({
         )}
       </div>
     </>
+  );
+}
+
+// IL REPORT DI SUPPORTO (0.255.12).
+//
+// Tre grandezze una accanto all'altra: quello che l'azienda ha dichiarato (i
+// crediti letti nel provvedimento), quello che la verifica amministrativa ha
+// accertato (la posizione dell'ente) e quello che il motore calcola con i
+// parametri dello spazio. Il confronto non lo rifà questa schermata: arriva già
+// fatto da `confrontaProvvedimento`, che è aritmetica deterministica. Qui si
+// mette in pagina, perché il documento si stampa e si porta in riunione.
+//
+// Senza provvedimento letto non si inventa nulla: si dice che il confronto
+// arriverà dopo la lettura, e il documento resta quello delle ipotesi.
+
+const ESITO_VOCE: Record<EsitoVoce, { etichetta: string; tono: Tono }> = {
+  CONFORME: { etichetta: 'Conforme', tono: 'verde' },
+  MINORE: { etichetta: 'Minore', tono: 'rosso' },
+  MAGGIORE: { etichetta: 'Maggiore', tono: 'giallo' },
+  NON_RISCONTRATO: { etichetta: 'Non riscontrato', tono: 'rosso' },
+  NON_PRESENTE_NEI_DATI_ENTE: { etichetta: 'Non nei dati dell’ente', tono: 'grigio' },
+};
+
+const CLASSE_TONO: Record<Tono, string> = {
+  verde: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  giallo: 'bg-amber-50 text-amber-900 border-amber-200',
+  rosso: 'bg-red-50 text-red-800 border-red-200',
+  grigio: 'bg-slate-50 text-slate-700 border-slate-200',
+};
+
+function ReportSupporto({
+  confronto,
+  lettura,
+}: {
+  confronto: ConfrontoProvvedimento | null;
+  lettura: {
+    dataAtto: string | null;
+    speseProceduraPct: number | null;
+    tempiMesi: number | null;
+    crediti: number;
+  } | null;
+}) {
+  if (!confronto) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          Report di supporto · dichiarato e accertato
+        </p>
+        <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-slate-600">
+          Il confronto con quanto dichiarato dall’azienda compare appena si legge il provvedimento
+          nell’istruttoria dello scenario: crediti riconosciuti dal giudice, posizione accertata
+          nella verifica amministrativa, differenze e perdita. Fino a quel momento il documento
+          porta le ipotesi calcolate con i parametri dello spazio.
+        </p>
+      </div>
+    );
+  }
+
+  const dataAtto = lettura?.dataAtto
+    ? lettura.dataAtto.split('-').reverse().join('/')
+    : 'non indicata';
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            Report di supporto · dichiarato e accertato
+          </p>
+          <p className="text-[10px] text-slate-500">
+            Atto del {dataAtto} · {lettura?.crediti ?? 0} crediti letti · spese{' '}
+            {pct(lettura?.speseProceduraPct ?? null)} · tempi{' '}
+            {lettura?.tempiMesi === null || lettura?.tempiMesi === undefined
+              ? 'non indicati'
+              : `${lettura.tempiMesi} mesi`}
+          </p>
+        </div>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-4">
+          <Riquadro
+            etichetta="Accertato dall’ente"
+            valore={euro(confronto.creditoEnte)}
+            nota="verifica amministrativa"
+          />
+          <Riquadro etichetta="Riconosciuto dal giudice" valore={euro(confronto.ammessoGiudice)} />
+          <Riquadro
+            etichetta="Recupero atteso"
+            valore={
+              confronto.recuperoAtteso === null ? 'non calcolabile' : euro(confronto.recuperoAtteso)
+            }
+            nota="percentuali dell’atto"
+            allerta={confronto.recuperoAtteso === null}
+          />
+          <Riquadro
+            etichetta="Perdita"
+            valore={
+              confronto.perditaTotale === null ? 'non calcolabile' : euro(confronto.perditaTotale)
+            }
+            nota="accertato − recupero"
+            allerta={confronto.perditaTotale !== null && confronto.perditaTotale > 0}
+          />
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-[11px]">
+            <thead>
+              <tr className="border-b border-slate-200 text-[9px] uppercase tracking-wider text-slate-500">
+                <th className="py-2 pr-3 font-bold">Voce</th>
+                <th className="px-2 py-2 text-right font-bold">Verifica amministrativa</th>
+                <th className="px-2 py-2 text-right font-bold">Provvedimento</th>
+                <th className="px-2 py-2 text-right font-bold">Differenza</th>
+                <th className="px-2 py-2 font-bold">Esito</th>
+                <th className="px-2 py-2 text-right font-bold">Recupero atteso</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {confronto.voci.map((v, i) => {
+                const esito = ESITO_VOCE[v.esito];
+                return (
+                  <tr key={`${v.voce}-${i}`} className="align-top">
+                    <td className="py-2 pr-3">
+                      <p className="font-semibold text-slate-900">{v.voce}</p>
+                      {v.voceGiudice && v.voceGiudice !== v.voce && (
+                        <p className="text-[10px] text-slate-500">
+                          nel provvedimento: {v.voceGiudice}
+                        </p>
+                      )}
+                      {v.rango && <p className="text-[10px] text-slate-500">{v.rango}</p>}
+                    </td>
+                    <td className="px-2 py-2 text-right font-mono">{euro(v.importoEnte)}</td>
+                    <td className="px-2 py-2 text-right font-mono">{euro(v.importoGiudice)}</td>
+                    <td className="px-2 py-2 text-right font-mono">
+                      {euro(v.differenza)}
+                      {v.differenzaPct !== null && (
+                        <span className="block text-[9px] text-slate-500">
+                          {pct(v.differenzaPct)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2">
+                      <span
+                        className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-bold ${CLASSE_TONO[esito.tono]}`}
+                      >
+                        {esito.etichetta}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2 text-right font-mono">{euro(v.realizzoAtteso)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-3">
+          <LegendaColori
+            etichette={{
+              verde: 'conforme',
+              giallo: 'maggiore',
+              rosso: 'minore o non riscontrato',
+              grigio: 'senza giudizio',
+            }}
+            nota="Verde: il giudice ha riconosciuto quanto accertato. Rosso: ha riconosciuto meno, o nulla. Giallo: più dell’accertato, da verificare, non una perdita."
+          />
+        </div>
+      </div>
+
+      {confronto.totaliRango.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-5">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            Totali per rango
+          </p>
+          <table className="mt-2 w-full text-left text-[11px]">
+            <thead>
+              <tr className="border-b border-slate-200 text-[9px] uppercase tracking-wider text-slate-500">
+                <th className="py-1.5 font-bold">Rango</th>
+                <th className="py-1.5 text-right font-bold">Accertato</th>
+                <th className="py-1.5 text-right font-bold">Ammesso</th>
+                <th className="py-1.5 text-right font-bold">Recupero</th>
+                <th className="py-1.5 text-right font-bold">Perdita</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {confronto.totaliRango.map((t) => (
+                <tr key={t.rango}>
+                  <td className="py-1.5 font-semibold text-slate-800">
+                    {t.rango === 'NON_INDICATO' ? 'Rango non indicato' : t.rango}
+                  </td>
+                  <td className="py-1.5 text-right font-mono">{euro(t.importoEnte)}</td>
+                  <td className="py-1.5 text-right font-mono">{euro(t.ammessoGiudice)}</td>
+                  <td className="py-1.5 text-right font-mono">
+                    {t.recuperoAtteso === null ? 'non calcolabile' : euro(t.recuperoAtteso)}
+                  </td>
+                  <td className="py-1.5 text-right font-mono">
+                    {t.perdita === null ? 'non calcolabile' : euro(t.perdita)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {confronto.avvisi.length > 0 && (
+        <ul className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-relaxed text-amber-900">
+          {confronto.avvisi.map((a) => (
+            <li key={a}>• {a}</li>
+          ))}
+        </ul>
+      )}
+
+      {confronto.elementiContestabili.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            Elementi che possono fondare una contestazione
+          </p>
+          <ul className="mt-2 space-y-1 text-[11px] text-slate-700">
+            {confronto.elementiContestabili.map((e) => (
+              <li key={`${e.voce}-${e.motivo}`} className="flex gap-2">
+                <span className="shrink-0 font-mono font-bold text-red-700">{euro(e.importo)}</span>
+                <span>{e.motivo}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
+            Sono difformità da verificare, non una qualificazione giuridica: la valutazione del
+            rimedio resta al legale dell’ente.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

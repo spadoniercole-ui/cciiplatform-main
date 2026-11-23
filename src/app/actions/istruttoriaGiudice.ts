@@ -369,23 +369,25 @@ export async function caricaDocumentiProvvedimentoAction(
       };
     }
 
-    // I dati dell'ente: prima le righe dello scenario, poi — solo se non ce
-    // ne sono — quelle caricate a livello azienda prima che la posizione si
-    // spostasse nello scenario. Sommarle entrambe conterebbe due volte.
+    // I dati dell'ente: la verifica amministrativa, cioè le righe registrate a
+    // livello azienda (0.255.12). Per decreti e cram down la posizione non si
+    // inserisce più nello scenario: il debito è quello accertato nella verifica.
+    // Le righe di scenario restano come riserva per gli scenari vecchi, che le
+    // avevano, e non si sommano mai alle prime.
     await assicuraTabellaDebitiEnte(nomeSchema);
-    const perScenario = await pool.query(
+    const perAzienda = await pool.query(
       `SELECT voce, importo FROM "${nomeSchema}".debiti_ente
-        WHERE azienda_id = $1 AND scenario_id = $2 ORDER BY id ASC`,
-      [scenario.scenario.aziendaId, scenarioId]
+        WHERE azienda_id = $1 AND scenario_id IS NULL ORDER BY id ASC`,
+      [scenario.scenario.aziendaId]
     );
     const righe =
-      perScenario.rows.length > 0
-        ? perScenario.rows
+      perAzienda.rows.length > 0
+        ? perAzienda.rows
         : (
             await pool.query(
               `SELECT voce, importo FROM "${nomeSchema}".debiti_ente
-                WHERE azienda_id = $1 AND scenario_id IS NULL ORDER BY id ASC`,
-              [scenario.scenario.aziendaId]
+                WHERE azienda_id = $1 AND scenario_id = $2 ORDER BY id ASC`,
+              [scenario.scenario.aziendaId, scenarioId]
             )
           ).rows;
     const vociEnte: VoceEnte[] = righe.map((r) => ({

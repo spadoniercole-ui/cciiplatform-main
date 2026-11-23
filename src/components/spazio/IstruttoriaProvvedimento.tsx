@@ -58,10 +58,18 @@ interface Props {
   nomeSchema: string;
   scenarioId: number;
   codice: string;
+  /** L'azienda della verifica amministrativa: è lì che vive la posizione debitoria. */
+  aziendaId: number;
   tipoAtto: Exclude<TipoAttoGiudice, 'PROPOSTA'>;
 }
 
-export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoAtto }: Props) {
+export function IstruttoriaProvvedimento({
+  nomeSchema,
+  scenarioId,
+  codice,
+  aziendaId,
+  tipoAtto,
+}: Props) {
   const demo = useDemo();
   const [stato, setStato] = useState<StatoIstruttoriaGiudice | null>(null);
   const [caricamento, setCaricamento] = useState(true);
@@ -162,9 +170,10 @@ export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoA
         </h2>
         <p className="text-[11px] text-slate-500 mt-1 max-w-4xl leading-relaxed">
           Carica il provvedimento e gli allegati. La piattaforma legge i crediti che il giudice ha
-          riconosciuto, li confronta voce per voce con la posizione debitoria dell’ente e calcola la
-          perdita; l’analisi critica spiega quei numeri. Qui non si valuta una proposta e non si
-          esprime un parere legale.
+          riconosciuto e li confronta voce per voce con la posizione debitoria accertata nella
+          verifica amministrativa dell’azienda; poi calcola la perdita, e l’analisi critica spiega
+          quei numeri. La posizione non si inserisce qui: per liquidazione e cram down è quella
+          della verifica. Qui non si valuta una proposta e non si esprime un parere legale.
         </p>
         {demo && (
           <p className="text-[11px] text-sky-900 bg-sky-50 border border-sky-200 rounded-lg p-3 mt-2 leading-relaxed">
@@ -182,17 +191,21 @@ export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoA
         </div>
       )}
 
+      {/* La posizione debitoria non si chiede più allo scenario (0.255.12): per
+          liquidazione e cram down il confronto parte dalla verifica
+          amministrativa. Se anche quella è vuota, il confronto resterà vuoto e
+          lo si dice indicando dove si accerta il debito, non dove si inserisce. */}
       {stato?.posizioneAssente && (
         <div className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
-          Non c’è ancora una posizione debitoria dell’ente per questa azienda: il confronto sarà
-          vuoto. Caricala prima in{' '}
+          La verifica amministrativa di questa azienda non ha ancora una posizione debitoria
+          accertata: il confronto con il provvedimento sarà vuoto.{' '}
           <a
             className="font-bold underline"
-            href={`/spazio/${codice}/scenari/${scenarioId}/situazione-debitoria`}
+            href={`/spazio/${codice}/verifica-azienda/${aziendaId}`}
           >
-            Situazione debitoria
-          </a>
-          .
+            Apri la verifica amministrativa
+          </a>{' '}
+          per accertarla. La posizione non si inserisce dallo scenario.
         </div>
       )}
 
