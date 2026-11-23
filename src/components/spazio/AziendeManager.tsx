@@ -20,6 +20,7 @@ import {
   type Azienda,
 } from '@/app/actions/aziende';
 import { avvisoApp, confermaApp } from '@/components/FinestreApp';
+import { conRitorno, destinazioneAziende } from '@/lib/navigazione/ritorno';
 
 interface Props {
   nomeSchema: string;
@@ -291,7 +292,10 @@ export function AziendeManager({ nomeSchema, codice }: Props) {
               }`}
             >
               <Link
-                href={`/spazio/${codice}/aziende/${azienda.id}`}
+                href={conRitorno(
+                  `/spazio/${codice}/aziende/${azienda.id}`,
+                  destinazioneAziende(codice)
+                )}
                 className="flex-1 min-w-0 group"
               >
                 <div className="font-bold text-slate-900 text-xs group-hover:text-blue-600 transition-colors">
@@ -331,7 +335,10 @@ export function AziendeManager({ nomeSchema, codice }: Props) {
                   )}
                 </button>
                 <Link
-                  href={`/spazio/${codice}/aziende/${azienda.id}`}
+                  href={conRitorno(
+                    `/spazio/${codice}/aziende/${azienda.id}`,
+                    destinazioneAziende(codice)
+                  )}
                   className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-blue-600"
                   title="Apri scheda azienda"
                 >

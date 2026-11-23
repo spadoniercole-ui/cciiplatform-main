@@ -62,6 +62,51 @@ export function percorsoRitorno(valore: string | string[] | undefined, codice: s
   return pulito;
 }
 
+/** L'elenco Aziende: la porta d'ingresso alle posizioni, e il ripiego dell'uscita. */
+export function destinazioneAziende(codice: string): string {
+  return `/spazio/${codice}/aziende`;
+}
+
+/**
+ * L'uscita dalla scheda azienda: dove si è entrati, altrimenti l'elenco Aziende.
+ *
+ * La scheda si apre da più punti — l'elenco Aziende, la griglia delle
+ * iconografie, la verifica amministrativa — e chi entra porta con sé la sua
+ * origine (`?ritorno=…`). Le regole sono quelle di `percorsoRitorno`: solo
+ * percorsi dello spazio di chi naviga, niente catene. Cambia il ripiego: chi
+ * non ha un'origine riconoscibile non finisce nei Parametri (che non sono una
+ * porta della scheda), ma nell'elenco delle aziende.
+ */
+export function percorsoRitornoAziende(
+  valore: string | string[] | null | undefined,
+  codice: string
+): string {
+  const elenco = destinazioneAziende(codice);
+  const percorso = percorsoRitorno(valore ?? undefined, codice);
+  // `percorsoRitorno` ripiega sui Parametri: quel valore non è un'origine,
+  // è l'assenza di un'origine.
+  return percorso === destinazionePredefinita(codice) ? elenco : percorso;
+}
+
+/** Dove porta l'uscita della scheda, detto per nome. */
+export function etichettaUscitaScheda(destinazione: string, codice: string): string {
+  const percorso = destinazione.split('?')[0];
+  const base = `/spazio/${codice}`;
+  if (percorso === base) return 'Torna alla dashboard';
+  if (percorso === destinazioneAziende(codice)) return 'Torna alle aziende';
+  if (percorso === `${base}/ritratti`) return 'Torna alle iconografie';
+  if (percorso === `${base}/verifica-salute` || percorso.startsWith(`${base}/verifica-salute/`))
+    return 'Torna alla verifica amministrativa';
+  if (
+    percorso === `${base}/verifica-contabile` ||
+    percorso.startsWith(`${base}/verifica-contabile/`)
+  )
+    return 'Torna alla verifica contabile';
+  if (percorso === `${base}/verifica-azienda` || percorso.startsWith(`${base}/verifica-azienda/`))
+    return 'Torna alla verifica aziendale';
+  return 'Torna alle aziende';
+}
+
 /** L'etichetta dice dove si torna, non «indietro». */
 export function etichettaRitorno(destinazione: string, codice: string): string {
   if (destinazione === destinazionePredefinita(codice)) return 'Torna a Parametri di Spazio';

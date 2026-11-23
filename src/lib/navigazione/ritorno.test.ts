@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { conRitorno, destinazionePredefinita, etichettaRitorno, percorsoRitorno } from './ritorno';
+import {
+  conRitorno,
+  destinazioneAziende,
+  destinazionePredefinita,
+  etichettaRitorno,
+  etichettaUscitaScheda,
+  percorsoRitorno,
+  percorsoRitornoAziende,
+} from './ritorno';
 
 // Il rimando ai Parametri porta con sé la pagina da cui si è partiti; l'uscita
 // riporta lì. Le prove che contano sono quelle di sicurezza: un ritorno non
@@ -55,6 +63,43 @@ describe('percorsoRitorno', () => {
 
   it('senza ritorno si torna alla dashboard', () => {
     expect(percorsoRitorno(undefined, 'enti')).toBe('/spazio/enti/parametri');
+  });
+});
+
+describe('percorsoRitornoAziende', () => {
+  it('torna dove si è entrati: griglia delle iconografie o elenco Aziende', () => {
+    expect(percorsoRitornoAziende('/spazio/enti/ritratti', 'enti')).toBe('/spazio/enti/ritratti');
+    expect(percorsoRitornoAziende(destinazioneAziende('enti'), 'enti')).toBe(
+      destinazioneAziende('enti')
+    );
+    // L'origine può portarsi la sua query.
+    expect(percorsoRitornoAziende('/spazio/enti/verifica-salute?azienda=42', 'enti')).toBe(
+      '/spazio/enti/verifica-salute?azienda=42'
+    );
+  });
+
+  it('senza origine, o con un’origine illecita, ripiega sull’elenco Aziende', () => {
+    const elenco = destinazioneAziende('enti');
+    expect(percorsoRitornoAziende(undefined, 'enti')).toBe(elenco);
+    expect(percorsoRitornoAziende('', 'enti')).toBe(elenco);
+    expect(percorsoRitornoAziende('/spazio/altro/aziende', 'enti')).toBe(elenco);
+    expect(percorsoRitornoAziende('https://esempio.it/spazio/enti/ritratti', 'enti')).toBe(elenco);
+    expect(percorsoRitornoAziende('/superadmin/spazi', 'enti')).toBe(elenco);
+  });
+});
+
+describe('etichettaUscitaScheda', () => {
+  it('dice dove si torna, e non «indietro»', () => {
+    expect(etichettaUscitaScheda(destinazioneAziende('enti'), 'enti')).toBe('Torna alle aziende');
+    expect(etichettaUscitaScheda('/spazio/enti/ritratti', 'enti')).toBe('Torna alle iconografie');
+    expect(etichettaUscitaScheda('/spazio/enti', 'enti')).toBe('Torna alla dashboard');
+    expect(etichettaUscitaScheda('/spazio/enti/verifica-salute?azienda=42', 'enti')).toBe(
+      'Torna alla verifica amministrativa'
+    );
+  });
+
+  it('sull’origine sconosciuta usa il nome del ripiego', () => {
+    expect(etichettaUscitaScheda('/spazio/enti/utenti', 'enti')).toBe('Torna alle aziende');
   });
 });
 

@@ -5,6 +5,7 @@ import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { statoDirettrici, type Stadio } from '@/lib/verificaAzienda/direttrici';
+import { conRitorno } from '@/lib/navigazione/ritorno';
 
 // LE ICONOGRAFIE — l'ultima lettura del percorso, prima degli scenari.
 //
@@ -158,14 +159,20 @@ export default async function RitrattiPage({ params }: { params: Promise<{ codic
             <div className="shrink-0 flex flex-col items-stretch gap-1">
               {a.pronto ? (
                 <Link
-                  href={`/spazio/${codice}/aziende/${a.aziendaId}/ritratto`}
+                  href={conRitorno(
+                    `/spazio/${codice}/aziende/${a.aziendaId}/ritratto`,
+                    `/spazio/${codice}/ritratti`
+                  )}
                   className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded bg-slate-900 text-white text-[9px] font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors"
                 >
                   <Eye className="w-3 h-3" /> Apri l’iconografia
                 </Link>
               ) : (
                 <Link
-                  href={`/spazio/${codice}/aziende/${a.aziendaId}/ritratto`}
+                  href={conRitorno(
+                    `/spazio/${codice}/aziende/${a.aziendaId}/ritratto`,
+                    `/spazio/${codice}/ritratti`
+                  )}
                   className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded border border-slate-200 bg-white text-slate-500 text-[9px] font-bold uppercase tracking-wider hover:border-blue-300 hover:text-blue-600 transition-colors"
                 >
                   <Eye className="w-3 h-3" /> Iconografia parziale

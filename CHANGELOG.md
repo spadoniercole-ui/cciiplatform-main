@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.255.5**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.255.6**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,20 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.255.6 — 2026-11-23
+
+- **«Torna alle aziende» torna dove si è entrati.** La scheda azienda si apre da più punti —
+  l’elenco Aziende, la griglia delle iconografie, la verifica amministrativa — e l’uscita
+  fissa a `/aziende` obbligava chi era entrato da altrove a ricominciare il giro da un menù
+  che non era quello da cui veniva. Ora l’ingresso porta con sé la sua origine (`?ritorno=…`,
+  lo stesso meccanismo dei rimandi ai Parametri) e l’uscita la segue: dalla griglia delle
+  iconografie si torna alle iconografie, dall’elenco all’elenco.
+- **Se l’origine manca, si esce dall’elenco Aziende** — non dai Parametri, che non sono una
+  porta della scheda — e l’etichetta cambia con la destinazione: «Torna alle aziende»,
+  «Torna alle iconografie», «Torna alla verifica amministrativa», «Torna alla dashboard».
+  Le regole di sicurezza restano quelle di sempre: solo percorsi dello spazio di chi naviga,
+  niente catene di ritorni, niente URL esterni.
 
 ## 0.255.5 — 2026-11-23
 

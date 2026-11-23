@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { CruscottoAzienda } from '@/components/spazio/CruscottoAzienda';
+import { UscitaSchedaAzienda } from '@/components/spazio/UscitaSchedaAzienda';
 import Link from 'next/link';
 import { ArrowLeft, Check, Eye, Lock, Users } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
@@ -120,12 +122,20 @@ export default async function AziendaLayout({
   return (
     <DemoAziendaScope azienda={azienda.ragioneSociale}>
       <div className="max-w-5xl space-y-4">
-        <Link
-          href={`/spazio/${codice}/aziende`}
-          className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-blue-600 font-bold uppercase tracking-wider"
+        {/* L'uscita torna dove si è entrati — l'elenco Aziende o la griglia
+            delle iconografie, secondo il `?ritorno` con cui si è aperta la
+            scheda — e ripiega sull'elenco quando quell'origine manca. Il
+            componente legge la query, quindi sta dentro un confine di
+            sospensione: nel frattempo si vede la stessa uscita predefinita. */}
+        <Suspense
+          fallback={
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 font-bold uppercase tracking-wider">
+              <ArrowLeft className="w-3.5 h-3.5" /> Torna alle aziende
+            </span>
+          }
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> Torna alle aziende
-        </Link>
+          <UscitaSchedaAzienda codice={codice} />
+        </Suspense>
 
         <div className="bg-white border border-slate-200 rounded-xl p-5">
           <div className="flex items-start justify-between flex-wrap gap-2">
