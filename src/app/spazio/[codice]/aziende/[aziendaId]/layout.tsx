@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { CruscottoAzienda } from '@/components/spazio/CruscottoAzienda';
 import { UscitaSchedaAzienda } from '@/components/spazio/UscitaSchedaAzienda';
 import Link from 'next/link';
-import { Camera, Users } from 'lucide-react';
+import { Camera } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { leggiIdentificativiEnte } from '@/lib/anagraficaEnte/identificativi';
@@ -115,21 +115,14 @@ export default async function AziendaLayout({
 
         {/* Una sola porta verso l'analisi: la verifica aziendale. Da lì si
           aprono l'esito amministrativo e la verifica contabile, quindi questa
-          pagina non ripete quei due pulsanti. Operatori resta separato, perché
-          non è un passo dell'analisi. */}
+          pagina non ripete quei due pulsanti. Gli utenti si gestiscono dal
+          menù Utenti dello spazio (0.255.16), non da qui. */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           <Link
             href={`/spazio/${codice}/verifica-azienda/${aziendaId}`}
             className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border border-blue-200 bg-blue-50 text-blue-800 hover:border-blue-400 transition-colors"
           >
             <Camera className="w-3.5 h-3.5" /> Verifica aziendale
-          </Link>
-
-          <Link
-            href={`${base}/operatori`}
-            className="ml-auto shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
-          >
-            <Users className="w-3.5 h-3.5" /> Operatori
           </Link>
         </div>
 

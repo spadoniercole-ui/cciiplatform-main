@@ -26,6 +26,20 @@ il terzo per correzioni.
 
 ---
 
+## 0.255.16 — 2026-11-23
+
+- **La gestione utenti torna nel menù Utenti.** Creare un utente non si fa più dalla scheda
+  dell’azienda su cui lavora: da /spazio/[codice]/utenti si scrive l’anagrafica, si sceglie il
+  profilo e si spuntano le aziende attive. La pagina Operatori della singola azienda e il suo
+  componente sono stati rimossi, con il pulsante che li apriva.
+- **Due profili.** `OPERATIVO` lavora (scenari e check list in scrittura, il resto in lettura);
+  `CONSULTATORE` legge tutto e non scrive niente. I flag iniziali vivono in
+  `src/lib/profiliUtente.ts`, con i loro test.
+- **Le funzioni si vedono alla fine del salvataggio.** Dopo la creazione compaiono username e
+  password temporanea, poi l’elenco delle funzioni del profilo con i flag accesi: l’Admin li spegne
+  o li riaccende e li salva con `impostaPermessiUtenteAction`. Il livello per azienda (sola lettura
+  o lettura e scrittura) si sceglie nella stessa schermata, accanto a ogni azienda spuntata.
+
 ## 0.255.15 — 2026-11-23
 
 - **La demo si rifà a tre aziende e tre tappe.** Meccanica Valsesia è completa (amministrativa,

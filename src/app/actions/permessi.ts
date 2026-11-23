@@ -51,6 +51,62 @@ export interface RisultatoOperazionePermessi {
   error?: string;
 }
 
+/**
+ * Scrive INSIEME i flag di tutte le funzioni (0.255.16). È l'azione della
+ * schermata Utenti dopo la creazione: il profilo propone i flag, l'Admin li
+ * accende o li spegne e li salva in un colpo solo, senza sette chiamate.
+ */
+export async function impostaPermessiUtenteAction(
+  nomeSchema: string,
+  utenteId: number,
+  permessi: Record<string, LivelloPermesso>
+): Promise<RisultatoOperazionePermessi> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    const validi: Record<string, LivelloPermesso> = {};
+    for (const modulo of MODULI_PERMESSO) {
+      const livello = permessi[modulo];
+      if (livello === 'NESSUNO' || livello === 'LETTURA' || livello === 'SCRITTURA') {
+        validi[modulo] = livello;
+      }
+    }
+    if (Object.keys(validi).length === 0) {
+      return { success: false, error: 'Nessuna funzione da salvare.' };
+    }
+
+    const { db } = await import('@/db/client');
+    const { getTabelleTenant } = await import('@/db/schema');
+    const { eq } = await import('drizzle-orm');
+    const tabelle = getTabelleTenant(nomeSchema);
+
+    const esistenti = await db
+      .select()
+      .from(tabelle.permessi_utente)
+      .where(eq(tabelle.permessi_utente.utenteId, utenteId));
+
+    for (const modulo of MODULI_PERMESSO) {
+      const livello = validi[modulo];
+      if (!livello) continue;
+      const riga = esistenti.find((r) => r.modulo === modulo);
+      if (riga) {
+        await db
+          .update(tabelle.permessi_utente)
+          .set({ livello })
+          .where(eq(tabelle.permessi_utente.id, riga.id));
+      } else {
+        await db.insert(tabelle.permessi_utente).values({ utenteId, modulo, livello });
+      }
+    }
+    return { success: true };
+  } catch (error: any) {
+    console.error('[impostaPermessiUtenteAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile salvare le funzioni: ${error.message || error}`,
+    };
+  }
+}
+
 export async function impostaPermessoAction(
   nomeSchema: string,
   utenteId: number,

@@ -20,6 +20,8 @@ import {
   normalizzaLivelloAzienda,
   type LivelloAzienda,
 } from '@/lib/permessiAzienda';
+import { componiPermessiUtente, type TipologiaProfilo } from '@/lib/profiliUtente';
+import type { LivelloPermesso, Modulo } from '@/lib/moduliPermesso';
 
 export type TipologiaUtente = 'OPERATIVO' | 'CONSULTATORE';
 
@@ -53,6 +55,8 @@ export interface RisultatoOperazioneUtente {
   error?: string;
   passwordTemporanea?: string;
   username?: string;
+  /** L'utente appena creato: la schermata mostra subito le sue funzioni. */
+  utenteId?: number;
 }
 
 export interface DatiUtente {
@@ -67,6 +71,11 @@ export interface DatiUtente {
    * associazione), che è il comportamento delle associazioni vecchie.
    */
   livelli?: Record<number, LivelloAzienda>;
+  /**
+   * I flag delle funzioni scelti dall'Admin. Se mancano valgono quelli del
+   * profilo (Operatore/Consultatore): è lì che nasce cosa può fare l'utente.
+   */
+  permessi?: Partial<Record<Modulo, LivelloPermesso>>;
 }
 
 /** Il livello da scrivere per un'azienda: scelto, altrimenti quello di prima. */
@@ -212,21 +221,19 @@ export async function creaUtenteSpazioAction(
       );
     }
 
-    // Permessi di default per un nuovo utente: moduli di analisi in
-    // scrittura, gestione dello spazio (Aziende/Utenti/Parametri) negata —
-    // solo l'Admin di Spazio la gestisce. Modificabili subito dopo dall'Admin.
-    const permessiDefault: Record<string, 'NESSUNO' | 'LETTURA' | 'SCRITTURA'> = {
-      scenari: 'SCRITTURA',
-      checklist: 'SCRITTURA',
-      indici: 'LETTURA',
-      xbrl: 'LETTURA',
-      report: 'LETTURA',
-    };
-    for (const [modulo, livello] of Object.entries(permessiDefault)) {
+    // Le funzioni partono dal profilo scelto (Operatore o Consultatore) e
+    // dalle eventuali scelte già fatte dall'Admin nella schermata: la gestione
+    // dello spazio (Aziende/Utenti/Parametri) resta fuori, è dell'Admin di
+    // Spazio. Modificabili subito dopo dall'Admin, flag per flag.
+    const permessiProfilo = componiPermessiUtente(
+      dati.tipologia as TipologiaProfilo,
+      dati.permessi
+    );
+    for (const [modulo, livello] of Object.entries(permessiProfilo)) {
       await db.insert(tabelle.permessi_utente).values({ utenteId, modulo, livello });
     }
 
-    return { success: true, passwordTemporanea, username };
+    return { success: true, passwordTemporanea, username, utenteId };
   } catch (error: any) {
     console.error('[creaUtenteSpazioAction] Errore:', error);
     return { success: false, error: `Impossibile creare l'utente: ${error.message || error}` };
