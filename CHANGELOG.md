@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.255.4**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.255.5**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,19 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.255.5 — 2026-11-23
+
+- **La scheda azienda non ha più una tab per il report.** Il foglio dell’iconografia si
+  scarica già da tre punti: la griglia di ingresso, la mappa e il pulsante nero dentro
+  l’iconografia stessa. Una quarta porta con lo stesso nome, in fila alle tab delle tre
+  verifiche, faceva sembrare il report una quarta verifica da attraversare. Resta la tab
+  «Iconografia», che non è il controllo che il documento esista: è la rappresentazione — i
+  quattro riquadri e le barre delle dimensioni — e da lì il report si lancia.
+- **«Torna alle aziende» riporta a un menù che dice il suo nome.** L’elenco su cui si usciva
+  dalla scheda si intitolava «Verifica contabile aziendale»: chi tornava indietro credeva di
+  essere finito in un’altra sezione. Ora la pagina si chiama «Aziende» e dichiara di essere
+  il punto d’ingresso alle posizioni, con anagrafica, tre verifiche e iconografia.
 
 ## 0.255.4 — 2026-11-22
 

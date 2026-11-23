@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { CruscottoAzienda } from '@/components/spazio/CruscottoAzienda';
 import Link from 'next/link';
-import { ArrowLeft, Check, Eye, FileDown, Lock, Users } from 'lucide-react';
+import { ArrowLeft, Check, Eye, Lock, Users } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
@@ -220,21 +220,21 @@ export default async function AziendaLayout({
             );
           })}
 
-          {/* Iconografia e report — la lettura d'insieme e il suo foglio A4.
-            Stanno dopo le tre verifiche, come nella barra laterale: chiudono il
-            percorso, non sono una tappa da compilare. Il report si scarica da
-            qui senza passare dall'elenco delle iconografie. */}
+          {/* Iconografia — la lettura d'insieme, dopo le tre verifiche: chiude
+            il percorso, non è una tappa da compilare.
+
+            Il report non ha una porta qui. L'iconografia è già una
+            rappresentazione (i quattro riquadri, con le barre delle
+            dimensioni), e il suo foglio A4 si scarica da dentro di essa, dove
+            si legge ciò che si sta per stampare. Una seconda porta nella
+            barra ripeteva lo stesso documento accanto al pulsante nero della
+            pagina, oltre ai due punti da cui il report si lancia già fuori
+            dalla scheda: tre nomi per un'unica uscita. */}
           <Link
             href={`${base}/ritratto`}
             className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
           >
             <Eye className="w-3.5 h-3.5" /> Iconografia
-          </Link>
-          <Link
-            href={`/report/iconografia/${codice}/${aziendaId}?stampa=1`}
-            className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
-          >
-            <FileDown className="w-3.5 h-3.5" /> Report PDF
           </Link>
 
           {/* Operatori — separato dal flusso di analisi, spinto all'estremità
