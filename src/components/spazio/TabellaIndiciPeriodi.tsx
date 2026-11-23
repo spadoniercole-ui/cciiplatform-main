@@ -11,6 +11,7 @@ import {
   type RisultatoIndiciMultiPeriodo,
 } from '@/app/actions/indiciMultiPeriodo';
 import type { IndiceCcii } from '@/lib/xbrl/types';
+import { LegendaColori } from './LegendaColori';
 
 const fmt = (v: number | 'N/D') =>
   v === 'N/D' ? 'n/d' : v.toLocaleString('it-IT', { maximumFractionDigits: 2 });
@@ -119,10 +120,15 @@ export function TabellaIndiciPeriodi({
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-slate-400 leading-relaxed">
-        In rosso i valori oltre la soglia di riferimento. Strumenti operativi di lettura, non
-        parametri normativi: il sistema di indici dell’originario art. 13 CCII è abrogato.
-      </p>
+      <LegendaColori
+        toni={['verde', 'rosso', 'grigio']}
+        etichette={{
+          verde: 'dentro la soglia',
+          rosso: 'oltre la soglia',
+          grigio: 'non calcolabile',
+        }}
+        nota="Strumenti operativi di lettura, non parametri normativi: il sistema di indici dell’originario art. 13 CCII è abrogato."
+      />
     </div>
   );
 }

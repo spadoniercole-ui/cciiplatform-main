@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.255.9**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.255.10**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,21 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.255.10 — 2026-11-23
+
+- **I colori dicono una cosa sola, e adesso c’è scritto che cosa.** Verde, giallo, rosso e
+  grigio esprimevano un giudizio con classi ripetute in ogni schermata, senza una legenda che
+  dicesse a cosa corrispondevano. Il significato ora sta in un solo posto
+  (`src/lib/colori/significato.ts`: favorevole / attenzione / allerta / senza giudizio), e le
+  schermate che colorano un giudizio portano a margine la legenda che lo traduce. Blu e sky
+  restano azione e identità di colonna: mai un giudizio, così «buono» resta verde e non blu.
+- **Dove è entrata la legenda**: la barra delle tre verifiche nella scheda azienda (verde =
+  completata, giallo = da fare, grigio = non disponibile, con la nota che il verde dice
+  «chiusa» e non «favorevole»); il semaforo dell’attenzione (attenzione minima / da
+  approfondire / priorità alta); le tabelle degli indici — prospetto contabile, configurazione
+  indici, indici per periodo — con «dentro la soglia / oltre la soglia / non calcolabile»; il
+  quadro della Check List.
 
 ## 0.255.9 — 2026-11-23
 

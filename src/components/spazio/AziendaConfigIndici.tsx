@@ -18,6 +18,7 @@ import { segnaVistaAnalisiBilancioAction } from '@/app/actions/analisiBilancioSt
 import { ottieniStoricoXbrlAzienda, type BilancioStoricoAzienda } from '@/app/actions/xbrlAzienda';
 import type { IndiceCcii } from '@/lib/xbrl/types';
 import { calcolaQuoteDebitoPubblico } from '@/lib/xbrl/indici';
+import { LegendaColori } from './LegendaColori';
 
 interface Props {
   nomeSchema: string;
@@ -195,12 +196,17 @@ export function AziendaConfigIndici({ nomeSchema, aziendaId }: Props) {
                 })}
               </tbody>
             </table>
-            <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
-              Valori del bilancio depositato (in rosso oltre la soglia). Strumenti operativi di
-              lettura, non parametri normativi: il sistema di indici dell’originario art. 13 CCII è
-              abrogato. Nello scenario gli stessi indici sono ricalcolati anche sulla Posizione
-              Aggiornata, con i dati attualizzati.
-            </p>
+            <div className="mt-2">
+              <LegendaColori
+                toni={['verde', 'rosso', 'grigio']}
+                etichette={{
+                  verde: 'dentro la soglia',
+                  rosso: 'oltre la soglia',
+                  grigio: 'non calcolabile',
+                }}
+                nota="Valori del bilancio depositato. Strumenti operativi di lettura, non parametri normativi: il sistema di indici dell’originario art. 13 CCII è abrogato. Nello scenario gli stessi indici sono ricalcolati anche sulla Posizione Aggiornata."
+              />
+            </div>
           </div>
         )}
       </div>

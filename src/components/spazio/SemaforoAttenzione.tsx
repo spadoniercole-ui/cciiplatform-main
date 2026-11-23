@@ -18,6 +18,7 @@
 
 import React from 'react';
 import { AlertTriangle, CircleCheck, HelpCircle } from 'lucide-react';
+import { LegendaColori } from './LegendaColori';
 import type { Attenzione } from '@/lib/screening/indicatore';
 
 const STILE = {
@@ -140,6 +141,19 @@ export function SemaforoAttenzione({ attenzione }: { attenzione: Attenzione }) {
           </div>
         </div>
       )}
+
+      {/* Le tre luci accese una sola volta non dicono che cosa significano le
+          altre due: la legenda traduce i toni mentre il semaforo li usa. */}
+      <div className="pt-2 border-t border-black/5">
+        <LegendaColori
+          toni={['verde', 'giallo', 'rosso']}
+          etichette={{
+            verde: 'attenzione minima',
+            giallo: 'da approfondire',
+            rosso: 'priorità alta',
+          }}
+        />
+      </div>
 
       <p className="text-[10px] text-slate-500 leading-relaxed pt-2 border-t border-black/5">
         Indicatore di <span className="font-bold">priorità di attenzione</span>, non di probabilità

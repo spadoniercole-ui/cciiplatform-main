@@ -16,6 +16,7 @@ import { Table2 } from 'lucide-react';
 import { ottieniStoricoXbrlAzienda, type BilancioStoricoAzienda } from '@/app/actions/xbrlAzienda';
 import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
 import { indiciVisibili, valoreIndice } from '@/lib/xbrl/indiciVisibili';
+import { LegendaColori } from './LegendaColori';
 
 const euro = (n: number | undefined) =>
   typeof n === 'number' && Number.isFinite(n) ? `${Math.round(n).toLocaleString('it-IT')} €` : '—';
@@ -187,10 +188,17 @@ export function ProspettoContabileStorico({
             </tbody>
           </table>
         </div>
-        <p className="mt-1 text-[10px] text-slate-400 leading-relaxed">
-          Stesse formule del resto della piattaforma. In rosso i valori oltre soglia: strumenti
-          operativi di lettura, non parametri normativi.
-        </p>
+        <div className="mt-2">
+          <LegendaColori
+            toni={['verde', 'rosso', 'grigio']}
+            etichette={{
+              verde: 'dentro la soglia',
+              rosso: 'oltre la soglia',
+              grigio: 'non calcolabile',
+            }}
+            nota="Stesse formule del resto della piattaforma: strumenti operativi di lettura, non parametri normativi."
+          />
+        </div>
       </div>
     </div>
   );

@@ -12,6 +12,8 @@ import { leggiIdentificativiEnte } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
 import { DemoAziendaScope } from '@/components/spazio/DemoUploadProvider';
+import { LegendaColori } from '@/components/spazio/LegendaColori';
+import { tonoDaStatoPasso } from '@/lib/colori/significato';
 
 type StatoStep = 'bloccato' | 'attivo' | 'completo';
 
@@ -109,12 +111,16 @@ export default async function AziendaLayout({
     },
   ];
 
+  // I colori della barra non si scelgono qui: sono i quattro toni di
+  // `src/lib/colori/significato.ts` (verde = fatto, giallo = da fare, grigio =
+  // non disponibile). Un solo significato in tutta la piattaforma, e la legenda
+  // qui sotto che lo traduce.
   const classePerStato = (stato: StatoStep): string => {
-    if (stato === 'completo')
+    const tono = tonoDaStatoPasso(stato);
+    if (tono === 'verde')
       return 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:border-emerald-400';
-    if (stato === 'attivo')
+    if (tono === 'giallo')
       return 'bg-amber-50 border-amber-300 text-amber-800 hover:border-amber-400';
-    // bloccato
     return 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed';
   };
 
@@ -244,6 +250,18 @@ export default async function AziendaLayout({
             <Users className="w-3.5 h-3.5" /> Operatori
           </Link>
         </div>
+
+        {/* La legenda sta a margine della barra: i tre colori dicono fatto,
+            da fare, non disponibile — ma solo a chi lo sa già. */}
+        <LegendaColori
+          toni={['verde', 'giallo', 'grigio']}
+          etichette={{
+            verde: 'verifica completata',
+            giallo: 'ancora da fare',
+            grigio: 'non disponibile',
+          }}
+          nota="Il verde dice che la verifica è chiusa, non che l'esito è favorevole: l'esito è nella verifica stessa."
+        />
 
         {children}
       </div>

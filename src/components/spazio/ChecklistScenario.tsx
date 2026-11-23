@@ -41,6 +41,7 @@ import {
   type ConfigurazioneChecklist,
 } from '@/app/actions/checklistConfig';
 import { ottieniModelliChecklist, type ModelloChecklist } from '@/app/actions/checklistModelli';
+import { LegendaColori } from './LegendaColori';
 
 interface Props {
   nomeSchema: string;
@@ -471,6 +472,17 @@ export function ChecklistScenario({
           </span>
         </div>
       </div>
+
+      <LegendaColori
+        toni={['verde', 'giallo', 'rosso', 'grigio']}
+        etichette={{
+          verde: 'criticità contenute',
+          giallo: 'piano da rafforzare',
+          rosso: 'criticità strutturali',
+          grigio: 'non ancora valutabile',
+        }}
+        nota="La percentuale è criticità pesata sulle sole domande già risposte: non è un voto d’insieme."
+      />
 
       {quadro.criticitaStrutturaliAperte.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">

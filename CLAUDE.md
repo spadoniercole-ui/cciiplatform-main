@@ -43,16 +43,16 @@ solo all'anteprima, è incompleta: alla fine del lavoro si aggiornano **GitHub, 
 anteprima e il deploy di produzione**, sempre tutti e tre. Il push e la pubblicazione sono
 quindi autorizzati come parte ordinaria del lavoro, senza chiederli di nuovo.
 
-1. **GitHub** — commit in italiano sul ramo di lavoro (messaggio che dice *perché*: cosa
+1. **GitHub** — commit in italiano sul ramo di lavoro (messaggio che dice _perché_: cosa
    cambia e per chi), poi `git push origin <ramo>`. Nessun lavoro resta non committato:
    se un file è di troppo, lo si toglie dal commit, non lo si lascia fuori in silenzio.
-2. **Anteprima** — il push su un ramo di lavoro fa partire il deploy *Preview* su Vercel. Va
+2. **Anteprima** — il push su un ramo di lavoro fa partire il deploy _Preview_ su Vercel. Va
    atteso fino allo stato **Ready** del commit appena pushato (non di uno precedente), e le
    correzioni si fanno nel ramo, non direttamente online. Su `main` l'anteprima non esiste:
    Vercel non ne crea per un push su `main`, e la consegna non la attende (vedi
    `ambientiAttesi` in `src/lib/consegna/verifica.ts`).
 3. **Produzione** — lo stesso commit arriva su `main` (il ramo di produzione) e diventa il
-   deploy *Production*. Si verifica la versione in fondo alla pagina di login: deve coincidere
+   deploy _Production_. Si verifica la versione in fondo alla pagina di login: deve coincidere
    con `APP_VERSION` e con l'ultima voce di `CHANGELOG.md`. La legge lo script, dalla pagina
    vera (attributo `data-versione` nel piè di pagina).
 
@@ -86,7 +86,7 @@ Regole pratiche:
   stesso giro.
 - Lo stato dei due deploy si legge **da GitHub**, senza token Vercel: il repository è pubblico
   e Vercel pubblica lì ogni deployment. Lo fa `npm run consegna`, che interroga
-  `deployments?sha=<sha>`, `deployments/<id>/statuses` (dice *success* e dà `environment_url`)
+  `deployments?sha=<sha>`, `deployments/<id>/statuses` (dice _success_ e dà `environment_url`)
   e `actions/runs?head_sha=<sha>`; gli ambienti si chiamano «Preview – cciiplatform-main»,
   «Production – cciiplatform-main» e i due progetti gemelli (`cciiweb-40`), e i progetti attesi
   si cambiano con `--progetti=`. Gli URL dei singoli deployment stanno dietro la protezione
@@ -134,7 +134,7 @@ Regole pratiche:
   - `richiediAccessoSpazio(codice)` / `richiediAccessoSpazioId(id)` se il parametro è quello;
   - `richiediSuperadmin()` per licenze, spazi, backup/ripristino, parametri di sistema;
   - route API: `rifiutaSeNonAutorizzato('SESSIONE' | 'SUPERADMIN')`.
-  Operatori (`modalita === 'OPERATORE'`), oltre allo spazio:
+    Operatori (`modalita === 'OPERATORE'`), oltre allo spazio:
   - azioni con `aziendaId` / `scenarioId` → `richiediAccessoAzienda` / `richiediAccessoScenario`
     (solo aziende assegnate); con il solo id di una riga → `verificaRigaConsentita`;
   - scritture → `{ modulo: [...], livello: 'SCRITTURA' }` col modulo della pagina che le usa
@@ -144,10 +144,10 @@ Regole pratiche:
     `verifica-salute`) → `soloAdmin: true`, anche le letture;
   - elenchi di più aziende → filtrati a `contesto.aziendeConsentite`;
   - URL di file passati dal browser → `verificaFileDelloSpazio` prima di `get`/`del`.
-  Mai fidarsi di `nomeSchema`, id utente o ruolo passati dal browser. Le funzioni interne
-  (helper, avvio MFA) vanno in `src/lib`, non esportate da file `'use server'`.
-  `scripts/check-autorizzazione.mjs` (dentro `npm run type-check`) fa fallire la CI se
-  un'azione non ha la guardia.
+    Mai fidarsi di `nomeSchema`, id utente o ruolo passati dal browser. Le funzioni interne
+    (helper, avvio MFA) vanno in `src/lib`, non esportate da file `'use server'`.
+    `scripts/check-autorizzazione.mjs` (dentro `npm run type-check`) fa fallire la CI se
+    un'azione non ha la guardia.
 - **AI**: solo `@anthropic-ai/sdk` (`ANTHROPIC_API_KEY`), usato nelle server action
   (proposta, screening, visura, confronto liquidatorio, chatbot…) e in
   `src/app/api/xbrl/report-ai`. Un lavoro AI che non deve bloccare la risposta si
@@ -207,6 +207,11 @@ deve funzionare **in cloud, in portable e sul server**. La CI costruisce anche l
   testa (jsdom e Testing Library sono dipendenze di sviluppo).
   La logica di dominio nuova va in `src/lib/…` con i suoi test.
 - **Stile**: Prettier (singoli apici, punto e virgola, 100 colonne, trailing comma es5).
+- **Colori**: verde/giallo/rosso/grigio esprimono un giudizio e hanno un significato solo,
+  in `src/lib/colori/significato.ts` (favorevole / attenzione / allerta / senza giudizio).
+  Blu e sky sono azione o identità di colonna, mai un giudizio: un «buono» non è blu. Ogni
+  schermata che colora un giudizio affianca `<LegendaColori>` (a margine, piccola) che ne
+  traduce il significato nel contesto: un semaforo senza legenda costringe a indovinare.
 - **Porte delle rotte**: ogni nuova `page.tsx` deve aprirsi da un link, un redirect o una
   voce di menù. `npm run check:rotte` (eseguito in CI) elenca le pagine raggiungibili solo
   per URL e fallisce quando ne compare una nuova; le orfane già note, ognuna col suo motivo,
