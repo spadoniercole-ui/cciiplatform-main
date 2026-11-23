@@ -29,6 +29,11 @@ jobs:
       - name: Type-check
         run: npm run type-check
 
+      # Pagine che nessun link apre (solo segnalibro): le orfane note sono in
+      # scripts/porte-rotte.json, una nuova fa fallire il job.
+      - name: Porte delle rotte
+        run: npm run check:rotte
+
       - name: Lint
         run: npm run lint
 

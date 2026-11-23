@@ -27,6 +27,7 @@ npm run lint         # next lint (0 errori richiesti; i warning sono tollerati)
 npm test             # vitest run (tutti i test)
 npx vitest run src/lib/xbrl/indici.test.ts   # un singolo file
 npm run build        # build cloud (non richiede segreti)
+npm run check:rotte  # pagine senza porta in ingresso (fallisce su una nuova)
 npm run consegna:subito   # dopo ogni push: anteprima/produzione, CI e versione online
 npm run build:portable
 npm run consegna     # attende anteprima, produzione e CI del commit pushato (dopo il push)
@@ -206,6 +207,11 @@ deve funzionare **in cloud, in portable e sul server**. La CI costruisce anche l
   testa (jsdom e Testing Library sono dipendenze di sviluppo).
   La logica di dominio nuova va in `src/lib/…` con i suoi test.
 - **Stile**: Prettier (singoli apici, punto e virgola, 100 colonne, trailing comma es5).
+- **Porte delle rotte**: ogni nuova `page.tsx` deve aprirsi da un link, un redirect o una
+  voce di menù. `npm run check:rotte` (eseguito in CI) elenca le pagine raggiungibili solo
+  per URL e fallisce quando ne compare una nuova; le orfane già note, ognuna col suo motivo,
+  stanno in `scripts/porte-rotte.json`. Una pagina che resta per i soli segnalibri si
+  registra lì, non si lascia scoprire fra sei mesi.
 - **Versioni** — ad ogni consegna di prodotto aggiorna **insieme**:
   1. `version` in `package.json`
   2. `APP_VERSION` in `src/lib/appVersion.ts`

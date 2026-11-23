@@ -1,0 +1,21 @@
+{
+  "spiegazione": "Rotte senza una porta in ingresso: nessun link, redirect o voce di menù le apre, quindi vivono solo per chi ha un vecchio segnalibro. Ogni voce qui è una decisione esplicita, con il motivo. Aggiungerne una richiede di scriverne il motivo; togliere una voce (perché la pagina ora ha una porta) è sempre la strada preferita. Elenco: node scripts/check-rotte.mjs --elenco",
+  "senzaPorta": {
+    "/spazio/[codice]/aziende/[aziendaId]/bilanci": "rimando per segnalibri: il caricamento XBRL vive nella verifica contabile",
+    "/spazio/[codice]/aziende/[aziendaId]/checklist": "rimando per segnalibri: le domande e il Test pratico vivono nella Check List dello scenario",
+    "/spazio/[codice]/aziende/[aziendaId]/indici": "rimando per segnalibri: gli indici dell'azienda vivono nella configurazione XBRL",
+    "/spazio/[codice]/aziende/[aziendaId]/screening": "rimando per segnalibri: la valutazione completa è la verifica contabile",
+    "/spazio/[codice]/indici": "sezione in costruzione (SezioneInCostruzione): non ha ancora una voce di menù",
+    "/spazio/[codice]/parametri/tipo-debito": "configurazione raggiungibile solo per URL: manca una voce in Parametri di Spazio",
+    "/spazio/[codice]/scenari/[scenarioId]/brogliaccio": "rimando per segnalibri: il Brogliaccio non esiste più, lo scenario si lavora su /proposta",
+    "/spazio/[codice]/scenari/[scenarioId]/indici": "pagina dello scenario senza porta: la tabella si legge dalla lavorazione",
+    "/spazio/[codice]/scenari/[scenarioId]/relazione": "pagina dello scenario senza porta: la Relazione si legge dalla lavorazione",
+    "/spazio/[codice]/scenari/[scenarioId]/report": "rimando per segnalibri: «Report» è diventata la Proposta",
+    "/spazio/[codice]/scenari/[scenarioId]/settore": "pagina dello scenario senza porta: i dati di settore si leggono dalla lavorazione",
+    "/spazio/[codice]/verifica-contabile/[aziendaId]/fotografia": "rimando per segnalibri: la fotografia contabile è il report contabile",
+    "/spazio/[codice]/verifica-salute/[aziendaId]/supporto": "rimando per segnalibri: il report della verifica ha una rotta autonoma",
+    "/spazio/[codice]/xbrl": "sezione in costruzione (SezioneInCostruzione): non ha ancora una voce di menù",
+    "/superadmin/Indici": "pagina del pannello Superadmin raggiungibile solo per URL",
+    "/superadmin/xbrl/caricamento": "pagina del pannello Superadmin raggiungibile solo per URL"
+  }
+}
