@@ -12,12 +12,22 @@
 // percorsi dello spazio di chi naviga, niente catene. L'etichetta dice dove si
 // torna; senza origine riconoscibile si esce dall'elenco Aziende, che è la
 // porta delle posizioni.
+//
+// PERCHÉ NON `useSearchParams`. In un componente client che legge i parametri
+// di ricerca, Next sospende il render e mostra il ripiego del confine di
+// sospensione finché l'idratazione non arriva: con un ripiego che non è un
+// collegamento, l'uscita restava un `<span>` e chi apriva la scheda senza
+// origine non aveva più una via d'uscita cliccabile. Il primo render quindi è
+// già un link vero all'elenco — quello che si vede senza JavaScript — e la
+// query si legge dal browser appena il componente è vivo.
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import {
   PARAMETRO_RITORNO,
+  destinazioneAziende,
   etichettaUscitaScheda,
   percorsoRitornoAziende,
 } from '@/lib/navigazione/ritorno';
@@ -26,8 +36,15 @@ const CLASSI =
   'inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-blue-600 font-bold uppercase tracking-wider';
 
 export function UscitaSchedaAzienda({ codice }: { codice: string }) {
-  const parametri = useSearchParams();
-  const destinazione = percorsoRitornoAziende(parametri.get(PARAMETRO_RITORNO), codice);
+  const percorso = usePathname();
+  // Il ripiego è anche il primo render: un collegamento all'elenco, non un
+  // segnaposto. Se l'origine c'è, si applica un istante dopo.
+  const [destinazione, setDestinazione] = useState(() => destinazioneAziende(codice));
+
+  useEffect(() => {
+    const parametri = new URLSearchParams(window.location.search);
+    setDestinazione(percorsoRitornoAziende(parametri.get(PARAMETRO_RITORNO), codice));
+  }, [codice, percorso]);
 
   return (
     <Link href={destinazione} className={CLASSI}>
