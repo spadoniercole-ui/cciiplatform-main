@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { CruscottoAzienda } from '@/components/spazio/CruscottoAzienda';
 import { UscitaSchedaAzienda } from '@/components/spazio/UscitaSchedaAzienda';
 import Link from 'next/link';
-import { ArrowLeft, Check, Eye, Lock, Users } from 'lucide-react';
+import { ArrowLeft, Check, Lock, Users } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
@@ -230,22 +230,21 @@ export default async function AziendaLayout({
             );
           })}
 
-          {/* Iconografia — la lettura d'insieme, dopo le tre verifiche: chiude
-            il percorso, non è una tappa da compilare.
+          {/* NÉ IL REPORT NÉ L'ICONOGRAFIA HANNO UNA PORTA QUI.
 
-            Il report non ha una porta qui. L'iconografia è già una
-            rappresentazione (i quattro riquadri, con le barre delle
-            dimensioni), e il suo foglio A4 si scarica da dentro di essa, dove
-            si legge ciò che si sta per stampare. Una seconda porta nella
-            barra ripeteva lo stesso documento accanto al pulsante nero della
-            pagina, oltre ai due punti da cui il report si lancia già fuori
-            dalla scheda: tre nomi per un'unica uscita. */}
-          <Link
-            href={`${base}/ritratto`}
-            className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
-          >
-            <Eye className="w-3.5 h-3.5" /> Iconografia
-          </Link>
+            Il report: si scarica dalla griglia delle iconografie, dalla mappa
+            e dal pulsante nero dentro l'iconografia stessa. Una tab con lo
+            stesso nome, in fila alle tre verifiche, faceva sembrare il
+            documento una quarta verifica.
+
+            L'iconografia: la barra resta la sola forma lecita (vedi il
+            commento in testa a `lib/ritratto/ritratto.ts`: le cinque
+            dimensioni non si sommano, e una ragnatela con l'area riempita
+            reintrodurrebbe per via grafica il voto d'insieme che il modello
+            rifiuta). Una pagina così — quattro riquadri di lettura, con le
+            barre come supporto — non è la rappresentazione che giustifica una
+            tab accanto alle verifiche: si raggiunge dalla sua voce di menù
+            («Iconografie») e dalla griglia che elenca le posizioni. */}
 
           {/* Operatori — separato dal flusso di analisi, spinto all'estremità
             opposta: sopra restano solo i passi utili all'analisi aziendale. */}

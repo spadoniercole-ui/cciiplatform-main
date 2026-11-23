@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.255.6**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.255.7**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,19 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.255.7 — 2026-11-23
+
+- **L’iconografia non ha più una tab nella scheda azienda.** La tab doveva restare solo se
+  la pagina fosse una vera rappresentazione, e la sola forma lecita resta la barra: le cinque
+  dimensioni non si sommano e non hanno pesi, quindi una ragnatela a cinque assi con l’area
+  riempita — o una bolla, che è un’area — reintrodurrebbe per via grafica il voto d’insieme
+  che il modello rifiuta da sempre («due giudizi sulla stessa posizione e nessuno che dica
+  quale credere»). Il grafico più leggibile non aggiungeva una lettura corretta: ne
+  aggiungeva una proibita. La pagina resta, con le sue barre e i suoi quattro riquadri, e si
+  raggiunge dalla voce «Iconografie» e dalla griglia che elenca le posizioni.
+- **La barra delle direttrici resta a tre verifiche più Operatori**: sono le tappe del
+  lavoro; la lettura d’insieme sta dove appartiene.
 
 ## 0.255.6 — 2026-11-23
 

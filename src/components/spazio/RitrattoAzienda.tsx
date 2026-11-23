@@ -272,6 +272,12 @@ export function RitrattoAzienda({ ritratto }: Props) {
                     </span>
                   </div>
 
+                  {/* LA BARRA, NON LA RAGNATELA.
+                      Le cinque dimensioni non si sommano e non hanno pesi: la
+                      barra dice quanto pesa ciascuna, da sola. Una ragnatela a
+                      cinque assi — o una bolla — chiuderebbe i vertici in
+                      un'area, e l'area è un voto d'insieme: il secondo
+                      giudizio che il modello evita (vedi `lib/ritratto/ritratto.ts`). */}
                   <div className="mt-1.5 flex items-center gap-2">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
                       <div
