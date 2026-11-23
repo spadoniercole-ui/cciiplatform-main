@@ -192,10 +192,22 @@ export function VerificaAziendaScheda({
   return (
     <div className="space-y-4">
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-2">
-        <h1 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <Camera className="w-4 h-4 text-blue-600" />
-          Verifica azienda — {ragioneSociale}
-        </h1>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h1 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Camera className="w-4 h-4 text-blue-600" />
+            Verifica azienda — {ragioneSociale}
+          </h1>
+          {/* L'anagrafica non è una verifica, ma da qui si deve poter correggere
+              un dato senza tornare all'elenco (0.255.13). */}
+          {codice && (
+            <Link
+              href={`/spazio/${codice}/aziende/${aziendaId}`}
+              className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+            >
+              Anagrafica azienda
+            </Link>
+          )}
+        </div>
         <p className="text-xs text-slate-500 leading-relaxed max-w-3xl">
           Le due verifiche restano due letture distinte: il dato attuale dell’amministrativa e il
           dato storico della contabile. La verifica aziendale ne è la fotografia: le colonne del

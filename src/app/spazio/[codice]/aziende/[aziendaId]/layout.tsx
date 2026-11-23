@@ -2,30 +2,26 @@ import { redirect } from 'next/navigation';
 import { CruscottoAzienda } from '@/components/spazio/CruscottoAzienda';
 import { UscitaSchedaAzienda } from '@/components/spazio/UscitaSchedaAzienda';
 import Link from 'next/link';
-import { ArrowLeft, Check, Lock, Users } from 'lucide-react';
+import { Camera, Users } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
-import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
-import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
-import { statoDirettrici, type Stadio } from '@/lib/verificaAzienda/direttrici';
 import { leggiIdentificativiEnte } from '@/lib/anagraficaEnte/identificativi';
 import { IdentificativiEnte } from '@/components/spazio/IdentificativiEnte';
 import { RiferimentoAziendaStampa } from '@/components/spazio/RiferimentoAziendaStampa';
 import { DemoAziendaScope } from '@/components/spazio/DemoUploadProvider';
-import { LegendaColori } from '@/components/spazio/LegendaColori';
-import { tonoDaStatoPasso } from '@/lib/colori/significato';
 
-type StatoStep = 'bloccato' | 'attivo' | 'completo';
-
-interface Step {
-  id: string; // segmento URL ('' = anagrafica root)
-  /** Destinazione quando non è una sotto-pagina di questa scheda. */
-  href?: string;
-  label: string;
-  stato: StatoStep;
-  motivo?: string; // perché è bloccato (tooltip)
-  badge?: number; // es. domande residue
-}
+// L'ANAGRAFICA NON È UNA VERIFICA (0.255.13).
+//
+// Questa scheda si apriva con la barra delle tre verifiche — amministrativa,
+// contabile, aziendale — e la stessa barra stava anche dentro la verifica
+// aziendale. Chi arrivava dall'esito amministrativo («Scheda azienda») finiva
+// così in due posti diversi che si chiamavano allo stesso modo e producevano
+// documenti diversi.
+//
+// Ora il binario è uno: da qui si va nella verifica aziendale, che è la
+// fotografia delle due letture e il documento che si rilascia, e da lì si
+// aprono l'esito amministrativo e la contabile. Questa pagina resta quello che
+// è: i dati dell'azienda, da leggere e correggere.
 
 export default async function AziendaLayout({
   children,
@@ -50,79 +46,12 @@ export default async function AziendaLayout({
   const aziendaNum = Number(aziendaId);
   const isEnte = contesto.tipoSpazio === 'ENTE';
 
-  // Segnali delle tre direttrici, tutti in parallelo. La regola che decide i
-  // verdi è una sola (`statoDirettrici`), la stessa che usa la dashboard.
-  const [storicoVerifiche, statoContabile] = await Promise.all([
-    ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
-    statoVerificaContabileAction(contesto.nomeSchema).catch(() => null),
-  ]);
   // Identificativi presso l'ente: in testata, in evidenza, appena salvati.
   const identificativi = isEnte
     ? await leggiIdentificativiEnte(contesto.nomeSchema, aziendaNum).catch(() => [])
     : [];
 
-  const rigaContabile = statoContabile?.success
-    ? statoContabile.aziende.find((a) => a.aziendaId === aziendaNum)
-    : undefined;
-  const direttrici = statoDirettrici({
-    amministrativaLetta: Boolean(
-      storicoVerifiche?.success && storicoVerifiche.righe?.some((v) => v.id === aziendaNum)
-    ),
-    contabile: rigaContabile
-      ? {
-          completa: rigaContabile.completa,
-          anniXbrl: rigaContabile.anniXbrl,
-          visuraPresente: rigaContabile.visuraPresente,
-        }
-      : null,
-    baseAziendaleSalvata: rigaContabile?.baseAziendaleSalvata ?? false,
-  });
-  const aPasso = (stato: Stadio): StatoStep => (stato === 'COMPLETO' ? 'completo' : 'attivo');
-
   const base = `/spazio/${codice}/aziende/${aziendaId}`;
-
-  // TRE VERIFICHE, NON LE TAB DELLO SCREENING. La barra di questa scheda
-  // portava «Anagrafica → Analisi Bilancio → Verifica contabile → Check List»:
-  // era il percorso del vecchio screening, e chi entrava da qui mescolava
-  // verifica amministrativa e contabile. Ora la scheda è l'Anagrafica
-  // dell'azienda, e da qui si aprono le tre direttrici del prodotto:
-  // amministrativa (il triage), contabile (il dato XBRL) e aziendale (le due
-  // lette insieme, con la fotografia salvata). Le vecchie sotto-pagine restano
-  // raggiungibili dal loro URL (XBRL, indici, bilanci) finché non si ripuliscono,
-  // ma non sono più una tappa da attraversare.
-  const steps: Step[] = [
-    {
-      id: 'amministrativa',
-      href: `/spazio/${codice}/verifica-salute?azienda=${aziendaId}`,
-      label: 'Verifica amministrativa',
-      stato: aPasso(direttrici.amministrativa),
-    },
-    {
-      id: 'contabile',
-      href: `/spazio/${codice}/verifica-contabile/${aziendaId}`,
-      label: 'Verifica contabile',
-      stato: aPasso(direttrici.contabile),
-    },
-    {
-      id: 'aziendale',
-      href: `/spazio/${codice}/verifica-azienda/${aziendaId}`,
-      label: 'Verifica aziendale',
-      stato: aPasso(direttrici.aziendale),
-    },
-  ];
-
-  // I colori della barra non si scelgono qui: sono i quattro toni di
-  // `src/lib/colori/significato.ts` (verde = fatto, giallo = da fare, grigio =
-  // non disponibile). Un solo significato in tutta la piattaforma, e la legenda
-  // qui sotto che lo traduce.
-  const classePerStato = (stato: StatoStep): string => {
-    const tono = tonoDaStatoPasso(stato);
-    if (tono === 'verde')
-      return 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:border-emerald-400';
-    if (tono === 'giallo')
-      return 'bg-amber-50 border-amber-300 text-amber-800 hover:border-amber-400';
-    return 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed';
-  };
 
   return (
     <DemoAziendaScope azienda={azienda.ragioneSociale}>
@@ -184,65 +113,18 @@ export default async function AziendaLayout({
           Se non c'è mai stata una verifica non si mostra nulla. */}
         <CruscottoAzienda nomeSchema={contesto.nomeSchema} aziendaId={aziendaNum} codice={codice} />
 
-        {/* Barra delle direttrici: le tre verifiche a sinistra, Operatori a
-          destra. Semaforo: arancione = da fare, verde = fatto. */}
+        {/* Una sola porta verso l'analisi: la verifica aziendale. Da lì si
+          aprono l'esito amministrativo e la verifica contabile, quindi questa
+          pagina non ripete quei due pulsanti. Operatori resta separato, perché
+          non è un passo dell'analisi. */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {steps.map((step) => {
-            const contenuto = (
-              <span className="inline-flex items-center gap-1">
-                {step.stato === 'completo' && <Check className="w-3 h-3 shrink-0" />}
-                {step.stato === 'bloccato' && <Lock className="w-3 h-3 shrink-0" />}
-                {step.label}
-              </span>
-            );
-            const classi = `relative px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border transition-colors shrink-0 ${classePerStato(step.stato)}`;
-            const badge =
-              step.badge !== undefined ? (
-                <span
-                  className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-amber-500 text-white text-[9px] font-black rounded-full"
-                  title={`${step.badge} domande dello screening in attesa di risposta`}
-                >
-                  {step.badge}
-                </span>
-              ) : null;
+          <Link
+            href={`/spazio/${codice}/verifica-azienda/${aziendaId}`}
+            className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border border-blue-200 bg-blue-50 text-blue-800 hover:border-blue-400 transition-colors"
+          >
+            <Camera className="w-3.5 h-3.5" /> Verifica aziendale
+          </Link>
 
-            if (step.stato === 'bloccato') {
-              return (
-                <span key={step.id} className={classi} title={step.motivo} aria-disabled="true">
-                  {contenuto}
-                </span>
-              );
-            }
-            return (
-              <Link
-                key={step.id}
-                href={step.href ?? (step.id ? `${base}/${step.id}` : base)}
-                className={classi}
-              >
-                {contenuto}
-                {badge}
-              </Link>
-            );
-          })}
-
-          {/* NÉ IL REPORT NÉ L'ICONOGRAFIA HANNO UNA PORTA QUI.
-
-            Il report: si scarica dalla griglia delle iconografie, dalla mappa
-            e dal pulsante nero dentro l'iconografia stessa. Una tab con lo
-            stesso nome, in fila alle tre verifiche, faceva sembrare il
-            documento una quarta verifica.
-
-            L'iconografia: la barra resta la sola forma lecita (vedi il
-            commento in testa a `lib/ritratto/ritratto.ts`: le cinque
-            dimensioni non si sommano, e una ragnatela con l'area riempita
-            reintrodurrebbe per via grafica il voto d'insieme che il modello
-            rifiuta). Una pagina così — quattro riquadri di lettura, con le
-            barre come supporto — non è la rappresentazione che giustifica una
-            tab accanto alle verifiche: si raggiunge dalla sua voce di menù
-            («Iconografie») e dalla griglia che elenca le posizioni. */}
-
-          {/* Operatori — separato dal flusso di analisi, spinto all'estremità
-            opposta: sopra restano solo i passi utili all'analisi aziendale. */}
           <Link
             href={`${base}/operatori`}
             className="ml-auto shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[11px] font-bold whitespace-nowrap border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
@@ -250,18 +132,6 @@ export default async function AziendaLayout({
             <Users className="w-3.5 h-3.5" /> Operatori
           </Link>
         </div>
-
-        {/* La legenda sta a margine della barra: i tre colori dicono fatto,
-            da fare, non disponibile — ma solo a chi lo sa già. */}
-        <LegendaColori
-          toni={['verde', 'giallo', 'grigio']}
-          etichette={{
-            verde: 'verifica completata',
-            giallo: 'ancora da fare',
-            grigio: 'non disponibile',
-          }}
-          nota="Il verde dice che la verifica è chiusa, non che l'esito è favorevole: l'esito è nella verifica stessa."
-        />
 
         {children}
       </div>

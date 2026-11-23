@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.255.12**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.255.13**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,16 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.255.13 — 2026-11-23
+
+- **Un binario solo verso la verifica aziendale.** L’esito della verifica amministrativa offriva
+  una voce «Scheda azienda» che apriva l’anagrafica, la quale si presentava con una propria
+  barra delle tre verifiche: due pagine chiamate «verifica aziendale» e due documenti diversi.
+  Ora quella voce porta alla verifica aziendale (fotografia, colonne del prospetto e tre
+  scenari, con il documento da rilasciare), e l’anagrafica non ripete più i pulsanti delle
+  verifiche: le tiene una sola pagina, con un rimando inverso «Anagrafica azienda» per
+  correggere un dato senza tornare all’elenco.
 
 ## 0.255.12 — 2026-11-23
 

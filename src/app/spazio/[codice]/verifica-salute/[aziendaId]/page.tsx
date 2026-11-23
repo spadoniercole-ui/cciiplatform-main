@@ -148,11 +148,18 @@ export default async function EsitoVerificaAmministrativaPage({
             >
               <ShieldAlert className="w-3.5 h-3.5" /> Posizione
             </Link>
+            {/* UN BINARIO SOLO (0.255.13). Questa voce portava all'anagrafica
+                dell'azienda, che si apriva con una propria barra delle tre
+                verifiche: due pagine diverse chiamate «verifica aziendale» e
+                due report diversi. La voce porta ora alla verifica aziendale,
+                che è il documento che si rilascia e da cui si aprono le due
+                letture. L'anagrafica resta raggiungibile dall'elenco Aziende,
+                dove si modificano i dati. */}
             <Link
-              href={`/spazio/${codice}/aziende/${id}`}
+              href={`/spazio/${codice}/verifica-azienda/${id}`}
               className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
             >
-              Scheda azienda
+              Verifica aziendale
             </Link>
           </div>
         </div>
