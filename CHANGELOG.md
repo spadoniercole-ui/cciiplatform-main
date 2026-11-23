@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.255.13**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.255.14**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,23 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.255.14 — 2026-11-23
+
+- **Torna il livello di permesso per azienda.** L’associazione utente↔azienda esisteva già, ma
+  senza profilo: chi era associato a un’azienda poteva tutto ciò che il suo permesso di modulo
+  consentiva, su tutte le aziende. `utenti_aziende` ha ora `livello` (`LETTURA` oppure
+  `SCRITTURA`), con le associazioni preesistenti che valgono `SCRITTURA`: nessuno resta chiuso
+  fuori.
+- **Creazione**: dal form «Nuovo operatore» nella scheda azienda il livello si sceglie insieme
+  all’associazione. **Manutenzione e profilatura**: accanto a ogni operatore associato c’è il
+  selettore del livello, salvato con `impostaLivelloAziendaAction`; associare o rimuovere
+  un’azienda non azzera il livello delle altre.
+- **Applicazione**: il livello per azienda è un tetto al permesso di modulo, applicato da
+  `verificaAziendaConsentita` (quindi da `richiediAccessoAzienda` e `richiediAccessoScenario`
+  quando chiedono la scrittura). Un Operatore in sola lettura su un’azienda non può modificarla
+  nemmeno se il modulo è in scrittura; la regola pura sta in `src/lib/permessiAzienda.ts` con i
+  suoi test. La panoramica Utenti mostra il livello accanto a ogni azienda.
 
 ## 0.255.13 — 2026-11-23
 

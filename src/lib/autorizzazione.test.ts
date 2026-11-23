@@ -253,6 +253,32 @@ describe('operatori: aziende, scenari e righe assegnate', () => {
     await expect(richiediAccessoAzienda('tenant_alfa', 8)).resolves.toBeTruthy();
   });
 
+  it('il livello dell’azienda limita la scrittura, non la lettura', () => {
+    // Contesto sintetico: la regola vive in `verificaAziendaConsentita`, che è
+    // sincrona e non tocca il database.
+    const solaLettura = {
+      modalita: 'OPERATORE',
+      aziendeConsentite: [7],
+      livelliAzienda: { 7: 'LETTURA' },
+    } as unknown as Parameters<typeof verificaAziendaConsentita>[0];
+
+    expect(() => verificaAziendaConsentita(solaLettura, 7, 'LETTURA')).not.toThrow();
+    expect(() => verificaAziendaConsentita(solaLettura, 7, 'SCRITTURA')).toThrow('sola lettura');
+  });
+
+  it('un’associazione senza livello vale «lettura e scrittura»', () => {
+    const senzaLivello = {
+      modalita: 'OPERATORE',
+      aziendeConsentite: [7],
+      livelliAzienda: {},
+    } as unknown as Parameters<typeof verificaAziendaConsentita>[0];
+
+    expect(() => verificaAziendaConsentita(senzaLivello, 7, 'SCRITTURA')).not.toThrow();
+    expect(() => verificaAziendaConsentita(senzaLivello, 8, 'LETTURA')).toThrow(
+      'Azienda non assegnata'
+    );
+  });
+
   it('basta il permesso su uno dei moduli elencati', async () => {
     login('t-otto', 'USER', 1, 'otto.operatore');
     await expect(

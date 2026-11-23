@@ -77,10 +77,13 @@ export function getTabelleTenant(nomeSchema: string) {
 
     // Associazione N:N utente <-> azienda (un utente può operare su più
     // aziende dello stesso spazio, un'azienda può avere più utenti).
+    // Il livello è il tetto di scrittura su quella singola azienda: vale
+    // insieme al permesso per modulo, e non può allargarlo (0.255.14).
     utenti_aziende: tableBuilder('utenti_aziende', {
       id: serial('id').primaryKey(),
       utenteId: integer('utente_id').notNull(),
       aziendaId: integer('azienda_id').notNull(),
+      livello: text('livello').$type<'LETTURA' | 'SCRITTURA'>().notNull().default('SCRITTURA'),
     }),
 
     // Permessi per modulo di ogni utente Operativo/Consultatore (Nessun

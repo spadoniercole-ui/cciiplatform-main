@@ -143,6 +143,11 @@ Regole pratiche:
   - funzioni usate solo da pagine Admin (`parametri`, `utenti`, `aziende/**`,
     `verifica-salute`) → `soloAdmin: true`, anche le letture;
   - elenchi di più aziende → filtrati a `contesto.aziendeConsentite`;
+  - il **livello dell'associazione utente↔azienda** (`utenti_aziende.livello`, `LETTURA` o
+    `SCRITTURA`) è un tetto alla scrittura su quella singola azienda: vale insieme al permesso
+    di modulo e non lo allarga. Lo applica `verificaAziendaConsentita`, quindi
+    `richiediAccessoAzienda`/`richiediAccessoScenario` quando chiedono `livello: 'SCRITTURA'`.
+    Le associazioni create prima della colonna valgono `SCRITTURA` (nessuno resta chiuso fuori).
   - URL di file passati dal browser → `verificaFileDelloSpazio` prima di `get`/`del`.
     Mai fidarsi di `nomeSchema`, id utente o ruolo passati dal browser. Le funzioni interne
     (helper, avvio MFA) vanno in `src/lib`, non esportate da file `'use server'`.

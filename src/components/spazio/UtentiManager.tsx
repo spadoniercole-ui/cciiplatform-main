@@ -176,9 +176,16 @@ export function UtentiManager({ nomeSchema }: Props) {
                   )}
                   <div className="text-[10px] text-slate-400 mt-0.5">
                     {utente.tipologia === 'OPERATIVO' ? 'Operativo' : 'Consultatore'} ·{' '}
-                    {utente.aziendeIds.length === 0
+                    {utente.aziende.length === 0
                       ? 'nessuna azienda associata'
-                      : utente.aziendeIds.map(nomeAzienda).join(', ')}
+                      : utente.aziende
+                          .map(
+                            (a) =>
+                              `${nomeAzienda(a.id)} (${
+                                a.livello === 'LETTURA' ? 'sola lettura' : 'lettura e scrittura'
+                              })`
+                          )
+                          .join(', ')}
                   </div>
                 </div>
 

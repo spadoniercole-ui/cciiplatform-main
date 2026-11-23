@@ -3033,6 +3033,13 @@ export async function assicuraTabelleUtenti(nomeSchema: string): Promise<void> {
   await eseguiDdlTenant(
     sql`CREATE INDEX IF NOT EXISTS idx_utenti_aziende_utente ON ${s}.utenti_aziende (utente_id)`
   );
+
+  // Il livello dell'utente su QUESTA azienda (0.255.14). Le associazioni
+  // create prima della colonna valevano «piena»: il default conserva quel
+  // comportamento e non chiude l'accesso a chi stava lavorando.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.utenti_aziende ADD COLUMN IF NOT EXISTS livello TEXT NOT NULL DEFAULT 'SCRITTURA'`
+  );
   await eseguiDdlTenant(
     sql`CREATE INDEX IF NOT EXISTS idx_utenti_aziende_azienda ON ${s}.utenti_aziende (azienda_id)`
   );

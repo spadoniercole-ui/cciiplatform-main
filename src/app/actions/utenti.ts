@@ -15,8 +15,19 @@ import { assicuraTabelleUtenti } from '@/db/provision';
 import { generaUsernameUnivoco, usernameEsisteGlobale } from '@/lib/generaUsername';
 import { chiudiSessioniUtente } from '@/lib/sessione';
 import { pool } from '@/lib/db';
+import {
+  livelloAziendaValido,
+  normalizzaLivelloAzienda,
+  type LivelloAzienda,
+} from '@/lib/permessiAzienda';
 
 export type TipologiaUtente = 'OPERATIVO' | 'CONSULTATORE';
+
+/** L'utente e il livello che ha su una singola azienda (0.255.14). */
+export interface AssegnazioneAzienda {
+  id: number;
+  livello: LivelloAzienda;
+}
 
 export interface UtenteSpazio {
   id: number;
@@ -27,6 +38,8 @@ export interface UtenteSpazio {
   tipologia: TipologiaUtente;
   attivo: boolean;
   aziendeIds: number[];
+  /** Le stesse aziende con il livello di ciascuna: è qui che vive la profilatura. */
+  aziende: AssegnazioneAzienda[];
 }
 
 export interface RisultatoElencoUtenti {
@@ -48,6 +61,23 @@ export interface DatiUtente {
   email: string;
   tipologia: TipologiaUtente;
   aziendeIds: number[];
+  /**
+   * Il livello scelto per ogni azienda. Se manca si conserva quello già
+   * registrato (modifica) oppure vale «lettura e scrittura» (nuova
+   * associazione), che è il comportamento delle associazioni vecchie.
+   */
+  livelli?: Record<number, LivelloAzienda>;
+}
+
+/** Il livello da scrivere per un'azienda: scelto, altrimenti quello di prima. */
+function livelloDaScrivere(
+  dati: DatiUtente,
+  aziendaId: number,
+  precedente?: unknown
+): LivelloAzienda {
+  const scelto = dati.livelli?.[aziendaId];
+  if (livelloAziendaValido(scelto)) return scelto;
+  return precedente === undefined ? 'SCRITTURA' : normalizzaLivelloAzienda(precedente);
 }
 
 function generaPasswordTemporanea(): string {
@@ -75,16 +105,22 @@ export async function ottieniUtentiSpazio(nomeSchema: string): Promise<Risultato
     const righeUtenti = await db.select().from(tabelle.utenti_spazio);
     const righeAssociazioni = await db.select().from(tabelle.utenti_aziende);
 
-    const utenti: UtenteSpazio[] = righeUtenti.map((u) => ({
-      id: u.id,
-      nome: u.nome,
-      cognome: u.cognome,
-      username: u.username ?? null,
-      email: u.email,
-      tipologia: u.tipologia as TipologiaUtente,
-      attivo: u.attivo,
-      aziendeIds: righeAssociazioni.filter((a) => a.utenteId === u.id).map((a) => a.aziendaId),
-    }));
+    const utenti: UtenteSpazio[] = righeUtenti.map((u) => {
+      const aziende: AssegnazioneAzienda[] = righeAssociazioni
+        .filter((a) => a.utenteId === u.id)
+        .map((a) => ({ id: a.aziendaId, livello: normalizzaLivelloAzienda(a.livello) }));
+      return {
+        id: u.id,
+        nome: u.nome,
+        cognome: u.cognome,
+        username: u.username ?? null,
+        email: u.email,
+        tipologia: u.tipologia as TipologiaUtente,
+        attivo: u.attivo,
+        aziendeIds: aziende.map((a) => a.id),
+        aziende,
+      };
+    });
 
     return { success: true, utenti };
   } catch (error: any) {
@@ -154,7 +190,9 @@ export async function creaUtenteSpazioAction(
     const utenteId = inserito[0].id;
 
     for (const aziendaId of dati.aziendeIds) {
-      await db.insert(tabelle.utenti_aziende).values({ utenteId, aziendaId });
+      await db
+        .insert(tabelle.utenti_aziende)
+        .values({ utenteId, aziendaId, livello: livelloDaScrivere(dati, aziendaId) });
     }
 
     // Indicizzazione username -> schema: senza questo, il login non saprebbe
@@ -228,9 +266,22 @@ export async function modificaUtenteSpazioAction(
 
     // Riscrive le associazioni azienda da zero: più semplice e sicuro di un
     // confronto differenziale, dato il volume atteso (poche aziende per utente).
+    // Prima si leggono i livelli già assegnati: chi modifica un utente da qui
+    // (associa o rimuove un'azienda) non deve azzerare la profilatura delle
+    // altre aziende, che si cambia nel suo selettore.
+    const esistenti = await db
+      .select()
+      .from(tabelle.utenti_aziende)
+      .where(eq(tabelle.utenti_aziende.utenteId, id));
+    const livelliPrecedenti = new Map(esistenti.map((r) => [r.aziendaId, r.livello]));
+
     await db.delete(tabelle.utenti_aziende).where(eq(tabelle.utenti_aziende.utenteId, id));
     for (const aziendaId of dati.aziendeIds) {
-      await db.insert(tabelle.utenti_aziende).values({ utenteId: id, aziendaId });
+      await db.insert(tabelle.utenti_aziende).values({
+        utenteId: id,
+        aziendaId,
+        livello: livelloDaScrivere(dati, aziendaId, livelliPrecedenti.get(aziendaId)),
+      });
     }
 
     return { success: true };
@@ -277,6 +328,52 @@ export async function disabilitaUtenteSpazioAction(
     return esito;
   } catch (error) {
     return { success: false, error: messaggioErrore(error, 'Operazione non riuscita.') };
+  }
+}
+
+/**
+ * Il livello di un utente su UNA azienda (0.255.14): è la profilatura
+ * dell'associazione, distinta dai permessi per modulo. Solo l'Admin di Spazio
+ * la cambia, e solo per un'azienda a cui l'utente è già associato.
+ */
+export async function impostaLivelloAziendaAction(
+  nomeSchema: string,
+  utenteId: number,
+  aziendaId: number,
+  livello: LivelloAzienda
+): Promise<RisultatoOperazioneUtente> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (!livelloAziendaValido(livello)) {
+      return { success: false, error: 'Livello non valido: sola lettura o lettura e scrittura.' };
+    }
+    await assicuraTabelleUtenti(nomeSchema);
+    const { db } = await import('@/db/client');
+    const { getTabelleTenant } = await import('@/db/schema');
+    const { eq, and } = await import('drizzle-orm');
+    const tabelle = getTabelleTenant(nomeSchema);
+
+    const aggiornate = await db
+      .update(tabelle.utenti_aziende)
+      .set({ livello })
+      .where(
+        and(
+          eq(tabelle.utenti_aziende.utenteId, Number(utenteId)),
+          eq(tabelle.utenti_aziende.aziendaId, Number(aziendaId))
+        )
+      )
+      .returning({ id: tabelle.utenti_aziende.id });
+
+    if (aggiornate.length === 0) {
+      return { success: false, error: 'Questo utente non è associato all’azienda.' };
+    }
+    return { success: true };
+  } catch (error: any) {
+    console.error('[impostaLivelloAziendaAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile aggiornare il livello: ${error.message || error}`,
+    };
   }
 }
 

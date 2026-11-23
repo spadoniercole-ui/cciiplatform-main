@@ -24,6 +24,7 @@ import { cookies } from 'next/headers';
 import { pool } from '@/lib/db';
 import { richiedeCambioPassword as valutaCambioPassword } from '@/lib/passwordTemporanea';
 import type { Modulo, LivelloPermesso } from '@/lib/moduliPermesso';
+import { normalizzaLivelloAzienda } from '@/lib/permessiAzienda';
 
 export const COOKIE_SESSIONE = 'session_token';
 export const COOKIE_SPAZIO_ISPEZIONE = 'spazio_ispezione';
@@ -65,6 +66,12 @@ export interface ContestoAccessoSpazio {
   permessi?: Record<string, LivelloPermesso>;
   /** Solo per OPERATORE: id delle aziende su cui può operare. */
   aziendeConsentite?: number[];
+  /**
+   * Il livello su ogni azienda assegnata (0.255.14). È un tetto: insieme al
+   * permesso di modulo dice che cosa l'utente può fare su quella azienda.
+   * Le associazioni vecchie, senza livello, valgono «SCRITTURA».
+   */
+  livelliAzienda?: Record<number, LivelloPermesso>;
   /** ENTE cambia a cascata i limiti di ricevibilità (1 sola soglia invece di N categorie) e il feedback sulla Proposta — vedi RicevibilitaManager e PropostaScenario. */
   tipoSpazio: 'ENTE' | 'NON_ENTE';
   /** Predisposto, non ancora operativo altrove nel codice. */
@@ -297,10 +304,29 @@ async function contestoUtenteSpazio(
   const permessi: Record<string, LivelloPermesso> = {};
   for (const p of permessiRis.rows) permessi[p.modulo] = p.livello as LivelloPermesso;
 
-  const aziendeRis = await pool.query(
-    `SELECT azienda_id FROM "${nomeSchema}".utenti_aziende WHERE utente_id = $1`,
-    [utenteId]
-  );
+  // La colonna `livello` arriva con la prima gestione utenti dello schema. Se
+  // uno schema non è ancora migrato, la lettura non deve chiudere fuori nessuno:
+  // si leggono le sole associazioni, e senza livello valgono «SCRITTURA».
+  let righeAziende: { azienda_id: number; livello?: string | null }[];
+  try {
+    righeAziende = (
+      await pool.query(
+        `SELECT azienda_id, livello FROM "${nomeSchema}".utenti_aziende WHERE utente_id = $1`,
+        [utenteId]
+      )
+    ).rows;
+  } catch {
+    righeAziende = (
+      await pool.query(
+        `SELECT azienda_id FROM "${nomeSchema}".utenti_aziende WHERE utente_id = $1`,
+        [utenteId]
+      )
+    ).rows;
+  }
+  const livelliAzienda: Record<number, LivelloPermesso> = {};
+  for (const a of righeAziende) {
+    livelliAzienda[Number(a.azienda_id)] = normalizzaLivelloAzienda(a.livello);
+  }
 
   return {
     ...base,
@@ -309,7 +335,8 @@ async function contestoUtenteSpazio(
     email: utente.rows[0].email ?? undefined,
     richiedeCambioPassword: valutaCambioPassword(utente.rows[0].password_temporanea),
     permessi,
-    aziendeConsentite: aziendeRis.rows.map((a: { azienda_id: number }) => a.azienda_id),
+    aziendeConsentite: righeAziende.map((a) => Number(a.azienda_id)),
+    livelliAzienda,
   };
 }
 
@@ -408,14 +435,28 @@ export async function richiediAccessoSpazioId(
   return contesto;
 }
 
-/** Per gli Operatori: verifica che l'azienda sia tra quelle assegnate. */
+/**
+ * Per gli Operatori: l'azienda deve essere fra quelle assegnate e il livello
+ * su quella azienda deve bastare per l'operazione. Un utente in sola lettura
+ * su un'azienda può leggerla, non modificarla, anche se il permesso di modulo
+ * gli darebbe la scrittura: il livello per azienda è un tetto (0.255.14).
+ */
 export function verificaAziendaConsentita(
   contesto: ContestoAccessoSpazio,
-  aziendaId: number
+  aziendaId: number,
+  livelloRichiesto?: 'LETTURA' | 'SCRITTURA'
 ): void {
   if (contesto.modalita !== 'OPERATORE') return;
-  if (!contesto.aziendeConsentite?.includes(Number(aziendaId))) {
+  const id = Number(aziendaId);
+  if (!contesto.aziendeConsentite?.includes(id)) {
     throw new ErroreAutorizzazione('Azienda non assegnata a questo utente.');
+  }
+  if (livelloRichiesto !== 'SCRITTURA') return;
+  const livelloAzienda = normalizzaLivelloAzienda(contesto.livelliAzienda?.[id]);
+  if (livelloAzienda === 'LETTURA') {
+    throw new ErroreAutorizzazione(
+      'Su questa azienda hai il permesso di sola lettura: per modificarla serve il livello «lettura e scrittura».'
+    );
   }
 }
 
@@ -429,7 +470,7 @@ export async function richiediAccessoAzienda(
   req: RequisitiAccesso = {}
 ): Promise<ContestoAccessoSpazio> {
   const contesto = await richiediAccessoSchema(nomeSchema, req);
-  verificaAziendaConsentita(contesto, aziendaId);
+  verificaAziendaConsentita(contesto, aziendaId, req.livello);
   return contesto;
 }
 
@@ -445,7 +486,7 @@ export async function richiediAccessoScenario(
 ): Promise<ContestoAccessoSpazio> {
   const contesto = await richiediAccessoSchema(nomeSchema, req);
   if (contesto.modalita === 'OPERATORE') {
-    await verificaRigaConsentita(contesto, 'scenari', scenarioId);
+    await verificaRigaConsentita(contesto, 'scenari', scenarioId, req.livello);
   }
   return contesto;
 }
@@ -471,7 +512,8 @@ export type TabellaConAzienda = keyof typeof TABELLE_CON_AZIENDA;
 export async function verificaRigaConsentita(
   contesto: ContestoAccessoSpazio,
   tabella: TabellaConAzienda,
-  id: number
+  id: number,
+  livelloRichiesto?: 'LETTURA' | 'SCRITTURA'
 ): Promise<void> {
   if (contesto.modalita !== 'OPERATORE') return;
   const colonna = TABELLE_CON_AZIENDA[tabella];
@@ -483,7 +525,7 @@ export async function verificaRigaConsentita(
            JOIN "${s}".scenari sc ON sc.id = t.scenario_id WHERE t.id = $1`;
   const ris = await pool.query(sql, [Number(id)]);
   if (ris.rows.length === 0) return;
-  verificaAziendaConsentita(contesto, ris.rows[0].azienda_id);
+  verificaAziendaConsentita(contesto, ris.rows[0].azienda_id, livelloRichiesto);
 }
 
 /** Prefisso del nome dei file caricati: lega il file allo spazio che lo carica. */

@@ -13,11 +13,17 @@ import {
   ottieniUtentiSpazio,
   creaUtenteSpazioAction,
   modificaUtenteSpazioAction,
+  impostaLivelloAziendaAction,
   disabilitaUtenteSpazioAction,
   riattivaUtenteSpazioAction,
   type UtenteSpazio,
   type TipologiaUtente,
 } from '@/app/actions/utenti';
+import {
+  ETICHETTA_LIVELLO_AZIENDA,
+  LIVELLI_AZIENDA,
+  type LivelloAzienda,
+} from '@/lib/permessiAzienda';
 import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 interface Props {
@@ -30,6 +36,9 @@ const FORM_VUOTO = {
   cognome: '',
   email: '',
   tipologia: 'OPERATIVO' as TipologiaUtente,
+  // Il livello nasce con l'associazione: chi crea un operatore da un'azienda
+  // decide subito se quell'azienda la legge e basta o anche la modifica.
+  livello: 'SCRITTURA' as LivelloAzienda,
 };
 
 export function AziendaUtentiManager({ nomeSchema, aziendaId }: Props) {
@@ -52,6 +61,8 @@ export function AziendaUtentiManager({ nomeSchema, aziendaId }: Props) {
   } | null>(null);
 
   const [utenteDaAssociare, setUtenteDaAssociare] = useState<number | ''>('');
+  const [livelloAssociazione, setLivelloAssociazione] = useState<LivelloAzienda>('SCRITTURA');
+  const [livelloInCorso, setLivelloInCorso] = useState<number | null>(null);
 
   const handleScaricaCredenziali = () => {
     if (!usernameGenerato || !passwordGenerata) return;
@@ -97,8 +108,12 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
     setErrore(null);
     try {
       const risultato = await creaUtenteSpazioAction(nomeSchema, {
-        ...form,
+        nome: form.nome,
+        cognome: form.cognome,
+        email: form.email,
+        tipologia: form.tipologia,
         aziendeIds: [aziendaId],
+        livelli: { [aziendaId]: form.livello },
       });
       if (!risultato.success) {
         setErrore(risultato.error || "Impossibile creare l'operatore.");
@@ -133,8 +148,20 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
       email: utente.email,
       tipologia: utente.tipologia,
       aziendeIds: [...utente.aziendeIds, aziendaId],
+      // Il livello delle aziende già associate resta quello registrato: si
+      // manda solo quello nuovo, così associare non azzera la profilatura.
+      livelli: { [aziendaId]: livelloAssociazione },
     });
     setUtenteDaAssociare('');
+    await carica();
+  };
+
+  const handleCambiaLivello = async (utenteId: number, livello: LivelloAzienda) => {
+    setLivelloInCorso(utenteId);
+    setErrore(null);
+    const risultato = await impostaLivelloAziendaAction(nomeSchema, utenteId, aziendaId, livello);
+    if (!risultato.success) setErrore(risultato.error || 'Livello non aggiornato.');
+    setLivelloInCorso(null);
     await carica();
   };
 
@@ -314,6 +341,24 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
                 <option value="OPERATIVO">Operativo</option>
                 <option value="CONSULTATORE">Consultatore</option>
               </select>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Livello su questa azienda
+                <select
+                  value={form.livello}
+                  onChange={(e) => setForm({ ...form, livello: e.target.value as LivelloAzienda })}
+                  className="mt-1 w-full p-2 text-sm font-normal normal-case tracking-normal border border-slate-200 rounded-lg text-slate-900 bg-white"
+                >
+                  {LIVELLI_AZIENDA.map((livello) => (
+                    <option key={livello} value={livello}>
+                      {ETICHETTA_LIVELLO_AZIENDA[livello]}
+                    </option>
+                  ))}
+                </select>
+                <span className="block mt-1 text-[10px] font-normal normal-case tracking-normal text-slate-400">
+                  Il livello vale solo per questa azienda: i permessi per modulo restano quelli
+                  della scheda Utenti, e questo li limita.
+                </span>
+              </label>
               <button
                 type="submit"
                 disabled={salvataggio}
@@ -337,6 +382,18 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
             {nonAssociati.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.nome} {u.cognome} ({u.tipologia === 'OPERATIVO' ? 'Operativo' : 'Consultatore'})
+              </option>
+            ))}
+          </select>
+          <select
+            value={livelloAssociazione}
+            onChange={(e) => setLivelloAssociazione(e.target.value as LivelloAzienda)}
+            title="Livello con cui l'operatore entra in questa azienda"
+            className="p-2 text-xs border border-slate-200 rounded-lg text-slate-900 bg-white shrink-0"
+          >
+            {LIVELLI_AZIENDA.map((livello) => (
+              <option key={livello} value={livello}>
+                {ETICHETTA_LIVELLO_AZIENDA[livello]}
               </option>
             ))}
           </select>
@@ -368,6 +425,21 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* La profilatura di QUESTA associazione: si cambia da qui, accanto
+                  all'operatore, perché è qui che il livello ha senso (0.255.14). */}
+              <select
+                value={u.aziende.find((a) => a.id === aziendaId)?.livello ?? 'SCRITTURA'}
+                onChange={(e) => handleCambiaLivello(u.id, e.target.value as LivelloAzienda)}
+                disabled={livelloInCorso === u.id}
+                title="Livello di questo operatore su questa azienda"
+                className="p-1 text-[10px] font-bold uppercase border border-slate-200 rounded bg-white text-slate-700 disabled:opacity-50"
+              >
+                {LIVELLI_AZIENDA.map((livello) => (
+                  <option key={livello} value={livello}>
+                    {ETICHETTA_LIVELLO_AZIENDA[livello]}
+                  </option>
+                ))}
+              </select>
               <span
                 className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
                   u.attivo ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
