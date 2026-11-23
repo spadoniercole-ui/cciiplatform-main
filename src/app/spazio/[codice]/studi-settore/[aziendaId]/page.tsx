@@ -5,6 +5,7 @@ import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
 import { ottieniDatiSettore } from '@/app/actions/datiSettore';
 import { crescitaDaSerie } from '@/lib/piano/automatico';
+import { StampaPagina } from '@/components/spazio/StampaPagina';
 // La quota della crescita di settore che passa sui costi: era l'ipotesi
 // dichiarata del vecchio motore di simulazione, e resta la stessa qui perché la
 // pagina descrive la serie, non calcola più una traiettoria.
@@ -62,21 +63,28 @@ export default async function AndamentoSettorePage({
     <div className="max-w-4xl space-y-4">
       <Link
         href={`/spazio/${codice}/studi-settore`}
-        className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-blue-600 font-bold uppercase tracking-wider"
+        className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-blue-600 font-bold uppercase tracking-wider print:hidden"
       >
         <ArrowLeft className="w-3.5 h-3.5" /> Torna agli studi di settore
       </Link>
 
       <div className="bg-white border border-slate-200 rounded-xl p-5">
-        <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-blue-600" /> Andamento del settore —{' '}
-          {azienda.azienda.ragioneSociale}
-        </h1>
-        <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-3xl">
-          Il settore è quello del codice ATECO dell’azienda: è il riferimento che la simulazione usa
-          per far convergere la crescita storica. I valori sono la serie ISTAT, non una stima della
-          piattaforma.
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-blue-600" /> Andamento del settore —{' '}
+              {azienda.azienda.ragioneSociale}
+            </h1>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-3xl">
+              Il settore è quello del codice ATECO dell’azienda: è il riferimento che la simulazione
+              usa per far convergere la crescita storica. I valori sono la serie ISTAT, non una
+              stima della piattaforma.
+            </p>
+          </div>
+          {/* L'andamento si porta al tavolo dell'azienda: si stampa la pagina,
+              senza costruire un secondo documento con gli stessi numeri. */}
+          <StampaPagina etichetta="Stampa / PDF" />
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -199,7 +207,7 @@ export default async function AndamentoSettorePage({
         </p>
         <Link
           href={`/spazio/${codice}/verifica-azienda/${id}`}
-          className="inline-flex text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+          className="inline-flex text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800 print:hidden"
         >
           Apri la mappa della verifica azienda →
         </Link>

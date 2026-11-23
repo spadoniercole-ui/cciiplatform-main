@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.255.10**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.255.11**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,15 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.255.11 — 2026-11-23
+
+- **Si stampano gli studi di settore dell’azienda.** La pagina «Andamento del settore» —
+  codice ATECO, serie ISTAT, crescita composta, destinazione dei costi ai ricavi e ai costi —
+  aveva già tutto il necessario per essere un documento, ma nessun modo di portarlo via. Ora
+  il pulsante «Stampa / PDF» sta in testata e sulla carta restano solo i numeri: i ritorni e
+  il rimando alla verifica azienda spariscono (i margini A4 e i colori sono quelli di
+  `globals.css`).
 
 ## 0.255.10 — 2026-11-23
 
