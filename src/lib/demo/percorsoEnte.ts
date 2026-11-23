@@ -1,7 +1,16 @@
 // src/lib/demo/percorsoEnte.ts
 //
-// IL PERCORSO DEMO DI UNO SPAZIO ENTE (0.172.0): quattro percorsi completi,
-// dal triage allo scenario, e una quinta posizione ferma al triage.
+// IL PERCORSO DEMO DI UNO SPAZIO ENTE (0.256.0): TRE AZIENDE, TRE TAPPE.
+//
+//   Meccanica Valsesia — completa: amministrativa, contabile e aziendale,
+//                        con lo scenario dell'accordo e quello del cram down;
+//   Tessitura Lario    — si ferma alla contabile: bilanci, visura e parametri,
+//                        nessuno scenario e nessuna verifica aziendale;
+//   Logistica Padana   — si ferma all'amministrativa: anagrafica, posizioni,
+//                        soglie, e nient'altro (vedi TRIAGE_DEMO).
+//
+// Prima erano cinque: le altre due mostravano varianti che non aggiungevano
+// un passo nuovo e rendevano ambiguo dove finisse ogni percorso.
 //
 // PERCHÉ PARTE DAL TRIAGE E NON DAL PROVVEDIMENTO. Il set della 0.171.0
 // mostrava la fine della storia: un decreto già emesso e i documenti allegati.
@@ -115,6 +124,16 @@ export interface AziendaPercorsoDemo {
   tipoIstruttoria: TipoIstruttoria;
   /** La quarta azienda resta volutamente senza percorso precostituito. */
   aperta?: boolean;
+  /**
+   * FIN DOVE ARRIVA LA DEMO PER QUESTA AZIENDA (0.256.0).
+   *
+   * Tre aziende, tre tappe: una completa (verifiche e scenari), una che si
+   * ferma alla contabile, una che si ferma all'amministrativa. Il caricamento
+   * legge questo campo e non crea i passi che non ci sono: una demo che finge
+   * di aver fatto la contabile senza bilanci sarebbe la confusione che si
+   * vuole togliere.
+   */
+  profondita?: 'COMPLETA' | 'CONTABILE';
   scenario: string;
   /** Nome usato prima della 0.174.0, per rinominare senza duplicare. */
   scenarioPrecedente?: string;
@@ -352,6 +371,16 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
     annoCostituzione: 2008,
     dataVerifica: '2026-09-30',
     profilo: 'ROSSO',
+    profondita: 'COMPLETA',
+    // La posizione completa ha il ritratto intero: corredo della contabile e
+    // fotografia come base della proposta.
+    verifiche: {
+      corredoContabile: {
+        idEnte: 'INPS',
+        campi: ['3412880091', 'GS-0011401', '11301', 'PV-2026-0001', 'Vigevano'],
+      },
+      baseAziendale: true,
+    },
     finanziario: {
       anno: 2025,
       corrente: dati({
@@ -552,6 +581,9 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
     annoCostituzione: 1998,
     dataVerifica: '2026-10-15',
     profilo: 'GIALLO',
+    // Arriva alla contabile e si ferma: niente scenario, niente verifica
+    // aziendale. La tappa successiva è quella che l'operatore deve scegliere.
+    profondita: 'CONTABILE',
     finanziario: {
       anno: 2025,
       corrente: dati({
@@ -697,10 +729,10 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
       'Tessitura e nobilitazione di filati per l’abbigliamento.',
       62
     ),
-    // Tessitura è la posizione che arriva al ritratto completo: ha la visura
-    // del fascicolo demo, i parametri INPS e la fotografia come base della
-    // proposta. Le altre restano a metà di proposito, così si vedono entrambi
-    // i rami.
+    // Tessitura arriva alla contabile e lì si ferma: ha la visura del
+    // fascicolo demo e i parametri INPS, non la fotografia e non uno scenario.
+    // È la tappa di mezzo, e il documento che si legge lo dice invece di
+    // riempire le sezioni che mancano.
     verifiche: {
       corredoContabile: {
         idEnte: 'INPS',
@@ -709,418 +741,12 @@ export const PERCORSO_DEMO: AziendaPercorsoDemo[] = [
         // nello spazio demo.
         campi: ['4412880091', 'GS-0011442', '11305', 'CO-2026-0004', 'Como'],
       },
-      baseAziendale: true,
+      baseAziendale: false,
     },
-    rango: 'CHIROGRAFARIO',
-    tipoIstruttoria: 'DECRETO_LIQUIDAZIONE',
-    scenario: 'Decreto di liquidazione — Tessitura Lario Demo',
-    scenarioPrecedente: 'Proposta di piano attestato — Tessitura Lario Demo',
-    dataDepositoProposta: '2026-10-06',
-    // L'accordo che il decreto ha reso inutile è ancora in valutazione: la
-    // liquidazione realizza 22.472 euro (72.000 di contributi al 30,5% e 8.000
-    // di sanzioni al 6,4%), l'accordo ne offre 60.800 su 152.000 in sei rate.
-    // Sono i due termini che il confronto del report mette accanto.
-    scenariAggiuntivi: [
-      { nome: 'Proposta di piano attestato — Tessitura Lario Demo', tipoIstruttoria: 'PROPOSTA' },
-    ],
-    propostaCreditori: [
-      {
-        categoria: 'INPS',
-        // Il credito dell'ente comprende i contributi 2026 maturati e non
-        // versati: è la crescita che il ponte della contabile ricostruisce.
-        dovuto: 152000,
-        offerta: 40,
-        modalita: 'RATEALE',
-        rate: 6,
-        rango: 'PRIVILEGIATO_GENERALE',
-        rilevanteEnte: true,
-      },
-      {
-        categoria: 'Banca Ipotecaria S.p.A.',
-        dovuto: 250000,
-        offerta: 100,
-        modalita: 'UNICA_SOLUZIONE',
-        rate: null,
-        rango: 'PRIVILEGIATO_IPOTECA',
-        rilevanteEnte: false,
-      },
-      {
-        categoria: 'Fornitori chirografari',
-        dovuto: 180000,
-        offerta: 20,
-        modalita: 'RATEALE',
-        rate: 8,
-        rango: 'CHIROGRAFARIO',
-        rilevanteEnte: false,
-      },
-    ],
-  },
-  {
-    ragioneSociale: 'Logistica Padana Demo S.r.l.',
-    codiceFiscale: '00000000103',
-    partitaIva: '00000000103',
-    codiceAteco: '52.29.00',
-    formaGiuridica: 'Società a responsabilità limitata',
-    indirizzo: 'Via della Logistica 41',
-    citta: 'Piacenza',
-    provincia: 'PC',
-    cap: '29122',
-    capitaleSociale: 150_000,
-    rappresentante: 'Chiara Esempio',
-    ruoloRappresentante: 'Amministratrice unica',
-    numeroRea: 'PC-001103',
-    pec: 'logistica.padana.demo@pec.esempio.it',
-    annoCostituzione: 2015,
-    dataVerifica: '2026-10-28',
-    profilo: 'ATTENZIONE_MINIMA',
-    finanziario: {
-      anno: 2025,
-      corrente: dati({
-        ricaviVendite: 900_000,
-        valoreProduzione: 950_000,
-        costiProduzione: 880_000,
-        ebit: 70_000,
-        ammortamenti: 30_000,
-        ebitda: 100_000,
-        oneriFinanziari: 10_000,
-        utileEsercizio: 40_000,
-        totaleAttivo: 700_000,
-        attivoCircolante: 300_000,
-        disponibilitaLiquide: 90_000,
-        immobilizzazioni: 400_000,
-        patrimonioNetto: 300_000,
-        totaleDebiti: 400_000,
-        debitiBanche: 100_000,
-        debitiFornitori: 200_000,
-        debitiTributari: 20_000,
-        debitiPrevidenziali: 25_000,
-        passivoCorrente: 300_000,
-        creditiClienti: 180_000,
-      }),
-      precedente: dati({
-        ricaviVendite: 850_000,
-        valoreProduzione: 900_000,
-        costiProduzione: 840_000,
-        ebit: 60_000,
-        ammortamenti: 28_000,
-        ebitda: 88_000,
-        oneriFinanziari: 9_000,
-        utileEsercizio: 35_000,
-        totaleAttivo: 670_000,
-        attivoCircolante: 280_000,
-        disponibilitaLiquide: 75_000,
-        immobilizzazioni: 390_000,
-        patrimonioNetto: 260_000,
-        totaleDebiti: 410_000,
-        debitiBanche: 110_000,
-        debitiFornitori: 200_000,
-        debitiTributari: 22_000,
-        debitiPrevidenziali: 24_000,
-        passivoCorrente: 310_000,
-        creditiClienti: 170_000,
-      }),
-    },
-    debiti: [
-      {
-        voce: 'Contributi previdenziali scaduti',
-        importo: 12_000,
-        tipo: 'DEBITO',
-        nota: 'Posizione dimostrativa del triage',
-      },
-      {
-        voce: 'Sanzioni civili contributive',
-        importo: 1_500,
-        tipo: 'DEBITO',
-        nota: 'Posizione dimostrativa del triage',
-      },
-    ],
-    soglie: {
-      conLavoratori: true,
-      contributiScaduti: 12_000,
-      contributiDovutiAnnoPrecedente: 250_000,
-      annoContributiDovuti: 2025,
-      volumeAffari: 950_000,
-      ritardoOltre90Giorni: false,
-      periodiInRitardo: 0,
-    },
-    screening: screening(
-      [
-        {
-          numero: '1',
-          titolo: 'Gestione del credito',
-          domande: [
-            {
-              id: 'D1.1',
-              domanda:
-                'L’impresa ha definito un piano di rientro per la posizione debitoria verso l’ente?',
-              risposta: true,
-            },
-            {
-              id: 'D1.2',
-              domanda: 'Le rate scadute sono state versate nei termini?',
-              risposta: true,
-            },
-            {
-              id: 'D1.3',
-              domanda: 'La posizione debitoria è stata riconciliata con l’ente?',
-              risposta: true,
-            },
-          ],
-        },
-        {
-          numero: '2',
-          titolo: 'Vigilanza documentale',
-          domande: [
-            {
-              id: 'D2.1',
-              domanda: 'I bilanci degli ultimi tre esercizi risultano depositati?',
-              risposta: true,
-            },
-            {
-              id: 'D2.2',
-              domanda: 'La visura non riporta procedure concorsuali in corso?',
-              risposta: true,
-            },
-            {
-              id: 'D2.3',
-              domanda: 'Le comunicazioni verso l’ente risultano aggiornate?',
-              risposta: true,
-            },
-          ],
-        },
-      ],
-      `L’esposizione contributiva di 12.000 euro resta ampiamente sotto la soglia di segnalazione applicabile e non risultano ritardi oltre i 90 giorni.\n\nIl bilancio 2025 mostra un patrimonio netto di 300.000 euro e nessun indice diagnostico oltre la soglia di riferimento. Il piano di rientro è rispettato e la documentazione è aggiornata. Con i dati disponibili non emergono criticità.`
-    ),
-    visura: visura(
-      {
-        ragioneSociale: 'Logistica Padana Demo S.r.l.',
-        codiceFiscale: '00000000103',
-        formaGiuridica: 'Società a responsabilità limitata',
-        indirizzo: 'Via della Logistica 41',
-        citta: 'Piacenza',
-        provincia: 'PC',
-        cap: '29122',
-        capitaleSociale: 150_000,
-        annoCostituzione: 2015,
-        rappresentante: 'Chiara Esempio',
-        ruoloRappresentante: 'Amministratrice unica',
-      },
-      'Trasporto merci conto terzi e gestione di magazzini.',
-      31
-    ),
-    rango: 'PRIVILEGIATO',
-    tipoIstruttoria: 'CRAM_DOWN',
-    scenario: 'Cram down — Logistica Padana Demo',
-    scenarioPrecedente: 'Proposta di accordo di ristrutturazione — Logistica Padana Demo',
-    dataDepositoProposta: '2026-10-21',
-    // Stessa azienda, due atti: l'accordo offre 8.100 euro su 13.500 (60% in
-    // quattro rate), il cram down riconosce 10.000 di contributi al 50% e 1.000
-    // di sanzioni al 20% — 5.200 euro. Qui l'accordo rende più della procedura.
-    scenariAggiuntivi: [
-      {
-        nome: 'Proposta di accordo di ristrutturazione — Logistica Padana Demo',
-        tipoIstruttoria: 'PROPOSTA',
-      },
-    ],
-    propostaCreditori: [
-      {
-        categoria: 'INPS',
-        dovuto: 13500,
-        offerta: 60,
-        modalita: 'RATEALE',
-        rate: 4,
-        rango: 'PRIVILEGIATO_GENERALE',
-        rilevanteEnte: true,
-      },
-      {
-        categoria: 'Banca Ipotecaria S.p.A.',
-        dovuto: 150000,
-        offerta: 100,
-        modalita: 'UNICA_SOLUZIONE',
-        rate: null,
-        rango: 'PRIVILEGIATO_IPOTECA',
-        rilevanteEnte: false,
-      },
-      {
-        categoria: 'Fornitori chirografari',
-        dovuto: 90000,
-        offerta: 30,
-        modalita: 'RATEALE',
-        rate: 8,
-        rango: 'CHIROGRAFARIO',
-        rilevanteEnte: false,
-      },
-    ],
-  },
-  {
-    // La quarta posizione è quella che l'utente ha chiesto: un'azienda
-    // completa nei dati ma senza un percorso già deciso. Serve a mostrare
-    // che la piattaforma non riconosce solo i tre casi preparati: chiede
-    // che cosa ha in mano l'azienda e si adatta alla risposta.
-    ragioneSociale: 'Cantieri Brianza Demo S.r.l.',
-    codiceFiscale: '00000000104',
-    partitaIva: '00000000104',
-    codiceAteco: '41.20.00',
-    formaGiuridica: 'Società a responsabilità limitata',
-    indirizzo: 'Via del Lambro 22',
-    citta: 'Monza',
-    provincia: 'MB',
-    cap: '20900',
-    capitaleSociale: 200_000,
-    rappresentante: 'Marco Esempio',
-    ruoloRappresentante: 'Amministratore unico',
-    numeroRea: 'MB-001104',
-    pec: 'cantieri.brianza.demo@pec.esempio.it',
-    annoCostituzione: 2011,
-    dataVerifica: '2026-11-02',
-    profilo: 'GIALLO',
-    finanziario: {
-      anno: 2025,
-      corrente: dati({
-        ricaviVendite: 1_600_000,
-        valoreProduzione: 1_750_000,
-        costiProduzione: 1_680_000,
-        ebit: 70_000,
-        ammortamenti: 40_000,
-        ebitda: 110_000,
-        oneriFinanziari: 45_000,
-        utileEsercizio: 10_000,
-        totaleAttivo: 1_300_000,
-        attivoCircolante: 700_000,
-        disponibilitaLiquide: 25_000,
-        immobilizzazioni: 600_000,
-        patrimonioNetto: 120_000,
-        totaleDebiti: 1_180_000,
-        debitiBanche: 500_000,
-        debitiFornitori: 450_000,
-        debitiTributari: 90_000,
-        debitiPrevidenziali: 140_000,
-        passivoCorrente: 800_000,
-        creditiClienti: 450_000,
-      }),
-      precedente: dati({
-        ricaviVendite: 1_720_000,
-        valoreProduzione: 1_880_000,
-        costiProduzione: 1_780_000,
-        ebit: 100_000,
-        ammortamenti: 38_000,
-        ebitda: 138_000,
-        oneriFinanziari: 42_000,
-        utileEsercizio: 30_000,
-        totaleAttivo: 1_350_000,
-        attivoCircolante: 740_000,
-        disponibilitaLiquide: 60_000,
-        immobilizzazioni: 610_000,
-        patrimonioNetto: 150_000,
-        totaleDebiti: 1_200_000,
-        debitiBanche: 480_000,
-        debitiFornitori: 470_000,
-        debitiTributari: 85_000,
-        debitiPrevidenziali: 135_000,
-        passivoCorrente: 810_000,
-        creditiClienti: 480_000,
-      }),
-    },
-    debiti: [
-      {
-        voce: 'Contributi previdenziali scaduti',
-        importo: 60_000,
-        tipo: 'DEBITO',
-        nota: 'Posizione dimostrativa del triage',
-      },
-      {
-        voce: 'Sanzioni civili contributive',
-        importo: 10_000,
-        tipo: 'DEBITO',
-        nota: 'Posizione dimostrativa del triage',
-      },
-    ],
-    soglie: {
-      conLavoratori: true,
-      contributiScaduti: 60_000,
-      contributiDovutiAnnoPrecedente: 350_000,
-      annoContributiDovuti: 2025,
-      volumeAffari: 1_750_000,
-      ritardoOltre90Giorni: false,
-      periodiInRitardo: 0,
-    },
-    screening: screening(
-      [
-        {
-          numero: '1',
-          titolo: 'Gestione del credito',
-          domande: [
-            {
-              id: 'D1.1',
-              domanda:
-                'L’impresa ha definito un piano di rientro per la posizione debitoria verso l’ente?',
-              risposta: true,
-            },
-            {
-              id: 'D1.2',
-              domanda: 'Le rate scadute sono state versate nei termini?',
-              risposta: false,
-              nota: 'Una rata è stata versata in ritardo, senza superare i 90 giorni.',
-            },
-            {
-              id: 'D1.3',
-              domanda: 'La posizione debitoria è stata riconciliata con l’ente?',
-              risposta: true,
-            },
-          ],
-        },
-        {
-          numero: '2',
-          titolo: 'Vigilanza documentale',
-          domande: [
-            {
-              id: 'D2.1',
-              domanda: 'I bilanci degli ultimi tre esercizi risultano depositati?',
-              risposta: true,
-            },
-            {
-              id: 'D2.2',
-              domanda: 'La visura non riporta procedure concorsuali in corso?',
-              risposta: true,
-            },
-            {
-              id: 'D2.3',
-              domanda: 'Le comunicazioni verso l’ente risultano aggiornate?',
-              risposta: false,
-              nota: 'L’ultima comunicazione documentata risale al primo semestre 2026.',
-            },
-          ],
-        },
-      ],
-      `L’impresa edile presenta un’esposizione contributiva di 60.000 euro, sotto la soglia di segnalazione applicabile, e un ritardo non superiore a 90 giorni. Il bilancio 2025 mostra un patrimonio netto di 120.000 euro in riduzione rispetto all’esercizio precedente e un indice diagnostico oltre la soglia di riferimento.\n\nNon risultano procedure concorsuali in corso. La posizione è ancora aperta: la documentazione disponibile non basta a dire se l’azienda stia seguendo una proposta, una liquidazione o un’altra soluzione. Il percorso va chiesto e verificato con i documenti che l’azienda depositerà.`
-    ),
-    visura: visura(
-      {
-        ragioneSociale: 'Cantieri Brianza Demo S.r.l.',
-        codiceFiscale: '00000000104',
-        formaGiuridica: 'Società a responsabilità limitata',
-        indirizzo: 'Via del Lambro 22',
-        citta: 'Monza',
-        provincia: 'MB',
-        cap: '20900',
-        capitaleSociale: 200_000,
-        annoCostituzione: 2011,
-        rappresentante: 'Marco Esempio',
-        ruoloRappresentante: 'Amministratore unico',
-      },
-      'Costruzione di edifici residenziali e commerciali.',
-      38
-    ),
     rango: 'CHIROGRAFARIO',
     tipoIstruttoria: 'DA_CHIEDERE',
-    scenario: 'Valutazione aperta — Cantieri Brianza Demo',
-    // Qui la verifica amministrativa c’è (è obbligatoria) e le altre due no:
-    // serve a mostrare il documento che dichiara le sezioni mancanti invece di
-    // riempirle. Non è una demo incompleta: è il caso che il prodotto deve
-    // saper dire.
-    verifiche: { contabile: false, aziendale: false },
-    dataDepositoProposta: '2026-11-02',
-    aperta: true,
+    scenario: 'Valutazione — Tessitura Lario Demo',
+    dataDepositoProposta: '2026-10-06',
   },
 ];
 
@@ -1212,47 +838,49 @@ export const MATERIE_TRIAGE_DEMO: MateriaTriageDemo[] = [
 ];
 
 /**
- * La quinta azienda del set demo, ferma alla verifica di salute.
+ * LA TERZA AZIENDA: FERMA ALLA VERIFICA AMMINISTRATIVA (0.256.0).
  *
- * I dati bastano a riaprire il triage e a leggere l'indicatore: anagrafica
- * completa, contributi e sanzioni, soglie dichiarate. Mancano di proposito lo
- * screening, il bilancio XBRL e lo scenario — sono i passi che l'operatore deve
- * ancora decidere se affrontare.
+ * Logistica Padana è la posizione che si apre e si ferma lì: anagrafica,
+ * contributi e sanzioni con le TS che il triage sa lavorare, soglie
+ * dichiarate. Mancano di proposito lo screening, il bilancio XBRL e lo
+ * scenario, così il percorso mostra il primo passo concluso e i successivi
+ * ancora da decidere. Non è una demo incompleta: è la tappa che il prodotto
+ * deve saper dire.
  */
 export const TRIAGE_DEMO: AziendaTriageDemo = {
-  ragioneSociale: 'Impianti Adriatica Demo S.r.l.',
-  codiceFiscale: '00000000105',
-  partitaIva: '00000000105',
-  codiceAteco: '43.21.01',
+  ragioneSociale: 'Logistica Padana Demo S.r.l.',
+  codiceFiscale: '00000000103',
+  partitaIva: '00000000103',
+  codiceAteco: '52.29.00',
   formaGiuridica: 'Società a responsabilità limitata',
-  indirizzo: 'Via del Porto 12',
-  citta: 'Pescara',
-  provincia: 'PE',
-  cap: '65122',
-  capitaleSociale: 80_000,
-  rappresentante: 'Giulia Esempio',
+  indirizzo: 'Via della Logistica 41',
+  citta: 'Piacenza',
+  provincia: 'PC',
+  cap: '29122',
+  capitaleSociale: 150_000,
+  rappresentante: 'Chiara Esempio',
   ruoloRappresentante: 'Amministratrice unica',
-  numeroRea: 'PE-001105',
-  pec: 'impianti.adriatica.demo@pec.esempio.it',
-  annoCostituzione: 2013,
-  dataVerifica: '2026-11-05',
-  // Caso ROSSO: la soglia INPS è superata (180.000 € su 280.000 € dovuti,
-  // oltre il 30% e oltre il minimo assoluto) e il ritardo supera i 90 giorni.
-  // Le tre posizioni sono instradate a due uffici distinti, così il triage mostra
-  // comunicazioni, report per unità operativa e presa in carico senza vuoti.
-  profilo: 'ROSSO',
+  numeroRea: 'PC-001103',
+  pec: 'logistica.padana.demo@pec.esempio.it',
+  annoCostituzione: 2015,
+  dataVerifica: '2026-10-28',
+  // Sotto soglia e senza ritardo oltre i 90 giorni: la verifica amministrativa
+  // si chiude con «nessuna criticità», ed è il caso in cui la demo mostra che
+  // l'ente può anche archiviare. Le tre posizioni restano instradate a due
+  // uffici, così il triage non ha vuoti.
+  profilo: 'ATTENZIONE_MINIMA',
   debiti: [
     {
       voce: 'TS 27 flusso Uniemens non versato',
-      importo: 176_595.98,
+      importo: 9_000,
       tipo: 'DEBITO',
       categoria: 'CONTRIBUTI',
       periodo: '202506 - 202512',
-      nota: 'Posizione dimostrativa del triage — oltre soglia',
+      nota: 'Posizione dimostrativa del triage — sotto soglia',
     },
     {
       voce: 'TS 25 nota di rettifica',
-      importo: 3_404.02,
+      importo: 3_000,
       tipo: 'DEBITO',
       categoria: 'CONTRIBUTI',
       periodo: '202506 - 202506',
@@ -1260,7 +888,7 @@ export const TRIAGE_DEMO: AziendaTriageDemo = {
     },
     {
       voce: 'TS 81 Verbale evasione',
-      importo: 25_000,
+      importo: 1_500,
       tipo: 'DEBITO',
       categoria: 'SANZIONI',
       periodo: '2025',
@@ -1269,12 +897,12 @@ export const TRIAGE_DEMO: AziendaTriageDemo = {
   ],
   soglie: {
     conLavoratori: true,
-    contributiScaduti: 180_000,
-    contributiDovutiAnnoPrecedente: 280_000,
+    contributiScaduti: 12_000,
+    contributiDovutiAnnoPrecedente: 250_000,
     annoContributiDovuti: 2025,
-    volumeAffari: 1_050_000,
-    ritardoOltre90Giorni: true,
-    periodiInRitardo: 6,
+    volumeAffari: 950_000,
+    ritardoOltre90Giorni: false,
+    periodiInRitardo: 0,
   },
 };
 

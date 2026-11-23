@@ -137,12 +137,14 @@ describe('acquisizione della posizione debitoria demo', () => {
 
     const esito = await acquisisciPosizioneDebitoriaDemoEnte(SCHEMA, AZIENDA, SCENARIO);
 
-    expect(esito).toMatchObject({ righe: 2, totale: 13_500, giaPresenti: false });
+    // La posizione demo di Logistica ha tre righe (TS 27, TS 25, TS 81): è la
+    // certificazione che il seed ricostruisce quando l'azienda non ne ha più.
+    expect(esito).toMatchObject({ righe: 3, totale: 13_500, giaPresenti: false });
     const scenario = await db.query<{ note: string }>(
       `SELECT note FROM "${SCHEMA}".debiti_ente WHERE scenario_id = $1 ORDER BY id`,
       [SCENARIO]
     );
-    expect(scenario.rows).toHaveLength(2);
+    expect(scenario.rows).toHaveLength(3);
     expect(scenario.rows[0].note).toContain('demo');
   });
 

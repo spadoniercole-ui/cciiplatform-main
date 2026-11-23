@@ -21,6 +21,7 @@ import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { prefissoFileSpazio, rifiutaSeNonAutorizzato } from '@/lib/autorizzazione';
 import { limiteUploadByte } from '@/lib/edizioneServer';
 import { CorpoTroppoGrande, formDataDalCorpo, leggiCorpoLimitato } from '@/lib/file/corpoLimitato';
+import { eDocumentoDemo } from '@/lib/demo/documenti';
 
 // 4MB su Vercel (prudente sotto il tetto reale di 4,5MB), 20MB su disco locale.
 const DIMENSIONE_MASSIMA = limiteUploadByte();
@@ -71,6 +72,20 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
     if (!file) {
       return NextResponse.json({ error: 'Nessun file ricevuto.' }, { status: 400 });
+    }
+    // SOLO IL SET DEMO, SOLO IN DEMO (0.256.0). In uno spazio demo i documenti
+    // sono quelli del pacchetto scaricabile, riconosciuti dal nome: un file
+    // qualsiasi non entra, perché la demo non ha nulla da leggere di vero e i
+    // documenti veri non devono finire in uno spazio dimostrativo. Fuori dal
+    // demo il controllo non esiste: la produzione non cambia comportamento.
+    if (contesto.demo && !eDocumentoDemo(file.name)) {
+      return NextResponse.json(
+        {
+          error:
+            'Ambiente demo: si possono acquisire solo i documenti del set demo. Scarica il pacchetto dalla schermata di acquisizione e usa quelli.',
+        },
+        { status: 403 }
+      );
     }
     if (file.type !== 'application/pdf') {
       return NextResponse.json({ error: 'Solo file PDF sono ammessi.' }, { status: 400 });

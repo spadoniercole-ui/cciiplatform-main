@@ -197,21 +197,21 @@ describe('caricamento demo — quinta azienda al triage', () => {
 
     expect(aziende.rows).toHaveLength(1);
     expect(aziende.rows[0]).toMatchObject({
-      ragione_sociale: 'Impianti Adriatica Demo S.r.l.',
+      ragione_sociale: 'Logistica Padana Demo S.r.l.',
       in_verifica: true,
-      verifica_esito: 'ROSSO',
-      verifica_riferita_al: '2026-11-05',
+      verifica_esito: 'ATTENZIONE_MINIMA',
+      verifica_riferita_al: '2026-10-28',
       con_lavoratori_subordinati: true,
-      volume_affari: '1050000',
+      volume_affari: '950000',
     });
 
     const posizioni = await db.query<{ voce: string; importo: string; tipo: string }>(
       `SELECT voce, importo, tipo FROM ${SCHEMA}.debiti_ente ORDER BY id`
     );
     expect(posizioni.rows).toEqual([
-      { voce: 'TS 27 flusso Uniemens non versato', importo: '176595.98', tipo: 'DEBITO' },
-      { voce: 'TS 25 nota di rettifica', importo: '3404.02', tipo: 'DEBITO' },
-      { voce: 'TS 81 Verbale evasione', importo: '25000', tipo: 'DEBITO' },
+      { voce: 'TS 27 flusso Uniemens non versato', importo: '9000', tipo: 'DEBITO' },
+      { voce: 'TS 25 nota di rettifica', importo: '3000', tipo: 'DEBITO' },
+      { voce: 'TS 81 Verbale evasione', importo: '1500', tipo: 'DEBITO' },
     ]);
 
     const certificazione = await db.query<{
@@ -231,7 +231,7 @@ describe('caricamento demo — quinta azienda al triage', () => {
         voce: 'TS 27 flusso Uniemens non versato',
         stato: 'Da contabilizzare',
         periodo: '202506 - 202512',
-        contributi: '176595.98',
+        contributi: '9000',
         sanzioni: null,
         trattamento: 'da_contabilizzare',
         ambito: 'INPS',
@@ -240,7 +240,7 @@ describe('caricamento demo — quinta azienda al triage', () => {
         voce: 'TS 25 nota di rettifica',
         stato: 'Da contabilizzare',
         periodo: '202506 - 202506',
-        contributi: '3404.02',
+        contributi: '3000',
         sanzioni: null,
         trattamento: 'da_contabilizzare',
         ambito: 'INPS',
@@ -250,7 +250,7 @@ describe('caricamento demo — quinta azienda al triage', () => {
         stato: 'Da contabilizzare',
         periodo: '2025',
         contributi: null,
-        sanzioni: '25000',
+        sanzioni: '1500',
         trattamento: 'da_contabilizzare',
         ambito: 'INPS',
       },
@@ -321,8 +321,8 @@ describe('caricamento demo — quinta azienda al triage', () => {
     ]);
 
     const report = componiReportUo({
-      azienda: 'Impianti Adriatica Demo S.r.l.',
-      dataVerifica: '2026-11-05',
+      azienda: 'Logistica Padana Demo S.r.l.',
+      dataVerifica: '2026-10-28',
       righe: righe.rows.map((r) => ({
         sezione: r.sezione,
         voce: r.voce,
@@ -363,11 +363,11 @@ describe('caricamento demo — quinta azienda al triage', () => {
     ]);
     const contributi = report.documenti.find((d) => d.dipendenza === 'Unità operativa contributi')!;
     expect(contributi.righe).toBe(2);
-    expect(contributi.totale).toBeCloseTo(180_000, 2);
+    expect(contributi.totale).toBeCloseTo(12_000, 2);
     expect(contributi.codici.map((c) => c.codice)).toEqual(['25', '27']);
     const vigilanza = report.documenti.find((d) => d.dipendenza === 'Unità operativa vigilanza')!;
     expect(vigilanza.righe).toBe(1);
-    expect(vigilanza.totale).toBeCloseTo(25_000, 2);
+    expect(vigilanza.totale).toBeCloseTo(1_500, 2);
     expect(vigilanza.codici.map((c) => c.codice)).toEqual(['81']);
     expect(report.senzaDipendenza).toEqual([]);
   });

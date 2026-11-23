@@ -165,7 +165,7 @@ import type { Attenzione } from '@/lib/screening/indicatore';
 import { improntaFile } from '@/lib/fascicolo/impronta';
 import { registraDocumentoOrigineAction } from '@/app/actions/documentiOrigine';
 import { useDemo } from './DemoUploadProvider';
-import { AZIENDA_IMPIANTI, documentiDemoPerAzienda } from '@/lib/demo/documenti';
+import { AZIENDA_LOGISTICA, documentiDemoPerAzienda } from '@/lib/demo/documenti';
 
 /** «21/10/2026, 15:42» — data e ora locali della consegna. */
 function dataOraConsegna(iso: string): string {
@@ -221,7 +221,10 @@ interface Props {
 type Fase = 'caricamento' | 'conferma' | 'checklist' | 'esito' | 'presa_in_carico' | 'demo';
 
 /** I documenti che il triage demo acquisisce prima della check list. */
-const DOCUMENTI_TRIAGE_DEMO = documentiDemoPerAzienda(AZIENDA_IMPIANTI, null);
+// La posizione che si ferma all'amministrativa è Logistica: la verifica si
+// apre sui suoi documenti, che sono fascicolo, certificazione, denunce e
+// deleghe — non un bilancio che quella tappa non ha.
+const DOCUMENTI_TRIAGE_DEMO = documentiDemoPerAzienda(AZIENDA_LOGISTICA, null);
 
 const CAMPI: { chiave: keyof AnagraficaEstratta; label: string; numerico?: boolean }[] = [
   { chiave: 'ragioneSociale', label: 'Ragione sociale' },

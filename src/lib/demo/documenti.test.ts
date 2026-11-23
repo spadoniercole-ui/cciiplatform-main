@@ -1,11 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { analizzaFileXbrl } from '@/lib/xbrl';
-import { parseIstanzaXbrl } from '@/lib/xbrl/parser';
 import {
-  AZIENDA_CANTIERI,
-  AZIENDA_IMPIANTI,
   AZIENDA_LOGISTICA,
   AZIENDA_MECCANICA,
   AZIENDA_TESSITURA,
@@ -16,15 +12,18 @@ import {
   documentiDemoPerAzienda,
   documentiDemoSelezionati,
   documentiProvvedimentoDemo,
+  eDocumentoDemo,
   fascicoloDemoPerCodiceFiscale,
 } from './documenti';
 
 describe('documenti del percorso demo', () => {
-  it('porta tutti i file necessari, nelle cinque aziende', () => {
-    expect(DOCUMENTI_DEMO.length).toBeGreaterThanOrEqual(23);
-    expect(new Set(DOCUMENTI_DEMO.map((d) => d.azienda)).size).toBe(5);
-    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'PDF').length).toBeGreaterThanOrEqual(12);
-    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'EXCEL').length).toBeGreaterThanOrEqual(11);
+  it('porta i file delle tre aziende, e nessun’altra', () => {
+    expect(DOCUMENTI_DEMO.length).toBeGreaterThanOrEqual(14);
+    expect(new Set(DOCUMENTI_DEMO.map((d) => d.azienda))).toEqual(
+      new Set([AZIENDA_MECCANICA, AZIENDA_TESSITURA, AZIENDA_LOGISTICA])
+    );
+    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'PDF').length).toBeGreaterThanOrEqual(5);
+    expect(DOCUMENTI_DEMO.filter((d) => d.formato === 'EXCEL').length).toBeGreaterThanOrEqual(8);
   });
 
   it('i file esistono davvero in public/demo, compreso il pacchetto', () => {
@@ -36,48 +35,39 @@ describe('documenti del percorso demo', () => {
     expect(existsSync(join(process.cwd(), 'public', PACCHETTO_DOCUMENTI_DEMO))).toBe(true);
   });
 
-  it('ogni azienda ha il fascicolo storico e il prospetto di bilancio', () => {
-    for (const codiceFiscale of ['00000000101', '00000000102', '00000000103', '00000000104']) {
+  it('tutte hanno il fascicolo, solo quelle con bilancio ce l’hanno', () => {
+    for (const codiceFiscale of ['00000000101', '00000000102', '00000000103']) {
       expect(fascicoloDemoPerCodiceFiscale(codiceFiscale)?.formato).toBe('PDF');
+    }
+    expect(fascicoloDemoPerCodiceFiscale('non-esiste')).toBeNull();
+
+    for (const codiceFiscale of ['00000000101', '00000000102']) {
       expect(bilancioDemoPerCodiceFiscale(codiceFiscale)?.formato).toBe('EXCEL');
     }
-    expect(fascicoloDemoPerCodiceFiscale('00000000105')?.formato).toBe('PDF');
-    expect(fascicoloDemoPerCodiceFiscale('non-esiste')).toBeNull();
+    // Logistica si ferma all'amministrativa: nessun bilancio, e la funzione lo
+    // dice invece di restituire un file che quella tappa non ha.
+    expect(bilancioDemoPerCodiceFiscale('00000000103')).toBeNull();
   });
 
-  it('la posizione ferma al triage ha visura, bilancio, certificazione, DM10 e deleghe', () => {
-    const documenti = documentiDemoPerAzienda(AZIENDA_IMPIANTI, null);
+  it('la posizione ferma all’amministrativa ha visura, certificazione, DM10 e deleghe', () => {
+    const documenti = documentiDemoPerAzienda(AZIENDA_LOGISTICA, null);
     expect(documenti.map((d) => d.ruolo).sort()).toEqual([
-      'BILANCIO',
       'CERTIFICAZIONE',
       'CHECKLIST',
       'DELEGHE',
       'DENUNCE',
       'FASCICOLO',
     ]);
-    expect(bilancioDemoPerCodiceFiscale('00000000105')).toBeNull();
     expect(
       documentiDemoSelezionati(
-        AZIENDA_IMPIANTI,
+        AZIENDA_LOGISTICA,
         '.pdf,.xlsx',
         'FASCICOLO,CERTIFICAZIONE,DENUNCE,DELEGHE'
       )
     ).toHaveLength(4);
   });
 
-  it('la liquidazione ha decreto e stato passivo, il cram down il dispositivo', () => {
-    const liquidazione = documentiProvvedimentoDemo('00000000102');
-    const cramDown = documentiProvvedimentoDemo('00000000103');
-    expect(liquidazione.map((d) => d.nome)).toEqual([
-      'decreto-liquidazione-tessitura-lario.pdf',
-      'stato-passivo-tessitura-lario.pdf',
-    ]);
-    expect(cramDown.map((d) => d.nome)).toEqual(['dispositivo-cram-down-logistica-padana.pdf']);
-  });
-
-  it('la stessa azienda può avere due atti, e ogni scenario vede il suo documento', () => {
-    // Meccanica Valsesia: accordo e cram down sono due scenari della stessa
-    // azienda, e il documento segue la natura dello scenario.
+  it('solo la Meccanica ha atti, e il documento segue la natura dello scenario', () => {
     expect(documentiProvvedimentoDemo('00000000101', 'PROPOSTA').map((d) => d.nome)).toEqual([
       'proposta-meccanica-valsesia.pdf',
     ]);
@@ -85,16 +75,11 @@ describe('documenti del percorso demo', () => {
       'dispositivo-cram-down-meccanica-valsesia.pdf',
     ]);
     expect(documentiProvvedimentoDemo('00000000101')).toHaveLength(2);
-  });
 
-  it('la valutazione aperta può ricevere entrambe le varianti del provvedimento', () => {
-    expect(
-      documentiProvvedimentoDemo('00000000104', 'DECRETO_LIQUIDAZIONE').map((d) => d.nome)
-    ).toEqual(['decreto-liquidazione-cantieri-brianza.pdf']);
-    expect(documentiProvvedimentoDemo('00000000104', 'CRAM_DOWN').map((d) => d.nome)).toEqual([
-      'dispositivo-cram-down-cantieri-brianza.pdf',
-    ]);
-    expect(documentiProvvedimentoDemo('00000000104')).toHaveLength(2);
+    // Tessitura e Logistica non hanno uno scenario: nessun atto da mostrare.
+    expect(documentiProvvedimentoDemo('00000000102')).toEqual([]);
+    expect(documentiProvvedimentoDemo('00000000103')).toEqual([]);
+    expect(documentiProvvedimentoDemo('non-esiste')).toEqual([]);
   });
 
   it('il caricamento simulato mostra il tipo di file giusto', () => {
@@ -109,31 +94,6 @@ describe('documenti del percorso demo', () => {
     ).toBe(true);
   });
 
-  it('ogni azienda ha il bilancio XBRL e il file è davvero leggibile', async () => {
-    for (const azienda of [
-      AZIENDA_MECCANICA,
-      AZIENDA_TESSITURA,
-      AZIENDA_LOGISTICA,
-      AZIENDA_CANTIERI,
-      AZIENDA_IMPIANTI,
-    ]) {
-      const istanze = documentiDemoPerAzienda(azienda, '.xbrl,.xml');
-      expect(istanze, azienda).toHaveLength(1);
-      const xml = readFileSync(join(process.cwd(), 'public', istanze[0].percorso), 'utf8');
-      const estratto = parseIstanzaXbrl(xml);
-      expect(estratto.annoBilancio, azienda).toBe(2025);
-      expect(estratto.facts.length, azienda).toBeGreaterThan(15);
-
-      // Il file non basta: deve arrivare ai campi del bilancio che la
-      // verifica azienda legge. Un tag scritto male darebbe una demo di zeri.
-      const analisi = await analizzaFileXbrl(xml, istanze[0].nome);
-      expect(analisi.corrente.totaleAttivo, azienda).toBe(1_100_000);
-      expect(analisi.corrente.totaleDebiti, azienda).toBe(900_000);
-      expect(analisi.corrente.valoreProduzione, azienda).toBe(1_350_000);
-      expect(analisi.note?.fatti.length ?? 0, azienda).toBeGreaterThan(0);
-    }
-  });
-
   it('filtra per azienda: nel caricamento di Meccanica non compaiono i documenti di Tessitura', () => {
     const meccanica = documentiDemoPerAzienda(AZIENDA_MECCANICA, '.pdf');
     expect(meccanica.some((d) => d.azienda === AZIENDA_TESSITURA)).toBe(false);
@@ -142,24 +102,29 @@ describe('documenti del percorso demo', () => {
   });
 
   it('preseleziona i ruoli del campo e lascia scegliere gli altri documenti dell’azienda', () => {
-    const scelti = documentiDemoSelezionati(
-      AZIENDA_TESSITURA,
-      '.pdf',
-      'PROVVEDIMENTO,STATO_PASSIVO'
-    );
-    expect(scelti.map((d) => d.ruolo)).toEqual(['PROVVEDIMENTO', 'STATO_PASSIVO']);
+    const scelti = documentiDemoSelezionati(AZIENDA_MECCANICA, '.pdf', 'PROPOSTA');
+    expect(scelti.map((d) => d.ruolo)).toEqual(['PROPOSTA']);
     const tutti = documentiDemoPerAzienda(AZIENDA_TESSITURA, '.pdf');
-    expect(tutti.map((d) => d.ruolo)).toContain('FASCICOLO');
-    expect(
-      documentiDemoSelezionati(AZIENDA_CANTIERI, '.pdf', 'PROPOSTA').map((d) => d.ruolo)
-    ).toEqual(['PROPOSTA']);
+    expect(tutti.map((d) => d.ruolo)).toEqual(['FASCICOLO']);
   });
 
   it('se il ruolo richiesto manca, preseleziona i documenti disponibili invece di zero file', () => {
-    // Tessitura segue la liquidazione: un campo «proposta» non deve aprire il
+    // Tessitura non ha un atto: un campo «provvedimento» non deve aprire il
     // modale con la selezione vuota e il pulsante disabilitato.
     expect(
-      documentiDemoSelezionati(AZIENDA_TESSITURA, '.pdf', 'PROPOSTA').map((d) => d.ruolo)
-    ).toEqual(['FASCICOLO', 'PROVVEDIMENTO', 'STATO_PASSIVO']);
+      documentiDemoSelezionati(AZIENDA_TESSITURA, '.pdf', 'PROVVEDIMENTO').map((d) => d.ruolo)
+    ).toEqual(['FASCICOLO']);
+  });
+
+  it('riconosce il set demo dal nome del file, e solo quello', () => {
+    // IL MARCHIO DEL SET (0.256.0): la guardia dell'upload si appoggia a
+    // questo, quindi il test guarda sia il nome esatto sia ciò che non deve
+    // passare.
+    expect(eDocumentoDemo('proposta-meccanica-valsesia.pdf')).toBe(true);
+    expect(eDocumentoDemo('FASCICOLO-STORICO-LOGISTICA-PADANA.PDF')).toBe(true);
+    expect(eDocumentoDemo('C:\\temp\\fascicolo-storico-tessitura-lario.pdf')).toBe(true);
+    expect(eDocumentoDemo('fattura-mia.pdf')).toBe(false);
+    expect(eDocumentoDemo('fascicolo-storico-cantieri-brianza.pdf')).toBe(false);
+    expect(eDocumentoDemo(null)).toBe(false);
   });
 });

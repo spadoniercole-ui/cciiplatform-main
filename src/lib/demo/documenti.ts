@@ -43,8 +43,6 @@ export interface DocumentoDemo {
 export const AZIENDA_MECCANICA = 'Meccanica Valsesia Demo S.r.l.';
 export const AZIENDA_TESSITURA = 'Tessitura Lario Demo S.p.A.';
 export const AZIENDA_LOGISTICA = 'Logistica Padana Demo S.r.l.';
-export const AZIENDA_CANTIERI = 'Cantieri Brianza Demo S.r.l.';
-export const AZIENDA_IMPIANTI = 'Impianti Adriatica Demo S.r.l.';
 
 export const PACCHETTO_DOCUMENTI_DEMO = '/demo/documenti-demo.zip';
 
@@ -115,7 +113,8 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
     'CHECKLIST'
   ),
 
-  // Tessitura Lario — liquidazione giudiziale.
+  // Tessitura Lario — si ferma alla verifica contabile: bilancio, visura,
+  // certificazione. Nessun atto: lo scenario non è ancora stato aperto.
   documento(
     AZIENDA_TESSITURA,
     'fascicolo-storico-tessitura-lario.pdf',
@@ -146,47 +145,18 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
   ),
   documento(
     AZIENDA_TESSITURA,
-    'decreto-liquidazione-tessitura-lario.pdf',
-    'PDF',
-    'Decreto di liquidazione giudiziale',
-    'PROVVEDIMENTO'
-  ),
-  documento(
-    AZIENDA_TESSITURA,
-    'stato-passivo-tessitura-lario.pdf',
-    'PDF',
-    'Stato passivo — allegato al decreto',
-    'STATO_PASSIVO'
-  ),
-  documento(
-    AZIENDA_TESSITURA,
     'checklist-prodotti-tessitura-lario.xlsx',
     'EXCEL',
     'Check list dei prodotti — compilata',
     'CHECKLIST'
   ),
 
-  // Logistica Padana — cram down.
   documento(
     AZIENDA_LOGISTICA,
     'fascicolo-storico-logistica-padana.pdf',
     'PDF',
     'Fascicolo storico e visura camerale',
     'FASCICOLO'
-  ),
-  documento(
-    AZIENDA_LOGISTICA,
-    'bilancio-logistica-padana-2025.xlsx',
-    'EXCEL',
-    'Bilancio 2025 — prospetto dimostrativo',
-    'BILANCIO'
-  ),
-  documento(
-    AZIENDA_LOGISTICA,
-    'bilancio-logistica-padana-2025.xbrl',
-    'XBRL',
-    'Bilancio 2025 — istanza XBRL letta dal motore',
-    'BILANCIO'
   ),
   documento(
     AZIENDA_LOGISTICA,
@@ -197,10 +167,17 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
   ),
   documento(
     AZIENDA_LOGISTICA,
-    'dispositivo-cram-down-logistica-padana.pdf',
-    'PDF',
-    'Dispositivo di cram down',
-    'PROVVEDIMENTO'
+    'elenco-denunce-dm10-logistica-padana.xlsx',
+    'EXCEL',
+    'Elenco denunce DM10',
+    'DENUNCE'
+  ),
+  documento(
+    AZIENDA_LOGISTICA,
+    'elenco-deleghe-f24-logistica-padana.xlsx',
+    'EXCEL',
+    'Elenco deleghe di pagamento F24',
+    'DELEGHE'
   ),
   documento(
     AZIENDA_LOGISTICA,
@@ -209,115 +186,26 @@ export const DOCUMENTI_DEMO: DocumentoDemo[] = [
     'Check list dei prodotti — compilata',
     'CHECKLIST'
   ),
-
-  // Cantieri Brianza — la valutazione aperta: nessun percorso precostituito.
-  documento(
-    AZIENDA_CANTIERI,
-    'fascicolo-storico-cantieri-brianza.pdf',
-    'PDF',
-    'Fascicolo storico e visura camerale',
-    'FASCICOLO'
-  ),
-  documento(
-    AZIENDA_CANTIERI,
-    'bilancio-cantieri-brianza-2025.xlsx',
-    'EXCEL',
-    'Bilancio 2025 — prospetto dimostrativo',
-    'BILANCIO'
-  ),
-  documento(
-    AZIENDA_CANTIERI,
-    'bilancio-cantieri-brianza-2025.xbrl',
-    'XBRL',
-    'Bilancio 2025 — istanza XBRL letta dal motore',
-    'BILANCIO'
-  ),
-  documento(
-    AZIENDA_CANTIERI,
-    'certificazione-debiti-cantieri-brianza.xlsx',
-    'EXCEL',
-    'Certificazione dei debiti',
-    'CERTIFICAZIONE'
-  ),
-  documento(
-    AZIENDA_CANTIERI,
-    'proposta-cantieri-brianza.pdf',
-    'PDF',
-    'Proposta depositata — documento dimostrativo',
-    'PROPOSTA'
-  ),
-  documento(
-    AZIENDA_CANTIERI,
-    'decreto-liquidazione-cantieri-brianza.pdf',
-    'PDF',
-    'Decreto di liquidazione giudiziale — variante demo',
-    'PROVVEDIMENTO'
-  ),
-  documento(
-    AZIENDA_CANTIERI,
-    'dispositivo-cram-down-cantieri-brianza.pdf',
-    'PDF',
-    'Dispositivo di cram down — variante demo',
-    'PROVVEDIMENTO'
-  ),
-  documento(
-    AZIENDA_CANTIERI,
-    'checklist-prodotti-cantieri-brianza.xlsx',
-    'EXCEL',
-    'Check list dei prodotti — compilata',
-    'CHECKLIST'
-  ),
-
-  // Impianti Adriatica — la posizione ferma al triage: visura, certificazione,
-  // denunce DM10 e deleghe di pagamento. Non ci sono proposta o provvedimento,
-  // perché il percorso non è ancora arrivato allo scenario; il bilancio XBRL
-  // invece c'è, ed è quello che permette di provare la verifica azienda su una
-  // posizione non precostituita.
-  documento(
-    AZIENDA_IMPIANTI,
-    'fascicolo-storico-impianti-adriatica.pdf',
-    'PDF',
-    'Fascicolo storico e visura camerale',
-    'FASCICOLO'
-  ),
-  documento(
-    AZIENDA_IMPIANTI,
-    'bilancio-impianti-adriatica-2025.xbrl',
-    'XBRL',
-    'Bilancio 2025 — istanza XBRL letta dal motore',
-    'BILANCIO'
-  ),
-  documento(
-    AZIENDA_IMPIANTI,
-    'certificazione-debiti-impianti-adriatica.xlsx',
-    'EXCEL',
-    'Certificazione dei debiti',
-    'CERTIFICAZIONE'
-  ),
-  documento(
-    AZIENDA_IMPIANTI,
-    'elenco-denunce-dm10-impianti-adriatica.xlsx',
-    'EXCEL',
-    'Elenco denunce DM10',
-    'DENUNCE'
-  ),
-  documento(
-    AZIENDA_IMPIANTI,
-    'elenco-deleghe-f24-impianti-adriatica.xlsx',
-    'EXCEL',
-    'Elenco deleghe di pagamento F24',
-    'DELEGHE'
-  ),
-  documento(
-    AZIENDA_IMPIANTI,
-    'checklist-prodotti-impianti-adriatica.xlsx',
-    'EXCEL',
-    'Check list dei prodotti — compilata',
-    'CHECKLIST'
-  ),
 ];
 
 const normalizza = (valore: string) => valore.trim().toLocaleLowerCase('it-IT');
+
+/**
+ * IL MARCHIO DEL SET DEMO (0.256.0).
+ *
+ * In uno spazio demo l'unico caricamento ammesso è un file del set: la
+ * riconoscibilità è il nome, perché il set è generato da questo stesso elenco
+ * (`scripts/genera-demo-files.mjs`) e chi scarica il pacchetto riporta a
+ * bordo gli stessi nomi. Il controllo vive qui, accanto ai nomi, e lo usa la
+ * route di upload solo quando lo spazio è demo.
+ */
+const NOMI_DEMO = new Set(DOCUMENTI_DEMO.map((d) => normalizza(d.nome)));
+
+export function eDocumentoDemo(nome: string | null | undefined): boolean {
+  if (!nome) return false;
+  const base = nome.split(/[\\/]/).pop() ?? nome;
+  return NOMI_DEMO.has(normalizza(base));
+}
 
 const PER_AZIENDA = new Map(DOCUMENTI_DEMO.map((d) => [`${normalizza(d.azienda)}|${d.nome}`, d]));
 
@@ -328,30 +216,16 @@ function perAzienda(azienda: string, nome: string): DocumentoDemo | null {
 /** Il fascicolo storico (PDF) dell'azienda demo, per codice fiscale. */
 export function fascicoloDemoPerCodiceFiscale(codiceFiscale: string | null | undefined) {
   if (!codiceFiscale) return null;
-  const azienda =
-    codiceFiscale === '00000000101'
-      ? AZIENDA_MECCANICA
-      : codiceFiscale === '00000000102'
-        ? AZIENDA_TESSITURA
-        : codiceFiscale === '00000000103'
-          ? AZIENDA_LOGISTICA
-          : codiceFiscale === '00000000104'
-            ? AZIENDA_CANTIERI
-            : codiceFiscale === '00000000105'
-              ? AZIENDA_IMPIANTI
-              : null;
-  if (!azienda) return null;
-  const nome =
-    azienda === AZIENDA_MECCANICA
-      ? 'fascicolo-storico-meccanica-valsesia.pdf'
-      : azienda === AZIENDA_TESSITURA
-        ? 'fascicolo-storico-tessitura-lario.pdf'
-        : azienda === AZIENDA_LOGISTICA
-          ? 'fascicolo-storico-logistica-padana.pdf'
-          : azienda === AZIENDA_CANTIERI
-            ? 'fascicolo-storico-cantieri-brianza.pdf'
-            : 'fascicolo-storico-impianti-adriatica.pdf';
-  return perAzienda(azienda, nome);
+  const mappa: Record<string, { azienda: string; nome: string }> = {
+    '00000000101': {
+      azienda: AZIENDA_MECCANICA,
+      nome: 'fascicolo-storico-meccanica-valsesia.pdf',
+    },
+    '00000000102': { azienda: AZIENDA_TESSITURA, nome: 'fascicolo-storico-tessitura-lario.pdf' },
+    '00000000103': { azienda: AZIENDA_LOGISTICA, nome: 'fascicolo-storico-logistica-padana.pdf' },
+  };
+  const voce = mappa[codiceFiscale];
+  return voce ? perAzienda(voce.azienda, voce.nome) : null;
 }
 
 /** Il prospetto di bilancio (Excel) dell'azienda demo. */
@@ -361,10 +235,7 @@ export function bilancioDemoPerCodiceFiscale(codiceFiscale: string | null | unde
     return perAzienda(AZIENDA_MECCANICA, 'bilancio-meccanica-valsesia-2025.xlsx');
   if (codiceFiscale === '00000000102')
     return perAzienda(AZIENDA_TESSITURA, 'bilancio-tessitura-lario-2025.xlsx');
-  if (codiceFiscale === '00000000103')
-    return perAzienda(AZIENDA_LOGISTICA, 'bilancio-logistica-padana-2025.xlsx');
-  if (codiceFiscale === '00000000104')
-    return perAzienda(AZIENDA_CANTIERI, 'bilancio-cantieri-brianza-2025.xlsx');
+  // Logistica non ha bilancio: si ferma alla verifica amministrativa.
   return null;
 }
 
@@ -388,24 +259,8 @@ export function documentiProvvedimentoDemo(
     if (tipo === 'PROPOSTA') return proposta ? [proposta] : [];
     return [proposta, dispositivo].filter((d): d is DocumentoDemo => d !== null);
   }
-  if (codiceFiscale === '00000000102') {
-    return [
-      perAzienda(AZIENDA_TESSITURA, 'decreto-liquidazione-tessitura-lario.pdf'),
-      perAzienda(AZIENDA_TESSITURA, 'stato-passivo-tessitura-lario.pdf'),
-    ].filter((d): d is DocumentoDemo => d !== null);
-  }
-  if (codiceFiscale === '00000000103') {
-    return [perAzienda(AZIENDA_LOGISTICA, 'dispositivo-cram-down-logistica-padana.pdf')].filter(
-      (d): d is DocumentoDemo => d !== null
-    );
-  }
-  if (codiceFiscale === '00000000104') {
-    const decreto = perAzienda(AZIENDA_CANTIERI, 'decreto-liquidazione-cantieri-brianza.pdf');
-    const dispositivo = perAzienda(AZIENDA_CANTIERI, 'dispositivo-cram-down-cantieri-brianza.pdf');
-    if (tipo === 'DECRETO_LIQUIDAZIONE') return decreto ? [decreto] : [];
-    if (tipo === 'CRAM_DOWN') return dispositivo ? [dispositivo] : [];
-    return [decreto, dispositivo].filter((d): d is DocumentoDemo => d !== null);
-  }
+  // Tessitura e Logistica non hanno un atto: la demo le ferma prima dello
+  // scenario, quindi non esiste un provvedimento da proporre.
   return [];
 }
 

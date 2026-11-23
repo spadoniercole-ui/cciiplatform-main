@@ -26,6 +26,24 @@ il terzo per correzioni.
 
 ---
 
+## 0.255.15 — 2026-11-23
+
+- **La demo si rifà a tre aziende e tre tappe.** Meccanica Valsesia è completa (amministrativa,
+  contabile, aziendale, accordo e cram down); Tessitura Lario si ferma alla contabile (visura,
+  bilanci, parametri, nessun atto); Logistica Padana si ferma all’amministrativa (anagrafica,
+  posizioni TS, soglie, nessun bilancio). Cantieri Brianza e Impianti Adriatica escono dal set,
+  con i loro documenti e le loro varianti.
+- **I percorsi dicono dove finiscono.** `profondita` per ogni azienda (`COMPLETA` o `CONTABILE`):
+  il caricamento non crea gli scenari, le istruttorie e la verifica aziendale delle posizioni che
+  non ci arrivano, così una tappa a metà non finge di essere completa.
+- **I caricamenti seguono la posizione.** I documenti del set sono quelli che servono alla tappa di
+  ciascuna azienda: la Meccanica ha proposta e dispositivo, Tessitura solo la contabile, Logistica
+  fascicolo, certificazione, denunce e deleghe. Il pacchetto `/demo/documenti-demo.zip` è rigenerato
+  con gli stessi file.
+- **Solo il set demo, solo in demo.** In uno spazio demo l’upload riconosce i documenti del set dal
+  nome (`eDocumentoDemo`) e rifiuta con 403 qualsiasi altro file; fuori dal demo la guardia non
+  esiste e la produzione non cambia comportamento.
+
 ## 0.255.14 — 2026-11-23
 
 - **Torna il livello di permesso per azienda.** L’associazione utente↔azienda esisteva già, ma

@@ -944,6 +944,11 @@ export async function caricaPercorsoDemoEnte(
         // non per lo scenario, e il seed non sovrascrive ciò che c'è già.
         await inserisciCorredoContabileDemo(client, nomeSchema, aziendaId!, a);
         await inserisciDebitoMemorizzatoDemo(client, nomeSchema, aziendaId!, a);
+        // UNA DEMO CHE SI FERMA DOVE DEVE (0.256.0). Tessitura arriva alla
+        // contabile: bilanci, visura e parametri, e nulla dopo. Senza questa
+        // uscita lo scenario e l'istruttoria verrebbero creati lo stesso, e la
+        // tappa «contabile» sarebbe di nuovo una demo completa.
+        if (a.profondita === 'CONTABILE') continue;
         // Anche sulle aziende già presenti si riallinea lo scenario: la demo
         // della 0.173.x ne aveva uno solo, sempre «proposta». Riapplicare il
         // percorso deve aggiornare il tipo senza duplicare lo scenario né
@@ -990,9 +995,9 @@ export async function caricaPercorsoDemoEnte(
       }
     }
 
-    // La quinta posizione resta al triage: niente screening, niente bilancio,
-    // niente scenario. Se esiste già non la si tocca, perché potrebbe essere
-    // stata promossa o lavorata dopo il primo caricamento.
+    // LA TERZA AZIENDA RESTA ALLA VERIFICA AMMINISTRATIVA (0.256.0): niente
+    // screening, niente bilancio, niente scenario. Se esiste già non la si
+    // tocca, perché potrebbe essere stata promossa dopo il primo caricamento.
     if (!perNome.has(TRIAGE_DEMO.ragioneSociale)) {
       const triageId = await inserisciAzienda(client, nomeSchema, TRIAGE_DEMO, { triage: true });
       await inserisciPosizioniTriage(client, nomeSchema, triageId, TRIAGE_DEMO);
@@ -1097,7 +1102,11 @@ export async function acquisisciPosizioneDebitoriaDemoEnte(
   if (!riga.demo) {
     throw new Error('L’acquisizione demo è disponibile solo negli spazi demo.');
   }
-  const azienda = PERCORSO_DEMO.find((a) => a.ragioneSociale === String(riga.ragione_sociale));
+  // Anche la posizione ferma alla verifica amministrativa è nel set (0.256.0):
+  // la certificazione si acquisisce da lì come dalle altre.
+  const azienda = [...PERCORSO_DEMO, TRIAGE_DEMO].find(
+    (a) => a.ragioneSociale === String(riga.ragione_sociale)
+  );
   if (!azienda) throw new Error('Questa azienda non fa parte del percorso demo.');
 
   await assicuraTabellaDebitiEnte(nomeSchema);

@@ -56,34 +56,6 @@ const aziende = [
     addetti: 31,
     oggetto: 'Trasporto merci conto terzi e gestione di magazzini.',
   },
-  {
-    chiave: 'cantieri-brianza',
-    nome: 'Cantieri Brianza Demo S.r.l.',
-    cf: '00000000104',
-    piva: '00000000104',
-    rea: 'MB-001104',
-    forma: 'Società a responsabilità limitata',
-    sede: 'Via del Lambro 22, 20900 Monza (MB)',
-    pec: 'cantieri.brianza.demo@pec.esempio.it',
-    ateco: '41.20.00',
-    amministratore: 'Marco Esempio, Amministratore unico',
-    addetti: 38,
-    oggetto: 'Costruzione di edifici residenziali e commerciali.',
-  },
-  {
-    chiave: 'impianti-adriatica',
-    nome: 'Impianti Adriatica Demo S.r.l.',
-    cf: '00000000105',
-    piva: '00000000105',
-    rea: 'PE-001105',
-    forma: 'Società a responsabilità limitata',
-    sede: 'Via dell’Industria 14, 65129 Pescara (PE)',
-    pec: 'impianti.adriatica.demo@pec.esempio.it',
-    ateco: '43.21.01',
-    amministratore: 'Giulia Esempio, Amministratrice unica',
-    addetti: 18,
-    oggetto: 'Installazione e manutenzione di impianti elettrici e tecnologici.',
-  },
 ];
 
 function pdf({ file, titolo, sottotitolo, righe }) {
@@ -291,13 +263,9 @@ for (const a of aziende) {
   // Ogni azienda demo ha il suo bilancio XBRL, anche quella ferma al triage:
   // è il file che la simulazione di acquisizione propone nel campo XBRL, e
   // senza di esso la verifica azienda di quella posizione non si può mostrare.
-  xbrl({
-    file: `bilancio-${a.chiave}-2025.xbrl`,
-    azienda: a.nome,
-    cf: a.cf,
-  });
-
-  if (a.chiave !== 'impianti-adriatica') {
+  // Solo le due aziende che arrivano alla contabile hanno un bilancio.
+  if (a.chiave !== 'logistica-padana') {
+    xbrl({ file: `bilancio-${a.chiave}-2025.xbrl`, azienda: a.nome, cf: a.cf });
     excel({
       file: `bilancio-${a.chiave}-2025.xlsx`,
       titolo: 'Bilancio 2025 — prospetto dimostrativo',
@@ -361,124 +329,6 @@ for (const a of aziende) {
     });
   }
 
-  if (a.chiave === 'tessitura-lario') {
-    pdf({
-      file: 'decreto-liquidazione-tessitura-lario.pdf',
-      titolo: 'Decreto di liquidazione giudiziale',
-      sottotitolo: 'Tribunale di Como — Sezione crisi d’impresa · procedura demo',
-      righe: [
-        '## Il Tribunale',
-        'Visto il ricorso e la documentazione allegata, dichiara aperta la liquidazione giudiziale della società Tessitura Lario Demo S.p.A. e nomina il giudice delegato e il curatore.',
-        '---',
-        '## Crediti ammessi',
-        'Contributi previdenziali scaduti: ammesso 72.000,00 euro, rango privilegiato, realizzo previsto 30,5%.',
-        'Sanzioni civili contributive: ammesso 8.000,00 euro, rango chirografario, realizzo previsto 6,4%.',
-        '---',
-        '## Spese e tempi',
-        'Spese di procedura: 20% del realizzo lordo.',
-        'Durata stimata: 36 mesi.',
-        '---',
-        '## Avvertenza',
-        'Atto dimostrativo. I crediti, le percentuali e i tempi sono inventati per mostrare il confronto con la posizione dell’ente.',
-      ],
-    });
-    pdf({
-      file: 'stato-passivo-tessitura-lario.pdf',
-      titolo: 'Stato passivo — allegato al decreto',
-      sottotitolo: 'Tessitura Lario Demo S.p.A. · procedura demo',
-      righe: [
-        '## Crediti dello Stato e degli enti',
-        'Contributi previdenziali scaduti — 72.000,00 euro — privilegiato.',
-        'Sanzioni civili contributive — 8.000,00 euro — chirografario.',
-        '---',
-        '## Altri crediti',
-        'Fornitori: 420.000,00 euro — chirografario.',
-        'Banche: 510.000,00 euro — privilegiato ipotecario.',
-        '---',
-        '## Avvertenza',
-        'Documento dimostrativo: non riproduce uno stato passivo reale.',
-      ],
-    });
-  }
-
-  if (a.chiave === 'logistica-padana') {
-    pdf({
-      file: 'dispositivo-cram-down-logistica-padana.pdf',
-      titolo: 'Dispositivo di cram down',
-      sottotitolo: 'Tribunale di Piacenza — Sezione crisi d’impresa · procedura demo',
-      righe: [
-        '## Il Tribunale',
-        'Omologa il piano di ristrutturazione e dispone il cram down nei confronti dei creditori dissenzienti, nei termini indicati nel dispositivo.',
-        '---',
-        '## Crediti riconosciuti',
-        'Contributi previdenziali scaduti: riconosciuto 10.000,00 euro, rango privilegiato, soddisfacimento 50%.',
-        'Sanzioni civili contributive: riconosciuto 1.000,00 euro, rango chirografario, soddisfacimento 20%.',
-        '---',
-        '## Spese e tempi',
-        'Spese di procedura: 15% del realizzo lordo.',
-        'Durata stimata: 24 mesi.',
-        '---',
-        '## Avvertenza',
-        'Dispositivo dimostrativo. I dati sono inventati e servono solo al confronto con la posizione dell’ente.',
-      ],
-    });
-  }
-
-  if (a.chiave === 'cantieri-brianza') {
-    pdf({
-      file: 'proposta-cantieri-brianza.pdf',
-      titolo: 'Proposta depositata — variante aperta',
-      sottotitolo: a.nome,
-      righe: [
-        '## Proposta ricevuta dall’ente',
-        'La società ha depositato una proposta di ristrutturazione, ma il percorso non è ancora qualificato: la demo lascia aperta la scelta tra proposta, liquidazione e cram down.',
-        '---',
-        '## Condizioni dichiarate',
-        'Continuità aziendale e pagamento dei creditori secondo il piano allegato. Il documento è una variante dimostrativa, non un atto reale.',
-      ],
-    });
-    pdf({
-      file: 'decreto-liquidazione-cantieri-brianza.pdf',
-      titolo: 'Decreto di liquidazione giudiziale — variante',
-      sottotitolo: 'Tribunale di Monza — Sezione crisi d’impresa · procedura demo',
-      righe: [
-        '## Il Tribunale',
-        'Dichiara aperta la liquidazione giudiziale della società Cantieri Brianza Demo S.r.l. e nomina il giudice delegato e il curatore.',
-        '---',
-        '## Crediti ammessi',
-        'Contributi previdenziali scaduti: ammesso 48.000,00 euro, rango privilegiato, realizzo previsto 32%.',
-        'Sanzioni civili contributive: ammesso 8.000,00 euro, rango chirografario, realizzo previsto 8%.',
-        '---',
-        '## Spese e tempi',
-        'Spese di procedura: 18% del realizzo lordo.',
-        'Durata stimata: 30 mesi.',
-        '---',
-        '## Avvertenza',
-        'Atto dimostrativo: la variante serve a mostrare che il percorso può essere scelto anche su un’azienda non precostituita.',
-      ],
-    });
-    pdf({
-      file: 'dispositivo-cram-down-cantieri-brianza.pdf',
-      titolo: 'Dispositivo di cram down — variante',
-      sottotitolo: 'Tribunale di Monza — Sezione crisi d’impresa · procedura demo',
-      righe: [
-        '## Il Tribunale',
-        'Omologa il piano di ristrutturazione e dispone il cram down nei confronti dei creditori dissenzienti.',
-        '---',
-        '## Crediti riconosciuti',
-        'Contributi previdenziali scaduti: riconosciuto 51.000,00 euro, rango privilegiato, soddisfacimento 85%.',
-        'Sanzioni civili contributive: riconosciuto 8.500,00 euro, rango chirografario, soddisfacimento 85%.',
-        '---',
-        '## Spese e tempi',
-        'Spese di procedura: 12% del realizzo lordo.',
-        'Durata stimata: 18 mesi.',
-        '---',
-        '## Avvertenza',
-        'Dispositivo dimostrativo della variante cram down.',
-      ],
-    });
-  }
-
   excel({
     file: `certificazione-debiti-${a.chiave}.xlsx`,
     titolo: 'Certificazione dei debiti',
@@ -487,50 +337,26 @@ for (const a of aziende) {
       ['Voce', 'Importo', 'Tipo', 'Nota'],
       [
         'Contributi previdenziali scaduti',
-        a.chiave === 'meccanica-valsesia'
-          ? 210000
-          : a.chiave === 'tessitura-lario'
-            ? 80000
-            : a.chiave === 'logistica-padana'
-              ? 12000
-              : a.chiave === 'cantieri-brianza'
-                ? 60000
-                : 45000,
+        a.chiave === 'meccanica-valsesia' ? 210000 : a.chiave === 'tessitura-lario' ? 80000 : 12000,
         'DEBITO',
         'Dato fittizio',
       ],
       [
         'Sanzioni civili contributive',
-        a.chiave === 'meccanica-valsesia'
-          ? 35000
-          : a.chiave === 'tessitura-lario'
-            ? 12000
-            : a.chiave === 'logistica-padana'
-              ? 1500
-              : a.chiave === 'cantieri-brianza'
-                ? 10000
-                : 6000,
+        a.chiave === 'meccanica-valsesia' ? 35000 : a.chiave === 'tessitura-lario' ? 12000 : 1500,
         'DEBITO',
         'Dato fittizio',
       ],
       [
         'Totale',
-        a.chiave === 'meccanica-valsesia'
-          ? 245000
-          : a.chiave === 'tessitura-lario'
-            ? 92000
-            : a.chiave === 'logistica-padana'
-              ? 13500
-              : a.chiave === 'cantieri-brianza'
-                ? 70000
-                : 51000,
+        a.chiave === 'meccanica-valsesia' ? 245000 : a.chiave === 'tessitura-lario' ? 92000 : 13500,
         '',
         'Somma delle voci demo',
       ],
     ],
   });
 
-  if (a.chiave === 'impianti-adriatica') {
+  if (a.chiave === 'logistica-padana') {
     excel({
       file: `elenco-denunce-dm10-${a.chiave}.xlsx`,
       titolo: 'Elenco denunce DM10',

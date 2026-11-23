@@ -99,8 +99,14 @@ beforeEach(async () => {
 });
 
 const meccanica = PERCORSO_DEMO.find((a) => a.tipoIstruttoria === 'PROPOSTA')!;
-const senzaFacoltative = PERCORSO_DEMO.find((a) => a.verifiche?.aziendale === false)!;
 const tessitura = PERCORSO_DEMO.find((a) => a.ragioneSociale === 'Tessitura Lario Demo S.p.A.')!;
+// Nel set a tre aziende non c'è più una posizione senza facoltative: il caso
+// resta coperto da questa variante dichiarata, che serve a provare che il seed
+// rispetta i flag dell'azienda.
+const senzaFacoltative = {
+  ...tessitura,
+  verifiche: { contabile: false, aziendale: false },
+};
 
 async function scenario(id: number, aziendaId: number, nome: string, tipo: string) {
   await db.query(
@@ -144,7 +150,7 @@ describe('seed delle verifiche demo', () => {
     expect(dopo.rows[0].n).toBe(1);
   });
 
-  it('chiude contabile e aziendale di Tessitura anche con la liquidazione come atto', async () => {
+  it('chiude la contabile di Tessitura ma la fotografia non è base della proposta', async () => {
     await db.query(`
       INSERT INTO ${SCHEMA}.aziende (id, ragione_sociale)
       VALUES (300, 'Tessitura Lario Demo S.p.A.')
@@ -155,13 +161,13 @@ describe('seed delle verifiche demo', () => {
     await inserisciCorredoContabileDemo(db, SCHEMA, 300, tessitura);
     await inserisciDebitoMemorizzatoDemo(db, SCHEMA, 300, tessitura);
 
-    // La fotografia è base della proposta per dichiarazione dell'azienda, non
-    // per la natura dello scenario.
+    // Tessitura si ferma alla contabile: la simulazione c'è, ma non è la base
+    // della proposta — quella è la tappa che l'operatore deve ancora aprire.
     const sim = await db.query<{ base: boolean }>(
       `SELECT bool_or(base_per_proposta) AS base
          FROM ${SCHEMA}.verifica_azienda_simulazioni WHERE azienda_id = 300`
     );
-    expect(sim.rows[0].base).toBe(true);
+    expect(sim.rows[0].base).toBe(false);
 
     // Visura del fascicolo demo e parametri dell'ente: la contabile ha tutto.
     const az = await db.query<{ visura: string | null; nome: string | null }>(
