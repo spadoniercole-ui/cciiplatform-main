@@ -200,7 +200,7 @@ export function LavorazioneRedigente({
                 : 'Non ancora compilato: misura il debito da ristrutturare contro i flussi annui a regime.'
             }
             azione={testPratico ? 'Rivedi' : 'Compila'}
-            href={`/spazio/${codice}/aziende/${aziendaId}/checklist?${ritorno}&scenario=${scenarioId}`}
+            href={`/spazio/${codice}/scenari/${scenarioId}/checklist?${ritorno}`}
           />
           <Voce
             fatto={checklist.risposte > 0}
@@ -212,7 +212,9 @@ export function LavorazioneRedigente({
                 : `Nessuna risposta su ${checklist.totale}: è il quadro qualitativo che il bilancio non racconta.`
             }
             azione={checklist.risposte ? 'Continua' : 'Compila'}
-            href={`${base}/checklist?${ritorno}`}
+            // Le risposte contate qui sono quelle di questa pagina: la Check List
+            // dello scenario, che porta in testa il Test pratico.
+            href={`/spazio/${codice}/scenari/${scenarioId}/checklist?${ritorno}`}
           />
         </div>
         {chiusura.settoreDisponibile && (

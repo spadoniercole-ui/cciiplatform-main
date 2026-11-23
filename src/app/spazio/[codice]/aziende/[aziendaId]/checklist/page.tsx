@@ -1,10 +1,18 @@
 import { redirect } from 'next/navigation';
-import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
-import { CheckListMinisterialeAziendaScenario } from '@/components/spazio/CheckListMinisterialeAziendaScenario';
-import { TestPraticoAziendaScenario } from '@/components/spazio/TestPraticoAziendaScenario';
-import { destinazioneRitorno } from '@/lib/ritorno';
-import { BannerRitorno } from '@/components/spazio/BannerRitorno';
 
+// LA CHECK LIST E IL TEST PRATICO SI COMPILANO NELLO SCENARIO.
+//
+// Questa pagina aveva una copia propria delle 56 domande, scritta su un
+// archivio aziendale che nessun conteggio leggeva: la lavorazione della
+// proposta conta infatti le risposte dello scenario, cioè quelle della Check
+// List dello scenario — e in più questa pagina era l'unica porta (mai
+// dichiarata nella scheda) del Test pratico, con l'uscita «Torna alle aziende»
+// che non c'entrava.
+//
+// Ora il Test pratico apre la Check List dello scenario e le domande sono una
+// sola volta. L'indirizzo resta vivo come rimando: con lo scenario nel
+// collegamento porta alla sua Check List, altrimenti alla verifica
+// amministrativa dell'azienda (il triage, dove una lettura d'insieme ha senso).
 export default async function CheckListAziendaPage({
   params,
   searchParams,
@@ -14,34 +22,10 @@ export default async function CheckListAziendaPage({
 }) {
   const { codice, aziendaId } = await params;
   const { ritorno, scenario } = await searchParams;
-  // Aperta dalla lavorazione di uno scenario: si torna lì.
-  const rit =
-    scenario && /^\d+$/.test(scenario) ? destinazioneRitorno(codice, scenario, ritorno) : null;
-  const contesto = await ottieniContestoAccessoSpazio(codice);
-  if (!contesto) redirect('/');
-  if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
-
-  if (contesto.tipoSpazio !== 'ENTE') {
-    // Redigente: il Test pratico (Sezione I) fa da premessa alla Check
-    // List Ministeriale (Sezione II) — stessa pagina, nell'ordine del
-    // documento ufficiale.
-    return (
-      <div className="space-y-8">
-        {rit && <BannerRitorno ritorno={rit} />}
-        <TestPraticoAziendaScenario
-          nomeSchema={contesto.nomeSchema}
-          aziendaId={Number(aziendaId)}
-        />
-        <CheckListMinisterialeAziendaScenario
-          nomeSchema={contesto.nomeSchema}
-          aziendaId={Number(aziendaId)}
-        />
-      </div>
-    );
+  if (scenario && /^\d+$/.test(scenario)) {
+    // Solo i ritorni noti: l'URL non si costruisce con quello che arriva.
+    const rit = ritorno === 'lavorazione' || ritorno === 'valutazione' ? `?ritorno=${ritorno}` : '';
+    redirect(`/spazio/${codice}/scenari/${scenario}/checklist${rit}`);
   }
-
-  // ENTE: la check list generata dallo screening vive nel triage (0.154.0).
-  // Questa rotta resta solo come rimando per i collegamenti già salvati: il
-  // questionario e le risposte stanno dove si decide se procedere.
   redirect(`/spazio/${codice}/verifica-salute?azienda=${aziendaId}`);
 }

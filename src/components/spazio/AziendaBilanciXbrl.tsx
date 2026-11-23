@@ -303,14 +303,14 @@ export function AziendaBilanciXbrl({ nomeSchema, aziendaId, hrefConfigurazione }
         )}
 
         <p className="text-[11px] text-slate-500">
-          Le tab alimentate dai bilanci si scelgono in{' '}
+          Le tab alimentate dai bilanci e gli indici letti da questa azienda si scelgono in{' '}
           <Link
             href={hrefConfigurazione}
             className="font-bold text-blue-600 hover:text-blue-700 underline"
           >
             Configurazione XBRL
           </Link>
-          ; gli indici calcolati si leggono in <strong>Indici</strong>.
+          .
         </p>
       </div>
     </div>

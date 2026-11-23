@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.255.8**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.255.9**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,25 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.255.9 — 2026-11-23
+
+- **Le sotto-pagine legacy della scheda azienda non restano aperte da sole.** `bilanci`,
+  `screening`, `checklist` e `indici` vivevano ancora come pagine raggiungibili solo da un
+  vecchio segnalibro, dentro la scheda azienda, con l’uscita «Torna alle aziende» che non
+  c’entrava con quello che si stava facendo. Ora ognuna porta alla sua casa nuova:
+  `bilanci` → la verifica contabile, dove il caricamento XBRL è la prima sezione; `indici` →
+  la configurazione XBRL, che ora contiene anche gli indici dell’azienda; `checklist` → la
+  Check List dello scenario; `screening` rimandava già alla verifica contabile e resta così.
+- **Il Test pratico ha una porta.** Era compilabile solo dalla pagina legacy della Check
+  List, che teneva anche una seconda copia delle 56 domande su un archivio aziendale che
+  nessun conteggio leggeva — la lavorazione della proposta conta le risposte dello scenario.
+  Ora il Test pratico (Sezione I) apre la Check List dello scenario per il Redigente, con il
+  ritorno alla lavorazione, e le domande sono una sola volta.
+- **«Analisi Bilancio» non è più un percorso in tre schede.** Bilanci XBRL / Configurazione
+  XBRL / Indici sparisce come sotto-navigazione insieme alle pagine che la componevano; la
+  configurazione XBRL porta un’uscita esplicita alla verifica contabile, e il rimando «Vai a
+  Bilanci XBRL» arriva alla sezione giusta invece che a una pagina doppia.
 
 ## 0.255.8 — 2026-11-23
 

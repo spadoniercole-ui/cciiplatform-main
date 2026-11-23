@@ -1,34 +1,19 @@
 import { redirect } from 'next/navigation';
-import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
-import { ottieniAziendaPerId } from '@/app/actions/aziende';
-import { AziendaBilanciXbrl } from '@/components/spazio/AziendaBilanciXbrl';
-import { SottoNavAnalisiBilancio } from '@/components/spazio/SottoNavAnalisiBilancio';
 
+// IL CARICAMENTO DEI BILANCI NON HA PIÙ UNA PAGINA SUA.
+//
+// Bilanci XBRL è la prima sezione della verifica contabile: lì il caricamento
+// sta accanto a prospetto, indici e simulazione, cioè dove i file servono. Come
+// scheda a sé era una pagina che si apriva solo da un vecchio segnalibro, con
+// l'uscita «Torna alle aziende» che non c'entrava con ciò che si stava facendo.
+//
+// L'indirizzo resta vivo e porta lì: chi aveva il segnalibro trova il
+// caricamento, non un 404.
 export default async function AziendaBilanciPage({
   params,
 }: {
   params: Promise<{ codice: string; aziendaId: string }>;
 }) {
   const { codice, aziendaId } = await params;
-  const contesto = await ottieniContestoAccessoSpazio(codice);
-  if (!contesto) redirect('/');
-  if (contesto.modalita === 'OPERATORE') redirect(`/spazio/${codice}`);
-
-  const risultato = await ottieniAziendaPerId(contesto.nomeSchema, Number(aziendaId));
-  if (!risultato.success || !risultato.azienda) {
-    redirect(`/spazio/${codice}/aziende`);
-  }
-
-  const base = `/spazio/${codice}/aziende/${aziendaId}`;
-
-  return (
-    <div className="space-y-4">
-      <SottoNavAnalisiBilancio base={base} attivo="bilanci" />
-      <AziendaBilanciXbrl
-        nomeSchema={contesto.nomeSchema}
-        aziendaId={Number(aziendaId)}
-        hrefConfigurazione={`${base}/xbrl`}
-      />
-    </div>
-  );
+  redirect(`/spazio/${codice}/verifica-contabile/${aziendaId}#bilanci-xbrl`);
 }
