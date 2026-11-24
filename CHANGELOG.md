@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.3**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.4**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,29 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.4 — 2026-11-24
+
+DALLE PERCENTUALI AGLI EURO, SENZA RIFARE IL CONTO DUE VOLTE.
+
+«30% del credito» è una regola; «30.000 euro» è la cifra su cui si decide. La
+piattaforma sapeva fare il secondo conto solo dentro la verifica azienda, e la
+posizione dell’ente mostrava «recupero minimo» senza dire da quale percentuale
+venisse. Ora gli importi si calcolano in un posto solo e si leggono in due.
+
+- **Nuova funzione `importiDaPercentuali`** (`src/lib/verificaAzienda`), con i
+  suoi test: accordo = credito × media proposta, liquidazione = credito × tasso
+  di realizzo del rango al netto delle spese di procedura, cram down = credito
+  × percentuale di soddisfacimento del rango.
+- **Posizione ente, riquadro «Accordo»:** l’importo alla media configurata in
+  Parametri di Spazio, con la percentuale e la fonte accanto.
+- **Posizione ente, riquadro «Procedure»:** gli importi di liquidazione e cram
+  down alle percentuali del rango, sopra le comunicazioni alle unità
+  operative. Una percentuale mancante non diventa zero: la riga dice che cosa
+  manca.
+- **Verifica azienda:** il confronto dei tre scenari si apre con la tabella
+  degli importi — prima riga l’accordo alla media proposta — e la frase su
+  quale procedura lascia la perdita minore resta sotto, a spiegare i numeri.
 
 ## 0.256.3 — 2026-11-24
 

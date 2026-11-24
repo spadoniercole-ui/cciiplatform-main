@@ -533,6 +533,43 @@ export function VerificaAziendaScheda({
             ))}
           </div>
 
+          {/* IL CONFRONTO IN IMPORTI (0.256.4). Prima si leggeva la sola frase
+              su quale procedura lascia la perdita minore: i numeri da cui quella
+              frase nasce erano sparsi nei tre riquadri. Ora aprono il confronto,
+              con la percentuale accanto, e la prima riga è l'accordo alla media
+              proposta — la stessa funzione che li mostra nella posizione ente. */}
+          {(fotografia.importiPercentuali ?? []).length > 0 && (
+            <div className="overflow-hidden rounded-lg border border-slate-200">
+              <table className="w-full text-[11px]">
+                <thead className="bg-slate-50 text-[9px] uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="p-2 text-left font-bold">Confronto</th>
+                    <th className="p-2 text-right font-bold">%</th>
+                    <th className="p-2 text-right font-bold">Importo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(fotografia.importiPercentuali ?? []).map((r) => (
+                    <tr key={r.codice} className="border-t border-slate-100">
+                      <td className="p-2 align-top">
+                        <span className="block font-bold text-slate-800">{r.etichetta}</span>
+                        <span className="block text-[9px] text-slate-500">
+                          {r.calcolabile ? r.fonte : `Non si calcola: ${r.motivo}.`}
+                        </span>
+                      </td>
+                      <td className="p-2 text-right align-top tabular-nums text-slate-600">
+                        {r.percentuale === null ? '—' : `${r.percentuale}%`}
+                      </td>
+                      <td className="p-2 text-right align-top font-bold tabular-nums text-slate-900">
+                        {r.calcolabile ? euro(r.importo) : 'non calcolabile'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {fotografia.confronto && (
             <p className="text-[11px] text-slate-600 leading-relaxed">
               {fotografia.confronto.testo}

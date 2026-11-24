@@ -87,6 +87,15 @@ export default async function PosizionePage({
   // La cassa e il flusso dell'azienda appartengono alla verifica contabile, che
   // li legge e li soglia per conto suo: portarli qui faceva sembrare che il
   // credito si misurasse con la liquidità dell'azienda, che è un'altra cosa.
+  // GLI IMPORTI DALLE PERCENTUALI (0.256.4). La fotografia della verifica
+  // azienda li porta già calcolati — accordo sulla media proposta, liquidazione
+  // e cram down sul rango — con la stessa funzione che usa la verifica azienda.
+  // Qui si mostrano e basta: ricalcolarli in pagina sarebbe il secondo motore
+  // che la 0.240.0 ha chiuso.
+  const importiPercentuali = lettura.dati.fotografia?.importiPercentuali ?? [];
+  const accordoMedia = importiPercentuali.find((i) => i.codice === 'ACCORDO') ?? null;
+  const procedure = importiPercentuali.filter((i) => i.codice !== 'ACCORDO');
+
   const lettureSenzaContabile = confronto.letture.filter((l) => l.natura !== 'PROIEZIONE');
   const divergenzeSenzaContabile = confronto.divergenze.filter(
     (d) => !d.tema.toLowerCase().includes('cassa')
@@ -345,8 +354,26 @@ export default async function PosizionePage({
         <PassoProcedura
           numero={5}
           titolo="Accordo e piano in essere"
-          obiettivo="Sapere quale recupero del credito si può chiedere all’azienda e se un piano è già in essere."
+          obiettivo="Sapere quale recupero del credito si può chiedere all’azienda, quanto vale alla percentuale media configurata e se un piano è già in essere."
         />
+        {accordoMedia && (
+          <div className="rounded-lg border border-slate-200 p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                {accordoMedia.etichetta}
+                {accordoMedia.percentuale !== null ? ` — ${accordoMedia.percentuale}%` : ''}
+              </p>
+              <p className="text-[15px] font-bold tabular-nums text-slate-900">
+                {accordoMedia.calcolabile ? formattaEuro(accordoMedia.importo) : 'non calcolabile'}
+              </p>
+            </div>
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              {accordoMedia.calcolabile
+                ? `Credito vantato per la ${accordoMedia.percentuale}%: ${accordoMedia.fonte}. Cambiando quella percentuale, cambia questo importo.`
+                : `L’importo non si calcola: ${accordoMedia.motivo}.`}
+            </p>
+          </div>
+        )}
         <div className="grid gap-2 sm:grid-cols-2">
           <div className="rounded-lg bg-slate-50 p-3">
             <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
@@ -417,8 +444,34 @@ export default async function PosizionePage({
         <PassoProcedura
           numero={7}
           titolo="Procedure: le comunicazioni alle unità operative"
-          obiettivo="Passare dalla posizione al lavoro degli uffici: chi deve contabilizzare che cosa, con il testo pronto per ogni unità operativa e le lavorazioni che la procedura le assegna."
+          obiettivo="Passare dalla posizione al lavoro degli uffici: quanto rendono liquidazione e cram down alle percentuali del rango, chi deve contabilizzare che cosa, con il testo pronto per ogni unità operativa."
         />
+        {procedure.length > 0 && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {procedure.map((p) => (
+              <div key={p.codice} className="rounded-lg border border-slate-200 p-3">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                  {p.etichetta}
+                  {p.percentuale !== null ? ` — ${p.percentuale}%` : ''}
+                </p>
+                <p className="text-[13px] font-bold tabular-nums text-slate-900">
+                  {p.calcolabile ? formattaEuro(p.importo) : 'non calcolabile'}
+                </p>
+                <p className="text-[9px] text-slate-500 leading-relaxed">
+                  {p.calcolabile
+                    ? `Credito per la percentuale del rango: ${p.fonte}.`
+                    : `Non si calcola: ${p.motivo}.`}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-[10px] text-slate-500 leading-relaxed">
+          Gli importi vengono dalle percentuali impostate in Parametri di Spazio: quella media della
+          proposta per l’accordo, il tasso di realizzo e la percentuale di soddisfacimento del rango
+          per le due procedure. Senza una percentuale l’importo non si calcola, e la riga dice
+          perché.
+        </p>
         <p className="text-[10px] text-slate-500 leading-relaxed">
           Le procedure sono un parametro dello spazio, non un passo della pratica: dicono che cosa
           va fatto per ogni tipologia di debito e a quale ufficio chiederlo, e valgono per tutte le

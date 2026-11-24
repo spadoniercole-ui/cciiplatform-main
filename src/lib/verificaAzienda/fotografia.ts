@@ -36,6 +36,10 @@
 
 import { costruisciBundleIndici } from '@/lib/xbrl/indici';
 import { calcolaScenari, type ParametriScenari, type RangoCredito } from '@/lib/triage/scenari';
+import {
+  importiDaPercentuali,
+  type ImportoPercentuale,
+} from '@/lib/verificaAzienda/importiPercentuali';
 import type { AlertSeverity, DatiFinanziariPeriodo, IndiceCcii } from '@/lib/xbrl/types';
 import type { ProiezioneContabile } from '@/lib/contabile/proiezione';
 
@@ -97,6 +101,12 @@ export interface FotografiaVerificaAzienda {
   scenari: ScenarioFotografia[];
   /** Dove conviene all'ente fra liquidazione e cram down, se entrambi noti. */
   confronto: { differenza: number; testo: string } | null;
+  /**
+   * Gli importi in euro che vengono dalle percentuali configurate: accordo
+   * (media proposta), liquidazione e cram down per rango. Stessa funzione della
+   * posizione dell'ente, così i due documenti non possono dire numeri diversi.
+   */
+  importiPercentuali: ImportoPercentuale[];
   avvertenze: string[];
   /** Perché la fotografia non si compone, se non si compone. */
   motivo: string | null;
@@ -215,6 +225,8 @@ export function componiFotografia(input: {
   credito: number | null;
   rango: RangoCredito | null;
   parametri: ParametriScenari;
+  /** La media proposta configurata in Parametri di Spazio, per la riga dell'accordo. */
+  percentualeMediaProposta?: number | null;
 }): FotografiaVerificaAzienda {
   const anni = colonneFotografia(input.proiezione);
   const credito =
@@ -233,6 +245,12 @@ export function componiFotografia(input: {
       capacita: capacitaRisposta(anni, credito),
       scenari: [],
       confronto: null,
+      importiPercentuali: importiDaPercentuali({
+        credito,
+        rango: input.rango,
+        parametri: input.parametri,
+        percentualeMediaProposta: input.percentualeMediaProposta ?? null,
+      }),
       avvertenze,
       motivo: 'Nessun bilancio XBRL leggibile: la fotografia non ha colonne da mostrare.',
     };
@@ -301,6 +319,12 @@ export function componiFotografia(input: {
     capacita,
     scenari: [accordo, liquidazione, cramDown],
     confronto: esitoScenari.confronto,
+    importiPercentuali: importiDaPercentuali({
+      credito,
+      rango: input.rango,
+      parametri: input.parametri,
+      percentualeMediaProposta: input.percentualeMediaProposta ?? null,
+    }),
     avvertenze,
     motivo: null,
   };

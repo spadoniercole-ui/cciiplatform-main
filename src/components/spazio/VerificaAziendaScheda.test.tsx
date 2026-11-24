@@ -117,6 +117,37 @@ const risultato = {
       },
     ],
     confronto: null,
+    // Gli importi dalle percentuali: l'accordo alla media proposta (30%) apre
+    // il confronto, poi le due procedure del rango.
+    importiPercentuali: [
+      {
+        codice: 'ACCORDO' as const,
+        etichetta: 'Accordo alla media proposta',
+        fonte: 'media proposta configurata in Parametri di Spazio',
+        percentuale: 30,
+        importo: 36_000,
+        calcolabile: true,
+        motivo: null,
+      },
+      {
+        codice: 'LIQUIDAZIONE' as const,
+        etichetta: 'Liquidazione giudiziale',
+        fonte: 'tasso di realizzo del rango, al netto delle spese di procedura',
+        percentuale: 30,
+        importo: 32_400,
+        calcolabile: true,
+        motivo: null,
+      },
+      {
+        codice: 'CRAM_DOWN' as const,
+        etichetta: 'Cram down',
+        fonte: 'percentuale di soddisfacimento del rango',
+        percentuale: null,
+        importo: null,
+        calcolabile: false,
+        motivo: 'manca la percentuale di cram down per il rango',
+      },
+    ],
     avvertenze: [],
     motivo: null,
   },
@@ -171,7 +202,14 @@ describe('VerificaAziendaScheda — fotografia e tre scenari', () => {
         ragioneSociale="Tessitura Lario Demo S.p.A."
       />
     );
-    expect(await screen.findByText('Liquidazione giudiziale')).toBeTruthy();
+    // Il nome della procedura compare due volte: nel riquadro dello scenario e
+    // nella riga del confronto in importi (0.256.4).
+    expect((await screen.findAllByText('Liquidazione giudiziale')).length).toBeGreaterThanOrEqual(
+      1
+    );
+    // Il confronto si apre con l'accordo alla media proposta, in euro.
+    expect(screen.getByText('Accordo alla media proposta')).toBeTruthy();
+    expect(screen.getByText('36.000 €')).toBeTruthy();
     // 32.400 € di recupero e 87.600 € di perdita sul credito di 120.000 €.
     // 32.400 € compare due volte: nel recupero dello scenario e nel recupero
     // minimo del punto di pareggio (è la stessa cifra, con due ruoli).

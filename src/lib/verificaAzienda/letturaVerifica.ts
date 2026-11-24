@@ -93,6 +93,32 @@ async function leggiRangoAzienda(
 }
 
 /**
+ * LA MEDIA PROPOSTA. È la percentuale che pre-compila le righe della proposta
+ * del Redigente (`parametri_proposta_redigente.percentuale_media_default`): la
+ * stessa che serve a dire quanto vale l'accordo in euro sul credito dell'ente.
+ *
+ * Se la tabella non c'è ancora — uno spazio che non è mai passato dai parametri
+ * della proposta — vale il 30% con cui la piattaforma la crea alla prima
+ * apertura (`ottieniPercentualeMediaProposta`). Non è un numero inventato qui:
+ * è il default della piattaforma, usato solo finché nessuno lo cambia.
+ */
+const PERCENTUALE_MEDIA_DEFAULT = 30;
+
+async function leggiPercentualeMediaProposta(nomeSchema: string): Promise<number | null> {
+  try {
+    const r = await pool.query(
+      `SELECT percentuale_media_default FROM "${nomeSchema}".parametri_proposta_redigente LIMIT 1`
+    );
+    const v = r.rows[0]?.percentuale_media_default;
+    if (v === null || v === undefined || v === '') return PERCENTUALE_MEDIA_DEFAULT;
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+  } catch {
+    return PERCENTUALE_MEDIA_DEFAULT;
+  }
+}
+
+/**
  * Le percentuali per rango fissate dall'ente. Nessun default: una riga
  * mancante resta null e lo scenario si dichiara non calcolabile.
  */
@@ -186,9 +212,10 @@ export async function leggiVerificaAzienda(
       : null,
   });
 
-  const [rango, parametri] = await Promise.all([
+  const [rango, parametri, percentualeMediaProposta] = await Promise.all([
     leggiRangoAzienda(nomeSchema, aziendaId),
     leggiParametriScenari(nomeSchema),
+    leggiPercentualeMediaProposta(nomeSchema),
   ]);
 
   const fotografia = componiFotografia({
@@ -196,6 +223,7 @@ export async function leggiVerificaAzienda(
     credito: debito?.totale ?? null,
     rango,
     parametri,
+    percentualeMediaProposta,
   });
 
   // La nota integrativa dell'ultimo bilancio: si mostra accanto alla
