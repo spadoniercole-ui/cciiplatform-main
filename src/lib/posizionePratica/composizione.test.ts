@@ -202,10 +202,13 @@ describe('composizione della posizione', () => {
     expect(p.testoRichiesta).toContain('non contiene valutazioni giuridiche');
   });
 
-  it('senza fotografia la posizione è bloccata, col motivo, e i conti sono non calcolabili', () => {
+  // 0.256.13: la posizione dell'ente si legge sulla verifica amministrativa.
+  // Senza la fotografia dell'azienda i conti a valle restano non calcolabili,
+  // ma il grado della posizione non è più un giudizio sul bilancio.
+  it('senza fotografia i conti a valle non si calcolano, e la posizione non si blocca per questo', () => {
     const p = componiPosizione(dati({ fotografia: null, congruenza: null }), OGGI);
-    expect(p.prontezza.grado).toBe('BLOCCATA');
-    expect(p.prontezza.blocchi.join(' ')).toContain('non si è potuta leggere');
+    expect(p.prontezza.blocchi.join(' ')).not.toContain('fotografia');
+    expect(p.prontezza.blocchi.join(' ')).not.toContain('bilanci');
     expect(p.breakEven.recuperoMinimo).toBeNull();
     expect(p.piano.stato).toBe('NON_DISPONIBILE');
     expect(p.confronto.letture.some((l) => l.nome === 'Fotografia dell’azienda')).toBe(false);

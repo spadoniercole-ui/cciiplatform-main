@@ -15,12 +15,18 @@
 // chiederne il calcolo in questo riquadro faceva sembrare che la posizione
 // dipendesse da una valutazione che ancora non è stata fatta.
 //
+// QUI SI LEGGE LA VERIFICA AMMINISTRATIVA, NON IL BILANCIO (0.256.13). Anche la
+// contabile e la fotografia dell'azienda non entrano più: la posizione dell'ente
+// è il credito accertato, le sue fonti e le lacune che lo riguardano. Far
+// dipendere il grado della posizione da un XBRL o da una proiezione portava in
+// questa pagina materia di un'altra verifica.
+//
 // Il testo parla di ciò che è stato letto, non di ciò che si può decidere: la
 // valutazione è di chi firma, la pagina dice soltanto a che punto è la lettura.
 //
 // Logica pura, con i suoi test.
 
-export type PaginaPosizione = 'amministrativa' | 'contabile' | 'azienda';
+export type PaginaPosizione = 'amministrativa';
 
 export interface IngressiProntezza {
   amministrativa: {
@@ -28,8 +34,6 @@ export interface IngressiProntezza {
     esito: string | null;
     copertura: { determinate: number; totali: number } | null;
   };
-  contabile: { completa: boolean; mancanti: string[] };
-  azienda: { fotografata: boolean; motivo: string | null };
   /** L'esito della quadratura del credito. */
   quadratura: 'COERENTE' | 'DIVERGENTE' | 'NON_VERIFICABILE';
   validita: { stato: 'recente' | 'in_scadenza' | 'da_rivedere'; etichetta: string };
@@ -86,23 +90,6 @@ export function valutaProntezza(input: IngressiProntezza): EsitoProntezza {
     );
   }
 
-  if (!input.contabile.completa) {
-    const mancanti = input.contabile.mancanti.filter(Boolean);
-    blocchi.push(
-      `La verifica contabile non è completa${
-        mancanti.length > 0 ? `: manca ${mancanti.join(', ')}` : ''
-      }. Senza il prospetto l’azienda non ha una fotografia da leggere.`
-    );
-  }
-
-  if (!input.azienda.fotografata) {
-    blocchi.push(
-      input.azienda.motivo
-        ? `La fotografia dell’azienda non si compone: ${input.azienda.motivo}`
-        : 'La fotografia dell’azienda non si compone.'
-    );
-  }
-
   if (input.validita.stato === 'da_rivedere') {
     attenzioni.push(
       `La verifica amministrativa è da rivedere (${input.validita.etichetta}): l’esito andrebbe rifatto sui documenti aggiornati, se lo si vuole usare.`
@@ -153,15 +140,6 @@ function prossimoAttoDi(input: IngressiProntezza, blocchi: string[]): ProssimoAt
       testo:
         'Allineare il credito: la verifica amministrativa e la certificazione devono dire la stessa cifra.',
       pagina: 'amministrativa',
-    };
-  }
-  if (!input.contabile.completa) {
-    return { testo: 'Completare la verifica contabile con i dati mancanti.', pagina: 'contabile' };
-  }
-  if (!input.azienda.fotografata) {
-    return {
-      testo: 'Comporre la fotografia dell’azienda sui bilanci disponibili.',
-      pagina: 'azienda',
     };
   }
   if (input.validita.stato === 'da_rivedere') {

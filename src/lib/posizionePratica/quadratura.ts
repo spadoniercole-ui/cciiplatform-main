@@ -142,6 +142,6 @@ export function quadraturaCredito(voci: VoceQuadratura[]): Quadratura {
       )
       .join(
         '; '
-      )} rispetto a ${riferimento.etichetta} ${euro(valoreRiferimento)}. Il credito va allineato prima di usarlo negli scenari.`,
+      )} rispetto a ${riferimento.etichetta} ${euro(valoreRiferimento)}. Il credito va allineato prima di usarlo nella decisione.`,
   };
 }

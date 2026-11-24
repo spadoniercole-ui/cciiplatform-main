@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.12**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.13**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,31 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.13 — 2026-11-24
+
+POSIZIONE ENTE: SOLO LA VERIFICA AMMINISTRATIVA, NIENTE BILANCIO NÉ SCENARI.
+
+- **Il passo «Le letture a confronto» sparisce.** Confrontava l'indicatore di
+  attenzione (indici di bilancio) con la check list e l'aritmetica degli
+  scenari: era il posto in cui la posizione dell'ente si metteva accanto a
+  materia di altre verifiche. I passi successivi si rinumerano.
+- **Il «Recupero minimo» sparisce.** Era il punto di pareggio misurato sulla
+  liquidazione: uno scenario, non un dato della verifica amministrativa. Restano
+  l'accordo alla percentuale media e il piano di versamenti in essere, che
+  parlano del credito e dei flussi dell'ente.
+- **La posizione non si blocca più per il bilancio.** La prontezza giudicava la
+  pagina anche sulla verifica contabile e sulla fotografia dell'azienda
+  («senza il prospetto non c'è una fotografia da leggere», «la fotografia non si
+  compone»): erano blocchi di un'altra verifica, che rendevano la posizione
+  dell'ente incompleta per ragioni che non la riguardano. Ora legge la verifica
+  amministrativa: eseguita, copertura dell'indicatore, quadratura del credito,
+  validità, documenti mancanti.
+- **L'etichetta è «Posizione Ente»** nel titolo della pagina, nel pulsante
+  dell'esito e nel passo 4 della verifica amministrativa.
+- **Le frasi che citavano gli scenari sono riscritte**: la tolleranza della
+  quadratura parla di chiarire la cifra prima della decisione, e le lacune
+  chiuse sono quelle della verifica amministrativa.
 
 ## 0.256.12 — 2026-11-24
 

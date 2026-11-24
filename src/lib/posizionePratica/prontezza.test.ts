@@ -11,8 +11,6 @@ function ingressi(patch: Partial<IngressiProntezza> = {}): IngressiProntezza {
       esito: 'ATTENZIONE_MINIMA',
       copertura: { determinate: 4, totali: 4 },
     },
-    contabile: { completa: true, mancanti: [] },
-    azienda: { fotografata: true, motivo: null },
     quadratura: 'COERENTE',
     validita: { stato: 'recente', etichetta: 'Oggi' },
     richiesteAperte: 0,
@@ -37,7 +35,7 @@ describe('prontezza della posizione', () => {
     expect(p.blocchi[0]).toContain('non è chiusa');
   });
 
-  it('il credito divergente blocca prima della contabile', () => {
+  it('il credito divergente blocca la posizione', () => {
     const p = valutaProntezza(ingressi({ quadratura: 'DIVERGENTE' }));
     expect(p.decidibile).toBe(false);
     expect(p.prossimoAtto?.testo).toContain('Allineare il credito');
@@ -87,12 +85,14 @@ describe('prontezza della posizione', () => {
     expect(p.attenzioni.join(' ')).toContain('2 documenti mancano');
   });
 
-  it('la fotografia che non si compone blocca, col motivo', () => {
-    const p = valutaProntezza(
-      ingressi({ azienda: { fotografata: false, motivo: 'Nessun bilancio XBRL leggibile.' } })
-    );
-    expect(p.grado).toBe('BLOCCATA');
-    expect(p.blocchi.join(' ')).toContain('Nessun bilancio XBRL');
-    expect(p.prossimoAtto?.pagina).toBe('azienda');
+  it('la posizione non si legge sul bilancio: la prontezza guarda solo la verifica amministrativa', () => {
+    // Il grado non cambia con la contabile o con la fotografia dell'azienda:
+    // gli ingressi non le hanno più.
+    expect(Object.keys(ingressi()).sort()).toEqual([
+      'amministrativa',
+      'quadratura',
+      'richiesteAperte',
+      'validita',
+    ]);
   });
 });

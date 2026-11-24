@@ -241,14 +241,6 @@ export function componiPosizione(
       esito: attenzione?.esito ?? null,
       copertura: attenzione?.copertura ?? null,
     },
-    contabile: {
-      completa: Boolean(contabile?.completa),
-      mancanti: contabile ? contabile.mancanti : ['lo stato della contabile'],
-    },
-    azienda: {
-      fotografata: Boolean(fotografia && fotografia.anni.length > 0),
-      motivo: fotografia?.motivo ?? (fotografia ? null : 'la fotografia non si è potuta leggere'),
-    },
     quadratura: quadratura.esito,
     validita: { stato: validita.stato, etichetta: validita.etichetta },
     richiesteAperte: richieste.length,

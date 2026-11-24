@@ -105,7 +105,8 @@ export const GLOSSARIO: VoceGlossario[] = [
   {
     etichetta: 'Da ricalcolare',
     dove: ['Posizione'],
-    significa: 'Dopo la verifica è arrivato un dato più recente (bilancio, debito, visura).',
+    significa:
+      'Dopo la verifica è arrivato un dato più recente (il debito verificato, una visura).',
     nonSignifica: 'Non vuol dire che i numeri siano sbagliati: vuol dire che non sono aggiornati.',
   },
   {
@@ -113,7 +114,7 @@ export const GLOSSARIO: VoceGlossario[] = [
     dove: ['Posizione'],
     significa: 'Due fonti che devono dire la stessa cifra del credito non la dicono.',
     nonSignifica:
-      'Non è un errore da correggere in automatico: è una scelta da fare, e va fatta prima degli scenari.',
+      'Non è un errore da correggere in automatico: è una scelta da fare, e va fatta prima della decisione sulla posizione.',
   },
 ];
 
