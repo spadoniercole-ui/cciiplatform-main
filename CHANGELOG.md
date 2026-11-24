@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.6**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.7**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,29 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.7 — 2026-11-24
+
+IL DEBITO SI CERCA NELLA VOCE DELL’ENTE, NON NELLA SOMMA.
+
+Il controllo «debito in bilancio» sommava debiti tributari e previdenziali: un
+debito di 40.000 verso l’INPS risultava «contabilizzato» grazie a 40.000 di
+debiti tributari di tutt’altro, e viceversa per l’Agenzia delle Entrate.
+
+- **La voce si sceglie dalla classificazione che già esiste.** L’elenco chiuso
+  `limiti_ricevibilita.ente_25novies` (INPS, INAIL, AGENZIA_ENTRATE,
+  AGENZIA_RISCOSSIONE, NON_PUBBLICO) dice chi è l’ente: INPS e INAIL si
+  confrontano con i **debiti previdenziali**, l’Agenzia delle Entrate con i
+  **debiti tributari**. Nessuna mappatura nuova.
+- **Dove la voce unica non c’è, si torna alla somma e lo si dice.** Ente non
+  classificato, `NON_PUBBLICO`, oppure Agente della Riscossione (porta a ruolo
+  partite di natura diversa): il confronto è sulla somma e la frase dichiara
+  che un importo può trovare riscontro in una posta di un altro creditore.
+- **La voce non letta resta «non verificabile»**, non zero: se la classificazione
+  indica i tributari e quel campo non è nel bilancio, la verifica non si
+  esprime.
+- **La riga in pagina** riporta la voce accanto all’importo («in bilancio
+  (debiti previdenziali): 0 €»), così si vede su che cosa si è confrontato.
 
 ## 0.256.6 — 2026-11-24
 

@@ -152,17 +152,20 @@ export async function diagnosticaIaiAction(
     const memorizzato = await leggiDebitoEnteMemorizzato(nomeSchema, aziendaId).catch(() => null);
     const limitiEnte = await ottieniLimitiRicevibilita(nomeSchema, 'ENTE').catch(() => null);
     const aliasEnte = limitiEnte?.success ? (limitiEnte.limiti[0]?.alias ?? []) : [];
+    // QUALE ENTE SI STA VERIFICANDO (0.256.7). La classificazione è quella già
+    // configurata nei parametri (`ente_25novies`): non se ne introduce una
+    // seconda. Se è NULL, la verifica confronta la somma e lo dichiara.
+    const ente25Novies = limitiEnte?.success ? (limitiEnte.limiti[0]?.ente25Novies ?? null) : null;
     const datiBilancio = (bil.rows[0]?.dati_finanziari ?? null) as Record<string, unknown> | null;
-    const tributari = num(datiBilancio?.debitiTributari);
-    const previdenziali = num(datiBilancio?.debitiPrevidenziali);
-    const inBilancio =
-      tributari === null && previdenziali === null ? null : (tributari ?? 0) + (previdenziali ?? 0);
     const debitoInBilancio = confrontaDebitoInBilancio({
       esposizione: memorizzato?.debito.totale ?? null,
-      inBilancio,
+      vociBilancio: {
+        tributari: num(datiBilancio?.debitiTributari),
+        previdenziali: num(datiBilancio?.debitiPrevidenziali),
+      },
+      ente25novies: ente25Novies,
       bilancioLetto: Boolean(datiBilancio),
       alias: aliasEnte,
-      voci: 'i debiti tributari e previdenziali',
     });
 
     return { success: true, dimensioni: diagnosticaDimensioni(dati), dati, debitoInBilancio };

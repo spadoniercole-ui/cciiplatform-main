@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { confrontaDebitoInBilancio } from './debitoInBilancio';
+import { confrontaDebitoInBilancio, importoInBilancio, vocePerEnte } from './debitoInBilancio';
 
 const base = {
   esposizione: 120000,
-  inBilancio: 0,
+  vociBilancio: { tributari: 0, previdenziali: 0 },
   bilancioLetto: true,
   alias: ['INPS', 'Istituto Nazionale della Previdenza Sociale'],
-  voci: 'i debiti tributari e previdenziali',
 };
 
 describe('confrontaDebitoInBilancio', () => {
@@ -21,14 +20,20 @@ describe('confrontaDebitoInBilancio', () => {
   });
 
   it('riconosce il debito contabilizzato e ne riporta l’importo', () => {
-    const d = confrontaDebitoInBilancio({ ...base, inBilancio: 150000 });
+    const d = confrontaDebitoInBilancio({
+      ...base,
+      vociBilancio: { tributari: 100000, previdenziali: 50000 },
+    });
     expect(d.stato).toBe('CONTABILIZZATO');
     expect(d.segnala).toBe(false);
     expect(d.testo).toContain('150.000 €');
   });
 
   it('un importo inferiore all’esposizione è un debito contabilizzato solo in parte', () => {
-    const d = confrontaDebitoInBilancio({ ...base, inBilancio: 40000 });
+    const d = confrontaDebitoInBilancio({
+      ...base,
+      vociBilancio: { tributari: 20000, previdenziali: 20000 },
+    });
     expect(d.stato).toBe('CONTABILIZZATO');
     expect(d.segnala).toBe(true);
     expect(d.testo).toMatch(/solo in parte/);
@@ -42,9 +47,12 @@ describe('confrontaDebitoInBilancio', () => {
   });
 
   it('una voce non letta non vale zero', () => {
-    const d = confrontaDebitoInBilancio({ ...base, inBilancio: null });
+    const d = confrontaDebitoInBilancio({
+      ...base,
+      vociBilancio: { tributari: null, previdenziali: null },
+    });
     expect(d.stato).toBe('NON_VERIFICABILE');
-    expect(d.testo).toMatch(/non sono state lette/);
+    expect(d.testo).toMatch(/non è stata letta/);
   });
 
   it('senza esposizione non c’è nulla da ritrovare', () => {
@@ -56,5 +64,86 @@ describe('confrontaDebitoInBilancio', () => {
     const d = confrontaDebitoInBilancio({ ...base, alias: [] });
     expect(d.alias).toEqual([]);
     expect(d.testo).toMatch(/alias dell’ente non sono configurati/);
+  });
+});
+
+describe('la voce che compete all’ente', () => {
+  it('legge la classificazione dall’elenco chiuso dei parametri', () => {
+    expect(vocePerEnte('INPS')).toBe('PREVIDENZIALI');
+    expect(vocePerEnte('inail')).toBe('PREVIDENZIALI');
+    expect(vocePerEnte('AGENZIA_ENTRATE')).toBe('TRIBUTARI');
+    expect(vocePerEnte('NON_PUBBLICO')).toBeNull();
+    expect(vocePerEnte(null)).toBeNull();
+    // L'Agente della Riscossione porta a ruolo partite di natura diversa.
+    expect(vocePerEnte('AGENZIA_RISCOSSIONE')).toBeNull();
+  });
+
+  it('prende solo la voce dell’ente, non la somma', () => {
+    const voci = { tributari: 90000, previdenziali: 0 };
+    expect(importoInBilancio(voci, 'PREVIDENZIALI')).toBe(0);
+    expect(importoInBilancio(voci, 'TRIBUTARI')).toBe(90000);
+    expect(importoInBilancio(voci, null)).toBe(90000);
+  });
+
+  it('un debito verso l’INPS non si copre con i debiti tributari', () => {
+    const d = confrontaDebitoInBilancio({
+      ...base,
+      ente25novies: 'INPS',
+      vociBilancio: { tributari: 150000, previdenziali: 0 },
+    });
+    expect(d.voce).toBe('PREVIDENZIALI');
+    expect(d.inBilancio).toBe(0);
+    expect(d.stato).toBe('NON_CONTABILIZZATO');
+    expect(d.testo).toMatch(/debiti previdenziali/);
+  });
+
+  it('un debito verso l’Agenzia delle Entrate non si copre con i contributi', () => {
+    const d = confrontaDebitoInBilancio({
+      ...base,
+      ente25novies: 'AGENZIA_ENTRATE',
+      vociBilancio: { tributari: 0, previdenziali: 150000 },
+    });
+    expect(d.voce).toBe('TRIBUTARI');
+    expect(d.stato).toBe('NON_CONTABILIZZATO');
+    expect(d.testo).toMatch(/debiti tributari/);
+  });
+
+  it('la voce dell’ente a zero è zero, non una voce non letta', () => {
+    const d = confrontaDebitoInBilancio({
+      ...base,
+      ente25novies: 'INPS',
+      vociBilancio: { tributari: null, previdenziali: 0 },
+    });
+    expect(d.stato).toBe('NON_CONTABILIZZATO');
+  });
+
+  it('se la voce dell’ente non è stata letta, la verifica si ferma', () => {
+    const d = confrontaDebitoInBilancio({
+      ...base,
+      ente25novies: 'AGENZIA_ENTRATE',
+      vociBilancio: { tributari: null, previdenziali: 80000 },
+    });
+    expect(d.stato).toBe('NON_VERIFICABILE');
+    expect(d.testo).toMatch(/non è stata letta/);
+  });
+
+  it('senza classificazione confronta la somma e lo dice', () => {
+    const d = confrontaDebitoInBilancio({
+      ...base,
+      vociBilancio: { tributari: 60000, previdenziali: 60000 },
+    });
+    expect(d.voce).toBeNull();
+    expect(d.stato).toBe('CONTABILIZZATO');
+    expect(d.testo).toMatch(/non è classificato nei parametri/);
+  });
+
+  it('un ente classificato senza voce unica dichiara la somma', () => {
+    const d = confrontaDebitoInBilancio({
+      ...base,
+      ente25novies: 'AGENZIA_RISCOSSIONE',
+      vociBilancio: { tributari: 200000, previdenziali: 0 },
+    });
+    expect(d.voce).toBeNull();
+    expect(d.testo).toMatch(/non stanno in una voce sola/);
   });
 });

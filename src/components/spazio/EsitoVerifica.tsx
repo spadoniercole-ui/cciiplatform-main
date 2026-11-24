@@ -16,7 +16,7 @@ import { NOME_DIMENSIONE } from '@/lib/iai/dimensioni';
 import type { IconografiaDimensioni } from '@/lib/ritratto/iconografia';
 import { formattaEuro } from '@/lib/formato/numeri';
 import type { EsitoVerifica as Esito } from '@/lib/verifica/esito';
-import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
+import { ETICHETTA_VOCE, type DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 
 // IL DEBITO VERSO L'ENTE, DENTRO LA SPIEGAZIONE (0.256.5).
 //
@@ -70,10 +70,11 @@ function RigaDebitoInBilancio({ d }: { d: DebitoInBilancio }) {
         <p className="mt-1 text-[11px] leading-relaxed text-slate-700">
           Debito accertato in amministrativa:{' '}
           <strong className={`tabular-nums ${tono.importo}`}>{formattaEuro(d.esposizione)}</strong>
-          {d.inBilancio !== null && d.stato === 'CONTABILIZZATO' && (
+          {d.inBilancio !== null && (
             <>
               {' '}
-              · in bilancio: <span className="tabular-nums">{formattaEuro(d.inBilancio)}</span>
+              · in bilancio{d.voce ? ` (${ETICHETTA_VOCE[d.voce]})` : ''}:{' '}
+              <span className="tabular-nums">{formattaEuro(d.inBilancio)}</span>
             </>
           )}
         </p>
