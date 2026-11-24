@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.255.14**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.0**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,35 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.0 — 2026-11-24
+
+I PASSI DELLE PROCEDURE SONO NUMERATI E SPIEGATI.
+
+Ogni verifica accompagna chi la esegue: i passaggi hanno un numero, un titolo e
+una frase che dice a che cosa serve quel passaggio. Il componente è uno solo
+(`PassoProcedura`) e si usa nelle verifiche amministrativa, contabile e
+aziendale e nella posizione dell’ente: niente più elenchi di riquadri senza
+ordine dichiarato.
+
+- **Verifica amministrativa** — il passo 1 si apre con un riquadro e il
+  pulsante «+ Aggiungi nuova verifica» al posto del campo file nudo; l’esito è
+  numerato dall’indicatore di attenzione al supporto decisionale. Il tasto
+  «Verifica aziendale» non sta più qui: la verifica aziendale arriva quando le
+  due verifiche hanno un senso insieme, e da qui si sarebbe potuti arrivare con
+  l’amministrativa ancora aperta e senza la contabile.
+- **Verifica contabile** — l’ordine è quello con cui la verifica nasce: visura
+  storica, campi dell’ente, bilanci XBRL, prospetto e indici, differenziali e
+  simulazione, report. Non presuppone più che la contabile si faccia dopo
+  l’amministrativa: i reparti possono lavorarle in parallelo.
+- **Adempimenti verso l’ente** — le righe sciolte dei periodi scoperti
+  diventano una tabella con data, fonte, scadenza legale e ritardo in giorni.
+- **Posizione ente** — il titolo dice «ente», le sezioni sono numerate, e dove
+  il dato non torna si dice il perché: fonti del credito che non coincidono
+  (tolleranza e che cosa allinea) e debito riaccertato (che cosa vuol dire e
+  che cosa comporta). Quando la Check List non ha una valutazione pesata il
+  link porta ai pesi, con l’invito all’amministratore per chi non li può
+  modificare.
 
 ## 0.255.16 — 2026-11-23
 

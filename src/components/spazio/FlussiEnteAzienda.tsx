@@ -257,24 +257,54 @@ export function FlussiEnteAzienda({
 
               {e.scoperte.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">
-                    Periodi scoperti, con il ritardo dalla scadenza
+                  {/* LA TABELLA DEGLI ADEMPIMENTI (0.256.0). Le righe sciolte
+                      («06/2025 · denuncia — scadenza 16/07/2025, 210 giorni»)
+                      costringevano a ricostruire a occhio la sequenza. In
+                      tabella ogni posizione si legge per colonna: quando è
+                      dovuta, da quale fonte, entro quale termine di legge, e
+                      da quanto è in ritardo. */}
+                  <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">
+                    Adempimenti scoperti — data, fonte, scadenza legale e ritardo
                   </p>
-                  <ul className="space-y-0.5">
-                    {e.scoperte.slice(0, 12).map((s) => (
-                      <li key={`${s.periodo}-${s.tipo}`} className="text-[11px] text-slate-700">
-                        {mese(s.periodo)} ·{' '}
-                        {s.tipo === 'DENUNCIA' ? e.etichette.denuncia : e.etichette.pagamento} —
-                        scadenza {s.scadenza.split('-').reverse().join('/')},{' '}
-                        <strong>{s.giorni} giorni</strong>
-                      </li>
-                    ))}
-                    {e.scoperte.length > 12 && (
-                      <li className="text-[10px] text-slate-500">
-                        e altre {e.scoperte.length - 12} posizioni.
-                      </li>
-                    )}
-                  </ul>
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="w-full text-[11px]">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50 text-left text-[9px] uppercase tracking-wider text-slate-500">
+                          <th className="px-2 py-1.5">Data</th>
+                          <th className="px-2 py-1.5">Fonte</th>
+                          <th className="px-2 py-1.5">Scad. legale</th>
+                          <th className="px-2 py-1.5 text-right">Ritardo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {e.scoperte.map((s) => (
+                          <tr key={`${s.periodo}-${s.tipo}`}>
+                            <td className="px-2 py-1 tabular-nums text-slate-800">
+                              {mese(s.periodo)}
+                            </td>
+                            <td className="px-2 py-1 text-slate-700">
+                              {s.tipo === 'DENUNCIA' ? e.etichette.denuncia : e.etichette.pagamento}
+                            </td>
+                            <td className="px-2 py-1 tabular-nums text-slate-700">
+                              {s.scadenza.split('-').reverse().join('/')}
+                            </td>
+                            <td
+                              className={`px-2 py-1 text-right font-bold tabular-nums ${
+                                s.giorni > 90 ? 'text-red-700' : 'text-amber-800'
+                              }`}
+                            >
+                              {s.giorni} giorni
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">
+                    La fonte è il documento che l’adempimento doveva produrre; la scadenza legale è
+                    quella del periodo di competenza; il ritardo si conta a oggi. In rosso oltre i
+                    90 giorni — la soglia della certificazione dei debiti.
+                  </p>
                 </div>
               )}
 

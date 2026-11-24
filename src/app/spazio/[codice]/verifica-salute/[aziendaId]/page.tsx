@@ -16,6 +16,7 @@ import { PosizioneEnteScenario } from '@/components/spazio/PosizioneEnteScenario
 import { ChecklistProdottiEsito } from '@/components/spazio/ChecklistProdottiEsito';
 import { DebitoMemorizzatoEnte } from '@/components/spazio/DebitoMemorizzatoEnte';
 import { FlussiEnteAzienda } from '@/components/spazio/FlussiEnteAzienda';
+import { PassoProcedura } from '@/components/spazio/PassoProcedura';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
 
 // L'ESITO DELLA VERIFICA AMMINISTRATIVA (0.194.0).
@@ -155,14 +156,21 @@ export default async function EsitoVerificaAmministrativaPage({
                 che è il documento che si rilascia e da cui si aprono le due
                 letture. L'anagrafica resta raggiungibile dall'elenco Aziende,
                 dove si modificano i dati. */}
-            <Link
-              href={`/spazio/${codice}/verifica-azienda/${id}`}
-              className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
-            >
-              Verifica aziendale
-            </Link>
           </div>
         </div>
+      </div>
+
+      {/* I PASSI DELL'ESITO, NUMERATI (0.256.0). La verifica amministrativa non
+          si legge come un elenco di riquadri: è una sequenza, e ogni passo dice
+          che cosa aggiunge alla lettura — la check list il quadro qualitativo, la
+          certificazione il credito, la posizione i riferimenti dell'ente, i
+          flussi gli adempimenti. */}
+      <div className="px-1">
+        <PassoProcedura
+          numero={1}
+          titolo="Indicatore di attenzione"
+          obiettivo="Leggere il risultato del triage: che cosa è accertato, che cosa manca, e su quale fattore si concentra l’attenzione."
+        />
       </div>
 
       {stile && attenzione && (
@@ -235,10 +243,31 @@ export default async function EsitoVerificaAmministrativaPage({
           insieme alla visura e ai prospetti. Prima il debito e prima — a
           maggior ragione — delle soglie, perché è da qui che la storia
           dell'azienda prende forma; e si compila dove la verifica si legge. */}
+      <div className="px-1">
+        <PassoProcedura
+          numero={2}
+          titolo="Check list dei prodotti"
+          obiettivo="Dare al giudizio il quadro qualitativo: le risposte alle domande dei prodotti, che entrano nella valutazione solo quando sono complete."
+        />
+      </div>
       <ChecklistProdottiEsito nomeSchema={contesto.nomeSchema} aziendaId={id} />
 
+      <div className="px-1">
+        <PassoProcedura
+          numero={3}
+          titolo="Certificazione dei debiti"
+          obiettivo="Accertare quanto l’azienda deve all’ente: è il credito che entra nelle soglie e nella posizione."
+        />
+      </div>
       <DebitoMemorizzatoEnte nomeSchema={contesto.nomeSchema} aziendaId={id} />
 
+      <div className="px-1">
+        <PassoProcedura
+          numero={4}
+          titolo="Posizione ente"
+          obiettivo="Collocare l’azienda nell’anagrafica dell’ente e leggerne la posizione: riferimenti, soglie di segnalazione e documenti da richiedere."
+        />
+      </div>
       <PosizioneEnteScenario
         nomeSchema={contesto.nomeSchema}
         aziendaId={id}
@@ -252,6 +281,13 @@ export default async function EsitoVerificaAmministrativaPage({
           quanto si deve, è anche che cosa l'azienda ha trasmesso e quando.
           Qui si vedono i periodi attesi, quelli arrivati, quelli mancanti con
           il ritardo dalla scadenza e i mesi di matricola sospesa. */}
+      <div className="px-1">
+        <PassoProcedura
+          numero={5}
+          titolo="Adempimenti verso l’ente"
+          obiettivo="Verificare che cosa l’azienda doveva trasmettere e quando: la tabella dice data, fonte, scadenza di legge e ritardo di ogni posizione."
+        />
+      </div>
       <FlussiEnteAzienda nomeSchema={contesto.nomeSchema} aziendaId={id} />
 
       {/* IL SUPPORTO DECISIONALE VA IN FONDO, DOPO TUTTO (0.223.0).
@@ -265,7 +301,7 @@ export default async function EsitoVerificaAmministrativaPage({
           <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-5">
             <span>
               <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                Supporto decisionale
+                Passo 6 · Supporto decisionale
               </span>
               <span className="mt-0.5 block text-[10px] text-slate-500 leading-relaxed">
                 La lettura dei dati, i percorsi e i loro esiti. Si apre su richiesta: non è un
@@ -320,6 +356,25 @@ export default async function EsitoVerificaAmministrativaPage({
                   </Link>
                 </p>
               ))}
+            {/* LA CHECK LIST SENZA PESI LO DICE, E MANDA A CHI I PESI LI
+                IMPOSTA (0.256.0). Dire «la valutazione pesata non è ancora
+                compilata» senza una via lasciava l’utente davanti a un dato
+                mancante che non poteva colmare. */}
+            {pesataMinisteriale === null && (
+              <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-[10px] text-slate-600 leading-relaxed">
+                La Check List non ha ancora una valutazione pesata: finché i pesi non sono impostati
+                vale la sola quota delle risposte, e il quadro qualitativo è più povero. I pesi si
+                gestiscono dai parametri dello spazio:{' '}
+                <Link
+                  href={`/spazio/${codice}/parametri/checklist`}
+                  className="font-bold text-blue-700 hover:text-blue-800"
+                >
+                  Gestisci i pesi della Check List →
+                </Link>{' '}
+                — se il tuo profilo non li può modificare, la richiesta va all’amministratore dello
+                spazio.
+              </p>
+            )}
             {raccomandazione && (
               <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 space-y-3">
                 <p className="text-[9px] font-bold uppercase tracking-wider text-blue-800">

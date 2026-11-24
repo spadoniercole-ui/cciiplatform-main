@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarRange, Loader2, Save, TriangleAlert } from 'lucide-react';
+import { PassoProcedura } from './PassoProcedura';
 import {
   proiezioneContabileAction,
   salvaSimulazioneContabileAction,
@@ -36,9 +37,12 @@ type Scheda = 'DIFFERENZIALI' | 'SIMULAZIONE';
 export function ProiezioneContabile({
   nomeSchema,
   aziendaId,
+  passo,
 }: {
   nomeSchema: string;
   aziendaId: number;
+  /** Numero del passaggio, quando il riquadro sta dentro una procedura. */
+  passo?: number;
 }) {
   const [dati, setDati] = useState<RisultatoProiezioneContabile | null>(null);
   const [caricamento, setCaricamento] = useState(true);
@@ -80,17 +84,33 @@ export function ProiezioneContabile({
 
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-          <CalendarRange className="w-3.5 h-3.5 text-blue-600" /> Differenziali e simulazione fino
-          all’anno della verifica
-        </h2>
-        {dati?.apertura && (
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            Verifica aperta il {dati.apertura.split('-').reverse().join('/')}
-          </span>
-        )}
-      </div>
+      {passo !== undefined ? (
+        <PassoProcedura
+          numero={passo}
+          titolo="Differenziali e simulazione"
+          icona={CalendarRange}
+          obiettivo="Misurare lo scarto di ogni anno dalla base e portare il dato fino all’anno della verifica: è la serie che gli scenari riprendono come punto di partenza."
+          azione={
+            dati?.apertura ? (
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Verifica aperta il {dati.apertura.split('-').reverse().join('/')}
+              </span>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+            <CalendarRange className="w-3.5 h-3.5 text-blue-600" /> Differenziali e simulazione fino
+            all’anno della verifica
+          </h2>
+          {dati?.apertura && (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Verifica aperta il {dati.apertura.split('-').reverse().join('/')}
+            </span>
+          )}
+        </div>
+      )}
 
       {caricamento && (
         <p className="flex items-center gap-2 text-[11px] text-slate-500">

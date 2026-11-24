@@ -707,7 +707,7 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     );
     // Chiusa la pratica si torna al caricamento: la verifica archiviata non è
     // più quella da guardare.
-    await waitFor(() => expect(screen.getByText('Visura camerale (PDF)')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/\+ Aggiungi nuova verifica/)).toBeTruthy());
   });
 
   //
@@ -907,7 +907,7 @@ describe('Verifica salute azienda — riapertura da ?azienda=', () => {
     screen.getByRole('button', { name: /Verifica un.altra azienda/i }).click();
 
     await waitFor(() => expect(screen.queryByText('Verifica riaperta')).toBeNull());
-    expect(screen.getByText('Visura camerale (PDF)')).toBeTruthy();
+    expect(screen.getByText(/\+ Aggiungi nuova verifica/)).toBeTruthy();
   });
   it('oltre i trenta giorni dice che i numeri vanno ricontrollati', async () => {
     // Duecento giorni fa: la finestra dei trenta è chiusa da un pezzo, e la

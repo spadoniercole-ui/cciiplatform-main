@@ -31,6 +31,7 @@ import type { PianoInEssere } from '@/lib/posizionePratica/pianoInEssere';
 import { indiciVisibili, valoreIndice } from '@/lib/xbrl/indiciVisibili';
 import type { FotografiaComplessiva } from '@/lib/verificaAzienda/interpolazione';
 import { FotografiaComplessivaView } from './FotografiaComplessiva';
+import { PassoProcedura } from './PassoProcedura';
 
 const euro = (n: number | undefined | null) =>
   typeof n === 'number' && Number.isFinite(n) ? `${Math.round(n).toLocaleString('it-IT')} €` : '—';
@@ -215,6 +216,11 @@ export function VerificaAziendaScheda({
         </p>
       </div>
 
+      <PassoProcedura
+        numero={1}
+        titolo="Le due verifiche, ciascuna con il suo stato"
+        obiettivo="Sapere che cosa hanno accertato l’amministrativa (il credito e la situazione dell’azienda) e la contabile (i numeri depositati), e se sono chiuse."
+      />
       <div className="grid md:grid-cols-2 gap-3">
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
           <div className="flex items-center justify-between gap-2">
@@ -324,9 +330,14 @@ export function VerificaAziendaScheda({
 
       {complessiva && (
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+          <PassoProcedura
+            numero={2}
+            titolo="Fotografia complessiva"
+            obiettivo="Incrociare le due letture in una sola: è il documento che si rilascia all’ente e da cui si parte per gli scenari."
+          />
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-              Fotografia complessiva — le due verifiche incrociate
+              Le due verifiche incrociate
             </h2>
             {codice && (
               <Link
@@ -353,31 +364,33 @@ export function VerificaAziendaScheda({
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            Fotografia — colonne del prospetto contabile
-          </p>
-          <div className="flex items-center gap-2">
-            {inCorso && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />}
-            <button
-              type="button"
-              onClick={() => void calcola()}
-              disabled={inCorso}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-            >
-              <Camera className="w-3 h-3" /> Rileggi
-            </button>
-            {anni.length > 0 && (
+        <PassoProcedura
+          numero={3}
+          titolo="Fotografia — colonne del prospetto contabile"
+          obiettivo="Leggere anno per anno i valori depositati e quelli costruiti dai differenziali, con gli indici e la loro soglia."
+          azione={
+            <div className="flex items-center gap-2">
+              {inCorso && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />}
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+                onClick={() => void calcola()}
+                disabled={inCorso}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50 disabled:opacity-40"
               >
-                <Printer className="w-3 h-3" /> Stampa
+                <Camera className="w-3 h-3" /> Rileggi
               </button>
-            )}
-          </div>
-        </div>
+              {anni.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+                >
+                  <Printer className="w-3 h-3" /> Stampa
+                </button>
+              )}
+            </div>
+          }
+        />
 
         {risultato?.asse && (
           <p className="text-[10px] text-slate-500 leading-relaxed">
@@ -502,7 +515,7 @@ export function VerificaAziendaScheda({
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Tre scenari sul credito vantato
+              Passo 4 · Tre scenari sul credito vantato
             </p>
             <p className="text-[11px] text-slate-600">
               Credito: <strong className="tabular-nums">{euro(fotografia.credito)}</strong>
@@ -617,7 +630,7 @@ export function VerificaAziendaScheda({
       {risultato?.nota && (
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            Nota integrativa — {risultato.nota.anno ?? 'ultimo bilancio'}
+            Passo 5 · Nota integrativa — {risultato.nota.anno ?? 'ultimo bilancio'}
           </p>
           <p className="text-[10px] text-slate-500 leading-relaxed">
             Sezioni lette: {risultato.nota.sezioni.join(', ')}. È il contesto dichiarato dagli
@@ -638,7 +651,7 @@ export function VerificaAziendaScheda({
 
       <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
         <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-          Base degli scenari
+          Passo 6 · Base degli scenari
         </p>
         <p className="text-[11px] text-slate-600 leading-relaxed">
           La fotografia si può fissare come base della verifica aziendale: gli scenari si aprono da
@@ -669,7 +682,7 @@ export function VerificaAziendaScheda({
       {codice && (
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            Report dell’azienda
+            Passo 7 · Report dell’azienda
           </p>
           <p className="text-[11px] text-slate-600 leading-relaxed max-w-2xl">
             Un documento solo con l’esito amministrativo (in sola lettura), il dato contabile e

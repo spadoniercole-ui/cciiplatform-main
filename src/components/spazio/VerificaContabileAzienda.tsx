@@ -9,9 +9,13 @@
 // Le note integrative danno la spiegazione dei numeri; la certificazione dei
 // debiti non si chiede, è il dato della verifica amministrativa.
 //
-// Visura storica e parametri dell'ente non sono la verifica: sono il corredo
-// che identifica l'azienda presso l'ente, e stanno in fondo, dichiarati come
-// tali. Le etichette dei parametri sono solo quelle configurate nello spazio
+// DALLA 0.256.0 I PASSI SONO NUMERATI E DICHIARATI (punto 1 e punto 10):
+// visura → campi dell'ente → bilanci → prospetto → simulazione → report. È
+// l'ordine con cui nasce una verifica contabile, e non presuppone che la
+// verifica amministrativa sia già stata fatta: le due sono indipendenti e si
+// incontrano solo nella verifica azienda.
+//
+// Le etichette dei parametri sono solo quelle configurate nello spazio
 // (Parametri di Spazio → Anagrafica Ente): prima comparivano come «Parametro
 // 1…10» e poi venivano mascherate dal nome vero, e sembravano due cose.
 
@@ -21,15 +25,16 @@ import {
   AlertCircle,
   Building2,
   CheckCircle2,
-  CircleDashed,
   FileSpreadsheet,
   FileText,
+  IdCard,
   Loader2,
   Upload,
 } from 'lucide-react';
 import { AziendaBilanciXbrl } from './AziendaBilanciXbrl';
 import { ProspettoContabileStorico } from './ProspettoContabileStorico';
 import { ProiezioneContabile } from './ProiezioneContabile';
+import { PassoProcedura } from './PassoProcedura';
 import { registraVisuraTriageAction } from '@/app/actions/visuraTriage';
 import { estraiAnagraficaDaVisuraAction } from '@/app/actions/visuraEstrazione';
 import {
@@ -109,15 +114,6 @@ export function VerificaContabileAzienda({
     return chiavi.some((k) => (parametri[k] ?? '').trim() !== '');
   }, [parametri, campiEnte]);
 
-  const passi = useMemo(
-    () => [
-      { etichetta: 'Bilanci XBRL', fatto: anniXbrl > 0 },
-      { etichetta: 'Corredo (visura e parametri)', fatto: Boolean(visura) && parametriCompilati },
-    ],
-    [visura, parametriCompilati, anniXbrl]
-  );
-  const completa = passi.every((p) => p.fatto);
-
   const caricaVisura = useCallback(async () => {
     if (!fileVisura) return;
     setCaricamentoVisura(true);
@@ -147,7 +143,7 @@ export function VerificaContabileAzienda({
         nome: fileVisura.name,
         caricataIl: new Date().toISOString().slice(0, 10),
       });
-      setMessaggio('Visura storica acquisita: è il corredo dell’anagrafica della verifica.');
+      setMessaggio('Visura storica acquisita: è il primo dato della verifica contabile.');
       setFileVisura(null);
     } catch (e) {
       setErrore(`Caricamento non riuscito: ${(e as Error).message}`);
@@ -208,32 +204,26 @@ export function VerificaContabileAzienda({
           la spiegazione delle voci. La certificazione dei debiti non è richiesta: è il dato della
           verifica amministrativa.
         </p>
+        <p className="text-[11px] text-slate-500 leading-relaxed">
+          Sei passi, nello stesso ordine in cui si costruisce un dato contabile: la visura
+          identifica l’azienda, i campi dell’ente la collocano nella sua anagrafica, i bilanci
+          portano i numeri, e da lì nascono prospetto, simulazione e report. Non presuppone che la
+          verifica amministrativa sia già stata fatta.
+        </p>
         <div className="flex flex-wrap gap-1.5 pt-1">
-          {passi.map((p) => (
-            <span
-              key={p.etichetta}
-              className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-[10px] font-bold ${
-                p.fatto
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                  : 'bg-amber-50 border-amber-200 text-amber-800'
-              }`}
-            >
-              {p.fatto ? (
-                <CheckCircle2 className="w-3 h-3" />
-              ) : (
-                <CircleDashed className="w-3 h-3" />
-              )}
-              {p.etichetta}
-            </span>
-          ))}
           <span
             className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-[10px] font-bold ${
-              completa
+              anniXbrl > 0 && visura && parametriCompilati
                 ? 'bg-emerald-600 border-emerald-600 text-white'
                 : 'bg-slate-50 border-slate-200 text-slate-400'
             }`}
           >
-            {completa ? 'Verifica contabile completa' : 'Da completare'}
+            {anniXbrl > 0 && visura && parametriCompilati
+              ? 'Corredo della verifica completo'
+              : 'Corredo da completare'}
+          </span>
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 bg-white text-[10px] font-bold text-slate-500">
+            {anniXbrl > 0 ? `${anniXbrl} annualità XBRL` : 'nessun bilancio XBRL'}
           </span>
         </div>
       </div>
@@ -249,85 +239,18 @@ export function VerificaContabileAzienda({
         </p>
       )}
 
-      {/* L'ancora serve al rimando «Vai a Bilanci XBRL» della configurazione:
-          da lì si arriva a questa sezione, non a una pagina a sé. */}
-      <section
-        id="bilanci-xbrl"
-        className="scroll-mt-4 bg-white border border-slate-200 rounded-xl p-5 space-y-3"
-      >
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-          <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" /> Bilanci XBRL
-        </h2>
-        <p className="text-[11px] text-slate-500">
-          Le istanze depositate sono il dato della verifica: da qui nascono prospetto, indici e
-          serie dei differenziali. Una nuova istanza si aggiunge all’archivio, non lo sostituisce.
-        </p>
-        <AziendaBilanciXbrl
-          nomeSchema={nomeSchema}
-          aziendaId={aziendaId}
-          hrefConfigurazione={`${base}/xbrl`}
-        />
-      </section>
-
-      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-          Prospetto a scalare e indici
-        </h2>
-        <ProspettoContabileStorico
-          nomeSchema={nomeSchema}
-          aziendaId={aziendaId}
-          indiciAbilitati={indiciAbilitati}
-        />
-      </section>
-
-      <ProiezioneContabile nomeSchema={nomeSchema} aziendaId={aziendaId} />
-
-      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-2">
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-          <FileText className="w-3.5 h-3.5 text-blue-600" /> Report contabile
-        </h2>
-        <p className="text-[11px] text-slate-500 leading-relaxed">
-          Il report contabile mette in fila le tre tabelle — prospetto, differenziali, simulazione —
-          con accanto la spiegazione dei valori e le note integrative del bilancio. Ogni tabella si
-          può stampare anche da sola; il documento racconta i numeri, non la vita dell’azienda:
-          quella la racconta la verifica amministrativa, e le due si leggono insieme nella verifica
-          aziendale.
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={`/spazio/${codice}/verifica-contabile/${aziendaId}/report`}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-slate-800"
-          >
-            <FileText className="w-3 h-3" /> Apri il report contabile
-          </Link>
-          {(
-            [
-              ['prospetto', 'Prospetto'],
-              ['differenziali', 'Differenziali'],
-              ['simulazione', 'Simulazione'],
-            ] as const
-          ).map(([slug, etichetta]) => (
-            <Link
-              key={slug}
-              href={`/spazio/${codice}/verifica-contabile/${aziendaId}/report/${slug}`}
-              className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
-            >
-              {etichetta} →
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* CORREDO — non è la verifica: sono l'identificazione dell'azienda
-        presso l'ente. Sta in fondo, dichiarato, per non aprire il percorso con
-        documenti che sembrano la verifica stessa. */}
+      {/* PASSO 1 — LA VISURA STORICA */}
       <section
         id="visura-storica"
         className="scroll-mt-4 bg-white border border-slate-200 rounded-xl p-5 space-y-3"
       >
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-          <FileText className="w-3.5 h-3.5 text-slate-500" /> Corredo — Visura storica
-        </h2>
+        <PassoProcedura
+          numero={1}
+          titolo="Visura storica"
+          icona={FileText}
+          obiettivo="Identificare l’azienda con i dati iscritti al Registro delle imprese prima di leggere qualunque numero: denominazione, sede, organi, eventi."
+          fatto={Boolean(visura)}
+        />
         {visura ? (
           <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
             Acquisita <strong>{visura.nome}</strong> il {visura.caricataIl}. Una nuova visura
@@ -336,8 +259,7 @@ export function VerificaContabileAzienda({
         ) : (
           <p className="text-[11px] text-slate-500">
             La visura storica identifica l’azienda (denominazione, sede, organi, eventi iscritti) e
-            non entra nei numeri della verifica. Non sostituisce quella della verifica
-            amministrativa.
+            non entra nei numeri. Non sostituisce quella della verifica amministrativa.
           </p>
         )}
         <div className="flex flex-wrap items-center gap-2">
@@ -390,14 +312,18 @@ export function VerificaContabileAzienda({
         )}
       </section>
 
-      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-          Corredo — Parametri dell’ente per questa azienda
-        </h2>
-        <p className="text-[11px] text-slate-500">
-          I campi con cui l’ente identifica l’azienda (matricola, CSC, CA…): restano a livello
-          azienda, non di scenario, e non entrano nei numeri della verifica.
-        </p>
+      {/* PASSO 2 — I CAMPI DELL'ENTE */}
+      <section
+        id="parametri-ente"
+        className="scroll-mt-4 bg-white border border-slate-200 rounded-xl p-5 space-y-3"
+      >
+        <PassoProcedura
+          numero={2}
+          titolo="Campi dell’ente"
+          icona={IdCard}
+          obiettivo="Collocare l’azienda nell’anagrafica dell’ente con i campi impostati nei parametri dello spazio: sono i riferimenti con cui l’ente la ritrova nei propri sistemi."
+          fatto={parametriCompilati}
+        />
         {!etichettePronte ? (
           <p className="text-[11px] text-slate-400">Lettura delle etichette in corso…</p>
         ) : campiEnte.length === 0 ? (
@@ -448,6 +374,95 @@ export function VerificaContabileAzienda({
             {salvataggioParametri && <Loader2 className="w-3 h-3 animate-spin" />}
             Salva i parametri
           </button>
+        )}
+      </section>
+
+      {/* PASSO 3 — I BILANCI: il cuore della verifica contabile.
+          L'ancora serve al rimando «Vai a Bilanci XBRL» della configurazione:
+          da lì si arriva a questa sezione, non a una pagina a sé. */}
+      <section
+        id="bilanci-xbrl"
+        className="scroll-mt-4 bg-white border border-slate-200 rounded-xl p-5 space-y-3"
+      >
+        <PassoProcedura
+          numero={3}
+          titolo="Bilanci XBRL"
+          icona={FileSpreadsheet}
+          obiettivo="Acquisire le istanze depositate: da qui nascono il prospetto a scalare, gli indici e la serie dei differenziali."
+          fatto={anniXbrl > 0}
+        />
+        <p className="text-[11px] text-slate-500">
+          Una nuova istanza si aggiunge all’archivio, non lo sostituisce.
+        </p>
+        <AziendaBilanciXbrl
+          nomeSchema={nomeSchema}
+          aziendaId={aziendaId}
+          hrefConfigurazione={`${base}/xbrl`}
+        />
+      </section>
+
+      {/* PASSO 4 — IL PROSPETTO */}
+      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+        <PassoProcedura
+          numero={4}
+          titolo="Prospetto a scalare e indici"
+          obiettivo="Leggere i bilanci nella forma che serve alla decisione: margini, struttura, indici di allerta con la loro soglia."
+        />
+        <ProspettoContabileStorico
+          nomeSchema={nomeSchema}
+          aziendaId={aziendaId}
+          indiciAbilitati={indiciAbilitati}
+        />
+      </section>
+
+      {/* PASSO 5 — LA SIMULAZIONE */}
+      <ProiezioneContabile nomeSchema={nomeSchema} aziendaId={aziendaId} passo={5} />
+
+      {/* PASSO 6 — IL REPORT */}
+      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-2">
+        <PassoProcedura
+          numero={6}
+          titolo="Report contabile"
+          icona={FileText}
+          obiettivo="Mettere in fila prospetto, differenziali e simulazione in un documento stampabile, con le note integrative che spiegano le voci."
+        />
+        <p className="text-[11px] text-slate-500 leading-relaxed">
+          Ogni tabella si può stampare anche da sola; il documento racconta i numeri, non la vita
+          dell’azienda: quella la racconta la verifica amministrativa, e le due si leggono insieme
+          nella verifica aziendale.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/spazio/${codice}/verifica-contabile/${aziendaId}/report`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-slate-800"
+          >
+            <FileText className="w-3 h-3" /> Apri il report contabile
+          </Link>
+          {(
+            [
+              ['prospetto', 'Prospetto'],
+              ['differenziali', 'Differenziali'],
+              ['simulazione', 'Simulazione'],
+            ] as const
+          ).map(([slug, etichetta]) => (
+            <Link
+              key={slug}
+              href={`/spazio/${codice}/verifica-contabile/${aziendaId}/report/${slug}`}
+              className="text-[10px] font-bold uppercase tracking-wider text-blue-700 hover:text-blue-800"
+            >
+              {etichetta} →
+            </Link>
+          ))}
+          {anniXbrl === 0 && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-amber-800">
+              <AlertCircle className="w-3 h-3" /> senza bilanci il report resta vuoto
+            </span>
+          )}
+        </div>
+        {anniXbrl > 0 && (
+          <p className="inline-flex items-center gap-1 text-[10px] text-emerald-700">
+            <CheckCircle2 className="w-3 h-3" /> il dato storico è pronto per la verifica azienda
+          </p>
         )}
       </section>
 

@@ -33,6 +33,7 @@ import {
 import { stampaHtml } from '@/lib/stampaTesto';
 import { etaVerifica } from '@/lib/triage/etaVerifica';
 import { DebitoMemorizzatoEnte } from './DebitoMemorizzatoEnte';
+import { PassoProcedura } from './PassoProcedura';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MateriaVociVera, type VoceDaRimappare } from './MateriaVociVera';
 import { ottieniMaterieVociVera } from '@/app/actions/posizioneVera';
@@ -259,6 +260,8 @@ export function VerificaSaluteAzienda({
   const [inCorso, setInCorso] = useState(false);
   const [demoInCorso, setDemoInCorso] = useState(false);
   const [demoPasso, setDemoPasso] = useState(0);
+  /** Il selettore dei file resta nascosto: si apre dal riquadro del passo 1. */
+  const inputVisura = useRef<HTMLInputElement | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
   const [avvisoCiclo, setAvvisoCiclo] = useState<string | null>(null);
   const [nonTrovati, setNonTrovati] = useState<string[]>([]);
@@ -2034,21 +2037,40 @@ export function VerificaSaluteAzienda({
 
       {fase === 'caricamento' && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-            Visura camerale (PDF)
-          </p>
+          <PassoProcedura
+            numero={1}
+            titolo="Acquisisci la visura camerale"
+            icona={FileText}
+            obiettivo="Da qui partono i dati anagrafici dell’azienda: il sistema legge la visura e te li propone, senza che tu li digiti."
+            fatto={false}
+            azione={
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                PDF
+              </span>
+            }
+          />
           <input
+            ref={inputVisura}
             type="file"
             accept=".pdf"
             data-demo-applica="file"
             data-demo-ruoli="FASCICOLO"
             disabled={inCorso}
             onChange={(e) => void caricaVisura(e.target.files?.[0] ?? null)}
-            className="w-full text-xs font-mono text-slate-900 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white file:font-bold file:uppercase file:text-[10px]"
+            className="hidden"
           />
+          <button
+            type="button"
+            onClick={() => inputVisura.current?.click()}
+            disabled={inCorso}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-xs font-bold uppercase tracking-wider text-slate-700 transition-colors hover:border-blue-400 hover:bg-blue-50/40 hover:text-blue-800 disabled:opacity-50"
+          >
+            <Upload className="w-4 h-4" />+ Aggiungi nuova verifica
+          </button>
           <p className="text-[10px] text-slate-400 leading-relaxed">
-            Da qui vengono letti i dati anagrafici. Il file non viene conservato: serve solo
-            all&apos;estrazione, e i campi letti li confermi tu prima che vengano salvati.
+            Si apre la scelta del file: serve la visura camerale in PDF. Il file non viene
+            conservato — serve solo all’estrazione, e i campi letti li confermi tu al passo 2 prima
+            che vengano salvati.
           </p>
           {inCorso && (
             <p className="text-[11px] text-slate-500">
@@ -2061,15 +2083,21 @@ export function VerificaSaluteAzienda({
 
       {fase === 'conferma' && dati && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-              Conferma i dati letti
-            </h3>
-            {nonTrovati.length > 0 && (
-              <span className="text-[10px] text-amber-700">
-                {nonTrovati.length} campi non trovati nella visura
-              </span>
-            )}
+          <div className="border-b border-slate-100 pb-3">
+            <PassoProcedura
+              numero={2}
+              titolo="Conferma i dati letti"
+              icona={Check}
+              obiettivo="Controllare quello che il sistema ha letto dalla visura prima di salvarlo: un dato anagrafico sbagliato si trascina in tutte le soglie."
+              fatto={false}
+              azione={
+                nonTrovati.length > 0 ? (
+                  <span className="text-[10px] text-amber-700">
+                    {nonTrovati.length} campi non trovati nella visura
+                  </span>
+                ) : undefined
+              }
+            />
           </div>
 
           <p className="text-[11px] text-slate-500 leading-relaxed">

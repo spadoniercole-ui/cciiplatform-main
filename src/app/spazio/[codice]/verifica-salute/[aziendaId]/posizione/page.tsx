@@ -8,6 +8,7 @@ import { ETICHETTE_REGISTRATE, GLOSSARIO } from '@/lib/posizionePratica/glossari
 import { leggiPosizioneAzienda } from '@/lib/posizionePratica/letturaPosizione';
 import { DecisioniPratica } from '@/components/spazio/DecisioniPratica';
 import { StampaPosizione } from '@/components/spazio/StampaPosizione';
+import { PassoProcedura } from '@/components/spazio/PassoProcedura';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 180;
@@ -92,7 +93,7 @@ export default async function PosizionePage({
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-            Posizione della pratica
+            Posizione ente — la pratica dell’azienda presso l’ente
           </p>
           <h1 className="text-xl font-bold text-slate-900">{String(azienda.ragioneSociale)}</h1>
           <p className="text-[11px] text-slate-500">
@@ -150,6 +151,11 @@ export default async function PosizionePage({
         id="stato"
         className={`rounded-xl border p-5 space-y-3 ${stile.bordo} ${stile.sfondo}`}
       >
+        <PassoProcedura
+          numero={1}
+          titolo="Stato della posizione"
+          obiettivo="Sapere subito se la pratica è pronta, quasi pronta o bloccata — e da che cosa, prima di leggere i numeri."
+        />
         <div className="flex items-center gap-2">
           <span className={`h-2.5 w-2.5 rounded-full ${stile.pallino}`} />
           <p className={`text-[11px] font-bold uppercase tracking-wider ${stile.testo}`}>
@@ -187,9 +193,11 @@ export default async function PosizionePage({
         id="quadratura"
         className="rounded-xl border border-slate-200 bg-white p-5 space-y-3"
       >
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-          Il credito e la sua quadratura
-        </p>
+        <PassoProcedura
+          numero={2}
+          titolo="Il credito dell’ente e la sua quadratura"
+          obiettivo="Mettere a confronto le fonti del credito (debito memorizzato, certificazione, proposta) e capire se e perché divergono."
+        />
         <div className="overflow-hidden rounded-lg border border-slate-200">
           <table className="w-full text-[11px]">
             <tbody>
@@ -223,18 +231,53 @@ export default async function PosizionePage({
         >
           {quadratura.dettaglio}
         </p>
+        {quadratura.esito === 'DIVERGENTE' && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1.5">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Perché le fonti non coincidono
+            </p>
+            <p className="text-[10px] text-slate-600 leading-relaxed">
+              Le fonti non sono la stessa cosa letta due volte: il debito memorizzato è quello
+              accertato nella verifica amministrativa alla sua data, la certificazione è il
+              documento dell’azienda, la proposta porta le rate del piano. Fra loro cambiano il
+              periodo di competenza, le partite già a ruolo e le sospensioni: lo scostamento è il
+              punto da chiarire, non un errore di calcolo.
+            </p>
+            <p className="text-[10px] text-slate-600 leading-relaxed">
+              Tolleranza applicata: {formattaEuro(quadratura.tolleranzaEuro)}. Sotto quella soglia
+              le fonti si leggono come coerenti; sopra, il credito va allineato prima di usarlo
+              negli scenari.
+            </p>
+          </div>
+        )}
       </section>
 
       {/* 3. DATE */}
       <section id="date" className="rounded-xl border border-slate-200 bg-white p-5 space-y-2">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-          Date e aggiornamento
-        </p>
+        <PassoProcedura
+          numero={3}
+          titolo="Date e aggiornamento"
+          obiettivo="Sapere a che data è ferma ogni fonte: un dato più vecchio di un atto successivo rende la posizione da rifare, non sbagliata."
+        />
         <p
           className={`text-[12px] leading-relaxed ${invecchiamento.esito === 'DA_RICALCOLARE' ? 'font-bold text-amber-900' : 'text-slate-700'}`}
         >
           {invecchiamento.dettaglio}
         </p>
+        {invecchiamento.voci.some((v) => v.cosa === 'debito riaccertato') && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1.5">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900">
+              Che cosa vuol dire «debito riaccertato»
+            </p>
+            <p className="text-[10px] text-amber-900 leading-relaxed">
+              Il credito dell’ente è stato ricalcolato — per una nuova certificazione, una rettifica
+              o una decisione sulla posizione — in una data successiva alla verifica. La cifra a cui
+              si guarda non è quella che la verifica aveva fissato, e per questo la quadratura può
+              non tornare: si ricalcola la posizione, oppure si riapre la verifica amministrativa se
+              il nuovo dato cambia l’esito.
+            </p>
+          </div>
+        )}
         <ul className="grid gap-1 sm:grid-cols-2">
           {invecchiamento.voci.map((v) => (
             <li key={`${v.fonte}-${v.cosa}`} className="text-[10px] text-slate-500">
@@ -246,9 +289,11 @@ export default async function PosizionePage({
 
       {/* 4. LETTURE A CONFRONTO */}
       <section id="letture" className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-          Le letture a confronto
-        </p>
+        <PassoProcedura
+          numero={4}
+          titolo="Le letture a confronto"
+          obiettivo="Vedere dove le verifiche dicono cose diverse, con il perché e l’errore che quella divergenza evita."
+        />
         <div className="grid gap-2 sm:grid-cols-2">
           {confronto.letture.map((l) => (
             <div key={l.nome} className="rounded-lg border border-slate-200 p-3">
@@ -290,9 +335,11 @@ export default async function PosizionePage({
 
       {/* 5. ACCORDO E PROCEDURE */}
       <section id="accordo" className="rounded-xl border border-slate-200 bg-white p-5 space-y-2">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-          Accordo, procedure e piano in essere
-        </p>
+        <PassoProcedura
+          numero={5}
+          titolo="Accordo, procedure e piano in essere"
+          obiettivo="Sapere quale recupero del credito si può chiedere all’azienda e quanto l’ente incasserebbe in liquidazione o in cram down."
+        />
         <p className="text-[12px] text-slate-800 leading-relaxed">{breakEven.dettaglio}</p>
         <div className="grid gap-2 sm:grid-cols-3">
           <div className="rounded-lg bg-slate-50 p-3">
@@ -343,9 +390,11 @@ export default async function PosizionePage({
 
       {/* 6. DOCUMENTI DA CHIEDERE */}
       <section id="documenti" className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-          Documenti da chiedere
-        </p>
+        <PassoProcedura
+          numero={6}
+          titolo="Documenti da chiedere"
+          obiettivo="Chiudere le lacune con una richiesta sola: che cosa manca, da chi e quale verifica chiude ogni documento."
+        />
         {richieste.length === 0 ? (
           <p className="text-[11px] text-slate-600">
             Non risultano documenti mancanti: le lacune delle quattro verifiche sono chiuse.
@@ -379,9 +428,12 @@ export default async function PosizionePage({
 
       {/* 7. DECISIONI */}
       <section id="decisioni" className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
-        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-700">
-          <FileText className="w-3.5 h-3.5" /> Decisioni sulla posizione
-        </p>
+        <PassoProcedura
+          numero={7}
+          titolo="Decisioni sulla posizione"
+          icona={FileText}
+          obiettivo="Scrivere la decisione con i numeri del giorno: la verifica si ricalcola, la scelta resta."
+        />
         <p className="text-[10px] text-slate-500 leading-relaxed">
           La verifica si ricalcola sempre; la decisione resta scritta con i numeri del giorno.
         </p>
@@ -402,9 +454,11 @@ export default async function PosizionePage({
         id="cronologia"
         className="rounded-xl border border-slate-200 bg-white p-5 space-y-2"
       >
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-          La cronologia degli atti
-        </p>
+        <PassoProcedura
+          numero={8}
+          titolo="La cronologia degli atti"
+          obiettivo="Ricostruire che cosa è successo prima e dopo: chi ha fatto cosa, e quando."
+        />
         <p className="text-[10px] text-slate-500 leading-relaxed">
           Le stesse cose, in ordine di tempo: la pagina è ordinata per argomento, questa riga dice
           che cosa è successo prima e che cosa dopo.
