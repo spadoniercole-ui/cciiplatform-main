@@ -3056,6 +3056,25 @@ export async function assicuraTabelleUtenti(nomeSchema: string): Promise<void> {
   await eseguiDdlTenant(
     sql`CREATE INDEX IF NOT EXISTS idx_permessi_utente ON ${s}.permessi_utente (utente_id)`
   );
+
+  // LE FUNZIONI SU UNA SINGOLA AZIENDA (0.256.1). Il permesso di modulo dice
+  // che cosa l'utente può fare nello spazio; questa tabella dice, azienda per
+  // azienda, se quel modulo si legge, si scrive o resta spento. Senza riga
+  // valgono il permesso di modulo e il tetto dell'associazione: nessun utente
+  // esistente cambia comportamento con l'introduzione della tabella.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.permessi_azienda_utente (
+      id SERIAL PRIMARY KEY,
+      utente_id INTEGER NOT NULL REFERENCES ${s}.utenti_spazio(id) ON DELETE CASCADE,
+      azienda_id INTEGER NOT NULL REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
+      modulo TEXT NOT NULL,
+      livello TEXT NOT NULL DEFAULT 'LETTURA',
+      UNIQUE (utente_id, azienda_id, modulo)
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_permessi_azienda_utente ON ${s}.permessi_azienda_utente (utente_id, azienda_id)`
+  );
 }
 
 /**

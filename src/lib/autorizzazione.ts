@@ -72,6 +72,13 @@ export interface ContestoAccessoSpazio {
    * Le associazioni vecchie, senza livello, valgono «SCRITTURA».
    */
   livelliAzienda?: Record<number, LivelloPermesso>;
+  /**
+   * Il livello per modulo su ogni singola azienda (0.256.1): è la profilatura
+   * scelta dall'Admin azienda per azienda. Quando c'è, vince sui permessi di
+   * modulo; quando manca, valgono il permesso di modulo e il tetto
+   * dell'associazione.
+   */
+  permessiAzienda?: Record<number, Record<string, LivelloPermesso>>;
   /** ENTE cambia a cascata i limiti di ricevibilità (1 sola soglia invece di N categorie) e il feedback sulla Proposta — vedi RicevibilitaManager e PropostaScenario. */
   tipoSpazio: 'ENTE' | 'NON_ENTE';
   /** Predisposto, non ancora operativo altrove nel codice. */
@@ -328,6 +335,29 @@ async function contestoUtenteSpazio(
     livelliAzienda[Number(a.azienda_id)] = normalizzaLivelloAzienda(a.livello);
   }
 
+  // Le funzioni scelte azienda per azienda. La tabella arriva con la 0.256.1:
+  // su uno schema non ancora migrato la lettura non deve chiudere fuori
+  // nessuno, quindi l'assenza vale «nessuna scelta» e si torna ai permessi di
+  // modulo.
+  const permessiAzienda: Record<number, Record<string, LivelloPermesso>> = {};
+  try {
+    const righe = (
+      await pool.query(
+        `SELECT azienda_id, modulo, livello FROM "${nomeSchema}".permessi_azienda_utente WHERE utente_id = $1`,
+        [utenteId]
+      )
+    ).rows;
+    for (const r of righe) {
+      const id = Number(r.azienda_id);
+      permessiAzienda[id] = {
+        ...(permessiAzienda[id] ?? {}),
+        [r.modulo]: r.livello as LivelloPermesso,
+      };
+    }
+  } catch {
+    // Tabella non ancora creata: si resta sul modello a permessi di modulo.
+  }
+
   return {
     ...base,
     modalita: 'OPERATORE',
@@ -337,7 +367,83 @@ async function contestoUtenteSpazio(
     permessi,
     aziendeConsentite: righeAziende.map((a) => Number(a.azienda_id)),
     livelliAzienda,
+    permessiAzienda,
   };
+}
+
+const ORDINE_LIVELLO: Record<LivelloPermesso, number> = {
+  NESSUNO: 0,
+  LETTURA: 1,
+  SCRITTURA: 2,
+};
+
+/**
+ * IL LIVELLO VERO su un modulo e UNA azienda (0.256.1).
+ *
+ * Se l'Admin ha scelto le funzioni per quell'azienda, quella scelta è la
+ * risposta: un modulo acceso in scrittura su un'azienda e in sola lettura su
+ * un'altra non è una contraddizione, è la profilatura voluta. Se per quella
+ * azienda non c'è scelta, si torna al modello precedente: il permesso di
+ * modulo, limitato dal tetto dell'associazione («sola lettura» sull'azienda
+ * vale anche se il modulo è in scrittura).
+ */
+export function livelloModuloSuAzienda(
+  contesto: ContestoAccessoSpazio,
+  aziendaId: number,
+  modulo: Modulo
+): LivelloPermesso {
+  const id = Number(aziendaId);
+  const scelto = contesto.permessiAzienda?.[id]?.[modulo];
+  if (scelto) return scelto;
+  const delModulo = contesto.permessi?.[modulo] ?? 'NESSUNO';
+  const tetto = normalizzaLivelloAzienda(contesto.livelliAzienda?.[id]);
+  return ORDINE_LIVELLO[delModulo] <= ORDINE_LIVELLO[tetto] ? delModulo : tetto;
+}
+
+/**
+ * Il massimo che l'utente può fare con un modulo su QUALCHE azienda.
+ *
+ * Serve ai controlli che non conoscono ancora l'azienda (la guardia di spazio):
+ * lì non si può decidere nel dettaglio, e negare in blocco chi ha la scrittura
+ * su un'azienda sola chiuderebbe fuori chi lavora. La decisione vera la prende
+ * poi il controllo sull'azienda, che è l'unico a sapere su quale si sta
+ * scrivendo.
+ */
+export function livelloMassimoModulo(
+  contesto: ContestoAccessoSpazio,
+  modulo: Modulo
+): LivelloPermesso {
+  let massimo: LivelloPermesso = contesto.permessi?.[modulo] ?? 'NESSUNO';
+  for (const mappa of Object.values(contesto.permessiAzienda ?? {})) {
+    const livello = mappa[modulo];
+    if (livello && ORDINE_LIVELLO[livello] > ORDINE_LIVELLO[massimo]) massimo = livello;
+  }
+  return massimo;
+}
+
+/**
+ * Il controllo sul modulo e sull'azienda insieme: è quello che rende vera la
+ * scelta fatta nell'Utenti (0.256.1). Un modulo in sola lettura su quell'azienda
+ * blocca la scrittura anche se altrove è in scrittura.
+ */
+export function verificaModuliSuAzienda(
+  contesto: ContestoAccessoSpazio,
+  aziendaId: number,
+  moduli: readonly Modulo[],
+  livelloRichiesto: 'LETTURA' | 'SCRITTURA'
+): void {
+  if (contesto.modalita !== 'OPERATORE') return;
+  const ok = moduli.some((m) => {
+    const livello = livelloModuloSuAzienda(contesto, aziendaId, m);
+    return livelloRichiesto === 'LETTURA' ? livello !== 'NESSUNO' : livello === 'SCRITTURA';
+  });
+  if (ok) return;
+  const nomi = moduli.map((m) => `"${NOMI_MODULO[m] ?? m}"`).join(' o ');
+  throw new ErroreAutorizzazione(
+    livelloRichiesto === 'SCRITTURA'
+      ? `Su questa azienda hai la sola lettura sul modulo ${nomi}: per modificarlo serve la scrittura su quell’azienda.`
+      : `Nessun permesso sul modulo ${nomi} per questa azienda.`
+  );
 }
 
 function verificaRequisiti(contesto: ContestoAccessoSpazio, req: RequisitiAccesso): void {
@@ -349,7 +455,7 @@ function verificaRequisiti(contesto: ContestoAccessoSpazio, req: RequisitiAccess
     const moduli: readonly Modulo[] = typeof req.modulo === 'string' ? [req.modulo] : req.modulo;
     const richiesto = req.livello ?? 'LETTURA';
     const ok = moduli.some((m) => {
-      const livello = contesto.permessi?.[m] ?? 'NESSUNO';
+      const livello = livelloMassimoModulo(contesto, m);
       return richiesto === 'LETTURA' ? livello !== 'NESSUNO' : livello === 'SCRITTURA';
     });
     if (!ok) {
@@ -444,12 +550,21 @@ export async function richiediAccessoSpazioId(
 export function verificaAziendaConsentita(
   contesto: ContestoAccessoSpazio,
   aziendaId: number,
-  livelloRichiesto?: 'LETTURA' | 'SCRITTURA'
+  livelloRichiesto?: 'LETTURA' | 'SCRITTURA',
+  moduli?: Modulo | readonly Modulo[]
 ): void {
   if (contesto.modalita !== 'OPERATORE') return;
   const id = Number(aziendaId);
   if (!contesto.aziendeConsentite?.includes(id)) {
     throw new ErroreAutorizzazione('Azienda non assegnata a questo utente.');
+  }
+  // Con i moduli si applica la scelta fatta per QUESTA azienda: è il punto in
+  // cui «legge l'amministrativa e scrive la contabile» diventa vero. Vale
+  // anche in lettura, perché un modulo spento su quell'azienda non va letto.
+  if (moduli) {
+    const elenco: readonly Modulo[] = typeof moduli === 'string' ? [moduli] : moduli;
+    verificaModuliSuAzienda(contesto, id, elenco, livelloRichiesto ?? 'LETTURA');
+    return;
   }
   if (livelloRichiesto !== 'SCRITTURA') return;
   const livelloAzienda = normalizzaLivelloAzienda(contesto.livelliAzienda?.[id]);
@@ -470,7 +585,7 @@ export async function richiediAccessoAzienda(
   req: RequisitiAccesso = {}
 ): Promise<ContestoAccessoSpazio> {
   const contesto = await richiediAccessoSchema(nomeSchema, req);
-  verificaAziendaConsentita(contesto, aziendaId, req.livello);
+  verificaAziendaConsentita(contesto, aziendaId, req.livello, req.modulo);
   return contesto;
 }
 
@@ -486,7 +601,7 @@ export async function richiediAccessoScenario(
 ): Promise<ContestoAccessoSpazio> {
   const contesto = await richiediAccessoSchema(nomeSchema, req);
   if (contesto.modalita === 'OPERATORE') {
-    await verificaRigaConsentita(contesto, 'scenari', scenarioId, req.livello);
+    await verificaRigaConsentita(contesto, 'scenari', scenarioId, req.livello, req.modulo);
   }
   return contesto;
 }
@@ -513,7 +628,8 @@ export async function verificaRigaConsentita(
   contesto: ContestoAccessoSpazio,
   tabella: TabellaConAzienda,
   id: number,
-  livelloRichiesto?: 'LETTURA' | 'SCRITTURA'
+  livelloRichiesto?: 'LETTURA' | 'SCRITTURA',
+  moduli?: Modulo | readonly Modulo[]
 ): Promise<void> {
   if (contesto.modalita !== 'OPERATORE') return;
   const colonna = TABELLE_CON_AZIENDA[tabella];
@@ -525,7 +641,7 @@ export async function verificaRigaConsentita(
            JOIN "${s}".scenari sc ON sc.id = t.scenario_id WHERE t.id = $1`;
   const ris = await pool.query(sql, [Number(id)]);
   if (ris.rows.length === 0) return;
-  verificaAziendaConsentita(contesto, ris.rows[0].azienda_id, livelloRichiesto);
+  verificaAziendaConsentita(contesto, ris.rows[0].azienda_id, livelloRichiesto, moduli);
 }
 
 /** Prefisso del nome dei file caricati: lega il file allo spazio che lo carica. */

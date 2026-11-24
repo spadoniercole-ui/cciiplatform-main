@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.0**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.1**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,35 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.1 — 2026-11-24
+
+LE FUNZIONI SI SCEGLONO AZIENDA PER AZIENDA.
+
+Scelti il profilo e le aziende, nella gestione Utenti si dice per ciascuna
+azienda che cosa quella persona legge e che cosa scrive: per esempio legge la
+verifica amministrativa e scrive quella contabile, oppure legge gli scenari e
+non li tocca. Le stesse funzioni possono valere in modo diverso da un’azienda
+all’altra.
+
+- **Il profilo resta la proposta di partenza.** Operatore propone scenari e
+  check list in scrittura e il resto in lettura; Consultatore propone tutto in
+  sola lettura, e per lui la scrittura non è selezionabile (la regola è anche
+  nel server: un livello di scrittura inviato dal browser viene registrato
+  come lettura).
+- **I controlli d’accesso leggono la scelta.** Il livello effettivo su un
+  modulo e un’azienda è quello scelto per quell’azienda; se non c’è, valgono il
+  permesso di modulo e il tetto dell’associazione, come prima. La scrittura non
+  concessa su un’azienda viene rifiutata anche quando il modulo altrove è in
+  scrittura.
+- **Niente più doppio selettore.** Il livello sull’associazione non si sceglie
+  più a mano: si ricava dalle funzioni (scrittura se almeno una è in scrittura).
+  Le funzioni delle aziende tolte vengono cancellate.
+- Tabella nuova `permessi_azienda_utente`, creata a runtime e idempotente: gli
+  schemi che non l’hanno ancora continuano a funzionare con il modello
+  precedente.
+- I passi delle verifiche usano ovunque il componente `PassoProcedura`: non
+  restano numerazioni scritte a mano.
 
 ## 0.256.0 — 2026-11-24
 

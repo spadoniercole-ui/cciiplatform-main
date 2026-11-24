@@ -21,7 +21,7 @@ import {
   type LivelloAzienda,
 } from '@/lib/permessiAzienda';
 import { componiPermessiUtente, type TipologiaProfilo } from '@/lib/profiliUtente';
-import type { LivelloPermesso, Modulo } from '@/lib/moduliPermesso';
+import { MODULI_PERMESSO, type LivelloPermesso, type Modulo } from '@/lib/moduliPermesso';
 
 export type TipologiaUtente = 'OPERATIVO' | 'CONSULTATORE';
 
@@ -29,6 +29,12 @@ export type TipologiaUtente = 'OPERATIVO' | 'CONSULTATORE';
 export interface AssegnazioneAzienda {
   id: number;
   livello: LivelloAzienda;
+  /**
+   * Le funzioni scelte per QUESTA azienda (0.256.1): modulo → livello. Se un
+   * modulo non compare, per quell'azienda valgono il permesso di modulo e il
+   * tetto dell'associazione.
+   */
+  permessi: Partial<Record<Modulo, LivelloPermesso>>;
 }
 
 export interface UtenteSpazio {
@@ -76,6 +82,24 @@ export interface DatiUtente {
    * profilo (Operatore/Consultatore): è lì che nasce cosa può fare l'utente.
    */
   permessi?: Partial<Record<Modulo, LivelloPermesso>>;
+  /**
+   * Le funzioni per singola azienda (0.256.1): aziendaId → modulo → livello.
+   * È la scelta che vince sui permessi di modulo quando l'utente lavora su
+   * quell'azienda. Per il Consultatore la scrittura non esiste: qualunque
+   * livello diverso da «NESSUNO» viene registrato come sola lettura.
+   */
+  permessiAzienda?: Record<number, Partial<Record<Modulo, LivelloPermesso>>>;
+}
+
+/**
+ * I livelli per modulo accettabili per un profilo: il Consultatore legge e
+ * basta. La regola sta qui, non solo nell'interfaccia: un livello di scrittura
+ * inviato dal browser per un Consultatore non deve diventare un permesso.
+ */
+function livelloConsentito(tipologia: TipologiaUtente, livello: LivelloPermesso): LivelloPermesso {
+  if (livello !== 'NESSUNO' && livello !== 'LETTURA' && livello !== 'SCRITTURA') return 'NESSUNO';
+  if (tipologia === 'CONSULTATORE' && livello === 'SCRITTURA') return 'LETTURA';
+  return livello;
 }
 
 /** Il livello da scrivere per un'azienda: scelto, altrimenti quello di prima. */
@@ -87,6 +111,68 @@ function livelloDaScrivere(
   const scelto = dati.livelli?.[aziendaId];
   if (livelloAziendaValido(scelto)) return scelto;
   return precedente === undefined ? 'SCRITTURA' : normalizzaLivelloAzienda(precedente);
+}
+
+/** utenteId → aziendaId → modulo → livello. */
+type MappaPermessiAzienda = Record<
+  number,
+  Record<number, Partial<Record<Modulo, LivelloPermesso>>>
+>;
+
+/**
+ * Le funzioni per azienda di tutti gli utenti dello spazio, in una lettura
+ * sola (0.256.1). La tabella arriva con questa versione: su uno schema non
+ * ancora migrato la mappa è vuota e la schermata mostra i soli permessi di
+ * modulo, come prima.
+ */
+async function leggiPermessiAziendaUtenti(nomeSchema: string): Promise<MappaPermessiAzienda> {
+  const mappa: MappaPermessiAzienda = {};
+  try {
+    const righe = (
+      await pool.query(
+        `SELECT utente_id, azienda_id, modulo, livello FROM "${nomeSchema}".permessi_azienda_utente`
+      )
+    ).rows as { utente_id: number; azienda_id: number; modulo: string; livello: string }[];
+    for (const r of righe) {
+      const utenteId = Number(r.utente_id);
+      const aziendaId = Number(r.azienda_id);
+      mappa[utenteId] = mappa[utenteId] ?? {};
+      mappa[utenteId][aziendaId] = {
+        ...(mappa[utenteId][aziendaId] ?? {}),
+        [r.modulo]: r.livello as LivelloPermesso,
+      };
+    }
+  } catch {
+    // Tabella non ancora creata: nessuna scelta per azienda.
+  }
+  return mappa;
+}
+
+/**
+ * Scrive le funzioni scelte per azienda. Solo i moduli inviati vengono
+ * toccati: un modulo assente dal payload resta com'era, così chi cambia una
+ * funzione non deve rimandare tutte le altre.
+ */
+async function scriviPermessiAzienda(
+  nomeSchema: string,
+  utenteId: number,
+  tipologia: TipologiaUtente,
+  permessiAzienda: DatiUtente['permessiAzienda']
+): Promise<void> {
+  if (!permessiAzienda) return;
+  for (const [azienda, livelli] of Object.entries(permessiAzienda)) {
+    for (const modulo of MODULI_PERMESSO) {
+      const grezzo = livelli?.[modulo];
+      if (grezzo === undefined) continue;
+      const livello = livelloConsentito(tipologia, grezzo);
+      await pool.query(
+        `INSERT INTO "${nomeSchema}".permessi_azienda_utente (utente_id, azienda_id, modulo, livello)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (utente_id, azienda_id, modulo) DO UPDATE SET livello = EXCLUDED.livello`,
+        [utenteId, Number(azienda), modulo, livello]
+      );
+    }
+  }
 }
 
 function generaPasswordTemporanea(): string {
@@ -113,11 +199,16 @@ export async function ottieniUtentiSpazio(nomeSchema: string): Promise<Risultato
 
     const righeUtenti = await db.select().from(tabelle.utenti_spazio);
     const righeAssociazioni = await db.select().from(tabelle.utenti_aziende);
+    const permessiPerAzienda = await leggiPermessiAziendaUtenti(nomeSchema);
 
     const utenti: UtenteSpazio[] = righeUtenti.map((u) => {
       const aziende: AssegnazioneAzienda[] = righeAssociazioni
         .filter((a) => a.utenteId === u.id)
-        .map((a) => ({ id: a.aziendaId, livello: normalizzaLivelloAzienda(a.livello) }));
+        .map((a) => ({
+          id: a.aziendaId,
+          livello: normalizzaLivelloAzienda(a.livello),
+          permessi: permessiPerAzienda[u.id]?.[a.aziendaId] ?? {},
+        }));
       return {
         id: u.id,
         nome: u.nome,
@@ -203,6 +294,10 @@ export async function creaUtenteSpazioAction(
         .insert(tabelle.utenti_aziende)
         .values({ utenteId, aziendaId, livello: livelloDaScrivere(dati, aziendaId) });
     }
+
+    // Le funzioni scelte azienda per azienda: sono quelle che i controlli
+    // d'accesso leggono quando l'utente lavora su quell'azienda.
+    await scriviPermessiAzienda(nomeSchema, utenteId, dati.tipologia, dati.permessiAzienda);
 
     // Indicizzazione username -> schema: senza questo, il login non saprebbe
     // in quale schema isolato cercare le credenziali di questo username
@@ -290,6 +385,17 @@ export async function modificaUtenteSpazioAction(
         livello: livelloDaScrivere(dati, aziendaId, livelliPrecedenti.get(aziendaId)),
       });
     }
+
+    // Le funzioni delle aziende tolte non vanno lasciate appese: se un domani
+    // l'azienda tornasse assegnata, il permesso tornerebbe con lei — e non è
+    // quello che l'Admin ha appena deciso.
+    await assicuraTabelleUtenti(nomeSchema);
+    await pool.query(
+      `DELETE FROM "${nomeSchema}".permessi_azienda_utente
+        WHERE utente_id = $1 AND azienda_id <> ALL($2::int[])`,
+      [id, dati.aziendeIds]
+    );
+    await scriviPermessiAzienda(nomeSchema, id, dati.tipologia, dati.permessiAzienda);
 
     return { success: true };
   } catch (error: any) {
@@ -381,6 +487,53 @@ export async function impostaLivelloAziendaAction(
       success: false,
       error: `Impossibile aggiornare il livello: ${error.message || error}`,
     };
+  }
+}
+
+/**
+ * Le funzioni di un utente SU UNA AZIENDA (0.256.1).
+ *
+ * È la schermata Utenti a decidere, azienda per azienda, che cosa quella
+ * persona legge e che cosa scrive: la scelta vale da subito nei controlli
+ * d'accesso. Il Consultatore non può avere la scrittura, e la regola si
+ * applica qui, non solo nell'interfaccia.
+ */
+export async function impostaPermessiAziendaUtenteAction(
+  nomeSchema: string,
+  utenteId: number,
+  aziendaId: number,
+  permessi: Partial<Record<Modulo, LivelloPermesso>>
+): Promise<RisultatoOperazioneUtente> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    if (Object.keys(permessi).length === 0) {
+      return { success: false, error: 'Nessuna funzione da salvare.' };
+    }
+    await assicuraTabelleUtenti(nomeSchema);
+
+    const utente = await pool.query(
+      `SELECT tipologia FROM "${nomeSchema}".utenti_spazio WHERE id = $1`,
+      [Number(utenteId)]
+    );
+    if (utente.rows.length === 0) return { success: false, error: 'Utente non trovato.' };
+
+    const associazione = await pool.query(
+      `SELECT id FROM "${nomeSchema}".utenti_aziende WHERE utente_id = $1 AND azienda_id = $2`,
+      [Number(utenteId), Number(aziendaId)]
+    );
+    if (associazione.rows.length === 0) {
+      return { success: false, error: 'Questo utente non è associato all’azienda.' };
+    }
+
+    await scriviPermessiAzienda(
+      nomeSchema,
+      Number(utenteId),
+      utente.rows[0].tipologia as TipologiaUtente,
+      { [Number(aziendaId)]: permessi }
+    );
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: messaggioErrore(error, 'Funzioni non salvate.') };
   }
 }
 

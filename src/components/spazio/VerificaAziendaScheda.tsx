@@ -513,10 +513,12 @@ export function VerificaAziendaScheda({
 
       {fotografia && fotografia.scenari.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+          <PassoProcedura
+            numero={4}
+            titolo="Tre scenari sul credito vantato"
+            obiettivo="Misurare quanto l’ente recupererebbe con l’accordo, in liquidazione e in cram down, sulle percentuali fissate per il rango."
+          />
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Passo 4 · Tre scenari sul credito vantato
-            </p>
             <p className="text-[11px] text-slate-600">
               Credito: <strong className="tabular-nums">{euro(fotografia.credito)}</strong>
               {fotografia.rango
@@ -629,9 +631,11 @@ export function VerificaAziendaScheda({
 
       {risultato?.nota && (
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            Passo 5 · Nota integrativa — {risultato.nota.anno ?? 'ultimo bilancio'}
-          </p>
+          <PassoProcedura
+            numero={5}
+            titolo={`Nota integrativa — ${risultato.nota.anno ?? 'ultimo bilancio'}`}
+            obiettivo="Leggere il contesto dichiarato dagli amministratori: continuità, piani e intenzioni. Spiega i numeri, non li cambia."
+          />
           <p className="text-[10px] text-slate-500 leading-relaxed">
             Sezioni lette: {risultato.nota.sezioni.join(', ')}. È il contesto dichiarato dagli
             amministratori: si legge accanto alla fotografia e non ne cambia i numeri.
@@ -650,9 +654,11 @@ export function VerificaAziendaScheda({
       )}
 
       <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-          Passo 6 · Base degli scenari
-        </p>
+        <PassoProcedura
+          numero={6}
+          titolo="Base degli scenari"
+          obiettivo="Fissare questa fotografia come punto di partenza degli scenari: se cambia, gli scenari ripartono da qui."
+        />
         <p className="text-[11px] text-slate-600 leading-relaxed">
           La fotografia si può fissare come base della verifica aziendale: gli scenari si aprono da
           qui invece che dalla sola amministrativa.
@@ -681,9 +687,11 @@ export function VerificaAziendaScheda({
 
       {codice && (
         <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            Passo 7 · Report dell’azienda
-          </p>
+          <PassoProcedura
+            numero={7}
+            titolo="Report dell’azienda"
+            obiettivo="Emettere il documento che raccoglie le due verifiche e l’analisi, scegliendo che cosa includere."
+          />
           <p className="text-[11px] text-slate-600 leading-relaxed max-w-2xl">
             Un documento solo con l’esito amministrativo (in sola lettura), il dato contabile e
             l’analisi. Scegli che cosa includere prima di emetterlo: l’emissione è definitiva, e

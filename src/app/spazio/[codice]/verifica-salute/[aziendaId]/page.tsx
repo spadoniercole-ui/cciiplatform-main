@@ -300,10 +300,12 @@ export default async function EsitoVerificaAmministrativaPage({
         <details className="group bg-white border border-slate-200 rounded-xl">
           <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-5">
             <span>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                Passo 6 · Supporto decisionale
-              </span>
-              <span className="mt-0.5 block text-[10px] text-slate-500 leading-relaxed">
+              <PassoProcedura
+                numero={6}
+                titolo="Supporto decisionale"
+                obiettivo="Leggere i dati, i percorsi possibili e i loro esiti: è un supporto alla scelta, non un consiglio."
+              />
+              <span className="mt-1 block text-[10px] text-slate-500 leading-relaxed">
                 La lettura dei dati, i percorsi e i loro esiti. Si apre su richiesta: non è un
                 consiglio.{' '}
                 {prodottiCompleti && sintesiProdotti

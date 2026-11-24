@@ -49,6 +49,9 @@ const permessi: Record<number, { modulo: string; livello: string }[]> = {
     { modulo: 'checklist', livello: 'LETTURA' },
   ],
 };
+// Le funzioni scelte per singola azienda (0.256.1): utenteId → righe.
+const permessiAzienda: Record<number, { azienda_id: number; modulo: string; livello: string }[]> =
+  {};
 
 vi.mock('next/headers', () => ({
   cookies: async () => ({
@@ -85,6 +88,8 @@ vi.mock('@/lib/db', () => ({
             .map((u) => ({ ...u, email: null, password_temporanea: null })),
         };
       }
+      if (sql.includes('.permessi_azienda_utente'))
+        return { rows: permessiAzienda[p0 as number] ?? [] };
       if (sql.includes('.permessi_utente')) return { rows: permessi[p0 as number] ?? [] };
       if (sql.includes('.utenti_aziende')) return { rows: [{ azienda_id: 7 }] };
       // Righe riconducibili a un'azienda: scenari 100 → azienda 7, 200 → azienda 8;
@@ -132,6 +137,7 @@ function login(token: string, ruolo: string, workspaceId: number | null, usernam
 beforeEach(() => {
   cookieJar.clear();
   sessioni = [];
+  for (const chiave of Object.keys(permessiAzienda)) delete permessiAzienda[Number(chiave)];
 });
 
 describe('senza sessione', () => {
@@ -277,6 +283,38 @@ describe('operatori: aziende, scenari e righe assegnate', () => {
     expect(() => verificaAziendaConsentita(senzaLivello, 8, 'LETTURA')).toThrow(
       'Azienda non assegnata'
     );
+  });
+
+  it('le funzioni scelte per azienda valgono più del permesso di modulo', async () => {
+    // Nello spazio l'utente scrive gli scenari, ma su questa azienda legge e
+    // basta: è la profilatura che l'Admin ha scelto azienda per azienda.
+    permessiAzienda[11] = [{ azienda_id: 7, modulo: 'scenari', livello: 'LETTURA' }];
+    login('t-otto', 'USER', 1, 'otto.operatore');
+
+    await expect(
+      richiediAccessoScenario('tenant_alfa', 100, { modulo: ['scenari'], livello: 'SCRITTURA' })
+    ).rejects.toThrow('sola lettura');
+    await expect(
+      richiediAccessoScenario('tenant_alfa', 100, { modulo: ['scenari'], livello: 'LETTURA' })
+    ).resolves.toBeTruthy();
+  });
+
+  it('le funzioni per azienda possono aprire la scrittura dove il modulo è in sola lettura', async () => {
+    permessiAzienda[11] = [{ azienda_id: 7, modulo: 'checklist', livello: 'SCRITTURA' }];
+    login('t-otto', 'USER', 1, 'otto.operatore');
+
+    await expect(
+      richiediAccessoAzienda('tenant_alfa', 7, { modulo: ['checklist'], livello: 'SCRITTURA' })
+    ).resolves.toBeTruthy();
+  });
+
+  it('un modulo spento per azienda non si legge su quell’azienda', async () => {
+    permessiAzienda[11] = [{ azienda_id: 7, modulo: 'scenari', livello: 'NESSUNO' }];
+    login('t-otto', 'USER', 1, 'otto.operatore');
+
+    await expect(
+      richiediAccessoAzienda('tenant_alfa', 7, { modulo: ['scenari'], livello: 'LETTURA' })
+    ).rejects.toThrow('Nessun permesso');
   });
 
   it('basta il permesso su uno dei moduli elencati', async () => {

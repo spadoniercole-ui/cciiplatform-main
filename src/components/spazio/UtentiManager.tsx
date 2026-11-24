@@ -25,7 +25,7 @@ import {
   ottieniUtentiSpazio,
   creaUtenteSpazioAction,
   modificaUtenteSpazioAction,
-  impostaLivelloAziendaAction,
+  impostaPermessiAziendaUtenteAction,
   disabilitaUtenteSpazioAction,
   riattivaUtenteSpazioAction,
   rigeneraPasswordUtenteAction,
@@ -33,11 +33,6 @@ import {
   type TipologiaUtente,
 } from '@/app/actions/utenti';
 import { ottieniAziende, type Azienda } from '@/app/actions/aziende';
-import {
-  ottieniPermessiUtente,
-  impostaPermessoAction,
-  impostaPermessiUtenteAction,
-} from '@/app/actions/permessi';
 import { MODULI_PERMESSO, type LivelloPermesso, type Modulo } from '@/lib/moduliPermesso';
 import {
   DESCRIZIONE_PROFILO,
@@ -45,11 +40,7 @@ import {
   TIPOLOGIE_PROFILO,
   permessiDelProfilo,
 } from '@/lib/profiliUtente';
-import {
-  ETICHETTA_LIVELLO_AZIENDA,
-  LIVELLI_AZIENDA,
-  type LivelloAzienda,
-} from '@/lib/permessiAzienda';
+import type { LivelloAzienda } from '@/lib/permessiAzienda';
 import { avvisoApp, confermaApp } from '@/components/FinestreApp';
 
 const ETICHETTE_MODULO: Record<string, string> = {
@@ -62,13 +53,25 @@ const ETICHETTE_MODULO: Record<string, string> = {
   simulazione: 'Piano di sviluppo',
 };
 
+/** Le tre scelte per una funzione su un'azienda. */
+const ETICHETTE_LIVELLO: Record<LivelloPermesso, string> = {
+  NESSUNO: 'Spenta',
+  LETTURA: 'Sola lettura',
+  SCRITTURA: 'Lettura e scrittura',
+};
+
+/** Il livello che il profilo propone per un modulo, quando l'Admin non ha scelto. */
+const livelloDelProfilo = (tipologia: TipologiaUtente, modulo: Modulo): LivelloPermesso =>
+  permessiDelProfilo(tipologia)[modulo] ?? 'NESSUNO';
+
 const FORM_VUOTO = {
   nome: '',
   cognome: '',
   email: '',
   tipologia: 'OPERATIVO' as TipologiaUtente,
   aziendeIds: [] as number[],
-  livelli: {} as Record<number, LivelloAzienda>,
+  /** aziendaId → modulo → livello. Vuoto = si parte dai valori del profilo. */
+  permessiAzienda: {} as Record<number, Partial<Record<Modulo, LivelloPermesso>>>,
 };
 
 interface Props {
@@ -94,19 +97,10 @@ export function UtentiManager({ nomeSchema }: Props) {
     username: string;
     password: string;
   } | null>(null);
-  // I flag del profilo scelto, accesi di partenza: `true` = funzione attiva
-  // al livello del profilo, `false` = spenta (NESSUNO).
-  const [funzioni, setFunzioni] = useState<Record<string, boolean>>({});
-  const [salvataggioFunzioni, setSalvataggioFunzioni] = useState(false);
-  const [funzioniSalvate, setFunzioniSalvate] = useState(false);
-
-  const [utentePermessiAperto, setUtentePermessiAperto] = useState<number | null>(null);
-  const [permessiCorrenti, setPermessiCorrenti] = useState<Record<string, LivelloPermesso>>({});
-  const [caricamentoPermessi, setCaricamentoPermessi] = useState(false);
-
   const [utenteAziendeAperto, setUtenteAziendeAperto] = useState<number | null>(null);
   const [aziendeBozza, setAziendeBozza] = useState<number[]>([]);
-  const [livelloInCorso, setLivelloInCorso] = useState<number | null>(null);
+  // Utente di cui si stanno modificando le funzioni per azienda.
+  const [utenteFunzioniAperto, setUtenteFunzioniAperto] = useState<number | null>(null);
 
   const [passwordAppenaGenerata, setPasswordAppenaGenerata] = useState<{
     utenteId: number;
@@ -142,7 +136,41 @@ export function UtentiManager({ nomeSchema }: Props) {
   // su cui assegnare lavoro.
   const aziendeAttive = aziende.filter((a) => a.attiva);
 
-  const livelloForm = (aziendaId: number): LivelloAzienda => form.livelli[aziendaId] ?? 'SCRITTURA';
+  /** Il livello scelto per un modulo su un'azienda, o quello del profilo. */
+  const livelloForm = (aziendaId: number, modulo: Modulo): LivelloPermesso =>
+    form.permessiAzienda[aziendaId]?.[modulo] ?? livelloDelProfilo(form.tipologia, modulo);
+
+  const setLivelloForm = (aziendaId: number, modulo: Modulo, livello: LivelloPermesso) => {
+    setForm((prev) => ({
+      ...prev,
+      permessiAzienda: {
+        ...prev.permessiAzienda,
+        [aziendaId]: { ...(prev.permessiAzienda[aziendaId] ?? {}), [modulo]: livello },
+      },
+    }));
+  };
+
+  /**
+   * Cambiare profilo non deve lasciare acceso quello che il profilo non può:
+   * il Consultatore è in sola lettura, e le scelte già fatte si riallineano
+   * invece di restare in scrittura finché non si toccano.
+   */
+  const cambiaProfilo = (tipologia: TipologiaUtente) => {
+    setForm((prev) => {
+      const permessiAzienda = Object.fromEntries(
+        Object.entries(prev.permessiAzienda).map(([azienda, mappa]) => [
+          azienda,
+          Object.fromEntries(
+            Object.entries(mappa ?? {}).map(([modulo, livello]) => [
+              modulo,
+              tipologia === 'CONSULTATORE' && livello === 'SCRITTURA' ? 'LETTURA' : livello,
+            ])
+          ),
+        ])
+      ) as Record<number, Partial<Record<Modulo, LivelloPermesso>>>;
+      return { ...prev, tipologia, permessiAzienda };
+    });
+  };
 
   const toggleAziendaForm = (aziendaId: number) => {
     setForm((prev) => {
@@ -159,7 +187,6 @@ export function UtentiManager({ nomeSchema }: Props) {
   const apriForm = () => {
     setForm(FORM_VUOTO);
     setCreato(null);
-    setFunzioniSalvate(false);
     setMostraForm(true);
   };
 
@@ -168,23 +195,35 @@ export function UtentiManager({ nomeSchema }: Props) {
     setSalvataggio(true);
     setErroreLista(null);
     try {
+      // Le funzioni si scrivono SEMPRE per azienda, anche quando l'Admin non
+      // tocca i selettori: partono dal profilo scelto e da lì si cambiano.
+      const permessiAzienda: Record<number, Partial<Record<Modulo, LivelloPermesso>>> = {};
+      const livelli: Record<number, LivelloAzienda> = {};
+      for (const aziendaId of form.aziendeIds) {
+        const scelti: Partial<Record<Modulo, LivelloPermesso>> = {};
+        for (const modulo of MODULI_PERMESSO) {
+          scelti[modulo] = livelloForm(aziendaId, modulo);
+        }
+        permessiAzienda[aziendaId] = scelti;
+        // Il tetto dell'associazione resta coerente con le funzioni scelte:
+        // scrittura se almeno una funzione è in scrittura, altrimenti lettura.
+        livelli[aziendaId] = MODULI_PERMESSO.some((m) => scelti[m] === 'SCRITTURA')
+          ? 'SCRITTURA'
+          : 'LETTURA';
+      }
       const risultato = await creaUtenteSpazioAction(nomeSchema, {
         nome: form.nome,
         cognome: form.cognome,
         email: form.email,
         tipologia: form.tipologia,
         aziendeIds: form.aziendeIds,
-        livelli: form.livelli,
+        livelli,
+        permessiAzienda,
       });
       if (!risultato.success) {
         setErroreLista(risultato.error || "Impossibile creare l'utente.");
         return;
       }
-      const profilo = permessiDelProfilo(form.tipologia);
-      setFunzioni(
-        Object.fromEntries(MODULI_PERMESSO.map((m) => [m, true])) as Record<string, boolean>
-      );
-      setFunzioniSalvate(false);
       setCreato({
         utenteId: risultato.utenteId ?? null,
         nome: form.nome,
@@ -193,37 +232,11 @@ export function UtentiManager({ nomeSchema }: Props) {
         username: risultato.username || '',
         password: risultato.passwordTemporanea || '',
       });
-      // Le funzioni del profilo sono già state scritte dalla creazione; le
-      // mostra qui con i livelli che l'utente ha davvero.
-      setPermessiCorrenti(profilo);
       setForm(FORM_VUOTO);
       await carica();
     } finally {
       setSalvataggio(false);
     }
-  };
-
-  const handleSalvaFunzioni = async () => {
-    if (!creato?.utenteId) return;
-    const profilo = permessiDelProfilo(creato.tipologia);
-    const scelti: Record<string, LivelloPermesso> = {};
-    for (const modulo of MODULI_PERMESSO) {
-      scelti[modulo] = funzioni[modulo] ? profilo[modulo] : 'NESSUNO';
-    }
-    setSalvataggioFunzioni(true);
-    const risultato = await impostaPermessiUtenteAction(nomeSchema, creato.utenteId, scelti);
-    setSalvataggioFunzioni(false);
-    if (!risultato.success) {
-      avvisoApp(risultato.error || 'Funzioni non salvate.');
-      return;
-    }
-    setPermessiCorrenti(scelti);
-    setFunzioniSalvate(true);
-  };
-
-  const toggleFunzione = (modulo: Modulo) => {
-    setFunzioniSalvate(false);
-    setFunzioni((prev) => ({ ...prev, [modulo]: !prev[modulo] }));
   };
 
   const scaricaCredenziali = () => {
@@ -255,36 +268,27 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
     await carica();
   };
 
-  const handleApriPermessi = async (utente: UtenteSpazio) => {
-    if (utentePermessiAperto === utente.id) {
-      setUtentePermessiAperto(null);
-      return;
-    }
-    setUtenteAziendeAperto(null);
-    setUtentePermessiAperto(utente.id);
-    setCaricamentoPermessi(true);
-    const risultato = await ottieniPermessiUtente(nomeSchema, utente.id);
-    if (risultato.success) setPermessiCorrenti(risultato.permessi);
-    setCaricamentoPermessi(false);
-  };
-
-  const handleCambiaPermesso = async (
-    utenteId: number,
-    modulo: (typeof MODULI_PERMESSO)[number],
-    livello: LivelloPermesso
-  ) => {
-    setPermessiCorrenti((prev) => ({ ...prev, [modulo]: livello }));
-    await impostaPermessoAction(nomeSchema, utenteId, modulo, livello);
-  };
-
   const handleApriAziende = (utente: UtenteSpazio) => {
     if (utenteAziendeAperto === utente.id) {
       setUtenteAziendeAperto(null);
       return;
     }
-    setUtentePermessiAperto(null);
     setUtenteAziendeAperto(utente.id);
     setAziendeBozza(utente.aziendeIds);
+  };
+
+  /**
+   * Le funzioni si leggono e si salvano PER AZIENDA: è l'unica profilatura
+   * che conta, quindi aprire «Funzioni» offre le aziende dell'utente, non un
+   * elenco unico valido ovunque (0.256.1).
+   */
+  const handleApriFunzioni = (utente: UtenteSpazio) => {
+    if (utenteFunzioniAperto === utente.id) {
+      setUtenteFunzioniAperto(null);
+      return;
+    }
+    setUtenteAziendeAperto(null);
+    setUtenteFunzioniAperto(utente.id);
   };
 
   const handleSalvaAziende = async (utente: UtenteSpazio) => {
@@ -306,18 +310,6 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
       return;
     }
     setUtenteAziendeAperto(null);
-    await carica();
-  };
-
-  const handleCambiaLivello = async (
-    utenteId: number,
-    aziendaId: number,
-    livello: LivelloAzienda
-  ) => {
-    setLivelloInCorso(utenteId);
-    const risultato = await impostaLivelloAziendaAction(nomeSchema, utenteId, aziendaId, livello);
-    if (!risultato.success) avvisoApp(risultato.error || 'Livello non aggiornato.');
-    setLivelloInCorso(null);
     await carica();
   };
 
@@ -420,7 +412,7 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
                 <button
                   key={tipologia}
                   type="button"
-                  onClick={() => setForm({ ...form, tipologia })}
+                  onClick={() => cambiaProfilo(tipologia)}
                   className={`text-left p-2.5 rounded-lg border transition-colors ${
                     form.tipologia === tipologia
                       ? 'border-blue-400 bg-blue-50'
@@ -465,28 +457,59 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
                         />
                         <span className="truncate">{azienda.ragioneSociale}</span>
                       </label>
-                      {scelta && (
-                        <select
-                          value={livelloForm(azienda.id)}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              livelli: {
-                                ...form.livelli,
-                                [azienda.id]: e.target.value as LivelloAzienda,
-                              },
-                            })
-                          }
-                          title="Livello su questa azienda"
-                          className="p-1 text-[10px] font-bold uppercase border border-slate-200 rounded bg-white text-slate-700 shrink-0"
-                        >
-                          {LIVELLI_AZIENDA.map((livello) => (
-                            <option key={livello} value={livello}>
-                              {ETICHETTA_LIVELLO_AZIENDA[livello]}
-                            </option>
-                          ))}
-                        </select>
-                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {form.aziendeIds.length > 0 && (
+              <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Funzioni per azienda
+                </p>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  Le stesse funzioni possono valere in modo diverso da un&apos;azienda
+                  all&apos;altra: qui si dice, per ciascuna, che cosa questa persona legge e che
+                  cosa scrive.
+                  {form.tipologia === 'CONSULTATORE'
+                    ? ' Il Consultatore è in sola lettura: la scrittura non è selezionabile.'
+                    : ''}
+                </p>
+                {form.aziendeIds.map((aziendaId) => {
+                  const azienda = aziendeAttive.find((a) => a.id === aziendaId);
+                  return (
+                    <div
+                      key={aziendaId}
+                      className="rounded-lg border border-slate-200 bg-white p-2.5 space-y-1.5"
+                    >
+                      <p className="text-[11px] font-bold text-slate-800 truncate">
+                        {azienda?.ragioneSociale ?? `#${aziendaId}`}
+                      </p>
+                      {MODULI_PERMESSO.map((modulo) => (
+                        <div key={modulo} className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] text-slate-600">
+                            {ETICHETTE_MODULO[modulo] ?? modulo}
+                          </span>
+                          <select
+                            value={livelloForm(aziendaId, modulo)}
+                            onChange={(e) =>
+                              setLivelloForm(aziendaId, modulo, e.target.value as LivelloPermesso)
+                            }
+                            className="p-1 text-[10px] font-bold border border-slate-200 rounded bg-white text-slate-700"
+                          >
+                            {(Object.keys(ETICHETTE_LIVELLO) as LivelloPermesso[])
+                              .filter(
+                                (livello) =>
+                                  form.tipologia === 'OPERATIVO' || livello !== 'SCRITTURA'
+                              )
+                              .map((livello) => (
+                                <option key={livello} value={livello}>
+                                  {ETICHETTE_LIVELLO[livello]}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      ))}
                     </div>
                   );
                 })}
@@ -560,64 +583,39 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
           <div>
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
               <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-                Funzioni del profilo {ETICHETTA_PROFILO[creato.tipologia]}
+                Funzioni per azienda
               </h3>
               <span className="text-[10px] text-slate-500 max-w-[50%] text-right">
                 {DESCRIZIONE_PROFILO[creato.tipologia]}
               </span>
             </div>
             <p className="text-[10px] text-slate-500 mt-2">
-              Accesi di partenza, secondo il profilo scelto: spegni quello che questa persona non
-              deve vedere e salva. Il livello (sola lettura o lettura e scrittura) resta quello del
-              profilo.
+              Sono già scritte come le hai impostate nella creazione. Da qui scegli l&apos;azienda e
+              cambi che cosa questa persona legge e che cosa scrive: la scelta vale solo su
+              quell&apos;azienda.
             </p>
-            <div className="mt-2 space-y-1.5">
-              {MODULI_PERMESSO.map((modulo) => {
-                const acceso = funzioni[modulo] !== false;
-                const livello = permessiDelProfilo(creato.tipologia)[modulo];
-                return (
-                  <label
-                    key={modulo}
-                    className="flex items-center justify-between gap-2 p-2 rounded-lg border border-slate-200 cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2 text-[11px] text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={acceso}
-                        onChange={() => toggleFunzione(modulo)}
-                      />
-                      <span className="font-bold">{ETICHETTE_MODULO[modulo] ?? modulo}</span>
-                    </span>
-                    <span className="text-[10px] text-slate-500">
-                      {acceso
-                        ? livello === 'SCRITTURA'
-                          ? 'lettura e scrittura'
-                          : 'sola lettura'
-                        : 'spenta'}
-                    </span>
-                  </label>
-                );
-              })}
+            <div className="mt-2">
+              {creato.utenteId ? (
+                <FunzioniAziendaEditor
+                  nomeSchema={nomeSchema}
+                  utenteId={creato.utenteId}
+                  tipologia={creato.tipologia}
+                  aziende={(utenti.find((u) => u.id === creato.utenteId)?.aziende ?? []).map(
+                    (a) => ({
+                      id: a.id,
+                      ragioneSociale: nomeAzienda(a.id),
+                      permessi: a.permessi,
+                    })
+                  )}
+                />
+              ) : null}
             </div>
             <div className="flex items-center gap-3 mt-3">
-              <button
-                type="button"
-                onClick={handleSalvaFunzioni}
-                disabled={salvataggioFunzioni || !creato.utenteId || funzioniSalvate}
-                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold text-[10px] uppercase rounded-lg transition-colors"
-              >
-                {salvataggioFunzioni
-                  ? 'Salvataggio...'
-                  : funzioniSalvate
-                    ? 'Funzioni salvate'
-                    : 'Salva le funzioni'}
-              </button>
               <button
                 type="button"
                 onClick={() => {
                   setCreato(null);
                   setMostraForm(false);
-                  setFunzioniSalvate(false);
                 }}
                 className="text-slate-500 hover:text-slate-700 underline text-[10px] font-bold"
               >
@@ -704,9 +702,9 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleApriPermessi(utente)}
-                    className={`p-1.5 ${utentePermessiAperto === utente.id ? 'text-blue-600' : 'text-slate-400 hover:text-blue-600'}`}
-                    title="Funzioni e permessi"
+                    onClick={() => handleApriFunzioni(utente)}
+                    className={`p-1.5 ${utenteFunzioniAperto === utente.id ? 'text-blue-600' : 'text-slate-400 hover:text-blue-600'}`}
+                    title="Funzioni per azienda"
                   >
                     <ShieldCheck className="w-3.5 h-3.5" />
                   </button>
@@ -736,11 +734,11 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
               {utenteAziendeAperto === utente.id && (
                 <div className="mt-1.5 ml-3 border-l-2 border-blue-200 pl-3 py-2 space-y-2">
                   <p className="text-[10px] text-slate-500">
-                    Aziende attive su cui può operare; il livello vale solo per quell&apos;azienda.
+                    Aziende attive su cui può operare. Le funzioni si scelgono per azienda dal
+                    pulsante dello scudo, accanto al nome.
                   </p>
                   {aziendeAttive.map((azienda) => {
                     const scelta = aziendeBozza.includes(azienda.id);
-                    const livello = utente.aziende.find((a) => a.id === azienda.id)?.livello;
                     return (
                       <div key={azienda.id} className="flex items-center justify-between gap-2">
                         <label className="flex items-center gap-2 text-[11px] text-slate-700 cursor-pointer min-w-0">
@@ -757,26 +755,6 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
                           />
                           <span className="truncate">{azienda.ragioneSociale}</span>
                         </label>
-                        {livello && (
-                          <select
-                            value={livello}
-                            onChange={(e) =>
-                              handleCambiaLivello(
-                                utente.id,
-                                azienda.id,
-                                e.target.value as LivelloAzienda
-                              )
-                            }
-                            disabled={livelloInCorso === utente.id}
-                            className="p-1 text-[10px] font-bold uppercase border border-slate-200 rounded bg-white text-slate-700 disabled:opacity-50 shrink-0"
-                          >
-                            {LIVELLI_AZIENDA.map((l) => (
-                              <option key={l} value={l}>
-                                {ETICHETTA_LIVELLO_AZIENDA[l]}
-                              </option>
-                            ))}
-                          </select>
-                        )}
                       </div>
                     );
                   })}
@@ -812,40 +790,163 @@ Conserva questo file in un posto sicuro e cancellalo dopo aver comunicato le cre
                 </div>
               )}
 
-              {utentePermessiAperto === utente.id && (
-                <div className="mt-1.5 ml-3 border-l-2 border-blue-200 pl-3 py-2 space-y-2">
-                  {caricamentoPermessi ? (
-                    <p className="text-[11px] text-slate-400">Caricamento funzioni...</p>
-                  ) : (
-                    MODULI_PERMESSO.map((modulo) => (
-                      <div key={modulo} className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-slate-600 font-bold">
-                          {ETICHETTE_MODULO[modulo]}
-                        </span>
-                        <select
-                          value={permessiCorrenti[modulo] || 'NESSUNO'}
-                          onChange={(e) =>
-                            handleCambiaPermesso(
-                              utente.id,
-                              modulo,
-                              e.target.value as LivelloPermesso
-                            )
-                          }
-                          className="text-[10px] font-bold px-2 py-1 border border-slate-200 rounded text-slate-900 bg-white"
-                        >
-                          <option value="NESSUNO">Spenta</option>
-                          <option value="LETTURA">Sola lettura</option>
-                          <option value="SCRITTURA">Lettura e scrittura</option>
-                        </select>
-                      </div>
-                    ))
-                  )}
+              {utenteFunzioniAperto === utente.id && (
+                <div className="mt-1.5 ml-3 border-l-2 border-blue-200 pl-3 py-2">
+                  <FunzioniAziendaEditor
+                    nomeSchema={nomeSchema}
+                    utenteId={utente.id}
+                    tipologia={utente.tipologia}
+                    aziende={utente.aziende.map((a) => ({
+                      id: a.id,
+                      ragioneSociale: nomeAzienda(a.id),
+                      permessi: a.permessi,
+                    }))}
+                  />
                 </div>
               )}
             </div>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * LE FUNZIONI SU UNA AZIENDA (0.256.1).
+ *
+ * Si sceglie l'azienda, si vede che cosa quella persona può fare lì, e si
+ * salva. È l'unica profilatura che conta davvero: le stesse funzioni possono
+ * valere in modo diverso da un'azienda all'altra, e il Consultatore non ha la
+ * scrittura (la regola è anche nel server: qui si spegne la scelta).
+ */
+function FunzioniAziendaEditor({
+  nomeSchema,
+  utenteId,
+  tipologia,
+  aziende,
+}: {
+  nomeSchema: string;
+  utenteId: number;
+  tipologia: TipologiaUtente;
+  aziende: {
+    id: number;
+    ragioneSociale: string;
+    permessi: Partial<Record<Modulo, LivelloPermesso>>;
+  }[];
+}) {
+  const [scelta, setScelta] = useState<number | null>(aziende[0]?.id ?? null);
+  const [livelli, setLivelli] = useState<Partial<Record<Modulo, LivelloPermesso>>>({});
+  const [salvataggio, setSalvataggio] = useState(false);
+  const [salvato, setSalvato] = useState(false);
+
+  const azienda = aziende.find((a) => a.id === scelta) ?? null;
+
+  // Le scelte salvate dell'azienda scelta; quando si cambia azienda si
+  // riparte dalle sue, non da quelle dell'azienda di prima.
+  useEffect(() => {
+    const iniziali = aziende.find((a) => a.id === scelta)?.permessi ?? {};
+    setLivelli(iniziali);
+    setSalvato(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scelta, utenteId]);
+
+  const livello = (modulo: Modulo): LivelloPermesso =>
+    livelli[modulo] ?? livelloDelProfilo(tipologia, modulo);
+
+  const salva = async () => {
+    if (!azienda) return;
+    const scelti: Partial<Record<Modulo, LivelloPermesso>> = {};
+    for (const modulo of MODULI_PERMESSO) scelti[modulo] = livello(modulo);
+    setSalvataggio(true);
+    const risultato = await impostaPermessiAziendaUtenteAction(
+      nomeSchema,
+      utenteId,
+      azienda.id,
+      scelti
+    );
+    setSalvataggio(false);
+    if (!risultato.success) {
+      avvisoApp(risultato.error || 'Funzioni non salvate.');
+      return;
+    }
+    setLivelli(scelti);
+    setSalvato(true);
+  };
+
+  if (aziende.length === 0) {
+    return (
+      <p className="text-[11px] text-slate-500">
+        Nessuna azienda associata: assegnala prima da «Aziende», poi scegli le funzioni.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        Azienda su cui stai decidendo
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {aziende.map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            onClick={() => setScelta(a.id)}
+            className={`px-2 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${
+              a.id === scelta
+                ? 'border-blue-300 bg-blue-50 text-blue-800'
+                : 'border-slate-200 text-slate-600 hover:border-blue-200'
+            }`}
+          >
+            {a.ragioneSociale}
+          </button>
+        ))}
+      </div>
+
+      {azienda && (
+        <div className="space-y-1.5">
+          {MODULI_PERMESSO.map((modulo) => (
+            <div key={modulo} className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-slate-600 font-bold">
+                {ETICHETTE_MODULO[modulo] ?? modulo}
+              </span>
+              <select
+                value={livello(modulo)}
+                onChange={(e) => {
+                  setSalvato(false);
+                  setLivelli((prev) => ({
+                    ...prev,
+                    [modulo]: e.target.value as LivelloPermesso,
+                  }));
+                }}
+                className="text-[10px] font-bold px-2 py-1 border border-slate-200 rounded text-slate-900 bg-white"
+              >
+                {(Object.keys(ETICHETTE_LIVELLO) as LivelloPermesso[])
+                  .filter((l) => tipologia === 'OPERATIVO' || l !== 'SCRITTURA')
+                  .map((l) => (
+                    <option key={l} value={l}>
+                      {ETICHETTE_LIVELLO[l]}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          ))}
+          {tipologia === 'CONSULTATORE' && (
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              Il Consultatore è in sola lettura: può vedere le funzioni accese, non modificarle.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => void salva()}
+            disabled={salvataggio || salvato}
+            className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold text-[10px] uppercase rounded-lg"
+          >
+            {salvataggio ? 'Salvataggio...' : salvato ? 'Funzioni salvate' : 'Salva le funzioni'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
