@@ -29,6 +29,7 @@ import { TabellaIndiciPeriodi } from '@/components/spazio/TabellaIndiciPeriodi';
 import { PianoSviluppoScenario } from '@/components/spazio/PianoSviluppoScenario';
 import { DocumentiCorredoRedigente } from '@/components/spazio/DocumentiCorredoRedigente';
 import { RelazioneAiScenario } from '@/components/spazio/RelazioneAiScenario';
+import { PassoProcedura } from './PassoProcedura';
 
 export interface StatoLavorazione {
   anniBilancio: number[];
@@ -57,20 +58,6 @@ interface Props {
   rigaRilevanteBloccataIniziale: boolean;
   stato: StatoLavorazione;
   chiusura: ChiusuraLavorazione;
-}
-
-function TitoloFase({ numero, testo, id }: { numero: number; testo: string; id: string }) {
-  return (
-    <h3
-      id={id}
-      className="scroll-mt-4 font-bold text-slate-900 uppercase text-xs tracking-wider flex items-center gap-2"
-    >
-      <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">
-        {numero}
-      </span>
-      {testo}
-    </h3>
-  );
 }
 
 const pct = (n: number | null) =>
@@ -164,7 +151,12 @@ export function LavorazioneRedigente({
       </div>
 
       <section className="space-y-3">
-        <TitoloFase numero={1} id="stato" testo="Stato attuale dell’azienda" />
+        <PassoProcedura
+          numero={2}
+          id="stato"
+          titolo="Stato attuale dell’azienda"
+          obiettivo="Sapere da dove parte l’azienda: bilanci depositati, situazione aggiornata, test pratico, Check List e settore sono le basi su cui si costruisce la proposta."
+        />
         <div className="grid gap-2">
           <Voce
             fatto={anniBilancio.length > 0}
@@ -245,7 +237,12 @@ export function LavorazioneRedigente({
       </section>
 
       <section className="space-y-3">
-        <TitoloFase numero={2} id="proposta" testo="La proposta" />
+        <PassoProcedura
+          numero={3}
+          id="proposta"
+          titolo="La proposta"
+          obiettivo="Scrivere le righe del piano di rientro: quali creditori, per quali importi e in quante rate."
+        />
         <PropostaScenario
           nomeSchema={nomeSchema}
           scenarioId={scenarioId}
@@ -260,7 +257,12 @@ export function LavorazioneRedigente({
       </section>
 
       <section className="space-y-3">
-        <TitoloFase numero={3} id="piano" testo="Il piano di sviluppo: le rate reggono?" />
+        <PassoProcedura
+          numero={4}
+          id="piano"
+          titolo="Il piano di sviluppo: le rate reggono?"
+          obiettivo="Verificare che le rate promesse stiano in piedi con i numeri dell’azienda: se non reggono si corregge la proposta, non il piano."
+        />
         {chiusura.pianoDisponibile ? (
           <PianoSviluppoScenario
             key={versioneProposta}
@@ -278,7 +280,12 @@ export function LavorazioneRedigente({
       </section>
 
       <section className="space-y-3">
-        <TitoloFase numero={4} id="chiusura" testo="Documenti e Relazione" />
+        <PassoProcedura
+          numero={5}
+          id="chiusura"
+          titolo="Documenti e Relazione"
+          obiettivo="Chiudere lo scenario con i documenti formali: il corredo dell’azienda e la Relazione che racconta la proposta."
+        />
         <DocumentiCorredoRedigente
           nomeSchema={nomeSchema}
           scenarioId={scenarioId}

@@ -18,9 +18,12 @@ export function PassoProcedura({
   icona: Icona,
   fatto,
   azione,
+  id,
 }: {
   /** Posizione del passaggio nella procedura: 1, 2, 3… */
   numero: number;
+  /** Ancora della sezione: serve ai ritorni da una pagina di servizio. */
+  id?: string;
   titolo: string;
   /** Una frase: che cosa si ottiene con questo passaggio. */
   obiettivo: string;
@@ -31,7 +34,7 @@ export function PassoProcedura({
   azione?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start gap-3">
+    <div id={id} className="flex items-start gap-3 scroll-mt-4">
       <span
         className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold tabular-nums ${
           fatto === true

@@ -28,6 +28,7 @@ import {
   type DocumentoProvvedimento,
   type StatoIstruttoriaGiudice,
 } from '@/app/actions/istruttoriaGiudice';
+import { PassoProcedura } from './PassoProcedura';
 import { ETICHETTA_ATTO, type TipoAttoGiudice } from '@/lib/giudice/lettura';
 import { useDemo } from '@/components/spazio/DemoUploadProvider';
 import type { ConfrontoProvvedimento as Confronto } from '@/lib/giudice/confronto';
@@ -209,16 +210,14 @@ export function IstruttoriaProvvedimento({
         </div>
       )}
 
-      {/* 1 · Documenti */}
+      {/* Passo 2 — Documenti */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center">
-            1
-          </span>
-          <h3 className="font-bold text-slate-900 uppercase text-[11px] tracking-wider">
-            Provvedimento e documenti
-          </h3>
-        </div>
+        <PassoProcedura
+          numero={2}
+          titolo="Provvedimento e documenti"
+          icona={FileText}
+          obiettivo="Acquisire il provvedimento del giudice e gli allegati: da lì si leggono i crediti ammessi e le poste che il giudice ha riconosciuto."
+        />
 
         {haDocumenti ? (
           <div className="space-y-2">
@@ -339,17 +338,14 @@ export function IstruttoriaProvvedimento({
         )}
       </div>
 
-      {/* 2 · Confronto */}
+      {/* Passo 3 — Confronto */}
       {confronto && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center">
-              2
-            </span>
-            <h3 className="font-bold text-slate-900 uppercase text-[11px] tracking-wider">
-              Confronto con la posizione dell’ente
-            </h3>
-          </div>
+          <PassoProcedura
+            numero={3}
+            titolo="Confronto con la posizione dell’ente"
+            obiettivo="Mettere il credito ammesso dal giudice accanto a quello accertato nella verifica amministrativa, voce per voce, e vedere dove divergono."
+          />
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
@@ -500,17 +496,16 @@ export function IstruttoriaProvvedimento({
         </div>
       )}
 
-      {/* 3 · Analisi */}
+      {/* Passo 4 — Analisi */}
       {confronto && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center">
-                3
-              </span>
-              <h3 className="font-bold text-slate-900 uppercase text-[11px] tracking-wider">
-                Analisi critica e perdita
-              </h3>
+            <div className="flex-1 min-w-0">
+              <PassoProcedura
+                numero={4}
+                titolo="Analisi critica e perdita"
+                obiettivo="Leggere che cosa la procedura comporta per l’ente: quanto si perde rispetto al credito e perché, con i numeri del confronto."
+              />
             </div>
             {stato?.relazione && (
               <button

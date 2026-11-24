@@ -398,7 +398,7 @@ export function PianoSviluppoScenario({
     }
   };
 
-  /** Passo 4: il motore cerca la combinazione verde, l'AI ne scrive la lettura. */
+  /** Nella ricerca della soluzione il motore cerca la combinazione verde, l'AI ne scrive la lettura. */
   const calcolaSoluzione = async () => {
     if (!dati || !ipAzienda || !sistema) return;
     setSoluzioneInCorso(true);

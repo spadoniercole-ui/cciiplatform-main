@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.1**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.2**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,26 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.2 — 2026-11-24
+
+ANCHE LA PROCEDURA DELLO SCENARIO HA I SUOI PASSI.
+
+Lo scenario non era numerato: la Redigente aveva quattro fasi con un numero
+scritto a mano e senza dire a che cosa servivano, la Ricevente e l’istruttoria
+del provvedimento idem. Ora tutte le strade dello scenario usano lo stesso
+componente delle verifiche, con l’obiettivo dichiarato a ogni passaggio.
+
+- **Primo passo, comune a ogni scenario:** le verifiche dell’ente (prima era
+  «0 · Primo passo»).
+- **Redigente:** 2 lo stato attuale dell’azienda, 3 la proposta, 4 il piano di
+  sviluppo, 5 documenti e Relazione.
+- **Ricevente:** 2 documenti ricevuti, 3 conferma di ciò che è stato letto, 4
+  valutazione della proposta.
+- **Decreto di liquidazione e cram down:** 2 provvedimento e documenti, 3
+  confronto con la posizione dell’ente, 4 analisi critica e perdita.
+- I titoli numerati a mano (pallini «1 · 2 · 3 ·» e «0 · Primo passo») sono
+  spariti dal codice.
 
 ## 0.256.1 — 2026-11-24
 

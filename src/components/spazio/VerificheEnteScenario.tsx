@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { CheckCircle2, CircleDashed, Loader2 } from 'lucide-react';
 import { impostaVerificheScenarioAction } from '@/app/actions/verificheScenario';
 import { sintesiVerificheEnte, type RiepilogoVerificheEnte } from '@/lib/debitiEnte/verificheEnte';
+import { PassoProcedura } from './PassoProcedura';
 import { type AggancioContabile } from '@/lib/debitiEnte/aggancioContabile';
 
 const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
@@ -95,14 +96,16 @@ export function VerificheEnteScenario({
   return (
     <section className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
-            0 · Primo passo
-          </p>
-          <h2 className="mt-0.5 text-sm font-bold text-slate-900 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-            Verifiche dell’ente — {ragioneSociale}
-          </h2>
+        <div className="min-w-0 flex-1">
+          {/* PRIMO PASSO DI OGNI SCENARIO (0.256.2). Prima era un «0 · Primo
+              passo» scritto a mano, senza dire che cosa si otteneva: il numero
+              ora è quello del percorso, e l'obiettivo dice perché si parte da qui. */}
+          <PassoProcedura
+            numero={1}
+            titolo="Le verifiche dell’ente"
+            icona={CheckCircle2}
+            obiettivo="Partire dai dati già accertati: la verifica amministrativa (obbligatoria) e quella contabile, se c’è, entrano nello scenario con la data in cui sono state caricate."
+          />
           <p className="mt-1 text-[11px] text-slate-700 max-w-3xl leading-relaxed">
             {sintesiVerificheEnte(riepilogo)} Le due verifiche si spuntano qui: quello che è
             spuntato è dentro lo scenario, con la data in cui è stato caricato.

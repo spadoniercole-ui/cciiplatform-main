@@ -38,6 +38,7 @@ import {
   type DocumentoPdf,
 } from '@/app/actions/simulazioneRicevente';
 import { InquadramentoProposta } from '@/components/spazio/InquadramentoProposta';
+import { PassoProcedura } from './PassoProcedura';
 import {
   ETICHETTA_TIPO_DOCUMENTO,
   type PrimaLettura,
@@ -82,17 +83,6 @@ interface Props {
 type Documento = { nome: string; tipo: TipoDocumentoRicevuto };
 
 const euro = (n: number) => `€ ${Math.round(n).toLocaleString('it-IT')}`;
-
-function TitoloFase({ numero, testo }: { numero: number; testo: string }) {
-  return (
-    <h3 className="font-bold text-slate-900 uppercase text-xs tracking-wider flex items-center gap-2">
-      <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] flex items-center justify-center">
-        {numero}
-      </span>
-      {testo}
-    </h3>
-  );
-}
 
 export function SimulazioneRiceventeScenario({
   nomeSchema,
@@ -471,7 +461,12 @@ export function SimulazioneRiceventeScenario({
 
       {/* ---------------- 1 · RICEZIONE ---------------- */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-        <TitoloFase numero={1} testo="Documenti ricevuti" />
+        <PassoProcedura
+          numero={2}
+          titolo="Documenti ricevuti"
+          icona={FileText}
+          obiettivo="Acquisire ciò che l’azienda ha depositato: dai documenti si legge che cosa propone, a chi e con quali numeri."
+        />
         {documenti ? (
           <div className="space-y-3">
             <table className="w-full text-left text-xs">
@@ -696,7 +691,12 @@ export function SimulazioneRiceventeScenario({
       {/* ---------------- 2 · CONFERME ---------------- */}
       {fase2Visibile && (
         <div className="space-y-4">
-          <TitoloFase numero={2} testo="Conferma ciò che è stato letto" />
+          <PassoProcedura
+            numero={3}
+            titolo="Conferma ciò che è stato letto"
+            icona={CheckCircle2}
+            obiettivo="Controllare i dati letti dai documenti prima che diventino la proposta: un importo o una data sbagliati trascinano tutto il confronto."
+          />
           <InquadramentoProposta
             nomeSchema={nomeSchema}
             scenarioId={scenarioId}
@@ -872,7 +872,11 @@ export function SimulazioneRiceventeScenario({
           id="valutazione"
           className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 scroll-mt-4"
         >
-          <TitoloFase numero={3} testo="Valutazione della proposta" />
+          <PassoProcedura
+            numero={4}
+            titolo="Valutazione della proposta"
+            obiettivo="Misurare l’offerta dell’azienda: quanto propone all’ente e se regge il confronto con la liquidazione e con le soglie."
+          />
           {lista && (
             <ul className="space-y-1.5">
               {lista.voci.map((v) => (
