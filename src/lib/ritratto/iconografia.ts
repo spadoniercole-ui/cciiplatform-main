@@ -11,9 +11,9 @@
 //   E  che cosa dice la visura che il bilancio non dice      → elenco
 //
 // PERCHÉ BARRE E NON UN GRAFICO UNICO. Le grandezze non sono omogenee (euro,
-// percentuali, punteggi) e non si sommano: ogni grafico ha la sua unità e la sua
-// scala, e il confronto è dentro il grafico, non fra grafici. Un'unica area
-// avrebbe richiesto una normalizzazione, cioè un numero nuovo da spiegare.
+// importi, punteggi) e non si sommano: ogni grafico ha la sua scala, e il
+// confronto è dentro il grafico, non fra grafici. Un'unica area avrebbe
+// richiesto una normalizzazione, cioè un numero nuovo da spiegare.
 //
 // NESSUN VALORE INVENTATO. Un dato mancante resta una barra vuota con scritto
 // «non letto», e la scala si adatta a ciò che c'è. Se non c'è nulla da
@@ -21,7 +21,7 @@
 //
 // Logica pura, con i suoi test.
 
-import { altmanZ2, type Componente, type DatiIai } from '@/lib/iai/dimensioni';
+import { type Componente, type DatiIai } from '@/lib/iai/dimensioni';
 import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 
 /**
@@ -50,8 +50,6 @@ export interface ExtraIconografia {
   prospettico: ProspetticoBilancio | null;
 }
 
-export type UnitaGrafico = 'euro' | 'percento' | 'numero';
-
 export interface BarraGrafico {
   etichetta: string;
   /** Il valore nella unità del grafico; null quando il dato non è stato letto. */
@@ -69,7 +67,6 @@ export interface GraficoDimensione {
   titolo: string;
   /** Che cosa mostra il grafico, in una riga: il confronto che si sta facendo. */
   lettura: string;
-  unita: UnitaGrafico;
   /** Il massimo assoluto su cui si scala la barra; null se non c'è nulla da disegnare. */
   massimo: number | null;
   /**
@@ -168,7 +165,6 @@ function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimens
     titolo: 'Quanto vale l’esposizione, ambito per ambito',
     lettura:
       'Ogni barra è l’esposizione di un ambito dell’art. 25-novies; il confronto dice quale ambito porta l’importo e dove i presupposti risultano integrati.',
-    unita: 'euro',
     massimo: massimoDi(barre),
     minimo: minimoDi(barre),
     barre,
@@ -233,7 +229,6 @@ function graficoB(
     titolo: 'Come sta in piedi',
     lettura:
       'Patrimonio netto e debiti totali sulla stessa scala: la barra dice quanto pesa ciascuno, il rapporto accanto dice quanto patrimonio c’è per ogni euro di debito.',
-    unita: 'euro',
     massimo: massimoDi(barre),
     minimo: minimoDi(barre),
     barre,
@@ -320,7 +315,6 @@ function graficoC(
     titolo: 'I due esercizi, accostati',
     lettura:
       'Ogni voce ha la barra dell’ultimo esercizio accanto a quella del precedente: la lunghezza dice il livello, la coppia dice la direzione.',
-    unita: 'euro',
     massimo: massimoDi(barre),
     // SOTTO ZERO SI VA A SINISTRA. Utile e patrimonio netto possono essere
     // negativi: senza il fondo della scala la barra si disegnerebbe verso destra
@@ -450,20 +444,4 @@ export function componiIconografia(
     avvisoAffidabilita: avvisoD(dati, componenti),
     visura: particolariE(dati),
   };
-}
-
-/** Lo Z''-score usato dalla dimensione B, per mostrarlo accanto al bilancio. */
-export function zScoreBilancio(dati: DatiIai): number | null {
-  const b = dati.bilancio.corrente;
-  if (!b || b.totaleAttivo === null || b.attivoCircolante === null) return null;
-  if (b.patrimonioNetto === null || b.ebitda === null || !b.totaleDebiti) return null;
-  return altmanZ2({
-    attivoCircolante: b.attivoCircolante,
-    passivoCorrente: null,
-    totaleAttivo: b.totaleAttivo,
-    utiliNonDistribuiti: null,
-    ebit: b.ebitda,
-    patrimonioNetto: b.patrimonioNetto,
-    totaleDebiti: b.totaleDebiti,
-  });
 }

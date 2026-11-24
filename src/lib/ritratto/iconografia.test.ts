@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { componiIconografia, zScoreBilancio } from './iconografia';
+import { componiIconografia } from './iconografia';
 import { confrontaDebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 import type { Componente, DatiIai } from '@/lib/iai/dimensioni';
 
@@ -58,7 +58,6 @@ describe('componiIconografia', () => {
 
   it('A confronta le esposizioni degli ambiti, in euro', () => {
     const a = componiIconografia(dati, componenti).grafici.find((g) => g.dimensione === 'A');
-    expect(a?.unita).toBe('euro');
     expect(a?.massimo).toBe(120000);
     expect(a?.barre).toHaveLength(2);
     expect(a?.barre[0].riferimento).toMatch(/presupposti oggettivi/);
@@ -68,7 +67,6 @@ describe('componiIconografia', () => {
     const b = componiIconografia(dati, componenti).grafici.find((g) => g.dimensione === 'B');
     // In euro, non in percentuale: due rapporti scalati sul proprio massimo
     // facevano sembrare grandezze il 6% e l'8%.
-    expect(b?.unita).toBe('euro');
     expect(b?.barre).toHaveLength(2);
     expect(b?.barre[0].etichetta).toBe('Patrimonio netto');
     expect(b?.barre[0].segnala).toBe(true);
@@ -133,19 +131,5 @@ describe('componiIconografia', () => {
     const e = componiIconografia(senza, componenti).visura;
     expect(e.disponibile).toBe(false);
     expect(e.particolari[0].testo).toMatch(/non sono stati estratti/);
-  });
-});
-
-describe('zScoreBilancio', () => {
-  it("restituisce lo Z'' della dimensione B quando il bilancio lo consente", () => {
-    expect(zScoreBilancio(dati)).toBeTypeOf('number');
-  });
-
-  it('senza totale attivo non inventa un punteggio', () => {
-    const senza = {
-      ...dati,
-      bilancio: { ...dati.bilancio, corrente: { ...dati.bilancio.corrente!, totaleAttivo: null } },
-    };
-    expect(zScoreBilancio(senza)).toBeNull();
   });
 });

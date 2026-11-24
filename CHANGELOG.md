@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.8**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.9**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,18 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.9 — 2026-11-24
+
+CODICE CHE NESSUNO LEGGEVA, TOLTO DALL’ICONOGRAFIA.
+
+- `zScoreBilancio` era esportato con il commento «per mostrarlo accanto al
+  bilancio» ma non lo chiamava nessuno: lo Z″-score si calcola già dentro la
+  dimensione B, e una seconda copia fuori dall’uso restava solo da mantenere.
+- Il campo `unita` dei grafici (`'euro' | 'percento' | 'numero'`) non era letto
+  da nessun componente: le cifre portano l’unità nel testo della barra. Tolto
+  insieme al tipo `UnitaGrafico`; restano `massimo` e `minimo`, che sono la
+  scala davvero usata.
 
 ## 0.256.8 — 2026-11-24
 
