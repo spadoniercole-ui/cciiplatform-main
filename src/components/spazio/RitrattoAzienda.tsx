@@ -311,7 +311,12 @@ export function RitrattoAzienda({ ritratto }: Props) {
                         <p className="mt-0.5 text-[9px] leading-snug text-slate-500">{g.lettura}</p>
                         <div className="mt-1">
                           {g.barre.map((b, i) => (
-                            <BarraDato key={`${b.etichetta}-${i}`} b={b} massimo={g.massimo ?? 1} />
+                            <BarraDato
+                              key={`${b.etichetta}-${i}`}
+                              b={b}
+                              massimo={g.massimo ?? 1}
+                              minimo={g.minimo}
+                            />
                           ))}
                         </div>
                       </div>
@@ -374,13 +379,18 @@ export function RitrattoAzienda({ ritratto }: Props) {
                       Lacuna: {v.lacune.join('; ')}.
                     </p>
                   )}
-                  {v.motivi.length === 0 && v.lacune.length === 0 && (
-                    <p className="mt-1 text-[10px] text-slate-400">
-                      {v.punteggio > 0
-                        ? 'Nessun determinante in chiaro: l’intensità resta quella misurata dal motore.'
-                        : 'Nessun determinante su questa dimensione.'}
-                    </p>
-                  )}
+                  {/* Su D l'avviso dice già da dove viene l'intensità: la riga
+                      «nessun determinante in chiaro» sotto un riquadro rosso
+                      sembrava negare l'avviso stesso. */}
+                  {v.motivi.length === 0 &&
+                    v.lacune.length === 0 &&
+                    !(v.lettera === 'D' && iconografia?.avvisoAffidabilita) && (
+                      <p className="mt-1 text-[10px] text-slate-400">
+                        {v.punteggio > 0
+                          ? 'Nessun determinante in chiaro: l’intensità resta quella misurata dal motore.'
+                          : 'Nessun determinante su questa dimensione.'}
+                      </p>
+                    )}
                 </div>
               );
             })}

@@ -167,7 +167,12 @@ export function EsitoVerifica({
                       <p className="mt-0.5 text-[9px] leading-snug text-slate-500">{g.lettura}</p>
                       <div className="mt-1">
                         {g.barre.map((b, i) => (
-                          <BarraDato key={`${b.etichetta}-${i}`} b={b} massimo={g.massimo ?? 1} />
+                          <BarraDato
+                            key={`${b.etichetta}-${i}`}
+                            b={b}
+                            massimo={g.massimo ?? 1}
+                            minimo={g.minimo}
+                          />
                         ))}
                       </div>
                       {g.notaProspettico && (

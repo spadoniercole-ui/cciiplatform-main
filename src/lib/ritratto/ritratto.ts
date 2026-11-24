@@ -40,6 +40,7 @@ import type { Determinante, EsitoVerifica } from '@/lib/verifica/esito';
 import type { Stadio, StatoDirettrici } from '@/lib/verificaAzienda/direttrici';
 import { componiIconografia, type IconografiaDimensioni } from '@/lib/ritratto/iconografia';
 import type { DatiIai } from '@/lib/iai/dimensioni';
+import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 
 // ---- Le fonti ------------------------------------------------------------
 
@@ -80,6 +81,12 @@ export interface FontiRitratto {
    * C, avviso di D, particolarità della visura per E). Non si ricalcolano.
    */
   datiIai?: DatiIai | null;
+  /**
+   * Il confronto fra debito accertato e debito iscritto in bilancio: è la prima
+   * riga del box A, e senza di esso il box A della sola esposizione non dice la
+   * cosa che conta di più (0.256.7).
+   */
+  debitoInBilancio?: DebitoInBilancio | null;
 }
 
 // ---- I quattro riquadri --------------------------------------------------
@@ -398,7 +405,12 @@ export function componiRitratto(fonti: FontiRitratto): Ritratto {
   // L'ICONOGRAFIA si costruisce solo con i dati grezzi: senza di essi le
   // dimensioni restano le barre di intensità, che è già una lettura vera.
   const iconografia =
-    fonti.datiIai && fonti.esito ? componiIconografia(fonti.datiIai, fonti.esito.dimensioni) : null;
+    fonti.datiIai && fonti.esito
+      ? componiIconografia(fonti.datiIai, fonti.esito.dimensioni, {
+          debito: fonti.debitoInBilancio ?? null,
+          prospettico: null,
+        })
+      : null;
 
   return { testata, direttrici, giudizio, dimensioni, iconografia, mancanze };
 }

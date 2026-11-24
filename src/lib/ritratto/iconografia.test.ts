@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { componiIconografia, zScoreBilancio } from './iconografia';
+import { confrontaDebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 import type { Componente, DatiIai } from '@/lib/iai/dimensioni';
 
 const dati: DatiIai = {
@@ -63,11 +64,37 @@ describe('componiIconografia', () => {
     expect(a?.barre[0].riferimento).toMatch(/presupposti oggettivi/);
   });
 
-  it('B mette i due rapporti in percentuale e segnala quelli negativi', () => {
+  it('B mette patrimonio e debiti sulla stessa scala, col rapporto scritto accanto', () => {
     const b = componiIconografia(dati, componenti).grafici.find((g) => g.dimensione === 'B');
-    expect(b?.unita).toBe('percento');
+    // In euro, non in percentuale: due rapporti scalati sul proprio massimo
+    // facevano sembrare grandezze il 6% e l'8%.
+    expect(b?.unita).toBe('euro');
     expect(b?.barre).toHaveLength(2);
-    expect(b?.barre.every((x) => x.segnala)).toBe(true);
+    expect(b?.barre[0].etichetta).toBe('Patrimonio netto');
+    expect(b?.barre[0].segnala).toBe(true);
+    expect(b?.barre[0].riferimento).toMatch(/% dei debiti/);
+    expect(b?.barre[1].etichetta).toBe('Totale debiti');
+  });
+
+  it('A mette il debito accertato e quello iscritto in bilancio prima degli ambiti', () => {
+    const debito = confrontaDebitoInBilancio({
+      esposizione: 120000,
+      vociBilancio: { tributari: 0, previdenziali: 0 },
+      ente25novies: 'INPS',
+      bilancioLetto: true,
+      alias: ['INPS'],
+    });
+    const a = componiIconografia(dati, componenti, { debito, prospettico: null }).grafici.find(
+      (g) => g.dimensione === 'A'
+    );
+    expect(a?.barre[0].etichetta).toBe('Debito amministrativo accertato');
+    expect(a?.barre[1].testo).toBe('0 €');
+    expect(a?.barre.filter((x) => x.etichetta === 'INPS')).toHaveLength(1);
+  });
+
+  it('segnala la scala sotto zero quando un valore è negativo', () => {
+    const c = componiIconografia(dati, componenti).grafici.find((g) => g.dimensione === 'C');
+    expect(c?.minimo).toBeLessThan(0);
   });
 
   it('C accosta i due esercizi voce per voce', () => {

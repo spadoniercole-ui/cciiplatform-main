@@ -72,6 +72,13 @@ export interface GraficoDimensione {
   unita: UnitaGrafico;
   /** Il massimo assoluto su cui si scala la barra; null se non c'è nulla da disegnare. */
   massimo: number | null;
+  /**
+   * Il fondo della scala. È 0 quasi sempre; scende sotto zero quando ci sono
+   * valori negativi (patrimonio netto, utile), e allora la barra parte dalla
+   * linea dello zero e va a sinistra: senza il fondo, un patrimonio di −85.000
+   * si disegnerebbe verso destra come se fosse un attivo.
+   */
+  minimo: number;
   barre: BarraGrafico[];
   /** Che cosa manca per avere anche il valore attualizzato, quando manca. */
   notaProspettico?: string;
@@ -104,6 +111,12 @@ const massimoDi = (barre: BarraGrafico[]): number | null => {
     .map((b) => (b.valore === null ? null : Math.abs(b.valore)))
     .filter((v): v is number => v !== null && v > 0);
   return valori.length > 0 ? Math.max(...valori) : null;
+};
+
+/** Il valore più basso fra le barre, se è sotto zero: serve alla linea dello zero. */
+const minimoDi = (barre: BarraGrafico[]): number => {
+  const valori = barre.map((b) => b.valore).filter((v): v is number => v !== null && v < 0);
+  return valori.length > 0 ? Math.min(...valori) : 0;
 };
 
 function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimensione | null {
@@ -157,6 +170,7 @@ function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimens
       'Ogni barra è l’esposizione di un ambito dell’art. 25-novies; il confronto dice quale ambito porta l’importo e dove i presupposti risultano integrati.',
     unita: 'euro',
     massimo: massimoDi(barre),
+    minimo: minimoDi(barre),
     barre,
   };
 }
@@ -167,62 +181,61 @@ function graficoB(
 ): GraficoDimensione | null {
   const b = dati.bilancio.corrente;
   if (!b) return null;
+  // LA STRUTTURA, IN EURO (0.256.7). Prima erano due rapporti percentuali
+  // scalati sul proprio massimo: 6,11% e 8,33% occupavano quasi tutta la barra
+  // e sembravano grandezze, mentre dicono una frazione. In euro, patrimonio e
+  // debiti si vedono per quello che sono — uno spesso strato e una fetta — e il
+  // rapporto, che resta utile, va scritto accanto invece che disegnato.
   const barre: BarraGrafico[] = [];
-  if (b.patrimonioNetto !== null && b.totaleDebiti) {
-    const r = (b.patrimonioNetto / b.totaleDebiti) * 100;
+  const quota = (n: number) => (b.totaleDebiti ? (n / b.totaleDebiti) * 100 : null);
+  if (b.patrimonioNetto !== null) {
+    const r = quota(b.patrimonioNetto);
     barre.push({
-      etichetta: 'Patrimonio netto sui debiti',
-      valore: r,
-      testo: pct(r),
-      riferimento: 'sotto zero il patrimonio è più piccolo del debito',
-      segnala: r < 0,
+      etichetta: 'Patrimonio netto',
+      valore: b.patrimonioNetto,
+      testo: euro(b.patrimonioNetto),
+      riferimento:
+        r === null
+          ? 'quota dei debiti non calcolabile: totale debiti non letto'
+          : `pari al ${pct(r)} dei debiti totali${
+              b.patrimonioNetto < 0 ? ' — il patrimonio è negativo' : ''
+            }`,
+      segnala: b.patrimonioNetto < 0,
     });
   }
-  if (b.ebitda !== null && b.ricavi) {
-    const m = (b.ebitda / b.ricavi) * 100;
+  if (b.totaleDebiti !== null) {
     barre.push({
-      etichetta: 'Margine EBITDA sui ricavi',
-      valore: m,
-      testo: pct(m),
-      riferimento: 'sotto zero la gestione non genera cassa',
-      segnala: m < 0,
+      etichetta: 'Totale debiti',
+      valore: b.totaleDebiti,
+      testo: euro(b.totaleDebiti),
+      riferimento:
+        b.ebitda !== null && b.ricavi
+          ? `EBITDA ${pct((b.ebitda / b.ricavi) * 100)} dei ricavi`
+          : 'EBITDA non calcolabile: ricavi o EBITDA non letti',
+      segnala: false,
     });
   }
-  // IL VALORE ATTUALIZZATO, ACCANTO A QUELLO DI BILANCIO (0.256.6). Quando il
-  // piano c'è, la struttura si legge in termini assoluti: patrimonio netto di
-  // bilancio e patrimonio a fine orizzonte sulla stessa scala. I due rapporti
-  // percentuali non stanno nello stesso grafico — unità diverse — e il piano
-  // non porta il passivo rideterminato con cui rifarli.
-  const attualizzato =
-    prospettico && prospettico.patrimonioNetto !== null && b.patrimonioNetto !== null;
-  if (attualizzato && prospettico) {
-    barre.length = 0;
-    barre.push(
-      {
-        etichetta: 'Patrimonio netto di bilancio',
-        valore: b.patrimonioNetto,
-        testo: euro(b.patrimonioNetto ?? 0),
-        riferimento: 'storico: ultimo esercizio depositato',
-        segnala: (b.patrimonioNetto ?? 0) < 0,
-      },
-      {
-        etichetta: `Patrimonio netto a fine piano (${prospettico.anno})`,
-        valore: prospettico.patrimonioNetto,
-        testo: euro(prospettico.patrimonioNetto ?? 0),
-        riferimento: 'attualizzato: il piano di sviluppo dello scenario',
-        segnala: (prospettico.patrimonioNetto ?? 0) < 0,
-      }
-    );
+  // IL VALORE ATTUALIZZATO (0.256.6): patrimonio netto di bilancio e patrimonio
+  // a fine orizzonte sulla stessa scala.
+  if (prospettico && prospettico.patrimonioNetto !== null) {
+    barre.push({
+      etichetta: `Patrimonio netto a fine piano (${prospettico.anno})`,
+      valore: prospettico.patrimonioNetto,
+      testo: euro(prospettico.patrimonioNetto),
+      riferimento: 'attualizzato: il piano di sviluppo dello scenario',
+      segnala: prospettico.patrimonioNetto < 0,
+    });
   }
 
   if (!barre.length) return null;
   return {
     dimensione: 'B',
-    titolo: 'Come sta in piedi al netto delle due voci',
+    titolo: 'Come sta in piedi',
     lettura:
-      'Due rapporti dello stesso bilancio, confrontati con lo zero: quanto dell’attivo è coperto dal patrimonio e quanto la gestione lascia prima degli ammortamenti.',
-    unita: attualizzato ? 'euro' : 'percento',
+      'Patrimonio netto e debiti totali sulla stessa scala: la barra dice quanto pesa ciascuno, il rapporto accanto dice quanto patrimonio c’è per ogni euro di debito.',
+    unita: 'euro',
     massimo: massimoDi(barre),
+    minimo: minimoDi(barre),
     barre,
     notaProspettico: prospettico
       ? undefined
@@ -309,6 +322,10 @@ function graficoC(
       'Ogni voce ha la barra dell’ultimo esercizio accanto a quella del precedente: la lunghezza dice il livello, la coppia dice la direzione.',
     unita: 'euro',
     massimo: massimoDi(barre),
+    // SOTTO ZERO SI VA A SINISTRA. Utile e patrimonio netto possono essere
+    // negativi: senza il fondo della scala la barra si disegnerebbe verso destra
+    // come se fosse un valore positivo, e il segno resterebbe solo nella cifra.
+    minimo: minimoDi(barre),
     barre,
     notaProspettico: prospettico
       ? undefined
@@ -320,7 +337,17 @@ function avvisoD(dati: DatiIai, componenti: Componente[]): AvvisoAffidabilita | 
   const d = componenti.find((c) => c.dimensione === 'D');
   if (!d) return null;
   const motivi = [...d.motivi, ...d.lacune];
-  if (d.punteggio < 50 && motivi.length === 0) return null;
+  const avevaMotivi = motivi.length > 0;
+  // UN AVVISO SENZA MOTIVI NON SI LEGGE. Quando l'intensità viene dalla quota
+  // di dati dichiarati o non noti nel fascicolo — e non da un fatto singolo che
+  // il motore possa nominare — lo si dice: meglio che un riquadro vuoto sotto
+  // un titolo che parla di dati inaffidabili.
+  if (motivi.length === 0) {
+    motivi.push(
+      'l’intensità viene dalla quota di dati dichiarati o non noti nel fascicolo, non da un fatto singolo: le voci che mancano sono elencate nella dimensione D'
+    );
+  }
+  if (d.punteggio < 50 && !avevaMotivi) return null;
   return {
     titolo: 'I dati su cui si sta decidendo non sono tutti affidabili',
     testo:

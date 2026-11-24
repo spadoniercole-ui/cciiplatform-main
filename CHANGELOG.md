@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.7**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.8**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,31 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.8 — 2026-11-24
+
+LE BARRE CHE NON SI LEGGEVANO: STRUTTURA IN EURO, SOTTO ZERO A SINISTRA.
+
+Controllo a video dell’iconografia su una posizione con patrimonio netto
+negativo e una procedura in visura. Tre cose non si leggevano.
+
+- **B — struttura patrimoniale:** erano due rapporti percentuali scalati sul
+  proprio massimo, e 6,11% e 8,33% occupavano quasi tutta la barra come se
+  fossero grandezze. Ora patrimonio netto e debiti totali stanno in euro sulla
+  stessa scala, il rapporto è scritto accanto («pari al −9,44% dei debiti
+  totali») e il patrimonio negativo si vede per quello che è.
+- **C — dinamica:** utile e patrimonio netto negativi venivano disegnati verso
+  destra come valori positivi, con il segno solo nella cifra. La scala ha ora
+  un fondo sotto zero, la barra parte dalla linea dello zero e cresce a
+  sinistra; la linea dello zero è visibile e separa i due versi.
+- **A — esposizione:** il debito accertato e quello iscritto in bilancio
+  mancavano nell’iconografia (c’erano solo nell’esito della contabile) perché
+  l’azione del ritratto non passava il confronto. Ora sono le prime due righe.
+- **D:** l’avviso non resta più senza motivi quando l’intensità viene dalla
+  quota di dati dichiarati o non noti, e la riga «nessun determinante in
+  chiaro» non compare più sotto il riquadro rosso, dove sembrava negarlo.
+- **Impianti:** etichette e valori non si sovrappongono a 1000 e 1280 px; il
+  riquadro D non lascia più un blocco vuoto sotto il titolo.
 
 ## 0.256.7 — 2026-11-24
 
