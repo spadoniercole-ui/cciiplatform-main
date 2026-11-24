@@ -9,6 +9,7 @@ import { leggiPosizioneAzienda } from '@/lib/posizionePratica/letturaPosizione';
 import { DecisioniPratica } from '@/components/spazio/DecisioniPratica';
 import { StampaPosizione } from '@/components/spazio/StampaPosizione';
 import { PassoProcedura } from '@/components/spazio/PassoProcedura';
+import { ProcedureComunicazioniUo } from '@/components/spazio/ProcedureComunicazioniUo';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 180;
@@ -81,6 +82,16 @@ export default async function PosizionePage({
   const autoreDecisione = lettura.autoreSessione;
   const stile = STILE_GRADO[prontezza.grado];
 
+  // LA CONTABILITÀ NON STA QUI (0.256.3). Questa pagina è la posizione
+  // dell'ENTE: il credito, le sue fonti, le procedure per farlo contabilizzare.
+  // La cassa e il flusso dell'azienda appartengono alla verifica contabile, che
+  // li legge e li soglia per conto suo: portarli qui faceva sembrare che il
+  // credito si misurasse con la liquidità dell'azienda, che è un'altra cosa.
+  const lettureSenzaContabile = confronto.letture.filter((l) => l.natura !== 'PROIEZIONE');
+  const divergenzeSenzaContabile = confronto.divergenze.filter(
+    (d) => !d.tema.toLowerCase().includes('cassa')
+  );
+
   return (
     <div className="max-w-4xl space-y-4">
       <Link
@@ -101,11 +112,6 @@ export default async function PosizionePage({
             {eseguitaIl
               ? new Date(eseguitaIl).toLocaleDateString('it-IT')
               : 'verifica non eseguita'}
-            {' · '}
-            Copertura: {posizione.coperturaTesto ?? '—'}
-            {posizione.coperturaMancante.length > 0 && (
-              <> · fuori: {posizione.coperturaMancante.join(', ')}</>
-            )}
             {' · '}
             Validità: {validita.etichetta}
             {aperturaAziendale?.autore && (
@@ -133,6 +139,7 @@ export default async function PosizionePage({
           ['letture', 'Letture'],
           ['accordo', 'Accordo'],
           ['documenti', 'Documenti'],
+          ['procedure', 'Procedure'],
           ['decisioni', 'Decisioni'],
           ['cronologia', 'Cronologia'],
         ].map(([ancora, testo]) => (
@@ -295,7 +302,7 @@ export default async function PosizionePage({
           obiettivo="Vedere dove le verifiche dicono cose diverse, con il perché e l’errore che quella divergenza evita."
         />
         <div className="grid gap-2 sm:grid-cols-2">
-          {confronto.letture.map((l) => (
+          {lettureSenzaContabile.map((l) => (
             <div key={l.nome} className="rounded-lg border border-slate-200 p-3">
               <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
                 {l.nome} · {l.natura.toLowerCase()}
@@ -305,9 +312,9 @@ export default async function PosizionePage({
             </div>
           ))}
         </div>
-        {confronto.divergenze.length > 0 && (
+        {divergenzeSenzaContabile.length > 0 && (
           <div className="space-y-2">
-            {confronto.divergenze.map((d) => (
+            {divergenzeSenzaContabile.map((d) => (
               <div
                 key={d.tema}
                 className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1"
@@ -337,11 +344,10 @@ export default async function PosizionePage({
       <section id="accordo" className="rounded-xl border border-slate-200 bg-white p-5 space-y-2">
         <PassoProcedura
           numero={5}
-          titolo="Accordo, procedure e piano in essere"
-          obiettivo="Sapere quale recupero del credito si può chiedere all’azienda e quanto l’ente incasserebbe in liquidazione o in cram down."
+          titolo="Accordo e piano in essere"
+          obiettivo="Sapere quale recupero del credito si può chiedere all’azienda e se un piano è già in essere."
         />
-        <p className="text-[12px] text-slate-800 leading-relaxed">{breakEven.dettaglio}</p>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2">
           <div className="rounded-lg bg-slate-50 p-3">
             <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
               Recupero minimo
@@ -355,32 +361,12 @@ export default async function PosizionePage({
           </div>
           <div className="rounded-lg bg-slate-50 p-3">
             <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-              Scoperto di cassa
-            </p>
-            <p className="text-[13px] font-bold tabular-nums text-slate-900">
-              {formattaEuro(breakEven.scoperto)}
-            </p>
-            <p className="text-[9px] text-slate-500">
-              {breakEven.sostenibile === null
-                ? 'non calcolabile'
-                : breakEven.sostenibile
-                  ? 'cassa e flusso coprono il credito'
-                  : 'cassa e flusso non coprono il credito'}
-            </p>
-          </div>
-          <div className="rounded-lg bg-slate-50 p-3">
-            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
               Piano in essere
             </p>
             <p className="text-[13px] font-bold text-slate-900">{piano.stato}</p>
             <p className="text-[9px] text-slate-500">{piano.dettaglio}</p>
           </div>
         </div>
-        {breakEven.mancanti.length > 0 && (
-          <p className="text-[10px] text-amber-800 leading-relaxed">
-            <strong>Perché un conto manca:</strong> {breakEven.mancanti.join(', ')}.
-          </p>
-        )}
         {piano.avvertenza && (
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900 leading-relaxed">
             {piano.avvertenza}
@@ -426,10 +412,34 @@ export default async function PosizionePage({
         )}
       </section>
 
-      {/* 7. DECISIONI */}
-      <section id="decisioni" className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+      {/* 7. PROCEDURE — LE COMUNICAZIONI ALLE UNITA' OPERATIVE */}
+      <section id="procedure" className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
         <PassoProcedura
           numero={7}
+          titolo="Procedure: le comunicazioni alle unità operative"
+          obiettivo="Passare dalla posizione al lavoro degli uffici: chi deve contabilizzare che cosa, con il testo pronto per ogni unità operativa e le lavorazioni che la procedura le assegna."
+        />
+        <p className="text-[10px] text-slate-500 leading-relaxed">
+          Le procedure sono un parametro dello spazio, non un passo della pratica: dicono che cosa
+          va fatto per ogni tipologia di debito e a quale ufficio chiederlo, e valgono per tutte le
+          aziende. Qui si vede che cosa ne discende per questa, posizione per posizione.
+        </p>
+        <ProcedureComunicazioniUo
+          nomeSchema={contesto.nomeSchema}
+          aziendaId={id}
+          ragioneSociale={String(azienda.ragioneSociale)}
+          dataVerifica={
+            eseguitaIl
+              ? new Date(eseguitaIl).toISOString().slice(0, 10)
+              : new Date().toISOString().slice(0, 10)
+          }
+        />
+      </section>
+
+      {/* 8. DECISIONI */}
+      <section id="decisioni" className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+        <PassoProcedura
+          numero={8}
           titolo="Decisioni sulla posizione"
           icona={FileText}
           obiettivo="Scrivere la decisione con i numeri del giorno: la verifica si ricalcola, la scelta resta."
@@ -449,13 +459,13 @@ export default async function PosizionePage({
         />
       </section>
 
-      {/* 8. CRONOLOGIA DEGLI ATTI */}
+      {/* 9. CRONOLOGIA DEGLI ATTI */}
       <section
         id="cronologia"
         className="rounded-xl border border-slate-200 bg-white p-5 space-y-2"
       >
         <PassoProcedura
-          numero={8}
+          numero={9}
           titolo="La cronologia degli atti"
           obiettivo="Ricostruire che cosa è successo prima e dopo: chi ha fatto cosa, e quando."
         />

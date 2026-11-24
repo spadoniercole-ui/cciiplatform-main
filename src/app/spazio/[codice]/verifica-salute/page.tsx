@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniObbligoVeraAction } from '@/app/actions/parametriTriage';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
-import { statoVerificaContabileAction } from '@/app/actions/verificaContabile';
 import { CruscottoVerificheEnte } from '@/components/spazio/CruscottoVerificheEnte';
 import { VerificaSaluteAzienda } from '@/components/spazio/VerificaSaluteAzienda';
 
@@ -38,27 +37,21 @@ export default async function VerificaSalutePage({
 
   // IL PORTAFOGLIO (0.242.0): le posizioni verificate, quante invecchiano e
   // quante sono rosse, lette dallo stesso storico che la pagina mostra.
-  const [storicoRis, contabileRis] = await Promise.all([
-    ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
-    statoVerificaContabileAction(contesto.nomeSchema).catch(() => null),
-  ]);
+  // LA CONTABILE NON SI LEGGE PIÙ QUI (0.256.3): il portafoglio dell'ente
+  // conta posizioni, invecchiamento ed esiti delle verifiche amministrative. Il
+  // grado di completezza della contabile è un numero della sua pagina, e
+  // chiederlo a ogni caricamento di questa non lo rendeva più chiaro.
+  const storicoRis = await ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null);
   const righeCruscotto = (storicoRis?.success ? (storicoRis.righe ?? []) : []).map((r) => ({
     id: r.id,
     ragioneSociale: r.ragioneSociale,
     esito: r.esito,
     eseguitaIl: r.eseguitaIl,
   }));
-  const contabileIncompleta = contabileRis?.success
-    ? contabileRis.aziende.filter((a) => !a.completa).length
-    : 0;
 
   return (
     <main className="p-6 max-w-5xl mx-auto space-y-4">
-      <CruscottoVerificheEnte
-        codice={codice}
-        righe={righeCruscotto}
-        contabileIncompleta={contabileIncompleta}
-      />
+      <CruscottoVerificheEnte codice={codice} righe={righeCruscotto} />
       <VerificaSaluteAzienda
         nomeSchema={contesto.nomeSchema}
         codice={codice}

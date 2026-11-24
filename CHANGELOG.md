@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.2**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.3**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,31 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.3 — 2026-11-24
+
+LA POSIZIONE ENTE TORNA A DIRE A CHI SI SCRIVE.
+
+Le procedure delle comunicazioni alle unità operative esistevano nel triage e
+non si vedevano più da nessun’altra parte: chi lavora una posizione non sapeva
+quali uffici devono contabilizzare i crediti ancora non contabilizzati, né con
+quale testo chiederglielo.
+
+- **Nuova sezione «Procedure» nella posizione ente:** una comunicazione per
+  unità operativa, composta dalle stesse regole del triage (materie,
+  lavorazioni, destinatari), con il testo da copiare. Da qui non parte nulla:
+  l’invio resta personale, come nel triage.
+- **La procedura è un parametro, non un passo registrato.** Che cosa va fatto
+  per una tipologia di debito e a chi chiederlo è una regola dello spazio,
+  uguale per tutte le aziende: registrarla come passo per ogni singola pratica
+  avrebbe ricopiato la stessa regola tante volte quante sono le posizioni.
+- **Via i riferimenti contabili dalla posizione ente:** la copertura dei
+  periodi contabili, la lettura «proiezione» (cassa e flusso), la divergenza
+  sulla cassa e il riquadro «Scoperto di cassa». La contabilità dell’azienda si
+  legge nella sua verifica; qui resta il credito dell’ente.
+- **«Contabile incompleta» esce dal portafoglio dell’ente:** è un numero della
+  verifica contabile, non una posizione da chiudere in amministrativa. Il
+  riquadro sparisce e la pagina non legge più lo stato della contabile.
 
 ## 0.256.2 — 2026-11-24
 

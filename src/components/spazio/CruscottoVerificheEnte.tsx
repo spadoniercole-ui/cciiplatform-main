@@ -5,9 +5,14 @@ import { valutaValidita } from '@/lib/screening/validitaVerifica';
 //
 // Tutto il resto della catena è per azienda; un ente ragiona per insieme:
 // quante posizioni ha verificato, quante stanno invecchiando, quante sono
-// rosse, su quante la contabile non è completa. Senza questo, l'invecchiamento
-// e la prontezza restano un dettaglio di pagina e non diventano una pratica di
-// lavoro.
+// rosse. Senza questo, l'invecchiamento e la prontezza restano un dettaglio di
+// pagina e non diventano una pratica di lavoro.
+//
+// LA CONTABILE NON È UN RIQUADRO DEL PORTAFOGLIO (0.256.3). «Contabile
+// incompleta» contava aziende a cui mancava visura, anagrafica o bilanci: è un
+// numero della verifica contabile, che ha la sua pagina e i suoi elenchi. Qui
+// dentro sembrava una posizione da chiudere in amministrativa, e chi guardava
+// il portafoglio finiva per aprire verifiche che non c'entravano col credito.
 //
 // Componente server: legge quello che la pagina ha già letto, non ricalcola
 // nulla e non chiama motori.
@@ -22,11 +27,9 @@ export interface RigaCruscotto {
 export function CruscottoVerificheEnte({
   codice,
   righe,
-  contabileIncompleta,
 }: {
   codice: string;
   righe: RigaCruscotto[];
-  contabileIncompleta: number;
 }) {
   if (righe.length === 0) {
     return (
@@ -56,11 +59,6 @@ export function CruscottoVerificheEnte({
       nota: `in scadenza: ${inScadenza.length}`,
     },
     { etichetta: 'Rosse', valore: rosse.length, nota: `gialle: ${gialle.length}` },
-    {
-      etichetta: 'Contabile incompleta',
-      valore: contabileIncompleta,
-      nota: 'visura, anagrafica o bilanci',
-    },
   ];
 
   return (
@@ -73,7 +71,7 @@ export function CruscottoVerificheEnte({
           Conteggi sullo storico delle verifiche; l’esito non si ricalcola qui.
         </p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-3">
         {riquadri.map((r) => (
           <div key={r.etichetta} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
