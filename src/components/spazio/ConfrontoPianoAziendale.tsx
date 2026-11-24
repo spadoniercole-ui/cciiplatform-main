@@ -128,7 +128,8 @@ export function ConfrontoPianoAziendale({
     const crescita = crescitaDiRiferimento(
       conf.settore.punti,
       conf.settore.descrizione,
-      dati.storico
+      dati.storico,
+      conf.parametri.limiteTassoCrescita
     );
     const auto = calcolaPiano(
       base,

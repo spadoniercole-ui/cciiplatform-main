@@ -76,9 +76,12 @@ export function crescitaAzienda(
 export function crescitaDiRiferimento(
   punti: PuntoSerie[] | null,
   descrizioneSettore: string | null,
-  storico: EsercizioStorico[]
+  storico: EsercizioStorico[],
+  // Tetto al tasso: è un parametro dello spazio (Parametri › Piano e
+  // simulazione AI). Omesso, resta il limite prudenziale di sistema.
+  limiteTasso: number = LIMITE_TASSO
 ): CrescitaRiferimento {
-  const limita = (t: number) => Math.max(-LIMITE_TASSO, Math.min(LIMITE_TASSO, t));
+  const limita = (t: number) => Math.max(-limiteTasso, Math.min(limiteTasso, t));
   const s = punti && punti.length ? crescitaDaSerie(punti) : null;
   if (s) {
     const tasso = r2(limita(s.tasso));

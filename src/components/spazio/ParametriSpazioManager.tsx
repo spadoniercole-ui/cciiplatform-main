@@ -24,6 +24,7 @@ import {
   ClipboardList,
   CalendarRange,
   CalendarClock,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { ConfigurazioneSpazioFile } from '@/components/spazio/ConfigurazioneSpazioFile';
 
@@ -115,6 +116,13 @@ export function ParametriSpazioManager({ nomeSchema, codice, tipoSpazio }: Props
         tipoSpazio === 'ENTE'
           ? 'Valore di liquidazione e % minima per categoria di creditore.'
           : 'Il punto di partenza per ogni nuova riga di Proposta, modificabile riga per riga.',
+    },
+    {
+      href: `/spazio/${codice}/parametri/piano-simulazione`,
+      icon: SlidersHorizontal,
+      titolo: 'Piano e simulazione AI',
+      descrizione:
+        'Aliquota d’imposta da cui parte il calcolo, variazione massima di una manopola, tetto alla crescita di settore e orizzonte proposto: le leve che l’AI usa quando scrive le ipotesi del piano di sviluppo.',
     },
     {
       href: `/spazio/${codice}/parametri/confronto-piano`,

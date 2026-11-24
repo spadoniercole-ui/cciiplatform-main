@@ -16,6 +16,7 @@ import { calcolaPiano, euro, type IpotesiPiano } from '@/lib/piano/piano';
 import { crescitaDiRiferimento, ipotesiAutomatiche, type PuntoSerie } from '@/lib/piano/automatico';
 import { confrontaPiani } from '@/lib/piano/confronto';
 import { anniDelPiano, ipotesiDaPianoAzienda, valoriPuliti } from '@/lib/piano/pianoAziendale';
+import { leggiParametriSimulazione } from '@/lib/piano/letturaParametriSimulazione';
 import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
 import { soluzionePulita } from '@/lib/piano/riceventeSalvataggio';
 import {
@@ -82,7 +83,15 @@ export async function sintesiPianoScenarioAction(
     const punti = settore?.punti ?? (settoreLetto?.success ? settoreLetto.punti : []);
     const descrizione =
       settore?.descrizione ?? (settoreLetto?.info ? `ATECO ${settoreLetto.info.gruppo}` : null);
-    const crescita = crescitaDiRiferimento(punti, descrizione, d.storico);
+    // Il tetto alla crescita di settore è un parametro dello spazio: la sintesi
+    // deve usare lo stesso piano automatico che l'operatore vede a schermo.
+    const { parametri } = await leggiParametriSimulazione(nomeSchema);
+    const crescita = crescitaDiRiferimento(
+      punti,
+      descrizione,
+      d.storico,
+      parametri.limiteTassoCrescita
+    );
     const auto = calcolaPiano(
       base,
       o,

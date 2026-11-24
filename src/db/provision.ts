@@ -982,6 +982,30 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
     )`
   );
 
+  // Parametri della SIMULAZIONE DEL PIANO (0.256.12) — un'unica riga (id=1).
+  //
+  // Sono le quattro leve che l'AI usa quando scrive le ipotesi del piano di
+  // sviluppo: l'aliquota d'imposta da cui parte il calcolo quando lo storico
+  // non la rivela, l'ampiezza massima di una manopola, il tetto al tasso di
+  // crescita del riferimento automatico di settore e l'orizzonte proposto a
+  // chi apre un piano senza orizzonte salvato. Erano valori fissi nel codice;
+  // qui diventano dell'ente.
+  //
+  // NULL = valore di sistema (vedi src/lib/piano/parametriSimulazione.ts):
+  // la tabella non scrive numeri che nessuno ha scelto, e una riga vuota vale
+  // come una riga assente.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_piano_simulazione (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      aliquota_imposte_default NUMERIC,
+      variazione_massima_pct NUMERIC,
+      limite_tasso_crescita NUMERIC,
+      orizzonte_default INTEGER,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now(),
+      CONSTRAINT una_sola_riga_piano_simulazione CHECK (id = 1)
+    )`
+  );
+
   // Quali tab del motore XBRL (Indici CNDCEC, Altri Indici, Situazione
   // Debitoria, Andamento Storico) l'Admin di Spazio vuole attive
   // nell'Import XBRL di ogni azienda — non tutte servono a ogni studio.

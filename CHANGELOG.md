@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.11**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.12**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,32 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.12 — 2026-11-24
+
+IL PIANO E LA SIMULAZIONE AI HANNO I LORO PARAMETRI, E SONO DELL'ENTE.
+
+- **Una pagina nuova: Parametri › Piano e simulazione AI.** Quattro leve che
+  l'AI usa quando scrive le ipotesi del piano di sviluppo — prima tutte fissate
+  nel codice: l'**aliquota d'imposta predefinita** (27,9%, IRES 24% più IRAP
+  3,9%, quando lo storico non la rivela e l'AI non la indica), la **variazione
+  massima di una manopola** (±50%), il **tetto al tasso di crescita del
+  riferimento di settore** (20%: oltre, la serie ISTAT non è più un riferimento
+  credibile per una singola impresa) e l'**orizzonte proposto del piano** (5
+  anni, quando lo scenario non ne ha ancora uno salvato).
+- **Senza un valore impostato non cambia nulla.** La tabella tiene NULL dove lo
+  spazio non ha deciso: NULL vale il predefinito di sistema, la pagina lo
+  scrive accanto a ogni campo e il pulsante «Torna ai valori di sistema»
+  cancella quelli dello spazio invece di riscriverne di uguali.
+- **I parametri arrivano davvero alla simulazione.** Il tetto alla crescita
+  entra in `crescitaDiRiferimento` e vale anche per la sintesi del piano, non
+  solo per la schermata; l'ampiezza massima e l'aliquota entrano nel prompt e
+  nella validazione delle ipotesi dell'AI (`elaborazioneAi`), dove l'aliquota
+  non decisa dall'AI è quella dell'ente; l'orizzonte predefinito sostituisce il
+  5 scritto nell'azione del piano.
+- **Le soglie dei semafori restano dove sono.** Il confronto con il piano di
+  settore continua a leggere la sua pagina: due posti per lo stesso numero
+  sarebbero due verità.
 
 ## 0.256.11 — 2026-11-24
 

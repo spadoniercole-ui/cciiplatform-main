@@ -39,6 +39,8 @@ import {
   type RatePiano,
 } from '@/lib/piano/piano';
 import { ORIZZONTE_MASSIMO, type PianoRientro, type TotaleOfferto } from '@/lib/piano/ricevente';
+import { leggiParametriSimulazione } from '@/lib/piano/letturaParametriSimulazione';
+import type { ParametriSimulazionePiano } from '@/lib/piano/parametriSimulazione';
 import {
   pianoRientroPulito,
   soluzionePulita,
@@ -76,6 +78,8 @@ export interface DatiPianoSviluppo {
   serieSistema: boolean;
   /** Ricevente: soluzione verde salvata con la variante. */
   soluzione: SoluzioneSalvata | null;
+  /** Le leve della simulazione (Parametri › Piano e simulazione AI). */
+  parametri: ParametriSimulazionePiano;
 }
 
 export async function ottieniPianoSviluppoAction(
@@ -145,7 +149,11 @@ export async function ottieniPianoSviluppoAction(
         [scenarioId]
       )
     ).rows.map((r) => String(r.variante));
-    const orizzonte = piano.rows[0]?.orizzonte ? Number(piano.rows[0].orizzonte) : 5;
+    const { parametri } = await leggiParametriSimulazione(nomeSchema);
+    // Senza un orizzonte salvato vale quello dello spazio, non un 5 scritto qui.
+    const orizzonte = piano.rows[0]?.orizzonte
+      ? Number(piano.rows[0].orizzonte)
+      : parametri.orizzonteDefault;
     const prop = await ottieniPropostaScenario(nomeSchema, scenarioId);
     // Ricevente: le righe non si scrivono a mano, vengono dalla lettura della
     // proposta ricevuta (la riga sintetica della posizione dell'ente).
@@ -235,6 +243,7 @@ export async function ottieniPianoSviluppoAction(
         pianoRientro: pianoRientroPulito(piano.rows[0]?.piano_rientro),
         serieSistema: piano.rows[0]?.serie_sistema === true,
         soluzione: soluzionePulita(piano.rows[0]?.soluzione),
+        parametri,
       },
     };
   } catch (error: unknown) {
@@ -389,6 +398,14 @@ export async function elaboraPianoConAiAction(
     const c = contestoPulito(contesto);
     if (!c)
       return { success: false, error: 'Dati del piano incompleti: serve almeno un bilancio.' };
+    // Le leve dello spazio (Parametri › Piano e simulazione AI): l'AI scrive le
+    // ipotesi dentro questi limiti, e l'aliquota che non decide è quella
+    // dell'ente, non il 27,9% implicito nel motore.
+    const { parametri } = await leggiParametriSimulazione(s);
+    const opzioni = {
+      variazioneMassimaPct: parametri.variazioneMassimaPct,
+      aliquotaImposteDefault: parametri.aliquotaImposteDefault,
+    };
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey)
       return {
@@ -401,7 +418,7 @@ export async function elaboraPianoConAiAction(
       model: 'claude-sonnet-5',
       max_tokens: 6000,
       thinking: { type: 'disabled' },
-      messages: [{ role: 'user', content: promptElaborazione(c) }],
+      messages: [{ role: 'user', content: promptElaborazione(c, opzioni) }],
     });
     const testo = risposta.content
       .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
@@ -415,7 +432,7 @@ export async function elaboraPianoConAiAction(
       // si calcolano qui, così la variante salvata è già completa.
       const pianoAz = valoriPuliti(c.pianoAzienda);
       const ipAz = ipotesiDaPianoAzienda(pianoAz, c.storico[0].anno + 1, c.orizzonte);
-      esito = validaRettificheAi(json, Object.keys(pianoAz) as (keyof typeof pianoAz)[]);
+      esito = validaRettificheAi(json, Object.keys(pianoAz) as (keyof typeof pianoAz)[], opzioni);
       rettifiche = esito.rettifiche ?? {};
       if (Object.keys(rettifiche).length === 0)
         return {
@@ -424,7 +441,7 @@ export async function elaboraPianoConAiAction(
         };
       esito.ipotesi = applicaRettifiche(ipAz, rettifiche, c.ipotesiCorrenti ?? {});
     } else {
-      esito = validaRisposta(json, c.orizzonte);
+      esito = validaRisposta(json, c.orizzonte, opzioni);
       if (Object.keys(esito.ipotesi).length === 0)
         return {
           success: false,

@@ -17,6 +17,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { del, get } from '@/lib/blobStore';
 import { pool } from '@/lib/db';
 import { assicuraTabelleParametriSpazio } from '@/db/provision';
+import { leggiParametriSimulazione } from '@/lib/piano/letturaParametriSimulazione';
+import type { ParametriSimulazionePiano } from '@/lib/piano/parametriSimulazione';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { verificaScenarioNonBloccato } from '@/app/actions/scenari';
 import { ottieniDatiSettore } from '@/app/actions/datiSettore';
@@ -45,6 +47,8 @@ export interface DatiConfrontoPiano {
   settore: { punti: PuntoSerie[]; descrizione: string | null; motivo: string | null };
   abbinamento: Record<string, DestinazioneVoce>;
   unita: number;
+  /** Le leve della simulazione (Parametri › Piano e simulazione AI). */
+  parametri: ParametriSimulazionePiano;
 }
 
 export async function ottieniConfrontoPianoAction(
@@ -56,7 +60,7 @@ export async function ottieniConfrontoPianoAction(
   try {
     await richiediAccessoScenario(nomeSchema, scenarioId);
     await assicuraTabelleParametriSpazio(nomeSchema);
-    const [pianoRis, soglieRis, tracciatoRis, settoreRis] = await Promise.all([
+    const [pianoRis, soglieRis, tracciatoRis, settoreRis, parametriSim] = await Promise.all([
       pool.query(`SELECT * FROM "${nomeSchema}".piano_aziendale WHERE scenario_id = $1`, [
         scenarioId,
       ]),
@@ -68,6 +72,7 @@ export async function ottieniConfrontoPianoAction(
         [aziendaId]
       ),
       ottieniDatiSettore(nomeSchema, aziendaId),
+      leggiParametriSimulazione(nomeSchema),
     ]);
     const r = pianoRis.rows[0];
     const s = soglieRis.rows[0];
@@ -107,6 +112,7 @@ export async function ottieniConfrontoPianoAction(
         },
         abbinamento,
         unita: Number(tracciatoRis.rows[0]?.unita ?? 1) || 1,
+        parametri: parametriSim.parametri,
       },
     };
   } catch (error: unknown) {

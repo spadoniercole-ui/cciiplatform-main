@@ -17,6 +17,7 @@
 // breve e validata qui, senza seconde chiamate di correzione.
 
 import { cercaTerminiLessico, LESSICO, SOSTITUZIONI_DIRETTE } from '@/lib/lessico/lessico';
+import { PARAMETRI_SIMULAZIONE_PREDEFINITI } from './parametriSimulazione';
 import { rettifichePulite, type Rettifiche } from './rettifiche';
 import {
   ETICHETTA_RIGA,
@@ -29,6 +30,21 @@ import {
 } from './piano';
 
 export type LatoPiano = 'RICEVUTA' | 'DA_DEFINIRE';
+
+/**
+ * Le leve della simulazione, lette dai Parametri di Spazio
+ * (Parametri › Piano e simulazione AI). Omesse, restano i valori di sistema,
+ * così il comportamento del modulo non cambia per chi non le passa.
+ */
+export interface OpzioniSimulazione {
+  /** Variazione massima ammessa su una manopola, in entrambi i versi (%). */
+  variazioneMassimaPct?: number;
+  /**
+   * Aliquota d'imposta da usare quando l'AI non la indica: è il valore che lo
+   * spazio ha scelto al posto del 27,9% implicito nel motore.
+   */
+  aliquotaImposteDefault?: number;
+}
 
 export const VARIANTE_AI = 'elaborazione-ai';
 
@@ -48,6 +64,10 @@ export interface ContestoElaborazione {
   /** Vincoli che scattano con il piano di partenza (testo breve). */
   vincoli?: string[];
 }
+
+/** Il tetto di sistema alla variazione di una manopola, quando lo spazio non ne ha uno. */
+export const VARIAZIONE_MASSIMA_PREDEFINITA =
+  PARAMETRI_SIMULAZIONE_PREDEFINITI.variazioneMassimaPct;
 
 const arrot = (n: number) => Math.round(n);
 
@@ -119,14 +139,15 @@ export function modoRettifiche(c: ContestoElaborazione): boolean {
  * uguale per tutti gli anni — così il modello non deve scrivere decine di
  * celle (la risposta lunga si troncava e l'elaborazione falliva).
  */
-export function promptElaborazione(c: ContestoElaborazione): string {
+export function promptElaborazione(c: ContestoElaborazione, opzioni?: OpzioniSimulazione): string {
+  const max = opzioni?.variazioneMassimaPct ?? VARIAZIONE_MASSIMA_PREDEFINITA;
   if (modoRettifiche(c)) {
     const righe = Object.keys(c.pianoAzienda ?? {}).filter((r) =>
       RIGHE_INPUT.includes(r as RigaInput)
     ) as RigaInput[];
     return `Sei l'analista dell'ente creditore che ha RICEVUTO la proposta. Il punto di partenza è il PIANO DELL'AZIENDA: non costruisci un piano tuo, lo metti alla prova. Per ogni riga del piano dell'azienda indica UNA rettifica percentuale, uguale per tutti gli anni: 0 se la riga è credibile così; negativa dove l'azienda è più ottimista del riferimento di settore e dello storico senza ragioni nei dati (per i costi, positiva se l'azienda li sottostima). Esempio: ricavi −10 = ogni anno il 10% in meno di quanto dichiara l'azienda.
 
-Righe da rettificare (una voce ciascuna, valore tra −50 e +50):
+Righe da rettificare (una voce ciascuna, valore tra −${max} e +${max}):
 ${righe.map((r) => `- ${r}: ${ETICHETTA_RIGA[r]}`).join('\n')}
 
 Ogni valore con una motivazione di una frase (al massimo 25 parole) che richiama il dato su cui si fonda (scostamento dal riferimento, storico, settore). Il calcolo lo fa la piattaforma. ${lessicoBreve()}
@@ -146,7 +167,7 @@ Rispondi SOLO con JSON:
 Imposti le MANOPOLE del piano: per ogni riga UN valore, uguale per tutti gli anni, a partire dallo STATO ATTUALE (il primo esercizio dello storico; il passato non si modifica). Il calcolo (EBITDA, utile, cassa, copertura delle rate) lo fa la piattaforma. Righe e forma:
 ${RIGHE_INPUT.map((r) => `- ${r}: ${ETICHETTA_RIGA[r]} — ${r === 'aliquotaImposte' ? '"abs", aliquota in %' : RIGHE_FLUSSO.has(r) ? '"abs", euro per anno' : '"pct", variazione % annua'}`).join('\n')}
 
-Regole: tutte le righe; variazioni % tra -50 e +50 (0 = invariato); ogni valore con una motivazione di una frase (al massimo 25 parole) che richiama il dato su cui si fonda. ${lessicoBreve()}
+Regole: tutte le righe; variazioni % tra -${max} e +${max} (0 = invariato); ogni valore con una motivazione di una frase (al massimo 25 parole) che richiama il dato su cui si fonda. ${lessicoBreve()}
 
 DATI
 ${testoContesto(c)}
@@ -203,7 +224,12 @@ function completaRiga(r: RigaInput, arr: (Ipotesi | null)[]): (Ipotesi | null)[]
 }
 
 /** Valida la risposta del modello: solo righe, tipi e intervalli ammessi. */
-export function validaRisposta(json: unknown, orizzonte: number): EsitoElaborazione {
+export function validaRisposta(
+  json: unknown,
+  orizzonte: number,
+  opzioni?: OpzioniSimulazione
+): EsitoElaborazione {
+  const max = opzioni?.variazioneMassimaPct ?? VARIAZIONE_MASSIMA_PREDEFINITA;
   const scartati: string[] = [];
   const ipotesi: IpotesiPiano = {};
   const obj = (json && typeof json === 'object' ? json : {}) as Record<string, unknown>;
@@ -234,7 +260,7 @@ export function validaRisposta(json: unknown, orizzonte: number): EsitoElaborazi
         scartati.push(`${ETICHETTA_RIGA[r]} anno ${i + 1}: ${valore}% fuori intervallo`);
         return null;
       }
-      if (r !== 'aliquotaImposte' && tipo === 'pct' && Math.abs(valore) > 50) {
+      if (r !== 'aliquotaImposte' && tipo === 'pct' && Math.abs(valore) > max) {
         scartati.push(`${ETICHETTA_RIGA[r]} anno ${i + 1}: ${valore}% fuori intervallo`);
         return null;
       }
@@ -261,12 +287,25 @@ export function validaRisposta(json: unknown, orizzonte: number): EsitoElaborazi
       valore: 0,
     }));
   }
+  // L'aliquota che l'AI non decide è quella dello spazio, non il 27,9% del
+  // motore: altrimenti il parametro resterebbe scritto e mai applicato.
+  if (opzioni?.aliquotaImposteDefault !== undefined && !ipotesi.aliquotaImposte) {
+    ipotesi.aliquotaImposte = Array.from({ length: orizzonte }, () => ({
+      tipo: 'abs' as const,
+      valore: opzioni.aliquotaImposteDefault!,
+    }));
+  }
   const sintesi = typeof obj.sintesi === 'string' ? motivazionePulita(obj.sintesi, 600) : '';
   return { ipotesi, sintesi, scartati };
 }
 
 /** Valida le rettifiche dell'AI sul piano dell'azienda. */
-export function validaRettificheAi(json: unknown, righeAmmesse: RigaInput[]): EsitoElaborazione {
+export function validaRettificheAi(
+  json: unknown,
+  righeAmmesse: RigaInput[],
+  opzioni?: OpzioniSimulazione
+): EsitoElaborazione {
+  const max = opzioni?.variazioneMassimaPct ?? VARIAZIONE_MASSIMA_PREDEFINITA;
   const obj = (json && typeof json === 'object' ? json : {}) as Record<string, unknown>;
   const grezze = rettifichePulite(obj.rettifiche);
   const scartati: string[] = [];
@@ -279,7 +318,7 @@ export function validaRettificheAi(json: unknown, righeAmmesse: RigaInput[]): Es
       scartati.push(`riga non presente nel piano dell’azienda «${r}»`);
       continue;
     }
-    if (Math.abs(v.valore) > 50) {
+    if (Math.abs(v.valore) > max) {
       scartati.push(`${ETICHETTA_RIGA[r]}: ${v.valore}% fuori intervallo`);
       continue;
     }
