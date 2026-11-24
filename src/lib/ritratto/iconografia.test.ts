@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { componiIconografia } from './iconografia';
+import { componiIconografia, geometriaBarra } from './iconografia';
 import { confrontaDebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 import type { Componente, DatiIai } from '@/lib/iai/dimensioni';
 
@@ -131,5 +131,31 @@ describe('componiIconografia', () => {
     const e = componiIconografia(senza, componenti).visura;
     expect(e.disponibile).toBe(false);
     expect(e.particolari[0].testo).toMatch(/non sono stati estratti/);
+  });
+});
+
+describe('geometriaBarra', () => {
+  it('un valore positivo parte dallo zero, non dal bordo', () => {
+    expect(geometriaBarra(500, 1000)).toEqual({ zero: 0, inizio: 0, larghezza: 50 });
+  });
+
+  it('un valore negativo cresce a sinistra dello zero', () => {
+    // Scala da −100 a 1000: lo zero cade a 100/1100 della traccia.
+    const g = geometriaBarra(-100, 1000, -100);
+    expect(g.zero).toBeCloseTo(9.09, 1);
+    expect(g.inizio).toBe(0);
+    expect(g.larghezza).toBeCloseTo(9.09, 1);
+  });
+
+  it('un valore positivo con fondo sotto zero parte dallo zero', () => {
+    const g = geometriaBarra(500, 1000, -100);
+    expect(g.inizio).toBeCloseTo(9.09, 1);
+    expect(g.larghezza).toBeCloseTo(45.45, 1);
+  });
+
+  it('un dato non letto non disegna nulla, ma lo zero resta al suo posto', () => {
+    const g = geometriaBarra(null, 1000, -100);
+    expect(g.larghezza).toBe(0);
+    expect(g.inizio).toBe(g.zero);
   });
 });

@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.9**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.10**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,29 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.10 — 2026-11-24
+
+IL DEBITO IN BILANCIO: TRE STATI, UNA SOLA LETTURA; BARRE CON UN'UNICA GEOMETRIA.
+
+- Il terzo stato aveva due casi — contabilizzato solo in parte e verifica
+  impossibile — e **schermata e stampa li chiamavano tutti e due «la verifica in
+  bilancio non è possibile»**: un debito parzialmente iscritto, dove il
+  confronto c'è ed è proprio lui a dire che manca una parte, veniva letto come un
+  dato non verificabile. Ora c'è un titolo per caso.
+- `gravitaDebito` e `titoloDebito` stanno nella lib e sono l'unica fonte di
+  colore e titolo: la stessa catena di condizioni era ricopiata nel componente a
+  schermo e in quello della stampa, e le due copie divergevano già.
+- Toliti i campi che nessuno leggeva: `segnala` (ridondante con la gravità) e
+  l'elenco degli alias nel risultato (serviva solo a comporre il testo, che li
+  riporta già). La ripetizione dell'oggetto nei cinque esiti è ora una funzione
+  sola.
+- `geometriaBarra` è nella lib con i suoi test: dove cade lo zero, dove inizia e
+  quanto è larga una barra. Il componente non ricalcola più la scala, e i valori
+  negativi hanno una verifica scritta invece che solo visiva.
+- Nell'iconografia A la seconda riga non ricalcola più lo zero del caso «non
+  contabilizzato»: la lib lo mette già lei. `avvisoD` non riceve più i dati che
+  non usava.
 
 ## 0.256.9 — 2026-11-24
 

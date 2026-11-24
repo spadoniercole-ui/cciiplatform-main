@@ -9,13 +9,14 @@
 // SOTTO ZERO SI VA A SINISTRA. Quando la scala scende sotto zero — patrimonio
 // netto negativo, perdita d'esercizio — la barra parte dalla linea dello zero e
 // cresce verso sinistra: disegnarla verso destra come un valore positivo
-// lascerebbe il segno soltanto nella cifra, e la lunghezza direbbe il falso.
+// lascerebbe il segno soltanto nella cifra, e la lunghezza direbbe il falso. La
+// posizione la calcola `geometriaBarra`, che ha i suoi test.
 //
 // Vive in un componente suo perché lo usano due schermate — il ritratto
 // aziendale e l'esito della verifica contabile: è lo stesso disegno, e due
 // copie divergerebbero.
 
-import type { BarraGrafico } from '@/lib/ritratto/iconografia';
+import { geometriaBarra, type BarraGrafico } from '@/lib/ritratto/iconografia';
 
 export function BarraDato({
   b,
@@ -26,13 +27,7 @@ export function BarraDato({
   massimo: number;
   minimo?: number;
 }) {
-  const fondo = Math.min(0, minimo);
-  const cima = Math.max(massimo, 1);
-  const ampiezza = cima - fondo || 1;
-  const zero = ((0 - fondo) / ampiezza) * 100;
-  const valore = b.valore === null ? null : b.valore;
-  const inizio = valore === null ? zero : ((Math.min(valore, 0) - fondo) / ampiezza) * 100;
-  const larghezza = valore === null ? 0 : (Math.abs(valore) / ampiezza) * 100;
+  const { zero, inizio, larghezza } = geometriaBarra(b.valore, massimo, minimo);
 
   return (
     <div className="mt-1.5">
@@ -58,7 +53,7 @@ export function BarraDato({
         />
         {/* La linea dello zero: senza, una barra che parte da sinistra non dice
             da dove parte, e il suo inizio sembra il bordo del grafico. */}
-        {fondo < 0 && (
+        {minimo < 0 && (
           <div
             className="absolute top-0 z-10 h-full w-[2px] bg-slate-700"
             style={{ left: `calc(${zero}% - 1px)` }}

@@ -22,7 +22,7 @@
 // Logica pura, con i suoi test.
 
 import { type Componente, type DatiIai } from '@/lib/iai/dimensioni';
-import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
+import { gravitaDebito, type DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 
 /**
  * I VALORI ATTUALIZZATI (0.256.6).
@@ -116,6 +116,39 @@ const minimoDi = (barre: BarraGrafico[]): number => {
   return valori.length > 0 ? Math.min(...valori) : 0;
 };
 
+export interface GeometriaBarra {
+  /** Dove cade lo zero, in percentuale della traccia. */
+  zero: number;
+  /** Dove inizia la barra: a sinistra dello zero quando il valore è negativo. */
+  inizio: number;
+  larghezza: number;
+}
+
+/**
+ * Dove va disegnata una barra nella sua traccia. Sta nella lib e non nel
+ * componente perché è la regola che rende leggibile un valore negativo: se la
+ * scala non scende sotto zero, la barra parte dallo zero e non dal bordo.
+ */
+export function geometriaBarra(valore: number | null, massimo: number, minimo = 0): GeometriaBarra {
+  const fondo = Math.min(0, minimo);
+  const cima = Math.max(massimo, 1);
+  const ampiezza = cima - fondo || 1;
+  const posizione = (n: number) => ((n - fondo) / ampiezza) * 100;
+  const zero = posizione(0);
+  if (valore === null) return { zero, inizio: zero, larghezza: 0 };
+  return {
+    zero,
+    inizio: posizione(Math.min(valore, 0)),
+    larghezza: (Math.abs(valore) / ampiezza) * 100,
+  };
+}
+
+const RISCONTRO: Record<DebitoInBilancio['stato'], string> = {
+  CONTABILIZZATO: 'le voci di bilancio verso i creditori pubblici lo contengono',
+  NON_CONTABILIZZATO: 'nessun riscontro nelle voci di bilancio: il debito non è contabilizzato',
+  NON_VERIFICABILE: 'il confronto con il bilancio non è possibile',
+};
+
 function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimensione | null {
   const soglie = dati.ente.soglie;
   if (soglie.length === 0 && !debito) return null;
@@ -132,18 +165,15 @@ function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimens
       riferimento: 'verifica amministrativa: l’importo che l’ente vanta',
       segnala: false,
     });
-    const contabile = debito.inBilancio ?? (debito.stato === 'NON_CONTABILIZZATO' ? 0 : null);
+    // `inBilancio` è già 0 quando lo stato è «non contabilizzato»: lo zero qui
+    // è un fatto accertato, non un dato mancante.
+    const contabile = debito.inBilancio;
     barre.push({
       etichetta: 'Debito contabile iscritto in bilancio',
       valore: contabile,
       testo: contabile === null ? 'voce non letta' : euro(contabile),
-      riferimento:
-        debito.stato === 'NON_CONTABILIZZATO'
-          ? 'nessun riscontro nelle voci di bilancio: il debito non è contabilizzato'
-          : debito.stato === 'CONTABILIZZATO'
-            ? 'le voci di bilancio verso i creditori pubblici lo contengono'
-            : 'il confronto con il bilancio non è possibile',
-      segnala: debito.stato === 'NON_CONTABILIZZATO',
+      riferimento: RISCONTRO[debito.stato],
+      segnala: gravitaDebito(debito) !== 'neutro',
     });
   }
   barre.push(
@@ -327,7 +357,7 @@ function graficoC(
   };
 }
 
-function avvisoD(dati: DatiIai, componenti: Componente[]): AvvisoAffidabilita | null {
+function avvisoD(componenti: Componente[]): AvvisoAffidabilita | null {
   const d = componenti.find((c) => c.dimensione === 'D');
   if (!d) return null;
   const motivi = [...d.motivi, ...d.lacune];
@@ -441,7 +471,7 @@ export function componiIconografia(
   ].filter((g): g is GraficoDimensione => g !== null && g.massimo !== null);
   return {
     grafici,
-    avvisoAffidabilita: avvisoD(dati, componenti),
+    avvisoAffidabilita: avvisoD(componenti),
     visura: particolariE(dati),
   };
 }

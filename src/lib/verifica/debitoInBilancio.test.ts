@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { confrontaDebitoInBilancio, importoInBilancio, vocePerEnte } from './debitoInBilancio';
+import {
+  confrontaDebitoInBilancio,
+  gravitaDebito,
+  importoInBilancio,
+  titoloDebito,
+  vocePerEnte,
+} from './debitoInBilancio';
 
 const base = {
   esposizione: 120000,
@@ -12,7 +18,7 @@ describe('confrontaDebitoInBilancio', () => {
   it('dice «non contabilizzato» quando le voci pubbliche sono a zero', () => {
     const d = confrontaDebitoInBilancio(base);
     expect(d.stato).toBe('NON_CONTABILIZZATO');
-    expect(d.segnala).toBe(true);
+    expect(gravitaDebito(d)).toBe('rosso');
     expect(d.testo).toContain('120.000 €');
     expect(d.testo).toMatch(/non trova riscontro/);
     // Gli alias sono l'unico modo per riconoscere il debito sotto un altro nome.
@@ -25,7 +31,7 @@ describe('confrontaDebitoInBilancio', () => {
       vociBilancio: { tributari: 100000, previdenziali: 50000 },
     });
     expect(d.stato).toBe('CONTABILIZZATO');
-    expect(d.segnala).toBe(false);
+    expect(gravitaDebito(d)).toBe('neutro');
     expect(d.testo).toContain('150.000 €');
   });
 
@@ -35,14 +41,15 @@ describe('confrontaDebitoInBilancio', () => {
       vociBilancio: { tributari: 20000, previdenziali: 20000 },
     });
     expect(d.stato).toBe('CONTABILIZZATO');
-    expect(d.segnala).toBe(true);
+    expect(gravitaDebito(d)).toBe('ambra');
     expect(d.testo).toMatch(/solo in parte/);
+    expect(titoloDebito(d)).toMatch(/solo in parte/);
   });
 
   it('senza bilancio non dichiara nulla: la verifica non è possibile', () => {
     const d = confrontaDebitoInBilancio({ ...base, bilancioLetto: false });
     expect(d.stato).toBe('NON_VERIFICABILE');
-    expect(d.segnala).toBe(false);
+    expect(gravitaDebito(d)).toBe('ambra');
     expect(d.testo).toMatch(/Nessun bilancio/);
   });
 
@@ -62,8 +69,53 @@ describe('confrontaDebitoInBilancio', () => {
 
   it('senza alias lo dichiara: il nome in bilancio non è verificabile', () => {
     const d = confrontaDebitoInBilancio({ ...base, alias: [] });
-    expect(d.alias).toEqual([]);
     expect(d.testo).toMatch(/alias dell’ente non sono configurati/);
+  });
+});
+
+describe('i tre stati, come si leggono', () => {
+  const casi = [
+    {
+      nome: 'non contabilizzato',
+      input: base,
+      gravita: 'rosso',
+      titolo: 'Debito verso l’ente non contabilizzato in bilancio',
+    },
+    {
+      nome: 'contabilizzato per intero',
+      input: { ...base, vociBilancio: { tributari: 0, previdenziali: 150000 } },
+      gravita: 'neutro',
+      titolo: 'Debito verso l’ente contabilizzato in bilancio',
+    },
+    {
+      nome: 'contabilizzato solo in parte',
+      input: { ...base, vociBilancio: { tributari: 0, previdenziali: 50000 } },
+      gravita: 'ambra',
+      titolo: 'Debito verso l’ente contabilizzato solo in parte',
+    },
+    {
+      nome: 'verifica impossibile',
+      input: { ...base, bilancioLetto: false },
+      gravita: 'ambra',
+      titolo: 'Debito verso l’ente: la verifica in bilancio non è possibile',
+    },
+  ] as const;
+
+  for (const c of casi) {
+    it(c.nome, () => {
+      const d = confrontaDebitoInBilancio(c.input);
+      expect(gravitaDebito(d)).toBe(c.gravita);
+      expect(titoloDebito(d)).toBe(c.titolo);
+    });
+  }
+
+  it('un debito parziale non si legge come una verifica impossibile', () => {
+    const parziale = confrontaDebitoInBilancio({
+      ...base,
+      vociBilancio: { tributari: 0, previdenziali: 50000 },
+    });
+    const impossibile = confrontaDebitoInBilancio({ ...base, bilancioLetto: false });
+    expect(titoloDebito(parziale)).not.toBe(titoloDebito(impossibile));
   });
 });
 

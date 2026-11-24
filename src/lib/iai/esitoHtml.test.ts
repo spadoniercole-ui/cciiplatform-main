@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { htmlCopertinaEsito } from './esitoHtml';
 import { componiEsitoVerifica } from '@/lib/verifica/esito';
+import { confrontaDebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 import { diagnosticaDimensioni, type DatiIai } from './dimensioni';
 import type { Attenzione } from '@/lib/screening/indicatore';
 
@@ -72,5 +73,41 @@ describe('prima pagina del documento: l’esito', () => {
     // Il vecchio indice non deve rientrare dalla stampa.
     expect(h).not.toContain('IAI su 100');
     expect(h).not.toMatch(/fascia/i);
+  });
+
+  it('la riga del debito stampa il titolo giusto nei tre stati', () => {
+    const esito = componiEsitoVerifica({
+      giudizio: attenzione,
+      dimensioni: diagnosticaDimensioni(dati),
+    });
+    const intestazione = {
+      azienda: 'DEO GRIFO S.R.L.',
+      codiceFiscale: null,
+      ente: 'INPS',
+      data: '23/09/2026',
+    };
+    const stampa = (voci: { tributari: number | null; previdenziali: number | null }) =>
+      htmlCopertinaEsito(
+        esito,
+        intestazione,
+        confrontaDebitoInBilancio({
+          esposizione: 120000,
+          vociBilancio: voci,
+          ente25novies: 'INPS',
+          bilancioLetto: true,
+          alias: ['INPS'],
+        })
+      );
+
+    expect(stampa({ tributari: 0, previdenziali: 0 })).toContain(
+      'Debito verso l’ente non contabilizzato in bilancio'
+    );
+    // Contabilizzato solo in parte: non è «verifica impossibile» — il confronto c'è.
+    const parziale = stampa({ tributari: 0, previdenziali: 50000 });
+    expect(parziale).toContain('Debito verso l’ente contabilizzato solo in parte');
+    expect(parziale).not.toContain('la verifica in bilancio non è possibile');
+    expect(stampa({ tributari: 0, previdenziali: 150000 })).toContain(
+      'Debito verso l’ente contabilizzato in bilancio'
+    );
   });
 });

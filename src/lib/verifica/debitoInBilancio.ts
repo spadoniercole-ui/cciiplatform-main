@@ -36,6 +36,14 @@
 
 export type StatoDebitoInBilancio = 'CONTABILIZZATO' | 'NON_CONTABILIZZATO' | 'NON_VERIFICABILE';
 
+/**
+ * Quanto pesa il fatto sul giudizio: è la sola cosa che le schermate e le
+ * stampe devono sapere del colore. Il rosso è un fatto accertato, l'ambra un
+ * limite della lettura (debito parziale, confronto impossibile), il neutro un
+ * riscontro.
+ */
+export type GravitaDebito = 'rosso' | 'ambra' | 'neutro';
+
 /** Le due voci del passivo verso i creditori pubblici che il bilancio espone. */
 export type VocePubblica = 'TRIBUTARI' | 'PREVIDENZIALI';
 
@@ -79,15 +87,44 @@ export interface DebitoInBilancio {
   inBilancio: number | null;
   /** La voce guardata; null quando il confronto è sulla somma. */
   voce: VocePubblica | null;
-  /** Gli alias dell'ente configurati nei parametri dello spazio. */
-  alias: string[];
   /** La frase da mostrare: dice il fatto e il suo limite. */
   testo: string;
-  /** true quando va messo in evidenza, non solo letto. */
-  segnala: boolean;
+}
+
+/**
+ * Il peso del fatto, per il colore di schermata e di stampa. Un unico posto:
+ * prima la stessa catena di condizioni era ricopiata in due componenti, e le
+ * due copie avevano già divergito dal terzo stato.
+ */
+export function gravitaDebito(d: DebitoInBilancio): GravitaDebito {
+  if (d.stato === 'NON_CONTABILIZZATO') return 'rosso';
+  if (d.stato === 'NON_VERIFICABILE') return 'ambra';
+  return d.esposizione !== null && d.inBilancio !== null && d.inBilancio < d.esposizione
+    ? 'ambra'
+    : 'neutro';
+}
+
+/**
+ * Il titolo da mettere sopra il testo. Il terzo stato ha due casi diversi —
+ * debito contabilizzato solo in parte e verifica impossibile — e il primo non
+ * è «la verifica non è possibile»: il confronto c'è, e dice che manca una
+ * parte.
+ */
+export function titoloDebito(d: DebitoInBilancio): string {
+  if (d.stato === 'NON_CONTABILIZZATO') return 'Debito verso l’ente non contabilizzato in bilancio';
+  if (d.stato === 'NON_VERIFICABILE')
+    return 'Debito verso l’ente: la verifica in bilancio non è possibile';
+  return gravitaDebito(d) === 'ambra'
+    ? 'Debito verso l’ente contabilizzato solo in parte'
+    : 'Debito verso l’ente contabilizzato in bilancio';
 }
 
 const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
+
+type EsitoDebito = Pick<
+  DebitoInBilancio,
+  'stato' | 'esposizione' | 'inBilancio' | 'voce' | 'testo'
+>;
 
 export function confrontaDebitoInBilancio(input: {
   esposizione: number | null;
@@ -111,88 +148,67 @@ export function confrontaDebitoInBilancio(input: {
   const voci = voce ? ETICHETTA_VOCE[voce] : 'i debiti tributari e previdenziali';
   // PERCHÉ UNA VOCE SOLA: senza, un debito verso l'INPS potrebbe risultare
   // coperto dai debiti tributari — un'altra posta, un altro creditore.
+  const classificato = String(input.ente25novies ?? '').toUpperCase();
   const notaVoce = voce
-    ? ` Il confronto guarda ${voci}: è la voce che compete a questo ente secondo i parametri dello spazio (${String(
-        input.ente25novies
-      ).toUpperCase()}).`
+    ? ` Il confronto guarda ${voci}: è la voce che compete a questo ente secondo i parametri dello spazio (${classificato}).`
     : input.ente25novies
-      ? ` L’ente è configurato come ${String(
-          input.ente25novies
-        ).toUpperCase()}: le sue partite non stanno in una voce sola, quindi si guarda la somma delle due.`
+      ? ` L’ente è configurato come ${classificato}: le sue partite non stanno in una voce sola, quindi si guarda la somma delle due.`
       : ' L’ente non è classificato nei parametri dello spazio: il confronto guarda la somma delle due voci, e un importo può trovare riscontro in una posta che riguarda un altro creditore.';
 
   const inBilancio = input.bilancioLetto ? importoInBilancio(input.vociBilancio, voce) : null;
+  const esito = (
+    stato: StatoDebitoInBilancio,
+    importo: number | null,
+    testo: string
+  ): EsitoDebito => ({ stato, esposizione: input.esposizione, inBilancio: importo, voce, testo });
 
   if (!input.bilancioLetto) {
-    return {
-      stato: 'NON_VERIFICABILE',
-      esposizione: input.esposizione,
-      inBilancio: null,
-      voce,
-      alias,
-      testo:
-        'Nessun bilancio XBRL letto: non si può dire se il debito verso l’ente sia contabilizzato.',
-      segnala: false,
-    };
+    return esito(
+      'NON_VERIFICABILE',
+      null,
+      'Nessun bilancio XBRL letto: non si può dire se il debito verso l’ente sia contabilizzato.'
+    );
   }
 
   if (input.esposizione === null || input.esposizione <= 0) {
-    return {
-      stato: 'NON_VERIFICABILE',
-      esposizione: input.esposizione,
+    return esito(
+      'NON_VERIFICABILE',
       inBilancio,
-      voce,
-      alias,
-      testo:
-        'L’esposizione dell’ente non è accertata: senza l’importo non c’è nulla da ritrovare in bilancio.',
-      segnala: false,
-    };
+      'L’esposizione dell’ente non è accertata: senza l’importo non c’è nulla da ritrovare in bilancio.'
+    );
   }
 
   if (inBilancio === null) {
-    return {
-      stato: 'NON_VERIFICABILE',
-      esposizione: input.esposizione,
-      inBilancio: null,
-      voce,
-      alias,
-      testo: `La voce del bilancio (${voci}) non è stata letta: il confronto con ${euro(
+    return esito(
+      'NON_VERIFICABILE',
+      null,
+      `La voce del bilancio (${voci}) non è stata letta: il confronto con ${euro(
         input.esposizione
-      )} non si fa.${notaVoce}${notaAlias}`,
-      segnala: false,
-    };
+      )} non si fa.${notaVoce}${notaAlias}`
+    );
   }
 
   if (inBilancio <= 0) {
-    return {
-      stato: 'NON_CONTABILIZZATO',
-      esposizione: input.esposizione,
-      inBilancio: 0,
-      voce,
-      alias,
-      testo: `Il debito di ${euro(
+    return esito(
+      'NON_CONTABILIZZATO',
+      0,
+      `Il debito di ${euro(
         input.esposizione
       )} accertato in amministrativa non trova riscontro in bilancio: ${voci} ${
         voce ? 'risulta a zero' : 'sono a zero'
-      }. Il debito risulta non contabilizzato.${notaVoce}${notaAlias}`,
-      segnala: true,
-    };
+      }. Il debito risulta non contabilizzato.${notaVoce}${notaAlias}`
+    );
   }
 
-  const coperto = inBilancio >= input.esposizione;
-  return {
-    stato: 'CONTABILIZZATO',
-    esposizione: input.esposizione,
+  return esito(
+    'CONTABILIZZATO',
     inBilancio,
-    voce,
-    alias,
-    testo: coperto
+    inBilancio >= input.esposizione
       ? `Il debito di ${euro(input.esposizione)} trova riscontro in bilancio (${voci}: ${euro(
           inBilancio
         )}).${notaVoce}${notaAlias}`
       : `In bilancio risultano ${euro(inBilancio)} in ${voci} contro i ${euro(
           input.esposizione
-        )} accertati: il debito è contabilizzato solo in parte.${notaVoce}${notaAlias}`,
-    segnala: !coperto,
-  };
+        )} accertati: il debito è contabilizzato solo in parte.${notaVoce}${notaAlias}`
+  );
 }

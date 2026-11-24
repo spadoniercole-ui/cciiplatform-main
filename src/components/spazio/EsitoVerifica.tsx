@@ -16,7 +16,13 @@ import { NOME_DIMENSIONE } from '@/lib/iai/dimensioni';
 import type { IconografiaDimensioni } from '@/lib/ritratto/iconografia';
 import { formattaEuro } from '@/lib/formato/numeri';
 import type { EsitoVerifica as Esito } from '@/lib/verifica/esito';
-import { ETICHETTA_VOCE, type DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
+import {
+  ETICHETTA_VOCE,
+  gravitaDebito,
+  titoloDebito,
+  type DebitoInBilancio,
+  type GravitaDebito,
+} from '@/lib/verifica/debitoInBilancio';
 
 // IL DEBITO VERSO L'ENTE, DENTRO LA SPIEGAZIONE (0.256.5).
 //
@@ -25,40 +31,37 @@ import { ETICHETTA_VOCE, type DebitoInBilancio } from '@/lib/verifica/debitoInBi
 // scritto in bilancio?». Quando non c'è, la cifra accertata si mostra in un
 // altro colore: il rosso non è un giudizio sull'azienda, è il segno che quella
 // posta manca dal perimetro su cui sono calcolati patrimonio e indici.
+const TONO_DEBITO: Record<
+  GravitaDebito,
+  { bordo: string; sfondo: string; testo: string; importo: string; Icona: typeof AlertTriangle }
+> = {
+  rosso: {
+    bordo: 'border-red-200',
+    sfondo: 'bg-red-50',
+    testo: 'text-red-900',
+    importo: 'text-red-700',
+    Icona: AlertTriangle,
+  },
+  ambra: {
+    bordo: 'border-amber-200',
+    sfondo: 'bg-amber-50',
+    testo: 'text-amber-900',
+    importo: 'text-amber-800',
+    Icona: HelpCircle,
+  },
+  neutro: {
+    bordo: 'border-slate-200',
+    sfondo: 'bg-slate-50',
+    testo: 'text-slate-700',
+    importo: 'text-slate-900',
+    Icona: CheckCircle2,
+  },
+};
+
 function RigaDebitoInBilancio({ d }: { d: DebitoInBilancio }) {
-  const tono =
-    d.stato === 'NON_CONTABILIZZATO'
-      ? {
-          bordo: 'border-red-200',
-          sfondo: 'bg-red-50',
-          testo: 'text-red-900',
-          importo: 'text-red-700',
-        }
-      : d.stato === 'CONTABILIZZATO' && !d.segnala
-        ? {
-            bordo: 'border-slate-200',
-            sfondo: 'bg-slate-50',
-            testo: 'text-slate-700',
-            importo: 'text-slate-900',
-          }
-        : {
-            bordo: 'border-amber-200',
-            sfondo: 'bg-amber-50',
-            testo: 'text-amber-900',
-            importo: 'text-amber-800',
-          };
-  const titolo =
-    d.stato === 'NON_CONTABILIZZATO'
-      ? 'Debito verso l’ente non contabilizzato in bilancio'
-      : d.stato === 'CONTABILIZZATO' && !d.segnala
-        ? 'Debito verso l’ente contabilizzato in bilancio'
-        : 'Debito verso l’ente: la verifica in bilancio non è possibile';
-  const Icona =
-    d.stato === 'NON_CONTABILIZZATO'
-      ? AlertTriangle
-      : d.stato === 'CONTABILIZZATO' && !d.segnala
-        ? CheckCircle2
-        : HelpCircle;
+  const tono = TONO_DEBITO[gravitaDebito(d)];
+  const titolo = titoloDebito(d);
+  const Icona = tono.Icona;
 
   return (
     <div className={`rounded-lg border p-3 ${tono.bordo} ${tono.sfondo}`}>

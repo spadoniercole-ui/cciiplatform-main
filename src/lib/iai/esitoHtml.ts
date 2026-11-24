@@ -9,7 +9,12 @@
 
 import { DICHIARAZIONE_DIMENSIONI, NOME_DIMENSIONE } from './dimensioni';
 import type { EsitoVerifica } from '@/lib/verifica/esito';
-import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
+import {
+  gravitaDebito,
+  titoloDebito,
+  type DebitoInBilancio,
+  type GravitaDebito,
+} from '@/lib/verifica/debitoInBilancio';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -22,14 +27,15 @@ const STILE = {
 // LA RIGA DEL DEBITO IN BILANCIO (0.256.5). Stessa informazione della
 // schermata, con lo stesso colore: un documento che tace ciò che la pagina
 // dice è un documento che chi lo legge crede completo.
+const COLORE_DEBITO: Record<GravitaDebito, string> = {
+  rosso: '#b91c1c',
+  ambra: '#b45309',
+  neutro: '#334155',
+};
+
 function rigaDebitoHtml(d: DebitoInBilancio): string {
-  const colore = d.stato === 'NON_CONTABILIZZATO' ? '#b91c1c' : d.segnala ? '#b45309' : '#334155';
-  const titolo =
-    d.stato === 'NON_CONTABILIZZATO'
-      ? 'Debito verso l’ente non contabilizzato in bilancio'
-      : d.stato === 'CONTABILIZZATO' && !d.segnala
-        ? 'Debito verso l’ente contabilizzato in bilancio'
-        : 'Debito verso l’ente: la verifica in bilancio non è possibile';
+  const colore = COLORE_DEBITO[gravitaDebito(d)];
+  const titolo = titoloDebito(d);
   const importo =
     d.esposizione !== null
       ? ` Debito accertato: <strong style="color:${colore}">${Math.round(
