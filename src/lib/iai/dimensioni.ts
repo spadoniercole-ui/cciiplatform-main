@@ -102,6 +102,13 @@ export interface DatiIai {
     statoAttivitaAnomalo: string | null;
     giorniVisura: number | null;
     capitaleSociale: number | null;
+    /**
+     * Le variazioni che la visura dichiara — capitale, compagine, oggetto,
+     * rappresentante legale, sede, procedure in corso. Facoltative: la visura
+     * precaricata non le porta sempre estratte, e quando non ci sono il box E
+     * lo dice invece di far credere che nulla sia cambiato.
+     */
+    variazioni?: { etichetta: string; testo: string; segnala: boolean }[] | null;
   };
 }
 

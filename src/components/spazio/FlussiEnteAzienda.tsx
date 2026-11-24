@@ -13,6 +13,7 @@ import {
   CalendarDays,
   CalendarOff,
   ChevronDown,
+  ChevronRight,
   Loader2,
   Plus,
   RefreshCw,
@@ -24,7 +25,12 @@ import {
   ottieniSospensioniFlusso,
   salvaSospensioneFlusso,
 } from '@/app/actions/flussiEnte';
-import type { EsitoCongruenza } from '@/lib/flussiEnte/congruenza';
+import type { EsitoCongruenza, FamigliaFlusso } from '@/lib/flussiEnte/congruenza';
+import {
+  dataLeggibile,
+  periodoLeggibile,
+  raggruppaProspettoPerAnno,
+} from '@/lib/flussiEnte/prospetto';
 
 /** «2025-06» → «06/2025», che è come si leggono i periodi nei documenti. */
 const mese = (p: string) => `${p.slice(5)}/${p.slice(0, 4)}`;
@@ -37,6 +43,146 @@ const compatta = (periodi: string[], massimo = 12) =>
 
 const CLASSE_CAMPO =
   'w-full p-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900';
+
+// IL PROSPETTO DEGLI ADEMPIMENTI, CON I NODI DEGLI ANNI (0.256.6).
+//
+// La tabella piatta diceva le stesse cose ma in un elenco unico: due anni di
+// denunce e pagamenti sono decine di righe, e ritrovare il periodo che manca
+// voleva dire scorrere tutto. Qui si apre l'anno che interessa — un nodo per
+// anno con dentro quante posizioni sono scoperte — e il filtro delle sole
+// scoperte serve a passare dalla fotografia all'elenco di ciò che resta da
+// fare. Nulla è nascosto: il nodo chiuso dichiara che cosa contiene.
+function ProspettoAdempimenti({ esito }: { esito: EsitoCongruenza }) {
+  const [soloScoperte, setSoloScoperte] = useState(false);
+  const [fonte, setFonte] = useState<FamigliaFlusso | ''>('');
+  const [chiusi, setChiusi] = useState<number[]>([]);
+
+  const gruppi = raggruppaProspettoPerAnno(esito.prospetto, {
+    soloScoperte,
+    fonte: fonte || null,
+  });
+
+  const fonteDi = (tipo: FamigliaFlusso) =>
+    tipo === 'DENUNCIA' ? esito.etichette.denuncia : esito.etichette.pagamento;
+
+  const alternaAnno = (anno: number) =>
+    setChiusi((precedenti) =>
+      precedenti.includes(anno) ? precedenti.filter((a) => a !== anno) : [...precedenti, anno]
+    );
+
+  return (
+    <div>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase text-slate-500">
+          Adempimenti — data, fonte, scadenza legale e ritardo
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1 text-[10px] text-slate-600">
+            <input
+              type="checkbox"
+              checked={soloScoperte}
+              onChange={(e) => setSoloScoperte(e.target.checked)}
+            />
+            solo gli scoperti
+          </label>
+          <select
+            className="p-1 text-[10px] bg-white border border-slate-200 rounded text-slate-700"
+            value={fonte}
+            onChange={(e) => setFonte(e.target.value as FamigliaFlusso | '')}
+            aria-label="Filtra per fonte"
+          >
+            <option value="">Tutte le fonti</option>
+            <option value="DENUNCIA">{esito.etichette.denuncia}</option>
+            <option value="PAGAMENTO">{esito.etichette.pagamento}</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full text-[11px]">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-left text-[9px] uppercase tracking-wider text-slate-500">
+              <th className="px-2 py-1.5">Data</th>
+              <th className="px-2 py-1.5">Fonte</th>
+              <th className="px-2 py-1.5">Scad. legale</th>
+              <th className="px-2 py-1.5 text-right">Ritardo</th>
+            </tr>
+          </thead>
+          {gruppi.map((g) => {
+            const chiuso = chiusi.includes(g.anno);
+            return (
+              <tbody key={g.anno} className="border-b border-slate-100">
+                <tr className="bg-slate-100/70">
+                  <th colSpan={4} className="p-0 text-left">
+                    <button
+                      type="button"
+                      onClick={() => alternaAnno(g.anno)}
+                      className="flex w-full items-center gap-1 px-2 py-1.5 text-[10px] font-bold text-slate-700 hover:bg-slate-200/60"
+                      aria-expanded={!chiuso}
+                    >
+                      {chiuso ? (
+                        <ChevronRight className="w-3 h-3 shrink-0" />
+                      ) : (
+                        <ChevronDown className="w-3 h-3 shrink-0" />
+                      )}
+                      {g.anno}
+                      <span className="ml-1 font-normal text-slate-500">
+                        {g.righe.length} posizioni
+                        {g.scoperte > 0 ? ` · ${g.scoperte} scoperte` : ' · nessuna scoperta'}
+                        {g.ritardoMassimo !== null
+                          ? ` · ritardo massimo ${g.ritardoMassimo} giorni`
+                          : ''}
+                      </span>
+                    </button>
+                  </th>
+                </tr>
+                {!chiuso &&
+                  g.righe.map((r) => (
+                    <tr key={`${r.periodo}-${r.tipo}`}>
+                      <td className="px-2 py-1 pl-6 tabular-nums text-slate-800">
+                        {periodoLeggibile(r.periodo)}
+                      </td>
+                      <td className="px-2 py-1 text-slate-700">{fonteDi(r.tipo)}</td>
+                      <td className="px-2 py-1 tabular-nums text-slate-700">
+                        {dataLeggibile(r.scadenza)}
+                      </td>
+                      <td className="px-2 py-1 text-right tabular-nums">
+                        {r.ritardo !== null ? (
+                          <span
+                            className={`font-bold ${
+                              r.ritardo > 90 ? 'text-red-700' : 'text-amber-800'
+                            }`}
+                          >
+                            {r.ritardo} giorni
+                          </span>
+                        ) : r.stato === 'SCOPERTA' ? (
+                          <span className="text-slate-400">non ancora scaduto</span>
+                        ) : r.stato === 'REGOLARIZZATA' ? (
+                          <span className="text-slate-500">
+                            coperto{r.copertura ? `: ${r.copertura}` : ''}
+                          </span>
+                        ) : r.stato === 'TRASMESSO' ? (
+                          <span className="text-emerald-700">trasmesso</span>
+                        ) : (
+                          <span className="text-slate-400">fuori dall’arco</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            );
+          })}
+        </table>
+      </div>
+      <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">
+        La data è il periodo di competenza, che è il mese che l’adempimento dichiara; la fonte è il
+        documento che doveva produrlo; la scadenza legale è quella del profilo dell’ente. Il ritardo
+        si misura solo dove si può: per le posizioni trasmesse il file non porta la data di
+        trasmissione. In rosso oltre i 90 giorni — la soglia della certificazione dei debiti.
+      </p>
+    </div>
+  );
+}
 
 export function FlussiEnteAzienda({
   nomeSchema,
@@ -255,58 +401,11 @@ export function FlussiEnteAzienda({
                 </p>
               )}
 
-              {e.scoperte.length > 0 && (
-                <div>
-                  {/* LA TABELLA DEGLI ADEMPIMENTI (0.256.0). Le righe sciolte
-                      («06/2025 · denuncia — scadenza 16/07/2025, 210 giorni»)
-                      costringevano a ricostruire a occhio la sequenza. In
-                      tabella ogni posizione si legge per colonna: quando è
-                      dovuta, da quale fonte, entro quale termine di legge, e
-                      da quanto è in ritardo. */}
-                  <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">
-                    Adempimenti scoperti — data, fonte, scadenza legale e ritardo
-                  </p>
-                  <div className="overflow-x-auto rounded-lg border border-slate-200">
-                    <table className="w-full text-[11px]">
-                      <thead>
-                        <tr className="border-b border-slate-200 bg-slate-50 text-left text-[9px] uppercase tracking-wider text-slate-500">
-                          <th className="px-2 py-1.5">Data</th>
-                          <th className="px-2 py-1.5">Fonte</th>
-                          <th className="px-2 py-1.5">Scad. legale</th>
-                          <th className="px-2 py-1.5 text-right">Ritardo</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {e.scoperte.map((s) => (
-                          <tr key={`${s.periodo}-${s.tipo}`}>
-                            <td className="px-2 py-1 tabular-nums text-slate-800">
-                              {mese(s.periodo)}
-                            </td>
-                            <td className="px-2 py-1 text-slate-700">
-                              {s.tipo === 'DENUNCIA' ? e.etichette.denuncia : e.etichette.pagamento}
-                            </td>
-                            <td className="px-2 py-1 tabular-nums text-slate-700">
-                              {s.scadenza.split('-').reverse().join('/')}
-                            </td>
-                            <td
-                              className={`px-2 py-1 text-right font-bold tabular-nums ${
-                                s.giorni > 90 ? 'text-red-700' : 'text-amber-800'
-                              }`}
-                            >
-                              {s.giorni} giorni
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="mt-1 text-[10px] text-slate-500 leading-relaxed">
-                    La fonte è il documento che l’adempimento doveva produrre; la scadenza legale è
-                    quella del periodo di competenza; il ritardo si conta a oggi. In rosso oltre i
-                    90 giorni — la soglia della certificazione dei debiti.
-                  </p>
-                </div>
-              )}
+              {/* IL PROSPETTO (0.256.6). Prima erano righe sciolte — i periodi
+                  senza denuncia, quelli senza pagamento, i regolarizzati —
+                  ognuna in una frase: la tabella le mette in colonna e i nodi
+                  degli anni le aprono un anno alla volta. */}
+              {e.prospetto.length > 0 && <ProspettoAdempimenti esito={e} />}
 
               <p className="text-[10px] text-slate-500 leading-relaxed">{e.notaRitardi}</p>
             </div>

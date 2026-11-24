@@ -22,6 +22,33 @@
 // Logica pura, con i suoi test.
 
 import { altmanZ2, type Componente, type DatiIai } from '@/lib/iai/dimensioni';
+import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
+
+/**
+ * I VALORI ATTUALIZZATI (0.256.6).
+ *
+ * I box A-E arrivano dopo lo sviluppo dello scenario: accanto al valore di
+ * bilancio — storico — c'è quello che il piano di sviluppo porta a fine
+ * orizzonte. Non è una previsione del sistema: è il piano che l'azienda ha
+ * presentato o che è stato simulato, letto nelle stesse voci. Quando non c'è,
+ * la riga non si inventa e il box lo dichiara.
+ */
+export interface ProspetticoBilancio {
+  /** L'anno di chiusura dell'orizzonte. */
+  anno: number;
+  ricavi: number | null;
+  utile: number | null;
+  patrimonioNetto: number | null;
+  /** Il debito verso l'ente come lo porta il piano, se il piano lo espone. */
+  debitoEnte: number | null;
+}
+
+export interface ExtraIconografia {
+  /** Il confronto fra debito accertato e debito scritto in bilancio. */
+  debito: DebitoInBilancio | null;
+  /** I valori a fine orizzonte dello scenario, quando è stato sviluppato. */
+  prospettico: ProspetticoBilancio | null;
+}
 
 export type UnitaGrafico = 'euro' | 'percento' | 'numero';
 
@@ -46,6 +73,8 @@ export interface GraficoDimensione {
   /** Il massimo assoluto su cui si scala la barra; null se non c'è nulla da disegnare. */
   massimo: number | null;
   barre: BarraGrafico[];
+  /** Che cosa manca per avere anche il valore attualizzato, quando manca. */
+  notaProspettico?: string;
 }
 
 export interface AvvisoAffidabilita {
@@ -77,21 +106,50 @@ const massimoDi = (barre: BarraGrafico[]): number | null => {
   return valori.length > 0 ? Math.max(...valori) : null;
 };
 
-function graficoA(dati: DatiIai): GraficoDimensione | null {
+function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimensione | null {
   const soglie = dati.ente.soglie;
-  if (soglie.length === 0) return null;
-  const barre: BarraGrafico[] = soglie.map((s) => ({
-    etichetta: s.ambito,
-    valore: s.esposizione,
-    testo: s.esposizione === null ? 'esposizione non determinata' : euro(s.esposizione),
-    riferimento:
-      s.esito === 'sopra'
-        ? 'presupposti oggettivi rilevati'
-        : s.esito === 'sotto'
-          ? 'presupposti non rilevati'
-          : 'esito non esprimibile: dati mancanti',
-    segnala: s.esito === 'sopra' || s.esito === 'non_determinabile',
-  }));
+  if (soglie.length === 0 && !debito) return null;
+  // LE DUE RIGHE DEL DEBITO (0.256.6): quello che l'ente ha accertato e quello
+  // che l'azienda ne ha scritto in bilancio. Non è una somma né una differenza:
+  // sono due fonti diverse sulla stessa posta, e la seconda può essere zero —
+  // ed è proprio lo zero che va visto.
+  const barre: BarraGrafico[] = [];
+  if (debito && debito.esposizione !== null) {
+    barre.push({
+      etichetta: 'Debito amministrativo accertato',
+      valore: debito.esposizione,
+      testo: euro(debito.esposizione),
+      riferimento: 'verifica amministrativa: l’importo che l’ente vanta',
+      segnala: false,
+    });
+    const contabile = debito.inBilancio ?? (debito.stato === 'NON_CONTABILIZZATO' ? 0 : null);
+    barre.push({
+      etichetta: 'Debito contabile iscritto in bilancio',
+      valore: contabile,
+      testo: contabile === null ? 'voce non letta' : euro(contabile),
+      riferimento:
+        debito.stato === 'NON_CONTABILIZZATO'
+          ? 'nessun riscontro nelle voci di bilancio: il debito non è contabilizzato'
+          : debito.stato === 'CONTABILIZZATO'
+            ? 'le voci di bilancio verso i creditori pubblici lo contengono'
+            : 'il confronto con il bilancio non è possibile',
+      segnala: debito.stato === 'NON_CONTABILIZZATO',
+    });
+  }
+  barre.push(
+    ...soglie.map((s) => ({
+      etichetta: s.ambito,
+      valore: s.esposizione,
+      testo: s.esposizione === null ? 'esposizione non determinata' : euro(s.esposizione),
+      riferimento:
+        s.esito === 'sopra'
+          ? 'presupposti oggettivi rilevati'
+          : s.esito === 'sotto'
+            ? 'presupposti non rilevati'
+            : 'esito non esprimibile: dati mancanti',
+      segnala: s.esito === 'sopra' || s.esito === 'non_determinabile',
+    }))
+  );
   return {
     dimensione: 'A',
     titolo: 'Quanto vale l’esposizione, ambito per ambito',
@@ -103,7 +161,10 @@ function graficoA(dati: DatiIai): GraficoDimensione | null {
   };
 }
 
-function graficoB(dati: DatiIai): GraficoDimensione | null {
+function graficoB(
+  dati: DatiIai,
+  prospettico: ProspetticoBilancio | null
+): GraficoDimensione | null {
   const b = dati.bilancio.corrente;
   if (!b) return null;
   const barre: BarraGrafico[] = [];
@@ -127,19 +188,52 @@ function graficoB(dati: DatiIai): GraficoDimensione | null {
       segnala: m < 0,
     });
   }
+  // IL VALORE ATTUALIZZATO, ACCANTO A QUELLO DI BILANCIO (0.256.6). Quando il
+  // piano c'è, la struttura si legge in termini assoluti: patrimonio netto di
+  // bilancio e patrimonio a fine orizzonte sulla stessa scala. I due rapporti
+  // percentuali non stanno nello stesso grafico — unità diverse — e il piano
+  // non porta il passivo rideterminato con cui rifarli.
+  const attualizzato =
+    prospettico && prospettico.patrimonioNetto !== null && b.patrimonioNetto !== null;
+  if (attualizzato && prospettico) {
+    barre.length = 0;
+    barre.push(
+      {
+        etichetta: 'Patrimonio netto di bilancio',
+        valore: b.patrimonioNetto,
+        testo: euro(b.patrimonioNetto ?? 0),
+        riferimento: 'storico: ultimo esercizio depositato',
+        segnala: (b.patrimonioNetto ?? 0) < 0,
+      },
+      {
+        etichetta: `Patrimonio netto a fine piano (${prospettico.anno})`,
+        valore: prospettico.patrimonioNetto,
+        testo: euro(prospettico.patrimonioNetto ?? 0),
+        riferimento: 'attualizzato: il piano di sviluppo dello scenario',
+        segnala: (prospettico.patrimonioNetto ?? 0) < 0,
+      }
+    );
+  }
+
   if (!barre.length) return null;
   return {
     dimensione: 'B',
     titolo: 'Come sta in piedi al netto delle due voci',
     lettura:
       'Due rapporti dello stesso bilancio, confrontati con lo zero: quanto dell’attivo è coperto dal patrimonio e quanto la gestione lascia prima degli ammortamenti.',
-    unita: 'percento',
+    unita: attualizzato ? 'euro' : 'percento',
     massimo: massimoDi(barre),
     barre,
+    notaProspettico: prospettico
+      ? undefined
+      : 'Il valore attualizzato si calcola quando lo scenario ha un piano di sviluppo: senza piano restano i valori di bilancio.',
   };
 }
 
-function graficoC(dati: DatiIai): GraficoDimensione | null {
+function graficoC(
+  dati: DatiIai,
+  prospettico: ProspetticoBilancio | null
+): GraficoDimensione | null {
   const c = dati.bilancio.corrente;
   const p = dati.bilancio.precedente;
   if (!c || !p) return null;
@@ -179,6 +273,35 @@ function graficoC(dati: DatiIai): GraficoDimensione | null {
       c.patrimonioNetto !== null && c.patrimonioNetto < 0
     ),
   ];
+
+  // IL DIFFERENZIALE PROSPETTICO (0.256.6). Accanto alla coppia storica, la
+  // stessa voce a fine piano e la sua differenza dal bilancio: è il numero che
+  // dice se il piano cambia la direzione o la conferma.
+  if (prospettico) {
+    const futuro = (cosa: string, ora: number | null, dopo: number | null): BarraGrafico[] => {
+      if (dopo === null) return [];
+      const differenza = ora === null ? null : dopo - ora;
+      return [
+        {
+          etichetta: `${cosa} a fine piano (${prospettico.anno})`,
+          valore: dopo,
+          testo: euro(dopo),
+          riferimento:
+            differenza === null
+              ? null
+              : `differenza ${differenza >= 0 ? '+' : ''}${euro(differenza)} sul bilancio`,
+          segnala: dopo < 0 || (differenza !== null && differenza < 0),
+        },
+      ];
+    };
+    barre.push(
+      ...futuro('Ricavi', c.ricavi, prospettico.ricavi),
+      ...futuro('Utile', c.utile, prospettico.utile),
+      ...futuro('Patrimonio netto', c.patrimonioNetto, prospettico.patrimonioNetto),
+      ...futuro('Debito verso l’ente', null, prospettico.debitoEnte)
+    );
+  }
+
   return {
     dimensione: 'C',
     titolo: 'I due esercizi, accostati',
@@ -187,6 +310,9 @@ function graficoC(dati: DatiIai): GraficoDimensione | null {
     unita: 'euro',
     massimo: massimoDi(barre),
     barre,
+    notaProspettico: prospettico
+      ? undefined
+      : 'Il differenziale prospettico si calcola quando lo scenario ha un piano di sviluppo: senza piano restano i due esercizi di bilancio.',
   };
 }
 
@@ -216,6 +342,25 @@ function particolariE(dati: DatiIai): { disponibile: boolean; particolari: Parti
       segnala: false,
     });
     return { disponibile: false, particolari };
+  }
+  // LE VARIAZIONI DELLA VISURA (0.256.6): capitale, compagine, oggetto,
+  // rappresentante legale, sede, procedure in corso. Sono il motivo per cui la
+  // visura si legge accanto al bilancio: dicono che cosa è cambiato nella
+  // compagine e nella governance, che il conto economico non registra.
+  for (const variazione of v.variazioni ?? []) {
+    particolari.push({
+      etichetta: variazione.etichetta,
+      testo: variazione.testo,
+      segnala: variazione.segnala,
+    });
+  }
+  if (v.variazioni === undefined || v.variazioni === null) {
+    particolari.push({
+      etichetta: 'Variazioni di capitale, compagine e sede',
+      testo:
+        'la visura precaricata non porta estratte le variazioni: nessuna è dichiarata qui, e non si legge come «nessuna variazione».',
+      segnala: false,
+    });
   }
   if (v.proceduraPendente) {
     particolari.push({
@@ -263,10 +408,16 @@ function particolariE(dati: DatiIai): { disponibile: boolean; particolari: Parti
   return { disponibile: true, particolari };
 }
 
-export function componiIconografia(dati: DatiIai, componenti: Componente[]): IconografiaDimensioni {
-  const grafici = [graficoA(dati), graficoB(dati), graficoC(dati)].filter(
-    (g): g is GraficoDimensione => g !== null && g.massimo !== null
-  );
+export function componiIconografia(
+  dati: DatiIai,
+  componenti: Componente[],
+  extra: ExtraIconografia = { debito: null, prospettico: null }
+): IconografiaDimensioni {
+  const grafici = [
+    graficoA(dati, extra.debito),
+    graficoB(dati, extra.prospettico),
+    graficoC(dati, extra.prospettico),
+  ].filter((g): g is GraficoDimensione => g !== null && g.massimo !== null);
   return {
     grafici,
     avvisoAffidabilita: avvisoD(dati, componenti),

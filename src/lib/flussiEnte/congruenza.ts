@@ -63,6 +63,33 @@ export interface PeriodoRegolarizzato {
   voce: string;
 }
 
+/**
+ * LO STATO DI UNA POSIZIONE NEL PROSPETTO (0.256.6).
+ *
+ * Prima esistevano solo le righe SCIOLTE: i periodi senza denuncia, quelli
+ * senza pagamento, i regolarizzati e quelli fuori perimetro, ognuno in una
+ * frase sua. Chi legge doveva ricostruire a mente la sequenza. Il prospetto
+ * mette ogni posizione in una riga sola, con il suo stato, così la tabella si
+ * legge per colonna e si raggruppa per anno.
+ */
+export type StatoAdempimento = 'TRASMESSO' | 'SCOPERTA' | 'REGOLARIZZATA' | 'FUORI_PERIMETRO';
+
+export interface RigaProspetto {
+  /** Periodo di competenza, «AAAA-MM». */
+  periodo: string;
+  tipo: FamigliaFlusso;
+  stato: StatoAdempimento;
+  /** La voce che copre il periodo, quando è arrivato per un'altra strada. */
+  copertura: string | null;
+  /** Scadenza di legge del profilo, «AAAA-MM-GG»; null se non è esprimibile. */
+  scadenza: string | null;
+  /**
+   * Giorni fra la scadenza e la data della verifica. Null quando non si misura:
+   * per i flussi presenti il file non porta la data di trasmissione.
+   */
+  ritardo: number | null;
+}
+
 export interface EsitoCongruenza {
   /** L'ente a cui il flusso appartiene. */
   ente: string;
@@ -82,6 +109,11 @@ export interface EsitoCongruenza {
   fuoriPerimetro: { denunce: string[]; deleghe: string[] };
   regolarizzati: PeriodoRegolarizzato[];
   scoperte: PeriodoScoperto[];
+  /**
+   * Tutte le posizioni dell'arco, una per periodo e famiglia, con lo stato: è
+   * la tabella DATA / FONTE / SCAD. LEGALE / RITARDO, raggruppabile per anno.
+   */
+  prospetto: RigaProspetto[];
   /** Tutti i periodi attesi hanno denuncia e pagamento (o una regolarizzazione). */
   completo: boolean;
   /** Perché il ritardo non si misura sui flussi presenti. */
@@ -234,6 +266,62 @@ export function congruenzaFlussi(input: {
 
   scoperte.sort((a, b) => b.giorni - a.giorni || a.periodo.localeCompare(b.periodo));
 
+  // IL PROSPETTO, IN ORDINE CRONOLOGICO. Una riga per periodo e famiglia: le
+  // scoperte, le trasmesse, quelle coperte da una partita e quelle fuori
+  // dall'arco. Le famiglie stanno nell'ordine in cui l'obbligo si adempie —
+  // prima la denuncia, poi il pagamento.
+  const regolarizzatiPer = (tipo: FamigliaFlusso, periodo: string) =>
+    regolarizzazioni.get(`${tipo}:${periodo}`) ?? null;
+  const prospetto: RigaProspetto[] = [];
+  for (const periodo of attesi) {
+    const denuncia = regolarizzatiPer('DENUNCIA', periodo);
+    const scadDenuncia = scadenzaDenuncia(profilo, periodo);
+    prospetto.push({
+      periodo,
+      tipo: 'DENUNCIA',
+      stato: denunce.has(periodo) ? 'TRASMESSO' : denuncia ? 'REGOLARIZZATA' : 'SCOPERTA',
+      copertura: denuncia?.voce ?? null,
+      scadenza: scadDenuncia,
+      ritardo:
+        !denunce.has(periodo) && !denuncia && scadDenuncia
+          ? Math.max(0, giorniFra(scadDenuncia, dataVerifica))
+          : null,
+    });
+    const pagamento = regolarizzatiPer('PAGAMENTO', periodo);
+    const scadPagamento = scadenzaPagamento(profilo, periodo);
+    prospetto.push({
+      periodo,
+      tipo: 'PAGAMENTO',
+      stato: deleghe.has(periodo) ? 'TRASMESSO' : pagamento ? 'REGOLARIZZATA' : 'SCOPERTA',
+      copertura: pagamento?.voce ?? null,
+      scadenza: scadPagamento,
+      ritardo:
+        !deleghe.has(periodo) && !pagamento && scadPagamento
+          ? Math.max(0, giorniFra(scadPagamento, dataVerifica))
+          : null,
+    });
+  }
+  for (const periodo of [...new Set(fuoriDenunce)].sort()) {
+    prospetto.push({
+      periodo,
+      tipo: 'DENUNCIA',
+      stato: 'FUORI_PERIMETRO',
+      copertura: null,
+      scadenza: scadenzaDenuncia(profilo, periodo),
+      ritardo: null,
+    });
+  }
+  for (const periodo of [...new Set(fuoriDeleghe)].sort()) {
+    prospetto.push({
+      periodo,
+      tipo: 'PAGAMENTO',
+      stato: 'FUORI_PERIMETRO',
+      copertura: null,
+      scadenza: scadenzaPagamento(profilo, periodo),
+      ritardo: null,
+    });
+  }
+
   return {
     ente: profilo.enteNome,
     flusso: profilo.flusso,
@@ -252,6 +340,7 @@ export function congruenzaFlussi(input: {
     },
     regolarizzati,
     scoperte,
+    prospetto,
     completo:
       attesi.length > 0 &&
       senzaDenuncia.length === 0 &&

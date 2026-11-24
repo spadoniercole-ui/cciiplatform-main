@@ -13,6 +13,7 @@
 
 import { componiEsitoVerifica, type EsitoVerifica } from '@/lib/verifica/esito';
 import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
+import { componiIconografia, type IconografiaDimensioni } from '@/lib/ritratto/iconografia';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { diagnosticaIaiAction } from '@/app/actions/iai';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
@@ -22,6 +23,8 @@ export interface RisultatoEsitoVerifica {
   esito?: EsitoVerifica;
   /** Il debito dell’ente ritrovato o no in bilancio (0.256.5). */
   debitoInBilancio?: DebitoInBilancio;
+  /** Grafici, avviso e visura per i box A-E (0.256.6). */
+  iconografia?: IconografiaDimensioni;
   error?: string;
 }
 
@@ -46,14 +49,23 @@ export async function ottieniEsitoVerificaAction(
       return { success: false, error: giudizioRis.error ?? 'Esito non calcolabile.' };
     }
 
+    // L'ICONOGRAFIA DEI BOX A-E (0.256.6). Si compone dagli stessi dati su cui
+    // le dimensioni hanno già misurato: qui non si ricalcola nulla. Il valore
+    // attualizzato non c'è ancora — la pagina della contabile precede lo
+    // scenario — e il box lo dichiara invece di mostrare il solo storico come
+    // se fosse l'intera lettura.
+    const dimensioni =
+      dimensioniRis?.success && dimensioniRis.dimensioni ? dimensioniRis.dimensioni : [];
+    const datiIai = dimensioniRis?.success ? (dimensioniRis.dati ?? null) : null;
+    const debito = dimensioniRis?.debitoInBilancio ?? null;
+
     return {
       success: true,
       debitoInBilancio: dimensioniRis?.debitoInBilancio,
-      esito: componiEsitoVerifica({
-        giudizio: giudizioRis.attenzione,
-        dimensioni:
-          dimensioniRis?.success && dimensioniRis.dimensioni ? dimensioniRis.dimensioni : [],
-      }),
+      esito: componiEsitoVerifica({ giudizio: giudizioRis.attenzione, dimensioni }),
+      iconografia: datiIai
+        ? componiIconografia(datiIai, dimensioni, { debito, prospettico: null })
+        : undefined,
     };
   } catch (error: unknown) {
     console.error('[ottieniEsitoVerificaAction]', error);

@@ -9,9 +9,11 @@
 // Le barre non hanno soglie né colori di allarme: la loro lunghezza ordina i
 // determinanti, non gradua un giudizio. Il giudizio è quello sopra.
 
-import { Activity, AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react';
+import { Activity, AlertTriangle, AlertOctagon, CheckCircle2, HelpCircle } from 'lucide-react';
 import { SemaforoAttenzione } from './SemaforoAttenzione';
+import { BarraDato } from './BarraDatoGrafico';
 import { NOME_DIMENSIONE } from '@/lib/iai/dimensioni';
+import type { IconografiaDimensioni } from '@/lib/ritratto/iconografia';
 import { formattaEuro } from '@/lib/formato/numeri';
 import type { EsitoVerifica as Esito } from '@/lib/verifica/esito';
 import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
@@ -83,9 +85,12 @@ function RigaDebitoInBilancio({ d }: { d: DebitoInBilancio }) {
 export function EsitoVerifica({
   esito,
   debitoInBilancio,
+  iconografia,
 }: {
   esito: Esito;
   debitoInBilancio?: DebitoInBilancio | null;
+  /** Grafici, avviso e visura dei box A-E (0.256.6). */
+  iconografia?: IconografiaDimensioni | null;
 }) {
   return (
     <section className="space-y-3" aria-label="Esito della verifica contabile">
@@ -141,6 +146,82 @@ export function EsitoVerifica({
                 )}
                 {c.motivi.length === 0 && c.lacune.length === 0 && (
                   <p className="text-[11px] text-slate-400 mt-2">Nessun determinante.</p>
+                )}
+
+                {/* I GRAFICI DELLA DIMENSIONE (0.256.6). A: debito accertato
+                    contro debito iscritto, poi gli ambiti dell'art. 25-novies.
+                    B e C: valore di bilancio e, quando lo scenario ha un piano
+                    di sviluppo, valore attualizzato e differenziale. Il dato
+                    che manca non si disegna: si dichiara. */}
+                {iconografia?.grafici
+                  .filter((g) => g.dimensione === c.dimensione)
+                  .map((g) => (
+                    <div
+                      key={g.dimensione}
+                      className="mt-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5"
+                    >
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        {g.titolo}
+                      </p>
+                      <p className="mt-0.5 text-[9px] leading-snug text-slate-500">{g.lettura}</p>
+                      <div className="mt-1">
+                        {g.barre.map((b, i) => (
+                          <BarraDato key={`${b.etichetta}-${i}`} b={b} massimo={g.massimo ?? 1} />
+                        ))}
+                      </div>
+                      {g.notaProspettico && (
+                        <p className="mt-1 text-[9px] leading-snug text-slate-400">
+                          {g.notaProspettico}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+
+                {/* D — L'AVVISO FORTE. Non è una dimensione come le altre: se i
+                    dati su cui si decide non reggono, va detto con un segno che
+                    si vede prima dei numeri, non con una riga in fondo. */}
+                {c.dimensione === 'D' && iconografia?.avvisoAffidabilita && (
+                  <div className="mt-2 rounded-lg border-l-4 border-red-500 bg-red-50 p-2.5">
+                    <p className="flex items-center gap-1.5 text-[11px] font-bold text-red-800">
+                      <AlertOctagon className="h-3.5 w-3.5 shrink-0" />
+                      {iconografia.avvisoAffidabilita.titolo}
+                    </p>
+                    <p className="mt-0.5 text-[10px] leading-snug text-red-900">
+                      {iconografia.avvisoAffidabilita.testo}
+                    </p>
+                    {iconografia.avvisoAffidabilita.motivi.length > 0 && (
+                      <ul className="mt-1 list-disc pl-4">
+                        {iconografia.avvisoAffidabilita.motivi.map((m, i) => (
+                          <li key={i} className="text-[10px] leading-snug text-red-900">
+                            {m}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* E — LE PARTICOLARITÀ DELLA VISURA: variazioni di capitale,
+                    compagine, oggetto, rappresentante legale, sede e procedure
+                    in corso. Quando la visura non le porta estratte, il box lo
+                    dice: nessuna variazione dichiarata non è «nessuna
+                    variazione». */}
+                {c.dimensione === 'E' && iconografia && (
+                  <div className="mt-2 space-y-1 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Dalla visura
+                    </p>
+                    {iconografia.visura.particolari.map((p, i) => (
+                      <p
+                        key={i}
+                        className={`text-[10px] leading-snug ${
+                          p.segnala ? 'text-amber-900' : 'text-slate-600'
+                        }`}
+                      >
+                        <strong>{p.etichetta}:</strong> {p.testo}
+                      </p>
+                    ))}
+                  </div>
                 )}
               </div>
             ))}

@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.5**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.6**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,34 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.6 — 2026-11-24
+
+IL PROSPETTO DEGLI ADEMPIMENTI, PER ANNO, E I BOX A–E CHE PORTANO I NUMERI.
+
+Due punti della revisione: la tabella degli adempimenti che si legge per anno
+come in un filtro di Excel, e la schermata «Dove si concentra l’attenzione»
+che non si limita ai determinanti in prosa.
+
+- **Adempimenti verso l’ente:** la tabella DATA / FONTE / SCAD. LEGALE /
+  RITARDO non è più un elenco unico di sole scoperture. Ogni periodo ha le sue
+  due righe (denuncia e pagamento) con lo stato — trasmesso, scoperto, coperto
+  da una partita, fuori dall’arco — e le righe si aprono per anno: il nodo dice
+  quante posizioni contiene, quante sono scoperte e il ritardo più alto. Due
+  filtri: solo gli scoperti, e una sola fonte.
+- **«Dove si concentra l’attenzione»:** i box A–E ora portano i grafici che
+  prima stavano solo nel ritratto aziendale. A: debito amministrativo
+  accertato e debito contabile iscritto in bilancio, con lo zero in evidenza
+  quando il debito non c’è. B: struttura, con il patrimonio netto di bilancio
+  accanto a quello a fine piano quando lo scenario ha un piano di sviluppo. C:
+  i due esercizi e, con il piano, il valore a fine orizzonte con la differenza
+  sul bilancio (anche per il debito verso l’ente, se il piano lo espone). D:
+  avviso forte sui dati che non reggono. E: particolarità della visura, con
+  l’elenco delle variazioni quando la visura le porta estratte — e la
+  dichiarazione esplicita quando non le porta.
+- **Nessun valore attualizzato inventato:** senza piano di sviluppo il box
+  dice che il valore attualizzato si calcola dopo lo scenario, invece di
+  mostrare il solo storico come se fosse tutta la lettura.
 
 ## 0.256.5 — 2026-11-24
 
