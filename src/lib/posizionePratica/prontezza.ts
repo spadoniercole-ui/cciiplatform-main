@@ -5,14 +5,22 @@
 // cosa manca, e chi lo produce?».
 //
 // La regola non è una media: un blocco basta a fermare la posizione, come una
-// soglia di legge superata basta a renderla rossa. Le attenzioni non bloccano
-// ma vanno lette prima di firmare (una verifica scaduta, uno scenario non
-// calcolabile). La differenza fra blocco e attenzione è la differenza fra «non
-// posso» e «posso, sapendo questo».
+// soglia di legge superata basta a renderla rossa. Le attenzioni non bloccano:
+// sono cose da tenere presenti nella lettura (una verifica scaduta, una
+// copertura parziale). La differenza fra blocco e attenzione è la differenza
+// fra «manca il dato» e «il dato c'è, con questo limite».
+//
+// GLI SCENARI NON ENTRANO QUI (0.256.11). Sono l'ultimo passo di un percorso —
+// vengono dopo la fotografia dell'azienda e non si anticipano alla posizione:
+// chiederne il calcolo in questo riquadro faceva sembrare che la posizione
+// dipendesse da una valutazione che ancora non è stata fatta.
+//
+// Il testo parla di ciò che è stato letto, non di ciò che si può decidere: la
+// valutazione è di chi firma, la pagina dice soltanto a che punto è la lettura.
 //
 // Logica pura, con i suoi test.
 
-export type PaginaPosizione = 'amministrativa' | 'contabile' | 'azienda' | 'scenari';
+export type PaginaPosizione = 'amministrativa' | 'contabile' | 'azienda';
 
 export interface IngressiProntezza {
   amministrativa: {
@@ -22,7 +30,6 @@ export interface IngressiProntezza {
   };
   contabile: { completa: boolean; mancanti: string[] };
   azienda: { fotografata: boolean; motivo: string | null };
-  scenari: { calcolabili: number; totali: number };
   /** L'esito della quadratura del credito. */
   quadratura: 'COERENTE' | 'DIVERGENTE' | 'NON_VERIFICABILE';
   validita: { stato: 'recente' | 'in_scadenza' | 'da_rivedere'; etichetta: string };
@@ -71,7 +78,7 @@ export function valutaProntezza(input: IngressiProntezza): EsitoProntezza {
 
   if (input.quadratura === 'DIVERGENTE') {
     blocchi.push(
-      'Le fonti del credito non quadrano: gli scenari girerebbero su una cifra diversa da quella certificata.'
+      'Le fonti del credito non quadrano: la cifra su cui poggia la posizione non è quella certificata.'
     );
   } else if (input.quadratura === 'NON_VERIFICABILE') {
     attenzioni.push(
@@ -96,23 +103,9 @@ export function valutaProntezza(input: IngressiProntezza): EsitoProntezza {
     );
   }
 
-  if (input.scenari.totali === 0) {
-    attenzioni.push(
-      'Nessuno scenario sul credito è stato calcolato: manca il confronto fra accordo, liquidazione e cram down.'
-    );
-  } else if (input.scenari.calcolabili < input.scenari.totali) {
-    attenzioni.push(
-      `${input.scenari.totali - input.scenari.calcolabili} ${
-        input.scenari.totali - input.scenari.calcolabili === 1
-          ? 'scenario non è calcolabile'
-          : 'scenari non sono calcolabili'
-      } (${input.scenari.calcolabili} su ${input.scenari.totali}): le percentuali del rango o la cassa non bastano.`
-    );
-  }
-
   if (input.validita.stato === 'da_rivedere') {
     attenzioni.push(
-      `La verifica amministrativa è da rivedere (${input.validita.etichetta}): l’esito va rifatto sui documenti aggiornati prima di fondarci una decisione.`
+      `La verifica amministrativa è da rivedere (${input.validita.etichetta}): l’esito andrebbe rifatto sui documenti aggiornati, se lo si vuole usare.`
     );
   } else if (input.validita.stato === 'in_scadenza') {
     attenzioni.push(`La verifica amministrativa è in scadenza (${input.validita.etichetta}).`);
@@ -132,11 +125,18 @@ export function valutaProntezza(input: IngressiProntezza): EsitoProntezza {
       ? 'QUASI'
       : 'PRONTA';
 
+  // IL TESTO DICE A CHE PUNTO È LA LETTURA, non che cosa si può fare: «è
+  // decidibile» e «prima di firmare» erano formule vincolanti in una pagina
+  // che si limita a mettere in fila ciò che risulta.
   const dettaglio = !decidibile
-    ? `La posizione non è decidibile: ${blocchi.length} ${blocchi.length === 1 ? 'blocco' : 'blocchi'} e ${attenzioni.length} ${attenzioni.length === 1 ? 'attenzione' : 'attenzioni'}.`
+    ? `La posizione non è ancora completa: ${blocchi.length} ${
+        blocchi.length === 1 ? 'dato manca' : 'dati mancano'
+      }, ${attenzioni.length} ${attenzioni.length === 1 ? 'punto' : 'punti'} da tenere presenti.`
     : attenzioni.length > 0
-      ? `La posizione è decidibile con ${attenzioni.length} ${attenzioni.length === 1 ? 'attenzione' : 'attenzioni'}: nessun blocco, ma qualcosa va letto prima di firmare.`
-      : 'La posizione è decidibile: le quattro verifiche sono complete e il credito quadra.';
+      ? `La posizione si legge, con ${attenzioni.length} ${
+          attenzioni.length === 1 ? 'punto' : 'punti'
+        } da tenere presenti: nessun dato indispensabile manca.`
+      : 'La posizione si legge per intero: le verifiche a monte sono complete e il credito quadra.';
 
   return { grado, decidibile, blocchi, attenzioni, prossimoAtto, dettaglio };
 }
@@ -162,13 +162,6 @@ function prossimoAttoDi(input: IngressiProntezza, blocchi: string[]): ProssimoAt
     return {
       testo: 'Comporre la fotografia dell’azienda sui bilanci disponibili.',
       pagina: 'azienda',
-    };
-  }
-  if (input.scenari.calcolabili < input.scenari.totali) {
-    return {
-      testo:
-        'Completare le percentuali per rango: senza di esse gli scenari restano non calcolabili.',
-      pagina: 'scenari',
     };
   }
   if (input.validita.stato === 'da_rivedere') {

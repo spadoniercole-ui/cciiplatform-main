@@ -147,7 +147,7 @@ export default async function EsitoVerificaAmministrativaPage({
               href={`/spazio/${codice}/verifica-salute/${id}/posizione`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-blue-800 hover:bg-blue-100"
             >
-              <ShieldAlert className="w-3.5 h-3.5" /> Posizione
+              <ShieldAlert className="w-3.5 h-3.5" /> Posizione ente
             </Link>
             {/* UN BINARIO SOLO (0.255.13). Questa voce portava all'anagrafica
                 dell'azienda, che si apriva con una propria barra delle tre

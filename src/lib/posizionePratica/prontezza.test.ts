@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { valutaProntezza, type IngressiProntezza } from './prontezza';
 
-// «Posso decidere?» non è una media: un blocco ferma la posizione, una
-// attenzione la lascia decidibile ma da leggere.
+// «A che punto è la lettura?» non è una media: un blocco ferma la posizione,
+// un'attenzione la lascia leggibile ma con qualcosa da tenere presente.
 
 function ingressi(patch: Partial<IngressiProntezza> = {}): IngressiProntezza {
   return {
@@ -13,7 +13,6 @@ function ingressi(patch: Partial<IngressiProntezza> = {}): IngressiProntezza {
     },
     contabile: { completa: true, mancanti: [] },
     azienda: { fotografata: true, motivo: null },
-    scenari: { calcolabili: 2, totali: 2 },
     quadratura: 'COERENTE',
     validita: { stato: 'recente', etichetta: 'Oggi' },
     richiesteAperte: 0,
@@ -44,7 +43,7 @@ describe('prontezza della posizione', () => {
     expect(p.prossimoAtto?.testo).toContain('Allineare il credito');
   });
 
-  it('copertura incompleta e scenari parziali sono attenzioni, non blocchi', () => {
+  it('una copertura incompleta è un’attenzione, non un blocco', () => {
     const p = valutaProntezza(
       ingressi({
         amministrativa: {
@@ -52,13 +51,25 @@ describe('prontezza della posizione', () => {
           esito: 'ROSSO',
           copertura: { determinate: 3, totali: 4 },
         },
-        scenari: { calcolabili: 1, totali: 2 },
       })
     );
     expect(p.grado).toBe('QUASI');
     expect(p.decidibile).toBe(true);
     expect(p.attenzioni.join(' ')).toContain('3 dimensioni su 4');
-    expect(p.attenzioni.join(' ')).toContain('1 scenario non è calcolabile');
+  });
+
+  it('non anticipa gli scenari: sono l’ultimo passo, non un difetto di questo', () => {
+    const p = valutaProntezza(ingressi());
+    expect(p.attenzioni.join(' ')).not.toContain('scenario');
+    expect(p.dettaglio).not.toContain('scenario');
+    expect(p.prossimoAtto).toBeNull();
+  });
+
+  it('il testo dice a che punto è la lettura, non che cosa si può fare', () => {
+    const completa = valutaProntezza(ingressi());
+    expect(completa.dettaglio).not.toMatch(/decidibile|firmare/i);
+    const conAttenzione = valutaProntezza(ingressi({ richiesteAperte: 1 }));
+    expect(conAttenzione.dettaglio).not.toMatch(/decidibile|firmare/i);
   });
 
   it('la verifica da rivedere condiziona la decisione e diventa il prossimo atto', () => {

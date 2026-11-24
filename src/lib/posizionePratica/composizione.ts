@@ -249,10 +249,6 @@ export function componiPosizione(
       fotografata: Boolean(fotografia && fotografia.anni.length > 0),
       motivo: fotografia?.motivo ?? (fotografia ? null : 'la fotografia non si è potuta leggere'),
     },
-    scenari: {
-      calcolabili: scenari.filter((s) => s.calcolabile).length,
-      totali: scenari.length,
-    },
     quadratura: quadratura.esito,
     validita: { stato: validita.stato, etichetta: validita.etichetta },
     richiesteAperte: richieste.length,
@@ -262,7 +258,7 @@ export function componiPosizione(
   const invecchiamento = valutaInvecchiamento({
     verifica: { fonte: 'amministrativa', data: dati.eseguitaIl, cosa: 'verifica amministrativa' },
     dati: [
-      { fonte: 'debito', data: dati.debitoMemorizzatoIl, cosa: 'debito riaccertato' },
+      { fonte: 'debito', data: dati.debitoMemorizzatoIl, cosa: 'debito verificato' },
       { fonte: 'visura', data: contabile?.visuraIl ?? null, cosa: 'visura camerale ricaricata' },
     ],
   });
@@ -323,7 +319,9 @@ export function componiPosizione(
     congruenza?.dataVerifica ?? null,
     null
   );
-  aggiungiAtto('debito', 'Debito riaccertato', dati.debitoMemorizzatoIl, null);
+  // VERIFICATO, NON RIACCERTATO (0.256.11): la data registrata è quella in cui
+  // il credito è stato riletto e confermato, non un nuovo accertamento.
+  aggiungiAtto('debito', 'Debito verificato', dati.debitoMemorizzatoIl, null);
   for (const d of dati.decisioni ?? []) {
     aggiungiAtto('decisione', `Decisione: ${etichettaEsito(d.esito)}`, d.decisaIl, d.autore);
   }

@@ -169,13 +169,13 @@ export default async function PosizionePage({
       >
         <PassoProcedura
           numero={1}
-          titolo="Stato della posizione"
-          obiettivo="Sapere subito se la pratica è pronta, quasi pronta o bloccata — e da che cosa, prima di leggere i numeri."
+          titolo="Situazione della posizione"
+          obiettivo="Vedere a che punto è la lettura della pratica — che cosa è completo, che cosa conviene tenere presente — prima di entrare nei numeri."
         />
         <div className="flex items-center gap-2">
           <span className={`h-2.5 w-2.5 rounded-full ${stile.pallino}`} />
           <p className={`text-[11px] font-bold uppercase tracking-wider ${stile.testo}`}>
-            Stato: {prontezza.grado}
+            Situazione: {prontezza.grado}
           </p>
         </div>
         <p className="text-[12px] text-slate-800 leading-relaxed">{prontezza.dettaglio}</p>
@@ -199,7 +199,7 @@ export default async function PosizionePage({
         )}
         {prontezza.prossimoAtto && (
           <p className="text-[11px] text-slate-800">
-            <strong>Prossimo atto:</strong> {prontezza.prossimoAtto.testo}
+            <strong>Se si prosegue:</strong> {prontezza.prossimoAtto.testo}
           </p>
         )}
       </section>
@@ -280,17 +280,17 @@ export default async function PosizionePage({
         >
           {invecchiamento.dettaglio}
         </p>
-        {invecchiamento.voci.some((v) => v.cosa === 'debito riaccertato') && (
+        {invecchiamento.voci.some((v) => v.cosa === 'debito verificato') && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1.5">
             <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900">
-              Che cosa vuol dire «debito riaccertato»
+              Che cosa vuol dire «debito verificato»
             </p>
             <p className="text-[10px] text-amber-900 leading-relaxed">
-              Il credito dell’ente è stato ricalcolato — per una nuova certificazione, una rettifica
-              o una decisione sulla posizione — in una data successiva alla verifica. La cifra a cui
-              si guarda non è quella che la verifica aveva fissato, e per questo la quadratura può
-              non tornare: si ricalcola la posizione, oppure si riapre la verifica amministrativa se
-              il nuovo dato cambia l’esito.
+              Il credito dell’ente è stato riletto — su una nuova certificazione, una rettifica o
+              una decisione sulla posizione — in una data successiva alla verifica. Non è un nuovo
+              accertamento: è la verifica, e la conferma, di un dato già analizzato, rimasto quello
+              che era. Se la cifra non è cambiata la posizione resta la stessa; se è cambiata, si
+              ricalcola la posizione o si riapre la verifica amministrativa.
             </p>
           </div>
         )}
@@ -447,31 +447,62 @@ export default async function PosizionePage({
           obiettivo="Passare dalla posizione al lavoro degli uffici: quanto rendono liquidazione e cram down alle percentuali del rango, chi deve contabilizzare che cosa, con il testo pronto per ogni unità operativa."
         />
         {procedure.length > 0 && (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {procedure.map((p) => (
-              <div key={p.codice} className="rounded-lg border border-slate-200 p-3">
-                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                  {p.etichetta}
-                  {p.percentuale !== null ? ` — ${p.percentuale}%` : ''}
-                </p>
-                <p className="text-[13px] font-bold tabular-nums text-slate-900">
-                  {p.calcolabile ? formattaEuro(p.importo) : 'non calcolabile'}
-                </p>
-                <p className="text-[9px] text-slate-500 leading-relaxed">
-                  {p.calcolabile
-                    ? `Credito per la percentuale del rango: ${p.fonte}.`
-                    : `Non si calcola: ${p.motivo}.`}
-                </p>
-              </div>
-            ))}
+          <div className="overflow-hidden rounded-lg border border-slate-200">
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-[9px] uppercase tracking-wider text-slate-500">
+                  <th className="p-2 text-left">Recupero</th>
+                  <th className="p-2 text-right">Parametro</th>
+                  <th className="p-2 text-right">Importo presunto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {procedure.map((p) => (
+                  <tr key={p.codice} className="border-b border-slate-100 last:border-0">
+                    <td className="p-2 align-top">
+                      <span className="block font-bold text-slate-800">{p.etichetta}</span>
+                      <span className="block text-[9px] text-slate-500 leading-relaxed">
+                        {p.calcolabile
+                          ? `Dal debito amministrativo di ${formattaEuro(posizione.credito ?? 0)}: ${p.fonte}.`
+                          : `Non si calcola: ${p.motivo}.`}
+                      </span>
+                    </td>
+                    <td className="p-2 text-right align-top tabular-nums text-slate-600">
+                      {p.percentuale !== null ? `${p.percentuale}%` : '—'}
+                    </td>
+                    <td className="p-2 text-right align-top font-bold tabular-nums text-slate-900">
+                      {p.calcolabile ? formattaEuro(p.importo) : 'non calcolabile'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-        <p className="text-[10px] text-slate-500 leading-relaxed">
-          Gli importi vengono dalle percentuali impostate in Parametri di Spazio: quella media della
-          proposta per l’accordo, il tasso di realizzo e la percentuale di soddisfacimento del rango
-          per le due procedure. Senza una percentuale l’importo non si calcola, e la riga dice
-          perché.
-        </p>
+        {/* I VALORI SONO PRESUNTI (0.256.11). La natura del credito e l’esito di
+            una procedura non si conoscono a questa altezza del percorso: si
+            prendono i parametri dello spazio — anche quelli che serviranno a un
+            eventuale piano — e se ne ricava un ordine di grandezza, da cui
+            partire per ragionare sul tipo di recupero possibile. Il dato di
+            partenza è il debito amministrativo, non il credito dello scenario. */}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1.5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+            Valori presunti e ipotetici
+          </p>
+          <p className="text-[10px] text-slate-700 leading-relaxed">
+            Questi importi non sono un credito accertato né un esito: sono il debito amministrativo
+            letto alle percentuali dei parametri dello spazio, a mera indicazione di massima. Non si
+            conosce a priori la natura del credito, né si attende una verifica dell’azienda che
+            arrivi fino agli scenari — che restano l’ultimo passo del percorso. Servono a impostare
+            una riflessione sul tipo di recupero possibile, non a fissarne l’importo.
+          </p>
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            I parametri sono tutti in Parametri di Spazio, compresi quelli di un eventuale piano:
+            percentuale media della proposta per l’accordo, tasso di realizzo della liquidazione,
+            percentuale di soddisfacimento del rango per il cram down e i valori del piano. Senza un
+            parametro l’importo non si calcola, e la riga dice perché.
+          </p>
+        </div>
         <p className="text-[10px] text-slate-500 leading-relaxed">
           Le procedure sono un parametro dello spazio, non un passo della pratica: dicono che cosa
           va fatto per ogni tipologia di debito e a quale ufficio chiederlo, e valgono per tutte le

@@ -32,7 +32,7 @@ describe('invecchiamento della posizione', () => {
       verifica: { fonte: 'amministrativa', data: '2026-06-30', cosa: 'verifica' },
       dati: [
         { fonte: 'bilancio', data: '2026-09-15', cosa: 'bilancio' },
-        { fonte: 'debito', data: '2026-10-01', cosa: 'debito riaccertato' },
+        { fonte: 'debito', data: '2026-10-01', cosa: 'debito verificato' },
         { fonte: 'visura', data: '2026-05-01', cosa: 'visura' },
       ],
     });

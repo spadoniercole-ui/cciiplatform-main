@@ -211,7 +211,7 @@ describe('composizione della posizione', () => {
     expect(p.confronto.letture.some((l) => l.nome === 'Fotografia dell’azienda')).toBe(false);
   });
 
-  it('un debito riaccertato dopo la verifica rende la posizione «da ricalcolare»', () => {
+  it('un debito verificato dopo la verifica rende la posizione «da ricalcolare»', () => {
     const p = componiPosizione(
       dati({
         debitoMemorizzatoIl: '2026-12-01T08:00:00.000Z',

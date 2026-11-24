@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.10**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.11**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,32 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.11 — 2026-11-24
+
+POSIZIONE ENTE: LE PAROLE DELLA LETTURA, NON QUELLE DELLA DECISIONE.
+
+- **Il riquadro dello stato non vincola più.** «La posizione è decidibile»,
+  «va letto prima di firmare» erano formule che dicevano a chi legge che cosa
+  può fare; ora la pagina dice soltanto a che punto è la lettura («si legge per
+  intero», «si legge, con due punti da tenere presenti», «non è ancora
+  completa»).
+- **Gli scenari escono dal riquadro.** Non esistono più nella posizione e,
+  nella sequenza delle verifiche, sono l'ultimo passo: chiederne il calcolo qui
+  faceva sembrare la posizione incompleta per un passo che non è ancora il suo.
+  Tolti dagli ingressi della prontezza, dalle attenzioni e dal «prossimo atto».
+- **«Riaccertato» diventa «verificato».** Il credito non viene riaccertato: si
+  rilegge e si conferma un dato già analizzato, rimasto quello che era. Cambiati
+  l'atto in cronologia, la voce dell'invecchiamento e la spiegazione in pagina.
+- **Il passo 7 diventa una tabella di valori presunti.** Non si conosce a priori
+  la natura del credito e non si attende la verifica dell'azienda che arriva
+  agli scenari: si prende il debito amministrativo, lo si legge alle percentuali
+  dei parametri dello spazio — compresi quelli di un eventuale piano — e se ne
+  ricava un ordine di grandezza dichiarato come ipotetico, per ragionare sul
+  tipo di recupero.
+- **Senza il flag di simulazione il piano non si apre, e si dice perché.** Al
+  posto del rimando secco alla panoramica, una pagina spiega che senza il flag
+  l'unico dato è quello contabile del passo 3 della verifica azienda.
 
 ## 0.256.10 — 2026-11-24
 
