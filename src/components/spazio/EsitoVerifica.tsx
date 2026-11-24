@@ -178,11 +178,6 @@ export function EsitoVerifica({
                           />
                         ))}
                       </div>
-                      {g.notaProspettico && (
-                        <p className="mt-1 text-[9px] leading-snug text-slate-400">
-                          {g.notaProspettico}
-                        </p>
-                      )}
                     </div>
                   ))}
 

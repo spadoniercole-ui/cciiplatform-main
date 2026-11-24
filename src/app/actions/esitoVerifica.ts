@@ -63,9 +63,7 @@ export async function ottieniEsitoVerificaAction(
       success: true,
       debitoInBilancio: dimensioniRis?.debitoInBilancio,
       esito: componiEsitoVerifica({ giudizio: giudizioRis.attenzione, dimensioni }),
-      iconografia: datiIai
-        ? componiIconografia(datiIai, dimensioni, { debito, prospettico: null })
-        : undefined,
+      iconografia: datiIai ? componiIconografia(datiIai, dimensioni, { debito }) : undefined,
     };
   } catch (error: unknown) {
     console.error('[ottieniEsitoVerificaAction]', error);

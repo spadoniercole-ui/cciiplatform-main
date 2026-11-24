@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.14**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.15**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,25 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.15 — 2026-11-24
+
+L'ICONOGRAFIA NON PROMETTE PIÙ UN VALORE CHE NESSUNO PRODUCE.
+
+- **Tolte le righe «a fine piano» dei box B e C**, con la loro nota: il
+  `prospettico` che le alimentava era `null` in tutti e due i punti in cui
+  l'iconografia si costruisce (ritratto e verifica contabile), quindi il ramo
+  non si è mai acceso. Non è stato alimentato perché non si può: quelle due
+  letture sono d'azienda, senza scenario, e il piano di sviluppo vive dentro uno
+  scenario — e in più varianti, quindi sceglierne uno sarebbe una scelta
+  inventata dal sistema.
+- **Perché non bastano gli altri dati.** La proiezione contabile ricostruisce gli
+  anni mancanti fino alla verifica: non porta il patrimonio, i ricavi e l'utile a
+  una fine di piano, e chiamarli «a fine piano» sarebbe falso. Il debito verso
+  l'ente del piano non è nemmeno esposto dal ritratto.
+- **Il box B resta patrimonio netto e debiti totali**, il box C resta i due
+  esercizi accostati: la barra dice il livello, la coppia la direzione, e non
+  compare più una riga che prometteva un differenziale mai calcolato.
 
 ## 0.256.14 — 2026-11-24
 

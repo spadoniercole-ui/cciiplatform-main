@@ -82,7 +82,7 @@ describe('componiIconografia', () => {
       bilancioLetto: true,
       alias: ['INPS'],
     });
-    const a = componiIconografia(dati, componenti, { debito, prospettico: null }).grafici.find(
+    const a = componiIconografia(dati, componenti, { debito }).grafici.find(
       (g) => g.dimensione === 'A'
     );
     expect(a?.barre[0].etichetta).toBe('Debito amministrativo accertato');

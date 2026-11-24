@@ -25,29 +25,20 @@ import { type Componente, type DatiIai } from '@/lib/iai/dimensioni';
 import { gravitaDebito, type DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 
 /**
- * I VALORI ATTUALIZZATI (0.256.6).
+ * NESSUN VALORE PROSPETTICO (0.256.15).
  *
- * I box A-E arrivano dopo lo sviluppo dello scenario: accanto al valore di
- * bilancio — storico — c'è quello che il piano di sviluppo porta a fine
- * orizzonte. Non è una previsione del sistema: è il piano che l'azienda ha
- * presentato o che è stato simulato, letto nelle stesse voci. Quando non c'è,
- * la riga non si inventa e il box lo dichiara.
+ * Fino alla 0.256.14 l'iconografia prevedeva le righe «a fine piano» di B e C,
+ * alimentate da un `prospettico` che nessuno produceva: il ritratto e la
+ * verifica contabile sono letture d'azienda — senza scenario — e il piano di
+ * sviluppo vive dentro uno scenario, in più varianti. La proiezione contabile
+ * non basta: ricostruisce gli anni mancanti fino alla verifica, non porta il
+ * patrimonio a una fine di piano. Il ramo è stato tolto invece di lasciare un
+ * percorso che promette un dato e non lo produce mai: l'iconografia mostra il
+ * bilancio per quello che è, e non dichiara un valore attualizzato che non c'è.
  */
-export interface ProspetticoBilancio {
-  /** L'anno di chiusura dell'orizzonte. */
-  anno: number;
-  ricavi: number | null;
-  utile: number | null;
-  patrimonioNetto: number | null;
-  /** Il debito verso l'ente come lo porta il piano, se il piano lo espone. */
-  debitoEnte: number | null;
-}
-
 export interface ExtraIconografia {
   /** Il confronto fra debito accertato e debito scritto in bilancio. */
   debito: DebitoInBilancio | null;
-  /** I valori a fine orizzonte dello scenario, quando è stato sviluppato. */
-  prospettico: ProspetticoBilancio | null;
 }
 
 export interface BarraGrafico {
@@ -77,8 +68,6 @@ export interface GraficoDimensione {
    */
   minimo: number;
   barre: BarraGrafico[];
-  /** Che cosa manca per avere anche il valore attualizzato, quando manca. */
-  notaProspettico?: string;
 }
 
 export interface AvvisoAffidabilita {
@@ -201,10 +190,7 @@ function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimens
   };
 }
 
-function graficoB(
-  dati: DatiIai,
-  prospettico: ProspetticoBilancio | null
-): GraficoDimensione | null {
+function graficoB(dati: DatiIai): GraficoDimensione | null {
   const b = dati.bilancio.corrente;
   if (!b) return null;
   // LA STRUTTURA, IN EURO (0.256.7). Prima erano due rapporti percentuali
@@ -241,18 +227,6 @@ function graficoB(
       segnala: false,
     });
   }
-  // IL VALORE ATTUALIZZATO (0.256.6): patrimonio netto di bilancio e patrimonio
-  // a fine orizzonte sulla stessa scala.
-  if (prospettico && prospettico.patrimonioNetto !== null) {
-    barre.push({
-      etichetta: `Patrimonio netto a fine piano (${prospettico.anno})`,
-      valore: prospettico.patrimonioNetto,
-      testo: euro(prospettico.patrimonioNetto),
-      riferimento: 'attualizzato: il piano di sviluppo dello scenario',
-      segnala: prospettico.patrimonioNetto < 0,
-    });
-  }
-
   if (!barre.length) return null;
   return {
     dimensione: 'B',
@@ -262,16 +236,10 @@ function graficoB(
     massimo: massimoDi(barre),
     minimo: minimoDi(barre),
     barre,
-    notaProspettico: prospettico
-      ? undefined
-      : 'Il valore attualizzato si calcola quando lo scenario ha un piano di sviluppo: senza piano restano i valori di bilancio.',
   };
 }
 
-function graficoC(
-  dati: DatiIai,
-  prospettico: ProspetticoBilancio | null
-): GraficoDimensione | null {
+function graficoC(dati: DatiIai): GraficoDimensione | null {
   const c = dati.bilancio.corrente;
   const p = dati.bilancio.precedente;
   if (!c || !p) return null;
@@ -312,34 +280,6 @@ function graficoC(
     ),
   ];
 
-  // IL DIFFERENZIALE PROSPETTICO (0.256.6). Accanto alla coppia storica, la
-  // stessa voce a fine piano e la sua differenza dal bilancio: è il numero che
-  // dice se il piano cambia la direzione o la conferma.
-  if (prospettico) {
-    const futuro = (cosa: string, ora: number | null, dopo: number | null): BarraGrafico[] => {
-      if (dopo === null) return [];
-      const differenza = ora === null ? null : dopo - ora;
-      return [
-        {
-          etichetta: `${cosa} a fine piano (${prospettico.anno})`,
-          valore: dopo,
-          testo: euro(dopo),
-          riferimento:
-            differenza === null
-              ? null
-              : `differenza ${differenza >= 0 ? '+' : ''}${euro(differenza)} sul bilancio`,
-          segnala: dopo < 0 || (differenza !== null && differenza < 0),
-        },
-      ];
-    };
-    barre.push(
-      ...futuro('Ricavi', c.ricavi, prospettico.ricavi),
-      ...futuro('Utile', c.utile, prospettico.utile),
-      ...futuro('Patrimonio netto', c.patrimonioNetto, prospettico.patrimonioNetto),
-      ...futuro('Debito verso l’ente', null, prospettico.debitoEnte)
-    );
-  }
-
   return {
     dimensione: 'C',
     titolo: 'I due esercizi, accostati',
@@ -351,9 +291,6 @@ function graficoC(
     // come se fosse un valore positivo, e il segno resterebbe solo nella cifra.
     minimo: minimoDi(barre),
     barre,
-    notaProspettico: prospettico
-      ? undefined
-      : 'Il differenziale prospettico si calcola quando lo scenario ha un piano di sviluppo: senza piano restano i due esercizi di bilancio.',
   };
 }
 
@@ -462,13 +399,11 @@ function particolariE(dati: DatiIai): { disponibile: boolean; particolari: Parti
 export function componiIconografia(
   dati: DatiIai,
   componenti: Componente[],
-  extra: ExtraIconografia = { debito: null, prospettico: null }
+  extra: ExtraIconografia = { debito: null }
 ): IconografiaDimensioni {
-  const grafici = [
-    graficoA(dati, extra.debito),
-    graficoB(dati, extra.prospettico),
-    graficoC(dati, extra.prospettico),
-  ].filter((g): g is GraficoDimensione => g !== null && g.massimo !== null);
+  const grafici = [graficoA(dati, extra.debito), graficoB(dati), graficoC(dati)].filter(
+    (g): g is GraficoDimensione => g !== null && g.massimo !== null
+  );
   return {
     grafici,
     avvisoAffidabilita: avvisoD(componenti),

@@ -408,7 +408,6 @@ export function componiRitratto(fonti: FontiRitratto): Ritratto {
     fonti.datiIai && fonti.esito
       ? componiIconografia(fonti.datiIai, fonti.esito.dimensioni, {
           debito: fonti.debitoInBilancio ?? null,
-          prospettico: null,
         })
       : null;
 
