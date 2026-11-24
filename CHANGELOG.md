@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.15**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.16**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,27 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.16 — 2026-11-24
+
+IL DEBITO CONTABILIZZATO SOLO IN PARTE LO DICE ANCHE SOTTO LA BARRA.
+
+- **La riga del debito contabile, nel box A, affermava la copertura intera.**
+  Con 70.000 € iscritti contro 152.000 € accertati la barra era ambra e il
+  riquadro sopra diceva «contabilizzato solo in parte», ma la riga sotto —
+  `RISCONTRO[stato]` — recitava «le voci di bilancio verso i creditori pubblici
+  lo contengono»: due frasi opposte nello stesso riquadro. Ora il caso parziale
+  ha la sua: «contabilizzato solo in parte: 70.000 € in bilancio contro 152.000 €
+  accertati».
+- **Il testo del riscontro sta nella lib** (`riscontroDebito` in
+  `src/lib/verifica/debitoInBilancio.ts`), accanto a `gravitaDebito` e
+  `titoloDebito`: era l'ultima delle tre frasi del debito a vivere ancora nel
+  componente, e per questo era rimasta indietro rispetto alle altre due.
+- **Verificato in demo** (spazio RICEVENTE locale, Tessitura Lario e Meccanica
+  Valsesia): il riquadro ambra dice già «contabilizzato solo in parte», e ora la
+  riga del box A non lo contraddice più. Resta «la verifica in bilancio non è
+  possibile» solo dove il bilancio XBRL non è letto (Impianti Adriatica,
+  Meccanica Lombarda), che è il caso per cui quella frase esiste.
 
 ## 0.256.15 — 2026-11-24
 

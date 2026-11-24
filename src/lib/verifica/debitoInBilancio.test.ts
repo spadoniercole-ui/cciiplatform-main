@@ -3,6 +3,7 @@ import {
   confrontaDebitoInBilancio,
   gravitaDebito,
   importoInBilancio,
+  riscontroDebito,
   titoloDebito,
   vocePerEnte,
 } from './debitoInBilancio';
@@ -108,6 +109,25 @@ describe('i tre stati, come si leggono', () => {
       expect(titoloDebito(d)).toBe(c.titolo);
     });
   }
+
+  it('il riscontro sotto la barra dice «solo in parte», con i due importi', () => {
+    const parziale = confrontaDebitoInBilancio({
+      ...base,
+      vociBilancio: { tributari: 0, previdenziali: 50000 },
+    });
+    expect(riscontroDebito(parziale)).toBe(
+      'contabilizzato solo in parte: 50.000 € in bilancio contro 120.000 € accertati'
+    );
+    // Il riscontro intero e quello impossibile restano distinti.
+    const intero = confrontaDebitoInBilancio({
+      ...base,
+      vociBilancio: { tributari: 0, previdenziali: 150000 },
+    });
+    const impossibile = confrontaDebitoInBilancio({ ...base, bilancioLetto: false });
+    expect(riscontroDebito(intero)).toMatch(/per intero/);
+    expect(riscontroDebito(impossibile)).toMatch(/non è possibile/);
+    expect(riscontroDebito(parziale)).not.toMatch(/non è possibile/);
+  });
 
   it('un debito parziale non si legge come una verifica impossibile', () => {
     const parziale = confrontaDebitoInBilancio({

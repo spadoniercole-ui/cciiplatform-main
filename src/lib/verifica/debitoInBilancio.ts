@@ -121,6 +121,27 @@ export function titoloDebito(d: DebitoInBilancio): string {
 
 const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
 
+/**
+ * IL RISCONTRO IN UNA RIGA (0.256.16). È il testo che sta sotto la barra del
+ * debito contabile nell'iconografia. Diceva sempre «le voci di bilancio lo
+ * contengono», anche quando in bilancio c'era solo una parte: la riga era
+ * ambra, ma la frase affermava la copertura intera, e contraddiceva il titolo
+ * del riquadro sopra. Il caso parziale ha ora la sua frase, con i due importi.
+ */
+export function riscontroDebito(d: DebitoInBilancio): string {
+  if (d.stato === 'CONTABILIZZATO' && gravitaDebito(d) === 'ambra') {
+    return d.inBilancio !== null && d.esposizione !== null
+      ? `contabilizzato solo in parte: ${euro(d.inBilancio)} in bilancio contro ${euro(
+          d.esposizione
+        )} accertati`
+      : 'contabilizzato solo in parte: il bilancio non copre l’importo accertato';
+  }
+  if (d.stato === 'CONTABILIZZATO') return 'le voci di bilancio lo contengono per intero';
+  if (d.stato === 'NON_CONTABILIZZATO')
+    return 'nessun riscontro nelle voci di bilancio: il debito non è contabilizzato';
+  return 'il confronto con il bilancio non è possibile';
+}
+
 type EsitoDebito = Pick<
   DebitoInBilancio,
   'stato' | 'esposizione' | 'inBilancio' | 'voce' | 'testo'

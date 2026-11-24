@@ -22,7 +22,11 @@
 // Logica pura, con i suoi test.
 
 import { type Componente, type DatiIai } from '@/lib/iai/dimensioni';
-import { gravitaDebito, type DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
+import {
+  gravitaDebito,
+  riscontroDebito,
+  type DebitoInBilancio,
+} from '@/lib/verifica/debitoInBilancio';
 
 /**
  * NESSUN VALORE PROSPETTICO (0.256.15).
@@ -132,12 +136,6 @@ export function geometriaBarra(valore: number | null, massimo: number, minimo = 
   };
 }
 
-const RISCONTRO: Record<DebitoInBilancio['stato'], string> = {
-  CONTABILIZZATO: 'le voci di bilancio verso i creditori pubblici lo contengono',
-  NON_CONTABILIZZATO: 'nessun riscontro nelle voci di bilancio: il debito non è contabilizzato',
-  NON_VERIFICABILE: 'il confronto con il bilancio non è possibile',
-};
-
 function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimensione | null {
   const soglie = dati.ente.soglie;
   if (soglie.length === 0 && !debito) return null;
@@ -161,7 +159,7 @@ function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimens
       etichetta: 'Debito contabile iscritto in bilancio',
       valore: contabile,
       testo: contabile === null ? 'voce non letta' : euro(contabile),
-      riferimento: RISCONTRO[debito.stato],
+      riferimento: riscontroDebito(debito),
       segnala: gravitaDebito(debito) !== 'neutro',
     });
   }
