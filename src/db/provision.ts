@@ -1011,6 +1011,24 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
     sql`ALTER TABLE ${s}.parametri_piano_simulazione ADD COLUMN IF NOT EXISTS intensita_minima_attenzione NUMERIC`
   );
 
+  // IL CONTESTO ECONOMICO DEL PIANO (0.256.18). Non sono leve del motore ma
+  // fatti del mondo che il piano deve tenere presenti — inflazione, spread,
+  // costo del carburante, incidenza di crisi e instabilità, tecnologia. La
+  // tabella è un elenco, non una riga unica: ogni voce ha il suo campo
+  // descrittivo, il suo valore libero e la forma del valore (importo,
+  // percentuale, previsione a tendere). Vuota finché l'ente non scrive: la
+  // piattaforma non inventa valori.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_piano_contesto (
+      id SERIAL PRIMARY KEY,
+      descrizione TEXT NOT NULL,
+      valore TEXT NOT NULL DEFAULT '',
+      tipo TEXT NOT NULL DEFAULT 'PERCENTUALE',
+      ordinamento INTEGER NOT NULL DEFAULT 0,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    )`
+  );
+
   // Quali tab del motore XBRL (Indici CNDCEC, Altri Indici, Situazione
   // Debitoria, Andamento Storico) l'Admin di Spazio vuole attive
   // nell'Import XBRL di ogni azienda — non tutte servono a ogni studio.

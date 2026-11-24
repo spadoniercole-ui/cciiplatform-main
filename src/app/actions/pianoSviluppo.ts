@@ -45,6 +45,14 @@ import {
 } from '@/lib/piano/contestoContabile';
 import { ottieniEsitoVerificaAction } from '@/app/actions/esitoVerifica';
 import { leggiParametriSimulazione } from '@/lib/piano/letturaParametriSimulazione';
+import { leggiParametriContesto } from '@/lib/piano/letturaParametriContesto';
+import { testoParametriContesto } from '@/lib/piano/parametriContesto';
+import {
+  pianoVerificaDaColonne,
+  testoPianoVerifica,
+  type AnnoPianoVerifica,
+} from '@/lib/piano/pianoDaVerifica';
+import { testoLeve } from '@/lib/piano/leveSimulazione';
 import type { ParametriSimulazionePiano } from '@/lib/piano/parametriSimulazione';
 import {
   pianoRientroPulito,
@@ -85,6 +93,19 @@ export interface DatiPianoSviluppo {
   soluzione: SoluzioneSalvata | null;
   /** Le leve della simulazione (Parametri › Piano e simulazione AI). */
   parametri: ParametriSimulazionePiano;
+  /**
+   * true quando lo scenario è nato con il flag di simulazione: il piano di
+   * sviluppo poggia sul passo 3 della verifica aziendale (e sul confronto con
+   * il piano dell'azienda, per il Ricevente).
+   */
+  simulazioneAttiva: boolean;
+  /**
+   * Il piano dell'azienda che arriva dalla verifica aziendale, quando il flag è
+   * attivo: le annualità salvate nel prospetto. Vuoto quando non ce n'è.
+   */
+  pianoVerifica: AnnoPianoVerifica[];
+  /** Il contesto economico dello spazio (Parametri › Piano e simulazione AI). */
+  parametriContesto: number;
 }
 
 export async function ottieniPianoSviluppoAction(
@@ -218,6 +239,26 @@ export async function ottieniPianoSviluppoAction(
       mesi: mesiProposta > 1 ? mesiProposta : 0,
       anticipoPct: 0,
     };
+    // IL FLAG DI SIMULAZIONE E IL PIANO DELLA VERIFICA AZIENDALE (0.256.18).
+    // Con il flag acceso lo scenario lavora sul piano che l'azienda ha già
+    // messo a disposizione nel passo 3 della verifica: si legge quello, e si
+    // dichiara se non c'è, invece di far credere che il piano parta dal nulla.
+    const scenarioRis = await ottieniScenarioPerId(nomeSchema, scenarioId).catch(() => null);
+    const simulazioneAttiva = scenarioRis?.success
+      ? Boolean(scenarioRis.scenario?.simulazioneAttiva)
+      : false;
+    let pianoVerifica: AnnoPianoVerifica[] = [];
+    if (simulazioneAttiva) {
+      const va = await pool
+        .query(
+          `SELECT colonne FROM "${nomeSchema}".verifica_azienda_simulazioni
+            WHERE azienda_id = $1 ORDER BY base_per_proposta DESC, id DESC LIMIT 1`,
+          [aziendaId]
+        )
+        .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+      pianoVerifica = pianoVerificaDaColonne(va.rows[0]?.colonne);
+    }
+    const contesto = await leggiParametriContesto(nomeSchema).catch(() => []);
     const scr = await pool
       .query(`SELECT visura_fatti FROM "${nomeSchema}".azienda_screening WHERE azienda_id = $1`, [
         aziendaId,
@@ -249,6 +290,9 @@ export async function ottieniPianoSviluppoAction(
         serieSistema: piano.rows[0]?.serie_sistema === true,
         soluzione: soluzionePulita(piano.rows[0]?.soluzione),
         parametri,
+        simulazioneAttiva,
+        pianoVerifica,
+        parametriContesto: contesto.filter((c) => c.valore.length > 0).length,
       },
     };
   } catch (error: unknown) {
@@ -439,6 +483,11 @@ function contestoPulito(c: ContestoElaborazione): ContestoElaborazione | null {
       ? String(c.attenzioneContabile).slice(0, 4000)
       : null,
     lancio: c.lancio ? String(c.lancio).slice(0, 1000) : null,
+    // Le leve del lancio (0.256.18): testo già composto da `testoLeve`, come
+    // lo legge l'AI. Gli altri due blocchi li riempie il server qui sotto.
+    leve: c.leve ? String(c.leve).slice(0, 1500) : null,
+    parametriContesto: c.parametriContesto ? String(c.parametriContesto).slice(0, 4000) : null,
+    pianoVerifica: c.pianoVerifica ? String(c.pianoVerifica).slice(0, 4000) : null,
     vincoli: (c.vincoli ?? []).slice(0, 10).map((v) => String(v).slice(0, 200)),
   };
 }
@@ -473,6 +522,25 @@ export async function elaboraPianoConAiAction(
     const c = contestoPulito(contesto);
     if (!c)
       return { success: false, error: 'Dati del piano incompleti: serve almeno un bilancio.' };
+    // IL CONTESTO ECONOMICO E IL PIANO DELLA VERIFICA (0.256.18) si leggono
+    // qui: sono dati dello spazio e dell'azienda, non del browser. Il contesto
+    // vale per tutte le aziende (Parametri), il piano della verifica solo se lo
+    // scenario è nato con il flag di simulazione.
+    c.parametriContesto =
+      testoParametriContesto(await leggiParametriContesto(s).catch(() => [])) || null;
+    const scenarioCorrente = await ottieniScenarioPerId(s, scenarioId).catch(() => null);
+    if (scenarioCorrente?.success && scenarioCorrente.scenario?.simulazioneAttiva) {
+      const va = await pool
+        .query(
+          `SELECT colonne FROM "${s}".verifica_azienda_simulazioni
+            WHERE azienda_id = $1 ORDER BY base_per_proposta DESC, id DESC LIMIT 1`,
+          [scenarioCorrente.scenario.aziendaId]
+        )
+        .catch(() => ({ rows: [] as Record<string, unknown>[] }));
+      c.pianoVerifica = testoPianoVerifica(pianoVerificaDaColonne(va.rows[0]?.colonne)) || null;
+    } else {
+      c.pianoVerifica = null;
+    }
     // Le leve dello spazio (Parametri › Piano e simulazione AI): l'AI scrive le
     // ipotesi dentro questi limiti, e l'aliquota che non decide è quella
     // dell'ente, non il 27,9% implicito nel motore.

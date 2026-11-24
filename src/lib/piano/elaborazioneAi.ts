@@ -69,6 +69,19 @@ export interface ContestoElaborazione {
   attenzioneContabile?: string | null;
   /** I parametri di lancio scelti per questa simulazione (procedura, offerta, prudenza). */
   lancio?: string | null;
+  /**
+   * Il contesto economico dello spazio (Parametri › Piano e simulazione AI):
+   * inflazione, spread, costo del carburante, incidenza di crisi, tecnologia.
+   * In testo, vuoto quando l'ente non ha scritto nulla.
+   */
+  parametriContesto?: string | null;
+  /** Le leve accese al lancio (tagli, tecnologia, diversificazione, target). */
+  leve?: string | null;
+  /**
+   * Il piano dell'azienda che arriva dal passo 3 della verifica aziendale,
+   * quando lo scenario è stato creato con il flag di simulazione.
+   */
+  pianoVerifica?: string | null;
   /** Vincoli che scattano con il piano di partenza (testo breve). */
   vincoli?: string[];
 }
@@ -122,6 +135,12 @@ export function testoContesto(c: ContestoElaborazione): string {
         .join('\n')}`
     );
   }
+  if (c.pianoVerifica)
+    parti.push(
+      `PIANO DELL'AZIENDA DALLA VERIFICA AZIENDALE (passo 3)\n${c.pianoVerifica}\nIl piano che simuli parte da qui: dove lo contraddici, dillo nella motivazione.`
+    );
+  if (c.parametriContesto) parti.push(`CONTESTO ECONOMICO DELLO SPAZIO\n${c.parametriContesto}`);
+  if (c.leve) parti.push(`LEVE CHIESTE AL LANCIO (già decise: non proporne altre)\n${c.leve}`);
   if (c.attenzioneContabile)
     parti.push(`ATTENZIONE DELLA VERIFICA CONTABILE\n${c.attenzioneContabile}`);
   if (c.lancio) parti.push(`PARAMETRI DI LANCIO\n${c.lancio}`);

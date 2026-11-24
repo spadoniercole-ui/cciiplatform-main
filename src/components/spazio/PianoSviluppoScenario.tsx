@@ -50,6 +50,14 @@ import {
 } from '@/components/spazio/ConfrontoPianoAziendale';
 import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
 import {
+  LEVE,
+  LEVE_PREDEFINITE,
+  contaLeve,
+  testoLeve,
+  type LeveSimulazione,
+} from '@/lib/piano/leveSimulazione';
+import { testoPianoVerifica } from '@/lib/piano/pianoDaVerifica';
+import {
   applicaManopola,
   definizioniManopole,
   letturaManopola,
@@ -158,6 +166,11 @@ export function PianoSviluppoScenario({
     soglia: number;
   } | null>(null);
   const [lancio, setLancio] = useState<LancioSimulazione>(LANCIO_PREDEFINITO);
+  // LE CINQUE LEVE DEL LANCIO (0.256.18): tagli, tecnologia, diversificazione
+  // di produzione e mercati, target di clientela. Ognuna è un sì/no con una
+  // misura in percentuale, che la piattaforma propone e chi simula può
+  // cambiare. Valgono per questa simulazione, non per lo spazio.
+  const [leve, setLeve] = useState<LeveSimulazione>(LEVE_PREDEFINITE);
   // Ricevente, ordine dei fattori (0.129): variante di sistema, piano di
   // rientro, soluzione verde.
   const [serieSistema, setSerieSistema] = useState(false);
@@ -420,6 +433,9 @@ export function PianoSviluppoScenario({
         ipotesiCorrenti: ipotesi,
         attenzioneContabile: attenzione?.testo ?? null,
         lancio: testoLancio(lancio),
+        // Le leve accese, in testo: il contesto economico e il piano della
+        // verifica aziendale li aggiunge il server (sono dati dello spazio).
+        leve: testoLeve(leve) || null,
         vincoli: [...esito.vincoli.map((v) => v.testo), ...(attenzione?.vincoli ?? [])],
       });
       if (!r.success) {
@@ -620,6 +636,111 @@ export function PianoSviluppoScenario({
             tuo profilo: la simulazione lavora sui bilanci, sulle rate e sul riferimento di settore.
           </p>
         )}
+        {/* LE LEVE DEL LANCIO (0.256.18). Non sono manopole del motore: sono
+            le scelte di che cosa mettere in gioco, e ognuna porta la sua
+            misura. Il contesto economico (inflazione, spread, carburante,
+            incidenza di crisi e instabilità, tecnologia) sta in Parametri ›
+            Piano e simulazione AI, perché non varia per azienda. */}
+        <div className="border-t border-slate-200 pt-3 space-y-2">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            Le leve di questa simulazione ({contaLeve(leve)} accese su {LEVE.length})
+          </p>
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            Che cosa deve prevedere il piano. La misura è in percentuale ed è quella suggerita dalla
+            piattaforma: cambiala se per questa azienda non vale.
+          </p>
+          <div className="space-y-1.5">
+            {LEVE.map((l) => {
+              const s = leve[l.id];
+              return (
+                <div
+                  key={l.id}
+                  className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_90px_120px] items-center rounded-lg border border-slate-200 p-2"
+                >
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-800">{l.domanda}</p>
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      {l.misura} — {l.effetto}
+                    </p>
+                  </div>
+                  <select
+                    value={s.attiva ? 'SI' : 'NO'}
+                    onChange={(e) =>
+                      setLeve((prev) => ({
+                        ...prev,
+                        [l.id]: { ...prev[l.id], attiva: e.target.value === 'SI' },
+                      }))
+                    }
+                    className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800"
+                  >
+                    <option value="NO">No</option>
+                    <option value="SI">Sì</option>
+                  </select>
+                  <label className="text-[10px] text-slate-500">
+                    <span className="block">misura (%)</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="1"
+                      value={s.misura}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        setLeve((prev) => ({
+                          ...prev,
+                          [l.id]: {
+                            ...prev[l.id],
+                            misura: Number.isFinite(n)
+                              ? Math.max(0, Math.min(100, n))
+                              : prev[l.id].misura,
+                          },
+                        }));
+                      }}
+                      disabled={!s.attiva}
+                      className="mt-0.5 w-full p-1.5 text-xs text-right bg-white border border-slate-200 rounded-lg text-slate-800 disabled:opacity-50"
+                    />
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {/* IL PIANO DELLA VERIFICA AZIENDALE (passo 3): con il flag di
+            simulazione è il piano di sviluppo dell'azienda, ed è quello su cui
+            l'AI lavora. Se manca, si dice: il piano non parte da una base
+            che non c'è. */}
+        <div className="border-t border-slate-200 pt-3 space-y-1">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            Piano dell’azienda dalla verifica aziendale
+          </p>
+          {!dati.simulazioneAttiva ? (
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              Lo scenario non ha il flag di simulazione: il piano dell’azienda è quello presentato
+              (Excel o PDF) e la verifica aziendale resta un controllo, non la base del piano.
+            </p>
+          ) : dati.pianoVerifica.length === 0 ? (
+            <p className="text-[10px] text-amber-800 leading-relaxed">
+              Flag di simulazione attivo, ma il passo 3 della verifica aziendale non ha ancora
+              annualità salvate: la simulazione parte dai bilanci e lo dichiara, invece di inventare
+              una proiezione dell’azienda.
+            </p>
+          ) : (
+            <>
+              <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 border border-slate-200 p-2 text-[10px] text-slate-700 leading-relaxed">
+                {testoPianoVerifica(dati.pianoVerifica)}
+              </pre>
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                È la base del piano simulato: dove l’AI se ne discosta, lo motiva.
+              </p>
+            </>
+          )}
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            Contesto economico dello spazio:{' '}
+            {dati.parametriContesto === 0
+              ? 'nessun parametro con un valore — si inseriscono in Parametri › Piano e simulazione AI.'
+              : `${dati.parametriContesto} parametri con un valore, in Parametri › Piano e simulazione AI.`}
+          </p>
+        </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-[10px] font-bold text-slate-500 uppercase">
             Procedura da sostenere

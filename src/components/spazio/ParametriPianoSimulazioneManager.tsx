@@ -13,11 +13,19 @@
 // sistema» cancella quelli dello spazio, non ne scrive di uguali.
 
 import React, { useEffect, useState } from 'react';
-import { Save, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Save, RotateCcw, SlidersHorizontal, Plus, Trash2, Globe } from 'lucide-react';
 import {
+  ottieniParametriContestoAction,
   ottieniParametriPianoSimulazioneAction,
+  salvaParametriContestoAction,
   salvaParametriPianoSimulazioneAction,
 } from '@/app/actions/parametriPianoSimulazione';
+import {
+  ETICHETTA_TIPO_CONTESTO,
+  PARAMETRI_CONTESTO_ESEMPIO,
+  TIPI_PARAMETRO_CONTESTO,
+  type ParametroContesto,
+} from '@/lib/piano/parametriContesto';
 import {
   LIMITI_PARAMETRI_SIMULAZIONE,
   PARAMETRI_SIMULAZIONE_PREDEFINITI,
@@ -48,6 +56,52 @@ export function ParametriPianoSimulazioneManager({ nomeSchema }: { nomeSchema: s
   const [caricamento, setCaricamento] = useState(true);
   const [salvataggio, setSalvataggio] = useState(false);
   const [messaggio, setMessaggio] = useState<{ ok: boolean; testo: string } | null>(null);
+  // IL CONTESTO ECONOMICO DEL PIANO (0.256.18): un elenco, non una riga unica.
+  const [righe, setRighe] = useState<ParametroContesto[]>([]);
+  const [messaggioContesto, setMessaggioContesto] = useState<{
+    ok: boolean;
+    testo: string;
+  } | null>(null);
+  const [salvataggioContesto, setSalvataggioContesto] = useState(false);
+
+  const caricaContesto = async () => {
+    const r = await ottieniParametriContestoAction(nomeSchema);
+    if (r.success && r.righe) setRighe(r.righe);
+    else setMessaggioContesto({ ok: false, testo: r.error ?? 'Contesto non leggibile.' });
+  };
+
+  const salvaContesto = async () => {
+    setSalvataggioContesto(true);
+    setMessaggioContesto(null);
+    const r = await salvaParametriContestoAction(nomeSchema, righe);
+    setMessaggioContesto(
+      r.success
+        ? {
+            ok: true,
+            testo:
+              'Contesto salvato: entra nel presupposto di ogni piano sviluppato con l’AI, simulato o presentato dall’azienda.',
+          }
+        : { ok: false, testo: r.error ?? 'Salvataggio non riuscito.' }
+    );
+    if (r.success && r.righe) setRighe(r.righe);
+    setSalvataggioContesto(false);
+  };
+
+  /** Gli esempi entrano senza valori: la cifra la scrive l'ente. */
+  const caricaEsempi = () => {
+    setRighe((prev) => {
+      const presenti = new Set(prev.map((p) => p.descrizione.trim().toLowerCase()));
+      const nuove = PARAMETRI_CONTESTO_ESEMPIO.filter(
+        (e) => !presenti.has(e.descrizione.toLowerCase())
+      ).map((e) => ({ ...e }));
+      return [...prev, ...nuove];
+    });
+    setMessaggioContesto({
+      ok: true,
+      testo:
+        'Esempi aggiunti con il valore vuoto: compila i valori che valgono per il tuo territorio e salva. Una voce senza valore non entra nel piano.',
+    });
+  };
 
   const carica = async () => {
     const r = await ottieniParametriPianoSimulazioneAction(nomeSchema);
@@ -61,6 +115,7 @@ export function ParametriPianoSimulazioneManager({ nomeSchema }: { nomeSchema: s
   };
   useEffect(() => {
     carica();
+    caricaContesto();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema]);
 
@@ -182,6 +237,165 @@ export function ParametriPianoSimulazioneManager({ nomeSchema }: { nomeSchema: s
         <span className="text-[11px] text-slate-500">
           {personalizzati ? 'Parametri propri dello spazio.' : 'Valori di sistema.'}
         </span>
+      </div>
+
+      {/* IL CONTESTO ECONOMICO DEL PIANO (0.256.18). Non sono leve del
+          motore: sono fatti del mondo che il piano deve tenere presenti. Stanno
+          nei Parametri perché non variano per azienda, e valgono sia per il
+          piano simulato sia per quello che l'azienda presenta. */}
+      <div className="border-t border-slate-200 pt-4 space-y-2">
+        <div className="flex items-start gap-2">
+          <Globe className="w-4 h-4 text-blue-600 mt-0.5" />
+          <div>
+            <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+              Contesto economico del piano
+            </h2>
+            <p className="text-[11px] text-slate-600 mt-1 max-w-3xl leading-relaxed">
+              I fattori che possono influenzare lo sviluppo del piano aziendale — inflazione,
+              spread, costo del carburante, incidenza di crisi internazionali e di instabilità
+              politica, tecnologia. Sono il presupposto con cui l’AI sviluppa il piano, sia simulato
+              sia presentato dall’azienda, e valgono per tutte le aziende dello spazio perché non
+              variano da impresa a impresa.
+            </p>
+          </div>
+        </div>
+
+        {messaggioContesto && (
+          <p
+            className={`text-xs rounded-lg p-2 border ${
+              messaggioContesto.ok
+                ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
+                : 'text-red-800 bg-red-50 border-red-200'
+            }`}
+          >
+            {messaggioContesto.testo}
+          </p>
+        )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-slate-800">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-slate-500 text-left">
+                <th className="p-1.5 font-bold">Descrizione</th>
+                <th className="p-1.5 font-bold">Valore</th>
+                <th className="p-1.5 font-bold">Forma del valore</th>
+                <th className="p-1.5 font-bold w-10"> </th>
+              </tr>
+            </thead>
+            <tbody>
+              {righe.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-2 text-[11px] text-slate-500 leading-relaxed">
+                    Nessun parametro del contesto. Aggiungi le voci che valgono per il tuo
+                    territorio — o parti dagli esempi, che entrano senza valori.
+                  </td>
+                </tr>
+              ) : (
+                righe.map((r, i) => (
+                  <tr key={i} className="border-t border-slate-100">
+                    <td className="p-1.5">
+                      <input
+                        type="text"
+                        value={r.descrizione}
+                        maxLength={120}
+                        onChange={(e) =>
+                          setRighe((prev) =>
+                            prev.map((x, j) =>
+                              j === i ? { ...x, descrizione: e.target.value } : x
+                            )
+                          )
+                        }
+                        placeholder="inflazione attesa"
+                        className="w-full p-1.5 border border-slate-200 rounded-lg bg-white text-slate-900"
+                      />
+                    </td>
+                    <td className="p-1.5">
+                      <input
+                        type="text"
+                        value={r.valore}
+                        maxLength={200}
+                        onChange={(e) =>
+                          setRighe((prev) =>
+                            prev.map((x, j) => (j === i ? { ...x, valore: e.target.value } : x))
+                          )
+                        }
+                        placeholder={r.tipo === 'TENDENZA' ? 'in aumento' : '2,1'}
+                        className="w-full p-1.5 border border-slate-200 rounded-lg bg-white text-slate-900"
+                      />
+                    </td>
+                    <td className="p-1.5">
+                      <select
+                        value={r.tipo}
+                        onChange={(e) =>
+                          setRighe((prev) =>
+                            prev.map((x, j) =>
+                              j === i
+                                ? { ...x, tipo: e.target.value as ParametroContesto['tipo'] }
+                                : x
+                            )
+                          )
+                        }
+                        className="w-full p-1.5 border border-slate-200 rounded-lg bg-white text-slate-900"
+                      >
+                        {TIPI_PARAMETRO_CONTESTO.map((t) => (
+                          <option key={t} value={t}>
+                            {ETICHETTA_TIPO_CONTESTO[t]}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="p-1.5 text-right">
+                      <button
+                        type="button"
+                        title="Elimina la riga"
+                        onClick={() => setRighe((prev) => prev.filter((_, j) => j !== i))}
+                        className="p-1.5 text-slate-400 hover:text-red-700"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              setRighe((prev) => [...prev, { descrizione: '', valore: '', tipo: 'PERCENTUALE' }])
+            }
+            className="flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+          >
+            <Plus className="w-3.5 h-3.5" /> Aggiungi una riga
+          </button>
+          <button
+            type="button"
+            onClick={caricaEsempi}
+            className="flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Carica gli esempi
+          </button>
+          <button
+            type="button"
+            onClick={salvaContesto}
+            disabled={salvataggioContesto}
+            className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold text-[10px] uppercase rounded-lg"
+          >
+            <Save className="w-3.5 h-3.5" /> Salva il contesto
+          </button>
+          <span className="text-[11px] text-slate-500">
+            {righe.filter((r) => r.descrizione.trim()).length} voci,{' '}
+            {righe.filter((r) => r.descrizione.trim() && r.valore.trim()).length} con un valore.
+          </span>
+        </div>
+        <p className="text-[10px] text-slate-500 leading-relaxed">
+          Una voce senza valore resta un fattore dichiarato ma non misurato: entra nel piano come
+          «valore non indicato», non come zero. La tendina dice che cosa è il valore — un importo in
+          euro, una percentuale, una previsione a tendere in parole.
+        </p>
       </div>
 
       <p className="text-[10px] text-slate-500 leading-relaxed">

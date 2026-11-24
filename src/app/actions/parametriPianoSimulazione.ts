@@ -18,6 +18,18 @@ import {
   scriviParametriSimulazione,
 } from '@/lib/piano/letturaParametriSimulazione';
 
+import { validaParametriContesto, type ParametroContesto } from '@/lib/piano/parametriContesto';
+import {
+  leggiParametriContesto,
+  scriviParametriContesto,
+} from '@/lib/piano/letturaParametriContesto';
+
+export interface RisultatoParametriContesto {
+  success: boolean;
+  righe?: ParametroContesto[];
+  error?: string;
+}
+
 export interface RisultatoParametriSimulazione {
   success: boolean;
   parametri?: ParametriSimulazionePiano;
@@ -41,6 +53,45 @@ export async function ottieniParametriPianoSimulazioneAction(
     return {
       success: false,
       error: `Impossibile leggere i parametri: ${(error as Error).message || error}`,
+    };
+  }
+}
+
+/**
+ * IL CONTESTO ECONOMICO DEL PIANO (0.256.18). Elenco curato a mano dall'ente:
+ * ogni voce ha descrizione, valore e forma del valore. Vuoto finché non si
+ * scrive qualcosa — la piattaforma non propone cifre.
+ */
+export async function ottieniParametriContestoAction(
+  nomeSchema: string
+): Promise<RisultatoParametriContesto> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    return { success: true, righe: await leggiParametriContesto(nomeSchema) };
+  } catch (error: unknown) {
+    console.error('[ottieniParametriContestoAction] Errore:', error);
+    return {
+      success: false,
+      error: `Impossibile leggere il contesto del piano: ${(error as Error).message || error}`,
+    };
+  }
+}
+
+export async function salvaParametriContestoAction(
+  nomeSchema: string,
+  righe: ParametroContesto[]
+): Promise<RisultatoParametriContesto> {
+  try {
+    await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
+    const errori = validaParametriContesto(righe);
+    if (errori.length > 0) return { success: false, error: errori.join(' ') };
+    await scriviParametriContesto(nomeSchema, righe);
+    return { success: true, righe: await leggiParametriContesto(nomeSchema) };
+  } catch (error: unknown) {
+    console.error('[salvaParametriContestoAction] Errore:', error);
+    return {
+      success: false,
+      error: `Salvataggio non riuscito: ${(error as Error).message || error}`,
     };
   }
 }

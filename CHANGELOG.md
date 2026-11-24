@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.17**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.18**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,37 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.18 — 2026-11-24
+
+IL PIANO DELL'AI PARTE DA UN PRESUPPOSTO DICHIARATO, NON DAL VUOTO.
+
+- **Le cinque leve del lancio.** Al momento di simulare il sistema chiede se il
+  piano deve prevedere tagli del personale, investimenti in tecnologia,
+  diversificazione della produzione, diversificazione dei mercati e cambio del
+  target di clientela: SÌ/NO, e per ogni SÌ una misura in percentuale. La misura
+  c'è già, suggerita (10%, 5%, 15%, 15%, 20%): un sì senza misura non dice
+  all'AI quanto pesa la leva, e la parte che manca l'AI la inventerebbe. Chi
+  simula la cambia o la lascia. Le leve accese entrano nel prompt una per una,
+  con quello che comportano (i tagli abbassano i costi e la capacità
+  produttiva; la tecnologia alza ammortamenti prima e ricavi dopo).
+- **Il contesto economico del piano, nei Parametri.** Una tabella di voci che
+  influenzano lo sviluppo di un piano — inflazione, spread nazionale, costo del
+  carburante, incidenza di crisi internazionali, instabilità politica,
+  tecnologia — con il campo descrittivo, il valore libero e la tendina che dice
+  che cosa è quel valore: un importo in euro, una percentuale, una previsione a
+  tendere. Sta nei Parametri perché non varia per azienda, e vale sia per il
+  piano simulato sia per quello presentato dall'azienda. Gli esempi si
+  precaricano **senza valori**: la cifra la scrive l'ente, non la piattaforma. Una
+  voce senza valore entra come «valore non indicato», non come zero.
+- **Il flag di simulazione ora ha un contenuto.** Lo scenario creato con il flag
+  acceso usa come piano di sviluppo aziendale quello del passo 3 della verifica
+  aziendale: la simulazione salvata (le annualità STORICO e CALCOLATO) si legge e
+  si porta nel prompt, così dove l'AI se ne discosta lo deve motivare. Se il
+  passo 3 non ha ancora annualità, la pagina lo dice invece di far credere che
+  il piano parta da una proiezione dell'azienda che non esiste.
+- **Contesto e piano della verifica li legge il server,** non il browser: sono
+  dati dello spazio e dell'azienda, e il client manda solo le leve scelte.
 
 ## 0.256.17 — 2026-11-24
 
