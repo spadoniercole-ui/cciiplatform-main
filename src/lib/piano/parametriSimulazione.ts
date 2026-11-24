@@ -25,6 +25,12 @@ export interface ParametriSimulazionePiano {
   limiteTassoCrescita: number;
   /** Anni del piano proposti quando lo scenario non ne ha ancora uno salvato. */
   orizzonteDefault: number;
+  /**
+   * Intensità (0-100) da cui una dimensione della verifica contabile entra
+   * nella simulazione come vincolo. Sotto la soglia la dimensione resta nella
+   * pagina della contabile, ma non condiziona il piano.
+   */
+  intensitaMinimaAttenzione: number;
 }
 
 /**
@@ -36,6 +42,7 @@ export const PARAMETRI_SIMULAZIONE_PREDEFINITI: ParametriSimulazionePiano = {
   variazioneMassimaPct: 50,
   limiteTassoCrescita: LIMITE_TASSO,
   orizzonteDefault: 5,
+  intensitaMinimaAttenzione: 50,
 };
 
 /** Intervalli ammessi: gli stessi che la validazione delle ipotesi già impone. */
@@ -66,6 +73,12 @@ export const LIMITI_PARAMETRI_SIMULAZIONE: Record<
     max: ORIZZONTE_MASSIMO,
     etichetta: 'Orizzonte proposto del piano',
     unita: 'anni',
+  },
+  intensitaMinimaAttenzione: {
+    min: 0,
+    max: 100,
+    etichetta: 'Soglia dell’attenzione contabile',
+    unita: 'su 100',
   },
 };
 

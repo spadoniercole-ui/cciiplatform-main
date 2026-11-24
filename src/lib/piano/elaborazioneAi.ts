@@ -61,6 +61,14 @@ export interface ContestoElaborazione {
   scostamenti?: { voce: string; luce: 'giallo' | 'rosso'; ottimismoMassimo: number }[];
   /** Redigente: le ipotesi della variante su cui sta lavorando. */
   ipotesiCorrenti?: IpotesiPiano | null;
+  /**
+   * «Dove si concentra l'attenzione» della verifica contabile, in testo: le
+   * dimensioni accese, i determinanti, le lacune e il debito dell'ente se non è
+   * in bilancio (src/lib/piano/contestoContabile.ts).
+   */
+  attenzioneContabile?: string | null;
+  /** I parametri di lancio scelti per questa simulazione (procedura, offerta, prudenza). */
+  lancio?: string | null;
   /** Vincoli che scattano con il piano di partenza (testo breve). */
   vincoli?: string[];
 }
@@ -114,6 +122,9 @@ export function testoContesto(c: ContestoElaborazione): string {
         .join('\n')}`
     );
   }
+  if (c.attenzioneContabile)
+    parti.push(`ATTENZIONE DELLA VERIFICA CONTABILE\n${c.attenzioneContabile}`);
+  if (c.lancio) parti.push(`PARAMETRI DI LANCIO\n${c.lancio}`);
   if (c.vincoli?.length) parti.push(`VINCOLI CHE SCATTANO OGGI: ${c.vincoli.join(' ')}`);
   return parti.join('\n\n');
 }

@@ -36,6 +36,8 @@ const SPIEGAZIONE: Record<keyof ParametriSimulazionePiano, string> = {
     'Il tetto al tasso annuo del piano automatico di settore: oltre, la serie ISTAT non è un riferimento credibile per una singola impresa, e il piano automatico usa il tetto. Predefinito: 20%.',
   orizzonteDefault:
     'Gli anni proposti quando si apre un piano che non ne ha ancora uno salvato. Predefinito: 5 anni.',
+  intensitaMinimaAttenzione:
+    'Da quale intensità (0-100) una dimensione del riquadro «Dove si concentra l’attenzione» della verifica contabile entra nella simulazione come vincolo: struttura, dinamica, affidabilità, quadro procedurale. Predefinito: 50, la stessa soglia con cui la contabile sceglie i suoi determinanti.',
 };
 
 export function ParametriPianoSimulazioneManager({ nomeSchema }: { nomeSchema: string }) {

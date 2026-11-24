@@ -39,6 +39,11 @@ import {
   type RatePiano,
 } from '@/lib/piano/piano';
 import { ORIZZONTE_MASSIMO, type PianoRientro, type TotaleOfferto } from '@/lib/piano/ricevente';
+import {
+  testoAttenzioneContabile,
+  vincoliDaAttenzioneContabile,
+} from '@/lib/piano/contestoContabile';
+import { ottieniEsitoVerificaAction } from '@/app/actions/esitoVerifica';
 import { leggiParametriSimulazione } from '@/lib/piano/letturaParametriSimulazione';
 import type { ParametriSimulazionePiano } from '@/lib/piano/parametriSimulazione';
 import {
@@ -339,6 +344,72 @@ export async function eliminaVariantePianoAction(
 }
 
 // ---------------------------------------------------------------------------
+// L'ATTENZIONE DELLA CONTABILE COME CONTESTO DELLA SIMULAZIONE (0.256.14)
+//
+// Il riquadro «Dove si concentra l'attenzione» della verifica contabile non
+// resta una lettura da guardare: entra nella simulazione del piano, perché dice
+// all'AI su che cosa il piano deve rispondere (struttura, dinamica, affidabilità
+// dei dati, quadro procedurale) e con quali lacune fare i conti. Quali
+// dimensioni entrano lo decide la soglia dello spazio
+// (Parametri › Piano e simulazione AI).
+//
+// Se la contabile non è leggibile (o chi simula non è Admin di spazio), la
+// simulazione funziona come prima: `disponibile: false`, nessun vincolo
+// inventato.
+// ---------------------------------------------------------------------------
+
+export interface RisultatoAttenzioneContabile {
+  success: boolean;
+  /** Il riquadro dell'attenzione in testo, per il prompt. */
+  testo?: string;
+  /** I vincoli che il piano deve rispettare. */
+  vincoli?: string[];
+  /** La soglia dello spazio con cui si è deciso quali dimensioni entrano. */
+  soglia?: number;
+  /** false quando la contabile non è leggibile: la simulazione va avanti senza. */
+  disponibile?: boolean;
+  error?: string;
+}
+
+export async function ottieniAttenzioneContabilePianoAction(
+  codiceSpazio: string,
+  scenarioId: number,
+  aziendaId: number
+): Promise<RisultatoAttenzioneContabile> {
+  try {
+    const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
+    if (!contesto) return { success: false, error: 'Accesso non valido.' };
+    await richiediAccessoScenario(contesto.nomeSchema, scenarioId);
+    const { parametri } = await leggiParametriSimulazione(contesto.nomeSchema);
+    const soglia = parametri.intensitaMinimaAttenzione;
+    const esito = await ottieniEsitoVerificaAction(
+      contesto.nomeSchema,
+      aziendaId,
+      contesto.tipoSpazio
+    );
+    if (!esito.success || !esito.esito)
+      return { success: true, disponibile: false, testo: '', vincoli: [], soglia };
+    const input = {
+      esito: esito.esito,
+      debitoInBilancio: esito.debitoInBilancio ?? null,
+    };
+    return {
+      success: true,
+      disponibile: true,
+      testo: testoAttenzioneContabile(input, soglia),
+      vincoli: vincoliDaAttenzioneContabile(input, soglia),
+      soglia,
+    };
+  } catch (error: unknown) {
+    console.error('[ottieniAttenzioneContabilePianoAction]', error);
+    return {
+      success: false,
+      error: `Attenzione della contabile non leggibile: ${(error as Error).message}`,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Terzo livello: ipotesi scritte dall'AI, calcolo del motore (0.109.117)
 // ---------------------------------------------------------------------------
 
@@ -364,6 +435,10 @@ function contestoPulito(c: ContestoElaborazione): ContestoElaborazione | null {
     pianoAzienda: c.lato === 'RICEVUTA' ? (c.pianoAzienda ?? null) : null,
     scostamenti: c.lato === 'RICEVUTA' ? (c.scostamenti ?? []).slice(0, 12) : [],
     ipotesiCorrenti: c.ipotesiCorrenti ?? null,
+    attenzioneContabile: c.attenzioneContabile
+      ? String(c.attenzioneContabile).slice(0, 4000)
+      : null,
+    lancio: c.lancio ? String(c.lancio).slice(0, 1000) : null,
     vincoli: (c.vincoli ?? []).slice(0, 10).map((v) => String(v).slice(0, 200)),
   };
 }

@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.13**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.14**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,35 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.14 — 2026-11-24
+
+LA SIMULAZIONE DEL PIANO PARTE DAL RIQUADRO DELL'ATTENZIONE DELLA CONTABILE.
+
+- **Il riquadro «Dove si concentra l'attenzione» entra nel prompt.** Le
+  dimensioni sopra la soglia dello spazio — esposizione, struttura, dinamica,
+  affidabilità dei dati, quadro procedurale — arrivano all'AI con la loro
+  intensità, i determinanti e le lacune, più il debito dell'ente ritrovato o no
+  in bilancio. Prima la simulazione vedeva bilanci, rate e riferimento di
+  settore: non sapeva su che cosa il piano doveva rispondere.
+- **Ogni dimensione accesa diventa un vincolo.** Struttura fragile: il piano
+  deve dire come ricostituisce il patrimonio. Dinamica in peggioramento: la
+  crescita va ancorata allo storico. Dati affidabili poco: le voci scoperte si
+  trattano in modo prudente e la lacuna si dichiara. Debito non iscritto: il
+  piano deve prevederne iscrizione e copertura. L'AI li legge come vincoli di
+  contenuto: i numeri restano del motore.
+- **Parametri di lancio, scelti al momento della simulazione.** Procedura da
+  sostenere (accordo, liquidazione, cram down), offerta ipotizzata in
+  percentuale e impostazione (prudente, neutra, favorevole): valgono per quella
+  simulazione e non per lo spazio.
+- **Un parametro generale nuovo: la soglia dell'attenzione contabile**
+  (`Parametri › Piano e simulazione AI`, predefinito 50, la stessa soglia con cui
+  la contabile sceglie i propri determinanti). Sopra quella soglia una
+  dimensione entra nella simulazione; sotto resta nella pagina della contabile
+  senza condizionare il piano.
+- **Senza contabile la simulazione funziona come prima**, e lo dice: se le
+  dimensioni non sono leggibili (o chi simula non è Admin di spazio) il pannello
+  dichiara che l'attenzione non è disponibile, e non inventa vincoli.
 
 ## 0.256.13 — 2026-11-24
 

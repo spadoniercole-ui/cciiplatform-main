@@ -1005,6 +1005,11 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
       CONSTRAINT una_sola_riga_piano_simulazione CHECK (id = 1)
     )`
   );
+  // La soglia dell'attenzione contabile (0.256.14): da quale intensità una
+  // dimensione della contabile entra nella simulazione come vincolo.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.parametri_piano_simulazione ADD COLUMN IF NOT EXISTS intensita_minima_attenzione NUMERIC`
+  );
 
   // Quali tab del motore XBRL (Indici CNDCEC, Altri Indici, Situazione
   // Debitoria, Andamento Storico) l'Admin di Spazio vuole attive

@@ -32,7 +32,8 @@ export async function leggiParametriSimulazione(
   // dello spazio). Se la tabella non c'è ancora, valgono i valori di sistema.
   const r = await pool
     .query(
-      `SELECT aliquota_imposte_default, variazione_massima_pct, limite_tasso_crescita, orizzonte_default
+      `SELECT aliquota_imposte_default, variazione_massima_pct, limite_tasso_crescita, orizzonte_default,
+              intensita_minima_attenzione
        FROM "${nomeSchema}".parametri_piano_simulazione WHERE id = 1`
     )
     .catch(() => ({ rows: [] as Record<string, unknown>[] }));
@@ -42,6 +43,7 @@ export async function leggiParametriSimulazione(
     variazioneMassimaPct: riga.variazione_massima_pct,
     limiteTassoCrescita: riga.limite_tasso_crescita,
     orizzonteDefault: riga.orizzonte_default,
+    intensitaMinimaAttenzione: riga.intensita_minima_attenzione,
   });
   const personalizzati = Object.values(riga).some((v) => v !== null && v !== undefined);
   return { parametri, personalizzati };
@@ -56,18 +58,21 @@ export async function scriviParametriSimulazione(
   await assicuraTabelleParametriSpazio(nomeSchema);
   await pool.query(
     `INSERT INTO "${nomeSchema}".parametri_piano_simulazione
-       (id, aliquota_imposte_default, variazione_massima_pct, limite_tasso_crescita, orizzonte_default, aggiornato_il)
-     VALUES (1, $1, $2, $3, $4, now())
+       (id, aliquota_imposte_default, variazione_massima_pct, limite_tasso_crescita, orizzonte_default,
+        intensita_minima_attenzione, aggiornato_il)
+     VALUES (1, $1, $2, $3, $4, $5, now())
      ON CONFLICT (id) DO UPDATE SET aliquota_imposte_default = EXCLUDED.aliquota_imposte_default,
        variazione_massima_pct = EXCLUDED.variazione_massima_pct,
        limite_tasso_crescita = EXCLUDED.limite_tasso_crescita,
        orizzonte_default = EXCLUDED.orizzonte_default,
+       intensita_minima_attenzione = EXCLUDED.intensita_minima_attenzione,
        aggiornato_il = now()`,
     [
       parametri?.aliquotaImposteDefault ?? null,
       parametri?.variazioneMassimaPct ?? null,
       parametri?.limiteTassoCrescita ?? null,
       parametri?.orizzonteDefault ?? null,
+      parametri?.intensitaMinimaAttenzione ?? null,
     ]
   );
 }

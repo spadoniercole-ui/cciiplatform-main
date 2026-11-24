@@ -20,10 +20,17 @@ import {
   commentaSoluzionePianoAction,
   eliminaVariantePianoAction,
   elaboraPianoConAiAction,
+  ottieniAttenzioneContabilePianoAction,
   ottieniPianoSviluppoAction,
   salvaPianoSviluppoAction,
   type DatiPianoSviluppo,
 } from '@/app/actions/pianoSviluppo';
+import {
+  ETICHETTA_PROCEDURA,
+  LANCIO_PREDEFINITO,
+  testoLancio,
+  type LancioSimulazione,
+} from '@/lib/piano/contestoContabile';
 import {
   aliquotaImplicita,
   ETICHETTA_RIGA,
@@ -141,6 +148,16 @@ export function PianoSviluppoScenario({
   const [contestoConfronto, setContestoConfronto] = useState<ContestoConfronto | null>(null);
   const [aiInCorso, setAiInCorso] = useState(false);
   const [avvisoAi, setAvvisoAi] = useState<string | null>(null);
+  // L'ATTENZIONE DELLA CONTABILE E IL LANCIO (0.256.14). Il riquadro «Dove si
+  // concentra l'attenzione» non resta una lettura da guardare: entra nel
+  // prompt, con i vincoli che ne discendono. Procedura, offerta e prudenza si
+  // scelgono qui, perché valgono per questa simulazione e non per lo spazio.
+  const [attenzione, setAttenzione] = useState<{
+    testo: string;
+    vincoli: string[];
+    soglia: number;
+  } | null>(null);
+  const [lancio, setLancio] = useState<LancioSimulazione>(LANCIO_PREDEFINITO);
   // Ricevente, ordine dei fattori (0.129): variante di sistema, piano di
   // rientro, soluzione verde.
   const [serieSistema, setSerieSistema] = useState(false);
@@ -166,6 +183,22 @@ export function PianoSviluppoScenario({
     carica('base');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, scenarioId, aziendaId]);
+
+  // L'attenzione della contabile si legge una volta per azienda: è materia sua,
+  // non dello scenario. Se non è leggibile la simulazione va avanti senza.
+  useEffect(() => {
+    let annullato = false;
+    (async () => {
+      const r = await ottieniAttenzioneContabilePianoAction(codice, scenarioId, aziendaId);
+      if (annullato) return;
+      if (r.success && r.disponibile && r.testo)
+        setAttenzione({ testo: r.testo, vincoli: r.vincoli ?? [], soglia: r.soglia ?? 50 });
+      else setAttenzione(null);
+    })();
+    return () => {
+      annullato = true;
+    };
+  }, [codice, scenarioId, aziendaId]);
 
   // Ricevente: il punto di partenza è il piano dell'azienda, se caricato.
   const pianoAzienda =
@@ -385,7 +418,9 @@ export function PianoSviluppoScenario({
         pianoAzienda: contestoConfronto.pianoAzienda,
         scostamenti: contestoConfronto.scostamenti,
         ipotesiCorrenti: ipotesi,
-        vincoli: esito.vincoli.map((v) => v.testo),
+        attenzioneContabile: attenzione?.testo ?? null,
+        lancio: testoLancio(lancio),
+        vincoli: [...esito.vincoli.map((v) => v.testo), ...(attenzione?.vincoli ?? [])],
       });
       if (!r.success) {
         setAvvisoAi(r.error ?? 'Elaborazione non riuscita.');
@@ -557,6 +592,101 @@ export function PianoSviluppoScenario({
   return (
     <div className="space-y-4">
       {tipoProposta === 'RICEVUTA' && confronto}
+
+      {/* CHE COSA ENTRA NELLA SIMULAZIONE (0.256.14). Il riquadro dell'attenzione
+          della contabile e i parametri di lancio stanno sopra le manopole perché
+          sono il perimetro, non un risultato: l'AI scrive le ipotesi dentro
+          questo, e i parametri generali (aliquota, tolleranze, soglia
+          dell'attenzione) restano in Parametri › Piano e simulazione AI, dove
+          valgono per tutte le aziende dello spazio. */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+        <div>
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+            Che cosa entra nella simulazione
+          </h2>
+          <p className="text-[10px] text-slate-500 leading-relaxed mt-0.5">
+            L’attenzione della verifica contabile — le dimensioni sopra la soglia dello spazio, con
+            i determinanti e le lacune — e i parametri di lancio di questa simulazione. Non sono
+            risultati: sono il perimetro entro cui l’AI scrive le ipotesi, e il motore calcola.
+          </p>
+        </div>
+        {attenzione ? (
+          <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 border border-slate-200 p-2 text-[10px] text-slate-700 leading-relaxed">
+            {attenzione.testo}
+          </pre>
+        ) : (
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            Attenzione della contabile non disponibile per questa azienda, o non leggibile con il
+            tuo profilo: la simulazione lavora sui bilanci, sulle rate e sul riferimento di settore.
+          </p>
+        )}
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-[10px] font-bold text-slate-500 uppercase">
+            Procedura da sostenere
+            <select
+              value={lancio.procedura}
+              onChange={(e) =>
+                setLancio((l) => ({
+                  ...l,
+                  procedura: e.target.value as LancioSimulazione['procedura'],
+                }))
+              }
+              className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+            >
+              {(['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'] as const).map((p) => (
+                <option key={p} value={p}>
+                  {ETICHETTA_PROCEDURA[p]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-[10px] font-bold text-slate-500 uppercase">
+            Offerta ipotizzata (%)
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="1"
+              value={lancio.percentualeOfferta ?? ''}
+              onChange={(e) => {
+                const n = e.target.value.trim() === '' ? null : Number(e.target.value);
+                setLancio((l) => ({
+                  ...l,
+                  percentualeOfferta: n === null || !Number.isFinite(n) ? null : n,
+                }));
+              }}
+              placeholder="come la proposta"
+              className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+            />
+          </label>
+          <label className="text-[10px] font-bold text-slate-500 uppercase">
+            Impostazione
+            <select
+              value={lancio.prudenza}
+              onChange={(e) =>
+                setLancio((l) => ({
+                  ...l,
+                  prudenza: e.target.value as LancioSimulazione['prudenza'],
+                }))
+              }
+              className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+            >
+              <option value="PRUDENTE">Prudente</option>
+              <option value="NEUTRA">Neutra</option>
+              <option value="FAVOREVOLE">Favorevole</option>
+            </select>
+          </label>
+        </div>
+        {attenzione && attenzione.vincoli.length > 0 && (
+          <ul className="space-y-0.5">
+            {attenzione.vincoli.map((v) => (
+              <li key={v} className="text-[10px] text-amber-900 leading-relaxed">
+                <strong>Vincolo:</strong> {v}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
         <div className="flex items-start gap-2 flex-wrap">
           <TrendingUp className="w-4 h-4 text-blue-600 mt-0.5" />
