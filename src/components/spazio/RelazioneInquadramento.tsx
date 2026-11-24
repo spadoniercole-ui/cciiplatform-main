@@ -54,6 +54,7 @@ import type { Evidenza } from '@/lib/fascicolo/evidenza';
 import { useDemo } from '@/components/spazio/DemoUploadProvider';
 import { fascicoloDemoPerCodiceFiscale } from '@/lib/demo/documenti';
 import type { EsitoVerifica } from '@/lib/verifica/esito';
+import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 
 interface Props {
   nomeSchema: string;
@@ -62,6 +63,8 @@ interface Props {
   tipoSpazio: 'ENTE' | 'NON_ENTE';
   /** L'esito unico della verifica: entra nella prima pagina del documento. */
   esito: EsitoVerifica | null;
+  /** Il debito dell'ente in bilancio o no: stesso avviso della schermata (0.256.5). */
+  debitoInBilancio?: DebitoInBilancio | null;
   /** Gli indici abilitati nello spazio: le tabelle del documento mostrano questi. */
   indiciAbilitati?: string[];
 }
@@ -72,6 +75,7 @@ export function RelazioneInquadramento({
   codice,
   tipoSpazio,
   esito,
+  debitoInBilancio = null,
   indiciAbilitati = [],
 }: Props) {
   const router = useRouter();
@@ -241,10 +245,14 @@ export function RelazioneInquadramento({
         : revisione.testoRivisto + appendiceRilievi(revisione)
       : '';
     const copertina = esito
-      ? htmlCopertinaEsito(esito, {
-          ...intestazioneCopertina,
-          data: new Date().toLocaleString('it-IT'),
-        })
+      ? htmlCopertinaEsito(
+          esito,
+          {
+            ...intestazioneCopertina,
+            data: new Date().toLocaleString('it-IT'),
+          },
+          debitoInBilancio
+        )
       : '<p class="note">Esito non disponibile: la stampa riporta i soli dati.</p>';
 
     // I NUMERI CHE SOSTENGONO L'ESITO STANNO QUI. Prospetto, indici e

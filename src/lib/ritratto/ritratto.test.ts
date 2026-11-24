@@ -185,7 +185,18 @@ describe('componiRitratto', () => {
 
   it('non produce alcun totale: i riquadri sono quelli dichiarati', () => {
     const r = componiRitratto(fonti());
-    expect(Object.keys(r)).toEqual(['testata', 'direttrici', 'giudizio', 'dimensioni', 'mancanze']);
+    expect(Object.keys(r)).toEqual([
+      'testata',
+      'direttrici',
+      'giudizio',
+      'dimensioni',
+      // L'iconografia è un modo di mostrare le stesse dimensioni, non un
+      // riquadro nuovo: i quattro riquadri restano quattro.
+      'iconografia',
+      'mancanze',
+    ]);
+    // Senza i dati grezzi non ci sono grafici: il ritratto resta quello di prima.
+    expect(r.iconografia).toBeNull();
   });
 
   it('mette in chiaro la posizione disabilitata senza fingere una contabile letta', () => {

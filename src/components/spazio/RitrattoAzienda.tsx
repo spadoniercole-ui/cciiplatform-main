@@ -11,6 +11,7 @@
 // c'è.
 
 import type { EsitoAttenzione } from '@/lib/screening/indicatore';
+import type { BarraGrafico } from '@/lib/ritratto/iconografia';
 import type {
   RiquadroGiudizio,
   Ritratto,
@@ -20,6 +21,38 @@ import type {
 
 interface Props {
   ritratto: Ritratto;
+}
+
+// UNA BARRA PER OGNI DATO — L'ICONOGRAFIA DELLA DIMENSIONE (0.256.5).
+//
+// La scala è quella del grafico (massimo assoluto), non una percentuale
+// inventata: la lunghezza dice quanto vale il dato rispetto agli altri dello
+// stesso grafico. Una barra rossa non è un giudizio, è un fatto sfavorevole
+// (patrimonio negativo, ricavi in calo) che la dimensione ha già dichiarato.
+function BarraDato({ b, massimo }: { b: BarraGrafico; massimo: number }) {
+  const quota =
+    b.valore === null || massimo <= 0 ? 0 : Math.min(100, (Math.abs(b.valore) / massimo) * 100);
+  return (
+    <div className="mt-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10px] leading-snug text-slate-600">{b.etichetta}</span>
+        <span
+          className={`shrink-0 text-[10px] font-bold tabular-nums ${
+            b.segnala ? 'text-red-700' : 'text-slate-800'
+          }`}
+        >
+          {b.testo}
+        </span>
+      </div>
+      <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-slate-200/70">
+        <div
+          className={`h-full rounded-full ${b.segnala ? 'bg-red-400' : 'bg-slate-400'}`}
+          style={{ width: `${quota === 0 ? 0 : Math.max(2, quota)}%` }}
+        />
+      </div>
+      {b.riferimento && <p className="text-[9px] leading-snug text-slate-400">{b.riferimento}</p>}
+    </div>
+  );
 }
 
 const STILE_ESITO: Record<EsitoAttenzione, { banda: string; pallino: string; testo: string }> = {
@@ -150,7 +183,7 @@ function BloccoGiudizio({ giudizio }: { giudizio: RiquadroGiudizio }) {
 }
 
 export function RitrattoAzienda({ ritratto }: Props) {
-  const { testata, direttrici, giudizio, dimensioni, mancanze } = ritratto;
+  const { testata, direttrici, giudizio, dimensioni, iconografia, mancanze } = ritratto;
 
   return (
     <div className="space-y-4">
@@ -293,6 +326,71 @@ export function RitrattoAzienda({ ritratto }: Props) {
                       {v.punteggio}
                     </span>
                   </div>
+
+                  {/* I GRAFICI DELLA DIMENSIONE (0.256.5): A, B e C si
+                      guardano a confronto — ambiti per A, due rapporti per B,
+                      due esercizi per C. D non ha un grafico: ha un avviso. */}
+                  {iconografia?.grafici
+                    .filter((g) => g.dimensione === v.lettera)
+                    .map((g) => (
+                      <div
+                        key={g.dimensione}
+                        className="mt-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5"
+                      >
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          {g.titolo}
+                        </p>
+                        <p className="mt-0.5 text-[9px] leading-snug text-slate-500">{g.lettura}</p>
+                        <div className="mt-1">
+                          {g.barre.map((b, i) => (
+                            <BarraDato key={`${b.etichetta}-${i}`} b={b} massimo={g.massimo ?? 1} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+
+                  {/* D — L'AVVISO FORTE (0.256.5). Non è una dimensione come le
+                      altre: se i dati non sono affidabili, va detto prima dei
+                      numeri, non nella riga in fondo. */}
+                  {v.lettera === 'D' && iconografia?.avvisoAffidabilita && (
+                    <div className="mt-2 rounded-lg border-l-4 border-red-500 bg-red-50 p-2.5">
+                      <p className="text-[11px] font-bold text-red-800">
+                        {iconografia.avvisoAffidabilita.titolo}
+                      </p>
+                      <p className="mt-0.5 text-[10px] leading-snug text-red-900">
+                        {iconografia.avvisoAffidabilita.testo}
+                      </p>
+                      {iconografia.avvisoAffidabilita.motivi.length > 0 && (
+                        <ul className="mt-1 list-disc pl-4">
+                          {iconografia.avvisoAffidabilita.motivi.map((m, i) => (
+                            <li key={i} className="text-[10px] leading-snug text-red-900">
+                              {m}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  {/* E — LE PARTICOLARITÀ DELLA VISURA (0.256.5): quello che il
+                      bilancio non dice e che la visura dichiara. */}
+                  {v.lettera === 'E' && iconografia && (
+                    <div className="mt-2 space-y-1 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                        Dalla visura
+                      </p>
+                      {iconografia.visura.particolari.map((p, i) => (
+                        <p
+                          key={i}
+                          className={`text-[10px] leading-snug ${
+                            p.segnala ? 'text-amber-900' : 'text-slate-600'
+                          }`}
+                        >
+                          <strong>{p.etichetta}:</strong> {p.testo}
+                        </p>
+                      ))}
+                    </div>
+                  )}
 
                   {v.motivi.length > 0 && (
                     <ul className="mt-1 space-y-0.5">

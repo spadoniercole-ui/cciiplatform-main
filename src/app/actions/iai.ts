@@ -16,6 +16,9 @@ import { ottieniFascicoloAction } from '@/app/actions/fascicoloEvidenza';
 import { riepilogoFascicolo } from '@/lib/fascicolo/evidenza';
 import { avvisiDaFattiVisura, normalizzaFattiVisura, proceduraPendente } from '@/lib/visura/fatti';
 import { diagnosticaDimensioni, type Componente, type DatiIai } from '@/lib/iai/dimensioni';
+import { confrontaDebitoInBilancio, type DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
+import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
+import { ottieniLimitiRicevibilita } from '@/app/actions/parametriSpazio';
 import { leggiDatiSoglieAzienda } from '@/lib/soglie25novies/datiAzienda';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
 
@@ -30,7 +33,14 @@ export async function diagnosticaIaiAction(
   nomeSchema: string,
   aziendaId: number,
   tipoSpazio: 'ENTE' | 'NON_ENTE'
-): Promise<{ success: boolean; dimensioni?: Componente[]; dati?: DatiIai; error?: string }> {
+): Promise<{
+  success: boolean;
+  dimensioni?: Componente[];
+  dati?: DatiIai;
+  /** Il debito accertato in amministrativa, ritrovato o no in bilancio. */
+  debitoInBilancio?: DebitoInBilancio;
+  error?: string;
+}> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!/^[a-z0-9_]+$/.test(nomeSchema))
@@ -132,7 +142,30 @@ export async function diagnosticaIaiAction(
         capitaleSociale: fatti?.capitaleSociale ?? null,
       },
     };
-    return { success: true, dimensioni: diagnosticaDimensioni(dati), dati };
+    // IL DEBITO VERSO L’ENTE, IN BILANCIO O NO (0.256.5).
+    //
+    // Non è una dimensione: è il ponte fra le due verifiche. L’importo
+    // accertato in amministrativa si cerca nelle voci del bilancio verso i
+    // creditori pubblici; gli alias dell’ente dicono con quali nomi l’azienda
+    // può indicarlo, e se mancano lo si dichiara — un debito scritto sotto
+    // altro nome non sarebbe riconosciuto.
+    const memorizzato = await leggiDebitoEnteMemorizzato(nomeSchema, aziendaId).catch(() => null);
+    const limitiEnte = await ottieniLimitiRicevibilita(nomeSchema, 'ENTE').catch(() => null);
+    const aliasEnte = limitiEnte?.success ? (limitiEnte.limiti[0]?.alias ?? []) : [];
+    const datiBilancio = (bil.rows[0]?.dati_finanziari ?? null) as Record<string, unknown> | null;
+    const tributari = num(datiBilancio?.debitiTributari);
+    const previdenziali = num(datiBilancio?.debitiPrevidenziali);
+    const inBilancio =
+      tributari === null && previdenziali === null ? null : (tributari ?? 0) + (previdenziali ?? 0);
+    const debitoInBilancio = confrontaDebitoInBilancio({
+      esposizione: memorizzato?.debito.totale ?? null,
+      inBilancio,
+      bilancioLetto: Boolean(datiBilancio),
+      alias: aliasEnte,
+      voci: 'i debiti tributari e previdenziali',
+    });
+
+    return { success: true, dimensioni: diagnosticaDimensioni(dati), dati, debitoInBilancio };
   } catch (error: unknown) {
     console.error('[diagnosticaIaiAction]', error);
     return {

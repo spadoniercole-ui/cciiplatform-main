@@ -112,6 +112,9 @@ export async function ritrattoAziendaAction(
           }
         : null,
       esito,
+      // I dati grezzi servono ai grafici delle dimensioni: non si ricalcolano,
+      // sono quelli su cui la diagnostica ha già misurato.
+      datiIai: dimensioniRis?.success ? (dimensioniRis.dati ?? null) : null,
     });
 
     return { success: true, ritratto };

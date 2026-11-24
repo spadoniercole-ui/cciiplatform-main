@@ -78,7 +78,7 @@ export default async function VerificaContabileAziendaPage({
       />
 
       {esito ? (
-        <EsitoVerifica esito={esito} />
+        <EsitoVerifica esito={esito} debitoInBilancio={esitoRis?.debitoInBilancio ?? null} />
       ) : (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
           L’esito non è calcolabile con i dati disponibili: completa visura, parametri e bilanci qui
@@ -92,6 +92,7 @@ export default async function VerificaContabileAziendaPage({
         codice={codice}
         tipoSpazio={contesto.tipoSpazio}
         esito={esito}
+        debitoInBilancio={esitoRis?.debitoInBilancio ?? null}
         indiciAbilitati={
           indiciRis?.success ? indiciRis.indici.filter((i) => i.abilitato).map((i) => i.codice) : []
         }

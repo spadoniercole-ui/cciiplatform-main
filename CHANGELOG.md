@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.4**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.5**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,37 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.5 — 2026-11-24
+
+IL DEBITO CHE NON C’È IN BILANCIO E LE CINQUE DIMENSIONI CHE SI VEDONO.
+
+Due cose che mancavano alla lettura di una posizione: sapere se il debito
+accertato dall’ente è scritto in bilancio, e vedere — non solo leggere in
+prosa — da che cosa nascono le cinque dimensioni.
+
+- **«Dove si concentra l’attenzione»:** nuova riga sul debito verso l’ente.
+  L’importo accertato in amministrativa si cerca nelle voci del bilancio verso i
+  creditori pubblici (debiti tributari e previdenziali); se non c’è, la riga lo
+  dice in rosso e **l’importo del debito amministrativo si mostra in un altro
+  colore** — quella posta non è nel perimetro su cui sono calcolati patrimonio
+  e indici. Gli alias dell’ente, letti dai parametri, dicono con quali nomi
+  l’azienda può indicarlo; se non sono configurati, la riga lo dichiara invece
+  di dare per certo il confronto. La stessa riga entra nella prima pagina del
+  documento stampato.
+- **Iconografia dell’azienda — i grafici delle dimensioni:**
+  - **A** barre a confronto dell’esposizione, ambito per ambito, con l’esito dei
+    presupposti accanto;
+  - **B** i due rapporti dello stesso bilancio (patrimonio sui debiti, margine
+    EBITDA) confrontati con lo zero;
+  - **C** i due esercizi accostati voce per voce (ricavi, utile, patrimonio
+    netto): la lunghezza dice il livello, la coppia dice la direzione;
+  - **D** un avviso forte, non una barra: se i dati non sono affidabili si dice
+    prima dei numeri, non nella riga in fondo;
+  - **E** le particolarità della visura: procedura pendente, stato dell’attività,
+    patrimonio sotto il capitale sociale, età della visura.
+- Le barre usano la scala del proprio grafico (nessun valore normalizzato a
+  mano) e restano barre: cinque grandezze diverse non diventano un’area.
 
 ## 0.256.4 — 2026-11-24
 

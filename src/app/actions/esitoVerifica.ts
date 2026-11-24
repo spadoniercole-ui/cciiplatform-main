@@ -12,6 +12,7 @@
 // divergere dai dati che lo sostengono.
 
 import { componiEsitoVerifica, type EsitoVerifica } from '@/lib/verifica/esito';
+import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
 import { diagnosticaIaiAction } from '@/app/actions/iai';
 import { richiediAccessoSchema } from '@/lib/autorizzazione';
@@ -19,6 +20,8 @@ import { richiediAccessoSchema } from '@/lib/autorizzazione';
 export interface RisultatoEsitoVerifica {
   success: boolean;
   esito?: EsitoVerifica;
+  /** Il debito dell’ente ritrovato o no in bilancio (0.256.5). */
+  debitoInBilancio?: DebitoInBilancio;
   error?: string;
 }
 
@@ -45,6 +48,7 @@ export async function ottieniEsitoVerificaAction(
 
     return {
       success: true,
+      debitoInBilancio: dimensioniRis?.debitoInBilancio,
       esito: componiEsitoVerifica({
         giudizio: giudizioRis.attenzione,
         dimensioni:

@@ -38,6 +38,8 @@ import type { EsitoAttenzione } from '@/lib/screening/indicatore';
 import { NOME_DIMENSIONE, type Componente, type Dimensione } from '@/lib/iai/dimensioni';
 import type { Determinante, EsitoVerifica } from '@/lib/verifica/esito';
 import type { Stadio, StatoDirettrici } from '@/lib/verificaAzienda/direttrici';
+import { componiIconografia, type IconografiaDimensioni } from '@/lib/ritratto/iconografia';
+import type { DatiIai } from '@/lib/iai/dimensioni';
 
 // ---- Le fonti ------------------------------------------------------------
 
@@ -73,6 +75,11 @@ export interface FontiRitratto {
   contabile: FonteContabileRitratto | null;
   /** Già composto da `componiEsitoVerifica`: il giudizio non si tocca. */
   esito: EsitoVerifica | null;
+  /**
+   * I dati grezzi della diagnostica: servono all'iconografia (grafici di A, B e
+   * C, avviso di D, particolarità della visura per E). Non si ricalcolano.
+   */
+  datiIai?: DatiIai | null;
 }
 
 // ---- I quattro riquadri --------------------------------------------------
@@ -144,6 +151,8 @@ export interface Ritratto {
   direttrici: RiquadroDirettrici;
   giudizio: RiquadroGiudizio;
   dimensioni: RiquadroDimensioni;
+  /** Grafici, avviso e visura dentro le dimensioni; null senza i dati grezzi. */
+  iconografia: IconografiaDimensioni | null;
   /** Che cosa il ritratto non può dire, e perché: in chiaro, sotto i riquadri. */
   mancanze: string[];
 }
@@ -386,5 +395,10 @@ export function componiRitratto(fonti: FontiRitratto): Ritratto {
     );
   }
 
-  return { testata, direttrici, giudizio, dimensioni, mancanze };
+  // L'ICONOGRAFIA si costruisce solo con i dati grezzi: senza di essi le
+  // dimensioni restano le barre di intensità, che è già una lettura vera.
+  const iconografia =
+    fonti.datiIai && fonti.esito ? componiIconografia(fonti.datiIai, fonti.esito.dimensioni) : null;
+
+  return { testata, direttrici, giudizio, dimensioni, iconografia, mancanze };
 }

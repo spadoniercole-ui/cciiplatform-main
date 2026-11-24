@@ -9,6 +9,7 @@
 
 import { DICHIARAZIONE_DIMENSIONI, NOME_DIMENSIONE } from './dimensioni';
 import type { EsitoVerifica } from '@/lib/verifica/esito';
+import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -17,6 +18,28 @@ const STILE = {
   GIALLO: { colore: '#d97706', fondo: '#fffbeb', parola: 'Attenzione' },
   ATTENZIONE_MINIMA: { colore: '#059669', fondo: '#ecfdf5', parola: 'Attenzione contenuta' },
 } as const;
+
+// LA RIGA DEL DEBITO IN BILANCIO (0.256.5). Stessa informazione della
+// schermata, con lo stesso colore: un documento che tace ciò che la pagina
+// dice è un documento che chi lo legge crede completo.
+function rigaDebitoHtml(d: DebitoInBilancio): string {
+  const colore = d.stato === 'NON_CONTABILIZZATO' ? '#b91c1c' : d.segnala ? '#b45309' : '#334155';
+  const titolo =
+    d.stato === 'NON_CONTABILIZZATO'
+      ? 'Debito verso l’ente non contabilizzato in bilancio'
+      : d.stato === 'CONTABILIZZATO' && !d.segnala
+        ? 'Debito verso l’ente contabilizzato in bilancio'
+        : 'Debito verso l’ente: la verifica in bilancio non è possibile';
+  const importo =
+    d.esposizione !== null
+      ? ` Debito accertato: <strong style="color:${colore}">${Math.round(
+          d.esposizione
+        ).toLocaleString('it-IT')} €</strong>.`
+      : '';
+  return `<p class="dich" style="color:${colore}"><strong>${esc(titolo)}</strong> ${esc(
+    d.testo
+  )}${importo}</p>`;
+}
 
 export function htmlCopertinaEsito(
   esito: EsitoVerifica,
@@ -27,7 +50,9 @@ export function htmlCopertinaEsito(
     data: string;
     /** Identificativi presso l'ente (matricola, posizioni…): il riconoscimento aziendale. */
     identificativi?: { etichetta: string; valore: string }[];
-  }
+  },
+  /** Il debito dell’ente ritrovato o no in bilancio (0.256.5). */
+  debitoInBilancio?: DebitoInBilancio | null
 ): string {
   const ident = intestazione.identificativi?.length
     ? `<p class="ident">${intestazione.identificativi
@@ -93,6 +118,7 @@ export function htmlCopertinaEsito(
   </div>
 
   <h2>Dove si concentra l’attenzione</h2>
+  ${debitoInBilancio ? rigaDebitoHtml(debitoInBilancio) : ''}
   <p class="muto">Cinque dimensioni: spiegano l’esito, non lo sostituiscono. Nessun punteggio complessivo.</p>
   <table>${dimensioni}</table>
   <p class="dich">${esc(DICHIARAZIONE_DIMENSIONI)}</p>

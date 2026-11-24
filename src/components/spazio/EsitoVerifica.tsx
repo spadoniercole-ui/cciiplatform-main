@@ -9,12 +9,84 @@
 // Le barre non hanno soglie né colori di allarme: la loro lunghezza ordina i
 // determinanti, non gradua un giudizio. Il giudizio è quello sopra.
 
-import { Activity } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react';
 import { SemaforoAttenzione } from './SemaforoAttenzione';
 import { NOME_DIMENSIONE } from '@/lib/iai/dimensioni';
+import { formattaEuro } from '@/lib/formato/numeri';
 import type { EsitoVerifica as Esito } from '@/lib/verifica/esito';
+import type { DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 
-export function EsitoVerifica({ esito }: { esito: Esito }) {
+// IL DEBITO VERSO L'ENTE, DENTRO LA SPIEGAZIONE (0.256.5).
+//
+// Le cinque dimensioni dicono da dove viene l'attenzione, ma non rispondono
+// alla domanda che l'operatore si fa per prima: «questo debito, l'azienda l'ha
+// scritto in bilancio?». Quando non c'è, la cifra accertata si mostra in un
+// altro colore: il rosso non è un giudizio sull'azienda, è il segno che quella
+// posta manca dal perimetro su cui sono calcolati patrimonio e indici.
+function RigaDebitoInBilancio({ d }: { d: DebitoInBilancio }) {
+  const tono =
+    d.stato === 'NON_CONTABILIZZATO'
+      ? {
+          bordo: 'border-red-200',
+          sfondo: 'bg-red-50',
+          testo: 'text-red-900',
+          importo: 'text-red-700',
+        }
+      : d.stato === 'CONTABILIZZATO' && !d.segnala
+        ? {
+            bordo: 'border-slate-200',
+            sfondo: 'bg-slate-50',
+            testo: 'text-slate-700',
+            importo: 'text-slate-900',
+          }
+        : {
+            bordo: 'border-amber-200',
+            sfondo: 'bg-amber-50',
+            testo: 'text-amber-900',
+            importo: 'text-amber-800',
+          };
+  const titolo =
+    d.stato === 'NON_CONTABILIZZATO'
+      ? 'Debito verso l’ente non contabilizzato in bilancio'
+      : d.stato === 'CONTABILIZZATO' && !d.segnala
+        ? 'Debito verso l’ente contabilizzato in bilancio'
+        : 'Debito verso l’ente: la verifica in bilancio non è possibile';
+  const Icona =
+    d.stato === 'NON_CONTABILIZZATO'
+      ? AlertTriangle
+      : d.stato === 'CONTABILIZZATO' && !d.segnala
+        ? CheckCircle2
+        : HelpCircle;
+
+  return (
+    <div className={`rounded-lg border p-3 ${tono.bordo} ${tono.sfondo}`}>
+      <p className={`flex items-center gap-1.5 text-[11px] font-bold ${tono.testo}`}>
+        <Icona className="h-3.5 w-3.5 shrink-0" /> {titolo}
+      </p>
+      <p className={`mt-1 text-[11px] leading-relaxed ${tono.testo}`}>{d.testo}</p>
+      {d.esposizione !== null && (
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-700">
+          Debito accertato in amministrativa:{' '}
+          <strong className={`tabular-nums ${tono.importo}`}>{formattaEuro(d.esposizione)}</strong>
+          {d.inBilancio !== null && d.stato === 'CONTABILIZZATO' && (
+            <>
+              {' '}
+              · in bilancio: <span className="tabular-nums">{formattaEuro(d.inBilancio)}</span>
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function EsitoVerifica({
+  esito,
+  debitoInBilancio,
+}: {
+  esito: Esito;
+  debitoInBilancio?: DebitoInBilancio | null;
+}) {
   return (
     <section className="space-y-3" aria-label="Esito della verifica contabile">
       <SemaforoAttenzione attenzione={esito.giudizio} />
@@ -33,6 +105,8 @@ export function EsitoVerifica({ esito }: { esito: Esito }) {
               </p>
             </div>
           </div>
+
+          {debitoInBilancio && <RigaDebitoInBilancio d={debitoInBilancio} />}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {esito.dimensioni.map((c) => (
