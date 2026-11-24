@@ -4,6 +4,7 @@ import { ArrowLeft, FileText } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ritrattoAziendaAction } from '@/app/actions/ritratto';
 import { componiReportIconografia } from '@/lib/ritratto/reportIconografia';
+import { ETICHETTA_BARRA_DEBITO } from '@/lib/ritratto/iconografia';
 import type { Stadio } from '@/lib/verificaAzienda/direttrici';
 import { stileFoglioA4 } from '@/lib/stampe/foglioA4';
 import { StampaDocumento } from '@/components/spazio/StampaDocumento';
@@ -57,6 +58,16 @@ ${stileFoglioA4({
 .ico-barra-dim .valore { text-align: right; font-family: var(--font-mono), monospace; font-size: 7pt;
   color: #64748b; }
 .ico-barra-dim .didascalia { grid-column: 2 / 4; }
+.ico-barra-str { display: grid; grid-template-columns: 40mm 1fr 18mm; align-items: center; gap: 1.6mm;
+  font-size: 7.4pt; break-inside: avoid; }
+.ico-barra-str .traccia { height: 2.6mm; background: #e2e8f0; border-radius: 2mm; overflow: hidden; }
+.ico-barra-str .riempimento { display: block; height: 100%; border-radius: 2mm; background: #475569; }
+.ico-barra-str .riempimento.negativo { background: #dc2626; }
+.ico-barra-str .valore { text-align: right; font-family: var(--font-mono), monospace; font-size: 7pt;
+  color: #334155; }
+.ico-barra-str .didascalia { grid-column: 2 / 4; }
+.ico-sfora { font-size: 6.8pt; color: #b91c1c; border-left: 2px solid #dc2626; padding-left: 2.4mm;
+  margin-top: 1.4mm; }
 .ico-donut { display: flex; align-items: center; gap: 3mm; }
 .ico-legenda { font-size: 6.8pt; color: #64748b; }
 .ico-nota { font-size: 6.8pt; color: #64748b; margin-top: 1mm; }
@@ -292,9 +303,62 @@ export default async function ReportIconografiaPage({
             )}
           </section>
 
+          {report.debito && (
+            <section className="ico-sezione">
+              <h2 className="ico-titolo">5 · Il debito verso l’ente</h2>
+              <table className="ico-tabella">
+                <tbody>
+                  {report.debito.righe.map((r) => (
+                    <tr key={r.etichetta}>
+                      <td className="etichetta">{r.etichetta}</td>
+                      <td>
+                        <strong>{r.testo}</strong>
+                        {r.riferimento && r.etichetta !== ETICHETTA_BARRA_DEBITO.iscritto && (
+                          <span className="ico-legenda"> — {r.riferimento}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {report.debito.riscontro && <p className="ico-nota">{report.debito.riscontro}</p>}
+            </section>
+          )}
+
+          {report.struttura && (
+            <section className="ico-sezione">
+              <h2 className="ico-titolo">6 · La struttura</h2>
+              <div className="ico-grafico">
+                {report.struttura.barre.map((b) => (
+                  <div key={b.etichetta} className="ico-barra-str">
+                    <span>{b.etichetta}</span>
+                    <span className="traccia">
+                      <span
+                        className={`riempimento${b.negativo ? ' negativo' : ''}`}
+                        style={{ width: `${Math.max(0.8, b.larghezza)}%` }}
+                      />
+                    </span>
+                    <span className="valore">{b.testo}</span>
+                    {b.riferimento && (
+                      <span className="ico-legenda didascalia">{b.riferimento}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="ico-nota">{report.struttura.lettura}</p>
+            </section>
+          )}
+
+          {report.budget.sfora && (
+            <p className="ico-sfora">
+              Il foglio è pieno: il contenuto occupa {report.budget.usate} righe su{' '}
+              {report.budget.disponibili}. Le sezioni in coda restano nell’iconografia a schermo.
+            </p>
+          )}
+
           {g && (
             <section className="ico-sezione">
-              <h2 className="ico-titolo">5 · Accertato e da accertare</h2>
+              <h2 className="ico-titolo">7 · Accertato e da accertare</h2>
               <table className="ico-tabella ico-fatti">
                 <thead>
                   <tr>

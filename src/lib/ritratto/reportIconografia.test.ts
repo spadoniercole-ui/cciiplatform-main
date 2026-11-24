@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Componente } from '@/lib/iai/dimensioni';
+import type { Componente, DatiIai } from '@/lib/iai/dimensioni';
+import { confrontaDebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
 import type { Attenzione } from '@/lib/screening/indicatore';
 import type { StatoDirettrici } from '@/lib/verificaAzienda/direttrici';
 import { componiEsitoVerifica } from '@/lib/verifica/esito';
@@ -55,6 +56,47 @@ function fonti(patch: Partial<FontiRitratto> = {}): FontiRitratto {
 const report = (patch: Partial<FontiRitratto> = {}) =>
   componiReportIconografia(componiRitratto(fonti(patch)), '22/11/2026');
 
+// I dati grezzi che l'iconografia legge: senza, i grafici A e B non esistono e
+// il foglio non ha né la riga del debito né la struttura.
+const DATI_IAI: DatiIai = {
+  ente: {
+    soglie: [{ ambito: 'Segnalazione INPS', esito: 'sotto', esposizione: 80000 }],
+    importiNonNoti: 0,
+    denunceAssenti: false,
+    addetti: 12,
+  },
+  bilancio: {
+    corrente: {
+      anno: 2025,
+      ricavi: 2000000,
+      ebitda: 160000,
+      utile: 30000,
+      totaleAttivo: 1800000,
+      attivoCircolante: 900000,
+      patrimonioNetto: 400000,
+      totaleDebiti: 1400000,
+      debitiNonDisaggregati: false,
+    },
+    precedente: { ricavi: 1900000, utile: 45000, patrimonioNetto: 370000 },
+  },
+  fascicolo: { totale: 3, titoloEnte: 1, dichiarato: 2, nonNoti: 0 },
+  visura: {
+    disponibile: true,
+    proceduraPendente: null,
+    statoAttivitaAnomalo: null,
+    giorniVisura: 40,
+    capitaleSociale: 100000,
+  },
+};
+
+const DEBITO_PARZIALE = confrontaDebitoInBilancio({
+  esposizione: 152000,
+  vociBilancio: { tributari: 60000, previdenziali: 70000 },
+  ente25novies: 'INPS',
+  bilancioLetto: true,
+  alias: ['INPS'],
+});
+
 describe('componiReportIconografia', () => {
   it('porta nell’intestazione impresa, verifica e debito come stanno nel ritratto', () => {
     const r = report();
@@ -105,6 +147,46 @@ describe('componiReportIconografia', () => {
       ['D', 80, 'letta'],
       ['E', 40, 'letta'],
     ]);
+  });
+
+  it('porta sul foglio le due righe del debito, accertato e iscritto', () => {
+    const r = report({ datiIai: DATI_IAI, debitoInBilancio: DEBITO_PARZIALE });
+    expect(r.debito?.righe.map((x) => x.etichetta)).toEqual([
+      'Debito amministrativo accertato',
+      'Debito contabile iscritto in bilancio',
+    ]);
+    expect(r.debito?.righe[0].testo).toBe('152.000 €');
+    expect(r.debito?.righe[1].testo).toBe('70.000 €');
+    // Il riscontro parziale non si legge come un confronto impossibile.
+    expect(r.debito?.riscontro).toMatch(/solo in parte/);
+    expect(r.debito?.riscontro).not.toMatch(/non è possibile/);
+  });
+
+  it('senza iconografia non inventa la riga del debito', () => {
+    const r = report();
+    expect(r.debito).toBeNull();
+    expect(r.struttura).toBeNull();
+  });
+
+  it('porta il grafico della struttura con la larghezza già calcolata', () => {
+    const r = report({ datiIai: DATI_IAI });
+    expect(r.struttura?.barre.map((b) => b.etichetta)).toEqual([
+      'Patrimonio netto',
+      'Totale debiti',
+    ]);
+    // I debiti sono il massimo del grafico: barra piena.
+    expect(r.struttura?.barre[1].larghezza).toBe(100);
+    expect(r.struttura?.barre[0].larghezza).toBeCloseTo((400000 / 1400000) * 100, 5);
+    expect(r.struttura?.barre[0].negativo).toBe(false);
+    expect(r.struttura?.lettura).toMatch(/Patrimonio netto e debiti/);
+  });
+
+  it('conta i due blocchi nuovi nel budget del foglio', () => {
+    const senza = report();
+    const con = report({ datiIai: DATI_IAI, debitoInBilancio: DEBITO_PARZIALE });
+    expect(con.budget.usate).toBeGreaterThan(senza.budget.usate);
+    expect(con.budget.usate).toBeLessThanOrEqual(RIGHE_FOGLIO);
+    expect(con.budget.sfora).toBe(false);
   });
 
   it('chiude l’intensità dentro 0-100, come la barra', () => {

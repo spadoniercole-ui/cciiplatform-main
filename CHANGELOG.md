@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.16**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.17**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,28 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.17 — 2026-11-24
+
+IL FOGLIO A4 DELL'ICONOGRAFIA PORTA ANCHE IL DEBITO E LA STRUTTURA.
+
+- **Sezione 5 · Il debito verso l'ente.** Le due righe del box A — accertato in
+  amministrativa e iscritto in bilancio — con il riscontro sotto («contabilizzato
+  solo in parte: 70.000 € in bilancio contro 152.000 € accertati»). Prima il
+  foglio portava solo «Debito memorizzato» nella tabella dell'impresa: la cosa
+  che si cerca su un allegato — se quel debito è scritto in bilancio — restava a
+  schermo.
+- **Sezione 6 · La struttura.** Patrimonio netto e debiti totali sulla stessa
+  scala, con la barra già dimensionata dal massimo del grafico e il rapporto
+  accanto. Anche questa era solo a schermo.
+- **I valori non si ricalcolano:** si ripescano dai grafici già composti (box A e
+  box B) riconoscendo le righe del debito dal loro nome, esportato da
+  `iconografia.ts` (`ETICHETTA_BARRA_DEBITO`). Se l'iconografia non c'è, i due
+  blocchi non compaiono invece di stampare caselle vuote.
+- **Il conto delle righe è rifatto insieme:** i due blocchi pagano titolo,
+  margini, riscontro e didascalia come gli altri, e il budget delle lacune si
+  restringe di conseguenza. Se nemmeno il contenuto fisso sta, `budget.sfora`
+  diventa vero e il foglio lo dichiara in chiaro, invece di sforare in silenzio.
 
 ## 0.256.16 — 2026-11-24
 

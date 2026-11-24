@@ -28,6 +28,7 @@
 
 import type { EsitoAttenzione } from '@/lib/screening/indicatore';
 import type { Stadio } from '@/lib/verificaAzienda/direttrici';
+import { ETICHETTA_BARRA_DEBITO } from './iconografia';
 import type { Ritratto, StatoLettura } from './ritratto';
 
 export interface RigaReport {
@@ -83,6 +84,38 @@ export interface GiudizioReport {
   daAccertareOltre: number;
 }
 
+/**
+ * IL DEBITO E LA STRUTTURA SUL FOGLIO (0.256.17). Il foglio portava solo le
+ * cinque barre di intensità: il debito accertato/iscritto e il patrimonio sui
+ * debiti restavano a schermo, e sono la prima cosa che si cerca su un allegato.
+ * I valori non si ricalcolano: si ripescano dai grafici già composti (box A e
+ * box B), riconoscendo le righe del debito dal loro nome.
+ */
+export interface RigaValoreReport {
+  etichetta: string;
+  /** Il valore già scritto: «152.000 €», «non letto». */
+  testo: string;
+  /** Che cosa significa: il riscontro, il rapporto sui debiti, o nulla. */
+  riferimento: string | null;
+}
+
+export interface DebitoFoglioReport {
+  righe: RigaValoreReport[];
+  /** Il riscontro del debito iscritto: «contabilizzato solo in parte…». */
+  riscontro: string | null;
+}
+
+export interface StrutturaFoglioReport {
+  barre: (RigaValoreReport & {
+    /** Lunghezza della barra sul massimo del grafico, 0-100. */
+    larghezza: number;
+    /** true quando il valore è sotto zero: si stampa in rosso, come a schermo. */
+    negativo: boolean;
+  })[];
+  /** Che cosa mostra il grafico, come lo dice l'iconografia a schermo. */
+  lettura: string;
+}
+
 /** Il conto delle righe: quanto costa il foglio e se qualcosa è rimasto fuori. */
 export interface BudgetFoglioReport {
   /** Righe disponibili su un A4 con i margini di questo report. */
@@ -91,6 +124,8 @@ export interface BudgetFoglioReport {
   usate: number;
   /** true quando una lacuna è stata lasciata fuori per stare sul foglio. */
   tagliato: boolean;
+  /** true quando nemmeno il contenuto fisso sta: il foglio lo dichiara. */
+  sfora: boolean;
 }
 
 export interface ReportIconografia {
@@ -108,6 +143,10 @@ export interface ReportIconografia {
   giudizio: GiudizioReport | null;
   dimensioni: BarraDimensioneReport[];
   dimensioniNota: string;
+  /** Il debito accertato e quello iscritto in bilancio, dal box A. */
+  debito: DebitoFoglioReport | null;
+  /** Il grafico della struttura (patrimonio, debiti), dal box B. */
+  struttura: StrutturaFoglioReport | null;
   mancanze: string[];
   /** Lacune che non stanno sul foglio: si dichiarano in cifre. */
   mancanzeOltre: number;
@@ -210,6 +249,48 @@ export function componiReportIconografia(
       }
     : null;
 
+  // IL DEBITO DEL BOX A. Le due righe si riconoscono dal nome: se il confronto
+  // non c'è (nessun debito memorizzato) il blocco non compare, invece di
+  // stampare due caselle vuote.
+  const graficoA = ritratto.iconografia?.grafici.find((g) => g.dimensione === 'A') ?? null;
+  const righeDebito: RigaValoreReport[] = (graficoA?.barre ?? [])
+    .filter(
+      (b) =>
+        b.etichetta === ETICHETTA_BARRA_DEBITO.accertato ||
+        b.etichetta === ETICHETTA_BARRA_DEBITO.iscritto
+    )
+    .map((b) => ({ etichetta: b.etichetta, testo: b.testo, riferimento: b.riferimento }));
+  const debito: DebitoFoglioReport | null =
+    righeDebito.length > 0
+      ? {
+          righe: righeDebito,
+          riscontro:
+            righeDebito.find((r) => r.etichetta === ETICHETTA_BARRA_DEBITO.iscritto)?.riferimento ??
+            null,
+        }
+      : null;
+
+  // LA STRUTTURA DEL BOX B: patrimonio netto e debiti totali sulla stessa scala,
+  // con la lunghezza già calcolata qui (la pagina non fa conti).
+  const graficoB = ritratto.iconografia?.grafici.find((g) => g.dimensione === 'B') ?? null;
+  const massimoStruttura = graficoB?.massimo ?? null;
+  const struttura: StrutturaFoglioReport | null =
+    graficoB && graficoB.barre.length > 0
+      ? {
+          lettura: graficoB.lettura,
+          barre: graficoB.barre.map((b) => ({
+            etichetta: b.etichetta,
+            testo: b.testo,
+            riferimento: b.riferimento,
+            larghezza:
+              b.valore === null || !massimoStruttura
+                ? 0
+                : Math.min(100, (Math.abs(b.valore) / massimoStruttura) * 100),
+            negativo: b.valore !== null && b.valore < 0,
+          })),
+        }
+      : null;
+
   const ridotto = [...accertato.righe, ...daAccertare.righe].some((r) => r.ridotto)
     ? 'Le voci di «Accertato» e «Da accertare» sono ridotte per stare sul foglio: il testo integrale è nell’iconografia a schermo.'
     : 'Nessuna voce è stata ridotta: il foglio riporta il testo integrale.';
@@ -227,12 +308,18 @@ export function componiReportIconografia(
   const righeFatti = giudizioReport
     ? 1 + 2 + Math.max(giudizioReport.accertato.length, giudizioReport.daAccertare.length) + 2
     : 0;
+  // I due blocchi nuovi pagano titolo e margini come gli altri: la riga del
+  // riscontro e la didascalia della struttura sono righe, non decorazioni.
+  const costoDebito = debito ? 1 + debito.righe.length + (debito.riscontro ? 1 : 0) + 1 : 0;
+  const costoStruttura = struttura ? 1 + struttura.barre.length + 2 : 0;
   const righeFisse =
     6 +
     1 +
     Math.max(righeImpresa, righeGiudizio) +
     righeDirettrici +
     righeDimensioni +
+    costoDebito +
+    costoStruttura +
     righeFatti +
     2;
 
@@ -272,6 +359,8 @@ export function componiReportIconografia(
       tono: LETTURA[v.stato].tono,
     })),
     dimensioniNota: dimensioni.nota,
+    debito,
+    struttura,
     // Le mancanze entrano finché il budget del foglio le regge: quelle che
     // restano fuori si contano, e la pagina le dichiara.
     mancanze: mancanzeTenute,
@@ -280,6 +369,7 @@ export function componiReportIconografia(
       disponibili: RIGHE_FOGLIO,
       usate: righeFisse + righeMancanze,
       tagliato: mancanzeOltre > 0,
+      sfora: righeFisse > RIGHE_FOGLIO,
     },
     notaRiduzione: ridotto,
   };

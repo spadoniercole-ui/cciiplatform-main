@@ -136,6 +136,16 @@ export function geometriaBarra(valore: number | null, massimo: number, minimo = 
   };
 }
 
+/**
+ * Le due righe del debito, con il loro nome (0.256.17). Il foglio A4 del
+ * report le ripesca dal grafico A: si riconoscono da qui, non dalla posizione
+ * nella lista, così l'etichetta e chi la legge non possono divergere.
+ */
+export const ETICHETTA_BARRA_DEBITO = {
+  accertato: 'Debito amministrativo accertato',
+  iscritto: 'Debito contabile iscritto in bilancio',
+} as const;
+
 function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimensione | null {
   const soglie = dati.ente.soglie;
   if (soglie.length === 0 && !debito) return null;
@@ -146,7 +156,7 @@ function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimens
   const barre: BarraGrafico[] = [];
   if (debito && debito.esposizione !== null) {
     barre.push({
-      etichetta: 'Debito amministrativo accertato',
+      etichetta: ETICHETTA_BARRA_DEBITO.accertato,
       valore: debito.esposizione,
       testo: euro(debito.esposizione),
       riferimento: 'verifica amministrativa: l’importo che l’ente vanta',
@@ -156,7 +166,7 @@ function graficoA(dati: DatiIai, debito: DebitoInBilancio | null): GraficoDimens
     // è un fatto accertato, non un dato mancante.
     const contabile = debito.inBilancio;
     barre.push({
-      etichetta: 'Debito contabile iscritto in bilancio',
+      etichetta: ETICHETTA_BARRA_DEBITO.iscritto,
       valore: contabile,
       testo: contabile === null ? 'voce non letta' : euro(contabile),
       riferimento: riscontroDebito(debito),
