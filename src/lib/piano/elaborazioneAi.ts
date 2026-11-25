@@ -18,6 +18,7 @@
 
 import { cercaTerminiLessico, LESSICO, SOSTITUZIONI_DIRETTE } from '@/lib/lessico/lessico';
 import { PARAMETRI_SIMULAZIONE_PREDEFINITI } from './parametriSimulazione';
+import type { LeveSimulazione } from './leveSimulazione';
 import { rettifichePulite, type Rettifiche } from './rettifiche';
 import {
   ETICHETTA_RIGA,
@@ -77,6 +78,11 @@ export interface ContestoElaborazione {
   parametriContesto?: string | null;
   /** Le leve accese al lancio (tagli, tecnologia, diversificazione, target). */
   leve?: string | null;
+  /**
+   * Le stesse leve come scelte: il browser manda queste, il server ne ricava
+   * il testo per il prompt (`leve`) e le salva con la variante.
+   */
+  leveScelte?: LeveSimulazione | null;
   /**
    * Il piano dell'azienda che arriva dal passo 3 della verifica aziendale,
    * quando lo scenario è stato creato con il flag di simulazione.

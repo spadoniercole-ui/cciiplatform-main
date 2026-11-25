@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.18**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.19**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,24 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.19 — 2026-11-25
+
+LA SIMULAZIONE RICORDA CON QUALI LEVE È STATA PRODOTTA.
+
+- **Le leve si salvano con la variante.** Le cinque scelte del lancio (tagli del
+  personale, investimenti in tecnologia, diversificazione della produzione e dei
+  mercati, cambio del target di clientela) non restano più solo nello stato della
+  pagina: finiscono nella variante del piano (`piano_sviluppo.leve`, jsonb), sia
+  quando le scrive l'elaborazione con l'AI sia quando si salva a mano. Ricaricando
+  la pagina o riaprendo la variante, il pannello riparte dalle leve con cui quel
+  piano è nato, invece di tornare a tutte spente.
+- **Accanto alla sintesi.** Nell'esito del piano compare l'elenco delle leve
+  accese con la loro misura, riferito alla variante aperta: si legge che quel
+  piano prevede, per esempio, tagli del personale al 12%, e non lo si deve
+  dedurre dalle ipotesi. Una variante salvata prima di questa versione non ha
+  leve registrate: la pagina lo dice e non ne inventa, e le leve di un salvataggio
+  successivo restano quelle già registrate finché non arrivano nuove scelte.
 
 ## 0.256.18 — 2026-11-24
 

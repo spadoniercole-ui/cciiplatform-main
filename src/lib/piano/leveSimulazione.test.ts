@@ -4,6 +4,8 @@ import {
   LEVE,
   LEVE_PREDEFINITE,
   contaLeve,
+  leveAccese,
+  leveDaSalvate,
   leveValide,
   misuraSuggerita,
   testoLeve,
@@ -107,5 +109,31 @@ describe('leve della simulazione', () => {
     expect(testo).toContain('Tagli del personale: SÌ, 12%');
     expect(testo).not.toContain('Investimenti in tecnologia');
     expect(testo).toContain('riduzione dell’organico');
+  });
+
+  it('le leve salvate con la variante si rileggono; una variante senza leve resta senza', () => {
+    expect(leveDaSalvate(null)).toBeNull();
+    expect(leveDaSalvate(undefined)).toBeNull();
+    expect(leveDaSalvate({})).toBeNull();
+    expect(leveDaSalvate('PERSONALE')).toBeNull();
+    const lette = leveDaSalvate({ PERSONALE: { attiva: true, misura: 12 } });
+    expect(lette?.PERSONALE).toEqual({ attiva: true, misura: 12 });
+    expect(lette?.MERCATI).toEqual({ attiva: false, misura: 15 });
+  });
+
+  it('la sintesi elenca solo le leve accese, con la misura arrotondata', () => {
+    expect(leveAccese(LEVE_PREDEFINITE)).toEqual([]);
+    const accese = leveAccese(
+      leveValide({
+        PERSONALE: { attiva: true, misura: 12.4 },
+        CLIENTELA: { attiva: true, misura: 20 },
+        MERCATI: { attiva: false, misura: 15 },
+      })
+    );
+    expect(accese.map((a) => [a.domanda, a.pct])).toEqual([
+      ['Tagli del personale', 12],
+      ['Cambio del target di clientela', 20],
+    ]);
+    expect(accese[0].misura).toBe('riduzione dell’organico');
   });
 });

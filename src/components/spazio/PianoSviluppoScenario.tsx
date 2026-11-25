@@ -53,7 +53,7 @@ import {
   LEVE,
   LEVE_PREDEFINITE,
   contaLeve,
-  testoLeve,
+  leveAccese,
   type LeveSimulazione,
 } from '@/lib/piano/leveSimulazione';
 import { testoPianoVerifica } from '@/lib/piano/pianoDaVerifica';
@@ -190,6 +190,9 @@ export function PianoSviluppoScenario({
     setSerieSistema(r.dati.serieSistema);
     setPianoRientro(r.dati.pianoRientro);
     setSoluzione(r.dati.soluzione);
+    // Le leve salvate con la variante tornano nel pannello: la simulazione
+    // ricorda con quali leve è stata prodotta, anche dopo un ricaricamento.
+    if (r.dati.leve) setLeve(r.dati.leve);
     setModificato(false);
   };
   useEffect(() => {
@@ -400,7 +403,7 @@ export function PianoSviluppoScenario({
       ipotesiEffettive,
       note || null,
       modoRettifica ? rettifiche : null,
-      modoRettifica ? { pianoRientro, serieSistema, soluzione } : {}
+      modoRettifica ? { pianoRientro, serieSistema, soluzione, leve } : { leve }
     );
     if (!r.success) return setErrore(r.error ?? 'Errore.');
     await carica(variante);
@@ -433,9 +436,10 @@ export function PianoSviluppoScenario({
         ipotesiCorrenti: ipotesi,
         attenzioneContabile: attenzione?.testo ?? null,
         lancio: testoLancio(lancio),
-        // Le leve accese, in testo: il contesto economico e il piano della
-        // verifica aziendale li aggiunge il server (sono dati dello spazio).
-        leve: testoLeve(leve) || null,
+        // Le leve del lancio come scelte: il server ne ricava il testo per il
+        // prompt e le salva con la variante. Il contesto economico e il piano
+        // della verifica aziendale li aggiunge il server (dati dello spazio).
+        leveScelte: leve,
         vincoli: [...esito.vincoli.map((v) => v.testo), ...(attenzione?.vincoli ?? [])],
       });
       if (!r.success) {
@@ -665,12 +669,13 @@ export function PianoSviluppoScenario({
                   </div>
                   <select
                     value={s.attiva ? 'SI' : 'NO'}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setLeve((prev) => ({
                         ...prev,
                         [l.id]: { ...prev[l.id], attiva: e.target.value === 'SI' },
-                      }))
-                    }
+                      }));
+                      setModificato(true);
+                    }}
                     className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800"
                   >
                     <option value="NO">No</option>
@@ -695,6 +700,7 @@ export function PianoSviluppoScenario({
                               : prev[l.id].misura,
                           },
                         }));
+                        setModificato(true);
                       }}
                       disabled={!s.attiva}
                       className="mt-0.5 w-full p-1.5 text-xs text-right bg-white border border-slate-200 rounded-lg text-slate-800 disabled:opacity-50"
@@ -1363,6 +1369,36 @@ export function PianoSviluppoScenario({
           <pre className="whitespace-pre-wrap text-xs text-slate-800 font-sans">
             {esito.sintesi}
           </pre>
+          {/* LE LEVE CON CUI LA VARIANTE È NATA (0.256.19): accanto alla sintesi,
+              perché sono il presupposto di quel piano e non un'impostazione a
+              sé. Si leggono quelle salvate, non quelle che il pannello mostra
+              mentre si cambiano. */}
+          {dati.leve &&
+            (() => {
+              const accese = leveAccese(dati.leve);
+              return (
+                <div className="border-t border-slate-300/60 pt-2 space-y-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    Le leve con cui è stata prodotta la variante «{variante}»
+                  </p>
+                  {accese.length === 0 ? (
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Nessuna leva accesa: il piano non prevede tagli del personale, investimenti in
+                      tecnologia, diversificazioni né cambio di target.
+                    </p>
+                  ) : (
+                    <ul className="space-y-0.5">
+                      {accese.map((a) => (
+                        <li key={a.id} className="text-[11px] text-slate-800 leading-relaxed">
+                          <span className="font-semibold">{a.domanda}</span>: sì, {a.pct}% (
+                          {a.misura}).
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })()}
           {esito.vincoli.length > 0 && (
             <ul className="space-y-1">
               {esito.vincoli.map((v, i) => (

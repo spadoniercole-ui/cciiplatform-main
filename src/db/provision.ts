@@ -1240,6 +1240,11 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS soluzione JSONB`
   );
+  // Le cinque leve con cui la variante è stata prodotta (0.256.19): tagli del
+  // personale, tecnologia, diversificazione di produzione e mercati, target di
+  // clientela, ognuna con il sì/no e la misura. Restano con la variante perché
+  // la simulazione ricordi il suo presupposto anche dopo un ricaricamento.
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS leve JSONB`);
   // Vecchia simulazione a levette (sostituita dal Piano di sviluppo nella
   // 0.109.113 e tolta dal codice nella 0.109.118, su indicazione di Ercole:
   // «la simulazione attuale la puoi cestinare»). Le sue tabelle si

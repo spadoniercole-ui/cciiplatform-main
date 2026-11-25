@@ -137,3 +137,27 @@ export function testoLeve(leve: LeveSimulazione): string {
 export function contaLeve(leve: LeveSimulazione): number {
   return LEVE.filter((l) => leve[l.id]?.attiva).length;
 }
+
+/**
+ * Le leve come stanno nella variante salvata (colonna jsonb `leve`). Null
+ * quando la variante non ne ha: è nata prima che le leve si registrassero, e
+ * non si inventa con quali leve è stata prodotta.
+ */
+export function leveDaSalvate(input: unknown): LeveSimulazione | null {
+  if (!input || typeof input !== 'object') return null;
+  const o = input as Record<string, unknown>;
+  if (!LEVE.some((l) => o[l.id] && typeof o[l.id] === 'object')) return null;
+  return leveValide(input);
+}
+
+/** Le leve accese con la loro misura arrotondata: la sintesi del piano le elenca. */
+export function leveAccese(
+  leve: LeveSimulazione
+): { id: IdLeva; domanda: string; misura: string; pct: number }[] {
+  return LEVE.filter((l) => leve[l.id]?.attiva).map((l) => ({
+    id: l.id,
+    domanda: l.domanda,
+    misura: l.misura,
+    pct: Math.round(leve[l.id].misura),
+  }));
+}

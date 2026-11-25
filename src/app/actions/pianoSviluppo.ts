@@ -52,7 +52,12 @@ import {
   testoPianoVerifica,
   type AnnoPianoVerifica,
 } from '@/lib/piano/pianoDaVerifica';
-import { testoLeve } from '@/lib/piano/leveSimulazione';
+import {
+  testoLeve,
+  leveValide,
+  leveDaSalvate,
+  type LeveSimulazione,
+} from '@/lib/piano/leveSimulazione';
 import type { ParametriSimulazionePiano } from '@/lib/piano/parametriSimulazione';
 import {
   pianoRientroPulito,
@@ -106,6 +111,11 @@ export interface DatiPianoSviluppo {
   pianoVerifica: AnnoPianoVerifica[];
   /** Il contesto economico dello spazio (Parametri › Piano e simulazione AI). */
   parametriContesto: number;
+  /**
+   * Le leve con cui questa variante è stata prodotta, come sono state salvate:
+   * null quando la variante non ne ha (nata prima che si registrassero).
+   */
+  leve: LeveSimulazione | null;
 }
 
 export async function ottieniPianoSviluppoAction(
@@ -293,6 +303,7 @@ export async function ottieniPianoSviluppoAction(
         simulazioneAttiva,
         pianoVerifica,
         parametriContesto: contesto.filter((c) => c.valore.length > 0).length,
+        leve: leveDaSalvate(piano.rows[0]?.leve),
       },
     };
   } catch (error: unknown) {
@@ -316,6 +327,8 @@ export async function salvaPianoSviluppoAction(
     pianoRientro?: PianoRientro | null;
     serieSistema?: boolean;
     soluzione?: SoluzioneSalvata | null;
+    /** Le leve del lancio: restano con la variante, così la simulazione le ricorda. */
+    leve?: LeveSimulazione | null;
   } = {}
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -335,11 +348,15 @@ export async function salvaPianoSviluppoAction(
     await assicuraTabelleParametriSpazio(contesto.nomeSchema);
     const rientro = pianoRientroPulito(extra.pianoRientro);
     const sol = soluzionePulita(extra.soluzione);
+    // Le leve si salvano solo se il browser le manda: se non arrivano (un
+    // salvataggio che non le conosce) restano quelle già registrate.
+    const leve = extra.leve ? JSON.stringify(leveValide(extra.leve)) : null;
     await pool.query(
-      `INSERT INTO "${contesto.nomeSchema}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, piano_rientro, serie_sistema, soluzione, salvato_il)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+      `INSERT INTO "${contesto.nomeSchema}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, piano_rientro, serie_sistema, soluzione, leve, salvato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
        ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, rettifiche = $6,
-         piano_rientro = $7, serie_sistema = $8, soluzione = $9, salvato_il = now()`,
+         piano_rientro = $7, serie_sistema = $8, soluzione = $9, leve = COALESCE($10, piano_sviluppo.leve),
+         salvato_il = now()`,
       [
         scenarioId,
         v,
@@ -350,6 +367,7 @@ export async function salvaPianoSviluppoAction(
         rientro ? JSON.stringify(rientro) : null,
         extra.serieSistema === true,
         sol ? JSON.stringify(sol) : null,
+        leve,
       ]
     );
     return { success: true };
@@ -522,6 +540,11 @@ export async function elaboraPianoConAiAction(
     const c = contestoPulito(contesto);
     if (!c)
       return { success: false, error: 'Dati del piano incompleti: serve almeno un bilancio.' };
+    // Le leve del lancio (0.256.19): una sola fonte, `leveScelte`. Da qui il
+    // testo per il prompt e, più sotto, il jsonb salvato con la variante: la
+    // simulazione ricorda con quali leve è stata prodotta.
+    const leveScelte = leveValide(contesto.leveScelte);
+    c.leve = testoLeve(leveScelte) || null;
     // IL CONTESTO ECONOMICO E IL PIANO DELLA VERIFICA (0.256.18) si leggono
     // qui: sono dati dello spazio e dell'azienda, non del browser. Il contesto
     // vale per tutte le aziende (Parametri), il piano della verifica solo se lo
@@ -602,9 +625,10 @@ export async function elaboraPianoConAiAction(
       .filter(Boolean)
       .join('\n');
     await pool.query(
-      `INSERT INTO "${s}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, salvato_il)
-       VALUES ($1, $2, $3, $4, $5, $6, now())
-       ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, rettifiche = $6, salvato_il = now()`,
+      `INSERT INTO "${s}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, leve, salvato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+       ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, rettifiche = $6,
+         leve = $7, salvato_il = now()`,
       [
         scenarioId,
         VARIANTE_AI,
@@ -612,6 +636,7 @@ export async function elaboraPianoConAiAction(
         JSON.stringify(esito.ipotesi),
         nota,
         rettifiche ? JSON.stringify(rettifiche) : null,
+        JSON.stringify(leveScelte),
       ]
     );
     return {
