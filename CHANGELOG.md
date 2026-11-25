@@ -26,6 +26,30 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.23 — 2026-11-25
+
+IL CREDITO DELL'ENTE SA DOVE SI COLLOCA NELLA LIQUIDAZIONE.
+
+- **La certificazione si legge anche per classe e grado.** Il debito verso
+  l'ente non è una cifra sola: i contributi hanno il privilegio generale
+  mobiliare di I grado (art. 2753 c.c., art. 2778 n. 1 c.c.), le sanzioni
+  civili sono accessorie e valgono metà con privilegio di grado VIII e metà
+  chirografo (art. 2754 c.c., art. 2778 n. 8 c.c.), le sanzioni amministrative
+  in senso stretto sono chirografe. La posizione della certificazione mostra
+  ora questa ripartizione, calcolata dalle colonne che il file già porta
+  (contributi, sanzioni, stato). La regola sta in
+  `src/lib/debitiEnte/classificazioneCredito.ts` con i suoi test.
+- **Nulla si attribuisce d'ufficio.** Le cartelle dell'Agente della Riscossione
+  aggregano il residuo, i verbali di evasione e le note di rettifica portano una
+  cifra unica: restano «da classificare» finché non arriva il dettaglio. Il
+  resto che non quadra col riparto non si regala a una classe.
+- **Il debito certo è quello che il file non dichiara ancora da lavorare.**
+  Le voci «da verificare», «non definite», «sospese», «da contabilizzare»
+  restano fuori dal debito certo e si espongono a parte; le verifiche concluse
+  («Verificata», «Calcolati») sono certe. Nessun importo dell'ente si modifica:
+  la classificazione è una lettura, e gli sgravi esistono solo con
+  provvedimento del giudice e atto amministrativo che li sostiene.
+
 ## 0.256.22 — 2026-11-25
 
 LA SIMULAZIONE SA GIÀ CHE COSA STA FACENDO, E LE MANOPOLE DICONO IL VERSO.

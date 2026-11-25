@@ -43,6 +43,7 @@ import { ottieniMaterieEnteAction, ottieniTitoliEnteAction } from '@/app/actions
 import type { MateriaEnte } from '@/lib/titoliEnte/materie';
 import { materiaPerRigaVera } from '@/lib/titoliEnte/materiaVera';
 import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
+import { totaliClassificazione } from '@/lib/debitiEnte/classificazioneCredito';
 import { chiaveMateria } from '@/lib/lavorazioni/instradamentoMateria';
 import { ottieniDebitiEnte, type RigaDebitoEnte } from '@/app/actions/debitiEnte';
 import { etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
@@ -386,6 +387,15 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
     .filter((r) => r.trattamento === 'contabilizzato' || r.trattamento === 'da_contabilizzare');
   const righePotenziali = righeVera.filter((r) => r.trattamento === 'potenziale');
 
+  // CLASSIFICAZIONE PER LA LIQUIDAZIONE GIUDIZIALE.
+  //
+  // È una LETTURA della certificazione, non un dato da compilare: la classe e
+  // il grado si ricavano dalla composizione della riga (contributi, sanzioni,
+  // stato) e l'operatore non li modifica — come non modifica gli importi che
+  // arrivano dai sistemi dell'ente. Le righe ancora da lavorare restano fuori
+  // dal debito certo e si dichiarano a parte.
+  const classi = totaliClassificazione(righeVera.filter((_, i) => !escluseDoppie.has(i)));
+
   // Confronto certo-per-certo per categoria (solo importi noti).
   const codiciPresenti = Array.from(
     new Set<string>([
@@ -513,6 +523,54 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
           differenza è il non contabilizzato che, in presenza di proposta, andrà contabilizzato.
         </p>
       </div>
+
+      {righeVera.length > 0 && (
+        <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Classificazione del credito — liquidazione giudiziale
+            </span>
+            <span className="text-xs font-bold text-slate-900">
+              Debito certo {euro(classi.certo)}
+            </span>
+          </div>
+          <table className="w-full text-[11px] text-slate-700">
+            <tbody>
+              <tr className="border-t border-slate-100">
+                <td className="py-1">Contributi previdenziali — privilegio di I grado</td>
+                <td className="py-1 text-right font-mono">{euro(classi.contributi)}</td>
+              </tr>
+              <tr className="border-t border-slate-100">
+                <td className="py-1">Sanzioni civili — metà con privilegio di grado VIII</td>
+                <td className="py-1 text-right font-mono">{euro(classi.sanzioniPrivilegiate)}</td>
+              </tr>
+              <tr className="border-t border-slate-100">
+                <td className="py-1">Sanzioni civili e amministrative — chirografo</td>
+                <td className="py-1 text-right font-mono">{euro(classi.sanzioniChirografo)}</td>
+              </tr>
+              <tr className="border-t border-slate-100">
+                <td className="py-1">
+                  Da classificare — il documento non separa contributi e sanzioni
+                </td>
+                <td className="py-1 text-right font-mono">{euro(classi.daClassificare)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="text-[10px] text-slate-500">
+            Contributi: art. 2753 c.c. e art. 2778 n. 1 c.c. Sanzioni civili: metà con privilegio di
+            grado VIII, metà chirografo (art. 2754 c.c. e art. 2778 n. 8 c.c.). Le sanzioni
+            amministrative in senso stretto sono chirografe. La classificazione è derivata dal file:
+            non si modifica a mano e non altera gli importi dell&apos;ente.
+          </p>
+          {(classi.nonDeterminato > 0 || classi.creditoAFavore > 0) && (
+            <p className="text-[10px] text-slate-600">
+              Fuori dal debito certo: posizioni non ancora determinate (note non definite, da
+              verificare, sospese) {euro(classi.nonDeterminato)}; crediti a favore dell&apos;azienda
+              dichiarati dal file {euro(classi.creditoAFavore)}.
+            </p>
+          )}
+        </div>
+      )}
 
       {errore && (
         <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
