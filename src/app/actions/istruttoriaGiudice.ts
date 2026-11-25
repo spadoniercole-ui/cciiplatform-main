@@ -42,6 +42,7 @@ import {
   type ConfrontoProvvedimento,
   type VoceEnte,
 } from '@/lib/giudice/confronto';
+import { vociEnteDaFonti, type VoceEnte as VocePosizione } from '@/lib/giudice/posizioneEnte';
 
 export interface DocumentoProvvedimento {
   nome: string;
@@ -161,6 +162,64 @@ async function rigaEsistente(
   };
 }
 
+/**
+ * La posizione debitoria che il provvedimento trova già accertata: le posizioni
+ * dell'azienda, le righe di uno scenario anteriore, la certificazione dei
+ * debiti e — in ultimo — la cifra che la verifica amministrativa ha concluso e
+ * memorizzato. La verifica è la base di ogni scenario, quindi il decreto non
+ * deve pretendere che qualcuno la rifaccia: deve leggere ciò che ha prodotto.
+ */
+async function leggiVociEnte(
+  nomeSchema: string,
+  aziendaId: number,
+  scenarioId: number
+): Promise<VoceEnte[]> {
+  await assicuraTabellaDebitiEnte(nomeSchema);
+  const [perAzienda, perScenario, certificazione, memorizzato] = await Promise.all([
+    pool
+      .query(
+        `SELECT voce, importo FROM "${nomeSchema}".debiti_ente
+          WHERE azienda_id = $1 AND scenario_id IS NULL ORDER BY id ASC`,
+        [aziendaId]
+      )
+      .catch(() => ({ rows: [] as VocePosizione[] })),
+    pool
+      .query(
+        `SELECT voce, importo FROM "${nomeSchema}".debiti_ente
+          WHERE azienda_id = $1 AND scenario_id = $2 ORDER BY id ASC`,
+        [aziendaId, scenarioId]
+      )
+      .catch(() => ({ rows: [] as VocePosizione[] })),
+    pool
+      .query(
+        `SELECT voce, importo FROM "${nomeSchema}".debiti_vera
+          WHERE azienda_id = $1
+            AND trattamento IN ('contabilizzato', 'da_contabilizzare')
+          ORDER BY id ASC`,
+        [aziendaId]
+      )
+      .catch(() => ({ rows: [] as VocePosizione[] })),
+    pool
+      .query(`SELECT totale FROM "${nomeSchema}".debiti_ente_memorizzati WHERE azienda_id = $1`, [
+        aziendaId,
+      ])
+      .catch(() => ({ rows: [] as { totale: string | number }[] })),
+  ]);
+  const numero = (v: unknown): number => {
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const righe = (elenco: VocePosizione[]): VocePosizione[] =>
+    elenco.map((r) => ({ voce: String(r.voce), importo: numero(r.importo) }));
+  const totaleMemorizzato = memorizzato.rows[0]?.totale;
+  return vociEnteDaFonti({
+    azienda: righe(perAzienda.rows),
+    scenario: righe(perScenario.rows),
+    certificazione: righe(certificazione.rows),
+    memorizzato: totaleMemorizzato === undefined ? null : numero(totaleMemorizzato),
+  });
+}
+
 /** Lo stato dell'istruttoria, per riaprire la pagina senza perdere nulla. */
 export async function ottieniIstruttoriaGiudiceAction(
   nomeSchema: string,
@@ -176,10 +235,7 @@ export async function ottieniIstruttoriaGiudiceAction(
     }
     const tipo = (scenario.scenario.tipoIstruttoria ?? 'PROPOSTA') as TipoAttoGiudice;
     const stato = await rigaEsistente(nomeSchema, scenarioId);
-    const posizione = await pool.query(
-      `SELECT COUNT(*)::int AS n FROM "${nomeSchema}".debiti_ente WHERE azienda_id = $1`,
-      [scenario.scenario.aziendaId]
-    );
+    const vociEnte = await leggiVociEnte(nomeSchema, scenario.scenario.aziendaId, scenarioId);
     return {
       success: true,
       tipoIstruttoria: tipo,
@@ -189,7 +245,7 @@ export async function ottieniIstruttoriaGiudiceAction(
       relazione: stato?.relazione ?? null,
       letturaIl: stato?.letturaIl ?? null,
       generataIl: stato?.generataIl ?? null,
-      posizioneAssente: Number(posizione.rows[0]?.n ?? 0) === 0,
+      posizioneAssente: vociEnte.length === 0,
     };
   } catch (error: any) {
     console.error('[ottieniIstruttoriaGiudiceAction] Errore:', error);
@@ -369,31 +425,16 @@ export async function caricaDocumentiProvvedimentoAction(
       };
     }
 
-    // I dati dell'ente: la verifica amministrativa, cioè le righe registrate a
-    // livello azienda (0.255.12). Per decreti e cram down la posizione non si
+    // I dati dell'ente: la verifica amministrativa, che è la base di ogni
+    // scenario e si legge dall'archivio che porta il debito — posizioni
+    // dell'azienda, righe di uno scenario anteriore, certificazione o cifra già
+    // conclusa dalla verifica. Per decreti e cram down la posizione non si
     // inserisce più nello scenario: il debito è quello accertato nella verifica.
-    // Le righe di scenario restano come riserva per gli scenari vecchi, che le
-    // avevano, e non si sommano mai alle prime.
-    await assicuraTabellaDebitiEnte(nomeSchema);
-    const perAzienda = await pool.query(
-      `SELECT voce, importo FROM "${nomeSchema}".debiti_ente
-        WHERE azienda_id = $1 AND scenario_id IS NULL ORDER BY id ASC`,
-      [scenario.scenario.aziendaId]
+    const vociEnte: VoceEnte[] = await leggiVociEnte(
+      nomeSchema,
+      scenario.scenario.aziendaId,
+      scenarioId
     );
-    const righe =
-      perAzienda.rows.length > 0
-        ? perAzienda.rows
-        : (
-            await pool.query(
-              `SELECT voce, importo FROM "${nomeSchema}".debiti_ente
-                WHERE azienda_id = $1 AND scenario_id = $2 ORDER BY id ASC`,
-              [scenario.scenario.aziendaId, scenarioId]
-            )
-          ).rows;
-    const vociEnte: VoceEnte[] = righe.map((r) => ({
-      voce: String(r.voce),
-      importo: Number(r.importo),
-    }));
     const confronto = confrontaProvvedimento(vociEnte, lettura, tipo);
 
     await assicuraTabelleScenari(nomeSchema);

@@ -410,7 +410,7 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                     <span className="block text-[11px] font-bold">Verifica amministrativa</span>
                     <span className="block text-[10px] text-slate-500 mt-0.5">
                       {disponibilita?.amministrativa
-                        ? 'Dato attuale: debito dell’ente e soglie, come base di confronto per liquidazione e cram down.'
+                        ? 'Sempre inclusa in ogni scenario, accordo compreso: debito dell’ente e soglie, già accertati dalla verifica amministrativa.'
                         : 'Non disponibile: mancano visura o prospetti dell’ente su questa azienda.'}
                     </span>
                   </button>
@@ -462,7 +462,9 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                 </div>
                 <p className="text-[10px] text-slate-400">
                   {baseNuova === 'AZIENDALE'
-                    ? 'L’accordo transattivo si valuta sulla verifica azienda e sulla simulazione salvata come base.'
+                    ? simulazioneAttivaNuova
+                      ? 'L’accordo transattivo si valuta sulla simulazione salvata nel passo 3 della verifica aziendale: i documenti dell’azienda non servono.'
+                      : 'L’accordo transattivo si valuta sulla verifica azienda e sulla simulazione salvata come base.'
                     : 'Liquidazione e cram down si misurano sul debito e sulle soglie della verifica amministrativa.'}
                 </p>
               </div>

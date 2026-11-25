@@ -59,18 +59,10 @@ interface Props {
   nomeSchema: string;
   scenarioId: number;
   codice: string;
-  /** L'azienda della verifica amministrativa: è lì che vive la posizione debitoria. */
-  aziendaId: number;
   tipoAtto: Exclude<TipoAttoGiudice, 'PROPOSTA'>;
 }
 
-export function IstruttoriaProvvedimento({
-  nomeSchema,
-  scenarioId,
-  codice,
-  aziendaId,
-  tipoAtto,
-}: Props) {
+export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoAtto }: Props) {
   const demo = useDemo();
   const [stato, setStato] = useState<StatoIstruttoriaGiudice | null>(null);
   const [caricamento, setCaricamento] = useState(true);
@@ -194,19 +186,16 @@ export function IstruttoriaProvvedimento({
 
       {/* La posizione debitoria non si chiede più allo scenario (0.255.12): per
           liquidazione e cram down il confronto parte dalla verifica
-          amministrativa. Se anche quella è vuota, il confronto resterà vuoto e
-          lo si dice indicando dove si accerta il debito, non dove si inserisce. */}
+          amministrativa, che è la base di ogni scenario e si apre già con il
+          debito accertato (0.256.21). Quando nemmeno quella ha prodotto una
+          cifra, lo si dice come stato del dato — non come una cosa da andare a
+          fare altrove. */}
       {stato?.posizioneAssente && (
         <div className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-3 leading-relaxed">
-          La verifica amministrativa di questa azienda non ha ancora una posizione debitoria
-          accertata: il confronto con il provvedimento sarà vuoto.{' '}
-          <a
-            className="font-bold underline"
-            href={`/spazio/${codice}/verifica-azienda/${aziendaId}`}
-          >
-            Apri la verifica amministrativa
-          </a>{' '}
-          per accertarla. La posizione non si inserisce dallo scenario.
+          La verifica amministrativa di questa azienda non ha ancora prodotto una posizione
+          debitoria: finché non ce n’è una, il confronto con il provvedimento resta vuoto. Il debito
+          non si inserisce dallo scenario: è quello che la verifica amministrativa — base di ogni
+          scenario, accordo compreso — legge dagli archivi dell’ente.
         </div>
       )}
 

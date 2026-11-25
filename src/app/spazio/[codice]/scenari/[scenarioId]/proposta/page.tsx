@@ -182,7 +182,6 @@ export default async function PropostaScenarioPage({
           nomeSchema={contesto.nomeSchema}
           scenarioId={Number(scenarioId)}
           codice={codice}
-          aziendaId={scenario.aziendaId}
           tipoAtto={tipoIstruttoria}
         />
       </div>

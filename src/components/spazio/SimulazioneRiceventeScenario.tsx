@@ -76,6 +76,8 @@ interface Props {
   tipoSpazio: 'ENTE' | 'NON_ENTE';
   /** Versione delle righe della proposta (per l'inquadramento). */
   versioneRighe: number;
+  /** Scenario nato con il flag di simulazione: i documenti dell'azienda non si chiedono. */
+  simulazioneAttiva: boolean;
   /** Il genitore aggiorna i pannelli che dipendono dalla valutazione. */
   onAnalisiCompletata?: () => void;
 }
@@ -91,6 +93,7 @@ export function SimulazioneRiceventeScenario({
   aziendaId,
   tipoSpazio,
   versioneRighe,
+  simulazioneAttiva,
   onAnalisiCompletata,
 }: Props) {
   const [fileScelti, setFileScelti] = useState<File[]>([]);
@@ -434,6 +437,56 @@ export function SimulazioneRiceventeScenario({
   }, [caricamento]);
 
   if (caricamento) return <p className="text-xs text-slate-400">Caricamento...</p>;
+
+  // IL FLAG DI SIMULAZIONE (0.256.21). Lo scenario è nato dichiarando che i
+  // documenti dell'azienda non servono: il punto di partenza è la simulazione
+  // salvata nel passo 3 della verifica aziendale. Chiedere qui proposta,
+  // attestazione o piano contraddirebbe la scelta fatta alla creazione, quindi
+  // il passo dei documenti ricevuti non esiste: si legge la simulazione.
+  if (simulazioneAttiva) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+            Istruttoria della proposta
+          </h2>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Lo scenario è nato con il flag di simulazione: i documenti dell’azienda non si chiedono.
+            Il punto di partenza è la simulazione salvata nel passo 3 della verifica aziendale, e da
+            quella la Relazione di chiusura, in fondo alla pagina.
+          </p>
+        </div>
+
+        {errore && (
+          <div className="flex items-start gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <p>{errore}</p>
+          </div>
+        )}
+
+        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+          <PassoProcedura
+            numero={2}
+            titolo="Simulazione come base"
+            icona={Sparkles}
+            obiettivo="Partire dalla simulazione dell’ente: è quello che il flag ha dichiarato alla creazione dello scenario."
+          />
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Qui non c’è nulla da caricare. Proposta, attestazione, piano e situazione contabile
+            dell’azienda restano fuori da questo scenario: la base sono le leve e i numeri della
+            simulazione salvata nel passo 3 della verifica aziendale. Se la simulazione non è ancora
+            quella giusta, si corregge lì, una volta sola.
+          </p>
+          <a
+            href={`/spazio/${codice}/verifica-azienda/${aziendaId}`}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold uppercase tracking-wider rounded-lg text-xs transition-colors"
+          >
+            Apri la verifica aziendale
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const fase2Visibile = Boolean(documenti) || Boolean(analisi);
   const urlPosizione = `/spazio/${codice}/scenari/${scenarioId}/posizione-aggiornata?ritorno=valutazione`;

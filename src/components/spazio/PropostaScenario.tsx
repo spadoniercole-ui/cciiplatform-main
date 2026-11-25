@@ -739,6 +739,7 @@ export function PropostaScenario({
               aziendaId={aziendaId}
               tipoSpazio={tipoSpazio}
               versioneRighe={versioneRighe}
+              simulazioneAttiva={Boolean(chiusura?.simulazioneAttiva)}
               onAnalisiCompletata={carica}
             />
           )}
@@ -873,25 +874,28 @@ export function PropostaScenario({
           )}
 
           {/* Dopo la valutazione: indici con la posizione aggiornata, la
-              domanda sul piano e la chiusura con la Relazione. */}
-          {tipoProposta === 'RICEVUTA' && valutazioneFatta && (
-            <>
-              <TabellaIndiciPeriodi
-                nomeSchema={nomeSchema}
-                scenarioId={scenarioId}
-                titolo="Indici: bilanci depositati e posizione aggiornata"
-              />
-              {chiusura && (
-                <ChiusuraIstruttoria
+              domanda sul piano e la chiusura con la Relazione. Con il flag di
+              simulazione non c'è una valutazione sui documenti, ma la chiusura
+              esiste lo stesso: la Relazione legge la simulazione. */}
+          {tipoProposta === 'RICEVUTA' &&
+            (valutazioneFatta || Boolean(chiusura?.simulazioneAttiva)) && (
+              <>
+                <TabellaIndiciPeriodi
                   nomeSchema={nomeSchema}
                   scenarioId={scenarioId}
-                  aziendaId={aziendaId}
-                  codice={codice}
-                  dati={chiusura}
+                  titolo="Indici: bilanci depositati e posizione aggiornata"
                 />
-              )}
-            </>
-          )}
+                {chiusura && (
+                  <ChiusuraIstruttoria
+                    nomeSchema={nomeSchema}
+                    scenarioId={scenarioId}
+                    aziendaId={aziendaId}
+                    codice={codice}
+                    dati={chiusura}
+                  />
+                )}
+              </>
+            )}
         </>
       )}
     </div>

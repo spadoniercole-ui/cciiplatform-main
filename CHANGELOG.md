@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.20**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.21**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,31 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.21 — 2026-11-25
+
+IL FLAG E LA VERIFICA AMMINISTRATIVA VALGONO ANCHE DOPO LA CREAZIONE.
+
+- **Con il flag di simulazione l'istruttoria della proposta non chiede documenti.**
+  Alla creazione lo scenario dichiarava di partire dalla simulazione salvata nel passo 3
+  della verifica aziendale, ma la pagina dell'istruttoria chiedeva comunque proposta,
+  attestazione, piano e situazione contabile: la dichiarazione non arrivava a valle.
+  Ora, con il flag acceso, il passo «Documenti ricevuti» non esiste: la pagina dice che
+  la base è quella simulazione e porta alla verifica aziendale per correggerla. La
+  Relazione di chiusura legge già i numeri del piano, quindi il percorso resta intero.
+- **La verifica amministrativa è la base di ogni scenario e si apre già col debito.**
+  Per decreto di liquidazione e cram down il confronto guardava solo le righe
+  `debiti_ente` dell'azienda: se la verifica amministrativa aveva accertato il debito
+  dalla certificazione o lo aveva memorizzato come atto concluso, la pagina diceva
+  comunque «nessuna posizione accertata» e invitava ad aprire la verifica. Ora la
+  posizione si legge in ordine — posizioni dell'azienda, righe di scenario anteriori,
+  certificazione dei debiti, cifra memorizzata dalla verifica — con la scelta in
+  `src/lib/giudice/posizioneEnte.ts` e i suoi test. Il riquadro resta solo quando
+  davvero non c'è nulla, e dice lo stato del dato senza chiedere di andare altrove.
+- **Alla creazione si legge che l'amministrativa c'è sempre.** La scheda della verifica
+  amministrativa dice ora che è inclusa in ogni scenario, accordo compreso, e la nota
+  sotto la situazione, con il flag acceso, parla della simulazione e non dei documenti
+  dell'azienda.
 
 ## 0.256.20 — 2026-11-25
 
