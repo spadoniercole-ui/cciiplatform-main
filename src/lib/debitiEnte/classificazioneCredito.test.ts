@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   classificaRiga,
+  classificaRigaCompleta,
   rigaCerta,
+  scenariPerClasse,
   totaliClassificazione,
   type RigaDaClassificare,
 } from './classificazioneCredito';
+import type { ParametriScenari } from '@/lib/triage/scenari';
 
 const riga = (r: Partial<RigaDaClassificare>): RigaDaClassificare => ({
   voce: 'TS 27 flusso Uniemens non versato',
@@ -75,6 +78,63 @@ describe('classificazione del credito dell’ente', () => {
   it('il resto non attribuibile non si regala a una classe', () => {
     const q = classificaRiga(riga({ importo: 100, contributi: 60, sanzioni: 20 })).quote;
     expect(q).toContainEqual({ classe: 'DA_CLASSIFICARE', grado: 'CHIROGRAFO', importo: 20 });
+  });
+
+  it('la riga mostra le quote con il rango dello scenario, e nessun rango per il non classificato', () => {
+    const r = classificaRigaCompleta(riga({ importo: 400, contributi: 300, sanzioni: 100 }));
+    expect(r.quote.map((q) => `${q.etichetta} → ${q.rango}`)).toEqual([
+      'Contributi · grado I → PRIVILEGIATO',
+      'Sanzioni civili · grado VIII → PRIVILEGIATO',
+      'Sanzioni civili · chirografo → CHIROGRAFARIO',
+    ]);
+    const v = classificaRigaCompleta(riga({ voce: 'Verbale Evasione', importo: 900 }));
+    expect(v.quote[0].rango).toBeNull();
+  });
+
+  it('le percentuali per rango si applicano a ogni classe, non al totale', () => {
+    const parametri: ParametriScenari = {
+      costiProceduraPct: 10,
+      ranghi: [
+        { rango: 'PREDEDUCIBILE', tassoLiquidazionePct: 100, cramDownPct: 100 },
+        { rango: 'PRIVILEGIATO', tassoLiquidazionePct: 50, cramDownPct: 60 },
+        { rango: 'CHIROGRAFARIO', tassoLiquidazionePct: 20, cramDownPct: 30 },
+        { rango: 'POSTERGATO', tassoLiquidazionePct: 0, cramDownPct: 0 },
+      ],
+    };
+    const esito = scenariPerClasse(
+      [
+        // Contributi 1000 → privilegiato; sanzioni 200 → 100 grado VIII e 100 chirografo.
+        riga({ importo: 1200, contributi: 1000, sanzioni: 200 }),
+        // Verbale: nessun rango, resta fuori dai conti.
+        riga({ voce: 'Verbale Evasione', importo: 500 }),
+      ],
+      parametri
+    );
+    expect(
+      esito.quote.map((q) => [q.rango, q.importo, q.nettoLiquidazione, q.nettoCramDown])
+    ).toEqual([
+      ['PRIVILEGIATO', 1000, 450, 600],
+      ['PRIVILEGIATO', 100, 45, 60],
+      ['CHIROGRAFARIO', 100, 18, 30],
+    ]);
+    expect(esito.liquidazione).toBe(513);
+    expect(esito.cramDown).toBe(690);
+    expect(esito.escluso).toBe(500);
+  });
+
+  it('senza una percentuale del rango l’ipotesi resta non calcolabile, non zero', () => {
+    const esito = scenariPerClasse([riga({ importo: 1000, contributi: 1000, sanzioni: 0 })], {
+      costiProceduraPct: 10,
+      ranghi: [
+        { rango: 'PREDEDUCIBILE', tassoLiquidazionePct: null, cramDownPct: null },
+        { rango: 'PRIVILEGIATO', tassoLiquidazionePct: null, cramDownPct: 40 },
+        { rango: 'CHIROGRAFARIO', tassoLiquidazionePct: 20, cramDownPct: 30 },
+        { rango: 'POSTERGATO', tassoLiquidazionePct: 0, cramDownPct: 0 },
+      ],
+    });
+    expect(esito.liquidazione).toBeNull();
+    expect(esito.cramDown).toBe(400);
+    expect(esito.mancanti.length).toBe(1);
   });
 
   it('i totali sommano le classi del file reale e tengono fuori il non certo', () => {

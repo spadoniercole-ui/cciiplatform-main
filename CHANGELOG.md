@@ -26,6 +26,28 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.24 — 2026-11-25
+
+LA CLASSE DEL CREDITO ARRIVA ALLA RIGA E AGLI SCENARI.
+
+- **Ogni riga della verifica amministrativa dice che cosa è.** Nel dettaglio
+  della certificazione la colonna «Classe del credito» mostra le quote della
+  riga: contributi al privilegio di I grado, sanzioni civili divise fra grado
+  VIII e chirografo, sanzioni amministrative al chirografo. Dove il documento
+  non separa gli importi — cartelle ADR, verbali di evasione, note di rettifica
+  non definite — la riga dice «da classificare» con il suo importo, senza
+  ripartizioni inventate.
+- **Le percentuali per rango si applicano alle classi, non al totale.** Nel
+  documento di confronto (liquidazione e cram down) il credito dell'ente è
+  diviso per classe e rango, e ogni quota prende la percentuale del proprio
+  rango: è questo che distingue un cram down graduato dal debito totale
+  moltiplicato per una percentuale unica. Il «da classificare» resta fuori dai
+  conti e si dichiara a parte; se una percentuale del rango manca, l'ipotesi
+  resta non calcolabile invece di diventare zero.
+- **La regola è una sola, in `src/lib/debitiEnte/classificazioneCredito.ts`**
+  (`classificaRigaCompleta`, `rangoDellaQuota`, `scenariPerClasse`), con i suoi
+  test: la usano la colonna della verifica e il documento di confronto.
+
 ## 0.256.23 — 2026-11-25
 
 IL CREDITO DELL'ENTE SA DOVE SI COLLOCA NELLA LIQUIDAZIONE.

@@ -43,7 +43,10 @@ import { ottieniMaterieEnteAction, ottieniTitoliEnteAction } from '@/app/actions
 import type { MateriaEnte } from '@/lib/titoliEnte/materie';
 import { materiaPerRigaVera } from '@/lib/titoliEnte/materiaVera';
 import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
-import { totaliClassificazione } from '@/lib/debitiEnte/classificazioneCredito';
+import {
+  classificaRigaCompleta,
+  totaliClassificazione,
+} from '@/lib/debitiEnte/classificazioneCredito';
 import { chiaveMateria } from '@/lib/lavorazioni/instradamentoMateria';
 import { ottieniDebitiEnte, type RigaDebitoEnte } from '@/app/actions/debitiEnte';
 import { etichettaTipoDebito } from '@/lib/debitiEnte/tipoDebito';
@@ -1128,6 +1131,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
                 <th className="p-3">Natura</th>
                 <th className="p-3">Stato</th>
                 <th className="p-3">Importo</th>
+                <th className="p-3">Classe del credito</th>
                 <th className="p-3">Materia</th>
                 <th className="p-3">Categoria</th>
                 <th className="p-3">Trattamento</th>
@@ -1155,6 +1159,18 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
                         : r.trattamento === 'ignora'
                           ? 'bg-slate-100 text-slate-500'
                           : 'bg-emerald-100 text-emerald-700';
+                // La classe si legge dalla riga, non si sceglie: contributi,
+                // sanzioni, stato bastano a collocarla. Dove il documento non
+                // separa gli importi (cartelle ADR, verbali, note non definite)
+                // resta «da classificare», che non è un rango.
+                const cls = classificaRigaCompleta({
+                  voce: r.voce,
+                  importo: r.importo,
+                  stato: r.stato,
+                  contributi: r.contributi ?? null,
+                  sanzioni: r.sanzioni ?? null,
+                  ambito: r.ambito,
+                });
                 return (
                   <tr key={r.id} className={rigaClasse}>
                     <td className="p-3 text-slate-500 text-[10px]">{r.sezione}</td>
@@ -1162,6 +1178,35 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
                     <td className="p-3 text-slate-500 text-[11px]">{r.stato || '—'}</td>
                     <td className="p-3 text-slate-700">
                       {r.trattamento === 'potenziale' ? 'ignoto' : euro(r.importo)}
+                    </td>
+                    <td className="p-3">
+                      {cls.quote.length === 0 ? (
+                        <span className="text-[10px] text-slate-400">—</span>
+                      ) : (
+                        <span className="flex flex-col gap-0.5">
+                          {cls.quote.map((q, i) => (
+                            <span
+                              key={`${q.classe}-${q.grado}-${i}`}
+                              className={`inline-block w-fit px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                q.classe === 'DA_CLASSIFICARE'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : q.classe === 'NON_DETERMINATO'
+                                    ? 'bg-slate-100 text-slate-500'
+                                    : q.classe === 'CREDITO_A_FAVORE'
+                                      ? 'bg-blue-50 text-blue-700'
+                                      : 'bg-emerald-50 text-emerald-800'
+                              }`}
+                              title={
+                                q.rango
+                                  ? `Rango nello scenario: ${q.rango}`
+                                  : 'Nessun rango: il documento non separa contributi e sanzioni, oppure la posizione non è ancora determinata'
+                              }
+                            >
+                              {q.etichetta} · {euro(q.importo)}
+                            </span>
+                          ))}
+                        </span>
+                      )}
                     </td>
                     <td className="p-3">
                       {r.materia ? (

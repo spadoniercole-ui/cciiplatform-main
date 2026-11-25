@@ -24,6 +24,7 @@ import type { DatiFinanziariPeriodo } from '@/lib/xbrl/types';
 import { riepilogaSovrascritture, type Sovrascrittura } from '@/lib/scenari/confronto';
 import { salvaSovrascrittureAction } from '@/app/actions/confrontoScenario';
 import type { ConfrontoProvvedimento, EsitoVoce } from '@/lib/giudice/confronto';
+import type { ScenariPerClasse } from '@/lib/debitiEnte/classificazioneCredito';
 import { LegendaColori } from '@/components/spazio/LegendaColori';
 import type { Tono } from '@/lib/colori/significato';
 
@@ -57,6 +58,12 @@ interface Props {
   parametri?: ParametriScenari;
   soglie?: DatiSoglieDocumento | null;
   memorizzatoIl?: string | null;
+  /**
+   * Il credito dell'ente diviso per classe e rango, con le due ipotesi
+   * calcolate quota per quota: il cram down non moltiplica il totale per una
+   * percentuale unica, ma ogni quota per quella del suo rango.
+   */
+  classi?: ScenariPerClasse | null;
   /** Il confronto fra provvedimento e posizione amministrativa, se il provvedimento è stato letto. */
   confrontoProvvedimento?: ConfrontoProvvedimento | null;
   /** L'atto da cui vengono i crediti confrontati: data, spese, tempi. */
@@ -100,6 +107,7 @@ export function ConfrontoScenario(props: Props) {
         <DocumentoLiquidazione
           credito={props.credito ?? null}
           parametri={props.parametri}
+          classi={props.classi ?? null}
           soglie={props.soglie ?? null}
           confronto={props.confrontoProvvedimento ?? null}
           lettura={props.letturaProvvedimento ?? null}
@@ -125,12 +133,14 @@ export function ConfrontoScenario(props: Props) {
 function DocumentoLiquidazione({
   credito,
   parametri,
+  classi,
   soglie,
   confronto,
   lettura,
 }: {
   credito: number | null;
   parametri: ParametriScenari | undefined;
+  classi: ScenariPerClasse | null;
   soglie: DatiSoglieDocumento | null;
   confronto: ConfrontoProvvedimento | null;
   lettura: {
@@ -205,6 +215,63 @@ function DocumentoLiquidazione({
           </p>
         )}
       </div>
+
+      {classi && classi.quote.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 print:break-inside-avoid">
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+            Il credito dell’ente per classe e rango
+          </h3>
+          <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-slate-500">
+            Ogni quota prende la percentuale del proprio rango: i contributi e la metà privilegiata
+            delle sanzioni civili il privilegio, la metà chirografaria e le sanzioni amministrative
+            il chirografo. Il «da classificare» resta fuori dai conti finché il documento non separa
+            contributi e sanzioni.
+          </p>
+          <table className="mt-3 w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-slate-100 text-[10px] font-bold uppercase text-slate-500">
+                <th className="py-2 pr-3">Classe</th>
+                <th className="py-2 pr-3">Rango</th>
+                <th className="py-2 pr-3 text-right">Importo</th>
+                <th className="py-2 pr-3 text-right">% realizzo</th>
+                <th className="py-2 pr-3 text-right">Netto liquidazione</th>
+                <th className="py-2 pr-3 text-right">% cram down</th>
+                <th className="py-2 text-right">Netto cram down</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {classi.quote.map((q, i) => (
+                <tr key={`${q.etichetta}-${q.rango}-${i}`}>
+                  <td className="py-1.5 pr-3 text-slate-900">{q.etichetta}</td>
+                  <td className="py-1.5 pr-3 text-slate-600">{q.rango}</td>
+                  <td className="py-1.5 pr-3 text-right font-mono">{euro(q.importo)}</td>
+                  <td className="py-1.5 pr-3 text-right">{pct(q.tassoLiquidazionePct)}</td>
+                  <td className="py-1.5 pr-3 text-right font-mono">{euro(q.nettoLiquidazione)}</td>
+                  <td className="py-1.5 pr-3 text-right">{pct(q.cramDownPct)}</td>
+                  <td className="py-1.5 text-right font-mono">{euro(q.nettoCramDown)}</td>
+                </tr>
+              ))}
+              <tr className="bg-slate-50 font-black">
+                <td className="py-2 pr-3 text-slate-900" colSpan={4}>
+                  Totale classificato
+                </td>
+                <td className="py-2 pr-3 text-right font-mono">{euro(classi.liquidazione)}</td>
+                <td />
+                <td className="py-2 text-right font-mono">{euro(classi.cramDown)}</td>
+              </tr>
+            </tbody>
+          </table>
+          {classi.escluso > 0 && (
+            <p className="mt-2 text-[11px] text-amber-800">
+              Fuori dai conti: {euro(classi.escluso)} di posizioni che il documento non permette di
+              classificare (o non ancora determinate).
+            </p>
+          )}
+          {classi.mancanti.length > 0 && (
+            <p className="mt-1 text-[11px] text-slate-500">{classi.mancanti.join(' ')}</p>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-3 md:grid-cols-2">
         <IpotesiCard

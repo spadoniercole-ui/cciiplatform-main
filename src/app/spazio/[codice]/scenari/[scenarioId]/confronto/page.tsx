@@ -8,6 +8,9 @@ import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte
 import { leggiFotografiaBase } from '@/lib/verificaAzienda/baseFotografia';
 import { ottieniSovrascrittureAction } from '@/app/actions/confrontoScenario';
 import { ottieniIstruttoriaGiudiceAction } from '@/app/actions/istruttoriaGiudice';
+import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
+import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
+import { scenariPerClasse } from '@/lib/debitiEnte/classificazioneCredito';
 import { ConfrontoScenario } from '@/components/spazio/ConfrontoScenario';
 
 export const dynamic = 'force-dynamic';
@@ -59,7 +62,7 @@ export default async function ConfrontoScenarioPage({
   }
 
   if (scenario.baseVerifica === 'AMMINISTRATIVA') {
-    const [debito, parametri, soglie, istruttoria] = await Promise.all([
+    const [debito, parametri, soglie, istruttoria, vera] = await Promise.all([
       leggiDebitoEnteMemorizzato(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
       ottieniParametriScenariAction(contesto.nomeSchema).catch(() => null),
       valutaSoglieAziendaAction(contesto.nomeSchema, scenario.aziendaId, contesto.tipoSpazio).catch(
@@ -69,7 +72,31 @@ export default async function ConfrontoScenarioPage({
       // il documento porta anche il confronto voce per voce, senza rimandare a
       // un'altra pagina per vederlo o stamparlo.
       ottieniIstruttoriaGiudiceAction(contesto.nomeSchema, scenario.id).catch(() => null),
+      // Le righe della certificazione: da qui si ricava il credito per classe
+      // e rango. Senza righe (o senza parametri) il riquadro non compare.
+      ottieniDebitiVera(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
     ]);
+
+    // La stessa cifra una volta sola: le righe riconosciute come doppia
+    // scrittura dello stesso periodo restano fuori anche dalla ripartizione.
+    const righeVera = vera?.success ? vera.righe : [];
+    const escluse = insiemeEsclusi(denunceDuplicateVera(righeVera));
+    const classi =
+      parametri?.success && parametri.parametri
+        ? scenariPerClasse(
+            righeVera
+              .filter((_, i) => !escluse.has(i))
+              .map((r) => ({
+                voce: r.voce,
+                importo: r.importo,
+                stato: r.stato,
+                contributi: r.contributi,
+                sanzioni: r.sanzioni,
+                ambito: r.ambito,
+              })),
+            parametri.parametri
+          )
+        : null;
 
     return (
       <div className="space-y-4">
@@ -82,6 +109,7 @@ export default async function ConfrontoScenarioPage({
           credito={debito?.debito.totale ?? null}
           memorizzatoIl={debito?.memorizzatoIl ?? null}
           parametri={parametri?.success ? parametri.parametri : undefined}
+          classi={classi}
           confrontoProvvedimento={istruttoria?.success ? (istruttoria.confronto ?? null) : null}
           letturaProvvedimento={
             istruttoria?.success && istruttoria.lettura

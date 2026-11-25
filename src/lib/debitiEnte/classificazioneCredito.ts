@@ -27,6 +27,8 @@
 //
 // Logica pura: nessun accesso al database, nessun arrotondamento inventato.
 
+import { calcolaScenari, type ParametriScenari, type RangoCredito } from '@/lib/triage/scenari';
+
 export type ClasseCredito =
   | 'CONTRIBUTI'
   | 'SANZIONI_CIVILI'
@@ -151,6 +153,148 @@ export function classificaRiga(riga: RigaDaClassificare): ClassificazioneRiga {
     quote.push({ classe: 'DA_CLASSIFICARE', grado: 'CHIROGRAFO', importo: resto });
   }
   return { certo: true, quote };
+}
+
+/**
+ * IL RANGO DELLO SCENARIO che corrisponde alla classe. Lo scenario conosce
+ * quattro ranghi (prededucibile, privilegiato, chirografario, postergato), la
+ * classificazione conosce la classe e il grado: il contributo e la metà
+ * privilegiata delle sanzioni civili stanno nel privilegio, la metà
+ * chirografaria e le sanzioni amministrative nel chirografo. «Da classificare»
+ * non ha rango: attribuirgliene uno sarebbe la ripartizione inventata che si
+ * vuole evitare.
+ */
+export function rangoDellaQuota(q: Pick<QuotaCredito, 'classe' | 'grado'>): RangoCredito | null {
+  if (q.classe === 'CONTRIBUTI') return 'PRIVILEGIATO';
+  if (q.classe === 'SANZIONI_CIVILI') return q.grado === 'VIII' ? 'PRIVILEGIATO' : 'CHIROGRAFARIO';
+  if (q.classe === 'SANZIONI_AMMINISTRATIVE') return 'CHIROGRAFARIO';
+  return null;
+}
+
+/** L'etichetta breve della quota, per la colonna di una tabella. */
+export function etichettaQuota(q: Pick<QuotaCredito, 'classe' | 'grado'>): string {
+  switch (q.classe) {
+    case 'CONTRIBUTI':
+      return 'Contributi · grado I';
+    case 'SANZIONI_CIVILI':
+      return q.grado === 'VIII' ? 'Sanzioni civili · grado VIII' : 'Sanzioni civili · chirografo';
+    case 'SANZIONI_AMMINISTRATIVE':
+      return 'Sanzioni amministrative · chirografo';
+    case 'NON_DETERMINATO':
+      return 'Non determinata';
+    case 'CREDITO_A_FAVORE':
+      return 'A favore dell’azienda';
+    case 'DA_CLASSIFICARE':
+      return 'Da classificare';
+  }
+}
+
+export interface RigaClassificata {
+  certo: boolean;
+  /** La classe di ogni quota, già leggibile in tabella. */
+  quote: (QuotaCredito & { etichetta: string; rango: RangoCredito | null })[];
+}
+
+/** La classificazione di una riga, pronta da mostrare: una voce per quota. */
+export function classificaRigaCompleta(riga: RigaDaClassificare): RigaClassificata {
+  const c = classificaRiga(riga);
+  return {
+    certo: c.certo,
+    quote: c.quote.map((q) => ({ ...q, etichetta: etichettaQuota(q), rango: rangoDellaQuota(q) })),
+  };
+}
+
+export interface QuotaScenari {
+  etichetta: string;
+  rango: RangoCredito;
+  importo: number;
+  tassoLiquidazionePct: number | null;
+  nettoLiquidazione: number | null;
+  cramDownPct: number | null;
+  nettoCramDown: number | null;
+}
+
+export interface ScenariPerClasse {
+  quote: QuotaScenari[];
+  /** Realizzo netto sommato su tutte le quote classificabili. */
+  liquidazione: number | null;
+  cramDown: number | null;
+  /** Il credito che il documento non permette di collocare: resta fuori dai conti. */
+  escluso: number;
+  /** Perché un'ipotesi non è calcolabile: percentuali mancanti, quota esclusa. */
+  mancanti: string[];
+  calcolabile: boolean;
+}
+
+/**
+ * LE DUE IPOTESI APPLICATE ALLE CLASSI, NON AL TOTALE.
+ *
+ * Il cram down moltiplica il debito per una percentuale unica: va bene per
+ * l'accordo, non per la graduazione, dove la percentuale è quella del rango e
+ * un credito privilegiato non può essere trattato come uno chirografario. Qui
+ * ogni quota prende la percentuale del proprio rango e i netti si sommano. Il
+ * «da classificare» resta fuori: non ha un rango, e moltiplicarlo per una
+ * percentuale scelta a caso sarebbe la ripartizione inventata.
+ */
+export function scenariPerClasse(
+  righe: RigaDaClassificare[],
+  parametri: ParametriScenari
+): ScenariPerClasse {
+  const perRango = new Map(parametri.ranghi.map((r) => [r.rango, r]));
+  const quote: QuotaScenari[] = [];
+  const mancanti = new Set<string>();
+  let escluso = 0;
+  let liquidazione = 0;
+  let cramDown = 0;
+  let qualcheIpotesi = false;
+
+  for (const riga of righe) {
+    for (const q of classificaRiga(riga).quote) {
+      const rango = rangoDellaQuota(q);
+      if (!rango) {
+        escluso += q.importo;
+        continue;
+      }
+      const esito = calcolaScenari({ credito: q.importo, rango, parametri });
+      const p = perRango.get(rango);
+      quote.push({
+        etichetta: etichettaQuota(q),
+        rango,
+        importo: q.importo,
+        tassoLiquidazionePct: p?.tassoLiquidazionePct ?? null,
+        nettoLiquidazione: esito.liquidazione.netto,
+        cramDownPct: p?.cramDownPct ?? null,
+        nettoCramDown: esito.cramDown.netto,
+      });
+      if (esito.liquidazione.netto !== null) {
+        liquidazione += esito.liquidazione.netto;
+        qualcheIpotesi = true;
+      } else {
+        mancanti.add(`Realizzo non calcolabile per «${etichettaQuota(q)}».`);
+      }
+      if (esito.cramDown.netto !== null) {
+        cramDown += esito.cramDown.netto;
+        qualcheIpotesi = true;
+      } else {
+        mancanti.add(`Cram down non calcolabile per «${etichettaQuota(q)}».`);
+      }
+    }
+  }
+
+  return {
+    quote,
+    liquidazione:
+      quote.length === 0 || quote.some((q) => q.nettoLiquidazione === null)
+        ? null
+        : centesimi(liquidazione),
+    cramDown:
+      quote.length === 0 || quote.some((q) => q.nettoCramDown === null)
+        ? null
+        : centesimi(cramDown),
+    escluso: centesimi(escluso),
+    mancanti: Array.from(mancanti),
+    calcolabile: qualcheIpotesi,
+  };
 }
 
 export interface TotaliClassificazione {
