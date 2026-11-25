@@ -216,7 +216,7 @@ function DocumentoLiquidazione({
         )}
       </div>
 
-      {classi && classi.quote.length > 0 && (
+      {classi && (classi.quote.length > 0 || classi.escluso > 0) && (
         <div className="rounded-xl border border-slate-200 bg-white p-5 print:break-inside-avoid">
           <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
             Il credito dell’ente per classe e rango
@@ -251,6 +251,17 @@ function DocumentoLiquidazione({
                   <td className="py-1.5 text-right font-mono">{euro(q.nettoCramDown)}</td>
                 </tr>
               ))}
+              {classi.escluso > 0 && (
+                <tr>
+                  <td className="py-1.5 pr-3 text-amber-800" colSpan={2}>
+                    Da classificare — il documento non separa contributi e sanzioni
+                  </td>
+                  <td className="py-1.5 pr-3 text-right font-mono">{euro(classi.escluso)}</td>
+                  <td className="py-1.5 pr-3 text-right" colSpan={4}>
+                    fuori dai conti
+                  </td>
+                </tr>
+              )}
               <tr className="bg-slate-50 font-black">
                 <td className="py-2 pr-3 text-slate-900" colSpan={4}>
                   Totale classificato
@@ -263,8 +274,8 @@ function DocumentoLiquidazione({
           </table>
           {classi.escluso > 0 && (
             <p className="mt-2 text-[11px] text-amber-800">
-              Fuori dai conti: {euro(classi.escluso)} di posizioni che il documento non permette di
-              classificare (o non ancora determinate).
+              Il «da classificare» resta fuori dai conti finché non arriva il dettaglio che separa
+              contributi e sanzioni: l&apos;importo è dichiarato, non ripartito.
             </p>
           )}
           {classi.mancanti.length > 0 && (

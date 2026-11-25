@@ -26,6 +26,22 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.25 — 2026-11-25
+
+ANCHE IL FOGLIO STAMPATO DICE DOVE SI COLLOCA IL CREDITO.
+
+- **Il PDF della verifica amministrativa porta la classificazione.** Dopo il
+  confronto per categoria, il foglio riporta la tabella per classe e grado:
+  contributi al grado I, metà delle sanzioni civili al grado VIII, metà
+  chirografaria e sanzioni amministrative al chirografo, «da classificare» con
+  il suo importo, e il totale del debito certo. Sotto, le posizioni non
+  determinate e i crediti a favore dell'azienda restano dichiarati a parte.
+- **Il documento di confronto stampa la ripartizione anche quando è tutta «da
+  classificare».** Prima il riquadro si nascondeva se nessuna riga aveva un
+  rango: un ente con sole cartelle ADR o verbali stampava un documento senza
+  dire nulla del credito. Ora il riquadro c'è e la riga «da classificare»
+  espone l'importo, fuori dai conti, senza ripartizioni inventate.
+
 ## 0.256.24 — 2026-11-25
 
 LA CLASSE DEL CREDITO ARRIVA ALLA RIGA E AGLI SCENARI.

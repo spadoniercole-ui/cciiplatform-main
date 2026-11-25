@@ -482,6 +482,22 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
         </tbody>
       </table>
       <p class="note">«Contabilizzato» = somma della Situazione Debitoria per categoria. «Certificazione dei debiti» = somma del «Totale debito» (al netto del credito) del file di verifica per categoria. Le categorie neutre non alimentano i totali.</p>`;
+    // LA CLASSIFICAZIONE NEL FOGLIO. Il PDF diceva quanto l'ente vanta, non
+    // dove quel credito si colloca: chi lo riceve (ufficio, curatore,
+    // giudice) deve poter leggere anche le quote privilegiate e quelle che
+    // il documento non permette di classificare, con i loro importi.
+    const bloccoClassi = `<h1 style="font-size:15px;margin-top:28px">Classificazione del credito — liquidazione giudiziale</h1>
+      <table>
+        <thead><tr><th>Classe</th><th>Grado</th><th class="num">Importo</th></tr></thead>
+        <tbody>
+          <tr><td>Contributi previdenziali</td><td>I (art. 2753, 2778 n. 1 c.c.)</td><td class="num">${euro(classi.contributi)}</td></tr>
+          <tr><td>Sanzioni civili — metà privilegiata</td><td>VIII (art. 2754, 2778 n. 8 c.c.)</td><td class="num">${euro(classi.sanzioniPrivilegiate)}</td></tr>
+          <tr><td>Sanzioni civili e amministrative — metà chirografaria</td><td>Chirografo</td><td class="num">${euro(classi.sanzioniChirografo)}</td></tr>
+          <tr><td>Da classificare — il documento non separa contributi e sanzioni</td><td>—</td><td class="num">${euro(classi.daClassificare)}</td></tr>
+          <tr class="tot"><td>Totale debito certo</td><td></td><td class="num">${euro(classi.certo)}</td></tr>
+        </tbody>
+      </table>
+      <p class="note">La classificazione è letta dal file (contributi, sanzioni, stato) e non si modifica a mano. Fuori dal debito certo: posizioni non ancora determinate ${euro(classi.nonDeterminato)}; crediti a favore dell'azienda dichiarati dal file ${euro(classi.creditoAFavore)}.</p>`;
     const bloccoNonContab =
       perDicitura.length > 0
         ? `<h1 style="font-size:15px;margin-top:28px">Debiti non ancora contabilizzati (da lavorare)</h1>
@@ -508,7 +524,7 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
         : '';
     stampaHtml(
       'Verifica certo per certo — Certificazione dei debiti',
-      corpo + bloccoNonContab + bloccoPotenziali,
+      corpo + bloccoClassi + bloccoNonContab + bloccoPotenziali,
       `Generato il ${new Date().toLocaleString('it-IT')}`
     );
   };
