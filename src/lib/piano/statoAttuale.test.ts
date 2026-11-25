@@ -3,6 +3,7 @@ import {
   applicaManopola,
   definizioniManopole,
   letturaManopola,
+  luceDellaLeva,
   storicoDaStatoAttuale,
 } from './statoAttuale';
 import type { EsercizioStorico } from './piano';
@@ -117,5 +118,35 @@ describe('manopole', () => {
     expect(ip.ricaviVendite![0]!.valore).toBe(30);
     const aliq = defs.find((d) => d.riga === 'aliquotaImposte')!;
     expect(letturaManopola(aliq, {}, 3).valore).toBe(28);
+  });
+});
+
+describe('luce della manopola — il verso della voce', () => {
+  it('più ricavi è verde, meno ricavi è rosso', () => {
+    expect(luceDellaLeva('ricaviVendite', 3, 1)).toBe('ok');
+    expect(luceDellaLeva('ricaviVendite', -3, 1)).toBe('critico');
+  });
+
+  it('meno costi è verde, più costi è rosso', () => {
+    expect(luceDellaLeva('costiOperativi', -8, 1)).toBe('ok');
+    expect(luceDellaLeva('costiOperativi', 8, 1)).toBe('critico');
+    expect(luceDellaLeva('oneriFinanziari', -2, 1)).toBe('ok');
+    expect(luceDellaLeva('ammortamenti', 15, 1)).toBe('critico');
+  });
+
+  it('apporti dei soci e aliquota seguono il loro verso', () => {
+    expect(luceDellaLeva('apportiSoci', 50_000, 1000)).toBe('ok');
+    expect(luceDellaLeva('aliquotaImposte', -10, 1)).toBe('ok');
+    expect(luceDellaLeva('aliquotaImposte', 10, 1)).toBe('critico');
+  });
+
+  it('gli investimenti non hanno un verso: restano neutri', () => {
+    expect(luceDellaLeva('investimenti', 90_210, 1000)).toBe('neutro');
+    expect(luceDellaLeva('investimenti', -90_210, 1000)).toBe('neutro');
+  });
+
+  it('a riposo la manopola è neutra, non verde né rossa', () => {
+    expect(luceDellaLeva('ricaviVendite', 0, 1)).toBe('neutro');
+    expect(luceDellaLeva('costiOperativi', 0.2, 1)).toBe('neutro');
   });
 });

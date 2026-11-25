@@ -61,6 +61,7 @@ import {
   applicaManopola,
   definizioniManopole,
   letturaManopola,
+  luceDellaLeva,
   type DefinizioneManopola,
 } from '@/lib/piano/statoAttuale';
 import { Manopola } from '@/components/spazio/Manopola';
@@ -175,6 +176,9 @@ export function PianoSviluppoScenario({
   // rientro, soluzione verde.
   const [serieSistema, setSerieSistema] = useState(false);
   const [pianoRientro, setPianoRientro] = useState<PianoRientro | null>(null);
+  // In quanti anni si restituisce il debito: la voce che fissa le rate quando
+  // la proposta non ne porta (0.256.21). Vuoto = rate della proposta.
+  const [anniRientro, setAnniRientro] = useState<number | null>(null);
   const [soluzione, setSoluzione] = useState<SoluzioneSalvata | null>(null);
   const [soluzioneInCorso, setSoluzioneInCorso] = useState(false);
 
@@ -189,6 +193,24 @@ export function PianoSviluppoScenario({
     setVariante(r.dati.variante);
     setSerieSistema(r.dati.serieSistema);
     setPianoRientro(r.dati.pianoRientro);
+    setAnniRientro(
+      r.dati.pianoRientro?.modalita === 'RATEALE' && r.dati.pianoRientro.mesi > 0
+        ? Math.max(1, Math.round(r.dati.pianoRientro.mesi / 12))
+        : null
+    );
+    // Con il flag di simulazione la procedura è quella dello scenario: non c'è
+    // una seconda scelta da fare, e chiederla insinuerebbe un dubbio (0.256.21).
+    if (r.dati.simulazioneAttiva) {
+      setLancio((l) => ({
+        ...l,
+        procedura:
+          r.dati!.tipoIstruttoria === 'DECRETO_LIQUIDAZIONE'
+            ? 'LIQUIDAZIONE'
+            : r.dati!.tipoIstruttoria === 'CRAM_DOWN'
+              ? 'CRAM_DOWN'
+              : 'ACCORDO',
+      }));
+    }
     setSoluzione(r.dati.soluzione);
     // Le leve salvate con la variante tornano nel pannello: la simulazione
     // ricorda con quali leve è stata prodotta, anche dopo un ricaricamento.
@@ -237,12 +259,36 @@ export function PianoSviluppoScenario({
     [ipAzienda, rettifiche, ipotesi]
   );
 
+  // Il debito da restituire: quello accertato dalla verifica amministrativa,
+  // altrimenti il totale offerto dalla proposta.
+  const debitoDaRestituire = dati
+    ? (dati.debitoTarget ?? dati.offerto.ente + dati.offerto.altri)
+    : 0;
+
   // Rate: dal piano di rientro scelto con le domande, altrimenti dalla proposta.
   const rate = useMemo(() => {
     if (!dati) return { ente: [], altri: [] };
     if (pianoRientro) return rateDaPianoRientro(dati.offerto, pianoRientro, orizzonte);
     return { ente: dati.rate.ente.slice(0, orizzonte), altri: dati.rate.altri.slice(0, orizzonte) };
   }, [dati, pianoRientro, orizzonte]);
+
+  /** Fissa le rate: il debito accertato diviso gli anni scelti. */
+  const impostaAnniRientro = (anni: number | null) => {
+    setAnniRientro(anni);
+    setModificato(true);
+    setSoluzione(null);
+    if (anni === null) {
+      setPianoRientro(null);
+      return;
+    }
+    const debito = debitoDaRestituire > 0 ? debitoDaRestituire : null;
+    setPianoRientro({
+      modalita: 'RATEALE',
+      mesi: anni * 12,
+      anticipoPct: 0,
+      ...(debito === null ? {} : { offerto: { ente: debito, altri: 0 } }),
+    });
+  };
 
   const esito = useMemo(() => {
     if (!dati || dati.storico.length === 0) return null;
@@ -286,14 +332,6 @@ export function PianoSviluppoScenario({
   const base = dati.storico[0];
   const anniPiano = esito?.anni ?? [];
   const manopole = definizioniManopole(base, aliquotaImplicita(base) ?? 27.9);
-  const statoGlobale: 'ok' | 'attenzione' | 'critico' = !esito
-    ? 'ok'
-    : esito.vincoli.some((v) => v.codice === 'CASSA_NEGATIVA' || v.codice === 'RATE_NON_COPERTE')
-      ? 'critico'
-      : esito.vincoli.length
-        ? 'attenzione'
-        : 'ok';
-
   const setCella = (riga: RigaInput, i: number, ip: Ipotesi | null) => {
     if (righeAzienda.has(riga)) return; // la riga segue il piano dell'azienda e la sua manopola
     const arr = [...(ipotesi[riga] ?? [])];
@@ -611,7 +649,7 @@ export function PianoSviluppoScenario({
 
   return (
     <div className="space-y-4">
-      {tipoProposta === 'RICEVUTA' && confronto}
+      {tipoProposta === 'RICEVUTA' && !dati.simulazioneAttiva && confronto}
 
       {/* CHE COSA ENTRA NELLA SIMULAZIONE (0.256.14). Il riquadro dell'attenzione
           della contabile e i parametri di lancio stanno sopra le manopole perché
@@ -748,25 +786,36 @@ export function PianoSviluppoScenario({
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="text-[10px] font-bold text-slate-500 uppercase">
-            Procedura da sostenere
-            <select
-              value={lancio.procedura}
-              onChange={(e) =>
-                setLancio((l) => ({
-                  ...l,
-                  procedura: e.target.value as LancioSimulazione['procedura'],
-                }))
-              }
-              className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
-            >
-              {(['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'] as const).map((p) => (
-                <option key={p} value={p}>
-                  {ETICHETTA_PROCEDURA[p]}
-                </option>
-              ))}
-            </select>
-          </label>
+          {dati.simulazioneAttiva ? (
+            // La procedura è già quella dello scenario: chiederla di nuovo
+            // significherebbe mettere in dubbio il tipo scelto alla creazione.
+            <div className="text-[10px] font-bold text-slate-500 uppercase">
+              Procedura da sostenere
+              <p className="mt-1 text-xs font-normal normal-case tracking-normal text-slate-800">
+                {ETICHETTA_PROCEDURA[lancio.procedura]} — è quella dello scenario.
+              </p>
+            </div>
+          ) : (
+            <label className="text-[10px] font-bold text-slate-500 uppercase">
+              Procedura da sostenere
+              <select
+                value={lancio.procedura}
+                onChange={(e) =>
+                  setLancio((l) => ({
+                    ...l,
+                    procedura: e.target.value as LancioSimulazione['procedura'],
+                  }))
+                }
+                className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+              >
+                {(['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'] as const).map((p) => (
+                  <option key={p} value={p}>
+                    {ETICHETTA_PROCEDURA[p]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="text-[10px] font-bold text-slate-500 uppercase">
             Offerta ipotizzata (%)
             <input
@@ -783,6 +832,26 @@ export function PianoSviluppoScenario({
                 }));
               }}
               placeholder="come la proposta"
+              className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+            />
+          </label>
+          <label className="text-[10px] font-bold text-slate-500 uppercase">
+            Restituzione del debito (anni)
+            <input
+              type="number"
+              min={1}
+              max={ORIZZONTE_MASSIMO}
+              step="1"
+              value={anniRientro ?? ''}
+              onChange={(e) => {
+                const testo = e.target.value.trim();
+                if (testo === '') return impostaAnniRientro(null);
+                const n = Number(testo);
+                if (!Number.isFinite(n)) return;
+                impostaAnniRientro(Math.max(1, Math.min(ORIZZONTE_MASSIMO, Math.round(n))));
+              }}
+              placeholder="come la proposta"
+              title={`Il debito da restituire è ${euro(debitoDaRestituire)}: le rate si dividono sugli anni indicati. Vuoto = rate della proposta.`}
               className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
             />
           </label>
@@ -830,7 +899,7 @@ export function PianoSviluppoScenario({
                 rettifica la voce in percentuale, uguale per tutti gli anni. Poi, nei passi 2–4
                 sotto la tabella: variante di sistema, piano di rientro, soluzione verde.
               </p>
-            ) : tipoProposta === 'RICEVUTA' ? (
+            ) : tipoProposta === 'RICEVUTA' && !dati.simulazioneAttiva ? (
               <p className="text-[11px] text-amber-800 mt-0.5">
                 Il piano dell’azienda non è ancora caricato: caricalo nel riquadro qui sopra e le
                 manopole partiranno da quello. Intanto lavorano sullo stato attuale —{' '}
@@ -842,7 +911,9 @@ export function PianoSviluppoScenario({
                 proietta in avanti. Gira le manopole: ogni manopola vale per tutti gli anni del
                 piano e il risultato si ricalcola subito. Per ritoccare un solo anno apri la tabella
                 anno per anno. Il personale è dentro i costi operativi; le rate del piano di rientro
-                vengono dalla proposta.
+                {dati.simulazioneAttiva
+                  ? ' seguono gli anni di restituzione del debito qui sopra.'
+                  : ' vengono dalla proposta.'}
               </p>
             )}
           </div>
@@ -1014,7 +1085,7 @@ export function PianoSviluppoScenario({
                               neutro={m.neutro}
                               unita={m.unita}
                               aiuto={r?.motivazione ? `${m.aiuto}\nAI: ${r.motivazione}` : m.aiuto}
-                              stato={statoGlobale}
+                              stato={luceDellaLeva(m.riga, r?.valore ?? 0, m.passo)}
                               daAi={!!r?.motivazione}
                               fasce={
                                 sistema && esito && contestoConfronto
@@ -1064,7 +1135,7 @@ export function PianoSviluppoScenario({
                             neutro={m.neutro}
                             unita={m.unita}
                             aiuto={m.aiuto}
-                            stato={statoGlobale}
+                            stato={luceDellaLeva(m.riga, l.valore, m.passo)}
                             variaPerAnno={l.variaPerAnno}
                             daAi={l.daAi}
                             onChange={(v) => {
@@ -1355,9 +1426,10 @@ export function PianoSviluppoScenario({
           </div>
         </details>
         <p className="text-[10px] text-slate-500">
-          Partenza: {dati.partenza.etichetta}. Rate dalla proposta: ente{' '}
-          {euro(dati.rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))}, altri creditori{' '}
-          {euro(dati.rate.altri.slice(0, orizzonte).reduce((x, y) => x + y, 0))}.
+          Partenza: {dati.partenza.etichetta}.{' '}
+          {anniRientro && pianoRientro
+            ? `Rate del piano di rientro: debito di ${euro(debitoDaRestituire)} in ${anniRientro} ${anniRientro === 1 ? 'anno' : 'anni'} — ente ${euro(rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))}.`
+            : `Rate dalla proposta: ente ${euro(dati.rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))}, altri creditori ${euro(dati.rate.altri.slice(0, orizzonte).reduce((x, y) => x + y, 0))}.`}
         </p>
       </div>
 

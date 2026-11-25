@@ -109,6 +109,45 @@ export function storicoDaStatoAttuale(
 }
 
 // ---------------------------------------------------------------------------
+// Il colore di una manopola: che cosa vuol dire girare in quella direzione.
+// ---------------------------------------------------------------------------
+
+/**
+ * Il colore della singola manopola, non dello stato globale del piano.
+ *
+ * L'arco colorato raccontava lo stato del piano intero: bastava un vincolo
+ * acceso perché ogni manopola diventasse rossa, anche quella dei costi appena
+ * ridotti. Il verso favorevole è invece una proprietà della voce: ricavi e
+ * apporti dei soci stanno meglio in alto, costi, ammortamenti, oneri, crediti e
+ * debiti stanno meglio in basso. Le voci senza un verso evidente (gli
+ * investimenti) restano neutre: non c'è un errore da segnalare.
+ */
+export type LuceLeva = 'ok' | 'neutro' | 'critico';
+
+const VERSO_FAVOREVOLE: Partial<Record<RigaInput, 'su' | 'giu'>> = {
+  ricaviVendite: 'su',
+  altriRicavi: 'su',
+  costiOperativi: 'giu',
+  ammortamenti: 'giu',
+  oneriFinanziari: 'giu',
+  aliquotaImposte: 'giu',
+  creditiClienti: 'giu',
+  debitiFornitori: 'giu',
+  debitiBanche: 'giu',
+  apportiSoci: 'su',
+};
+
+export function luceDellaLeva(riga: RigaInput, valore: number, passo: number): LuceLeva {
+  const verso = VERSO_FAVOREVOLE[riga];
+  if (!verso) return 'neutro';
+  // Sotto mezzo passo il valore è praticamente a riposo: verde o rosso
+  // sarebbero un giudizio su niente.
+  if (!Number.isFinite(valore) || Math.abs(valore) < Math.abs(passo) / 2) return 'neutro';
+  const favorevole = verso === 'su' ? valore > 0 : valore < 0;
+  return favorevole ? 'ok' : 'critico';
+}
+
+// ---------------------------------------------------------------------------
 // Manopole: una per macro-voce, stesso valore su tutti gli anni del piano.
 // ---------------------------------------------------------------------------
 

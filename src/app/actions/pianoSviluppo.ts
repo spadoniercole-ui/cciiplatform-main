@@ -17,6 +17,7 @@ import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import Anthropic from '@anthropic-ai/sdk';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import { ottieniScenarioPerId, verificaScenarioNonBloccato } from '@/app/actions/scenari';
+import type { TipoIstruttoria } from '@/lib/giudice/lettura';
 import { estraiJson } from '@/lib/visura/fatti';
 import { rettifichePulite, applicaRettifiche, type Rettifiche } from '@/lib/piano/rettifiche';
 import { ipotesiDaPianoAzienda, valoriPuliti } from '@/lib/piano/pianoAziendale';
@@ -88,6 +89,14 @@ export interface DatiPianoSviluppo {
   salvatoIl: string | null;
   /** Totale offerto dalla proposta: all'ente e agli altri creditori. */
   offerto: TotaleOfferto;
+  /**
+   * Il debito da restituire con il piano, quando la proposta non lo dice: la
+   * cifra accertata dalla verifica amministrativa (memorizzata) o, in mancanza,
+   * la somma delle posizioni dell'ente. null = nessuna cifra disponibile.
+   */
+  debitoTarget: number | null;
+  /** La situazione dello scenario: con il flag di simulazione la procedura non si sceglie. */
+  tipoIstruttoria: TipoIstruttoria | null;
   /** Piano di rientro come lo dice la proposta (risposte proposte alle domande). */
   rientroProposta: PianoRientro;
   /** Piano di rientro scelto per questa variante, se fissato. */
@@ -257,6 +266,29 @@ export async function ottieniPianoSviluppoAction(
     const simulazioneAttiva = scenarioRis?.success
       ? Boolean(scenarioRis.scenario?.simulazioneAttiva)
       : false;
+    const tipoIstruttoria = scenarioRis?.success
+      ? ((scenarioRis.scenario?.tipoIstruttoria ?? null) as TipoIstruttoria | null)
+      : null;
+    // Il debito da restituire: la verifica amministrativa lo ha già accertato.
+    // Serve al piano di rientro quando la proposta non porta righe (0.256.21).
+    const debitoTarget = await (async (): Promise<number | null> => {
+      const mem = await pool
+        .query(`SELECT totale FROM "${nomeSchema}".debiti_ente_memorizzati WHERE azienda_id = $1`, [
+          aziendaId,
+        ])
+        .catch(() => ({ rows: [] as { totale: string | number }[] }));
+      const memorizzato = num(mem.rows[0]?.totale);
+      if (memorizzato > 0) return memorizzato;
+      const posizioni = await pool
+        .query(
+          `SELECT COALESCE(SUM(importo), 0) AS totale FROM "${nomeSchema}".debiti_ente
+            WHERE azienda_id = $1 AND scenario_id IS NULL`,
+          [aziendaId]
+        )
+        .catch(() => ({ rows: [] as { totale: string | number }[] }));
+      const somma = num(posizioni.rows[0]?.totale);
+      return somma > 0 ? somma : null;
+    })();
     let pianoVerifica: AnnoPianoVerifica[] = [];
     if (simulazioneAttiva) {
       const va = await pool
@@ -295,6 +327,8 @@ export async function ottieniPianoSviluppoAction(
           ente: Math.round(offerto.ente * 100) / 100,
           altri: Math.round(offerto.altri * 100) / 100,
         },
+        debitoTarget,
+        tipoIstruttoria,
         rientroProposta,
         pianoRientro: pianoRientroPulito(piano.rows[0]?.piano_rientro),
         serieSistema: piano.rows[0]?.serie_sistema === true,

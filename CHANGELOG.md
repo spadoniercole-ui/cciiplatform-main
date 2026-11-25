@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.21**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.22**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,34 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.22 — 2026-11-25
+
+LA SIMULAZIONE SA GIÀ CHE COSA STA FACENDO, E LE MANOPOLE DICONO IL VERSO.
+
+- **Con il flag non si chiede il piano dell'azienda.** Il riquadro «Piano
+  dell'azienda» (Excel o PDF) e la frase «caricalo nel riquadro qui sopra» non
+  compaiono più sugli scenari nati con il flag di simulazione: la base è quella
+  salvata nel passo 3 della verifica aziendale, e chiedere un file dell'azienda
+  contraddiceva la scelta già fatta.
+- **Con il flag la procedura non si sceglie di nuovo.** «Procedura da sostenere»
+  era un selettore separato dal tipo di scenario: ora, quando il flag è attivo,
+  si legge soltanto quale procedura è (accordo, liquidazione o cram down),
+  perché la scelta è quella fatta alla creazione dello scenario.
+- **Le manopole colorano il verso della voce, non lo stato del piano.** L'arco
+  era rosso su tutte le manopole appena un vincolo del piano scattava, anche sui
+  costi appena ridotti. Ora il colore è della singola manopola: verde quando la
+  si gira dalla parte favorevole (più ricavi, più apporti dei soci; meno costi,
+  ammortamenti, oneri, crediti e debiti), rosso quando la si gira dalla parte
+  contraria, grigio a riposo e per le voci senza verso (gli investimenti). La
+  regola sta in `luceDellaLeva` (`src/lib/piano/statoAttuale.ts`) con i suoi test;
+  lo stato globale del piano resta nei semafori sopra il cruscotto.
+- **Le rate del piano di rientro hanno una voce che le fissa.** Accanto a offerta
+  e impostazione c'è «Restituzione del debito (anni)»: indicati gli anni, le rate
+  si dividono sul debito accertato dalla verifica amministrativa (o, in mancanza,
+  sul totale offerto dalla proposta), invece di restare a zero quando la proposta
+  non porta righe. Vuoto significa «come la proposta»; il piano lo dichiara nella
+  riga sotto la tabella.
 
 ## 0.256.21 — 2026-11-25
 

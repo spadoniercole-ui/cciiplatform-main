@@ -3,8 +3,10 @@
 // MANOPOLA — controllo rotativo del cruscotto del piano. Si gira trascinando
 // in verticale (o in orizzontale), con le frecce della tastiera, o scrivendo
 // il valore nel campo sotto; doppio clic = torna al valore di riposo.
-// L'arco colorato riflette lo stato GLOBALE del piano (come i semafori delle
-// vecchie levette): girando una manopola si vede subito se il piano regge.
+// L'arco colorato dice il verso della manopola: verde quando la si gira dalla
+// parte favorevole (più ricavi, meno costi), rosso quando la si gira dalla
+// parte contraria, grigio quando la voce non ha un verso evidente. Lo stato
+// globale del piano resta nei semafori sopra il cruscotto.
 
 import React, { useRef } from 'react';
 
@@ -17,8 +19,8 @@ interface Props {
   neutro: number;
   unita: string;
   aiuto?: string;
-  /** Colore dell'arco: stato globale del piano. */
-  stato: 'ok' | 'attenzione' | 'critico';
+  /** Colore dell'arco: il verso della voce, o neutro quando non ne ha uno. */
+  stato: 'ok' | 'attenzione' | 'critico' | 'neutro';
   /** Le ipotesi sotto la manopola variano per anno: il valore è la media. */
   variaPerAnno?: boolean;
   daAi?: boolean;
@@ -45,7 +47,7 @@ const TESTO_FASCIA = {
   nc: 'non confrontabile con il settore',
 };
 
-const COLORE = { ok: '#059669', attenzione: '#d97706', critico: '#dc2626' };
+const COLORE = { ok: '#059669', attenzione: '#d97706', critico: '#dc2626', neutro: '#94a3b8' };
 const INIZIO = 135; // gradi: arco da 135° a 405° (270° di corsa)
 const CORSA = 270;
 
