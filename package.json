@@ -1,6 +1,6 @@
 {
   "name": "cciiplatform",
-  "version": "0.256.28",
+  "version": "0.256.29",
   "type": "module",
   "private": true,
   "engines": {
@@ -20,7 +20,6 @@
     "build:portable": "node portable/build-portable.mjs",
     "test": "vitest run",
     "check:autorizzazione": "node scripts/check-autorizzazione.mjs",
-    "check:archil": "node scripts/check-archil.mjs",
     "check:rotte": "node scripts/check-rotte.mjs",
     "consegna": "node scripts/attendi-consegna.mjs",
     "consegna:subito": "node scripts/attendi-consegna.mjs --una-volta",
@@ -31,7 +30,6 @@
     "@electric-sql/pglite": "^0.5.4",
     "@vercel/blob": "^2.6.1",
     "bcryptjs": "^2.4.3",
-    "disk": "1.8.0",
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.3",
     "fast-xml-parser": "^5.10.1",
@@ -41,7 +39,6 @@
     "next": "^15.5.26",
     "node-forge": "^1.4.0",
     "pg": "^8.22.0",
-    "postgres": "^3.4.5",
     "qrcode": "^1.5.4",
     "react": "19.0.3",
     "react-dom": "19.0.3",

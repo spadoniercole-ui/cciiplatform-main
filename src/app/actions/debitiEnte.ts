@@ -1,5 +1,7 @@
 'use server';
 
+import { cache } from 'react';
+
 // Posizione Debitoria dell'Ente — a livello di AZIENDA, non di
 // scenario: quello che l'ente dichiara di avere a credito verso
 // un'azienda secondo la propria contabilità non cambia da una
@@ -95,7 +97,19 @@ export interface RisultatoElencoDebitiEnte {
  *        azienda prima che la Situazione Debitoria si spostasse nello
  *        scenario. Restano leggibili e riprendibili, non si perdono.
  */
+/** Lettura ripetuta nello stesso render (layout, verifica e pagina): `cache()`
+ * di React la esegue una volta sola. Fuori da un render è un pass-through. */
+const ottieniDebitiEnteMemorizzata = cache(ottieniDebitiEnteInterna);
+
 export async function ottieniDebitiEnte(
+  nomeSchema: string,
+  aziendaId: number,
+  scenarioId?: number
+): Promise<RisultatoElencoDebitiEnte> {
+  return ottieniDebitiEnteMemorizzata(nomeSchema, aziendaId, scenarioId);
+}
+
+async function ottieniDebitiEnteInterna(
   nomeSchema: string,
   aziendaId: number,
   scenarioId?: number

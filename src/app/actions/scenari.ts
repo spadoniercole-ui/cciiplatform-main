@@ -1,5 +1,7 @@
 'use server';
 
+import { cache } from 'react';
+
 // Scenario: unità operativa centrale dell'analisi. Un'azienda può avere N
 // scenari nel tempo, ognuno un ciclo di analisi indipendente (Check List,
 // Test Pratico, Indici, XBRL, Cram Down si agganciano tutti qui, non
@@ -158,7 +160,19 @@ export interface RisultatoScenarioSingolo {
   error?: string;
 }
 
+/** Lettura ripetuta nello stesso render (layout dello scenario + pagina):
+ * `cache()` di React la esegue una volta sola. Fuori da un render (script,
+ * test) è un semplice pass-through. */
+const ottieniScenarioPerIdMemorizzata = cache(ottieniScenarioPerIdInterna);
+
 export async function ottieniScenarioPerId(
+  nomeSchema: string,
+  scenarioId: number
+): Promise<RisultatoScenarioSingolo> {
+  return ottieniScenarioPerIdMemorizzata(nomeSchema, scenarioId);
+}
+
+async function ottieniScenarioPerIdInterna(
   nomeSchema: string,
   scenarioId: number
 ): Promise<RisultatoScenarioSingolo> {

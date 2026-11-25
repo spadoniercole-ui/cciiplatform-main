@@ -12,6 +12,7 @@
 // Modulo lato server (usa il pool): lo chiamano azioni che hanno già
 // verificato l'accesso.
 
+import { cache } from 'react';
 import { pool } from '@/lib/db';
 import { assicuraTabelleAnagraficaEnte } from '@/db/provision';
 
@@ -106,7 +107,11 @@ export function testoIdentificativi(id: IdentificativoEnte[]): string {
 }
 
 /** Denominazione, identificativi presso l'ente e camerali: la testata di un'azienda. */
-export async function leggiRiferimentoAzienda(
+/** Lettura ripetuta nello stesso render (testata dello scenario e schede):
+ * `cache()` di React la esegue una volta sola. */
+export const leggiRiferimentoAzienda = cache(leggiRiferimentoAziendaInterna);
+
+async function leggiRiferimentoAziendaInterna(
   nomeSchema: string,
   aziendaId: number
 ): Promise<{

@@ -859,6 +859,27 @@ async function inserisciIstruttoriaDemo(
 }
 
 /**
+/**
+ * L'azienda demo a cui appartiene uno scenario, per il riallineamento mirato.
+ *
+ * La pagina di uno scenario riallineava TUTTO il percorso demo a ogni
+ * navigazione (cinque aziende, una ventina di scritture): lavoro che serve
+ * alle altre quattro aziende solo quando le si apre. Una lettura per chiave
+ * primaria dice quale azienda sta guardando l'utente.
+ */
+export async function aziendaDelloScenarioDemo(
+  nomeSchema: string,
+  scenarioId: number
+): Promise<number | null> {
+  if (!schemaOk(nomeSchema)) return null;
+  const r = await pool.query(`SELECT azienda_id FROM "${nomeSchema}".scenari WHERE id = $1`, [
+    scenarioId,
+  ]);
+  const id = r.rows[0]?.azienda_id;
+  return id === null || id === undefined ? null : Number(id);
+}
+
+/**
  * Carica il percorso demo nello schema indicato.
  *
  * Restituisce quante aziende sono state create e quante erano già presenti.
@@ -866,7 +887,7 @@ async function inserisciIstruttoriaDemo(
  */
 export async function caricaPercorsoDemoEnte(
   nomeSchema: string,
-  opzioni: { soloPercorsi?: boolean; soloTriage?: boolean } = {}
+  opzioni: { soloPercorsi?: boolean; soloTriage?: boolean; aziendaId?: number } = {}
 ): Promise<EsitoPercorsoDemo> {
   if (!schemaOk(nomeSchema)) throw new Error('Nome schema non valido.');
 
@@ -929,7 +950,12 @@ export async function caricaPercorsoDemoEnte(
   try {
     await client.query('BEGIN');
     if (!opzioni.soloTriage) {
-      for (const a of PERCORSO_DEMO) {
+      // Con `aziendaId` si riallinea solo l'azienda che si sta guardando: le
+      // altre restano come sono e si allineano quando le si apre.
+      const daRiallineare = opzioni.aziendaId
+        ? PERCORSO_DEMO.filter((a) => perNome.get(a.ragioneSociale) === opzioni.aziendaId)
+        : PERCORSO_DEMO;
+      for (const a of daRiallineare) {
         let aziendaId = perNome.get(a.ragioneSociale);
         if (!aziendaId) {
           aziendaId = await inserisciAzienda(client, nomeSchema, a);

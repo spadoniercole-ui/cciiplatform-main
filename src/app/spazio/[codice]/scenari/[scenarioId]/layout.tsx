@@ -35,8 +35,13 @@ export default async function ScenarioLayout({
   // diretto allo scenario deve vedere subito il percorso aggiornato (per
   // esempio Tessitura come liquidazione, non più come proposta).
   if (contesto.demo) {
-    const { caricaPercorsoDemoEnte } = await import('@/lib/demo/caricaPercorsoEnte');
-    await caricaPercorsoDemoEnte(contesto.nomeSchema, { soloPercorsi: true }).catch((errore) => {
+    const { aziendaDelloScenarioDemo, caricaPercorsoDemoEnte } =
+      await import('@/lib/demo/caricaPercorsoEnte');
+    const aziendaDemo = await aziendaDelloScenarioDemo(contesto.nomeSchema, Number(scenarioId));
+    await caricaPercorsoDemoEnte(contesto.nomeSchema, {
+      soloPercorsi: true,
+      aziendaId: aziendaDemo ?? undefined,
+    }).catch((errore) => {
       console.error('[ScenarioLayout] Riallineamento demo non riuscito:', errore);
     });
   }
@@ -69,33 +74,26 @@ export default async function ScenarioLayout({
     righePosizione: posizione && posizione.success ? posizione.righe : [],
   });
 
-  // Che cosa esiste davvero su questa azienda: decide quali spunte sono
-  // possibili nel passo 0 (l'amministrativa è obbligatoria, la contabile no).
-  const disponibilita = await verificheDisponibiliAziendaAction(
-    contesto.nomeSchema,
-    scenario.aziendaId
-  ).catch(() => null);
-
-  // Dopo un cambio di situazione i passi compilati non sono spariti: si dice
-  // che cosa va ricontrollato, con i numeri veri letti adesso.
-  const passiScenario = scenario.situazioneCambiataIl
-    ? passiDaRivedere(
-        await leggiPassiCompilati(contesto.nomeSchema, scenario.id).catch(() => ({
-          propostaRighe: 0,
-          risposteChecklist: 0,
-        }))
-      )
-    : [];
-
-  const storicoSituazione = scenario.situazioneCambiataIl
-    ? await leggiStoricoSituazione(contesto.nomeSchema, scenario.id).catch(() => [])
-    : [];
+  // Le quattro letture che seguono non dipendono l'una dall'altra: in parallelo
+  // costavano quattro andate e ritorni in fila al database. Che cosa esiste
+  // davvero su questa azienda decide quali spunte sono possibili nel passo 0
+  // (l'amministrativa è obbligatoria, la contabile no); i passi compilati e lo
+  // storico servono solo dopo un cambio di situazione; gli identificativi
+  // sono la testata dell'azienda.
+  const [disponibilita, passiScenario, storicoSituazione, riferimento] = await Promise.all([
+    verificheDisponibiliAziendaAction(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
+    scenario.situazioneCambiataIl
+      ? leggiPassiCompilati(contesto.nomeSchema, scenario.id)
+          .catch(() => ({ propostaRighe: 0, risposteChecklist: 0 }))
+          .then(passiDaRivedere)
+      : Promise.resolve([]),
+    scenario.situazioneCambiataIl
+      ? leggiStoricoSituazione(contesto.nomeSchema, scenario.id).catch(() => [])
+      : Promise.resolve([]),
+    leggiRiferimentoAzienda(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
+  ]);
 
   const base = `/spazio/${codice}/scenari/${scenarioId}`;
-  // Testata dell'azienda: identificativi presso l'ente in evidenza.
-  const riferimento = await leggiRiferimentoAzienda(contesto.nomeSchema, scenario.aziendaId).catch(
-    () => null
-  );
 
   return (
     <DemoAziendaScope azienda={scenario.ragioneSocialeAzienda}>

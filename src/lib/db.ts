@@ -17,4 +17,11 @@ export const pool = (PORTABLE
       connectionString: process.env.DATABASE_URL,
       // Cloud: TLS; edizione server: DATABASE_SSL=0 (Postgres nella rete interna).
       ssl: sslDatabase(),
+      // Un solo pool per processo: ci passano le ~230 query, il DDL delle
+      // garanzie e le query tipizzate di Drizzle (src/db/client.ts monta
+      // Drizzle su questo stesso Pool). Era il default implicito di `pg`:
+      // scritto qui perché il numero di connessioni aperte verso Postgres
+      // sia esplicito e non raddoppi senza che nessuno se ne accorga.
+      max: 10,
+      idleTimeoutMillis: 30_000,
     })) as unknown as Pool;

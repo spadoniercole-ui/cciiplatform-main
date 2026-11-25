@@ -1,5 +1,7 @@
 'use server';
 
+import { cache } from 'react';
+
 // LE VERIFICHE DELL’ENTE NELLO SCENARIO — quali entrano, e da quando.
 //
 // La scelta si fa alla creazione dello scenario e resta modificabile dal
@@ -181,7 +183,19 @@ async function leggiAggancio(nomeSchema: string, aziendaId: number): Promise<Agg
  * amministrativa e contabile, altrimenti amministrativa, altrimenti la sola
  * contabile storica — che resta l'unica scelta quando il dato attuale manca.
  */
+/** Lettura ripetuta nello stesso render (layout dello scenario e passo 0):
+ * `cache()` di React la esegue una volta sola. Fuori da un render è un
+ * semplice pass-through. */
+const verificheDisponibiliAziendaMemorizzata = cache(verificheDisponibiliAziendaInterna);
+
 export async function verificheDisponibiliAziendaAction(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<DisponibilitaVerifiche> {
+  return verificheDisponibiliAziendaMemorizzata(nomeSchema, aziendaId);
+}
+
+async function verificheDisponibiliAziendaInterna(
   nomeSchema: string,
   aziendaId: number
 ): Promise<DisponibilitaVerifiche> {

@@ -5,6 +5,7 @@
 // uno spazio vecchio (il provisioning è lazy): l'assenza vale zero, non un
 // errore.
 
+import { cache } from 'react';
 import { pool } from '@/lib/db';
 import type { PassiCompilati } from '@/lib/scenari/situazione';
 
@@ -29,7 +30,11 @@ async function conta(
   return Number(r.rows[0]?.n ?? 0);
 }
 
-export async function leggiPassiCompilati(
+/** Lettura ripetuta nello stesso render (avviso nel layout + avviso nella
+ * pagina): `cache()` di React la esegue una volta sola. */
+export const leggiPassiCompilati = cache(leggiPassiCompilatiInterna);
+
+async function leggiPassiCompilatiInterna(
   nomeSchema: string,
   scenarioId: number
 ): Promise<PassiCompilati> {

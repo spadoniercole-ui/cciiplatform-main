@@ -102,11 +102,6 @@ vi.mock('@/app/actions/screeningAzienda', () => ({
   aggiornaDirettriciEnteAction: vi.fn(),
 }));
 
-vi.mock('@/app/actions/triagePerimetro', () => ({
-  ottieniRangoCreditoAction: vi.fn().mockResolvedValue({ success: true, rango: null }),
-  salvaRangoCreditoAction: vi.fn(),
-}));
-
 vi.mock('@/app/actions/parametriScenari', () => ({
   ottieniParametriScenariAction: vi.fn().mockResolvedValue({ success: false, error: 'non usato' }),
 }));

@@ -1,5 +1,7 @@
 'use server';
 
+import { cache } from 'react';
+
 // Certificazione dei debiti — persistenza della mappatura titoli-di-sezione →
 // categoria (per spazio) e delle righe della certificazione dei debiti importate (per azienda). Il
 // confronto certo-per-certo con la Situazione Debitoria contabilizzata è
@@ -484,7 +486,19 @@ export interface RisultatoElencoVera {
   error?: string;
 }
 
+/** Lettura ripetuta nello stesso render (layout dello scenario + pagina):
+ * `cache()` di React la esegue una volta sola. Fuori da un render è un
+ * semplice pass-through. */
+const ottieniDebitiVeraMemorizzata = cache(ottieniDebitiVeraInterna);
+
 export async function ottieniDebitiVera(
+  nomeSchema: string,
+  aziendaId: number
+): Promise<RisultatoElencoVera> {
+  return ottieniDebitiVeraMemorizzata(nomeSchema, aziendaId);
+}
+
+async function ottieniDebitiVeraInterna(
   nomeSchema: string,
   aziendaId: number
 ): Promise<RisultatoElencoVera> {

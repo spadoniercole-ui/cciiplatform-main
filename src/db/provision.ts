@@ -1,4 +1,4 @@
-import { db } from './client';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { pool } from '@/lib/db';
 import { sql } from 'drizzle-orm';
 import { deveRinominareInLegacy } from '@/lib/migrazioni/debitiEnteLegacy';
@@ -6,7 +6,6 @@ import { assicuraTabelleProdotti } from './provisionProdotti';
 import { sqlVincoloCheckIdempotente } from '@/lib/migrazioni/vincoloCheck';
 import { sqlChiaveEsternaIdempotente } from '@/lib/migrazioni/chiaveEsterna';
 import { eCorsaDdlBenigna } from '@/lib/migrazioni/corsaDdl';
-import { getTabelleTenant } from './schema';
 
 // Ogni istruzione DDL è una query separata, non un unico blocco
 // multi-istruzione: Postgres avvolge un blocco così in una transazione
@@ -33,6 +32,43 @@ import { getTabelleTenant } from './schema';
 // tabella che non esiste più.
 const tabelleGarantite = new Set<string>();
 
+// ISTRUZIONI DDL GIÀ ESEGUITE IN QUESTO PROCESSO. Il registro qui sopra è per
+// tabella, e va dichiarato a mano in ogni funzione `assicura…`: con 290
+// istruzioni DDL nel file era applicato a poche di esse. Qui la chiave è
+// l'istruzione resa (testo + parametri, quindi con lo schema dentro): la
+// stessa CREATE/ALTER non torna su Postgres una seconda volta, una volta per
+// processo, senza dover toccare le singole funzioni.
+//
+// Il testo si ottiene dal dialetto Drizzle senza aprire connessioni: serve solo
+// a comporre la chiave e a eseguire l'istruzione sul Pool `pg`, così il DDL
+// condivide la connessione già calda delle letture invece di usare il secondo
+// pool di Drizzle (vedi src/db/client.ts).
+const ddlGiaEseguiti = new Set<string>();
+
+interface IstruzioneResa {
+  sql: string;
+  params: unknown[];
+}
+
+// Il dialetto serve solo a rendere il testo di un'istruzione (nessuna
+// connessione): così il DDL non dipende dall'istanza Drizzle e si esegue sul
+// Pool condiviso.
+const dialettoDdl = new PgDialect();
+
+function rendiIstruzione(istruzione: ReturnType<typeof sql>): IstruzioneResa {
+  return dialettoDdl.sqlToQuery(istruzione) as IstruzioneResa;
+}
+
+/** Lettura di servizio delle garanzie (es. «questa colonna c'è già?»): passa
+ * dallo stesso Pool delle altre query, senza aprire un secondo pool. Non è
+ * memorizzata: risponde su un dato che il DDL appena eseguito può aver
+ * cambiato. */
+async function leggiConDdl(istruzione: ReturnType<typeof sql>): Promise<Record<string, unknown>[]> {
+  const resa = rendiIstruzione(istruzione);
+  const esito = await pool.query(resa.sql, resa.params as unknown[]);
+  return esito.rows as Record<string, unknown>[];
+}
+
 function giaGarantita(nomeSchema: string, tabella: string): boolean {
   return tabelleGarantite.has(`${nomeSchema}.${tabella}`);
 }
@@ -49,26 +85,39 @@ function segnaGarantita(nomeSchema: string, tabella: string): void {
 export function dimenticaTabelleGarantite(nomeSchema?: string): void {
   if (!nomeSchema) {
     tabelleGarantite.clear();
+    ddlGiaEseguiti.clear();
     return;
   }
   for (const chiave of tabelleGarantite) {
     if (chiave.startsWith(`${nomeSchema}.`)) tabelleGarantite.delete(chiave);
   }
+  // Le chiavi del registro DDL contengono lo schema quotato (identificatore)
+  // oppure come parametro JSON: in entrambi i casi compare `"schema"`.
+  for (const chiave of ddlGiaEseguiti) {
+    if (chiave.includes(`"${nomeSchema}"`)) ddlGiaEseguiti.delete(chiave);
+  }
 }
 
 export async function eseguiDdlTenant(istruzione: ReturnType<typeof sql>) {
+  const resa = rendiIstruzione(istruzione);
+  const chiave = resa.params.length ? `${resa.sql}\u0000${JSON.stringify(resa.params)}` : resa.sql;
+  if (ddlGiaEseguiti.has(chiave)) return;
+
   try {
-    await db.execute(istruzione);
+    await pool.query(resa.sql, resa.params as unknown[]);
   } catch (error) {
     if (eCorsaDdlBenigna(error)) {
       console.warn(
         '[provision] Corsa concorrente sul DDL del tenant (innocua, ignorata):',
         (error as Error)?.message
       );
+      // L'oggetto esiste (l'ha creato la corsa concorrente): non si riprova.
+      ddlGiaEseguiti.add(chiave);
       return;
     }
     throw error;
   }
+  ddlGiaEseguiti.add(chiave);
 }
 
 /**
@@ -1177,6 +1226,12 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.titoli_ente ADD COLUMN IF NOT EXISTS materia_id INTEGER`
   );
+  // La materia si legge per codice («quali codici cadono in questa materia?»)
+  // e nei riallineamenti in blocco: senza indice ogni lettura scandiva
+  // l'anagrafica dei codici dell'ente.
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_titoli_ente_materia ON ${s}.titoli_ente (materia_id)`
+  );
   // Attività di recupero (0.133.0): la procedura che l'ente segue per
   // incassare il credito di quel codice, scritta una volta nei Parametri e
   // mostrata partita per partita nella fase successiva al triage. Testo
@@ -1823,14 +1878,14 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
   // l'ente dichiara per un'azienda non cambia da uno scenario
   // all'altro della stessa azienda. Rinomina la vecchia (per scenario)
   // come archivio, mai persa.
-  const vecchiaEsiste = await db.execute(
+  const vecchiaEsiste = await leggiConDdl(
     sql`SELECT 1 FROM information_schema.tables
         WHERE table_schema = ${nomeSchema} AND table_name = 'debiti_ente'`
   );
   const vecchiaHaScenarioId =
     vecchiaEsiste.length > 0 &&
     (
-      await db.execute(
+      await leggiConDdl(
         sql`SELECT 1 FROM information_schema.columns
             WHERE table_schema = ${nomeSchema} AND table_name = 'debiti_ente' AND column_name = 'scenario_id'`
       )
@@ -1851,7 +1906,7 @@ export async function assicuraTabellaDebitiEnte(nomeSchema: string): Promise<voi
   // nulla. E' il caso di ogni database in esercizio.
   const legacyGiaPresente =
     (
-      await db.execute(
+      await leggiConDdl(
         sql`SELECT 1 FROM information_schema.tables
             WHERE table_schema = ${nomeSchema} AND table_name = 'debiti_ente_per_scenario_legacy'`
       )
@@ -2088,14 +2143,14 @@ export async function assicuraTabelleAnagraficaEnte(nomeSchema: string): Promise
   // pulito, la si rinomina come archivio storico — mai persa, solo
   // non più letta/scritta dal codice corrente — e si crea la nuova a
   // livello azienda al suo posto.
-  const vecchiaEsiste = await db.execute(
+  const vecchiaEsiste = await leggiConDdl(
     sql`SELECT 1 FROM information_schema.tables
         WHERE table_schema = ${nomeSchema} AND table_name = 'anagrafica_ente'`
   );
   const vecchiaHaScenarioId =
     vecchiaEsiste.length > 0 &&
     (
-      await db.execute(
+      await leggiConDdl(
         sql`SELECT 1 FROM information_schema.columns
             WHERE table_schema = ${nomeSchema} AND table_name = 'anagrafica_ente' AND column_name = 'scenario_id'`
       )
@@ -2188,7 +2243,7 @@ export async function assicuraTabellaCategorieTipoDebito(nomeSchema: string): Pr
   // totali né i delta del confronto. Difensivo: se la colonna non c'era, la
   // aggiungo e imposto Neutro a FALSE una tantum (senza sovrascrivere scelte
   // future, perché lo faccio solo alla prima creazione della colonna).
-  const haContribuisce = await db.execute(
+  const haContribuisce = await leggiConDdl(
     sql`SELECT 1 FROM information_schema.columns
         WHERE table_schema = ${nomeSchema} AND table_name = 'categorie_tipo_debito' AND column_name = 'contribuisce'`
   );
@@ -2201,7 +2256,7 @@ export async function assicuraTabellaCategorieTipoDebito(nomeSchema: string): Pr
     );
   }
 
-  const conteggio = await db.execute(
+  const conteggio = await leggiConDdl(
     sql`SELECT count(*)::int AS n FROM ${s}.categorie_tipo_debito`
   );
   const n = (conteggio[0] as { n: number } | undefined)?.n ?? 0;
@@ -2321,7 +2376,7 @@ export async function assicuraTabelleVera(nomeSchema: string): Promise<void> {
   // criterio del parser; il riparto contributi/sanzioni invece non è
   // ricostruibile senza il file, e resta NULL (si usa l'importo intero) fino
   // al ricaricamento.
-  const ambitoPresente = await db.execute(sql`
+  const ambitoPresente = await leggiConDdl(sql`
     SELECT 1 FROM information_schema.columns
      WHERE table_schema = ${nomeSchema}
        AND table_name = 'debiti_vera'
@@ -3146,8 +3201,16 @@ export async function creaAdminSpazio(
     passwordTemporanea?: string;
   }
 ) {
-  const tabelle = getTabelleTenant(nomeSchema);
-  await db.insert(tabelle.admin_workspace).values(admin).onConflictDoNothing();
+  const s = sql.identifier(nomeSchema);
+  const resa = rendiIstruzione(sql`
+    INSERT INTO ${s}.admin_workspace
+      (nome, cognome, username, email, cellulare, password_hash, codice_convalida, password_temporanea)
+    VALUES
+      (${admin.nome}, ${admin.cognome}, ${admin.username}, ${admin.email}, ${admin.cellulare},
+       ${admin.passwordHash}, ${admin.codiceConvalida}, ${admin.passwordTemporanea ?? null})
+    ON CONFLICT DO NOTHING
+  `);
+  await pool.query(resa.sql, resa.params as unknown[]);
 }
 
 /**
@@ -3167,16 +3230,33 @@ export async function popolaDatiMasterSpazio(
     indiciMaster: { codice: string; nome: string; formula: string }[];
   }
 ) {
-  const tabelle = getTabelleTenant(nomeSchema);
-
-  await db.transaction(async (tx) => {
+  const s = sql.identifier(nomeSchema);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
     for (const param of datiIniziali.parametriSistema) {
-      await tx.insert(tabelle.parametri_workspace).values(param).onConflictDoNothing();
+      const resa = rendiIstruzione(sql`
+        INSERT INTO ${s}.parametri_workspace (chiave, valore, categoria, descrizione)
+        VALUES (${param.chiave}, ${param.valore}, ${param.categoria}, ${param.descrizione})
+        ON CONFLICT DO NOTHING
+      `);
+      await client.query(resa.sql, resa.params as unknown[]);
     }
     for (const indice of datiIniziali.indiciMaster) {
-      await tx.insert(tabelle.indici_master).values(indice).onConflictDoNothing();
+      const resa = rendiIstruzione(sql`
+        INSERT INTO ${s}.indici_master (codice, nome, formula)
+        VALUES (${indice.codice}, ${indice.nome}, ${indice.formula})
+        ON CONFLICT DO NOTHING
+      `);
+      await client.query(resa.sql, resa.params as unknown[]);
     }
-  });
+    await client.query('COMMIT');
+  } catch (errore) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw errore;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -3264,6 +3344,12 @@ export async function assicuraTabelleVerificaAzienda(nomeSchema: string): Promis
       base_per_proposta BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP NOT NULL DEFAULT now()
     )`
+  );
+  // Le simulazioni si leggono sempre per azienda (e quella scelta come base
+  // della proposta si cerca per azienda): la tabella cresce a ogni ricalcolo
+  // del piano, quindi il filtro vuole il suo indice.
+  await eseguiDdlTenant(
+    sql`CREATE INDEX IF NOT EXISTS idx_verifica_simulazioni_azienda ON ${s}.verifica_azienda_simulazioni (azienda_id)`
   );
   // La simulazione scelta come base degli scenari di accordo transattivo
   // (0.195.0). Una sola per azienda: l'azione azzera le altre.

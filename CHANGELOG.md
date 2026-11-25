@@ -26,6 +26,45 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.29 — 2026-11-25
+
+IL DATABASE SMETTE DI RIFARE IL LAVORO GIÀ FATTO.
+
+- **Le garanzie delle tabelle si eseguono una volta per processo.** Il registro
+  c'era ma era applicato a quattro istruzioni su 290: ogni azione rifaceva
+  CREATE TABLE, ALTER TABLE e CREATE INDEX su tabelle già a posto, prendendo
+  lock che mettevano in coda le letture. Ora la memoizzazione sta nel punto che
+  esegue il DDL (testo + parametri, quindi con lo schema dentro); la stessa
+  istruzione non torna su Postgres una seconda volta nello stesso processo, e
+  `dimenticaTabelleGarantite` la riapre quando lo schema viene azzerato o
+  ripristinato. Misura locale su PGlite: `assicuraTabelleParametriSpazio` da
+  85 ms a 0,7 ms a caldo, `assicuraTabelleScenari` da 84 ms a 1 ms.
+- **Un solo pool di connessioni.** Drizzle apriva un secondo pool con
+  `postgres.js` (max 10) accanto al Pool `pg` di tutte le altre query: fino a
+  20 connessioni per processo, doppio TLS, avvisi di Postgres nel log. Ora
+  Drizzle monta sullo **stesso** Pool (driver `node-postgres`), il DDL passa da
+  `pool.query` e il numero di connessioni è esplicito (`max: 10`).
+- **Le letture ripetute si fanno una volta per richiesta.** Lo scenario era
+  letto due volte (layout e pagina), la certificazione dei debiti tre o
+  quattro, la posizione dell'ente due: ora `ottieniScenarioPerId`,
+  `ottieniDebitiVera`, `ottieniDebitiEnte`, `verificheDisponibiliAziendaAction`,
+  `leggiPassiCompilati` e `leggiRiferimentoAzienda` sono memorizzate con
+  `cache()` di React, e le quattro letture del layout dello scenario partono in
+  parallelo invece che una dopo l'altra.
+- **La demo non si riallinea tutta a ogni pagina.** Aprire uno scenario di uno
+  spazio demo riscriveva il percorso delle cinque aziende demo; ora si
+  riallinea solo l'azienda dello scenario aperto (le altre quando le si apre):
+  circa un quarto del lavoro in meno per navigazione (misura locale a caldo:
+  176 ms per l'intero percorso, 134 ms per la sola azienda aperta).
+- **Due indici che mancavano.** `titoli_ente(materia_id)` e
+  `verifica_azienda_simulazioni(azienda_id)`: si leggono sempre per azienda o
+  per materia e crescono a ogni ricalcolo.
+- **Codice morto rimosso.** Sei file che nessuno importava (995 righe): fra
+  questi `actions/permessi.ts`, con tre server action ancora esposte come
+  endpoint e senza chiamanti, e `lib/archil.ts` con il suo controllo
+  `check:archil` e la dipendenza `disk` — il disco Archil non è mai stato
+  usato dall'applicazione (0.137.0).
+
 ## 0.256.28 — 2026-11-25
 
 TRE COSE CHE NON TORNAVANO: IL PULSANTE, LE RATE, L'ATTO CHE NON C'È.
