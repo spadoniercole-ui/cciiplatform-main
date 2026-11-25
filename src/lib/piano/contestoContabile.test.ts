@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   LANCIO_PREDEFINITO,
+  lancioDaSalvato,
+  lancioPianoValido,
   testoAttenzioneContabile,
   testoLancio,
   vincoliDaAttenzioneContabile,
@@ -89,5 +91,38 @@ describe('attenzione della contabile come contesto della simulazione', () => {
     expect(t).toContain('neutra');
     expect(t).toContain('40%');
     expect(testoLancio(LANCIO_PREDEFINITO)).not.toContain('OFFERTA IPOTIZZATA');
+  });
+  it('gli anni di restituzione entrano nel testo del lancio', () => {
+    expect(testoLancio({ ...LANCIO_PREDEFINITO, anniRientro: 5 })).toContain('in 5 anni');
+  });
+});
+
+describe('lancioPianoValido', () => {
+  it('tiene solo i valori ammessi, e riporta agli anni dentro l’orizzonte', () => {
+    const l = lancioPianoValido({
+      procedura: 'CRAM_DOWN',
+      percentualeOfferta: 42.567,
+      prudenza: 'NEUTRA',
+      anniRientro: 99,
+    });
+    expect(l).toEqual({
+      procedura: 'CRAM_DOWN',
+      percentualeOfferta: 42.57,
+      prudenza: 'NEUTRA',
+      anniRientro: 10,
+    });
+  });
+
+  it('un valore che non si riconosce non fa fallire il salvataggio', () => {
+    const l = lancioPianoValido({ procedura: 'FALLIMENTO', prudenza: 'OTTIMISTA' });
+    expect(l.procedura).toBe('ACCORDO');
+    expect(l.prudenza).toBe('PRUDENTE');
+    expect(l.percentualeOfferta).toBeNull();
+    expect(l.anniRientro).toBeNull();
+  });
+
+  it('null quando la variante non ha un lancio salvato', () => {
+    expect(lancioDaSalvato(null)).toBeNull();
+    expect(lancioDaSalvato('x')).toBeNull();
   });
 });

@@ -1300,6 +1300,18 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   // clientela, ognuna con il sì/no e la misura. Restano con la variante perché
   // la simulazione ricordi il suo presupposto anche dopo un ricaricamento.
   await eseguiDdlTenant(sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS leve JSONB`);
+  // Il lancio (0.256.31): procedura, offerta ipotizzata, anni di restituzione,
+  // impostazione. Prima viveva solo nello stato del browser: richiamare una
+  // variante restituiva le ipotesi ma non le scelte che le avevano prodotte.
+  await eseguiDdlTenant(sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS lancio JSONB`);
+  // Il progetto (0.256.31): la variante scelta come progetto del piano è
+  // definitiva — non si cancella e non si sovrascrive. Una sola per scenario.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS progetto BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS progetto_il TIMESTAMP`
+  );
   // Vecchia simulazione a levette (sostituita dal Piano di sviluppo nella
   // 0.109.113 e tolta dal codice nella 0.109.118, su indicazione di Ercole:
   // «la simulazione attuale la puoi cestinare»). Le sue tabelle si

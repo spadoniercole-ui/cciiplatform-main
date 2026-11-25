@@ -18,7 +18,8 @@
 
 import { cercaTerminiLessico, LESSICO, SOSTITUZIONI_DIRETTE } from '@/lib/lessico/lessico';
 import { PARAMETRI_SIMULAZIONE_PREDEFINITI } from './parametriSimulazione';
-import type { LeveSimulazione } from './leveSimulazione';
+import { LEVE, leveValide, type LeveSimulazione } from './leveSimulazione';
+import { lancioPianoValido, type LancioPiano } from './contestoContabile';
 import { rettifichePulite, type Rettifiche } from './rettifiche';
 import {
   ETICHETTA_RIGA,
@@ -175,6 +176,23 @@ export function modoRettifiche(c: ContestoElaborazione): boolean {
  * uguale per tutti gli anni — così il modello non deve scrivere decine di
  * celle (la risposta lunga si troncava e l'elaborazione falliva).
  */
+/**
+ * Le scelte che l'analisi propone accanto alle ipotesi: le leve accese con la
+ * misura e il lancio (procedura, offerta, anni, impostazione). Stanno nel
+ * prompt perché il piano non si legge solo dai numeri: dice che cosa l'azienda
+ * mette in gioco e come intende far fronte agli impegni assunti con l'ente.
+ */
+function bloccoScelte(): string {
+  const leve = LEVE.map(
+    (l) => `- ${l.id} (${l.domanda}): attiva true/false, misura in % (${l.misura})`
+  ).join('\n');
+  return `LE SCELTE CHE REGGONO IL PIANO — proponile anche tu, sulla base dei dati, e spiega nella sintesi perché:
+${leve}
+- lancio: procedura (ACCORDO, LIQUIDAZIONE o CRAM_DOWN), percentualeOfferta (0-100 sul credito dell'ente, null se non la fissi), anniRientro (1-10, null se come la proposta), prudenza (PRUDENTE, NEUTRA o FAVOREVOLE).
+Le scelte devono puntare a far fronte agli impegni assunti verso l'ente: la procedura e gli anni determinano le rate, l'offerta determina quanto entra. Non accendere leve che i dati non sostengono, e se nessuna serve lasciale spente.
+`;
+}
+
 export function promptElaborazione(c: ContestoElaborazione, opzioni?: OpzioniSimulazione): string {
   const max = opzioni?.variazioneMassimaPct ?? VARIAZIONE_MASSIMA_PREDEFINITA;
   if (modoRettifiche(c)) {
@@ -188,11 +206,12 @@ ${righe.map((r) => `- ${r}: ${ETICHETTA_RIGA[r]}`).join('\n')}
 
 Ogni valore con una motivazione di una frase (al massimo 25 parole) che richiama il dato su cui si fonda (scostamento dal riferimento, storico, settore). Il calcolo lo fa la piattaforma. ${lessicoBreve()}
 
+${bloccoScelte()}
 DATI
 ${testoContesto(c)}
 
 Rispondi SOLO con JSON:
-{"rettifiche": {"ricaviVendite": {"valore": -10, "motivazione": "..."}}, "sintesi": "tre frasi al massimo: impostazione e limiti"}`;
+{"rettifiche": {"ricaviVendite": {"valore": -10, "motivazione": "..."}}, "leve": {"PERSONALE": {"attiva": false, "misura": 10}}, "lancio": {"procedura": "ACCORDO", "percentualeOfferta": 40, "anniRientro": 5, "prudenza": "PRUDENTE"}, "sintesi": "tre frasi al massimo: impostazione e limiti"}`;
   }
   const compito =
     c.lato === 'RICEVUTA'
@@ -205,11 +224,12 @@ ${RIGHE_INPUT.map((r) => `- ${r}: ${ETICHETTA_RIGA[r]} — ${r === 'aliquotaImpo
 
 Regole: tutte le righe; variazioni % tra -${max} e +${max} (0 = invariato); ogni valore con una motivazione di una frase (al massimo 25 parole) che richiama il dato su cui si fonda. ${lessicoBreve()}
 
+${bloccoScelte()}
 DATI
 ${testoContesto(c)}
 
 Rispondi SOLO con JSON:
-{"ipotesi": {"ricaviVendite": {"tipo": "pct", "valore": 3, "motivazione": "..."}}, "sintesi": "tre frasi al massimo: impostazione e limiti"}`;
+{"ipotesi": {"ricaviVendite": {"tipo": "pct", "valore": 3, "motivazione": "..."}}, "leve": {"PERSONALE": {"attiva": false, "misura": 10}}, "lancio": {"procedura": "ACCORDO", "percentualeOfferta": 40, "anniRientro": 5, "prudenza": "PRUDENTE"}, "sintesi": "tre frasi al massimo: impostazione e limiti"}`;
 }
 
 export interface EsitoElaborazione {
@@ -218,6 +238,29 @@ export interface EsitoElaborazione {
   rettifiche?: Rettifiche;
   sintesi: string;
   scartati: string[];
+  /**
+   * Le scelte che reggono il piano: le leve e il lancio (procedura, offerta,
+   * anni di restituzione, impostazione). Undefined quando l'AI non le ha
+   * proposte: in quel caso restano quelle già scelte, non si azzerano.
+   */
+  leve?: LeveSimulazione;
+  lancio?: LancioPiano;
+}
+
+/** Le leve proposte dall'AI: solo se il modello le ha scritte, tutte e cinque. */
+export function leggiLeve(json: unknown): LeveSimulazione | undefined {
+  const obj = (json && typeof json === 'object' ? json : {}) as Record<string, unknown>;
+  if (!obj.leve || typeof obj.leve !== 'object' || Array.isArray(obj.leve)) return undefined;
+  const o = obj.leve as Record<string, unknown>;
+  if (!LEVE.some((l) => o[l.id] && typeof o[l.id] === 'object')) return undefined;
+  return leveValide(obj.leve);
+}
+
+/** Il lancio proposto dall'AI: valori ammessi soltanto, altrimenti i predefiniti. */
+export function leggiLancio(json: unknown): LancioPiano | undefined {
+  const obj = (json && typeof json === 'object' ? json : {}) as Record<string, unknown>;
+  if (!obj.lancio || typeof obj.lancio !== 'object' || Array.isArray(obj.lancio)) return undefined;
+  return lancioPianoValido(obj.lancio);
 }
 
 /** Ripulisce una motivazione dai termini non ammessi (sostituzione deterministica, nessuna nuova chiamata). */
@@ -332,7 +375,7 @@ export function validaRisposta(
     }));
   }
   const sintesi = typeof obj.sintesi === 'string' ? motivazionePulita(obj.sintesi, 600) : '';
-  return { ipotesi, sintesi, scartati };
+  return { ipotesi, sintesi, scartati, leve: leggiLeve(json), lancio: leggiLancio(json) };
 }
 
 /** Valida le rettifiche dell'AI sul piano dell'azienda. */
@@ -364,5 +407,12 @@ export function validaRettificheAi(
     };
   }
   const sintesi = typeof obj.sintesi === 'string' ? motivazionePulita(obj.sintesi, 600) : '';
-  return { ipotesi: {}, rettifiche, sintesi, scartati };
+  return {
+    ipotesi: {},
+    rettifiche,
+    sintesi,
+    scartati,
+    leve: leggiLeve(json),
+    lancio: leggiLancio(json),
+  };
 }

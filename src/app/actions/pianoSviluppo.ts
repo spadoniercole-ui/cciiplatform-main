@@ -42,8 +42,11 @@ import {
 } from '@/lib/piano/piano';
 import { ORIZZONTE_MASSIMO, type PianoRientro, type TotaleOfferto } from '@/lib/piano/ricevente';
 import {
+  lancioDaSalvato,
+  lancioPianoValido,
   testoAttenzioneContabile,
   vincoliDaAttenzioneContabile,
+  type LancioPiano,
 } from '@/lib/piano/contestoContabile';
 import { ottieniEsitoVerificaAction } from '@/app/actions/esitoVerifica';
 import { leggiParametriSimulazione } from '@/lib/piano/letturaParametriSimulazione';
@@ -128,6 +131,15 @@ export interface DatiPianoSviluppo {
    * null quando la variante non ne ha (nata prima che si registrassero).
    */
   leve: LeveSimulazione | null;
+  /**
+   * Il lancio salvato con la variante — procedura, offerta, anni di
+   * restituzione, impostazione. Null quando la variante non ne ha.
+   */
+  lancio: LancioPiano | null;
+  /** true quando questa variante è il progetto del piano: definitiva. */
+  progetto: boolean;
+  /** Quando la variante è diventata progetto. */
+  progettoIl: string | null;
 }
 
 export async function ottieniPianoSviluppoAction(
@@ -352,6 +364,11 @@ export async function ottieniPianoSviluppoAction(
         pianoVerifica,
         parametriContesto: contesto.filter((c) => c.valore.length > 0).length,
         leve: leveDaSalvate(piano.rows[0]?.leve),
+        lancio: lancioDaSalvato(piano.rows[0]?.lancio),
+        progetto: piano.rows[0]?.progetto === true,
+        progettoIl: piano.rows[0]?.progetto_il
+          ? new Date(piano.rows[0].progetto_il).toISOString()
+          : null,
       },
     };
   } catch (error: unknown) {
@@ -377,6 +394,8 @@ export async function salvaPianoSviluppoAction(
     soluzione?: SoluzioneSalvata | null;
     /** Le leve del lancio: restano con la variante, così la simulazione le ricorda. */
     leve?: LeveSimulazione | null;
+    /** Il lancio (procedura, offerta, anni, impostazione), salvato con la variante. */
+    lancio?: LancioPiano | null;
   } = {}
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -396,15 +415,29 @@ export async function salvaPianoSviluppoAction(
     await assicuraTabelleParametriSpazio(contesto.nomeSchema);
     const rientro = pianoRientroPulito(extra.pianoRientro);
     const sol = soluzionePulita(extra.soluzione);
+    // Il progetto è definitivo: non si sovrascrive con un salvataggio normale.
+    // Per cambiarlo si crea una nuova variante e la si fa progetto, così resta
+    // la traccia di che cosa era stato depositato.
+    const esistente = await pool.query(
+      `SELECT progetto FROM "${contesto.nomeSchema}".piano_sviluppo WHERE scenario_id = $1 AND variante = $2`,
+      [scenarioId, v]
+    );
+    if (esistente.rows[0]?.progetto === true)
+      return {
+        success: false,
+        error:
+          'Questa variante è il progetto del piano: è definitiva e non si modifica. Crea una nuova variante da questa e fanne il nuovo progetto.',
+      };
     // Le leve si salvano solo se il browser le manda: se non arrivano (un
     // salvataggio che non le conosce) restano quelle già registrate.
     const leve = extra.leve ? JSON.stringify(leveValide(extra.leve)) : null;
+    const lancio = extra.lancio ? JSON.stringify(lancioPianoValido(extra.lancio)) : null;
     await pool.query(
-      `INSERT INTO "${contesto.nomeSchema}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, piano_rientro, serie_sistema, soluzione, leve, salvato_il)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+      `INSERT INTO "${contesto.nomeSchema}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, piano_rientro, serie_sistema, soluzione, leve, lancio, salvato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
        ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, rettifiche = $6,
          piano_rientro = $7, serie_sistema = $8, soluzione = $9, leve = COALESCE($10, piano_sviluppo.leve),
-         salvato_il = now()`,
+         lancio = COALESCE($11, piano_sviluppo.lancio), salvato_il = now()`,
       [
         scenarioId,
         v,
@@ -416,6 +449,7 @@ export async function salvaPianoSviluppoAction(
         extra.serieSistema === true,
         sol ? JSON.stringify(sol) : null,
         leve,
+        lancio,
       ]
     );
     return { success: true };
@@ -440,15 +474,82 @@ export async function eliminaVariantePianoAction(
       livello: 'SCRITTURA',
     });
     if (variante === 'base') return { success: false, error: 'La variante «base» non si elimina.' };
-    await pool.query(
-      `DELETE FROM "${contesto.nomeSchema}".piano_sviluppo WHERE scenario_id = $1 AND variante = $2`,
+    const r = await pool.query(
+      `DELETE FROM "${contesto.nomeSchema}".piano_sviluppo
+        WHERE scenario_id = $1 AND variante = $2 AND progetto = FALSE`,
       [scenarioId, variante]
     );
+    if (r.rowCount === 0)
+      return {
+        success: false,
+        error: 'Questa variante è il progetto del piano: è definitiva e non si cancella.',
+      };
     return { success: true };
   } catch (error: unknown) {
     return {
       success: false,
       error: `Eliminazione non riuscita: ${(error as Error).message || error}`,
+    };
+  }
+}
+
+/**
+ * IL PROGETTO DEL PIANO (0.256.31). La variante scelta come progetto diventa
+ * definitiva: non si cancella e non si sovrascrive. Una sola per scenario: se
+ * un'altra lo era, smette di esserlo (resta come variante modificabile), perché
+ * un piano ha un progetto e non due.
+ */
+export async function rendiProgettoPianoAction(
+  codiceSpazio: string,
+  scenarioId: number,
+  variante: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
+    if (!contesto) return { success: false, error: 'Accesso non valido.' };
+    await richiediAccessoScenario(contesto.nomeSchema, scenarioId, {
+      modulo: ['simulazione'],
+      livello: 'SCRITTURA',
+    });
+    await assicuraTabelleParametriSpazio(contesto.nomeSchema);
+    const v =
+      variante
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '')
+        .slice(0, 30) || 'base';
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE "${contesto.nomeSchema}".piano_sviluppo SET progetto = FALSE, progetto_il = NULL
+          WHERE scenario_id = $1 AND progetto = TRUE`,
+        [scenarioId]
+      );
+      const r = await client.query(
+        `UPDATE "${contesto.nomeSchema}".piano_sviluppo SET progetto = TRUE, progetto_il = now()
+          WHERE scenario_id = $1 AND variante = $2`,
+        [scenarioId, v]
+      );
+      if (r.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          error: 'La variante non esiste: salvala prima di farne il progetto.',
+        };
+      }
+      await client.query('COMMIT');
+    } catch (errore) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw errore;
+    } finally {
+      client.release();
+    }
+    return { success: true };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: `Il progetto non è stato salvato: ${(error as Error).message || error}`,
     };
   }
 }
@@ -672,11 +773,16 @@ export async function elaboraPianoConAiAction(
     ]
       .filter(Boolean)
       .join('\n');
+    // Le leve e il lancio che l'AI propone si salvano con la variante: sono
+    // la sua risposta alla domanda «come si fa fronte agli impegni con l'ente».
+    // Se il modello non le scrive restano quelle scelte nel pannello.
+    const leveFinali = esito.leve ?? leveScelte;
+    const lancioFinale = esito.lancio ?? null;
     await pool.query(
-      `INSERT INTO "${s}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, leve, salvato_il)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+      `INSERT INTO "${s}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, leve, lancio, salvato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
        ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, rettifiche = $6,
-         leve = $7, salvato_il = now()`,
+         leve = $7, lancio = COALESCE($8, piano_sviluppo.lancio), salvato_il = now()`,
       [
         scenarioId,
         VARIANTE_AI,
@@ -684,7 +790,8 @@ export async function elaboraPianoConAiAction(
         JSON.stringify(esito.ipotesi),
         nota,
         rettifiche ? JSON.stringify(rettifiche) : null,
-        JSON.stringify(leveScelte),
+        JSON.stringify(leveFinali),
+        lancioFinale ? JSON.stringify(lancioFinale) : null,
       ]
     );
     return {

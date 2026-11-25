@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  leggiLancio,
+  leggiLeve,
   promptElaborazione,
   validaRisposta,
   motivazionePulita,
@@ -109,5 +111,44 @@ describe('elaborazione con l’AI: validazione della risposta', () => {
     expect(motivazionePulita('La proposta è non ricevibile.')).toBe(
       'La proposta è non coerente con i parametri configurati.'
     );
+  });
+  it('il prompt chiede anche le scelte che reggono il piano', () => {
+    const p = promptElaborazione({
+      lato: 'DA_DEFINIRE',
+      orizzonte: 3,
+      storico: [S],
+      crescita: { tasso: 2, descrizione: 'settore in crescita' },
+      rate: { ente: [1, 1, 1], altri: [0, 0, 0] },
+    });
+    expect(p).toContain('LE SCELTE CHE REGGONO IL PIANO');
+    expect(p).toMatch(/anniRientro/);
+  });
+});
+
+describe('le scelte proposte dall’AI', () => {
+  it('leve: solo quando il modello le scrive, e dentro 0-100', () => {
+    const leve = leggiLeve({ leve: { PERSONALE: { attiva: true, misura: 250 } } });
+    expect(leve?.PERSONALE).toEqual({ attiva: true, misura: 100 });
+    expect(leve?.TECNOLOGIA.attiva).toBe(false);
+    expect(leggiLeve({ ipotesi: {} })).toBeUndefined();
+  });
+
+  it('lancio: procedura, offerta, anni e impostazione ammessi soltanto', () => {
+    expect(
+      leggiLancio({
+        lancio: {
+          procedura: 'LIQUIDAZIONE',
+          percentualeOfferta: 30,
+          anniRientro: 4,
+          prudenza: 'PRUDENTE',
+        },
+      })
+    ).toEqual({
+      procedura: 'LIQUIDAZIONE',
+      percentualeOfferta: 30,
+      anniRientro: 4,
+      prudenza: 'PRUDENTE',
+    });
+    expect(leggiLancio({ sintesi: 'niente scelte' })).toBeUndefined();
   });
 });

@@ -15,6 +15,7 @@ import {
   Printer,
   Sparkles,
   RefreshCw,
+  Lock,
 } from 'lucide-react';
 import {
   commentaSoluzionePianoAction,
@@ -22,6 +23,7 @@ import {
   elaboraPianoConAiAction,
   ottieniAttenzioneContabilePianoAction,
   ottieniPianoSviluppoAction,
+  rendiProgettoPianoAction,
   salvaPianoSviluppoAction,
   type DatiPianoSviluppo,
 } from '@/app/actions/pianoSviluppo';
@@ -200,11 +202,31 @@ export function PianoSviluppoScenario({
     setVariante(r.dati.variante);
     setSerieSistema(r.dati.serieSistema);
     setPianoRientro(r.dati.pianoRientro);
-    setAnniRientro(
+    // Il lancio torna con la variante: procedura, offerta, anni, impostazione.
+    // Prima viveva solo nello stato del pannello e richiamare una variante lo
+    // riportava ai valori predefiniti (0.256.31).
+    if (r.dati.lancio)
+      setLancio({
+        procedura: r.dati.lancio.procedura,
+        percentualeOfferta: r.dati.lancio.percentualeOfferta,
+        prudenza: r.dati.lancio.prudenza,
+      });
+    const anniSalvati =
       r.dati.pianoRientro?.modalita === 'RATEALE' && r.dati.pianoRientro.mesi > 0
         ? Math.max(1, Math.round(r.dati.pianoRientro.mesi / 12))
-        : null
-    );
+        : (r.dati.lancio?.anniRientro ?? null);
+    setAnniRientro(anniSalvati);
+    // Gli anni del lancio senza un piano di rientro salvato: le rate si
+    // dimensionano su quell'arco, come se fossero stati scritti a mano.
+    if (!r.dati.pianoRientro && anniSalvati) {
+      const debito = r.dati.debitoTarget ?? r.dati.offerto.ente + r.dati.offerto.altri;
+      setPianoRientro({
+        modalita: 'RATEALE',
+        mesi: anniSalvati * 12,
+        anticipoPct: 0,
+        ...(debito > 0 ? { offerto: { ente: debito, altri: 0 } } : {}),
+      });
+    }
     // Con il flag di simulazione la procedura è quella dello scenario: non c'è
     // una seconda scelta da fare, e chiederla insinuerebbe un dubbio (0.256.21).
     if (r.dati.simulazioneAttiva) {
@@ -474,7 +496,9 @@ export function PianoSviluppoScenario({
       ipotesiEffettive,
       note || null,
       modoRettifica ? rettifiche : null,
-      modoRettifica ? { pianoRientro, serieSistema, soluzione, leve } : { leve }
+      modoRettifica
+        ? { pianoRientro, serieSistema, soluzione, leve, lancio: { ...lancio, anniRientro } }
+        : { leve, lancio: { ...lancio, anniRientro } }
     );
     if (!r.success) return setErrore(r.error ?? 'Errore.');
     await carica(variante);
@@ -510,7 +534,7 @@ export function PianoSviluppoScenario({
         scostamenti: contestoAi.scostamenti,
         ipotesiCorrenti: ipotesi,
         attenzioneContabile: attenzione?.testo ?? null,
-        lancio: testoLancio(lancio),
+        lancio: testoLancio({ ...lancio, anniRientro }),
         // Le leve del lancio come scelte: il server ne ricava il testo per il
         // prompt e le salva con la variante. Il contesto economico e il piano
         // della verifica aziendale li aggiunge il server (dati dello spazio).
@@ -701,8 +725,8 @@ export function PianoSviluppoScenario({
           </h2>
           <p className="text-[10px] text-slate-500 leading-relaxed mt-0.5">
             L’attenzione della verifica contabile — le dimensioni sopra la soglia dello spazio, con
-            i determinanti e le lacune — e i parametri di lancio di questa simulazione. Non sono
-            risultati: sono il perimetro entro cui l’AI scrive le ipotesi, e il motore calcola.
+            i determinanti e le lacune — e il piano dell’azienda dalla verifica. Non sono risultati:
+            sono il perimetro entro cui l’AI scrive le ipotesi, e il motore calcola.
           </p>
         </div>
         {attenzione ? (
@@ -715,77 +739,11 @@ export function PianoSviluppoScenario({
             tuo profilo: la simulazione lavora sui bilanci, sulle rate e sul riferimento di settore.
           </p>
         )}
-        {/* LE LEVE DEL LANCIO (0.256.18). Non sono manopole del motore: sono
-            le scelte di che cosa mettere in gioco, e ognuna porta la sua
-            misura. Il contesto economico (inflazione, spread, carburante,
-            incidenza di crisi e instabilità, tecnologia) sta in Parametri ›
-            Piano e simulazione AI, perché non varia per azienda. */}
-        <div className="border-t border-slate-200 pt-3 space-y-2">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-            Le leve di questa simulazione ({contaLeve(leve)} accese su {LEVE.length})
-          </p>
-          <p className="text-[10px] text-slate-500 leading-relaxed">
-            Che cosa deve prevedere il piano. La misura è in percentuale ed è quella suggerita dalla
-            piattaforma: cambiala se per questa azienda non vale.
-          </p>
-          <div className="space-y-1.5">
-            {LEVE.map((l) => {
-              const s = leve[l.id];
-              return (
-                <div
-                  key={l.id}
-                  className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_90px_120px] items-center rounded-lg border border-slate-200 p-2"
-                >
-                  <div>
-                    <p className="text-[11px] font-semibold text-slate-800">{l.domanda}</p>
-                    <p className="text-[10px] text-slate-500 leading-relaxed">
-                      {l.misura} — {l.effetto}
-                    </p>
-                  </div>
-                  <select
-                    value={s.attiva ? 'SI' : 'NO'}
-                    onChange={(e) => {
-                      setLeve((prev) => ({
-                        ...prev,
-                        [l.id]: { ...prev[l.id], attiva: e.target.value === 'SI' },
-                      }));
-                      setModificato(true);
-                    }}
-                    className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800"
-                  >
-                    <option value="NO">No</option>
-                    <option value="SI">Sì</option>
-                  </select>
-                  <label className="text-[10px] text-slate-500">
-                    <span className="block">misura (%)</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step="1"
-                      value={s.misura}
-                      onChange={(e) => {
-                        const n = Number(e.target.value);
-                        setLeve((prev) => ({
-                          ...prev,
-                          [l.id]: {
-                            ...prev[l.id],
-                            misura: Number.isFinite(n)
-                              ? Math.max(0, Math.min(100, n))
-                              : prev[l.id].misura,
-                          },
-                        }));
-                        setModificato(true);
-                      }}
-                      disabled={!s.attiva}
-                      className="mt-0.5 w-full p-1.5 text-xs text-right bg-white border border-slate-200 rounded-lg text-slate-800 disabled:opacity-50"
-                    />
-                  </label>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <p className="border-t border-slate-200 pt-3 text-[10px] text-slate-500 leading-relaxed">
+          Le leve e i parametri del lancio — che cosa l’azienda mette in gioco, con quale offerta e
+          in quanti anni restituisce il debito — stanno sotto l’analisi del piano: li propone l’AI e
+          li cambi tu.
+        </p>
         {/* IL PIANO DELLA VERIFICA AZIENDALE (passo 3): con il flag di
             simulazione è il piano di sviluppo dell'azienda, ed è quello su cui
             l'AI lavora. Se manca, si dice: il piano non parte da una base
@@ -822,244 +780,181 @@ export function PianoSviluppoScenario({
               : `${dati.parametriContesto} parametri con un valore, in Parametri › Piano e simulazione AI.`}
           </p>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
-          {dati.simulazioneAttiva ? (
-            // La procedura è già quella dello scenario: chiederla di nuovo
-            // significherebbe mettere in dubbio il tipo scelto alla creazione.
-            <div className="text-[10px] font-bold text-slate-500 uppercase">
-              Procedura da sostenere
-              <p className="mt-1 text-xs font-normal normal-case tracking-normal text-slate-800">
-                {ETICHETTA_PROCEDURA[lancio.procedura]} — è quella dello scenario.
-              </p>
-            </div>
-          ) : (
-            <label className="text-[10px] font-bold text-slate-500 uppercase">
-              Procedura da sostenere
-              <select
-                value={lancio.procedura}
-                onChange={(e) =>
-                  setLancio((l) => ({
-                    ...l,
-                    procedura: e.target.value as LancioSimulazione['procedura'],
-                  }))
-                }
-                className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
-              >
-                {(['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'] as const).map((p) => (
-                  <option key={p} value={p}>
-                    {ETICHETTA_PROCEDURA[p]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label className="text-[10px] font-bold text-slate-500 uppercase">
-            Offerta ipotizzata (%)
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step="1"
-              value={lancio.percentualeOfferta ?? ''}
-              onChange={(e) => {
-                const n = e.target.value.trim() === '' ? null : Number(e.target.value);
-                setLancio((l) => ({
-                  ...l,
-                  percentualeOfferta: n === null || !Number.isFinite(n) ? null : n,
-                }));
-              }}
-              placeholder="come la proposta"
-              className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
-            />
-          </label>
-          <label className="text-[10px] font-bold text-slate-500 uppercase">
-            Restituzione del debito (anni)
-            <input
-              type="number"
-              min={1}
-              max={ORIZZONTE_MASSIMO}
-              step="1"
-              value={anniRientro ?? ''}
-              onChange={(e) => {
-                const testo = e.target.value.trim();
-                if (testo === '') return impostaAnniRientro(null);
-                const n = Number(testo);
-                if (!Number.isFinite(n)) return;
-                impostaAnniRientro(Math.max(1, Math.min(ORIZZONTE_MASSIMO, Math.round(n))));
-              }}
-              placeholder="come la proposta"
-              title={`Il debito da restituire è ${euro(debitoDaRestituire)}: le rate si dividono sugli anni indicati. Vuoto = rate della proposta.`}
-              className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
-            />
-          </label>
-          <label className="text-[10px] font-bold text-slate-500 uppercase">
-            Impostazione
-            <select
-              value={lancio.prudenza}
-              onChange={(e) =>
-                setLancio((l) => ({
-                  ...l,
-                  prudenza: e.target.value as LancioSimulazione['prudenza'],
-                }))
-              }
-              className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
-            >
-              <option value="PRUDENTE">Prudente</option>
-              <option value="NEUTRA">Neutra</option>
-              <option value="FAVOREVOLE">Favorevole</option>
-            </select>
-          </label>
-        </div>
-        {attenzione && attenzione.vincoli.length > 0 && (
-          <ul className="space-y-0.5">
-            {attenzione.vincoli.map((v) => (
-              <li key={v} className="text-[10px] text-amber-900 leading-relaxed">
-                <strong>Vincolo:</strong> {v}
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
         <div className="flex items-start gap-2 flex-wrap">
           <TrendingUp className="w-4 h-4 text-blue-600 mt-0.5" />
-          <div className="flex-1">
-            <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
-              Piano di sviluppo
-            </h2>
-            {modoRettifica ? (
-              <p className="text-[11px] text-slate-600 mt-0.5">
-                <strong>1 · Piano dell’azienda.</strong> Le manopole partono dal piano presentato
-                dall’azienda, proiettato dallo stato attuale (
-                <strong>{dati.partenza.etichetta}</strong>); la fascia «azienda» sotto ogni manopola
-                dice quanto quella voce si discosta dal riferimento di settore. Ogni manopola
-                rettifica la voce in percentuale, uguale per tutti gli anni. Poi, nei passi 2–4
-                sotto la tabella: variante di sistema, piano di rientro, soluzione verde.
-              </p>
-            ) : tipoProposta === 'RICEVUTA' && !dati.simulazioneAttiva ? (
-              <p className="text-[11px] text-amber-800 mt-0.5">
-                Il piano dell’azienda non è ancora caricato: caricalo nel riquadro qui sopra e le
-                manopole partiranno da quello. Intanto lavorano sullo stato attuale —{' '}
-                <strong>{dati.partenza.etichetta}</strong>.
-              </p>
-            ) : (
-              <p className="text-[11px] text-slate-600 mt-0.5">
-                Si parte dallo stato attuale — <strong>{dati.partenza.etichetta}</strong> — e si
-                proietta in avanti. Gira le manopole: ogni manopola vale per tutti gli anni del
-                piano e il risultato si ricalcola subito. Per ritoccare un solo anno apri la tabella
-                anno per anno. Il personale è dentro i costi operativi; le rate del piano di rientro
-                {dati.simulazioneAttiva
-                  ? ' seguono gli anni di restituzione del debito qui sopra.'
-                  : ' vengono dalla proposta.'}
-              </p>
-            )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+                Piano di sviluppo
+              </h2>
+              {dati.progetto && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 rounded">
+                  <Lock className="w-3 h-3" /> Progetto — definitivo
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <label className="text-[10px] font-bold text-slate-500 uppercase">Variante</label>
-            <select
-              value={variante}
-              onChange={(e) => carica(e.target.value)}
-              className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+        </div>
+        {/* La descrizione prende tutta la larghezza della tabella: nella colonna
+            accanto ai pulsanti si riduceva a una striscia (0.256.31). */}
+        {modoRettifica ? (
+          <p className="text-[11px] text-slate-600 mt-0.5">
+            <strong>1 · Piano dell’azienda.</strong> Le manopole partono dal piano presentato
+            dall’azienda, proiettato dallo stato attuale (<strong>{dati.partenza.etichetta}</strong>
+            ); la fascia «azienda» sotto ogni manopola dice quanto quella voce si discosta dal
+            riferimento di settore. Ogni manopola rettifica la voce in percentuale, uguale per tutti
+            gli anni. Poi, nei passi 2–4 sotto la tabella: variante di sistema, piano di rientro,
+            soluzione verde.
+          </p>
+        ) : tipoProposta === 'RICEVUTA' && !dati.simulazioneAttiva ? (
+          <p className="text-[11px] text-amber-800 mt-0.5">
+            Il piano dell’azienda non è ancora caricato: caricalo nel riquadro qui sopra e le
+            manopole partiranno da quello. Intanto lavorano sullo stato attuale —{' '}
+            <strong>{dati.partenza.etichetta}</strong>.
+          </p>
+        ) : (
+          <p className="text-[11px] text-slate-600 mt-0.5">
+            Si parte dallo stato attuale — <strong>{dati.partenza.etichetta}</strong> — e si
+            proietta in avanti. Gira le manopole: ogni manopola vale per tutti gli anni del piano e
+            il risultato si ricalcola subito. Per ritoccare un solo anno apri la tabella anno per
+            anno. Il personale è dentro i costi operativi; le rate del piano di rientro
+            {dati.simulazioneAttiva
+              ? ' seguono gli anni di restituzione del debito qui sopra.'
+              : ' vengono dalla proposta.'}
+          </p>
+        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <label className="text-[10px] font-bold text-slate-500 uppercase">Variante</label>
+          <select
+            value={variante}
+            onChange={(e) => carica(e.target.value)}
+            className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+          >
+            {Array.from(new Set([...dati.varianti, variante])).map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={async () => {
+              // Nessun prompt nativo: il nome e' progressivo, rinominabile in seguito.
+              const n = `variante-${dati.varianti.length + 1}`;
+              const r = await salvaPianoSviluppoAction(
+                codice,
+                scenarioId,
+                n,
+                orizzonte,
+                ipotesiEffettive,
+                note || null,
+                modoRettifica ? rettifiche : null,
+                {
+                  leve,
+                  lancio: { ...lancio, anniRientro },
+                  ...(modoRettifica ? { pianoRientro, serieSistema, soluzione } : {}),
+                }
+              );
+              if (!r.success) return setErrore(r.error ?? 'Errore.');
+              await carica(n);
+            }}
+            className="flex items-center gap-1 px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
+            title="Copia le ipotesi correnti in una nuova variante"
+          >
+            <Plus className="w-3 h-3" /> Nuova variante da questa
+          </button>
+          {
+            <button
+              type="button"
+              onClick={elaboraConAi}
+              disabled={aiInCorso || !contestoAi || !esito}
+              className="flex items-center gap-1 px-2 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
+              title={
+                modoRettifica
+                  ? 'L’AI rettifica le righe del piano dell’azienda dove è più ottimista del riferimento, con la motivazione; il calcolo resta al motore. Salvata come variante «elaborazione-ai».'
+                  : 'L’AI imposta le manopole, una per riga, con la motivazione, e propone le scelte che reggono il piano (leve, procedura, offerta, anni); il calcolo resta al motore. Salvata come variante «elaborazione-ai».'
+              }
             >
-              {Array.from(new Set([...dati.varianti, variante])).map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
+              {aiInCorso ? (
+                <RefreshCw className="w-3 h-3 animate-spin" />
+              ) : (
+                <Sparkles className="w-3 h-3" />
+              )}
+              {aiInCorso
+                ? 'Elaborazione…'
+                : modoRettifica
+                  ? 'L’AI rettifica il piano dell’azienda'
+                  : 'L’AI imposta manopole e scelte'}
+            </button>
+          }
+          {!dati.progetto && variante !== 'base' && (
             <button
               type="button"
               onClick={async () => {
-                // Nessun prompt nativo: il nome e' progressivo, rinominabile in seguito.
-                const n = `variante-${dati.varianti.length + 1}`;
-                const r = await salvaPianoSviluppoAction(
-                  codice,
-                  scenarioId,
-                  n,
-                  orizzonte,
-                  ipotesiEffettive,
-                  note || null,
-                  modoRettifica ? rettifiche : null,
-                  modoRettifica ? { pianoRientro, serieSistema, soluzione } : {}
-                );
+                if (
+                  !(await confermaApp(
+                    `Salvare «${variante}» come progetto del piano? Da quel momento è definitivo: non si cancella e non si modifica.`,
+                    { etichettaConferma: 'Salva il progetto' }
+                  ))
+                )
+                  return;
+                const r = await rendiProgettoPianoAction(codice, scenarioId, variante);
                 if (!r.success) return setErrore(r.error ?? 'Errore.');
-                await carica(n);
+                await carica(variante);
               }}
-              className="flex items-center gap-1 px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase rounded-lg"
-              title="Copia le ipotesi correnti in una nuova variante"
+              className="flex items-center gap-1 px-2 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10px] uppercase rounded-lg"
+              title="La variante diventa il progetto del piano: definitiva, non si cancella e non si modifica"
             >
-              <Plus className="w-3 h-3" /> Nuova variante da questa
+              <Lock className="w-3 h-3" /> Salva il progetto
             </button>
-            {
-              <button
-                type="button"
-                onClick={elaboraConAi}
-                disabled={aiInCorso || !contestoAi || !esito}
-                className="flex items-center gap-1 px-2 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
-                title={
-                  modoRettifica
-                    ? 'L’AI rettifica le righe del piano dell’azienda dove è più ottimista del riferimento, con la motivazione; il calcolo resta al motore. Salvata come variante «elaborazione-ai».'
-                    : 'L’AI imposta le manopole, una per riga, con la motivazione; il calcolo resta al motore. Salvata come variante «elaborazione-ai».'
-                }
-              >
-                {aiInCorso ? (
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3 h-3" />
-                )}
-                {aiInCorso
-                  ? 'Elaborazione…'
-                  : modoRettifica
-                    ? 'L’AI rettifica il piano dell’azienda'
-                    : 'L’AI imposta le manopole'}
-              </button>
-            }
-            {variante !== 'base' && (
-              <button
-                type="button"
-                onClick={async () => {
-                  if (
-                    !(await confermaApp(`Eliminare la variante «${variante}»?`, {
-                      distruttiva: true,
-                      etichettaConferma: 'Elimina',
-                    }))
-                  )
-                    return;
-                  const r = await eliminaVariantePianoAction(codice, scenarioId, variante);
-                  if (!r.success) return setErrore(r.error ?? 'Errore.');
-                  await carica('base');
-                }}
-                className="text-slate-400 hover:text-red-600"
-                title="Elimina la variante"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-            <label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Orizzonte</label>
-            <select
-              value={orizzonte}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                setOrizzonte(n);
-                setIpotesi((ip) => estendiIpotesi(ip, n));
-                setModificato(true);
+          )}
+          {!dati.progetto && variante !== 'base' && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (
+                  !(await confermaApp(`Eliminare la variante «${variante}»?`, {
+                    distruttiva: true,
+                    etichettaConferma: 'Elimina',
+                  }))
+                )
+                  return;
+                const r = await eliminaVariantePianoAction(codice, scenarioId, variante);
+                if (!r.success) return setErrore(r.error ?? 'Errore.');
+                await carica('base');
               }}
-              className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+              className="text-slate-400 hover:text-red-600"
+              title="Elimina la variante"
             >
-              {Array.from(
-                new Set([
-                  orizzonte,
-                  ...Array.from({ length: ORIZZONTE_MASSIMO - 2 }, (_, i) => i + 3),
-                ])
-              )
-                .sort((a, b) => a - b)
-                .map((n) => (
-                  <option key={n} value={n}>
-                    {n} {n === 1 ? 'anno' : 'anni'}
-                  </option>
-                ))}
-            </select>
-          </div>
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Orizzonte</label>
+          <select
+            value={orizzonte}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              setOrizzonte(n);
+              setIpotesi((ip) => estendiIpotesi(ip, n));
+              setModificato(true);
+            }}
+            className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+          >
+            {Array.from(
+              new Set([
+                orizzonte,
+                ...Array.from({ length: ORIZZONTE_MASSIMO - 2 }, (_, i) => i + 3),
+              ])
+            )
+              .sort((a, b) => a - b)
+              .map((n) => (
+                <option key={n} value={n}>
+                  {n} {n === 1 ? 'anno' : 'anni'}
+                </option>
+              ))}
+          </select>
         </div>
 
         {esito && (
@@ -1302,6 +1197,190 @@ export function PianoSviluppoScenario({
           </div>
         )}
 
+        {/* LE SCELTE DEL PIANO (0.256.31). Sotto l’analisi, non sopra: l’AI le
+          propone insieme alle ipotesi — è la sua risposta alla domanda «come si
+          fa fronte agli impegni assunti con l'ente» — e chi simula le cambia.
+          Restano con la variante quando la si salva. */}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+          <div>
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
+              Le scelte del piano — proposte dall’analisi
+            </h2>
+            <p className="text-[10px] text-slate-500 leading-relaxed mt-0.5">
+              Che cosa l’azienda mette in gioco, con quale offerta e in quanti anni restituisce il
+              debito verso l’ente. L’analisi AI le propone con le ipotesi; se per questa azienda non
+              valgono, cambiale e salvale con la variante: ogni variante le ricorda.
+            </p>
+          </div>
+          {/* LE LEVE DEL LANCIO (0.256.18). Non sono manopole del motore: sono
+            le scelte di che cosa mettere in gioco, e ognuna porta la sua
+            misura. Il contesto economico (inflazione, spread, carburante,
+            incidenza di crisi e instabilità, tecnologia) sta in Parametri ›
+            Piano e simulazione AI, perché non varia per azienda. */}
+          <div className="border-t border-slate-200 pt-3 space-y-2">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Le leve di questa simulazione ({contaLeve(leve)} accese su {LEVE.length})
+            </p>
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              Che cosa deve prevedere il piano. La misura è in percentuale ed è quella suggerita
+              dalla piattaforma: cambiala se per questa azienda non vale.
+            </p>
+            <div className="space-y-1.5">
+              {LEVE.map((l) => {
+                const s = leve[l.id];
+                return (
+                  <div
+                    key={l.id}
+                    className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_90px_120px] items-center rounded-lg border border-slate-200 p-2"
+                  >
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-800">{l.domanda}</p>
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        {l.misura} — {l.effetto}
+                      </p>
+                    </div>
+                    <select
+                      value={s.attiva ? 'SI' : 'NO'}
+                      onChange={(e) => {
+                        setLeve((prev) => ({
+                          ...prev,
+                          [l.id]: { ...prev[l.id], attiva: e.target.value === 'SI' },
+                        }));
+                        setModificato(true);
+                      }}
+                      className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800"
+                    >
+                      <option value="NO">No</option>
+                      <option value="SI">Sì</option>
+                    </select>
+                    <label className="text-[10px] text-slate-500">
+                      <span className="block">misura (%)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step="1"
+                        value={s.misura}
+                        onChange={(e) => {
+                          const n = Number(e.target.value);
+                          setLeve((prev) => ({
+                            ...prev,
+                            [l.id]: {
+                              ...prev[l.id],
+                              misura: Number.isFinite(n)
+                                ? Math.max(0, Math.min(100, n))
+                                : prev[l.id].misura,
+                            },
+                          }));
+                          setModificato(true);
+                        }}
+                        disabled={!s.attiva}
+                        className="mt-0.5 w-full p-1.5 text-xs text-right bg-white border border-slate-200 rounded-lg text-slate-800 disabled:opacity-50"
+                      />
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            {dati.simulazioneAttiva ? (
+              // La procedura è già quella dello scenario: chiederla di nuovo
+              // significherebbe mettere in dubbio il tipo scelto alla creazione.
+              <div className="text-[10px] font-bold text-slate-500 uppercase">
+                Procedura da sostenere
+                <p className="mt-1 text-xs font-normal normal-case tracking-normal text-slate-800">
+                  {ETICHETTA_PROCEDURA[lancio.procedura]} — è quella dello scenario.
+                </p>
+              </div>
+            ) : (
+              <label className="text-[10px] font-bold text-slate-500 uppercase">
+                Procedura da sostenere
+                <select
+                  value={lancio.procedura}
+                  onChange={(e) =>
+                    setLancio((l) => ({
+                      ...l,
+                      procedura: e.target.value as LancioSimulazione['procedura'],
+                    }))
+                  }
+                  className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+                >
+                  {(['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'] as const).map((p) => (
+                    <option key={p} value={p}>
+                      {ETICHETTA_PROCEDURA[p]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label className="text-[10px] font-bold text-slate-500 uppercase">
+              Offerta ipotizzata (%)
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step="1"
+                value={lancio.percentualeOfferta ?? ''}
+                onChange={(e) => {
+                  const n = e.target.value.trim() === '' ? null : Number(e.target.value);
+                  setLancio((l) => ({
+                    ...l,
+                    percentualeOfferta: n === null || !Number.isFinite(n) ? null : n,
+                  }));
+                }}
+                placeholder="come la proposta"
+                className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+              />
+            </label>
+            <label className="text-[10px] font-bold text-slate-500 uppercase">
+              Restituzione del debito (anni)
+              <input
+                type="number"
+                min={1}
+                max={ORIZZONTE_MASSIMO}
+                step="1"
+                value={anniRientro ?? ''}
+                onChange={(e) => {
+                  const testo = e.target.value.trim();
+                  if (testo === '') return impostaAnniRientro(null);
+                  const n = Number(testo);
+                  if (!Number.isFinite(n)) return;
+                  impostaAnniRientro(Math.max(1, Math.min(ORIZZONTE_MASSIMO, Math.round(n))));
+                }}
+                placeholder="come la proposta"
+                title={`Il debito da restituire è ${euro(debitoDaRestituire)}: le rate si dividono sugli anni indicati. Vuoto = rate della proposta.`}
+                className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+              />
+            </label>
+            <label className="text-[10px] font-bold text-slate-500 uppercase">
+              Impostazione
+              <select
+                value={lancio.prudenza}
+                onChange={(e) =>
+                  setLancio((l) => ({
+                    ...l,
+                    prudenza: e.target.value as LancioSimulazione['prudenza'],
+                  }))
+                }
+                className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+              >
+                <option value="PRUDENTE">Prudente</option>
+                <option value="NEUTRA">Neutra</option>
+                <option value="FAVOREVOLE">Favorevole</option>
+              </select>
+            </label>
+          </div>
+          {attenzione && attenzione.vincoli.length > 0 && (
+            <ul className="space-y-0.5">
+              {attenzione.vincoli.map((v) => (
+                <li key={v} className="text-[10px] text-amber-900 leading-relaxed">
+                  <strong>Vincolo:</strong> {v}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <details className="group">
           <summary className="cursor-pointer text-[11px] font-bold text-blue-700 hover:underline">
             Tabella anno per anno — per ritoccare un singolo anno e vedere tutte le voci
@@ -1548,8 +1627,13 @@ export function PianoSviluppoScenario({
           <button
             type="button"
             onClick={salva}
-            disabled={!modificato}
+            disabled={!modificato || dati.progetto}
             className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
+            title={
+              dati.progetto
+                ? 'Questa variante è il progetto del piano: è definitiva. Per cambiarla crea una nuova variante da questa e fanne il progetto.'
+                : 'Salva le ipotesi, le leve e il lancio in questa variante'
+            }
           >
             <Save className="w-3.5 h-3.5" /> Salva la variante «{variante}»
           </button>

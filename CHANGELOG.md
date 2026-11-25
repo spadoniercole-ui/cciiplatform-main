@@ -26,6 +26,36 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.31 — 2026-11-25
+
+LE SCELTE DEL PIANO LE SCRIVE L’ANALISI, E IL PROGETTO NON SI CANCELLA PIÙ.
+
+- **Le leve e il lancio stanno sotto l’analisi del piano.** Erano in testa alla
+  simulazione, come perimetro da compilare prima di guardare i numeri: adesso
+  sono in coda alla tabella, nella scheda «Le scelte del piano — proposte
+  dall’analisi». In testa resta ciò che è materia, non scelta: l’attenzione della
+  verifica contabile e il piano dell’azienda dal passo 3.
+- **Le propone l’AI, con le ipotesi.** Il prompt dell’elaborazione chiede anche le
+  cinque leve (sì/no e misura) e il lancio — procedura da sostenere, offerta
+  ipotizzata, anni di restituzione, impostazione — perché sono la risposta alla
+  domanda «come si fa fronte agli impegni assunti con l’ente». I valori
+  arrivano validati (procedura e impostazione fra quelle ammesse, percentuali
+  0-100, anni dentro l’orizzonte) e si salvano con la variante «elaborazione-ai».
+- **Il lancio si salva con la variante.** Prima viveva solo nello stato della
+  pagina: richiamare una variante restituiva le ipotesi ma riportava procedura,
+  offerta e anni ai valori predefiniti, e le rate tornavano quelle della proposta.
+  Ora la variante li ricorda (colonna `lancio`), gli anni senza piano di rientro
+  salvato dimensionano le rate, e chi cambia un valore lo salva con «Salva la
+  variante».
+- **Il progetto è definitivo.** «Salva il progetto» rende la variante corrente il
+  progetto del piano: il cestino sparisce, il salvataggio si spegne e il server
+  rifiuta sia la cancellazione sia la sovrascrittura. Un progetto per scenario:
+  se un’altra variante lo era, torna modificabile. Per cambiare il progetto si
+  crea una nuova variante da questa.
+- **La descrizione del piano prende tutta la larghezza.** Era schiacciata nella
+  colonna accanto ai pulsanti: ora sta su una riga sua, sotto il titolo, e si
+  legge come un paragrafo.
+
 ## 0.256.30 — 2026-11-25
 
 LE CIFRE GIUSTE AL POSTO GIUSTO, E I COLORI CHE DICONO QUALCOSA.

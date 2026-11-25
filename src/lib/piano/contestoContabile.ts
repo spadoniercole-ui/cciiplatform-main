@@ -21,6 +21,7 @@
 
 import type { EsitoVerifica } from '@/lib/verifica/esito';
 import { gravitaDebito, type DebitoInBilancio } from '@/lib/verifica/debitoInBilancio';
+import { ORIZZONTE_MASSIMO } from './ricevente';
 
 /** Che cosa si sta simulando: si sceglie al lancio, non è un parametro fisso. */
 export interface LancioSimulazione {
@@ -36,6 +37,66 @@ export const LANCIO_PREDEFINITO: LancioSimulazione = {
   prudenza: 'PRUDENTE',
 };
 
+/**
+ * Il lancio come si salva con la variante: i parametri del lancio più gli anni
+ * di restituzione del debito, che la pagina teneva solo in memoria. Senza gli
+ * anni salvati, richiamare una variante restituiva le scelte dell'AI e perdeva
+ * l'orizzonte di restituzione su cui erano state calcolate le rate.
+ */
+export interface LancioPiano extends LancioSimulazione {
+  /** Anni di restituzione del debito; null = come la proposta. */
+  anniRientro: number | null;
+}
+
+export const LANCIO_PIANO_PREDEFINITO: LancioPiano = {
+  ...LANCIO_PREDEFINITO,
+  anniRientro: null,
+};
+
+const PROCEDURE: LancioSimulazione['procedura'][] = ['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'];
+const PRUDENZE: LancioSimulazione['prudenza'][] = ['PRUDENTE', 'NEUTRA', 'FAVOREVOLE'];
+
+/**
+ * Il lancio come arriva dal browser, dall'AI o dal database: valori ammessi
+ * soltanto, nessun numero fuori scala. Un campo che non si riconosce torna al
+ * valore predefinito invece di far fallire il salvataggio.
+ */
+export function lancioPianoValido(
+  input: unknown,
+  orizzonteMassimo: number = ORIZZONTE_MASSIMO
+): LancioPiano {
+  const o = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const procedura = PROCEDURE.includes(o.procedura as LancioSimulazione['procedura'])
+    ? (o.procedura as LancioSimulazione['procedura'])
+    : LANCIO_PREDEFINITO.procedura;
+  const prudenza = PRUDENZE.includes(o.prudenza as LancioSimulazione['prudenza'])
+    ? (o.prudenza as LancioSimulazione['prudenza'])
+    : LANCIO_PREDEFINITO.prudenza;
+  const offerta = Number(o.percentualeOfferta);
+  const percentualeOfferta =
+    o.percentualeOfferta === null ||
+    o.percentualeOfferta === undefined ||
+    o.percentualeOfferta === ''
+      ? null
+      : Number.isFinite(offerta)
+        ? Math.max(0, Math.min(100, Math.round(offerta * 100) / 100))
+        : null;
+  const anni = Number(o.anniRientro);
+  const anniRientro =
+    o.anniRientro === null || o.anniRientro === undefined || o.anniRientro === ''
+      ? null
+      : Number.isFinite(anni)
+        ? Math.max(1, Math.min(orizzonteMassimo, Math.round(anni)))
+        : null;
+  return { procedura, percentualeOfferta, prudenza, anniRientro };
+}
+
+/** Il lancio salvato con una variante; null quando la variante non ne ha. */
+export function lancioDaSalvato(input: unknown): LancioPiano | null {
+  if (!input || typeof input !== 'object') return null;
+  return lancioPianoValido(input);
+}
+
 export const ETICHETTA_PROCEDURA: Record<LancioSimulazione['procedura'], string> = {
   ACCORDO: 'accordo con i creditori',
   LIQUIDAZIONE: 'liquidazione giudiziale',
@@ -49,7 +110,7 @@ export const ETICHETTA_PRUDEENZA: Record<LancioSimulazione['prudenza'], string> 
 };
 
 /** Il testo dei parametri di lancio: entra nel prompt, non nei numeri del piano. */
-export function testoLancio(l: LancioSimulazione): string {
+export function testoLancio(l: LancioSimulazione | LancioPiano): string {
   const pezzi = [
     `PROCEDURA DA SOSTENERE: ${ETICHETTA_PROCEDURA[l.procedura]}. Il piano deve reggere le rate e la cassa di questa procedura, non una qualunque.`,
     `IMPOSTAZIONE: ${ETICHETTA_PRUDEENZA[l.prudenza]}.`,
@@ -57,6 +118,12 @@ export function testoLancio(l: LancioSimulazione): string {
   if (l.percentualeOfferta !== null && l.percentualeOfferta > 0) {
     pezzi.push(
       `OFFERTA IPOTIZZATA: ${l.percentualeOfferta}% del credito dell’ente. Le rate e la cassa si dimensionano su questa percentuale.`
+    );
+  }
+  const anni = (l as LancioPiano).anniRientro;
+  if (typeof anni === 'number' && anni > 0) {
+    pezzi.push(
+      `RESTITUZIONE DEL DEBITO: il debito dell’ente si restituisce in ${anni} anni; le rate si dimensionano su questo arco.`
     );
   }
   return pezzi.join(' ');
