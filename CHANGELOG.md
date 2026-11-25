@@ -26,6 +26,35 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.30 — 2026-11-25
+
+LE CIFRE GIUSTE AL POSTO GIUSTO, E I COLORI CHE DICONO QUALCOSA.
+
+- **«Da classificare» dice da dove viene.** Sotto la riga della classificazione si
+  legge la sua composizione: cartelle dell’Agente della Riscossione (credito già a
+  ruolo, che porta un residuo senza riparto) e voci a cifra unica (verbali, note non
+  definite). Se una riga fuori dall’Agente ha lo stesso importo di una cartella, la
+  schermata lo segnala come possibile stessa cifra contata due volte.
+- **Gli anni degli adempimenti nascono chiusi.** Il prospetto si apriva con
+  centoundici righe di periodi e la lettura annegava: ogni anno dice già quante
+  posizioni contiene, quante sono scoperte e il ritardo massimo, e si apre su
+  richiesta. Resta nell’unico punto in cui è (passo 5 della verifica amministrativa).
+- **Le due procedure si calcolano per davvero senza rango scelto.** Quando il
+  triage non ha ancora scelto il rango, la certificazione lo dice lo stesso: ogni
+  quota prende la percentuale del proprio rango (contributi e metà sanzioni civili
+  privilegiati, il resto chirografo) e i netti si sommano. Nella posizione ente e
+  nella verifica azienda gli importi non sono più un intervallo né «non
+  calcolabile: dati incompleti»: sono la cifra puntuale, con l’importo che il
+  documento non permette di collocare dichiarato a parte («fuori dai conti»).
+- **I colori seguono il segno.** Verde se il valore è favorevole, rosso se è
+  sfavorevole (compreso il fatto sfavorevole con numero positivo), arancione se è
+  neutro; quando il valore non si riesce a interpretare — dato assente, intensità
+  zero — il colore è uno solo, il grigio. La regola sta in `lib/ritratto/toni.ts`
+  e la usano le barre dei grafici e l’intensità delle cinque dimensioni.
+- **In simulazione non si chiede il provvedimento.** Lo scenario con il flag di
+  simulazione non ha documenti da caricare: il riquadro di caricamento del passo 2
+  sparisce e resta la stima già calcolata sul credito accertato.
+
 ## 0.256.29 — 2026-11-25
 
 IL DATABASE SMETTE DI RIFARE IL LAVORO GIÀ FATTO.

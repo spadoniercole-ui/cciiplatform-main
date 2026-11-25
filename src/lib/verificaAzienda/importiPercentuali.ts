@@ -62,6 +62,13 @@ export interface ImportoPercentuale {
    * ha nemmeno una percentuale utilizzabile.
    */
   intervallo: IntervalloImporto | null;
+  /**
+   * Quando il conto è fatto sulle quote classificate della certificazione: il
+   * credito che la classificazione lascia fuori dai conti (posizioni non
+   * determinate, cartelle dell'Agente senza riparto, crediti a favore) si
+   * dichiara qui, perché la cifra mostrata non è il credito intero.
+   */
+  escluso?: number;
 }
 
 export interface InputImportiPercentuali {
@@ -74,6 +81,15 @@ export interface InputImportiPercentuali {
    * rispettare.
    */
   sogliaRiscontro: number | null;
+  /**
+   * Le quote della certificazione già divise per rango (vedi
+   * `quotePerRango`). Se il rango del credito non è scelto a mano, sono queste
+   * a dire a quale rango appartiene il credito: le due procedure si calcolano
+   * per davvero, invece di leggersi come intervallo.
+   */
+  quoteClassificate?: { rango: RangoCredito; importo: number }[];
+  /** Il credito che la classificazione lascia fuori dai conti (le quote senza rango). */
+  esclusoClassificazione?: number;
 }
 
 const arrotonda = (n: number) => Math.round(n * 100) / 100;
@@ -175,22 +191,63 @@ export function importiDaPercentuali(input: InputImportiPercentuali): ImportoPer
     percentualiCram
   );
 
+  // SENZA RANGO SCELTO, MA CON LE QUOTE CLASSIFICATE. Il tipo di credito non
+  // è scelto a mano, però la certificazione lo dice: i contributi sono
+  // privilegiati, la metà delle sanzioni civili pure, il resto chirografo. Ogni
+  // quota prende la percentuale del PROPRIO rango e i netti si sommano. È il
+  // conto puntuale al posto dell'intervallo; le quote senza rango (cartelle
+  // dell'Agente, voci a cifra unica) restano fuori e si dichiarano.
+  const quote = (input.quoteClassificate ?? []).filter(
+    (q) => numeroValido(q.importo) && q.importo > 0
+  );
+  const perQuote = input.rango === null && quote.length > 0;
+
+  const sommaSuQuote = (quale: 'liquidazione' | 'cramDown'): number | null => {
+    let totale = 0;
+    for (const q of quote) {
+      const netto = calcolaScenari({
+        credito: q.importo,
+        rango: q.rango,
+        parametri: input.parametri,
+      })[quale].netto;
+      if (netto === null) return null;
+      totale += netto;
+    }
+    return arrotonda(totale);
+  };
+
   const daIpotesi = (
     codice: 'LIQUIDAZIONE' | 'CRAM_DOWN',
     ipotesi: typeof esito.liquidazione,
     etichetta: string,
     fonte: string,
-    intervallo: IntervalloImporto | null
-  ): ImportoPercentuale => ({
-    codice,
-    etichetta,
-    fonte,
-    percentuale: ipotesi.percentuale,
-    importo: ipotesi.calcolabile ? ipotesi.netto : null,
-    calcolabile: ipotesi.calcolabile,
-    motivo: ipotesi.calcolabile ? null : intervallo ? motivoIntervallo : motivoIpotesi(ipotesi),
-    intervallo: ipotesi.calcolabile ? null : intervallo,
-  });
+    intervallo: IntervalloImporto | null,
+    daQuote: number | null
+  ): ImportoPercentuale => {
+    if (perQuote && daQuote !== null) {
+      return {
+        codice,
+        etichetta,
+        fonte: 'quote classificate della certificazione, ognuna alla percentuale del proprio rango',
+        percentuale: null,
+        importo: daQuote,
+        calcolabile: true,
+        motivo: null,
+        intervallo: null,
+        escluso: input.esclusoClassificazione ?? 0,
+      };
+    }
+    return {
+      codice,
+      etichetta,
+      fonte,
+      percentuale: ipotesi.percentuale,
+      importo: ipotesi.calcolabile ? ipotesi.netto : null,
+      calcolabile: ipotesi.calcolabile,
+      motivo: ipotesi.calcolabile ? null : intervallo ? motivoIntervallo : motivoIpotesi(ipotesi),
+      intervallo: ipotesi.calcolabile ? null : intervallo,
+    };
+  };
 
   return [
     accordo,
@@ -199,14 +256,16 @@ export function importiDaPercentuali(input: InputImportiPercentuali): ImportoPer
       esito.liquidazione,
       'Liquidazione giudiziale',
       'tasso di realizzo del rango, al netto delle spese di procedura',
-      intervalloLiquidazione
+      intervalloLiquidazione,
+      sommaSuQuote('liquidazione')
     ),
     daIpotesi(
       'CRAM_DOWN',
       esito.cramDown,
       'Cram down',
       'percentuale di soddisfacimento del rango',
-      intervalloCram
+      intervalloCram,
+      sommaSuQuote('cramDown')
     ),
   ];
 }

@@ -21,6 +21,8 @@ import {
 } from '@/lib/verificaAzienda/fotografia';
 import { RANGHI, type ParametriScenari, type RangoCredito } from '@/lib/triage/scenari';
 import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
+import { leggiRigheClassificabili } from '@/lib/debitiEnte/righeClassificabili';
+import { quotePerRango } from '@/lib/debitiEnte/classificazioneCredito';
 import { selezionaNote, type SezioneNota } from '@/lib/xbrl/note';
 import type { DatiFinanziariPeriodo, FactTestuale } from '@/lib/xbrl/types';
 
@@ -225,11 +227,18 @@ export async function leggiVerificaAzienda(
       : null,
   });
 
-  const [rango, parametri, sogliaRiscontro] = await Promise.all([
+  // LE QUOTE CLASSIFICATE (0.256.30). Se il rango del credito non è stato
+  // scelto, la certificazione lo dice lo stesso: contributi privilegiati,
+  // metà delle sanzioni civili pure, il resto chirografo. Servono alle due
+  // procedure, che senza rango si leggevano come intervallo (o «non
+  // calcolabile») pur avendo i numeri per essere calcolate.
+  const [rango, parametri, sogliaRiscontro, righeClassificabili] = await Promise.all([
     leggiRangoAzienda(nomeSchema, aziendaId),
     leggiParametriScenari(nomeSchema),
     leggiSogliaRiscontro(nomeSchema),
+    leggiRigheClassificabili(nomeSchema, aziendaId),
   ]);
+  const classificate = quotePerRango(righeClassificabili);
 
   const fotografia = componiFotografia({
     proiezione: asseContabile,
@@ -237,6 +246,8 @@ export async function leggiVerificaAzienda(
     rango,
     parametri,
     sogliaRiscontro,
+    quoteClassificate: classificate.quote,
+    esclusoClassificazione: classificate.escluso,
   });
 
   // La nota integrativa dell'ultimo bilancio: si mostra accanto alla

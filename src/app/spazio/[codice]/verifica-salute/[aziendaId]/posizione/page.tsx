@@ -434,11 +434,22 @@ export default async function PosizionePage({
           <p className="text-[10px] text-slate-500 leading-relaxed">
             I parametri sono tutti in Parametri di Spazio: la soglia di riscontro della proposta per
             l’accordo, il tasso di realizzo e la percentuale di soddisfacimento per rango per
-            liquidazione e cram down. Se il rango del credito non è ancora scelto, l’importo si
-            legge come intervallo fra la percentuale più bassa e la più alta della tabella; senza un
-            parametro l’importo non si calcola, e la riga dice perché.
+            liquidazione e cram down. Se il rango del credito è scelto nel triage, il conto è su
+            quel rango; se non lo è, ma la certificazione separa contributi e sanzioni, ogni quota
+            prende la percentuale del proprio rango — quindi l’importo è puntuale anche senza la
+            scelta a mano. Solo quando nemmeno la classificazione basta l’importo si legge come
+            intervallo fra la percentuale più bassa e la più alta della tabella; senza un parametro
+            l’importo non si calcola, e la riga dice perché.
           </p>
         </div>
+        {procedure.some((p) => (p.escluso ?? 0) > 0) && (
+          <p className="text-[10px] text-amber-900 leading-relaxed">
+            Fuori dai conti {formattaEuro(Math.max(...procedure.map((p) => p.escluso ?? 0)))}: è il
+            credito che la classificazione non permette di collocare in un rango (posizioni non
+            determinate, cartelle dell’Agente senza riparto, crediti a favore dell’azienda). Gli
+            importi qui sopra sono calcolati sulla parte classificata.
+          </p>
+        )}
         <p className="text-[10px] text-slate-500 leading-relaxed">
           Le procedure sono un parametro dello spazio, non un passo della pratica: dicono che cosa
           va fatto per ogni tipologia di debito e a quale ufficio chiederlo, e valgono per tutte le

@@ -55,7 +55,12 @@ const CLASSE_CAMPO =
 function ProspettoAdempimenti({ esito }: { esito: EsitoCongruenza }) {
   const [soloScoperte, setSoloScoperte] = useState(false);
   const [fonte, setFonte] = useState<FamigliaFlusso | ''>('');
-  const [chiusi, setChiusi] = useState<number[]>([]);
+  // GLI ANNI PARTONO CHIUSI (0.256.30). Aperto per default, il prospetto
+  // riversava a schermo centoundici righe di periodi: la lettura delle
+  // informazioni annegava nei dettagli. Il nodo chiuso dice già quante
+  // posizioni contiene, quante sono scoperte e il ritardo massimo; chi vuole
+  // il periodo lo apre.
+  const [aperti, setAperti] = useState<number[]>([]);
 
   const gruppi = raggruppaProspettoPerAnno(esito.prospetto, {
     soloScoperte,
@@ -66,7 +71,7 @@ function ProspettoAdempimenti({ esito }: { esito: EsitoCongruenza }) {
     tipo === 'DENUNCIA' ? esito.etichette.denuncia : esito.etichette.pagamento;
 
   const alternaAnno = (anno: number) =>
-    setChiusi((precedenti) =>
+    setAperti((precedenti) =>
       precedenti.includes(anno) ? precedenti.filter((a) => a !== anno) : [...precedenti, anno]
     );
 
@@ -109,7 +114,7 @@ function ProspettoAdempimenti({ esito }: { esito: EsitoCongruenza }) {
             </tr>
           </thead>
           {gruppi.map((g) => {
-            const chiuso = chiusi.includes(g.anno);
+            const aperto = aperti.includes(g.anno);
             return (
               <tbody key={g.anno} className="border-b border-slate-100">
                 <tr className="bg-slate-100/70">
@@ -118,12 +123,12 @@ function ProspettoAdempimenti({ esito }: { esito: EsitoCongruenza }) {
                       type="button"
                       onClick={() => alternaAnno(g.anno)}
                       className="flex w-full items-center gap-1 px-2 py-1.5 text-[10px] font-bold text-slate-700 hover:bg-slate-200/60"
-                      aria-expanded={!chiuso}
+                      aria-expanded={aperto}
                     >
-                      {chiuso ? (
-                        <ChevronRight className="w-3 h-3 shrink-0" />
-                      ) : (
+                      {aperto ? (
                         <ChevronDown className="w-3 h-3 shrink-0" />
+                      ) : (
+                        <ChevronRight className="w-3 h-3 shrink-0" />
                       )}
                       {g.anno}
                       <span className="ml-1 font-normal text-slate-500">
@@ -136,7 +141,7 @@ function ProspettoAdempimenti({ esito }: { esito: EsitoCongruenza }) {
                     </button>
                   </th>
                 </tr>
-                {!chiuso &&
+                {aperto &&
                   g.righe.map((r) => (
                     <tr key={`${r.periodo}-${r.tipo}`}>
                       <td className="px-2 py-1 pl-6 tabular-nums text-slate-800">

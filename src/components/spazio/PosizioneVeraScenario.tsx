@@ -45,6 +45,7 @@ import { materiaPerRigaVera } from '@/lib/titoliEnte/materiaVera';
 import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
 import {
   classificaRigaCompleta,
+  dettaglioDaClassificare,
   totaliClassificazione,
 } from '@/lib/debitiEnte/classificazioneCredito';
 import { chiaveMateria } from '@/lib/lavorazioni/instradamentoMateria';
@@ -397,7 +398,13 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
   // stato) e l'operatore non li modifica — come non modifica gli importi che
   // arrivano dai sistemi dell'ente. Le righe ancora da lavorare restano fuori
   // dal debito certo e si dichiarano a parte.
-  const classi = totaliClassificazione(righeVera.filter((_, i) => !escluseDoppie.has(i)));
+  const righeClassificate = righeVera.filter((_, i) => !escluseDoppie.has(i));
+  const classi = totaliClassificazione(righeClassificate);
+  // DA DOVE VIENE IL «DA CLASSIFICARE» (0.256.30): cartelle dell'Agente della
+  // Riscossione (credito già a ruolo, che porta un residuo senza riparto) e
+  // voci a cifra unica. Si dichiara sotto la riga, con l'eventuale allarme dei
+  // doppioni: senza, la cifra resta un numero da verificare a mano.
+  const daClassificare = dettaglioDaClassificare(righeClassificate);
 
   // Confronto certo-per-certo per categoria (solo importi noti).
   const codiciPresenti = Array.from(
@@ -575,6 +582,29 @@ export function PosizioneVeraScenario({ nomeSchema, aziendaId }: Props) {
               </tr>
             </tbody>
           </table>
+          {classi.daClassificare > 0 && (
+            <p className="text-[10px] text-slate-600 leading-relaxed">
+              Da dove viene: cartelle dell’Agente della Riscossione{' '}
+              <strong className="font-mono">{euro(daClassificare.adr)}</strong> — credito già a
+              ruolo, il residuo non porta il riparto; voci a cifra unica{' '}
+              <strong className="font-mono">{euro(daClassificare.senzaRiparto)}</strong> (verbali,
+              note non definite). Non è la stessa cifra contata due volte: sono due parti distinte
+              del documento.
+              {daClassificare.possibiliDoppioni.length > 0 && (
+                <span className="block mt-1 text-amber-900">
+                  Da verificare:{' '}
+                  {daClassificare.possibiliDoppioni.length === 1
+                    ? 'una riga fuori dall’Agente ha'
+                    : `${daClassificare.possibiliDoppioni.length} righe fuori dall’Agente hanno`}{' '}
+                  lo stesso importo di una cartella (
+                  {daClassificare.possibiliDoppioni
+                    .map((d) => `${d.voce}: ${euro(d.importo)}`)
+                    .join('; ')}
+                  ). Può essere lo stesso debito contato due volte.
+                </span>
+              )}
+            </p>
+          )}
           <p className="text-[10px] text-slate-500">
             Contributi: art. 2753 c.c. e art. 2778 n. 1 c.c. Sanzioni civili: metà con privilegio di
             grado VIII, metà chirografo (art. 2754 c.c. e art. 2778 n. 8 c.c.). Le sanzioni

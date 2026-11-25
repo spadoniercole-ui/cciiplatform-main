@@ -12,6 +12,7 @@
 
 import type { EsitoAttenzione } from '@/lib/screening/indicatore';
 import { BarraDato } from './BarraDatoGrafico';
+import { BARRA_TONO, tonoDellIntensita } from '@/lib/ritratto/toni';
 import type {
   RiquadroGiudizio,
   Ritratto,
@@ -281,12 +282,14 @@ export function RitrattoAzienda({ ritratto }: Props) {
                       giudizio che il modello evita (vedi `lib/ritratto/ritratto.ts`). */}
                   <div className="mt-1.5 flex items-center gap-2">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                      {/* Rosso se l'intensità è alta (fatto sfavorevole),
+                          arancione se è neutra, grigio se la dimensione non è
+                          misurata: il grigio è un colore solo, e vuol dire
+                          «non interpretabile», non «va bene». */}
                       <div
-                        className={
-                          v.punteggio >= 50
-                            ? 'h-full rounded-full bg-red-400'
-                            : 'h-full rounded-full bg-slate-300'
-                        }
+                        className={`h-full rounded-full ${
+                          BARRA_TONO[tonoDellIntensita(v.punteggio)]
+                        }`}
                         style={{ width: `${Math.max(2, Math.min(100, v.punteggio))}%` }}
                       />
                     </div>

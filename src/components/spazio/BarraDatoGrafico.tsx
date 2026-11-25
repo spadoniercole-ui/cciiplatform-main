@@ -17,6 +17,7 @@
 // copie divergerebbero.
 
 import { geometriaBarra, type BarraGrafico } from '@/lib/ritratto/iconografia';
+import { BARRA_TONO, TESTO_TONO, tonoDelDato } from '@/lib/ritratto/toni';
 
 export function BarraDato({
   b,
@@ -28,24 +29,22 @@ export function BarraDato({
   minimo?: number;
 }) {
   const { zero, inizio, larghezza } = geometriaBarra(b.valore, massimo, minimo);
+  // Il colore dice il verso del dato: verde se favorevole, rosso se sfavorevole,
+  // arancione se neutro; grigio — uno solo — se il valore non c'è e quindi non
+  // si interpreta. Non è un giudizio: è la stessa regola del ritratto.
+  const tono = tonoDelDato({ valore: b.valore, segnala: b.segnala });
 
   return (
     <div className="mt-1.5">
       <div className="flex items-baseline justify-between gap-2">
         <span className="min-w-0 text-[10px] leading-snug text-slate-600">{b.etichetta}</span>
-        <span
-          className={`shrink-0 text-[10px] font-bold tabular-nums ${
-            b.segnala ? 'text-red-700' : 'text-slate-800'
-          }`}
-        >
+        <span className={`shrink-0 text-[10px] font-bold tabular-nums ${TESTO_TONO[tono]}`}>
           {b.testo}
         </span>
       </div>
       <div className="relative mt-0.5 h-1.5 overflow-hidden rounded-full bg-slate-200/70">
         <div
-          className={`absolute top-0 h-full rounded-full ${
-            b.segnala ? 'bg-red-400' : 'bg-slate-400'
-          }`}
+          className={`absolute top-0 h-full rounded-full ${BARRA_TONO[tono]}`}
           style={{
             left: `${inizio}%`,
             width: `${larghezza === 0 ? 0 : Math.max(0.8, larghezza)}%`,

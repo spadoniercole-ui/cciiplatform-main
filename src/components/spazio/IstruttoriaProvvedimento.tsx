@@ -239,6 +239,15 @@ export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoA
               {stato?.letturaIl ? new Date(stato.letturaIl).toLocaleString('it-IT') : '—'}
             </p>
           </div>
+        ) : stima ? (
+          // In simulazione i documenti dell'azienda non servono (0.256.30): il
+          // recupero si stima dal credito accertato, e il riquadro di
+          // caricamento sembrava un passo obbligatorio che non lo era.
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Lo scenario è in simulazione: qui non c’è nulla da caricare. La stima qui sotto è già
+            calcolata sul credito accertato, con le percentuali dell’ente; quando il provvedimento
+            arriverà, prenderà il posto della stima.
+          </p>
         ) : (
           <>
             <p className="text-[11px] text-slate-500 leading-relaxed">

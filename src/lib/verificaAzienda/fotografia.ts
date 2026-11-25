@@ -112,7 +112,8 @@ export interface FotografiaVerificaAzienda {
   motivo: string | null;
 }
 
-const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
+const euro = (n: number | null | undefined) =>
+  typeof n === 'number' && Number.isFinite(n) ? `${Math.round(n).toLocaleString('it-IT')} €` : '—';
 const arrotonda = (n: number) => Math.round(n * 100) / 100;
 const numero = (v: unknown): number | null =>
   typeof v === 'number' && Number.isFinite(v) ? v : null;
@@ -230,6 +231,14 @@ export function componiFotografia(input: {
    * dell'accordo: il debito per un eventuale accordo deve rispettarla.
    */
   sogliaRiscontro?: number | null;
+  /**
+   * Le quote della certificazione già divise per rango: quando il rango non è
+   * scelto, sono queste a dare le due procedure per davvero invece di un
+   * intervallo (o di «non calcolabile»).
+   */
+  quoteClassificate?: { rango: RangoCredito; importo: number }[];
+  /** Il credito che la classificazione lascia fuori dai conti. */
+  esclusoClassificazione?: number;
 }): FotografiaVerificaAzienda {
   const anni = colonneFotografia(input.proiezione);
   const credito =
@@ -237,6 +246,25 @@ export function componiFotografia(input: {
       ? arrotonda(input.credito as number)
       : null;
   const avvertenze: string[] = [];
+
+  // Gli importi dalle percentuali si calcolano una volta sola: li leggono sia
+  // i due riquadri degli scenari sia la tabella del confronto, e due calcoli
+  // per la stessa cifra sono due occasioni di divergere.
+  const importi = importiDaPercentuali({
+    credito,
+    rango: input.rango,
+    parametri: input.parametri,
+    sogliaRiscontro: input.sogliaRiscontro ?? null,
+    quoteClassificate: input.quoteClassificate,
+    esclusoClassificazione: input.esclusoClassificazione,
+  });
+  const daQuote =
+    input.rango === null &&
+    (input.quoteClassificate ?? []).length > 0 &&
+    importi.find((i) => i.codice === 'LIQUIDAZIONE')?.calcolabile === true;
+  const esclusoQuote = daQuote ? (input.esclusoClassificazione ?? 0) : 0;
+  /** Il credito su cui il conto è stato fatto: quello classificato, se le quote ci sono. */
+  const creditoDelConto = daQuote && credito !== null ? arrotonda(credito - esclusoQuote) : credito;
 
   if (anni.length === 0) {
     return {
@@ -248,12 +276,7 @@ export function componiFotografia(input: {
       capacita: capacitaRisposta(anni, credito),
       scenari: [],
       confronto: null,
-      importiPercentuali: importiDaPercentuali({
-        credito,
-        rango: input.rango,
-        parametri: input.parametri,
-        sogliaRiscontro: input.sogliaRiscontro ?? null,
-      }),
+      importiPercentuali: importi,
       avvertenze,
       motivo: 'Nessun bilancio XBRL leggibile: la fotografia non ha colonne da mostrare.',
     };
@@ -266,7 +289,17 @@ export function componiFotografia(input: {
   }
   if (!input.rango) {
     avvertenze.push(
-      'Rango del credito non scelto nel triage dell’azienda: le percentuali per rango non si possono applicare.'
+      daQuote
+        ? `Rango del credito non scelto nel triage: le due procedure sono calcolate sulle quote classificate della certificazione (${euro(
+            creditoDelConto
+          )}), ognuna alla percentuale del proprio rango.${
+            esclusoQuote > 0
+              ? ` Restano fuori dai conti ${euro(
+                  esclusoQuote
+                )}: posizioni non determinate, cartelle senza riparto, crediti a favore dell’azienda.`
+              : ''
+          }`
+        : 'Rango del credito non scelto nel triage dell’azienda: le percentuali per rango non si possono applicare.'
     );
   }
 
@@ -291,27 +324,41 @@ export function componiFotografia(input: {
   const perdita = (netto: number | null): number | null =>
     netto !== null && credito !== null ? arrotonda(credito - netto) : null;
 
-  const liquidazione: ScenarioFotografia = {
-    codice: 'LIQUIDAZIONE',
-    nome: 'Liquidazione giudiziale',
-    percentuale: esitoScenari.liquidazione.percentuale,
-    recupero: esitoScenari.liquidazione.netto,
-    perdita: perdita(esitoScenari.liquidazione.netto),
-    calcolabile: esitoScenari.liquidazione.calcolabile,
-    motivo: esitoScenari.liquidazione.motivo,
-    dettaglio: esitoScenari.liquidazione.dettaglio,
+  /** Un riquadro delle due procedure: prima il conto sul rango scelto, poi —
+   * quando manca il rango ma le quote ci sono — quello sulle quote classificate. */
+  const scenarioProcedura = (
+    codice: 'LIQUIDAZIONE' | 'CRAM_DOWN',
+    nome: string,
+    ipotesi: typeof esitoScenari.liquidazione
+  ): ScenarioFotografia => {
+    const riga = importi.find((i) => i.codice === codice) ?? null;
+    const daQuoteQui = daQuote && riga?.calcolabile === true && riga.importo !== null;
+    const recupero = ipotesi.calcolabile ? ipotesi.netto : daQuoteQui ? riga!.importo : null;
+    return {
+      codice,
+      nome,
+      percentuale: ipotesi.calcolabile ? ipotesi.percentuale : null,
+      recupero,
+      perdita:
+        recupero !== null && creditoDelConto !== null
+          ? arrotonda(creditoDelConto - recupero)
+          : null,
+      calcolabile: ipotesi.calcolabile || daQuoteQui,
+      motivo: ipotesi.calcolabile || daQuoteQui ? null : ipotesi.motivo,
+      dettaglio: daQuoteQui
+        ? `Quote classificate della certificazione, ognuna alla percentuale del proprio rango${
+            esclusoQuote > 0 ? `; fuori dai conti ${euro(esclusoQuote)}` : ''
+          }.`
+        : ipotesi.dettaglio,
+    };
   };
 
-  const cramDown: ScenarioFotografia = {
-    codice: 'CRAM_DOWN',
-    nome: 'Cram down omologato',
-    percentuale: esitoScenari.cramDown.percentuale,
-    recupero: esitoScenari.cramDown.netto,
-    perdita: perdita(esitoScenari.cramDown.netto),
-    calcolabile: esitoScenari.cramDown.calcolabile,
-    motivo: esitoScenari.cramDown.motivo,
-    dettaglio: esitoScenari.cramDown.dettaglio,
-  };
+  const liquidazione = scenarioProcedura(
+    'LIQUIDAZIONE',
+    'Liquidazione giudiziale',
+    esitoScenari.liquidazione
+  );
+  const cramDown = scenarioProcedura('CRAM_DOWN', 'Cram down omologato', esitoScenari.cramDown);
 
   return {
     anni,
@@ -322,12 +369,7 @@ export function componiFotografia(input: {
     capacita,
     scenari: [accordo, liquidazione, cramDown],
     confronto: esitoScenari.confronto,
-    importiPercentuali: importiDaPercentuali({
-      credito,
-      rango: input.rango,
-      parametri: input.parametri,
-      sogliaRiscontro: input.sogliaRiscontro ?? null,
-    }),
+    importiPercentuali: importi,
     avvertenze,
     motivo: null,
   };

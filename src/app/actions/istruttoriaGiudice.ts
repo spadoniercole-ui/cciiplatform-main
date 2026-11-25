@@ -46,7 +46,7 @@ import { vociEnteDaFonti, type VoceEnte as VocePosizione } from '@/lib/giudice/p
 import { classificaRigaCompleta } from '@/lib/debitiEnte/classificazioneCredito';
 import type { RangoCredito } from '@/lib/triage/scenari';
 import { RANGHI, type ParametriScenari } from '@/lib/triage/scenari';
-import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
+import { leggiRigheClassificabili } from '@/lib/debitiEnte/righeClassificabili';
 import {
   stimaSenzaProvvedimento,
   type StimaSenzaProvvedimento,
@@ -278,14 +278,10 @@ async function stimaDaPosizione(
       const n = typeof v === 'number' ? v : Number(v);
       return Number.isFinite(n) ? n : null;
     };
-    const [vera, config, ranghi] = await Promise.all([
-      pool
-        .query(
-          `SELECT voce, importo, stato, contributi, sanzioni, ambito
-             FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1 ORDER BY id ASC`,
-          [aziendaId]
-        )
-        .catch(() => ({ rows: [] as Record<string, unknown>[] })),
+    // Le righe della certificazione (già senza doppie scritture) le legge lo
+    // stesso modulo della fotografia: una query sola per tutti.
+    const [righe, config, ranghi] = await Promise.all([
+      leggiRigheClassificabili(nomeSchema, aziendaId),
       pool
         .query(`SELECT costi_procedura_pct FROM "${nomeSchema}".parametri_scenari WHERE id = 1`)
         .catch(() => ({ rows: [] as { costi_procedura_pct?: unknown }[] })),
@@ -296,29 +292,6 @@ async function stimaDaPosizione(
         )
         .catch(() => ({ rows: [] as Record<string, unknown>[] })),
     ]);
-    const escluse = insiemeEsclusi(
-      denunceDuplicateVera(
-        vera.rows.map((r) => ({
-          voce: String(r.voce ?? ''),
-          importo: Number(r.importo ?? 0),
-          stato: r.stato === null || r.stato === undefined ? undefined : String(r.stato),
-          periodo: r.periodo === null || r.periodo === undefined ? undefined : String(r.periodo),
-          contributi: numero(r.contributi),
-          sanzioni: numero(r.sanzioni),
-        }))
-      )
-    );
-    const righe = vera.rows
-      .filter((_, i) => !escluse.has(i))
-      .map((r) => ({
-        voce: String(r.voce ?? ''),
-        importo: Number(r.importo ?? 0),
-        stato: String(r.stato ?? ''),
-        contributi: numero(r.contributi),
-        sanzioni: numero(r.sanzioni),
-        ambito:
-          r.ambito === 'AGENTE_RISCOSSIONE' ? ('AGENTE_RISCOSSIONE' as const) : ('INPS' as const),
-      }));
     if (righe.length === 0) return null;
     const perRango = new Map(ranghi.rows.map((r) => [String(r.rango), r]));
     const parametri: ParametriScenari = {

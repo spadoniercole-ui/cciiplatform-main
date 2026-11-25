@@ -297,6 +297,93 @@ export function scenariPerClasse(
   };
 }
 
+/** Il credito classificabile, già diviso per rango: è quanto serve alle due
+ * ipotesi quando il rango del credito non è stato scelto a mano. */
+export interface QuotaPerRango {
+  rango: RangoCredito;
+  importo: number;
+}
+
+/**
+ * LE QUOTE CLASSIFICATE, RAGGRUPPATE PER RANGO.
+ *
+ * Quando il triage non ha ancora scelto il rango del credito, la
+ * classificazione della certificazione lo dice lo stesso: i contributi sono
+ * privilegiati, la metà privilegiata delle sanzioni civili pure, la metà
+ * chirografaria e le sanzioni amministrative sono chirografo. Da qui le due
+ * procedure si calcolano per davvero, quota per quota, invece di leggersi come
+ * un intervallo fra la percentuale più bassa e la più alta.
+ *
+ * Restano fuori le quote «da classificare»: non hanno rango, e attribuirgliene
+ * uno sarebbe la ripartizione inventata che si vuole evitare. Il loro importo
+ * si dichiara a parte (`escluso`), così chi legge sa su quale credito il conto
+ * è stato fatto.
+ */
+export function quotePerRango(righe: RigaDaClassificare[]): {
+  quote: QuotaPerRango[];
+  escluso: number;
+} {
+  const perRango = new Map<RangoCredito, number>();
+  let escluso = 0;
+  for (const riga of righe) {
+    for (const q of classificaRiga(riga).quote) {
+      const rango = rangoDellaQuota(q);
+      if (!rango) {
+        escluso += q.importo;
+        continue;
+      }
+      perRango.set(rango, (perRango.get(rango) ?? 0) + q.importo);
+    }
+  }
+  return {
+    quote: Array.from(perRango, ([rango, importo]) => ({ rango, importo: centesimi(importo) })),
+    escluso: centesimi(escluso),
+  };
+}
+
+/**
+ * DA DOVE VIENE IL «DA CLASSIFICARE». La riga del riquadro somma due cose
+ * diverse: le cartelle dell'Agente della Riscossione, che portano un residuo
+ * senza riparto, e le voci che il file dichiara con una cifra unica (verbali,
+ * note non definite). Tenerle distinte serve alla verifica che chiede
+ * l'operatore: la prima è credito già a ruolo, la seconda no.
+ *
+ * `possibiliDoppioni`: righe fuori dall'ambito dell'Agente con lo stesso
+ * importo di una cartella. Non è una prova che sia lo stesso debito, ma è
+ * l'unico segnale che il file dà — e va mostrato, non nascosto, perché quella
+ * cifra entrerebbe nei conti due volte.
+ */
+export interface DettaglioDaClassificare {
+  adr: number;
+  senzaRiparto: number;
+  totale: number;
+  possibiliDoppioni: { voce: string; importo: number }[];
+}
+
+export function dettaglioDaClassificare(righe: RigaDaClassificare[]): DettaglioDaClassificare {
+  const adr: number[] = [];
+  const senzaRiparto: number[] = [];
+  for (const riga of righe) {
+    for (const q of classificaRiga(riga).quote) {
+      if (q.classe !== 'DA_CLASSIFICARE') continue;
+      if (riga.ambito === 'AGENTE_RISCOSSIONE') adr.push(q.importo);
+      else senzaRiparto.push(q.importo);
+    }
+  }
+  const importiAdr = new Set(adr.map((n) => centesimi(n)));
+  const possibiliDoppioni = righe
+    .filter((r) => r.ambito !== 'AGENTE_RISCOSSIONE')
+    .filter((r) => importiAdr.has(centesimi(Number(r.importo) || 0)))
+    .map((r) => ({ voce: r.voce, importo: centesimi(Number(r.importo) || 0) }));
+  const somma = (v: number[]) => centesimi(v.reduce((a, n) => a + n, 0));
+  return {
+    adr: somma(adr),
+    senzaRiparto: somma(senzaRiparto),
+    totale: centesimi(somma(adr) + somma(senzaRiparto)),
+    possibiliDoppioni,
+  };
+}
+
 export interface TotaliClassificazione {
   /** Debito certo classificato: contributi + sanzioni (privilegiate e no) + da classificare. */
   certo: number;
