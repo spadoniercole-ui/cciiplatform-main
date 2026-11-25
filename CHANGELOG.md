@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.22**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.27**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,22 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.27 — 2026-11-25
+
+IL DOCUMENTO DI CONFRONTO RITROVA LA SUA BASE.
+
+- **La base scelta alla creazione si legge davvero.** `ottieniScenarioPerId`
+  non leggeva `base_verifica` — la colonna vive nel DDL del tenant, fuori da
+  Drizzle — e il documento di confronto dichiarava «Questo scenario non ha
+  una base» anche sugli scenari aperti da verifica amministrativa o da
+  simulazione aziendale. Ora la legge, e l'assenza resta il segnale degli
+  scenari creati prima che la colonna esistesse.
+- **Verificati a schermo e in stampa i totali per classe.** Con la base
+  amministrativa il confronto mostra le quote per classe e rango con le
+  percentuali del proprio rango, il «da classificare» fuori dai conti e il
+  totale classificato; la certificazione dei debiti porta gli stessi importi
+  nel foglio stampato, anche quando tutte le voci sono «da classificare».
 
 ## 0.256.26 — 2026-11-25
 

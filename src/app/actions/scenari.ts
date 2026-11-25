@@ -201,10 +201,23 @@ export async function ottieniScenarioPerId(
     }
 
     const r = righe[0];
+    // La base non passa da Drizzle: vive nel DDL del tenant, come nell'elenco.
+    // Senza questa lettura il documento di confronto dichiarava «nessuna base»
+    // anche sugli scenari creati con la verifica amministrativa.
+    const { pool } = await import('@/lib/db');
+    let baseVerifica: 'AZIENDALE' | 'AMMINISTRATIVA' | null = null;
+    await pool
+      .query(`SELECT base_verifica FROM "${nomeSchema}".scenari WHERE id = $1`, [scenarioId])
+      .then((esito) => {
+        const valore = esito.rows[0]?.base_verifica;
+        if (valore === 'AZIENDALE' || valore === 'AMMINISTRATIVA') baseVerifica = valore;
+      })
+      .catch(() => undefined);
     return {
       success: true,
       scenario: {
         id: r.id,
+        baseVerifica,
         aziendaId: r.aziendaId,
         nome: r.nome,
         stato: r.stato as StatoScenario,
