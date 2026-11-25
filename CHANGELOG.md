@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.19**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.20**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,36 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.20 — 2026-11-25
+
+OGNI VERIFICA PARLA SOLO DEL PROPRIO DATO.
+
+- **Il primo passo dell'esito amministrativo non parla più di bilancio.** Il riquadro
+  dell'indicatore portava le voci del triage — «4 indici diagnostici di bilancio oltre
+  la soglia» — che sono materia della contabile: in una verifica amministrativa faceva
+  sembrare accertato qualcosa che quella verifica non guarda. Al suo posto stanno le
+  segnalazioni delle verifiche della pagina stessa (check list dei prodotti, con le
+  risposte mancanti e la criticità pesata, e certificazione dei debiti con importo e
+  data): se non c'è nulla da dire, il riquadro non si mostra. Il calcolo sta in
+  `src/lib/posizionePratica/segnalazioni.ts`, con i suoi test.
+- **L'accordo vale alla soglia di riscontro, non alla media proposta.** Nella verifica
+  azienda e nella posizione dell'ente la riga dell'accordo usava
+  `parametri_proposta_redigente.percentuale_media_default` (30%): quella pre-compila le
+  righe della proposta, non dice quanto deve offrire il debitore. Ora usa la soglia di
+  riscontro della proposta (`limiti_ricevibilita.percentuale_minima` delle categorie
+  dell'ente), e la riga si chiama «Accordo alla soglia di riscontro».
+- **Senza rango scelto le procedure si leggono come intervallo.** Il tipo di credito non
+  si conosce nella fase in cui questi numeri si producono: lo stesso ente può vantare
+  crediti di categorie diverse. Invece di «non calcolabile: manca il rango», liquidazione
+  e cram down mostrano ora l'importo dal rango con la percentuale più bassa a quello con
+  la più alta (tabella Scenari del triage), con la dichiarazione che è un conto
+  grossolano: serve ad avvertire, non a fissare l'importo.
+- **Il flag di simulazione alla creazione dello scenario.** La casella mancava: c'era lo
+  stato nel pannello ma nessun comando che lo accendesse. Con il flag lo scenario parte
+  dal piano del passo 3 della verifica aziendale e non richiede i documenti dell'azienda
+  (basta la simulazione salvata come base); senza, la verifica azienda chiede anche il
+  bilancio XBRL, perché il piano si confronta con i prospetti dell'azienda.
 
 ## 0.256.19 — 2026-11-25
 

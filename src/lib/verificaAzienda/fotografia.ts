@@ -225,8 +225,11 @@ export function componiFotografia(input: {
   credito: number | null;
   rango: RangoCredito | null;
   parametri: ParametriScenari;
-  /** La media proposta configurata in Parametri di Spazio, per la riga dell'accordo. */
-  percentualeMediaProposta?: number | null;
+  /**
+   * La soglia di riscontro della proposta configurata per l'ente, per la riga
+   * dell'accordo: il debito per un eventuale accordo deve rispettarla.
+   */
+  sogliaRiscontro?: number | null;
 }): FotografiaVerificaAzienda {
   const anni = colonneFotografia(input.proiezione);
   const credito =
@@ -249,7 +252,7 @@ export function componiFotografia(input: {
         credito,
         rango: input.rango,
         parametri: input.parametri,
-        percentualeMediaProposta: input.percentualeMediaProposta ?? null,
+        sogliaRiscontro: input.sogliaRiscontro ?? null,
       }),
       avvertenze,
       motivo: 'Nessun bilancio XBRL leggibile: la fotografia non ha colonne da mostrare.',
@@ -323,7 +326,7 @@ export function componiFotografia(input: {
       credito,
       rango: input.rango,
       parametri: input.parametri,
-      percentualeMediaProposta: input.percentualeMediaProposta ?? null,
+      sogliaRiscontro: input.sogliaRiscontro ?? null,
     }),
     avvertenze,
     motivo: null,

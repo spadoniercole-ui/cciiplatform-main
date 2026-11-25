@@ -293,7 +293,7 @@ export default async function PosizionePage({
         <PassoProcedura
           numero={4}
           titolo="Accordo e piano in essere"
-          obiettivo="Sapere quanto vale il credito alla percentuale media configurata e se un piano di versamenti è già in essere."
+          obiettivo="Sapere quanto deve valere un eventuale accordo alla soglia di riscontro configurata per l’ente e se un piano di versamenti è già in essere."
         />
         {accordoMedia && (
           <div className="rounded-lg border border-slate-200 p-3">
@@ -308,7 +308,7 @@ export default async function PosizionePage({
             </div>
             <p className="text-[10px] text-slate-500 leading-relaxed">
               {accordoMedia.calcolabile
-                ? `Credito vantato per la ${accordoMedia.percentuale}%: ${accordoMedia.fonte}. Cambiando quella percentuale, cambia questo importo.`
+                ? `Il debito per un eventuale accordo deve rispettare la ${accordoMedia.percentuale}% del credito: ${accordoMedia.fonte}. Cambiando quella soglia nei parametri, cambia questo importo.`
                 : `L’importo non si calcola: ${accordoMedia.motivo}.`}
             </p>
           </div>
@@ -394,10 +394,18 @@ export default async function PosizionePage({
                       </span>
                     </td>
                     <td className="p-2 text-right align-top tabular-nums text-slate-600">
-                      {p.percentuale !== null ? `${p.percentuale}%` : '—'}
+                      {p.percentuale !== null
+                        ? `${p.percentuale}%`
+                        : p.intervallo
+                          ? `${p.intervallo.percentualeDa}–${p.intervallo.percentualeA}%`
+                          : '—'}
                     </td>
                     <td className="p-2 text-right align-top font-bold tabular-nums text-slate-900">
-                      {p.calcolabile ? formattaEuro(p.importo) : 'non calcolabile'}
+                      {p.calcolabile
+                        ? formattaEuro(p.importo)
+                        : p.intervallo
+                          ? `da ${formattaEuro(p.intervallo.importoDa)} a ${formattaEuro(p.intervallo.importoA)}`
+                          : 'non calcolabile'}
                     </td>
                   </tr>
                 ))}
@@ -417,15 +425,17 @@ export default async function PosizionePage({
           </p>
           <p className="text-[10px] text-slate-700 leading-relaxed">
             Questi importi non sono un credito accertato né un esito: sono il debito amministrativo
-            letto alle percentuali dei parametri dello spazio, a mera indicazione di massima. Non si
-            conosce a priori la natura del credito, né si attende una verifica dell’azienda che
-            arrivi fino agli scenari — che restano l’ultimo passo del percorso. Servono a impostare
-            una riflessione sul tipo di recupero possibile, non a fissarne l’importo.
+            letto alle percentuali della tabella Scenari del triage, a mera indicazione di massima.
+            A questa altezza non si conosce il tipo di credito — lo stesso ente può vantare crediti
+            di categorie diverse — quindi il conto è grossolano: serve a dare un avvertimento, non a
+            fissare un importo. Quando gli scenari dell’azienda arriveranno, quegli stessi numeri si
+            rileggeranno sul rango vero.
           </p>
           <p className="text-[10px] text-slate-500 leading-relaxed">
-            I parametri sono tutti in Parametri di Spazio, compresi quelli di un eventuale piano:
-            percentuale media della proposta per l’accordo, tasso di realizzo della liquidazione,
-            percentuale di soddisfacimento del rango per il cram down e i valori del piano. Senza un
+            I parametri sono tutti in Parametri di Spazio: la soglia di riscontro della proposta per
+            l’accordo, il tasso di realizzo e la percentuale di soddisfacimento per rango per
+            liquidazione e cram down. Se il rango del credito non è ancora scelto, l’importo si
+            legge come intervallo fra la percentuale più bassa e la più alta della tabella; senza un
             parametro l’importo non si calcola, e la riga dice perché.
           </p>
         </div>

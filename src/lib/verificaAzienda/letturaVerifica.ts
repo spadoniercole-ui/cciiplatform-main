@@ -93,28 +93,41 @@ async function leggiRangoAzienda(
 }
 
 /**
- * LA MEDIA PROPOSTA. È la percentuale che pre-compila le righe della proposta
- * del Redigente (`parametri_proposta_redigente.percentuale_media_default`): la
- * stessa che serve a dire quanto vale l'accordo in euro sul credito dell'ente.
+ * LA SOGLIA DI RISCONTRO DELLA PROPOSTA (0.256.20). È la percentuale minima del
+ * debito che un eventuale accordo deve rispettare: sta nei Parametri di Spazio,
+ * tabella dei riscontri della proposta (`limiti_ricevibilita.percentuale_minima`),
+ * una riga per categoria di creditore — e le righe legate a un ente dell'art.
+ * 25-novies sono quelle del nostro ente.
  *
- * Se la tabella non c'è ancora — uno spazio che non è mai passato dai parametri
- * della proposta — vale il 30% con cui la piattaforma la crea alla prima
- * apertura (`ottieniPercentualeMediaProposta`). Non è un numero inventato qui:
- * è il default della piattaforma, usato solo finché nessuno lo cambia.
+ * Fino alla 0.256.19 qui si leggeva la media proposta del Redigente (30% di
+ * default): quella pre-compila le righe della proposta, non dice quanto deve
+ * offrire il debitore per essere riscontrato.
+ *
+ * Se le categorie dell'ente portano soglie diverse, non se ne sceglie una: si
+ * resta senza soglia e la riga dell'accordo si dichiara non calcolabile. Se
+ * l'ente non ha righe sue, valgono tutte quelle dello spazio (una sola soglia
+ * comune); se nemmeno così la soglia è unica, resta null.
  */
-const PERCENTUALE_MEDIA_DEFAULT = 30;
-
-async function leggiPercentualeMediaProposta(nomeSchema: string): Promise<number | null> {
+async function leggiSogliaRiscontro(nomeSchema: string): Promise<number | null> {
   try {
     const r = await pool.query(
-      `SELECT percentuale_media_default FROM "${nomeSchema}".parametri_proposta_redigente LIMIT 1`
+      `SELECT percentuale_minima, ente_25novies FROM "${nomeSchema}".limiti_ricevibilita`
     );
-    const v = r.rows[0]?.percentuale_media_default;
-    if (v === null || v === undefined || v === '') return PERCENTUALE_MEDIA_DEFAULT;
-    const n = Number(v);
-    return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+    const righe = r.rows
+      .map((x) => ({
+        pct: x.percentuale_minima === null ? null : Number(x.percentuale_minima),
+        ente: x.ente_25novies ? String(x.ente_25novies).trim().length > 0 : false,
+      }))
+      .filter(
+        (x): x is { pct: number; ente: boolean } =>
+          x.pct !== null && Number.isFinite(x.pct) && x.pct >= 0 && x.pct <= 100
+      );
+    const ente = righe.filter((x) => x.ente);
+    const scelte = ente.length > 0 ? ente : righe;
+    const distinte = [...new Set(scelte.map((x) => x.pct))];
+    return distinte.length === 1 ? distinte[0] : null;
   } catch {
-    return PERCENTUALE_MEDIA_DEFAULT;
+    return null;
   }
 }
 
@@ -212,10 +225,10 @@ export async function leggiVerificaAzienda(
       : null,
   });
 
-  const [rango, parametri, percentualeMediaProposta] = await Promise.all([
+  const [rango, parametri, sogliaRiscontro] = await Promise.all([
     leggiRangoAzienda(nomeSchema, aziendaId),
     leggiParametriScenari(nomeSchema),
-    leggiPercentualeMediaProposta(nomeSchema),
+    leggiSogliaRiscontro(nomeSchema),
   ]);
 
   const fotografia = componiFotografia({
@@ -223,7 +236,7 @@ export async function leggiVerificaAzienda(
     credito: debito?.totale ?? null,
     rango,
     parametri,
-    percentualeMediaProposta,
+    sogliaRiscontro,
   });
 
   // La nota integrativa dell'ultimo bilancio: si mostra accanto alla

@@ -561,7 +561,11 @@ export function VerificaAziendaScheda({
                         {r.percentuale === null ? '—' : `${r.percentuale}%`}
                       </td>
                       <td className="p-2 text-right align-top font-bold tabular-nums text-slate-900">
-                        {r.calcolabile ? euro(r.importo) : 'non calcolabile'}
+                        {r.calcolabile
+                          ? euro(r.importo)
+                          : r.intervallo
+                            ? `da ${euro(r.intervallo.importoDa)} a ${euro(r.intervallo.importoA)}`
+                            : 'non calcolabile'}
                       </td>
                     </tr>
                   ))}
@@ -640,11 +644,13 @@ export function VerificaAziendaScheda({
           })()}
           <p className="text-[10px] text-slate-500 leading-relaxed">
             L’accordo non è un recupero: è la capacità dell’azienda di rispondere del credito con la
-            cassa che ha e con quella che l’esercizio produce. Se non copre l’importo dovuto, la
-            proposta è probabilmente destinata al rigetto — e contano i due esiti collettivi, dove
-            l’interesse dell’ente è il credito vantato. Le percentuali di liquidazione e cram down
-            sono quelle fissate dall’ente per il rango del credito: se mancano, lo scenario non si
-            calcola e lo dice.
+            cassa che ha e con quella che l’esercizio produce, e il debito per un eventuale accordo
+            deve rispettare la soglia di riscontro configurata per l’ente. Se non copre l’importo
+            dovuto, la proposta è probabilmente destinata al rigetto — e contano i due esiti
+            collettivi, dove l’interesse dell’ente è il credito vantato. Le percentuali di
+            liquidazione e cram down sono quelle fissate dall’ente nella tabella Scenari del triage:
+            quando il rango del credito non è scelto, l’importo si legge come intervallo fra la
+            percentuale più bassa e la più alta — un conto grossolano, che serve ad avvertire.
           </p>
 
           {fotografia.avvertenze.map((a, i) => (

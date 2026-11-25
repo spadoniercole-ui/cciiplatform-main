@@ -13,18 +13,20 @@ const parametri: ParametriScenari = {
 };
 
 describe('importiDaPercentuali', () => {
-  it('calcola l’accordo sulla media proposta, con la percentuale accanto', () => {
+  it('l’accordo vale alla soglia di riscontro della proposta, non alla media proposta', () => {
     const righe = importiDaPercentuali({
       credito: 100000,
       rango: 'PRIVILEGIATO',
       parametri,
-      percentualeMediaProposta: 30,
+      sogliaRiscontro: 100,
     });
     const accordo = importoAccordo(righe);
-    expect(accordo?.percentuale).toBe(30);
-    expect(accordo?.importo).toBe(30000);
+    expect(accordo?.etichetta).toBe('Accordo alla soglia di riscontro');
+    expect(accordo?.percentuale).toBe(100);
+    expect(accordo?.importo).toBe(100000);
     expect(accordo?.calcolabile).toBe(true);
-    expect(accordo?.fonte).toContain('media proposta');
+    expect(accordo?.fonte).toContain('soglia di riscontro');
+    expect(accordo?.intervallo).toBeNull();
   });
 
   it('mette l’accordo in testa e le due procedure dopo', () => {
@@ -32,7 +34,7 @@ describe('importiDaPercentuali', () => {
       credito: 100000,
       rango: 'PRIVILEGIATO',
       parametri,
-      percentualeMediaProposta: 30,
+      sogliaRiscontro: 80,
     });
     expect(righe.map((r) => r.codice)).toEqual(['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN']);
   });
@@ -42,7 +44,7 @@ describe('importiDaPercentuali', () => {
       credito: 100000,
       rango: 'PRIVILEGIATO',
       parametri,
-      percentualeMediaProposta: 30,
+      sogliaRiscontro: 80,
     });
     const liq = righe.find((r) => r.codice === 'LIQUIDAZIONE');
     const cram = righe.find((r) => r.codice === 'CRAM_DOWN');
@@ -54,17 +56,17 @@ describe('importiDaPercentuali', () => {
     expect(cram?.importo).toBe(50000);
   });
 
-  it('se manca la media proposta non inventa un importo per l’accordo', () => {
+  it('se manca la soglia non inventa un importo per l’accordo', () => {
     const righe = importiDaPercentuali({
       credito: 100000,
       rango: 'PRIVILEGIATO',
       parametri,
-      percentualeMediaProposta: null,
+      sogliaRiscontro: null,
     });
     const accordo = importoAccordo(righe);
     expect(accordo?.importo).toBeNull();
     expect(accordo?.calcolabile).toBe(false);
-    expect(accordo?.motivo).toMatch(/media proposta/);
+    expect(accordo?.motivo).toMatch(/soglia di riscontro/);
   });
 
   it('senza credito nessuno dei tre importi si calcola, e il motivo lo dice', () => {
@@ -72,12 +74,13 @@ describe('importiDaPercentuali', () => {
       credito: null,
       rango: 'PRIVILEGIATO',
       parametri,
-      percentualeMediaProposta: 30,
+      sogliaRiscontro: 80,
     });
     for (const r of righe) {
       expect(r.importo).toBeNull();
       expect(r.calcolabile).toBe(false);
       expect(r.motivo).toBeTruthy();
+      expect(r.intervallo).toBeNull();
     }
   });
 
@@ -86,24 +89,49 @@ describe('importiDaPercentuali', () => {
       credito: 100000,
       rango: 'PRIVILEGIATO',
       parametri,
-      percentualeMediaProposta: 130,
+      sogliaRiscontro: 130,
     });
     expect(importoAccordo(righe)?.importo).toBeNull();
     expect(importoAccordo(righe)?.motivo).toMatch(/non è configurata/);
   });
 
-  it('senza rango le due procedure si dichiarano non calcolabili, non zero', () => {
+  it('senza rango le procedure si leggono come intervallo, non come «non calcolabile»', () => {
     const righe = importiDaPercentuali({
       credito: 100000,
       rango: null,
       parametri,
-      percentualeMediaProposta: 30,
+      sogliaRiscontro: 80,
     });
     const liq = righe.find((r) => r.codice === 'LIQUIDAZIONE');
     const cram = righe.find((r) => r.codice === 'CRAM_DOWN');
+    // Liquidazione: dal 6,4% (5.120 € netti) al 100% (80.000 € netti).
     expect(liq?.importo).toBeNull();
-    expect(liq?.calcolabile).toBe(false);
-    expect(cram?.importo).toBeNull();
-    expect(cram?.motivo).toMatch(/rango/);
+    expect(liq?.intervallo).toEqual({
+      percentualeDa: 6.4,
+      percentualeA: 100,
+      importoDa: 5120,
+      importoA: 80000,
+    });
+    expect(liq?.motivo).toMatch(/Scenari del triage/);
+    // Cram down: dal 20% (20.000 €) al 100% (100.000 €).
+    expect(cram?.intervallo).toEqual({
+      percentualeDa: 20,
+      percentualeA: 100,
+      importoDa: 20000,
+      importoA: 100000,
+    });
+  });
+
+  it('senza le spese di procedura la liquidazione non ha un intervallo inventato', () => {
+    const righe = importiDaPercentuali({
+      credito: 100000,
+      rango: null,
+      parametri: { ...parametri, costiProceduraPct: null },
+      sogliaRiscontro: 80,
+    });
+    const liq = righe.find((r) => r.codice === 'LIQUIDAZIONE');
+    expect(liq?.intervallo).toBeNull();
+    expect(liq?.importo).toBeNull();
+    expect(liq?.motivo).toMatch(/spese di procedura/);
   });
 });

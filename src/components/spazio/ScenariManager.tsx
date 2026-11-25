@@ -176,6 +176,14 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
     setSituazioneNuova(base === 'AZIENDALE' ? 'PROPOSTA' : 'DECRETO_LIQUIDAZIONE');
   };
 
+  // IL FLAG DI SIMULAZIONE (0.256.20). Con il flag lo scenario parte dal piano
+  // del passo 3 della verifica aziendale: l'ente si costruisce lo scenario da
+  // sé e non ha bisogno dei documenti dell'azienda, che si confrontano dopo.
+  // Senza il flag la verifica azienda richiede anche il bilancio, perché il
+  // confronto si fa sui prospetti dell'azienda.
+  const aziendalePronta =
+    basePronta && (simulazioneAttivaNuova || Boolean(disponibilita?.contabile));
+
   const handleSelezionaAzienda = (aziendaId: number) => {
     setAziendaSelezionata(aziendaId);
     setScenari([]);
@@ -204,9 +212,11 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
       return;
     }
     if (!aziendaSelezionata || !nomeNuovo.trim()) return;
-    if (baseNuova === 'AZIENDALE' && (!basePronta || !disponibilita?.contabile)) {
+    if (baseNuova === 'AZIENDALE' && !aziendalePronta) {
       setErrore(
-        'L’accordo transattivo parte dalla verifica azienda: serve una simulazione salvata come base e un bilancio XBRL.'
+        simulazioneAttivaNuova
+          ? 'La simulazione non ha una base salvata nella verifica azienda: senza, lo scenario non ha un punto di partenza.'
+          : 'L’accordo transattivo parte dalla verifica azienda: serve una simulazione salvata come base e un bilancio XBRL.'
       );
       return;
     }
@@ -370,7 +380,7 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                   <button
                     type="button"
                     onClick={() => scegliBase('AZIENDALE')}
-                    disabled={!basePronta || !disponibilita?.contabile}
+                    disabled={!aziendalePronta}
                     className={`text-left rounded-lg border p-2 transition-colors disabled:opacity-50 ${
                       baseNuova === 'AZIENDALE'
                         ? 'border-blue-400 bg-blue-50 text-blue-900'
@@ -379,9 +389,13 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                   >
                     <span className="block text-[11px] font-bold">Verifica azienda</span>
                     <span className="block text-[10px] text-slate-500 mt-0.5">
-                      {basePronta && disponibilita?.contabile
-                        ? 'Amministrativa e contabile insieme, con la simulazione salvata come base.'
-                        : 'Serve una simulazione salvata come base nella verifica azienda e un bilancio XBRL.'}
+                      {aziendalePronta
+                        ? simulazioneAttivaNuova
+                          ? 'La simulazione salvata nel passo 3 è il punto di partenza: i documenti dell’azienda non servono.'
+                          : 'Amministrativa e contabile insieme, con la simulazione salvata come base.'
+                        : basePronta
+                          ? 'Con il flag di simulazione non servono i documenti dell’azienda; senza il flag serve anche un bilancio XBRL.'
+                          : 'Serve una simulazione salvata come base nella verifica azienda (passo 3) e, senza il flag, un bilancio XBRL.'}
                     </span>
                   </button>
                   <button
@@ -401,6 +415,27 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                     </span>
                   </button>
                 </div>
+                {tipoNuovo === 'RICEVUTA' && (
+                  <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={simulazioneAttivaNuova}
+                      onChange={(e) => setSimulazioneAttivaNuova(e.target.checked)}
+                      className="mt-0.5 h-3.5 w-3.5 accent-blue-600"
+                    />
+                    <span>
+                      <span className="block text-[11px] font-bold text-slate-800">
+                        Simulazione
+                      </span>
+                      <span className="block text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                        Lo scenario parte dal piano del passo 3 della verifica aziendale: l’ente si
+                        costruisce gli scenari e non servono i documenti dell’azienda. Il flag
+                        decide anche quale colonna dei parametri si legge per il calcolo di massima.
+                        Senza il flag il piano si confronta con i prospetti dell’azienda.
+                      </span>
+                    </span>
+                  </label>
+                )}
               </div>
               <div className="space-y-1.5">
                 <p className="block text-[9px] font-bold text-slate-400 uppercase">
@@ -442,10 +477,7 @@ export function ScenariManager({ codiceSpazio, nomeSchema, aziendeConsentite, ti
                 <button
                   type="button"
                   onClick={handleCreaScenario}
-                  disabled={
-                    !nomeNuovo.trim() ||
-                    (baseNuova === 'AZIENDALE' && (!basePronta || !disponibilita?.contabile))
-                  }
+                  disabled={!nomeNuovo.trim() || (baseNuova === 'AZIENDALE' && !aziendalePronta)}
                   className="px-3 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg transition-colors shrink-0"
                 >
                   Crea

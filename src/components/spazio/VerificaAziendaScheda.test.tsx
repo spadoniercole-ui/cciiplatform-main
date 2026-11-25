@@ -117,17 +117,19 @@ const risultato = {
       },
     ],
     confronto: null,
-    // Gli importi dalle percentuali: l'accordo alla media proposta (30%) apre
-    // il confronto, poi le due procedure del rango.
+    // Gli importi dalle percentuali: l'accordo alla soglia di riscontro (80%)
+    // apre il confronto, poi le due procedure del rango. Il cram down, senza
+    // rango scelto, si legge come intervallo fra il 20% e il 100%.
     importiPercentuali: [
       {
         codice: 'ACCORDO' as const,
-        etichetta: 'Accordo alla media proposta',
-        fonte: 'media proposta configurata in Parametri di Spazio',
-        percentuale: 30,
-        importo: 36_000,
+        etichetta: 'Accordo alla soglia di riscontro',
+        fonte: 'soglia di riscontro della proposta configurata in Parametri di Spazio',
+        percentuale: 80,
+        importo: 96_000,
         calcolabile: true,
         motivo: null,
+        intervallo: null,
       },
       {
         codice: 'LIQUIDAZIONE' as const,
@@ -137,6 +139,7 @@ const risultato = {
         importo: 32_400,
         calcolabile: true,
         motivo: null,
+        intervallo: null,
       },
       {
         codice: 'CRAM_DOWN' as const,
@@ -146,6 +149,12 @@ const risultato = {
         importo: null,
         calcolabile: false,
         motivo: 'manca la percentuale di cram down per il rango',
+        intervallo: {
+          percentualeDa: 20,
+          percentualeA: 100,
+          importoDa: 24_000,
+          importoA: 120_000,
+        },
       },
     ],
     avvertenze: [],
@@ -207,9 +216,11 @@ describe('VerificaAziendaScheda — fotografia e tre scenari', () => {
     expect((await screen.findAllByText('Liquidazione giudiziale')).length).toBeGreaterThanOrEqual(
       1
     );
-    // Il confronto si apre con l'accordo alla media proposta, in euro.
-    expect(screen.getByText('Accordo alla media proposta')).toBeTruthy();
-    expect(screen.getByText('36.000 €')).toBeTruthy();
+    // Il confronto si apre con l'accordo alla soglia di riscontro, in euro.
+    expect(screen.getByText('Accordo alla soglia di riscontro')).toBeTruthy();
+    expect(screen.getByText('96.000 €')).toBeTruthy();
+    // Senza rango il cram down si legge come intervallo, non come «non calcolabile».
+    expect(screen.getByText('da 24.000 € a 120.000 €')).toBeTruthy();
     // 32.400 € di recupero e 87.600 € di perdita sul credito di 120.000 €.
     // 32.400 € compare due volte: nel recupero dello scenario e nel recupero
     // minimo del punto di pareggio (è la stessa cifra, con due ruoli).

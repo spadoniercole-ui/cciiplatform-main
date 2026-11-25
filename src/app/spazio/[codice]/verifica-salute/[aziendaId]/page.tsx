@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { ArrowLeft, Building2, FileDown, ShieldAlert } from 'lucide-react';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniAziendaPerId } from '@/app/actions/aziende';
-import { ottieniAttenzioneScreeningAction } from '@/app/actions/attenzioneScreening';
+import { debitoEnteMemorizzatoAction } from '@/app/actions/debitiEnteMemorizzati';
 import { ottieniStoricoVerificheAction } from '@/app/actions/aziendaInVerifica';
 import { ottieniRaccomandazioneAction } from '@/app/actions/raccomandazioneVerifica';
 import { leggiChecklistProdottiAzienda } from '@/lib/prodotti/checklistAzienda';
@@ -18,6 +18,7 @@ import { DebitoMemorizzatoEnte } from '@/components/spazio/DebitoMemorizzatoEnte
 import { FlussiEnteAzienda } from '@/components/spazio/FlussiEnteAzienda';
 import { PassoProcedura } from '@/components/spazio/PassoProcedura';
 import { valutaValidita } from '@/lib/screening/validitaVerifica';
+import { segnalazioniAmministrative } from '@/lib/posizionePratica/segnalazioni';
 
 // L'ESITO DELLA VERIFICA AMMINISTRATIVA (0.194.0).
 //
@@ -32,25 +33,17 @@ import { valutaValidita } from '@/lib/screening/validitaVerifica';
 
 export const dynamic = 'force-dynamic';
 
-const STILE = {
-  ROSSO: {
-    pallino: 'bg-red-500',
-    testo: 'text-red-800',
-    bordo: 'border-red-200',
-    sfondo: 'bg-red-50',
-  },
-  GIALLO: {
-    pallino: 'bg-amber-400',
-    testo: 'text-amber-800',
-    bordo: 'border-amber-200',
-    sfondo: 'bg-amber-50',
-  },
-  ATTENZIONE_MINIMA: {
-    pallino: 'bg-emerald-500',
-    testo: 'text-emerald-800',
-    bordo: 'border-emerald-200',
-    sfondo: 'bg-emerald-50',
-  },
+// IL PRIMO PASSO NON PARLA DI BILANCIO (0.256.20). Il riquadro dell'indicatore
+// portava le voci del triage, che leggono gli indici di bilancio: in una
+// verifica amministrativa il bilancio non c'entra — è materia della contabile
+// — e quelle voci facevano sembrare accertato qualcosa che questa verifica non
+// ha guardato. Al loro posto stanno le segnalazioni delle verifiche che si
+// sviluppano qui sotto: la Check list dei prodotti e la certificazione dei
+// debiti. Se non c'è nulla da dire, il riquadro non si mostra.
+const STILE_SEGNALAZIONE = {
+  OK: 'text-emerald-800',
+  ATTENZIONE: 'text-amber-900',
+  MANCANTE: 'text-slate-600',
 } as const;
 
 export default async function EsitoVerificaAmministrativaPage({
@@ -78,9 +71,9 @@ export default async function EsitoVerificaAmministrativaPage({
     redirect(`/spazio/${codice}/verifica-salute`);
   }
 
-  const [attenzioneRis, storicoRis, raccomandazioneRis, checklistRis, pesataMinisteriale] =
+  const [debitoRis, storicoRis, raccomandazioneRis, checklistRis, pesataMinisteriale] =
     await Promise.all([
-      ottieniAttenzioneScreeningAction(contesto.nomeSchema, id).catch(() => null),
+      debitoEnteMemorizzatoAction(contesto.nomeSchema, id).catch(() => null),
       ottieniStoricoVerificheAction(contesto.nomeSchema).catch(() => null),
       ottieniRaccomandazioneAction(contesto.nomeSchema, id).catch(() => null),
       leggiChecklistProdottiAzienda(contesto.nomeSchema, id).catch(() => null),
@@ -89,7 +82,6 @@ export default async function EsitoVerificaAmministrativaPage({
   const raccomandazione = raccomandazioneRis?.success
     ? (raccomandazioneRis.raccomandazione ?? null)
     : null;
-  const attenzione = attenzioneRis?.success ? (attenzioneRis.attenzione ?? null) : null;
 
   // LA CHECK LIST CHE QUALIFICA È QUELLA DEI PRODOTTI, e ha un peso, non un
   // permesso: il supporto decisionale resta leggibile sempre — è la lettura dei
@@ -103,7 +95,21 @@ export default async function EsitoVerificaAmministrativaPage({
   const prodottiChiesti = (sintesiProdotti?.totale ?? 0) > 0;
   const riga = storicoRis?.success ? storicoRis.righe?.find((v) => v.id === id) : undefined;
   const validita = valutaValidita(riga?.eseguitaIl ?? null);
-  const stile = attenzione ? STILE[attenzione.esito as keyof typeof STILE] : null;
+  // Le segnalazioni del primo passo: check list e debito, cioè le verifiche
+  // della pagina. Nessuna riga sugli indici di bilancio.
+  const segnalazioni = segnalazioniAmministrative({
+    checklist: sintesiProdotti
+      ? {
+          totale: sintesiProdotti.totale,
+          risposte: sintesiProdotti.risposte,
+          mancanti: sintesiProdotti.mancanti,
+        }
+      : null,
+    debito: debitoRis?.debito
+      ? { totale: debitoRis.debito.totale, memorizzatoIl: debitoRis.memorizzatoIl ?? null }
+      : null,
+    percentualeCriticita: pesataMinisteriale,
+  });
 
   // La certificazione dei debiti è la prima scheda: è il dato che la verifica
   // ha appena prodotto. Negli spazi senza ente creditore resta la sola soglia.
@@ -128,7 +134,7 @@ export default async function EsitoVerificaAmministrativaPage({
               Esito della verifica amministrativa — {risultato.azienda.ragioneSociale}
             </h1>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-3xl">
-              Il risultato della verifica resta qui: indicatore di attenzione, certificazione dei
+              Il risultato della verifica resta qui: check list dei prodotti, certificazione dei
               debiti e soglie di segnalazione. La verifica contabile legge il dato storico
               dell’azienda e non ripete questi dati.
             </p>
@@ -168,74 +174,29 @@ export default async function EsitoVerificaAmministrativaPage({
       <div className="px-1">
         <PassoProcedura
           numero={1}
-          titolo="Indicatore di attenzione"
-          obiettivo="Leggere il risultato del triage: che cosa è accertato, che cosa manca, e su quale fattore si concentra l’attenzione."
+          titolo="Segnalazioni delle verifiche"
+          obiettivo="Sapere che cosa dicono le verifiche di questa pagina — il quadro qualitativo della check list dei prodotti e il credito accertato — senza anticipare materie che appartengono ad altre verifiche."
         />
       </div>
 
-      {stile && attenzione && (
-        <div className={`rounded-xl border p-5 space-y-3 ${stile.sfondo} ${stile.bordo}`}>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="flex items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${stile.pallino}`} />
-              <span className={`text-sm font-bold ${stile.testo}`}>{attenzione.etichetta}</span>
-            </span>
-            <span className="text-[11px] text-slate-600">{attenzione.fattoreDeterminante}</span>
-            <span className="text-[11px] text-slate-500">
-              Copertura {attenzione.copertura.determinate}/{attenzione.copertura.totali}
-            </span>
-            <span className="ml-auto text-[11px] text-slate-500">
-              {riga?.eseguitaIl
-                ? `Verificata il ${new Date(riga.eseguitaIl).toLocaleDateString('it-IT')} · ${validita.etichetta}`
-                : 'Data della verifica non registrata'}
-            </span>
-          </div>
-
-          {attenzione.accertato.length > 0 && (
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                Accertato
-              </p>
-              <ul className="mt-1 space-y-0.5">
-                {attenzione.accertato.map((voce, i) => (
-                  <li key={i} className="text-[11px] text-slate-700 leading-relaxed flex gap-1.5">
-                    <span className="text-slate-400 shrink-0">—</span>
-                    <span>{voce}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {attenzione.daAccertare.length > 0 && (
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
-                Da accertare
-              </p>
-              <ul className="mt-1 space-y-0.5">
-                {attenzione.daAccertare.map((voce, i) => (
-                  <li key={i} className="text-[11px] text-slate-600 leading-relaxed flex gap-1.5">
-                    <span className="text-slate-400 shrink-0">—</span>
-                    <span>{voce}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <p className="text-[10px] text-slate-500 leading-relaxed flex items-start gap-1.5">
-            <ShieldAlert className="w-3 h-3 mt-0.5 shrink-0 text-slate-400" />
-            Indicatore di priorità di attenzione, non di probabilità di insolvenza. La scelta su
+      {segnalazioni.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-2">
+          <ul className="space-y-1">
+            {segnalazioni.map((s) => (
+              <li
+                key={s.testo}
+                className={`text-[11px] leading-relaxed flex gap-1.5 ${STILE_SEGNALAZIONE[s.stato]}`}
+              >
+                <span className="text-slate-400 shrink-0">—</span>
+                <span>{s.testo}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            Sono le segnalazioni delle verifiche di questa pagina, non un giudizio: la scelta su
             come procedere resta al valutatore.
           </p>
         </div>
-      )}
-
-      {!attenzione && (
-        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-          L’indicatore non è leggibile per questa azienda: certificazione dei debiti e soglie
-          restano comunque consultabili qui sotto.
-        </p>
       )}
 
       {/* LA CHECK LIST DEI PRODOTTI STA FRA L'ESITO E IL DEBITO (0.223.0).

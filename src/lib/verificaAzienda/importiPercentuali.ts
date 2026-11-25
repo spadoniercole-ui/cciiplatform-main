@@ -1,21 +1,34 @@
-// GLI IMPORTI CHE VENGONO DALLE PERCENTUALI (0.256.4).
+// GLI IMPORTI CHE VENGONO DALLE PERCENTUALI (0.256.4, rivisti nella 0.256.20).
 //
 // La domanda a cui rispondono è una sola: «se applico le percentuali che ho
 // impostato, quanti soldi sono?». Tre righe, tre percentuali diverse:
 //
-//   ACCORDO      la media proposta configurata in Parametri di Spazio (la stessa
-//                che pre-compila le righe della proposta): credito × media.
+//   ACCORDO      la SOGLIA DI RISCONTRO DELLA PROPOSTA (Parametri di Spazio,
+//                «Parametri di riscontro della proposta», colonna
+//                `limiti_ricevibilita.percentuale_minima`): il debito per un
+//                eventuale accordo deve rispettare quella percentuale.
+//                Fino alla 0.256.19 qui si usava la media proposta del
+//                Redigente (30% di default), che è un'altra cosa: quella
+//                pre-compila le righe della proposta, questa dice quanto deve
+//                offrire il debitore perché la proposta sia riscontrata.
 //   LIQUIDAZIONE credito × tasso di realizzo del rango, meno le spese di
 //                procedura: è quello che resta in mano all'ente.
 //   CRAM DOWN    credito × percentuale di soddisfacimento del rango, senza
 //                costi: la percentuale è già l'esito dell'omologazione.
+//
+// QUANDO IL RANGO NON È SCELTO. Il tipo di credito non si conosce nella fase in
+// cui questi numeri si producono: lo stesso ente può vantare crediti di
+// categorie diverse. In quel caso la riga non si dichiara «non calcolabile» e
+// basta: mostra un INTERVALLO, dalla percentuale più bassa alla più alta della
+// tabella «Scenari del triage». È un conto grossolano, e serve a dare un
+// avvertimento — non a fissare un importo.
 //
 // PERCHÉ UN MODULO SOLO. Gli stessi tre importi si leggono nella posizione
 // dell'ente (riquadri «Accordo» e «Procedure») e nella verifica azienda (la
 // prima riga del confronto). Due calcoli per la stessa cosa sono due occasioni
 // di divergere: qui la regola sta una volta, e chi la mostra la legge.
 //
-// NESSUN NUMERO INVENTATO. Se manca il credito, il rango o la percentuale, la
+// NESSUN NUMERO INVENTATO. Se manca il credito, la soglia o la percentuale, la
 // riga si dichiara non calcolabile col motivo; non diventa zero, che si
 // leggerebbe come «recupero nullo».
 //
@@ -24,6 +37,14 @@
 import { calcolaScenari, type ParametriScenari, type RangoCredito } from '@/lib/triage/scenari';
 
 export type CodiceImportoPercentuale = 'ACCORDO' | 'LIQUIDAZIONE' | 'CRAM_DOWN';
+
+/** L'importo quando il rango non è scelto: dal più basso al più alto della tabella. */
+export interface IntervalloImporto {
+  percentualeDa: number;
+  percentualeA: number;
+  importoDa: number;
+  importoA: number;
+}
 
 export interface ImportoPercentuale {
   codice: CodiceImportoPercentuale;
@@ -35,14 +56,24 @@ export interface ImportoPercentuale {
   importo: number | null;
   calcolabile: boolean;
   motivo: string | null;
+  /**
+   * Senza rango scelto: fra quale percentuale e quale importo sta la cifra.
+   * Null quando il rango è noto (allora c'è `importo`) o quando la tabella non
+   * ha nemmeno una percentuale utilizzabile.
+   */
+  intervallo: IntervalloImporto | null;
 }
 
 export interface InputImportiPercentuali {
   credito: number | null;
   rango: RangoCredito | null;
   parametri: ParametriScenari;
-  /** `parametri_proposta_redigente.percentuale_media_default`. */
-  percentualeMediaProposta: number | null;
+  /**
+   * `limiti_ricevibilita.percentuale_minima` dell'ente: la soglia di riscontro
+   * della proposta, cioè la percentuale minima del debito che un accordo deve
+   * rispettare.
+   */
+  sogliaRiscontro: number | null;
 }
 
 const arrotonda = (n: number) => Math.round(n * 100) / 100;
@@ -53,6 +84,9 @@ const numeroValido = (n: number | null): n is number =>
 const percentualeValida = (p: number | null): p is number =>
   typeof p === 'number' && Number.isFinite(p) && p >= 0 && p <= 100;
 
+const motivoIntervallo =
+  'il rango del credito non è scelto: si va dalla percentuale più bassa alla più alta della tabella Scenari del triage';
+
 /**
  * I tre importi, nell'ordine in cui si leggono: prima l'accordo, poi le due
  * procedure. L'ordine è parte del contratto: chi mostra «la prima riga del
@@ -60,23 +94,25 @@ const percentualeValida = (p: number | null): p is number =>
  */
 export function importiDaPercentuali(input: InputImportiPercentuali): ImportoPercentuale[] {
   const credito = numeroValido(input.credito) ? input.credito : null;
-  const media = percentualeValida(input.percentualeMediaProposta)
-    ? input.percentualeMediaProposta
+  const soglia = percentualeValida(input.sogliaRiscontro) ? input.sogliaRiscontro : null;
+  const costi = percentualeValida(input.parametri.costiProceduraPct)
+    ? input.parametri.costiProceduraPct
     : null;
 
   const accordo: ImportoPercentuale = {
     codice: 'ACCORDO',
-    etichetta: 'Accordo alla media proposta',
-    fonte: 'media proposta configurata in Parametri di Spazio',
-    percentuale: media,
-    importo: credito !== null && media !== null ? arrotonda((credito * media) / 100) : null,
-    calcolabile: credito !== null && media !== null,
+    etichetta: 'Accordo alla soglia di riscontro',
+    fonte: 'soglia di riscontro della proposta configurata in Parametri di Spazio',
+    percentuale: soglia,
+    importo: credito !== null && soglia !== null ? arrotonda((credito * soglia) / 100) : null,
+    calcolabile: credito !== null && soglia !== null,
     motivo:
       credito === null
         ? 'il credito dell’ente non è accertato'
-        : media === null
-          ? 'la percentuale media proposta non è configurata'
+        : soglia === null
+          ? 'la soglia di riscontro della proposta non è configurata per l’ente'
           : null,
+    intervallo: null,
   };
 
   const esito = calcolaScenari({
@@ -95,11 +131,56 @@ export function importiDaPercentuali(input: InputImportiPercentuali): ImportoPer
       : 'non calcolabile con i parametri attuali';
   };
 
+  /** Il minimo e il massimo fra i ranghi configurati, per la percentuale nota. */
+  const intervalloDa = (
+    valore: (pct: number) => number | null,
+    percentuali: number[]
+  ): IntervalloImporto | null => {
+    if (credito === null || percentuali.length === 0) return null;
+    const importi = percentuali
+      .map((pct) => {
+        const importo = valore(pct);
+        return importo === null ? null : { pct, importo: arrotonda(importo) };
+      })
+      .filter((x): x is { pct: number; importo: number } => x !== null);
+    if (importi.length === 0) return null;
+    const conMin = importi.reduce((min, x) => (x.importo < min.importo ? x : min));
+    const conMax = importi.reduce((max, x) => (x.importo > max.importo ? x : max));
+    return {
+      percentualeDa: Math.min(...importi.map((x) => x.pct)),
+      percentualeA: Math.max(...importi.map((x) => x.pct)),
+      importoDa: conMin.importo,
+      importoA: conMax.importo,
+    };
+  };
+
+  const percentualiLiquidazione = input.parametri.ranghi
+    .map((r) => r.tassoLiquidazionePct)
+    .filter(percentualeValida);
+  const percentualiCram = input.parametri.ranghi
+    .map((r) => r.cramDownPct)
+    .filter(percentualeValida);
+
+  // La liquidazione ha un costo: ogni rango si legge al netto delle spese di
+  // procedura, come nel motore degli scenari.
+  const intervalloLiquidazione =
+    costi === null
+      ? null
+      : intervalloDa(
+          (pct) => (credito === null ? null : ((credito * pct) / 100) * (1 - costi / 100)),
+          percentualiLiquidazione
+        );
+  const intervalloCram = intervalloDa(
+    (pct) => (credito === null ? null : (credito * pct) / 100),
+    percentualiCram
+  );
+
   const daIpotesi = (
     codice: 'LIQUIDAZIONE' | 'CRAM_DOWN',
     ipotesi: typeof esito.liquidazione,
     etichetta: string,
-    fonte: string
+    fonte: string,
+    intervallo: IntervalloImporto | null
   ): ImportoPercentuale => ({
     codice,
     etichetta,
@@ -107,7 +188,8 @@ export function importiDaPercentuali(input: InputImportiPercentuali): ImportoPer
     percentuale: ipotesi.percentuale,
     importo: ipotesi.calcolabile ? ipotesi.netto : null,
     calcolabile: ipotesi.calcolabile,
-    motivo: ipotesi.calcolabile ? null : motivoIpotesi(ipotesi),
+    motivo: ipotesi.calcolabile ? null : intervallo ? motivoIntervallo : motivoIpotesi(ipotesi),
+    intervallo: ipotesi.calcolabile ? null : intervallo,
   });
 
   return [
@@ -116,9 +198,16 @@ export function importiDaPercentuali(input: InputImportiPercentuali): ImportoPer
       'LIQUIDAZIONE',
       esito.liquidazione,
       'Liquidazione giudiziale',
-      'tasso di realizzo del rango, al netto delle spese di procedura'
+      'tasso di realizzo del rango, al netto delle spese di procedura',
+      intervalloLiquidazione
     ),
-    daIpotesi('CRAM_DOWN', esito.cramDown, 'Cram down', 'percentuale di soddisfacimento del rango'),
+    daIpotesi(
+      'CRAM_DOWN',
+      esito.cramDown,
+      'Cram down',
+      'percentuale di soddisfacimento del rango',
+      intervalloCram
+    ),
   ];
 }
 
