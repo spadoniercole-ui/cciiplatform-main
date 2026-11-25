@@ -46,6 +46,45 @@ describe('confronto fra provvedimento e posizione debitoria dell’ente', () => 
     expect(esito.elementiContestabili).toHaveLength(1);
   });
 
+  it('porta accanto al rango dell’atto la classe e il rango della voce dell’ente', () => {
+    const esito = confrontaProvvedimento(
+      [
+        {
+          voce: 'TS 27 flusso Uniemens non versato',
+          importo: 3_404.02,
+          classe:
+            'Contributi · grado I + Sanzioni civili · grado VIII + Sanzioni civili · chirografo',
+          rangoEnte: null,
+        },
+        {
+          voce: 'Contributi INPS DM10',
+          importo: 1_000,
+          classe: 'Contributi · grado I',
+          rangoEnte: 'PRIVILEGIATO',
+        },
+      ],
+      lettura([
+        {
+          voce: 'Contributi INPS DM10',
+          importo: 1_000,
+          rango: 'CHIROGRAFARIO',
+          privilegio: null,
+          percentualeRealizzo: 40,
+          documento: null,
+          passo: null,
+        },
+      ]),
+      'DECRETO_LIQUIDAZIONE'
+    );
+    const flusso = esito.voci.find((v) => v.voce.startsWith('TS 27'))!;
+    expect(flusso.classeEnte).toContain('Contributi · grado I');
+    expect(flusso.rangoConforme).toBeNull();
+    const contributi = esito.voci.find((v) => v.voce === 'Contributi INPS DM10')!;
+    expect(contributi.classeEnte).toBe('Contributi · grado I');
+    expect(contributi.rangoEnte).toBe('PRIVILEGIATO');
+    expect(contributi.rangoConforme).toBe(false);
+  });
+
   it('un credito non riscontrato concorre alla perdita e alla contestazione', () => {
     const esito = confrontaProvvedimento(
       [{ voce: 'Canoni di locazione', importo: 5_000 }],

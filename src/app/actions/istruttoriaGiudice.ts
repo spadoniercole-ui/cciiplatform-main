@@ -43,6 +43,8 @@ import {
   type VoceEnte,
 } from '@/lib/giudice/confronto';
 import { vociEnteDaFonti, type VoceEnte as VocePosizione } from '@/lib/giudice/posizioneEnte';
+import { classificaRigaCompleta } from '@/lib/debitiEnte/classificazioneCredito';
+import type { RangoCredito } from '@/lib/triage/scenari';
 
 export interface DocumentoProvvedimento {
   nome: string;
@@ -192,7 +194,7 @@ async function leggiVociEnte(
       .catch(() => ({ rows: [] as VocePosizione[] })),
     pool
       .query(
-        `SELECT voce, importo FROM "${nomeSchema}".debiti_vera
+        `SELECT voce, importo, contributi, sanzioni, stato, ambito FROM "${nomeSchema}".debiti_vera
           WHERE azienda_id = $1
             AND trattamento IN ('contabilizzato', 'da_contabilizzare')
           ORDER BY id ASC`,
@@ -211,11 +213,39 @@ async function leggiVociEnte(
   };
   const righe = (elenco: VocePosizione[]): VocePosizione[] =>
     elenco.map((r) => ({ voce: String(r.voce), importo: numero(r.importo) }));
+  // LE RIGHE DELLA CERTIFICAZIONE PORTANO LA CLASSE. Le altre fonti no: la
+  // posizione contabile dell'ente non separa contributi e sanzioni. Dove la
+  // classe c'è, il confronto con l'atto mostra anche il rango che l'ente
+  // attribuisce alla voce.
+  const conClasse = (elenco: Record<string, unknown>[]): VocePosizione[] =>
+    elenco.map((r) => {
+      const importo = numero(r.importo);
+      const cls = classificaRigaCompleta({
+        voce: String(r.voce ?? ''),
+        importo,
+        stato: String(r.stato ?? ''),
+        contributi:
+          r.contributi === null || r.contributi === undefined ? null : numero(r.contributi),
+        sanzioni: r.sanzioni === null || r.sanzioni === undefined ? null : numero(r.sanzioni),
+        ambito: r.ambito === 'AGENTE_RISCOSSIONE' ? 'AGENTE_RISCOSSIONE' : 'INPS',
+      });
+      const ranghi = Array.from(
+        new Set(cls.quote.map((q) => q.rango).filter((x): x is RangoCredito => x !== null))
+      );
+      return {
+        voce: String(r.voce ?? ''),
+        importo,
+        classe: cls.quote.length > 0 ? cls.quote.map((q) => q.etichetta).join(' + ') : null,
+        // Un rango unico si confronta con quello dell'atto; una riga mista
+        // (contributi e sanzioni insieme) no, e non si sceglie per lei.
+        rangoEnte: ranghi.length === 1 ? ranghi[0] : null,
+      };
+    });
   const totaleMemorizzato = memorizzato.rows[0]?.totale;
   return vociEnteDaFonti({
     azienda: righe(perAzienda.rows),
     scenario: righe(perScenario.rows),
-    certificazione: righe(certificazione.rows),
+    certificazione: conClasse(certificazione.rows as Record<string, unknown>[]),
     memorizzato: totaleMemorizzato === undefined ? null : numero(totaleMemorizzato),
   });
 }

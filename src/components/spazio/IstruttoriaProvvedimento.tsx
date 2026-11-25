@@ -365,6 +365,7 @@ export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoA
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-slate-500">
                   <th className="border-b border-slate-200 px-2 py-2">Voce</th>
+                  <th className="border-b border-slate-200 px-2 py-2">Classe e rango (ente)</th>
                   <th className="border-b border-slate-200 px-2 py-2">Ente</th>
                   <th className="border-b border-slate-200 px-2 py-2">Giudice</th>
                   <th className="border-b border-slate-200 px-2 py-2">Differenza</th>
@@ -384,7 +385,31 @@ export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoA
                             nel provvedimento: {v.voceGiudice}
                           </p>
                         )}
-                        {v.rango && <p className="text-[10px] text-slate-500">{v.rango}</p>}
+                        {v.rango && (
+                          <p className="text-[10px] text-slate-500">
+                            provvedimento: {v.rango}
+                            {v.rangoConforme === false && (
+                              <span className="ml-1 inline-block rounded border border-amber-300 bg-amber-50 px-1 py-0.5 text-[9px] font-bold text-amber-800">
+                                rango difforme
+                              </span>
+                            )}
+                          </p>
+                        )}
+                      </td>
+                      {/* LA CLASSE DELL'ENTE ACCANTO AL RANGO DELL'ATTO: si vede subito
+                          se i contributi sono trattati come privilegiati e le sanzioni
+                          come chirografe. Il «da classificare» resta scritto come tale. */}
+                      <td className="border-b border-slate-100 px-2 py-2 text-[10px] text-slate-600">
+                        {v.classeEnte ? (
+                          <>
+                            <p>{v.classeEnte}</p>
+                            {v.rangoEnte && (
+                              <p className="text-slate-500">rango ente: {v.rangoEnte}</p>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="border-b border-slate-100 px-2 py-2 tabular-nums text-slate-700">
                         {euro(v.importoEnte)}

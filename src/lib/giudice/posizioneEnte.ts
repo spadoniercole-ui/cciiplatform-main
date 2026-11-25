@@ -22,6 +22,14 @@
 export interface VoceEnte {
   voce: string;
   importo: number;
+  /**
+   * La classe del credito, quando la voce viene dalla certificazione dei debiti:
+   * è ciò che permette di vedere, nel confronto con l'atto, se il provvedimento
+   * tratta i contributi come privilegiati e le sanzioni come chirografe.
+   */
+  classe?: string | null;
+  /** Il rango che la classe comporta, se la riga ne ha uno solo. */
+  rangoEnte?: string | null;
 }
 
 export interface FontiVociEnte {
@@ -44,7 +52,14 @@ function vociValide(righe: VoceEnte[]): VoceEnte[] {
       (r) =>
         typeof r.importo === 'number' && Number.isFinite(r.importo) && Math.abs(r.importo) >= 0.005
     )
-    .map((r) => ({ voce: String(r.voce), importo: r.importo }));
+    .map((r) => ({
+      voce: String(r.voce),
+      importo: r.importo,
+      // I campi facoltativi restano tali: chi non li ha non se li vede
+      // comparire come null nella voce della posizione.
+      ...(r.classe ? { classe: r.classe } : {}),
+      ...(r.rangoEnte ? { rangoEnte: r.rangoEnte } : {}),
+    }));
 }
 
 /**

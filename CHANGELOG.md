@@ -26,6 +26,26 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.26 — 2026-11-25
+
+IL CONFRONTO COL PROVVEDIMENTO DICE ANCHE LA CLASSE DELLA VOCE.
+
+- **Accanto al rango dell'atto c'è quello che l'ente attribuisce alla voce.**
+  Nel confronto voce per voce con decreto e cram down, ogni riga della
+  posizione porta la classe ricavata dalla certificazione (contributi · grado
+  I, sanzioni civili · grado VIII, chirografo, «da classificare») e il rango
+  che ne deriva. Si vede subito se il provvedimento tratta i contributi come
+  privilegiati e le sanzioni come chirografe, senza ricostruire la
+  composizione a mano.
+- **Il rango difforme si segnala da sé.** Quando la voce dell'ente ha un rango
+  unico e il provvedimento ne indica uno diverso, la riga lo dichiara. Una
+  voce mista — contributi e sanzioni in una sola riga — non riceve un rango
+  d'ufficio: il confronto resta sulle quote e la riga lo dice.
+- **La classe viaggia con la voce della posizione.** `VoceEnte` la porta da
+  `posizioneEnte.ts` al confronto (`confronto.ts`), che la riporta in ogni
+  `DifferenzaVoce`; i confronti già salvati restano leggibili, semplicemente
+  senza la colonna.
+
 ## 0.256.25 — 2026-11-25
 
 ANCHE IL FOGLIO STAMPATO DICE DOVE SI COLLOCA IL CREDITO.

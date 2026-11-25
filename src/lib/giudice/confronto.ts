@@ -23,6 +23,10 @@ import type { LetturaProvvedimento, TipoAttoGiudice } from './lettura';
 export interface VoceEnte {
   voce: string;
   importo: number;
+  /** Classe del credito dalla certificazione («Contributi · grado I», …). */
+  classe?: string | null;
+  /** Rango che la classe comporta, quando la voce ne ha uno solo. */
+  rangoEnte?: string | null;
 }
 
 export type EsitoVoce =
@@ -38,6 +42,16 @@ export interface DifferenzaVoce {
   differenza: number | null;
   differenzaPct: number | null;
   esito: EsitoVoce;
+  /** La classe del credito secondo la posizione dell'ente, se ricavabile. */
+  classeEnte: string | null;
+  /** Il rango che la posizione dell'ente attribuisce alla voce (solo se unico). */
+  rangoEnte: string | null;
+  /**
+   * Il rango del provvedimento coincide con quello dell'ente? null quando
+   * manca uno dei due, o quando la voce dell'ente mescola più ranghi (una
+   * riga con contributi e sanzioni): lì il confronto va fatto sulle quote.
+   */
+  rangoConforme: boolean | null;
   /** Importo che l'ente incasserebbe applicando la percentuale dell'atto; null se non dichiarata. */
   realizzoAtteso: number | null;
   nota: string;
@@ -142,6 +156,22 @@ export function somiglianza(a: string, b: string): number {
 
 const SOGLIA_ABBINAMENTO = 0.6;
 
+/**
+ * Il rango scritto nel provvedimento, ridotto ai valori che la piattaforma
+ * conosce. Il giudice lo scrive in mille modi («privilegiato ex art. 2753»,
+ * «chirografario», «privilegio generale mobiliare»): si riconosce la parola,
+ * non si inventa il grado. Un testo che non dice nulla resta null.
+ */
+export function rangoDaProvvedimento(testo: string | null | undefined): string | null {
+  const t = (testo ?? '').toLowerCase();
+  if (!t.trim()) return null;
+  if (/prededuc/.test(t)) return 'PREDEDUCIBILE';
+  if (/postergat/.test(t)) return 'POSTERGATO';
+  if (/chirograf/.test(t)) return 'CHIROGRAFARIO';
+  if (/privileg|ipotec|prelazion/.test(t)) return 'PRIVILEGIATO';
+  return null;
+}
+
 const arrotonda = (n: number) => Math.round(n * 100) / 100;
 
 const sogliaDifformita = (importo: number) => Math.max(1, Math.abs(importo) * 0.01);
@@ -200,6 +230,9 @@ export function confrontaProvvedimento(
         differenza: null,
         differenzaPct: null,
         esito: 'NON_RISCONTRATO',
+        classeEnte: v.classe ?? null,
+        rangoEnte: v.rangoEnte ?? null,
+        rangoConforme: null,
         realizzoAtteso: null,
         nota: notaVoce('NON_RISCONTRATO', null),
       });
@@ -215,6 +248,8 @@ export function confrontaProvvedimento(
     const realizzo =
       c.percentualeRealizzo === null ? null : arrotonda((c.importo * c.percentualeRealizzo) / 100);
 
+    const rangoProvvedimento = rangoDaProvvedimento(c.rango);
+    const rangoEnte = v.rangoEnte ?? null;
     voci.push({
       voce: v.voce,
       voceGiudice: c.voce,
@@ -224,6 +259,10 @@ export function confrontaProvvedimento(
       differenza,
       differenzaPct: v.importo !== 0 ? arrotonda((differenza / v.importo) * 100) : null,
       esito,
+      classeEnte: v.classe ?? null,
+      rangoEnte,
+      rangoConforme:
+        rangoProvvedimento === null || rangoEnte === null ? null : rangoProvvedimento === rangoEnte,
       realizzoAtteso: realizzo,
       nota: notaVoce(esito, differenza),
     });
@@ -240,6 +279,9 @@ export function confrontaProvvedimento(
       differenza: null,
       differenzaPct: null,
       esito: 'NON_PRESENTE_NEI_DATI_ENTE',
+      classeEnte: null,
+      rangoEnte: null,
+      rangoConforme: null,
       realizzoAtteso:
         c.percentualeRealizzo === null
           ? null
