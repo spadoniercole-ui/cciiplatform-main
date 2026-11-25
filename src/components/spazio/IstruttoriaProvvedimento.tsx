@@ -149,6 +149,7 @@ export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoA
 
   const confronto: Confronto | null = stato?.confronto ?? null;
   const lettura = stato?.lettura ?? null;
+  const stima = stato?.stima ?? null;
   const haDocumenti = (stato?.documenti?.length ?? 0) > 0;
   const puoGenerare = Boolean(stato?.confronto && !stato.relazione);
 
@@ -297,6 +298,69 @@ export function IstruttoriaProvvedimento({ nomeSchema, scenarioId, codice, tipoA
                 : 'Carica e leggi il provvedimento'}
             </button>
           </>
+        )}
+
+        {/* LA STIMA PRIMA DELL'ATTO (0.256.28). Con il flag di simulazione lo
+            scenario non aspetta i documenti dell'azienda: il recupero si
+            calcola sul credito accertato con le percentuali dell'ente, e la
+            perdita è la differenza rispetto al credito vantato. Il
+            provvedimento, quando arriva, prende il posto di questa stima. */}
+        {!lettura && stima && (
+          <div className="border-t border-slate-100 pt-3 space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-sky-700">
+              Stima senza provvedimento — flag di simulazione
+            </p>
+            <p className="text-[11px] text-slate-600 leading-relaxed">
+              Lo scenario lavora con quello che ha già: il credito accertato nella verifica
+              amministrativa e le percentuali fissate dall’ente nei parametri. Il recupero atteso è
+              quantificato con l’
+              {stima.tipo === 'CRAM_DOWN'
+                ? 'ipotesi di cram down'
+                : 'ipotesi di liquidazione giudiziale'}
+              , e la perdita è la differenza rispetto al credito vantato.
+            </p>
+            {stima.credito === 0 ? (
+              <p className="text-[11px] text-amber-800">
+                La verifica amministrativa non ha ancora il riparto tra contributi e sanzioni: senza
+                le quote classificate il credito di {euro(stima.escluso)} resta fuori dai conti e la
+                perdita non si stima.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-500">Credito vantato</p>
+                  <p className="text-slate-900 tabular-nums">{euro(stima.credito)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-500">Recupero atteso</p>
+                  <p className="text-slate-900 tabular-nums">{euro(stima.recupero)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-500">Perdita</p>
+                  <p className="text-red-700 font-bold tabular-nums">{euro(stima.perdita)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-500">
+                    Perdita sul credito
+                  </p>
+                  <p className="text-slate-900 tabular-nums">{percentuale(stima.perditaPct)}</p>
+                </div>
+              </div>
+            )}
+            {stima.credito > 0 && stima.escluso > 0 && (
+              <p className="text-[11px] text-amber-800">
+                Fuori dai conti {euro(stima.escluso)}: il documento non separa contributi e
+                sanzioni.
+              </p>
+            )}
+            {stima.mancanti.length > 0 && (
+              <p className="text-[11px] text-slate-500">{stima.mancanti.join(' ')}</p>
+            )}
+            <p className="text-[10px] text-slate-500">
+              Stima parametrica, non una lettura dell’atto: quando il provvedimento arriva, i suoi
+              numeri prendono il posto di questi.
+            </p>
+          </div>
         )}
 
         {lettura && (

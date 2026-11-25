@@ -10,7 +10,7 @@ situazioni):
 
 - **Cloud** — la piattaforma SaaS servita da Vercel. Numerazione `0.x`
   (allineata a `version` in `package.json` e a `APP_VERSION`). Ultima
-  release cloud: **0.256.27**. (I numeri 0.102–0.104 non sono stati riusati
+  release cloud: **0.256.28**. (I numeri 0.102–0.104 non sono stati riusati
   per il cloud: erano già comparsi su build portable consegnate, così
   nessun numero è mai condiviso tra le due linee.)
 - **Portable** — l'edizione stand-alone da chiavetta USB. Contatore
@@ -25,6 +25,26 @@ sale per cambi strutturali importanti, il secondo per funzionalità nuove,
 il terzo per correzioni.
 
 ---
+
+## 0.256.28 — 2026-11-25
+
+TRE COSE CHE NON TORNAVANO: IL PULSANTE, LE RATE, L'ATTO CHE NON C'È.
+
+- **L'AI torna a muovere le manopole.** Nel percorso Redigente il contesto del
+  confronto con il piano dell'azienda non arrivava mai, e il pulsante «L'AI
+  imposta le manopole» restava spento senza spiegazione. Ora il contesto
+  (crescita di riferimento, soglie) si legge direttamente quando il pannello
+  del confronto non c'è; con il confronto presente vale quello come prima.
+- **La restituzione del debito non resta a zero.** Se la proposta non porta
+  rate e il debito accertato c'è, il piano lo distribuisce sugli anni
+  dell'orizzonte e il piede della tabella dice che le rate vengono dal debito
+  accertato: «restituzione in 5 anni» non convive più con rate a 0.
+- **Con il flag di simulazione l'istruttoria non aspetta l'atto.** Nella
+  pagina del provvedimento compare la stima parametrica: il credito accertato
+  nella verifica amministrativa, il recupero atteso con le percentuali
+  dell'ente (liquidazione, con le spese di procedura; cram down, senza) e la
+  perdita rispetto al credito vantato. Quando il provvedimento arriva, la
+  lettura dell'atto prende il posto della stima.
 
 ## 0.256.27 — 2026-11-25
 

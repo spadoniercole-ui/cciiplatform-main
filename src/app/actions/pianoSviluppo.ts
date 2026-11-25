@@ -34,6 +34,7 @@ import {
   verificaRicevibilitaProposta,
 } from '@/app/actions/propostaScenario';
 import {
+  rateDaDebitoAccertato,
   rateDaProposta,
   type EsercizioStorico,
   type IpotesiPiano,
@@ -78,6 +79,8 @@ export interface DatiPianoSviluppo {
   storico: EsercizioStorico[];
   partenza: PartenzaPiano;
   rate: RatePiano;
+  /** Le rate non vengono dalla proposta ma dal debito accertato (0.256.28). */
+  rateDaDebito?: boolean;
   orizzonte: number;
   ipotesi: IpotesiPiano;
   /** Ricevente: rettifiche delle manopole sul piano dell'azienda. */
@@ -300,6 +303,16 @@ export async function ottieniPianoSviluppoAction(
         .catch(() => ({ rows: [] as Record<string, unknown>[] }));
       pianoVerifica = pianoVerificaDaColonne(va.rows[0]?.colonne);
     }
+    // LA RESTITUZIONE DEL DEBITO NON PUÒ RESTARE A ZERO. Se la proposta non
+    // porta rate e il debito accertato c'è, il piano lo restituisce comunque
+    // sugli anni dell'orizzonte: altrimenti si leggerebbe «restituzione in 5
+    // anni» accanto a rate a zero.
+    const haRateDaProposta = rate.ente.concat(rate.altri).some((v) => v > 0);
+    const rateFinali =
+      !haRateDaProposta && debitoTarget !== null && debitoTarget > 0
+        ? { ente: rateDaDebitoAccertato(debitoTarget, orizzonte), altri: rate.altri }
+        : rate;
+    const rateDaDebito = !haRateDaProposta && debitoTarget !== null && debitoTarget > 0;
     const contesto = await leggiParametriContesto(nomeSchema).catch(() => []);
     const scr = await pool
       .query(`SELECT visura_fatti FROM "${nomeSchema}".azienda_screening WHERE azienda_id = $1`, [
@@ -312,7 +325,8 @@ export async function ottieniPianoSviluppoAction(
       dati: {
         storico,
         partenza,
-        rate,
+        rate: rateFinali,
+        rateDaDebito,
         orizzonte,
         ipotesi: (piano.rows[0]?.ipotesi as IpotesiPiano) ?? {},
         rettifiche: rettifichePulite(piano.rows[0]?.rettifiche),

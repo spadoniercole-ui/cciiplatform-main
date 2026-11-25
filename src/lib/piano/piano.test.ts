@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   calcolaPiano,
+  rateDaDebitoAccertato,
   rateDaProposta,
   aliquotaImplicita,
   type EsercizioStorico,
@@ -90,5 +91,17 @@ describe('piano di sviluppo', () => {
     expect(aliquotaImplicita({ ...S, costiProduzione: 900_000, utileEsercizio: 84_000 })).toBe(
       27.59
     );
+  });
+
+  it('rate dal debito accertato: il debito torna per intero sugli anni', () => {
+    const rate = rateDaDebitoAccertato(245_000, 5);
+    expect(rate).toHaveLength(5);
+    expect(rate[0]).toBe(49_000);
+    expect(rate.reduce((a, b) => a + b, 0)).toBe(245_000);
+  });
+
+  it('rate dal debito accertato: resto sui centesimi nell’ultima rata', () => {
+    const rate = rateDaDebitoAccertato(100, 3);
+    expect(rate.reduce((a, b) => a + b, 0)).toBe(100);
   });
 });

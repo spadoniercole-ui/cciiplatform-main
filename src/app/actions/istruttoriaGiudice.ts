@@ -45,6 +45,12 @@ import {
 import { vociEnteDaFonti, type VoceEnte as VocePosizione } from '@/lib/giudice/posizioneEnte';
 import { classificaRigaCompleta } from '@/lib/debitiEnte/classificazioneCredito';
 import type { RangoCredito } from '@/lib/triage/scenari';
+import { RANGHI, type ParametriScenari } from '@/lib/triage/scenari';
+import { denunceDuplicateVera, insiemeEsclusi } from '@/lib/debitiEnte/duplicatiVera';
+import {
+  stimaSenzaProvvedimento,
+  type StimaSenzaProvvedimento,
+} from '@/lib/giudice/stimaSenzaProvvedimento';
 
 export interface DocumentoProvvedimento {
   nome: string;
@@ -62,6 +68,12 @@ export interface StatoIstruttoriaGiudice {
   generataIl?: string | null;
   /** Nessuna posizione debitoria dell'ente per questa azienda: il confronto non esiste. */
   posizioneAssente?: boolean;
+  /**
+   * Stima parametrica della perdita quando il provvedimento non c'è ancora
+   * (flag di simulazione): il recupero atteso dalle percentuali dell'ente sul
+   * credito accertato, e la perdita rispetto al credito vantato.
+   */
+  stima?: StimaSenzaProvvedimento | null;
   error?: string;
 }
 
@@ -250,6 +262,82 @@ async function leggiVociEnte(
   });
 }
 
+/**
+ * La stima parametrica senza provvedimento: le righe della certificazione
+ * (la stessa cifra una volta sola, doppie scritture escluse) con i parametri
+ * dell'ente. Non tocca l'istruttoria: è una lettura.
+ */
+async function stimaDaPosizione(
+  nomeSchema: string,
+  aziendaId: number,
+  tipo: 'DECRETO_LIQUIDAZIONE' | 'CRAM_DOWN'
+): Promise<StimaSenzaProvvedimento | null> {
+  try {
+    const numero = (v: unknown): number | null => {
+      if (v === null || v === undefined || v === '') return null;
+      const n = typeof v === 'number' ? v : Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    const [vera, config, ranghi] = await Promise.all([
+      pool
+        .query(
+          `SELECT voce, importo, stato, contributi, sanzioni, ambito
+             FROM "${nomeSchema}".debiti_vera WHERE azienda_id = $1 ORDER BY id ASC`,
+          [aziendaId]
+        )
+        .catch(() => ({ rows: [] as Record<string, unknown>[] })),
+      pool
+        .query(`SELECT costi_procedura_pct FROM "${nomeSchema}".parametri_scenari WHERE id = 1`)
+        .catch(() => ({ rows: [] as { costi_procedura_pct?: unknown }[] })),
+      pool
+        .query(
+          `SELECT rango, tasso_liquidazione_pct, cram_down_pct
+             FROM "${nomeSchema}".parametri_scenari_rango`
+        )
+        .catch(() => ({ rows: [] as Record<string, unknown>[] })),
+    ]);
+    const escluse = insiemeEsclusi(
+      denunceDuplicateVera(
+        vera.rows.map((r) => ({
+          voce: String(r.voce ?? ''),
+          importo: Number(r.importo ?? 0),
+          stato: r.stato === null || r.stato === undefined ? undefined : String(r.stato),
+          periodo: r.periodo === null || r.periodo === undefined ? undefined : String(r.periodo),
+          contributi: numero(r.contributi),
+          sanzioni: numero(r.sanzioni),
+        }))
+      )
+    );
+    const righe = vera.rows
+      .filter((_, i) => !escluse.has(i))
+      .map((r) => ({
+        voce: String(r.voce ?? ''),
+        importo: Number(r.importo ?? 0),
+        stato: String(r.stato ?? ''),
+        contributi: numero(r.contributi),
+        sanzioni: numero(r.sanzioni),
+        ambito:
+          r.ambito === 'AGENTE_RISCOSSIONE' ? ('AGENTE_RISCOSSIONE' as const) : ('INPS' as const),
+      }));
+    if (righe.length === 0) return null;
+    const perRango = new Map(ranghi.rows.map((r) => [String(r.rango), r]));
+    const parametri: ParametriScenari = {
+      costiProceduraPct: numero(config.rows[0]?.costi_procedura_pct),
+      ranghi: RANGHI.map((r) => {
+        const salvata = perRango.get(r.codice);
+        return {
+          rango: r.codice,
+          tassoLiquidazionePct: numero(salvata?.tasso_liquidazione_pct),
+          cramDownPct: numero(salvata?.cram_down_pct),
+        };
+      }),
+    };
+    return stimaSenzaProvvedimento(righe, parametri, tipo);
+  } catch {
+    return null;
+  }
+}
+
 /** Lo stato dell'istruttoria, per riaprire la pagina senza perdere nulla. */
 export async function ottieniIstruttoriaGiudiceAction(
   nomeSchema: string,
@@ -266,6 +354,13 @@ export async function ottieniIstruttoriaGiudiceAction(
     const tipo = (scenario.scenario.tipoIstruttoria ?? 'PROPOSTA') as TipoAttoGiudice;
     const stato = await rigaEsistente(nomeSchema, scenarioId);
     const vociEnte = await leggiVociEnte(nomeSchema, scenario.scenario.aziendaId, scenarioId);
+    // Con il flag di simulazione lo scenario non aspetta l'atto: stima il
+    // recupero sui dati che ha già (posizione accertata e parametri dell'ente).
+    const stima =
+      scenario.scenario.simulazioneAttiva &&
+      (tipo === 'DECRETO_LIQUIDAZIONE' || tipo === 'CRAM_DOWN')
+        ? await stimaDaPosizione(nomeSchema, scenario.scenario.aziendaId, tipo)
+        : null;
     return {
       success: true,
       tipoIstruttoria: tipo,
@@ -276,6 +371,7 @@ export async function ottieniIstruttoriaGiudiceAction(
       letturaIl: stato?.letturaIl ?? null,
       generataIl: stato?.generataIl ?? null,
       posizioneAssente: vociEnte.length === 0,
+      stima,
     };
   } catch (error: any) {
     console.error('[ottieniIstruttoriaGiudiceAction] Errore:', error);

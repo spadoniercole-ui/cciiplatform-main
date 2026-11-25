@@ -346,6 +346,21 @@ export function euro(n: number): string {
 }
 
 /**
+ * Le rate quando la proposta non ne porta: il debito accertato diviso gli anni
+ * del piano. Serve a non leggere «restituzione in 5 anni» accanto a rate a
+ * zero — il debito c'è, e il piano lo restituisce.
+ */
+export function rateDaDebitoAccertato(debito: number, anni: number): number[] {
+  const n = Math.max(1, Math.round(anni));
+  if (!Number.isFinite(debito) || debito <= 0) return new Array(n).fill(0);
+  const rata = debito / n;
+  const out = new Array(n - 1).fill(0).map(() => r2(rata));
+  const ultima = r2(debito - r2(rata) * (n - 1));
+  out.push(ultima < 0 ? 0 : ultima);
+  return out;
+}
+
+/**
  * Rate annue dal piano della proposta: per ogni riga, importo offerto
  * (dovuto × percentuale) distribuito sui mesi delle rate, poi sommato per
  * anno del piano. L'ente dello spazio va nelle rate «ente», il resto in «altri».

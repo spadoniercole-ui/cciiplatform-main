@@ -48,6 +48,8 @@ import {
   ConfrontoPianoAziendale,
   type ContestoConfronto,
 } from '@/components/spazio/ConfrontoPianoAziendale';
+import { ottieniConfrontoPianoAction } from '@/app/actions/pianoAziendale';
+import { crescitaDiRiferimento } from '@/lib/piano/automatico';
 import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
 import {
   LEVE,
@@ -155,6 +157,11 @@ export function PianoSviluppoScenario({
   const [modificato, setModificato] = useState(false);
   // Contesto per l'AI, calcolato dal riquadro del confronto (settore già letto lì).
   const [contestoConfronto, setContestoConfronto] = useState<ContestoConfronto | null>(null);
+  // Il contesto che il confronto con il piano dell'azienda produce non esiste
+  // nel percorso Redigente (quel pannello non c'è). L'elaborazione con l'AI ne
+  // ha bisogno per la crescita di riferimento e le soglie: qui si legge da
+  // solo, così il pulsante non resta spento senza un motivo visibile.
+  const [contestoBase, setContestoBase] = useState<ContestoConfronto | null>(null);
   const [aiInCorso, setAiInCorso] = useState(false);
   const [avvisoAi, setAvvisoAi] = useState<string | null>(null);
   // L'ATTENZIONE DELLA CONTABILE E IL LANCIO (0.256.14). Il riquadro «Dove si
@@ -221,6 +228,32 @@ export function PianoSviluppoScenario({
     carica('base');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nomeSchema, scenarioId, aziendaId]);
+
+  // Il contesto che manca al percorso Redigente: crescita di riferimento e
+  // soglie si leggono dalla stessa fonte del confronto, senza il pannello.
+  useEffect(() => {
+    if (contestoConfronto || contestoBase || !dati || dati.storico.length === 0) return;
+    let annullato = false;
+    (async () => {
+      const r = await ottieniConfrontoPianoAction(nomeSchema, scenarioId, aziendaId);
+      if (annullato || !r.success || !r.dati) return;
+      const crescita = crescitaDiRiferimento(
+        r.dati.settore.punti,
+        r.dati.settore.descrizione,
+        dati.storico,
+        r.dati.parametri.limiteTassoCrescita
+      );
+      setContestoBase({
+        crescita: { tasso: crescita.tasso, descrizione: crescita.descrizione },
+        soglie: r.dati.soglie,
+        pianoAzienda: null,
+        scostamenti: [],
+      });
+    })();
+    return () => {
+      annullato = true;
+    };
+  }, [contestoConfronto, contestoBase, dati, nomeSchema, scenarioId, aziendaId]);
 
   // L'attenzione della contabile si legge una volta per azienda: è materia sua,
   // non dello scenario. Se non è leggibile la simulazione va avanti senza.
@@ -447,8 +480,12 @@ export function PianoSviluppoScenario({
     await carica(variante);
   };
 
+  // Il contesto per l'AI: quello del confronto quando c'è, altrimenti quello
+  // letto qui sopra. Il pulsante non si spegne per un pannello assente.
+  const contestoAi = contestoConfronto ?? contestoBase;
+
   const elaboraConAi = async () => {
-    if (!dati || !esito || !contestoConfronto) return;
+    if (!dati || !esito || !contestoAi) return;
     if (
       dati.varianti.includes(VARIANTE_AI) &&
       !(await confermaApp(
@@ -464,13 +501,13 @@ export function PianoSviluppoScenario({
         lato: tipoProposta === 'RICEVUTA' ? 'RICEVUTA' : 'DA_DEFINIRE',
         orizzonte,
         storico: dati.storico.slice(0, 3),
-        crescita: contestoConfronto.crescita,
+        crescita: contestoAi.crescita,
         rate: {
           ente: dati.rate.ente.slice(0, orizzonte),
           altri: dati.rate.altri.slice(0, orizzonte),
         },
-        pianoAzienda: contestoConfronto.pianoAzienda,
-        scostamenti: contestoConfronto.scostamenti,
+        pianoAzienda: contestoAi.pianoAzienda,
+        scostamenti: contestoAi.scostamenti,
         ipotesiCorrenti: ipotesi,
         attenzioneContabile: attenzione?.testo ?? null,
         lancio: testoLancio(lancio),
@@ -957,7 +994,7 @@ export function PianoSviluppoScenario({
               <button
                 type="button"
                 onClick={elaboraConAi}
-                disabled={aiInCorso || !contestoConfronto || !esito}
+                disabled={aiInCorso || !contestoAi || !esito}
                 className="flex items-center gap-1 px-2 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white font-bold text-[10px] uppercase rounded-lg"
                 title={
                   modoRettifica
@@ -1429,7 +1466,9 @@ export function PianoSviluppoScenario({
           Partenza: {dati.partenza.etichetta}.{' '}
           {anniRientro && pianoRientro
             ? `Rate del piano di rientro: debito di ${euro(debitoDaRestituire)} in ${anniRientro} ${anniRientro === 1 ? 'anno' : 'anni'} — ente ${euro(rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))}.`
-            : `Rate dalla proposta: ente ${euro(dati.rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))}, altri creditori ${euro(dati.rate.altri.slice(0, orizzonte).reduce((x, y) => x + y, 0))}.`}
+            : dati.rateDaDebito
+              ? `Rate calcolate sul debito accertato (la proposta non ne porta): ente ${euro(rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))} in ${orizzonte} anni.`
+              : `Rate dalla proposta: ente ${euro(dati.rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))}, altri creditori ${euro(dati.rate.altri.slice(0, orizzonte).reduce((x, y) => x + y, 0))}.`}
         </p>
       </div>
 
