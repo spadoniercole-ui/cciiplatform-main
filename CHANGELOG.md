@@ -26,6 +26,22 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.41 — 2026-11-26
+
+IL PIANO DELL’ANALISI DICE CON CHE PARAMETRI È NATO.
+
+- **Niente numeri da inventare.** A manopole a zero il riquadro non chiede più all’operatore di
+  «rifare le ipotesi»: dice che quel piano ripete l’ultimo bilancio e che l’azione è l’elaborazione
+  dell’analisi, che fissa crescita, costi e margini con i bilanci, il settore e il contesto. Se il
+  piano fermo è invece quello dell’analisi, la scelta è sua e la motivazione sta accanto alle righe.
+- **I parametri che l’analisi ha usato.** Sotto le manopole, la variante dell’analisi mostra le
+  ipotesi salvate anno per anno con la loro motivazione, il riferimento di settore e il lancio
+  (procedura, offerta, anni, impostazione): cambiarli è a rischio dell’operatore, perché il piano
+  non è più quello scelto dall’analisi.
+- **La variante precedente si mette da parte.** Una nuova elaborazione non riscrive più
+  «elaborazione-ai»: quella riga diventa «elaborazione-ai-archiviata-N» e resta confrontabile,
+  mentre la nuova elaborazione scrive la sua. L’archiviazione avviene solo a risposta riuscita.
+
 ## 0.256.40 — 2026-11-26
 
 IL PROMPT NON CHIEDE I CAMPI DEL LANCIO GIÀ FISSATI.

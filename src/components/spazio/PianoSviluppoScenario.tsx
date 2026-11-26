@@ -55,6 +55,7 @@ import {
 import { ottieniConfrontoPianoAction } from '@/app/actions/pianoAziendale';
 import { crescitaDiRiferimento } from '@/lib/piano/automatico';
 import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
+import { parametriElaborazione } from '@/lib/piano/riepilogoElaborazione';
 import {
   LEVE,
   LEVE_PREDEFINITE,
@@ -439,6 +440,17 @@ export function PianoSviluppoScenario({
   const base = dati.storico[0];
   const anniPiano = esito?.anni ?? [];
   const manopole = definizioniManopole(base, aliquotaImplicita(base) ?? 27.9);
+  // I PARAMETRI DELL'ANALISI (0.256.41): le ipotesi salvate con la variante —
+  // non quelle che il pannello mostra mentre si girano le manopole — perché il
+  // piano che si legge è l'esito di quei valori. La variante dell'analisi si
+  // riconosce anche quando è stata messa da parte da una nuova elaborazione.
+  const parametriAnalisi = parametriElaborazione(dati.ipotesi, orizzonte, base.anno + 1);
+  const varianteDellAnalisi =
+    dati.variante === VARIANTE_AI || dati.variante.startsWith(`${VARIANTE_AI}-`);
+  // Il riquadro è dei parametri dell'analisi: le motivazioni lo dicono anche
+  // quando la variante è una copia di quella dell'analisi. Per un piano scritto
+  // a mano sarebbe un doppione delle manopole.
+  const parametriDaAnalisi = varianteDellAnalisi || parametriAnalisi.some((p) => !!p.motivazione);
 
   // LE VARIABILI FERME (0.256.34). Se i ricavi del piano ripetono quelli
   // dell'ultimo bilancio per tutti gli anni e nessuna leva è accesa, la tabella
@@ -583,7 +595,7 @@ export function PianoSviluppoScenario({
     if (
       dati.varianti.includes(VARIANTE_AI) &&
       !(await confermaApp(
-        'Esiste già la variante «elaborazione-ai»: una nuova elaborazione la riscrive. Le altre varianti restano come sono; se è il progetto del piano, l’elaborazione si ferma senza toccarla.',
+        'Esiste già la variante «elaborazione-ai»: una nuova elaborazione la mette da parte — resta tra le varianti con un nome suo, «elaborazione-ai-archiviata-N» — e ne scrive una nuova. Se è il progetto del piano, l’elaborazione si ferma senza toccarla.',
         { titolo: 'Nuova elaborazione con l’AI', etichettaConferma: 'Elabora di nuovo' }
       ))
     )
@@ -1194,15 +1206,66 @@ export function PianoSviluppoScenario({
               ))}
             </div>
 
+            {parametriDaAnalisi && parametriAnalisi.length > 0 && (
+              <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-900">
+                  I parametri con cui l’analisi è arrivata a questo piano
+                </p>
+                <p className="text-[10px] text-violet-950/80 leading-relaxed">
+                  Sono le ipotesi salvate con la variante «{dati.variante}», anno per anno. Il piano
+                  che leggi è l’esito di questi valori: se li cambi, il piano non è più quello
+                  scelto dall’analisi, e la scelta diventa tua. Una nuova elaborazione non li
+                  sovrascrive: mette da parte questa variante e ne scrive un’altra.
+                </p>
+                {contestoAi && (
+                  <p className="text-[10px] text-violet-950/80 leading-relaxed">
+                    <strong>Riferimento di settore:</strong>{' '}
+                    {`${contestoAi.crescita.tasso}% annuo${
+                      contestoAi.crescita.descrizione ? ` — ${contestoAi.crescita.descrizione}` : ''
+                    }.`}
+                  </p>
+                )}
+                <ul className="space-y-1 border-t border-violet-200 pt-2">
+                  {parametriAnalisi.map((p) => (
+                    <li key={p.riga} className="text-[11px] text-slate-800 leading-relaxed">
+                      <span className="font-semibold">{p.etichetta}</span>: {p.percorso}.
+                      {p.motivazione && (
+                        <span className="block text-[10px] text-violet-800">
+                          AI: {p.motivazione}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                  {dati.lancio && (
+                    <li className="text-[11px] text-slate-800 leading-relaxed">
+                      <span className="font-semibold">Lancio</span>:{' '}
+                      {ETICHETTA_PROCEDURA[dati.lancio.procedura]} · offerta{' '}
+                      {dati.lancio.percentualeOfferta === null
+                        ? 'come la proposta'
+                        : `${dati.lancio.percentualeOfferta}%`}
+                      {' · '}restituzione{' '}
+                      {dati.lancio.anniRientro === null
+                        ? 'come la proposta'
+                        : `${dati.lancio.anniRientro} ${dati.lancio.anniRientro === 1 ? 'anno' : 'anni'}`}
+                      {' · '}impostazione {dati.lancio.prudenza.toLowerCase()}.
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+
             {pianoFermo && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900 leading-relaxed">
                 <strong>
-                  I ricavi restano {fmt(base.ricaviVendite)} per tutti gli anni del piano.
+                  Le manopole sono a zero: il piano ripete {fmt(base.ricaviVendite)} € di ricavi per
+                  tutti gli anni.
                 </strong>{' '}
-                Se non è una scelta, il piano non prevede sviluppo: chiedi all’analisi di rifare le
-                ipotesi partendo dalla crescita (fatturato, incidenza dei costi, tecnologia,
-                ambiente), oppure accendi le leve che servono e rilancia l’elaborazione. Le leve
-                sono le variabili che l’analisi usa, e le scegli tu.
+                {varianteDellAnalisi
+                  ? 'È una scelta dell’analisi, non un’ipotesi che manca: la motivazione sta accanto alle righe. Se non la condividi, cambia i parametri qui sopra e rilancia l’elaborazione.'
+                  : 'Non devi inventare dei numeri: premi «L’AI imposta manopole e scelte» e sarà l’analisi a fissare crescita, costi e margini con i bilanci, il settore e il contesto economico. Le manopole mostreranno il percorso che ne risulta.'}
+                {!varianteDellAnalisi && dati.varianti.includes(VARIANTE_AI) && (
+                  <> Il piano dell’analisi è nella variante «elaborazione-ai».</>
+                )}
               </div>
             )}
 

@@ -39,7 +39,13 @@ interface PianoConfronto {
 }
 
 const nomeVariante = (v: string): string =>
-  v === 'base' ? 'Piano base' : v === VARIANTE_AI ? 'Piano AI' : `Variante ${v}`;
+  v === 'base'
+    ? 'Piano base'
+    : v === VARIANTE_AI
+      ? 'Piano AI'
+      : v.startsWith(`${VARIANTE_AI}-archiviata-`)
+        ? 'Piano AI messo da parte'
+        : `Variante ${v}`;
 
 export function ConfrontaPianiScenario({
   nomeSchema,

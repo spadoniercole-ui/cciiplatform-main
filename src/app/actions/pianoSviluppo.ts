@@ -29,6 +29,7 @@ import {
   validaRisposta,
   type ContestoElaborazione,
 } from '@/lib/piano/elaborazioneAi';
+import { nomeArchivioElaborazione } from '@/lib/piano/variantiPiano';
 import {
   ottieniPropostaScenario,
   verificaRicevibilitaProposta,
@@ -948,6 +949,23 @@ export async function elaboraPianoConAiAction(
     ]
       .filter(Boolean)
       .join('\n');
+    // LA VARIANTE PRECEDENTE SI METTE DA PARTE (0.256.41). Prima una nuova
+    // elaborazione riscriveva «elaborazione-ai» e il piano di prima spariva.
+    // Ora quella riga prende un nome suo e resta tra le varianti, confrontabile;
+    // l'archiviazione è qui, dopo la risposta del modello, così un'elaborazione
+    // fallita non tocca il piano che c'era.
+    const nomiVarianti = await pool.query(
+      `SELECT variante FROM "${s}".piano_sviluppo WHERE scenario_id = $1`,
+      [scenarioId]
+    );
+    const variantiEsistenti = nomiVarianti.rows.map((r) => String(r.variante));
+    if (variantiEsistenti.includes(VARIANTE_AI)) {
+      await pool.query(
+        `UPDATE "${s}".piano_sviluppo SET variante = $3
+          WHERE scenario_id = $1 AND variante = $2 AND progetto = FALSE`,
+        [scenarioId, VARIANTE_AI, nomeArchivioElaborazione(variantiEsistenti)]
+      );
+    }
     await pool.query(
       `INSERT INTO "${s}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, leve, lancio, salvato_il)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
