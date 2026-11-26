@@ -1304,6 +1304,13 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   // impostazione. Prima viveva solo nello stato del browser: richiamare una
   // variante restituiva le ipotesi ma non le scelte che le avevano prodotte.
   await eseguiDdlTenant(sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS lancio JSONB`);
+  // La ricerca del piano (0.256.42): quali manopole il motore ha girato dopo
+  // la proposta dell'analisi, da che valore a che valore e quale vincolo stava
+  // chiudendo. Resta con la variante, così il pannello la racconta anche dopo
+  // un ricaricamento.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS ricerca JSONB`
+  );
   // Il progetto (0.256.31): la variante scelta come progetto del piano è
   // definitiva — non si cancella e non si sovrascrive. Una sola per scenario.
   await eseguiDdlTenant(

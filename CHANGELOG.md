@@ -26,6 +26,26 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.42 — 2026-11-26
+
+IL MOTORE CERCA IL PIANO, NON LO PROPONE IN UN COLPO SOLO.
+
+- **La ricerca gira davvero le manopole.** Dopo la risposta dell’analisi il server chiama
+  `cercaPiano` (`src/lib/piano/ricercaPiano.ts`): a piccoli passi alza la crescita dei ricavi,
+  taglia la crescita dei costi, accende e rinforza le leve, spegne la tecnologia che non produce
+  cassa nei primi anni, e ricalcola il piano a ogni tentativo finché le rate sono coperte, la cassa
+  resta positiva e il patrimonio non si erode. Si ferma appena i vincoli si chiudono, non al tetto
+  dello spazio; deterministico, senza chiamate all’AI e con un tetto dichiarato di tentativi.
+- **I ricavi non restano fermi senza un vincolo.** Un piano che ripete l’ultimo bilancio per tutti
+  gli anni è un vincolo aperto, non un’ipotesi prudente: la ricerca lo alza. Restano fermi solo
+  quando un vincolo documentato (contabilità, procedure, note integrative) lo impone.
+- **La traccia delle mosse.** Ogni manopola girata lascia un passo con il valore di partenza,
+  quello di arrivo e il vincolo che stava chiudendo; il pannello mostra «Le manopole che il motore
+  ha girato», quanti piani ha calcolato e che cosa resta aperto. La ricerca si salva nella nuova
+  colonna `ricerca` della variante e la nota dell’elaborazione la racconta.
+- **Un piano che non arriva lo dice.** Se le manopole ammesse non chiudono i vincoli, i vincoli
+  aperti restano scritti accanto al piano, invece di essere coperti da numeri gonfiati.
+
 ## 0.256.41 — 2026-11-26
 
 IL PIANO DELL’ANALISI DICE CON CHE PARAMETRI È NATO.

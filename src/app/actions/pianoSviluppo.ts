@@ -23,6 +23,7 @@ import { rettifichePulite, applicaRettifiche, type Rettifiche } from '@/lib/pian
 import { ipotesiDaPianoAzienda, valoriPuliti } from '@/lib/piano/pianoAziendale';
 import {
   VARIANTE_AI,
+  VARIAZIONE_MASSIMA_PREDEFINITA,
   modoRettifiche,
   promptElaborazione,
   validaRettificheAi,
@@ -30,6 +31,13 @@ import {
   type ContestoElaborazione,
 } from '@/lib/piano/elaborazioneAi';
 import { nomeArchivioElaborazione } from '@/lib/piano/variantiPiano';
+import {
+  cercaPiano,
+  notaRicerca,
+  ricercaDaSalvare,
+  ricercaPulita,
+  type RicercaSalvata,
+} from '@/lib/piano/ricercaPiano';
 import {
   ottieniPropostaScenario,
   verificaRicevibilitaProposta,
@@ -141,6 +149,12 @@ export interface DatiPianoSviluppo {
    * restituzione, impostazione. Null quando la variante non ne ha.
    */
   lancio: LancioPiano | null;
+  /**
+   * La ricerca che ha prodotto il piano (0.256.42): le manopole girate dal
+   * motore dopo la proposta dell'analisi e i vincoli che restano aperti. Null
+   * per le varianti scritte a mano.
+   */
+  ricerca: RicercaSalvata | null;
   /**
    * true quando la variante ha una riga sua: la «base» vive nel browser finché
    * non si salva, e `varianti` la elenca anche quando non esiste (0.256.32).
@@ -376,6 +390,7 @@ export async function ottieniPianoSviluppoAction(
         parametriContesto: contesto.filter((c) => c.valore.length > 0).length,
         leve: leveDaSalvate(piano.rows[0]?.leve),
         lancio: lancioDaSalvato(piano.rows[0]?.lancio),
+        ricerca: ricercaPulita(piano.rows[0]?.ricerca),
         salvata: piano.rows.length > 0,
         progetto: piano.rows[0]?.progetto === true,
         progettoIl: piano.rows[0]?.progetto_il
@@ -753,6 +768,7 @@ export async function elaboraPianoConAiAction(
   ipotesi?: IpotesiPiano;
   sintesi?: string;
   scartati?: string[];
+  ricerca?: RicercaSalvata;
   error?: string;
 }> {
   try {
@@ -907,6 +923,41 @@ export async function elaboraPianoConAiAction(
     // cambiate, la proposta dell'analisi non le riscrive. La sintesi dice che
     // cosa l'analisi avrebbe proposto, così la scelta resta sua.
     const leveFinali = c.leveModificate ? leveScelte : (esito.leve ?? leveScelte);
+    // LA RICERCA DEL PIANO (0.256.42). L'analisi scrive il punto di partenza,
+    // il motore gira le manopole a piccoli passi — crescita dei ricavi, costi,
+    // leve — finché rate, cassa e patrimonio stanno in piedi, e restituisce il
+    // piano che ci arriva insieme alla traccia delle mosse. Se non ci arriva,
+    // lo dice: non gonfia i numeri oltre i limiti dello spazio.
+    const capitaleSociale = await (async (): Promise<number | null> => {
+      const aziendaId = scenarioCorrente?.success ? scenarioCorrente.scenario?.aziendaId : null;
+      if (!aziendaId) return null;
+      const r = await pool
+        .query(`SELECT visura_fatti FROM "${s}".azienda_screening WHERE azienda_id = $1`, [
+          aziendaId,
+        ])
+        .catch(() => ({ rows: [] as { visura_fatti?: { capitaleSociale?: unknown } }[] }));
+      const cap = r.rows[0]?.visura_fatti?.capitaleSociale;
+      return typeof cap === 'number' && Number.isFinite(cap) ? cap : null;
+    })();
+    const ricerca = cercaPiano({
+      storico: c.storico[0],
+      orizzonte: c.orizzonte,
+      rate: { ente: c.rate.ente, altri: c.rate.altri },
+      capitaleSociale,
+      ipotesiIniziali: esito.ipotesi,
+      leveIniziali: leveFinali,
+      variazioneMassimaPct: opzioni.variazioneMassimaPct ?? VARIAZIONE_MASSIMA_PREDEFINITA,
+      // I vincoli documentati sono quelli che il pannello manda già all'analisi:
+      // se ce n'è uno, i ricavi possono restare fermi.
+      vincoliDocumentati: c.vincoli,
+      // Con il piano dell'azienda rettificato il percorso di ricavi e costi è
+      // quello rettificato: la ricerca agisce sulle leve.
+      percorsoFisso: modoRettifiche(c),
+      leveBloccate: c.leveModificate,
+    });
+    esito.ipotesi = ricerca.ipotesi;
+    const levePiano = ricerca.leve;
+    const ricercaSalvata = ricercaDaSalvare(ricerca);
     const propostaScartata =
       c.leveModificate && esito.leve
         ? `Le leve erano già state scelte dall’operatore: la proposta dell’analisi (${
@@ -942,6 +993,7 @@ export async function elaboraPianoConAiAction(
         ? `L’analisi proponeva di restituire il debito in più anni dell’orizzonte: la restituzione resta entro i ${c.orizzonte} anni del piano.`
         : '',
       esito.sintesi,
+      notaRicerca(ricerca),
       propostaScartata,
       esito.scartati.length
         ? `Valori scartati perché fuori dagli intervalli ammessi: ${esito.scartati.join('; ')}.`
@@ -967,10 +1019,10 @@ export async function elaboraPianoConAiAction(
       );
     }
     await pool.query(
-      `INSERT INTO "${s}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, leve, lancio, salvato_il)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+      `INSERT INTO "${s}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, leve, lancio, ricerca, salvato_il)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
        ON CONFLICT (scenario_id, variante) DO UPDATE SET orizzonte = $3, ipotesi = $4, note = $5, rettifiche = $6,
-         leve = $7, lancio = COALESCE($8, piano_sviluppo.lancio), salvato_il = now()`,
+         leve = $7, lancio = COALESCE($8, piano_sviluppo.lancio), ricerca = $9, salvato_il = now()`,
       [
         scenarioId,
         VARIANTE_AI,
@@ -978,8 +1030,9 @@ export async function elaboraPianoConAiAction(
         JSON.stringify(esito.ipotesi),
         nota,
         rettifiche ? JSON.stringify(rettifiche) : null,
-        JSON.stringify(leveFinali),
+        JSON.stringify(levePiano),
         lancioFinale ? JSON.stringify(lancioFinale) : null,
+        JSON.stringify(ricercaSalvata),
       ]
     );
     return {
@@ -987,6 +1040,7 @@ export async function elaboraPianoConAiAction(
       ipotesi: esito.ipotesi,
       sintesi: esito.sintesi,
       scartati: esito.scartati,
+      ricerca: ricercaSalvata,
     };
   } catch (error: unknown) {
     console.error('[elaboraPianoConAiAction]', error);

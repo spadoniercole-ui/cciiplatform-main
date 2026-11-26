@@ -56,6 +56,7 @@ import { ottieniConfrontoPianoAction } from '@/app/actions/pianoAziendale';
 import { crescitaDiRiferimento } from '@/lib/piano/automatico';
 import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
 import { parametriElaborazione } from '@/lib/piano/riepilogoElaborazione';
+import { passiRaggruppati } from '@/lib/piano/ricercaPiano';
 import {
   LEVE,
   LEVE_PREDEFINITE,
@@ -445,6 +446,10 @@ export function PianoSviluppoScenario({
   // piano che si legge è l'esito di quei valori. La variante dell'analisi si
   // riconosce anche quando è stata messa da parte da una nuova elaborazione.
   const parametriAnalisi = parametriElaborazione(dati.ipotesi, orizzonte, base.anno + 1);
+  // Le manopole che il motore ha girato per far stare in piedi il piano
+  // (0.256.42), raggruppate per manopola: chi legge vede dove è arrivata, non
+  // ogni singolo scatto.
+  const passiRicerca = passiRaggruppati(dati.ricerca?.passi ?? []);
   const varianteDellAnalisi =
     dati.variante === VARIANTE_AI || dati.variante.startsWith(`${VARIANTE_AI}-`);
   // Il riquadro è dei parametri dell'analisi: le motivazioni lo dicono anche
@@ -1212,9 +1217,10 @@ export function PianoSviluppoScenario({
                   I parametri con cui l’analisi è arrivata a questo piano
                 </p>
                 <p className="text-[10px] text-violet-950/80 leading-relaxed">
-                  Sono le ipotesi salvate con la variante «{dati.variante}», anno per anno. Il piano
-                  che leggi è l’esito di questi valori: se li cambi, il piano non è più quello
-                  scelto dall’analisi, e la scelta diventa tua. Una nuova elaborazione non li
+                  Sono le ipotesi salvate con la variante «{dati.variante}», anno per anno: quelle
+                  scritte dall’analisi e quelle che la ricerca del motore ha portato a quel valore.
+                  Il piano che leggi è l’esito di questi valori: se li cambi, il piano non è più
+                  quello scelto dall’analisi, e la scelta diventa tua. Una nuova elaborazione non li
                   sovrascrive: mette da parte questa variante e ne scrive un’altra.
                 </p>
                 {contestoAi && (
@@ -1251,6 +1257,42 @@ export function PianoSviluppoScenario({
                     </li>
                   )}
                 </ul>
+                {dati.ricerca && (passiRicerca.length > 0 || dati.ricerca.aperti.length > 0) && (
+                  <div className="space-y-1 border-t border-violet-200 pt-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-violet-900">
+                      Le manopole che il motore ha girato
+                    </p>
+                    <p className="text-[10px] text-violet-950/80 leading-relaxed">
+                      L’analisi ha scritto il punto di partenza; il motore ha poi cercato il piano
+                      che copre le rate e tiene la cassa positiva, calcolando{' '}
+                      {dati.ricerca.tentativi} piani.{' '}
+                      {dati.ricerca.soddisfatto
+                        ? 'Con queste manopole i vincoli sono chiusi.'
+                        : 'Non tutti i vincoli si chiudono con le manopole ammesse dallo spazio.'}
+                    </p>
+                    {passiRicerca.length > 0 && (
+                      <ul className="space-y-1">
+                        {passiRicerca.map((p) => (
+                          <li
+                            key={p.manopola}
+                            className="text-[11px] text-slate-800 leading-relaxed"
+                          >
+                            <span className="font-semibold">{p.manopola}</span>: da {p.da} a {p.a}
+                            {p.volte > 1 ? ` in ${p.volte} passaggi` : ''}.
+                            <span className="block text-[10px] text-violet-800">
+                              Motore: {p.perche}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {dati.ricerca.aperti.length > 0 && (
+                      <p className="text-[10px] text-amber-900 leading-relaxed">
+                        <strong>Restano aperti:</strong> {dati.ricerca.aperti.join(' ')}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1261,7 +1303,7 @@ export function PianoSviluppoScenario({
                   tutti gli anni.
                 </strong>{' '}
                 {varianteDellAnalisi
-                  ? 'È una scelta dell’analisi, non un’ipotesi che manca: la motivazione sta accanto alle righe. Se non la condividi, cambia i parametri qui sopra e rilancia l’elaborazione.'
+                  ? 'Non è un’ipotesi che manca: un vincolo documentato impone di non far crescere i ricavi, e la motivazione sta accanto alle righe. La ricerca del motore non ha alzato la crescita proprio per quel vincolo: se non lo condividi, cambia i parametri qui sopra e rilancia l’elaborazione.'
                   : 'Non devi inventare dei numeri: premi «L’AI imposta manopole e scelte» e sarà l’analisi a fissare crescita, costi e margini con i bilanci, il settore e il contesto economico. Le manopole mostreranno il percorso che ne risulta.'}
                 {!varianteDellAnalisi && dati.varianti.includes(VARIANTE_AI) && (
                   <> Il piano dell’analisi è nella variante «elaborazione-ai».</>

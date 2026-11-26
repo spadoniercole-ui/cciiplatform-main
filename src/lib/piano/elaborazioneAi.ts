@@ -15,6 +15,12 @@
 // Velocità: una sola chiamata, contesto compatto costruito con i dati già
 // caricati nella pagina (nessuna nuova lettura dal database), risposta JSON
 // breve e validata qui, senza seconde chiamate di correzione.
+//
+// La risposta è il PUNTO DI PARTENZA, non il piano finito: dopo la validazione
+// il server chiama `cercaPiano` (src/lib/piano/ricercaPiano.ts), che è
+// deterministico e gira le manopole finché i vincoli si chiudono (0.256.42).
+// Così il piano non è una proposta in un colpo solo, e ogni sua ipotesi ha
+// dietro una mossa tracciata.
 
 import { cercaTerminiLessico, LESSICO, SOSTITUZIONI_DIRETTE } from '@/lib/lessico/lessico';
 import { PARAMETRI_SIMULAZIONE_PREDEFINITI } from './parametriSimulazione';
@@ -260,7 +266,8 @@ COME SI COSTRUISCE IL PIANO — in quest'ordine:
 6. L'IMPOSTAZIONE. ${impostazione}
 7. GLI ANNI. ${minAnni > 0 ? `Il debito si restituisce in ${minAnni} anni: anniRientro deve essere almeno ${minAnni} e non può superare l'orizzonte già scelto.` : `Gli anni di restituzione del debito non possono superare l'orizzonte del piano.`}
 8. I SACRIFICI. Di' che cosa il piano chiede di rinunciare o di anticipare (organico, investimenti, credito ai clienti, cassa) e dove il piano non arriva. Sono parte del piano, non un'appendice.
-9. CHIUDERE SULLE RATE. Il flusso di gestione deve coprire le rate verso l'ente e gli altri creditori: se con ipotesi difendibili non ci arriva, dillo nella sintesi invece di gonfiare i numeri.`;
+9. CHIUDERE SULLE RATE. Il flusso di gestione deve coprire le rate verso l'ente e gli altri creditori: se con ipotesi difendibili non ci arriva, dillo nella sintesi invece di gonfiare i numeri.
+10. LA RICERCA DEL MOTORE. Dopo la tua risposta la piattaforma gira le manopole a piccoli passi — crescita dei ricavi, costi, leve — finché rate, cassa e patrimonio stanno in piedi, e mette da parte le mosse che ha fatto. Tu scrivi il punto di partenza motivato, non devi indovinare il valore finale; e non gonfiare i numeri per arrivarci: la ricerca si ferma dove serve e, se non basta, lo dichiara.`;
 }
 
 function bloccoScelte(c: ContestoElaborazione): string {
