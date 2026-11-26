@@ -49,6 +49,8 @@ import {
   type LancioPiano,
 } from '@/lib/piano/contestoContabile';
 import { ottieniEsitoVerificaAction } from '@/app/actions/esitoVerifica';
+import { noteIntegrativeReport } from '@/lib/contabile/reportContabile';
+import type { FactTestuale } from '@/lib/xbrl/types';
 import { leggiParametriSimulazione } from '@/lib/piano/letturaParametriSimulazione';
 import { leggiParametriContesto } from '@/lib/piano/letturaParametriContesto';
 import { testoParametriContesto } from '@/lib/piano/parametriContesto';
@@ -61,9 +63,11 @@ import {
   testoLeve,
   leveValide,
   leveDaSalvate,
+  leveAccese,
   type LeveSimulazione,
 } from '@/lib/piano/leveSimulazione';
 import type { ParametriSimulazionePiano } from '@/lib/piano/parametriSimulazione';
+import { istantaneaParametriInVigore } from '@/lib/triage/letturaParametriScenari';
 import {
   pianoRientroPulito,
   soluzionePulita,
@@ -136,6 +140,11 @@ export interface DatiPianoSviluppo {
    * restituzione, impostazione. Null quando la variante non ne ha.
    */
   lancio: LancioPiano | null;
+  /**
+   * true quando la variante ha una riga sua: la «base» vive nel browser finché
+   * non si salva, e `varianti` la elenca anche quando non esiste (0.256.32).
+   */
+  salvata: boolean;
   /** true quando questa variante è il progetto del piano: definitiva. */
   progetto: boolean;
   /** Quando la variante è diventata progetto. */
@@ -166,6 +175,7 @@ export async function ottieniPianoSviluppoAction(
         ricaviVendite: num(d.ricaviVendite),
         valoreProduzione: num(d.valoreProduzione) || num(d.ricaviVendite),
         costiProduzione: num(d.costiProduzione),
+        costiPersonale: num(d.costiPersonale) > 0 ? num(d.costiPersonale) : null,
         ammortamenti: num(d.ammortamenti),
         oneriFinanziari: num(d.oneriFinanziari),
         utileEsercizio: num(d.utileEsercizio),
@@ -365,6 +375,7 @@ export async function ottieniPianoSviluppoAction(
         parametriContesto: contesto.filter((c) => c.valore.length > 0).length,
         leve: leveDaSalvate(piano.rows[0]?.leve),
         lancio: lancioDaSalvato(piano.rows[0]?.lancio),
+        salvata: piano.rows.length > 0,
         progetto: piano.rows[0]?.progetto === true,
         progettoIl: piano.rows[0]?.progetto_il
           ? new Date(piano.rows[0].progetto_il).toISOString()
@@ -494,15 +505,38 @@ export async function eliminaVariantePianoAction(
 }
 
 /**
+ * Lo stato del pannello, quando la variante non ha ancora una riga nel
+ * database: è il caso della «base», che finché non si salva vive solo nel
+ * browser. Il server lo valida con le stesse funzioni del salvataggio normale.
+ */
+export interface IstantaneaProgetto {
+  orizzonte: number;
+  ipotesi: IpotesiPiano;
+  note?: string | null;
+  rettifiche?: Rettifiche | null;
+  pianoRientro?: PianoRientro | null;
+  serieSistema?: boolean;
+  soluzione?: SoluzioneSalvata | null;
+  leve?: LeveSimulazione | null;
+  lancio?: LancioPiano | null;
+}
+
+/**
  * IL PROGETTO DEL PIANO (0.256.31). La variante scelta come progetto diventa
  * definitiva: non si cancella e non si sovrascrive. Una sola per scenario: se
  * un'altra lo era, smette di esserlo (resta come variante modificabile), perché
  * un piano ha un progetto e non due.
+ *
+ * 0.256.32: anche la «base» può diventarlo. Non ha una riga finché non si
+ * salva, perciò lo stato del pannello arriva qui (`istantanea`) e si salva
+ * prima di rendere la variante definitiva: il progetto è quello che si vede a
+ * schermo, non una variante vuota.
  */
 export async function rendiProgettoPianoAction(
   codiceSpazio: string,
   scenarioId: number,
-  variante: string
+  variante: string,
+  istantanea?: IstantaneaProgetto
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const contesto = await ottieniContestoAccessoSpazio(codiceSpazio);
@@ -518,6 +552,34 @@ export async function rendiProgettoPianoAction(
         .toLowerCase()
         .replace(/[^a-z0-9_-]/g, '')
         .slice(0, 30) || 'base';
+    const esistente = await pool.query(
+      `SELECT 1 FROM "${contesto.nomeSchema}".piano_sviluppo WHERE scenario_id = $1 AND variante = $2`,
+      [scenarioId, v]
+    );
+    if (esistente.rowCount === 0) {
+      if (!istantanea)
+        return {
+          success: false,
+          error: 'La variante non è ancora salvata: salvala prima di farne il progetto.',
+        };
+      const salvataggio = await salvaPianoSviluppoAction(
+        codiceSpazio,
+        scenarioId,
+        v,
+        istantanea.orizzonte,
+        istantanea.ipotesi,
+        istantanea.note ?? null,
+        istantanea.rettifiche ?? null,
+        {
+          pianoRientro: istantanea.pianoRientro ?? null,
+          serieSistema: istantanea.serieSistema === true,
+          soluzione: istantanea.soluzione ?? null,
+          leve: istantanea.leve ?? null,
+          lancio: istantanea.lancio ?? null,
+        }
+      );
+      if (!salvataggio.success) return salvataggio;
+    }
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -526,10 +588,15 @@ export async function rendiProgettoPianoAction(
           WHERE scenario_id = $1 AND progetto = TRUE`,
         [scenarioId]
       );
+      // Il progetto nasce con le percentuali degli scenari del giorno
+      // (0.256.33): restano con lui, così una versione pubblicata dopo non
+      // riscrive i numeri di un piano già depositato.
+      const congelati = await istantaneaParametriInVigore(contesto.nomeSchema).catch(() => null);
       const r = await client.query(
-        `UPDATE "${contesto.nomeSchema}".piano_sviluppo SET progetto = TRUE, progetto_il = now()
+        `UPDATE "${contesto.nomeSchema}".piano_sviluppo
+            SET progetto = TRUE, progetto_il = now(), parametri_versione = $3
           WHERE scenario_id = $1 AND variante = $2`,
-        [scenarioId, v]
+        [scenarioId, v, congelati ? JSON.stringify(congelati) : null]
       );
       if (r.rowCount === 0) {
         await client.query('ROLLBACK');
@@ -625,6 +692,10 @@ export async function ottieniAttenzioneContabilePianoAction(
 // ---------------------------------------------------------------------------
 
 const SCADENZA_AI_MS = 120 * 1000;
+// L'elaborazione del piano fa anche la ricerca web (0.256.34): sei ricerche
+// più la scrittura della risposta non stanno nei due minuti buoni della
+// lettura di una sintesi.
+const SCADENZA_ELABORAZIONE_MS = 240 * 1000;
 
 function contestoPulito(c: ContestoElaborazione): ContestoElaborazione | null {
   const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -653,8 +724,15 @@ function contestoPulito(c: ContestoElaborazione): ContestoElaborazione | null {
     // Le leve del lancio (0.256.18): testo già composto da `testoLeve`, come
     // lo legge l'AI. Gli altri due blocchi li riempie il server qui sotto.
     leve: c.leve ? String(c.leve).slice(0, 1500) : null,
+    // Le leve toccate dall'operatore (0.256.34): il prompt lo deve sapere,
+    // altrimenti propone una misura che poi il server scarta.
+    leveModificate: c.leveModificate === true,
     parametriContesto: c.parametriContesto ? String(c.parametriContesto).slice(0, 4000) : null,
     pianoVerifica: c.pianoVerifica ? String(c.pianoVerifica).slice(0, 4000) : null,
+    noteIntegrative: c.noteIntegrative ? String(c.noteIntegrative).slice(0, 6000) : null,
+    minAnni: Math.max(0, Math.min(ORIZZONTE_MASSIMO, Math.round(n(c.minAnni)))),
+    impostazione: c.impostazione ? String(c.impostazione).slice(0, 20) : null,
+    procedura: c.procedura ? String(c.procedura).slice(0, 20) : null,
     vincoli: (c.vincoli ?? []).slice(0, 10).map((v) => String(v).slice(0, 200)),
   };
 }
@@ -686,6 +764,21 @@ export async function elaboraPianoConAiAction(
     const s = contestoSpazio.nomeSchema;
     const bloccato = await verificaScenarioNonBloccato(s, scenarioId);
     if (bloccato) return { success: false, error: bloccato };
+    // IL PROGETTO NON SI SOVRASCRIVE CON UNA NUOVA ELABORAZIONE (0.256.32).
+    // Se la variante «elaborazione-ai» è il progetto del piano è definitiva,
+    // come lo è per il salvataggio a mano. Il controllo sta prima della
+    // chiamata al modello, così l'utente non aspetta per un rifiuto.
+    await assicuraTabelleParametriSpazio(s);
+    const varianteAi = await pool.query(
+      `SELECT progetto FROM "${s}".piano_sviluppo WHERE scenario_id = $1 AND variante = $2`,
+      [scenarioId, VARIANTE_AI]
+    );
+    if (varianteAi.rows[0]?.progetto === true)
+      return {
+        success: false,
+        error:
+          'La variante «elaborazione-ai» è il progetto del piano: è definitiva e una nuova elaborazione non la sovrascrive. Crea una nuova variante da questa e fanne il progetto.',
+      };
     const c = contestoPulito(contesto);
     if (!c)
       return { success: false, error: 'Dati del piano incompleti: serve almeno un bilancio.' };
@@ -694,6 +787,7 @@ export async function elaboraPianoConAiAction(
     // simulazione ricorda con quali leve è stata prodotta.
     const leveScelte = leveValide(contesto.leveScelte);
     c.leve = testoLeve(leveScelte) || null;
+    c.leveModificate = contesto.leveModificate === true;
     // IL CONTESTO ECONOMICO E IL PIANO DELLA VERIFICA (0.256.18) si leggono
     // qui: sono dati dello spazio e dell'azienda, non del browser. Il contesto
     // vale per tutte le aziende (Parametri), il piano della verifica solo se lo
@@ -701,6 +795,29 @@ export async function elaboraPianoConAiAction(
     c.parametriContesto =
       testoParametriContesto(await leggiParametriContesto(s).catch(() => [])) || null;
     const scenarioCorrente = await ottieniScenarioPerId(s, scenarioId).catch(() => null);
+    // LE NOTE INTEGRATIVE (0.256.35): il piano non si costruisce solo sulle
+    // macro-voci. Continuità, piani, fatti di rilievo, impegni e parti correlate
+    // sono il documento che spiega i numeri, e l'analisi li legge.
+    c.noteIntegrative = null;
+    if (scenarioCorrente?.success && scenarioCorrente.scenario?.aziendaId) {
+      const noteRis = await pool
+        .query(
+          `SELECT note_fatti FROM "${s}".xbrl_storico_azienda
+            WHERE azienda_id = $1 AND note_fatti IS NOT NULL
+            ORDER BY anno_bilancio DESC NULLS LAST LIMIT 1`,
+          [scenarioCorrente.scenario.aziendaId]
+        )
+        .catch(() => ({ rows: [] as { note_fatti?: unknown }[] }));
+      const fatti = Array.isArray(noteRis.rows[0]?.note_fatti)
+        ? (noteRis.rows[0]!.note_fatti as FactTestuale[])
+        : null;
+      const note = noteIntegrativeReport(fatti).note;
+      const testo = note
+        .map((n) => `${n.titolo}: ${n.testo}`)
+        .join('\n\n')
+        .slice(0, 6000);
+      c.noteIntegrative = testo || null;
+    }
     if (scenarioCorrente?.success && scenarioCorrente.scenario?.simulazioneAttiva) {
       const va = await pool
         .query(
@@ -728,13 +845,31 @@ export async function elaboraPianoConAiAction(
         error:
           'Chiave API ANTHROPIC_API_KEY non configurata nel server: l’elaborazione con l’AI non è disponibile.',
       };
-    const anthropic = new Anthropic({ apiKey, timeout: SCADENZA_AI_MS, maxRetries: 1 });
-    const risposta = await anthropic.messages.create({
-      model: 'claude-sonnet-5',
-      max_tokens: 6000,
-      thinking: { type: 'disabled' },
-      messages: [{ role: 'user', content: promptElaborazione(c, opzioni) }],
-    });
+    const anthropic = new Anthropic({ apiKey, timeout: SCADENZA_ELABORAZIONE_MS, maxRetries: 1 });
+    // LA RICERCA WEB (0.256.34). L'ambiente — situazione internazionale,
+    // stabilità politica, mercati emergenti, energia, tassi, cambi — non sta
+    // nei bilanci dell'azienda. Le ipotesi che ne dipendono devono poggiare su
+    // fonti lette, non sulla memoria del modello: è il lavoro che un operatore
+    // da solo non riuscirebbe a fare su tutte quelle variabili insieme.
+    const messaggi: Anthropic.Messages.MessageParam[] = [
+      { role: 'user', content: promptElaborazione(c, opzioni) },
+    ];
+    let risposta: Anthropic.Messages.Message | null = null;
+    for (let giro = 0; giro < 3; giro++) {
+      risposta = await anthropic.messages.create({
+        model: 'claude-sonnet-5',
+        max_tokens: 6000,
+        thinking: { type: 'disabled' },
+        messages: messaggi,
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
+      });
+      if (risposta.stop_reason !== 'pause_turn') break;
+      // La ricerca può sospendere il turno: si riprende da quello che il
+      // modello ha già prodotto, senza rimandargli il prompt da capo.
+      messaggi.push({ role: 'assistant', content: risposta.content });
+    }
+    if (!risposta)
+      return { success: false, error: 'L’elaborazione con l’AI non ha prodotto una risposta.' };
     const testo = risposta.content
       .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
       .map((b) => b.text)
@@ -763,21 +898,56 @@ export async function elaboraPianoConAiAction(
           error: `L’AI non ha prodotto ipotesi utilizzabili${esito.sintesi ? `: ${esito.sintesi}` : '.'} Riprova o gira le manopole a mano.`,
         };
     }
-    await assicuraTabelleParametriSpazio(s);
+    // Le leve e il lancio che l'AI propone si salvano con la variante: sono
+    // la sua risposta alla domanda «come si fa fronte agli impegni con l'ente».
+    // Se il modello non le scrive restano quelle scelte nel pannello.
+    //
+    // LE VARIABILI DELL'OPERATORE NON SI TOCCANO (0.256.34): se le ha già
+    // cambiate, la proposta dell'analisi non le riscrive. La sintesi dice che
+    // cosa l'analisi avrebbe proposto, così la scelta resta sua.
+    const leveFinali = c.leveModificate ? leveScelte : (esito.leve ?? leveScelte);
+    const propostaScartata =
+      c.leveModificate && esito.leve
+        ? `Le leve erano già state scelte dall’operatore: la proposta dell’analisi (${
+            leveAccese(esito.leve)
+              .map((l) => `${l.domanda} ${l.pct}%`)
+              .join(', ') || 'nessuna leva accesa'
+          }) non le ha sostituite.`
+        : '';
+    // La restituzione del debito non può essere più lunga del piano: se il
+    // modello propone più anni dell'orizzonte, si tiene l'orizzonte e lo si dice.
+    const lancioFinale = esito.lancio ?? null;
+    let anniTroncati = false;
+    const minAnni = c.minAnni ?? 0;
+    if (lancioFinale) {
+      // L'impostazione e la procedura sono dell'operatore (o dello scenario):
+      // l'analisi può proporre numeri, non cambiarne il quadro.
+      if (c.impostazione && ['PRUDENTE', 'NEUTRA', 'FAVOREVOLE'].includes(c.impostazione))
+        lancioFinale.prudenza = c.impostazione as LancioPiano['prudenza'];
+      if (c.procedura && ['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'].includes(c.procedura))
+        lancioFinale.procedura = c.procedura as LancioPiano['procedura'];
+      // Il piano non si restituisce in meno anni dell'arco scelto.
+      if (minAnni > 0)
+        lancioFinale.anniRientro = Math.max(minAnni, lancioFinale.anniRientro ?? minAnni);
+      if (lancioFinale.anniRientro && lancioFinale.anniRientro > c.orizzonte) {
+        lancioFinale.anniRientro = c.orizzonte;
+        anniTroncati = true;
+      }
+    }
     const nota = [
       `Ipotesi impostate dall’AI il ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}; i risultati li calcola il motore della piattaforma.`,
+      `Le leve scelte dall’analisi sono applicate al calcolo dalla piattaforma: le percentuali delle righe sono il percorso senza il loro effetto.`,
+      anniTroncati
+        ? `L’analisi proponeva di restituire il debito in più anni dell’orizzonte: la restituzione resta entro i ${c.orizzonte} anni del piano.`
+        : '',
       esito.sintesi,
+      propostaScartata,
       esito.scartati.length
         ? `Valori scartati perché fuori dagli intervalli ammessi: ${esito.scartati.join('; ')}.`
         : '',
     ]
       .filter(Boolean)
       .join('\n');
-    // Le leve e il lancio che l'AI propone si salvano con la variante: sono
-    // la sua risposta alla domanda «come si fa fronte agli impegni con l'ente».
-    // Se il modello non le scrive restano quelle scelte nel pannello.
-    const leveFinali = esito.leve ?? leveScelte;
-    const lancioFinale = esito.lancio ?? null;
     await pool.query(
       `INSERT INTO "${s}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, leve, lancio, salvato_il)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())

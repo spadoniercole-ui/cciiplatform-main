@@ -19,7 +19,11 @@ import {
   componiFotografia,
   type FotografiaVerificaAzienda,
 } from '@/lib/verificaAzienda/fotografia';
-import { RANGHI, type ParametriScenari, type RangoCredito } from '@/lib/triage/scenari';
+import { RANGHI, type RangoCredito } from '@/lib/triage/scenari';
+import {
+  leggiParametriAllaData,
+  leggiParametriVerificaAzienda,
+} from '@/lib/triage/letturaParametriScenari';
 import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
 import { leggiRigheClassificabili } from '@/lib/debitiEnte/righeClassificabili';
 import { quotePerRango } from '@/lib/debitiEnte/classificazioneCredito';
@@ -134,47 +138,6 @@ async function leggiSogliaRiscontro(nomeSchema: string): Promise<number | null> 
 }
 
 /**
- * Le percentuali per rango fissate dall'ente. Nessun default: una riga
- * mancante resta null e lo scenario si dichiara non calcolabile.
- */
-async function leggiParametriScenari(nomeSchema: string): Promise<ParametriScenari> {
-  const vuoti: ParametriScenari = {
-    costiProceduraPct: null,
-    ranghi: RANGHI.map((r) => ({
-      rango: r.codice,
-      tassoLiquidazionePct: null,
-      cramDownPct: null,
-    })),
-  };
-  try {
-    await assicuraTabelleScenariTriage(nomeSchema);
-    const [config, righe] = await Promise.all([
-      pool.query(`SELECT costi_procedura_pct FROM "${nomeSchema}".parametri_scenari WHERE id = 1`),
-      pool.query(
-        `SELECT rango, tasso_liquidazione_pct, cram_down_pct
-           FROM "${nomeSchema}".parametri_scenari_rango`
-      ),
-    ]);
-    const num = (v: unknown): number | null =>
-      v === null || v === undefined || v === '' ? null : Number(v);
-    const perRango = new Map(righe.rows.map((r) => [String(r.rango), r]));
-    return {
-      costiProceduraPct: num(config.rows[0]?.costi_procedura_pct),
-      ranghi: RANGHI.map((r) => {
-        const salvata = perRango.get(r.codice);
-        return {
-          rango: r.codice,
-          tassoLiquidazionePct: num(salvata?.tasso_liquidazione_pct),
-          cramDownPct: num(salvata?.cram_down_pct),
-        };
-      }),
-    };
-  } catch {
-    return vuoti;
-  }
-}
-
-/**
  * La fotografia dell'azienda alla data della verifica, con i tre scenari.
  * Non scrive nulla: l'unica scrittura della verifica azienda è la riga che
  * ScenariManager legge, e la fa l'azione.
@@ -232,12 +195,20 @@ export async function leggiVerificaAzienda(
   // metà delle sanzioni civili pure, il resto chirografo. Servono alle due
   // procedure, che senza rango si leggevano come intervallo (o «non
   // calcolabile») pur avendo i numeri per essere calcolate.
-  const [rango, parametri, sogliaRiscontro, righeClassificabili] = await Promise.all([
-    leggiRangoAzienda(nomeSchema, aziendaId),
-    leggiParametriScenari(nomeSchema),
-    leggiSogliaRiscontro(nomeSchema),
-    leggiRigheClassificabili(nomeSchema, aziendaId),
-  ]);
+  // LE PERCENTUALI CON LA LORO DECORRENZA (0.256.33). Una verifica già chiusa
+  // tiene l'istantanea salvata con lei; una nuova legge la versione in vigore
+  // al giorno in cui la verifica è stata aperta. Mai l'ultima scritta e basta:
+  // altrimenti pubblicare una versione nuova cambierebbe numeri già depositati.
+  const aperturaAziendale = await leggiAperturaVerifica(nomeSchema, aziendaId, 'AZIENDALE');
+  const [rango, parametriInVigore, parametriCongelati, sogliaRiscontro, righeClassificabili] =
+    await Promise.all([
+      leggiRangoAzienda(nomeSchema, aziendaId),
+      leggiParametriAllaData(nomeSchema, aperturaAziendale ?? `${annoVerifica}-12-31`),
+      leggiParametriVerificaAzienda(nomeSchema, aziendaId),
+      leggiSogliaRiscontro(nomeSchema),
+      leggiRigheClassificabili(nomeSchema, aziendaId),
+    ]);
+  const parametri = parametriCongelati?.parametri ?? parametriInVigore.parametri;
   const classificate = quotePerRango(righeClassificabili);
 
   const fotografia = componiFotografia({

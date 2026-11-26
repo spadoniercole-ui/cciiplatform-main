@@ -27,6 +27,7 @@ import {
 } from '@/db/provision';
 import { CHIAVI_TABELLE } from '@/lib/contabile/reportContabile';
 import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
+import { istantaneaParametriInVigore } from '@/lib/triage/letturaParametriScenari';
 
 const schemaOk = (n: string) => /^[a-z0-9_]+$/.test(n);
 
@@ -329,11 +330,15 @@ export async function salvaSimulazioneContabileAction(
     // La crescita è quella già applicata dal motore e resta dentro le colonne:
     // le due quote percentuali della vecchia simulazione non si scrivono, e
     // valgono i loro difetti (nessuna crescita storica, zero applicata).
+    // La simulazione contabile nasce con le percentuali degli scenari del
+    // giorno (0.256.33): resta con lei anche quando l'ente pubblica una
+    // versione nuova.
+    const congelati = await istantaneaParametriInVigore(nomeSchema).catch(() => null);
     const inserita = await pool.query(
       `INSERT INTO "${nomeSchema}".verifica_azienda_simulazioni
          (azienda_id, profilo, annualita, debito_ente, colonne, avvertenze,
-          base_per_proposta)
-       VALUES ($1,$2,$3,$4,$5,$6,TRUE)
+          base_per_proposta, parametri_versione)
+       VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7)
        RETURNING to_char(created_at, 'YYYY-MM-DD') AS il`,
       [
         aziendaId,
@@ -342,6 +347,7 @@ export async function salvaSimulazioneContabileAction(
         proiezione.ponteEnte?.debitoVerificato ?? 0,
         JSON.stringify(colonne),
         JSON.stringify(proiezione.avvertenze),
+        congelati ? JSON.stringify(congelati) : null,
       ]
     );
 

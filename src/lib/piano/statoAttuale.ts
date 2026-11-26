@@ -70,6 +70,7 @@ export function storicoDaStatoAttuale(
     ricaviVendite: d.ricaviVendite,
     valoreProduzione: d.valoreProduzione || d.ricaviVendite,
     costiProduzione: d.costiProduzione,
+    costiPersonale: typeof d.costiPersonale === 'number' ? d.costiPersonale : null,
     ammortamenti: d.ammortamenti,
     oneriFinanziari: d.oneriFinanziari,
     utileEsercizio: d.utileEsercizio,
@@ -90,11 +91,21 @@ export function storicoDaStatoAttuale(
   let nota: string;
   if (!economicoPresente && ultimo) {
     // Solo stato patrimoniale nella posizione: il conto economico è quello dell'ultimo bilancio.
-    for (const k of VOCI_ECONOMICHE) (e as unknown as Record<string, number>)[k] = ultimo[k];
+    for (const k of VOCI_ECONOMICHE)
+      (e as unknown as Record<string, number>)[k] = (ultimo as unknown as Record<string, number>)[
+        k
+      ];
+    // Il personale è una riga del conto economico: se la posizione porta solo
+    // lo stato patrimoniale, si continua a leggere quello dell'ultimo bilancio.
+    const personaleUltimo: number | null =
+      typeof ultimo.costiPersonale === 'number' ? ultimo.costiPersonale : null;
+    e.costiPersonale = personaleUltimo;
     nota = `conto economico del bilancio ${ultimo.anno}`;
   } else if (fattore !== 1) {
     for (const k of VOCI_ECONOMICHE)
-      (e as unknown as Record<string, number>)[k] = Math.round(e[k] * fattore * 100) / 100;
+      (e as unknown as Record<string, number>)[k] = Math.round((e[k] ?? 0) * fattore * 100) / 100;
+    if (typeof e.costiPersonale === 'number')
+      e.costiPersonale = Math.round(e.costiPersonale * fattore * 100) / 100;
     nota = `conto economico di ${mesi} mesi portato a 12`;
   } else nota = '';
   const data = posizione.dataRiferimento.slice(0, 10).split('-').reverse().join('/');

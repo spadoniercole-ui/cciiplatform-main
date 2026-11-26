@@ -33,7 +33,7 @@ mkdirSync(DATI, { recursive: true });
 console.log('');
 console.log('Ambiente demo locale — database PGlite in ' + DATI);
 console.log('  Spazio ente:  RICEVENTE-LOCALE-2026-001');
-console.log('  Accesso:      admin.ricevente / ricevente1234');
+console.log('  Accesso:      admin.ricevente / ricevente1234 (senza TOTP né PIN)');
 console.log('  Posizione:    /spazio/RICEVENTE-LOCALE-2026-001/verifica-salute/2/posizione');
 console.log('');
 console.log('La prima volta il caricamento della demo richiede qualche secondo.');
@@ -46,6 +46,9 @@ const conPortable = {
   PORTABLE_PASSPHRASE: process.env.PORTABLE_PASSPHRASE || 'demo-locale-2026',
   PORTABLE_DATA_DIR: DATI,
   PORTABLE_SEED_ENTE_DEMO: '1',
+  // Solo demo locale: la password basta, niente TOTP/PIN. Il guard in
+  // src/lib/demoAccesso.ts richiede anche PORTABLE=1.
+  DEMO_SENZA_MFA: '1',
   NEXT_TELEMETRY_DISABLED: '1',
 };
 

@@ -26,6 +26,183 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.40 — 2026-11-26
+
+IL PROMPT NON CHIEDE I CAMPI DEL LANCIO GIÀ FISSATI.
+
+- **Procedura e impostazione.** Quando lo scenario ha già una procedura e l’operatore una
+  impostazione, il prompt non le chiede più all’AI e l’esempio JSON non le contiene: il server
+  conserva quelle scelte e scarterebbe le altre.
+- **Anni di rientro.** Il prompt dice che `anniRientro` deve essere almeno il minimo dello
+  scenario, così l’AI non propone un valore che il server alza.
+- **Test.** Coperti sia il ramo con rettifiche sia quello con le manopole, con e senza campi
+  fissati.
+
+## 0.256.39 — 2026-11-26
+
+IL PROMPT NON CHIEDE PIÙ LE LEVE GIÀ DECISE.
+
+- **Niente leve nella risposta.** Quando l’operatore ha già cambiato le leve, il contesto non
+  ripete più «LEVE CHIESTE AL LANCIO» e la sezione delle scelte dice che non fanno parte della
+  risposta: l’analisi decide solo il lancio e il modello JSON non contiene `leve`.
+- **Test aggiornato.** Il prompt con leve modificate non contiene più l’elenco delle leve, il campo
+  `leve` né il contesto che le riproponeva.
+
+## 0.256.38 — 2026-11-26
+
+PERSONALE E RICAVI NUOVI NELLO STESSO CONTO.
+
+- **Riga del personale coerente col totale.** Quando Personale e una leva sui ricavi sono accese
+  insieme, il personale delle nuove linee entra nella base del taglio: «di cui costo del personale»
+  comprende anche quella quota e la differenza con i costi operativi resta il costo non-personale.
+- **Prompt senza le leve già decise.** Se l’operatore ha toccato le leve, l’analisi non riceve più
+  l’elenco delle leve né il campo `leve` nel modello di risposta: decide solo il lancio; il server
+  conserva le scelte del pannello.
+
+## 0.256.37 — 2026-11-26
+
+LE IPOTESI E LE LEVE DICONO LA STESSA COSA.
+
+- **Personale coerente col percorso.** La leva dei tagli parte dalla quota storica applicata ai
+  costi del percorso scritto, non dal solo costo dell’ultimo bilancio: se le ipotesi muovono i
+  costi, la riga del personale si muove con loro e il risparmio resta dentro l’EBITDA.
+- **Incidenza storica, non del primo anno.** I ricavi nuovi di produzione, mercati e clientela
+  portano costi e crediti con l’incidenza del bilancio, come dichiarato nel prompt, anche quando il
+  primo anno del piano ha già ipotesi diverse.
+- **Solo le righe toccate.** Il modulo riscrive soltanto ricavi, costi, crediti o investimenti che
+  una leva accesa modifica; le altre ipotesi restano nella forma scritta (percentuale o assoluta),
+  senza arrotondamenti o riscritture inutili.
+- **Una leva allo 0% è spenta.** Non viene contata, non entra nel prompt e non produce una nota sui
+  costi; il pannello la spegne quando la misura arriva a zero.
+- **Meno casi nel modulo.** Rimossi i campi degli effetti non letti dall’interfaccia, il ritorno
+  duplicato delle ipotesi e gli export `ETICHETTA_LEVA`/`misuraSuggerita`, sostituiti dai dati già
+  presenti in `LEVE`.
+- **Un solo punto di calcolo resta quello della 0.256.36.** Pagina, confronto, sintesi e ricerca
+  della soluzione verde continuano a passare da `calcolaPianoConLeve`.
+
+## 0.256.36 — 2026-11-26
+
+LE LEVE ENTRANO NEL CALCOLO IN UN SOLO PUNTO.
+
+- **Un solo punto di applicazione.** Nuova `calcolaPianoConLeve` in
+  `src/lib/piano/levePiano.ts`: applica le leve una volta alle ipotesi scritte e
+  restituisce insieme il piano, le ipotesi che lo producono e gli effetti. Pagina,
+  confronto tra i piani, autoverifica, sintesi per i documenti e ricerca della
+  soluzione verde passano tutti da qui.
+- **Stessi numeri in ogni vista.** La variante corrente nel confronto usa le leve vive
+  del pannello, le altre quelle salvate: lo stesso piano non mostra più numeri diversi
+  tra la scheda e la tabella riassuntiva.
+- **Piano di sistema con le stesse leve.** La colonna «piano di sistema» applica le leve
+  della variante; il riferimento di settore resta senza, perché è il metro con cui si
+  misura il piano.
+- **Niente doppio conteggio.** La ricerca della soluzione verde e il ritorno allo stato
+  del pannello partono dalle ipotesi scritte, non da quelle già riscritte dalle leve.
+
+## 0.256.35 — 2026-11-26
+
+LA SIMULAZIONE DELL’AI COSTRUISCE IL PIANO, NON LO RIMANDA.
+
+- **Il conto economico torna intero.** La tabella del piano mostra valore della produzione,
+  ricavi, costi della produzione, costo del personale, EBITDA, EBIT, oneri finanziari,
+  risultato, rate, flusso di gestione, cassa, patrimonio e debiti. Il costo del personale
+  arriva dal bilancio (o dalla quota storica dei costi operativi) e resta dentro i costi:
+  se un’ipotesi dice di ridurlo, la riduzione si vede nella riga e nell’EBITDA.
+- **Le leve diventano numeri.** Nuovo modulo puro `src/lib/piano/levePiano.ts`: il personale
+  riduce il costo del personale, la tecnologia investe una percentuale dei ricavi e
+  ammortizza in cinque anni, produzione, mercati e clientela aggiungono ricavi nuovi a
+  regime entro la rampa, con costi e crediti nell’incidenza storica del bilancio. Le leve
+  non si sommano al risultato: riscrivono le ipotesi delle righe che toccano, così non c’è
+  doppio conteggio al salvataggio o al ricaricamento. Il pannello dice che cosa fanno ai
+  numeri e quali sacrifici chiedono.
+- **L’analisi sceglie le leve e il percorso.** Il prompt della simulazione è riscritto in un
+  ordine dichiarato: base contabile del passo 3, note integrative e trend, settore e mercati
+  di sbocco con la ricerca web e la fonte, obiettivo (risanare, essere profittevole,
+  restituire il debito), leve con misura e motivo, percorso anno per anno per ricavi e
+  costi, sacrifici, copertura delle rate. Ricavi e costi non ammettono più un valore unico
+  ripetuto: la risposta chiede una serie per anno. Prudente, neutra e favorevole cambiano
+  misure e percorso; l’impostazione e la procedura restano quelle scelte dall’operatore o
+  dallo scenario.
+- **Il piano non è più corto del debito.** Gli anni di restituzione del debito sono il minimo
+  dell’orizzonte: l’interfaccia non lascia scegliere meno anni, allunga il piano quando serve
+  e l’analisi non può proporre una restituzione più lunga dell’orizzonte.
+
+## 0.256.34 — 2026-11-25
+
+IL PIANO DEVE CRESCERE, E LE SUE VARIABILI SONO DELL’OPERATORE.
+
+- **Un piano che ripete il fatturato non è un piano.** Le istruzioni dell’analisi
+  (0.256.34) dicono ora, prima delle scelte, che cosa deve fare un piano di sviluppo: alzare il
+  fatturato anno per anno (ricavi fermi ammessi solo con un vincolo documentato e scritto nella
+  motivazione), ridurre l’incidenza dei costi così che il margine EBITDA migliori, sfruttare
+  l’evoluzione tecnologica con investimenti e ammortamenti che anticipano i ricavi, tenere
+  conto dell’ambiente — situazione internazionale, stabilità politica, mercati emergenti,
+  energia, tassi, cambi, dazi — e chiudere il piano sulle rate: il flusso di gestione deve
+  coprirle, e se non ci arriva lo si dice invece di gonfiare i numeri.
+- **L’ambiente si cerca.** L’elaborazione del piano usa lo strumento di ricerca web (fino a sei
+  ricerche, con la ripresa del turno quando la ricerca lo sospende, e una scadenza più lunga):
+  ogni ipotesi che dipende dall’ambiente cita la variabile e la fonte, e una variabile che non
+  si trova non si inventa. È il lavoro che un operatore da solo non riuscirebbe a fare su tutte
+  quelle variabili insieme.
+- **Le leve sono le variabili del piano.** L’analisi le accende quando la crescita ne ha
+  bisogno, invece di lasciarle tutte spente per prudenza: un piano che cresce senza mettere in
+  gioco nulla non regge.
+- **Appena l’operatore le tocca, l’analisi non le riscrive.** Il pannello manda il fatto che le
+  leve siano già state scelte: il prompt chiede di non proporne altre e il server tiene le
+  scelte dell’operatore, riportando nella sintesi che cosa l’analisi avrebbe proposto. Al
+  salvataggio del piano restano quelle della variante.
+- **I numeri fermi si vedono.** Se i ricavi del piano restano quelli dell’ultimo bilancio per
+  tutto l’orizzonte e nessuna leva è accesa, sopra la tabella compare un avviso con la cifra: è
+  così che si distingue una scelta da un’ipotesi che manca.
+- **Test.** Le istruzioni dell’analisi sono verificate per entrambi i lati (Ricevente e
+  Redigente) e per il caso in cui le leve siano già dell’operatore.
+
+## 0.256.33 — 2026-11-25
+
+I PARAMETRI DEGLI SCENARI HANNO UNA DECORRENZA, E I DOCUMENTI CHIUSI NON
+CAMBIANO PIÙ NUMERI.
+
+- **Ogni salvataggio è una versione, non una sovrascrittura.** Le percentuali del
+  triage (spese di procedura, realizzo in liquidazione e cram down per rango) hanno ora
+  una data da cui valgono: `parametri_scenari_versioni` e
+  `parametri_scenari_versione_ranghi`. Una decorrenza futura prepara l’aggiornamento
+  senza applicarlo subito; una decorrenza già registrata non si riscrive e il
+  salvataggio si ferma con il motivo.
+- **Le verifiche e i progetti già chiusi restano congelati.** `verifica_azienda_simulazioni`
+  e `piano_sviluppo` portano `parametri_versione`, un’istantanea JSONB dei valori con cui
+  il documento è nato. Non è un rimando alla versione: cancellare o aggiungere versioni
+  non può riscrivere un numero già depositato. La fotografia della verifica, la
+  simulazione contabile e il progetto del piano la scrivono al momento in cui nascono.
+- **I calcoli nuovi prendono l’ultima versione in vigore.** Un lettore unico
+  (`letturaParametriScenari`) serve la verifica aziendale, la stima senza provvedimento
+  del giudice, la pagina dei parametri e il triage: ogni punto legge alla data del
+  proprio fatto, non «l’ultima scritta». Se la verifica ha un’istantanea, quella vince
+  sempre.
+- **Scheda delle versioni in Parametri.** Il form dice quale versione è in vigore e da
+  quando, propone la decorrenza (oggi, o il giorno dopo l’ultima registrata) e permette
+  una nota; la tabella elenca tutte le versioni con stato — in vigore, programmata,
+  superata — spese, percentuali per rango e nota. Una versione non si modifica: se ne
+  registra una nuova.
+- **Spazi esistenti senza sorprese.** Alla prima apertura i parametri già impostati
+  diventano la prima versione, con la decorrenza dell’ultimo salvataggio: nessun numero
+  cambia sotto i piedi a chi aggiorna. Le tabelle storiche restano e si allineano quando
+  una versione decorre già, così export e ripristini continuano a funzionare.
+- **Test.** `versioniParametri.test.ts` copre date, versione in vigore, stati,
+  ordinamento, decorrenza proposta, congelamento e rilettura, riepilogo.
+
+## 0.256.32 — 2026-11-25
+
+IL PROGETTO NON SI APRE A META E NON SI SOVRASCRIVE CON L’AI.
+
+- **Anche la variante «base» può diventare il progetto.** Finché non si salva non ha
+  una riga in `piano_sviluppo`, e «Salva il progetto» la rifiutava («la variante non
+  esiste»): il pulsante era spento. Ora `rendiProgettoPianoAction` riceve lo stato del
+  pannello e, se la variante non è mai stata salvata, lo salva prima di renderla
+  definitiva: il progetto è quello che si vede a schermo, non una variante vuota.
+- **Una nuova elaborazione con l’AI non sovrascrive il progetto.** Se la variante
+  «elaborazione-ai» è stata resa definitiva, l’elaborazione si ferma prima di chiamare
+  il modello, con un messaggio che rimanda a creare una nuova variante da quella: come
+  per il salvataggio a mano, il progetto resta la traccia di ciò che era depositato.
+
 ## 0.256.31 — 2026-11-25
 
 LE SCELTE DEL PIANO LE SCRIVE L’ANALISI, E IL PROGETTO NON SI CANCELLA PIÙ.

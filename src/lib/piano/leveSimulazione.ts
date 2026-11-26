@@ -67,31 +67,27 @@ export const LEVE: DefinizioneLeva[] = [
   },
 ];
 
-export const ETICHETTA_LEVA: Record<IdLeva, string> = {
-  PERSONALE: 'tagli del personale',
-  TECNOLOGIA: 'investimenti in tecnologia',
-  PRODUZIONE: 'diversificazione della produzione',
-  MERCATI: 'diversificazione dei mercati',
-  CLIENTELA: 'cambio del target di clientela',
-};
-
 export interface SceltaLeva {
   attiva: boolean;
   /** La misura in percentuale: 0-100. */
   misura: number;
+  /**
+   * Perché l'analisi ha scelto questa leva e questa misura (0.256.35). Non è un
+   * risultato: è l'idea che il piano usa, e resta accanto alla leva.
+   */
+  motivazione?: string;
 }
 
 export type LeveSimulazione = Record<IdLeva, SceltaLeva>;
 
 /** Tutte spente, con la misura suggerita pronta: chi apre il pannello la vede e decide. */
-export const LEVE_PREDEFINITE: LeveSimulazione = LEVE.reduce((acc, l) => {
-  acc[l.id] = { attiva: false, misura: l.suggeritaPct };
-  return acc;
-}, {} as LeveSimulazione);
+export const LEVE_PREDEFINITE: LeveSimulazione = Object.fromEntries(
+  LEVE.map((l) => [l.id, { attiva: false, misura: l.suggeritaPct }])
+) as LeveSimulazione;
 
-/** La misura suggerita per una leva, anche quando l'id arriva da fuori. */
-export function misuraSuggerita(id: IdLeva): number {
-  return LEVE.find((l) => l.id === id)?.suggeritaPct ?? 0;
+/** Una leva è accesa solo se ha anche una misura: lo 0% non produce numeri e non si conta. */
+export function levaAccesa(scelta: SceltaLeva | null | undefined): scelta is SceltaLeva {
+  return scelta?.attiva === true && scelta.misura > 0;
 }
 
 const clampPct = (n: unknown, fallback: number): number => {
@@ -113,9 +109,13 @@ export function leveValide(input: unknown): LeveSimulazione {
       string,
       unknown
     >;
+    const misura = clampPct(scelta.misura, l.suggeritaPct);
     esito[l.id] = {
-      attiva: scelta.attiva === true,
-      misura: clampPct(scelta.misura, l.suggeritaPct),
+      attiva: scelta.attiva === true && misura > 0,
+      misura,
+      ...(typeof scelta.motivazione === 'string' && scelta.motivazione.trim()
+        ? { motivazione: scelta.motivazione.replace(/\s+/g, ' ').trim().slice(0, 240) }
+        : {}),
     };
   }
   return esito;
@@ -123,7 +123,7 @@ export function leveValide(input: unknown): LeveSimulazione {
 
 /** Le leve accese, in testo per il prompt. Vuoto quando sono tutte spente. */
 export function testoLeve(leve: LeveSimulazione): string {
-  const accese = LEVE.filter((l) => leve[l.id]?.attiva);
+  const accese = LEVE.filter((l) => levaAccesa(leve[l.id]));
   if (accese.length === 0) return '';
   return accese
     .map((l) => {
@@ -135,7 +135,7 @@ export function testoLeve(leve: LeveSimulazione): string {
 
 /** Quante leve sono accese: la pagina lo dice accanto al pulsante. */
 export function contaLeve(leve: LeveSimulazione): number {
-  return LEVE.filter((l) => leve[l.id]?.attiva).length;
+  return LEVE.filter((l) => levaAccesa(leve[l.id])).length;
 }
 
 /**
@@ -154,7 +154,7 @@ export function leveDaSalvate(input: unknown): LeveSimulazione | null {
 export function leveAccese(
   leve: LeveSimulazione
 ): { id: IdLeva; domanda: string; misura: string; pct: number }[] {
-  return LEVE.filter((l) => leve[l.id]?.attiva).map((l) => ({
+  return LEVE.filter((l) => levaAccesa(leve[l.id])).map((l) => ({
     id: l.id,
     domanda: l.domanda,
     misura: l.misura,

@@ -45,7 +45,7 @@ import {
 import { vociEnteDaFonti, type VoceEnte as VocePosizione } from '@/lib/giudice/posizioneEnte';
 import { classificaRigaCompleta } from '@/lib/debitiEnte/classificazioneCredito';
 import type { RangoCredito } from '@/lib/triage/scenari';
-import { RANGHI, type ParametriScenari } from '@/lib/triage/scenari';
+import { leggiParametriAllaData } from '@/lib/triage/letturaParametriScenari';
 import { leggiRigheClassificabili } from '@/lib/debitiEnte/righeClassificabili';
 import {
   stimaSenzaProvvedimento,
@@ -280,32 +280,14 @@ async function stimaDaPosizione(
     };
     // Le righe della certificazione (già senza doppie scritture) le legge lo
     // stesso modulo della fotografia: una query sola per tutti.
-    const [righe, config, ranghi] = await Promise.all([
+    // Le percentuali in vigore oggi (0.256.33): la stima è un calcolo nuovo,
+    // quindi segue l'ultima versione con decorrenza già passata.
+    const [righe, lettura] = await Promise.all([
       leggiRigheClassificabili(nomeSchema, aziendaId),
-      pool
-        .query(`SELECT costi_procedura_pct FROM "${nomeSchema}".parametri_scenari WHERE id = 1`)
-        .catch(() => ({ rows: [] as { costi_procedura_pct?: unknown }[] })),
-      pool
-        .query(
-          `SELECT rango, tasso_liquidazione_pct, cram_down_pct
-             FROM "${nomeSchema}".parametri_scenari_rango`
-        )
-        .catch(() => ({ rows: [] as Record<string, unknown>[] })),
+      leggiParametriAllaData(nomeSchema),
     ]);
     if (righe.length === 0) return null;
-    const perRango = new Map(ranghi.rows.map((r) => [String(r.rango), r]));
-    const parametri: ParametriScenari = {
-      costiProceduraPct: numero(config.rows[0]?.costi_procedura_pct),
-      ranghi: RANGHI.map((r) => {
-        const salvata = perRango.get(r.codice);
-        return {
-          rango: r.codice,
-          tassoLiquidazionePct: numero(salvata?.tasso_liquidazione_pct),
-          cramDownPct: numero(salvata?.cram_down_pct),
-        };
-      }),
-    };
-    return stimaSenzaProvvedimento(righe, parametri, tipo);
+    return stimaSenzaProvvedimento(righe, lettura.parametri, tipo);
   } catch {
     return null;
   }

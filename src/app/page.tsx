@@ -78,8 +78,13 @@ export default function LoginPage() {
         setErrore(risultato.error || 'Credenziali non valide.');
         return;
       }
-      // Password corretta: si prosegue con l'MFA (TOTP + PIN). La sessione
-      // viene creata solo al completamento dei fattori.
+      // Demo locale (PORTABLE=1 + DEMO_SENZA_MFA=1): il server ha già creato
+      // la sessione e restituisce il codice dello spazio. In tutti gli altri
+      // casi si prosegue con l'MFA (TOTP + PIN).
+      if (risultato.mfa === false) {
+        router.push(`/spazio/${risultato.next}`);
+        return;
+      }
       setMfaAttivo(true);
     } catch (err) {
       console.error('Errore durante il login:', err);

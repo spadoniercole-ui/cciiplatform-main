@@ -28,6 +28,16 @@ import {
   type FonteSuggerimento,
   type SuggerimentoScenari,
 } from '@/lib/triage/suggerimentoScenari';
+import {
+  leggiParametriAllaData,
+  leggiVersioniParametri,
+} from '@/lib/triage/letturaParametriScenari';
+import {
+  dataItaliana,
+  giornoIso,
+  oggiIso,
+  type VersioneParametri,
+} from '@/lib/triage/versioniParametri';
 
 export type { FonteSuggerimento, SuggerimentoScenari };
 
@@ -41,49 +51,55 @@ const anthropic = apiKey ? new Anthropic({ apiKey, timeout: 150 * 1000, maxRetri
 export interface RisultatoParametri {
   success: boolean;
   parametri?: ParametriScenari;
+  /** La versione in vigore alla data letta; null se lo spazio ha solo i parametri storici. */
+  versione?: VersioneParametri | null;
+  /** Tutte le versioni, dalla più recente: la scheda dei Parametri. */
+  versioni?: VersioneParametri[];
   error?: string;
 }
 
+/**
+ * Le percentuali in vigore (0.256.33), non più «le percentuali» e basta: con
+ * `dataRiferimento` si legge la versione di quel giorno, senza si legge quella
+ * di oggi. È la lettura dei calcoli nuovi e delle pagine che mostrano il dato.
+ */
 export async function ottieniParametriScenariAction(
-  nomeSchema: string
+  nomeSchema: string,
+  dataRiferimento: string | null = null
 ): Promise<RisultatoParametri> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
     if (!schemaOk(nomeSchema)) return { success: false, error: 'Nome schema non valido.' };
     await assicuraTabelleScenariTriage(nomeSchema);
-    const [config, righe] = await Promise.all([
-      pool.query(`SELECT costi_procedura_pct FROM "${nomeSchema}".parametri_scenari WHERE id = 1`),
-      pool.query(
-        `SELECT rango, tasso_liquidazione_pct, cram_down_pct
-           FROM "${nomeSchema}".parametri_scenari_rango`
-      ),
-    ]);
-    const perRango = new Map(righe.rows.map((r) => [String(r.rango), r]));
-    return {
-      success: true,
-      parametri: {
-        costiProceduraPct: num(config.rows[0]?.costi_procedura_pct),
-        // L'ordine è quello dei ranghi, non quello del database: il report
-        // deve leggersi sempre allo stesso modo.
-        ranghi: RANGHI.map((r) => {
-          const salvata = perRango.get(r.codice);
-          return {
-            rango: r.codice,
-            tassoLiquidazionePct: num(salvata?.tasso_liquidazione_pct),
-            cramDownPct: num(salvata?.cram_down_pct),
-          };
-        }),
-      },
-    };
+    const { parametri, versione, versioni } = await leggiParametriAllaData(
+      nomeSchema,
+      dataRiferimento
+    );
+    return { success: true, parametri, versione, versioni };
   } catch (error: unknown) {
     console.error('[ottieniParametriScenariAction] Errore:', error);
     return { success: false, error: `Lettura non riuscita: ${(error as Error).message}` };
   }
 }
 
+/**
+ * UNA VERSIONE NUOVA, NON UNA SOVRASCRITTURA (0.256.33).
+ *
+ * Salvare i parametri registra una versione con la sua decorrenza: da quel
+ * giorno i calcoli nuovi usano questi valori, e i documenti chiusi prima
+ * restano su quelli con cui sono nati. Una decorrenza nel futuro è ammessa ed
+ * è il modo per preparare un aggiornamento senza applicarlo subito.
+ *
+ * Le tabelle storiche (`parametri_scenari`, `parametri_scenari_rango`) si
+ * allineano quando la versione decorre già: sono la forma in cui i valori
+ * escono nei backup e nei ripristini vecchi, e non devono dire una cosa diversa
+ * da quella che il triage applica. Con una decorrenza futura restano quelle di
+ * oggi, che è esattamente ciò che vale fino a quel giorno.
+ */
 export async function salvaParametriScenariAction(
   nomeSchema: string,
-  parametri: ParametriScenari
+  parametri: ParametriScenari,
+  opzioni: { validiDa?: string | null; nota?: string | null } = {}
 ): Promise<RisultatoParametri> {
   try {
     await richiediAccessoSchema(nomeSchema, { soloAdmin: true });
@@ -91,27 +107,63 @@ export async function salvaParametriScenariAction(
     const errore = validaParametri(parametri);
     if (errore.length > 0) return { success: false, error: errore.join(' ') };
 
+    const giorno = opzioni.validiDa ? giornoIso(opzioni.validiDa) : oggiIso();
+    if (!giorno)
+      return {
+        success: false,
+        error: 'La decorrenza deve essere una data (anno-mese-giorno).',
+      };
+
     await assicuraTabelleScenariTriage(nomeSchema);
+    const esistenti = await leggiVersioniParametri(nomeSchema);
+    const occupata = esistenti.find((v) => v.validiDa === giorno);
+    if (occupata)
+      return {
+        success: false,
+        error: `Esiste già una versione con decorrenza ${dataItaliana(giorno)}. Scegli un altro giorno: le percentuali di una data già registrata non si riscrivono, altrimenti un documento chiuso cambierebbe numeri.`,
+      };
+
     const ammessi = new Set<RangoCredito>(RANGHI.map((r) => r.codice));
+    for (const r of parametri.ranghi)
+      if (!ammessi.has(r.rango)) return { success: false, error: 'Rango non riconosciuto.' };
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query(
-        `INSERT INTO "${nomeSchema}".parametri_scenari (id, costi_procedura_pct)
-         VALUES (1, $1)
-         ON CONFLICT (id) DO UPDATE SET costi_procedura_pct = $1`,
-        [parametri.costiProceduraPct]
+      const inserita = await client.query(
+        `INSERT INTO "${nomeSchema}".parametri_scenari_versioni
+           (validi_da, nota, costi_procedura_pct)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
+        [giorno, opzioni.nota?.trim() || null, parametri.costiProceduraPct]
       );
+      const versioneId = Number(inserita.rows[0]?.id);
       for (const r of parametri.ranghi) {
-        if (!ammessi.has(r.rango)) return { success: false, error: 'Rango non riconosciuto.' };
         await client.query(
-          `INSERT INTO "${nomeSchema}".parametri_scenari_rango
-             (rango, tasso_liquidazione_pct, cram_down_pct)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (rango)
-           DO UPDATE SET tasso_liquidazione_pct = $2, cram_down_pct = $3`,
-          [r.rango, r.tassoLiquidazionePct, r.cramDownPct]
+          `INSERT INTO "${nomeSchema}".parametri_scenari_versione_ranghi
+             (versione_id, rango, tasso_liquidazione_pct, cram_down_pct)
+           VALUES ($1, $2, $3, $4)`,
+          [versioneId, r.rango, r.tassoLiquidazionePct, r.cramDownPct]
         );
+      }
+      // La versione decorre già: le tabelle storiche dicono la stessa cosa.
+      if (giorno <= oggiIso()) {
+        await client.query(
+          `INSERT INTO "${nomeSchema}".parametri_scenari (id, costi_procedura_pct, aggiornato_il)
+           VALUES (1, $1, now())
+           ON CONFLICT (id) DO UPDATE SET costi_procedura_pct = $1, aggiornato_il = now()`,
+          [parametri.costiProceduraPct]
+        );
+        for (const r of parametri.ranghi) {
+          await client.query(
+            `INSERT INTO "${nomeSchema}".parametri_scenari_rango
+               (rango, tasso_liquidazione_pct, cram_down_pct, aggiornato_il)
+             VALUES ($1, $2, $3, now())
+             ON CONFLICT (rango)
+             DO UPDATE SET tasso_liquidazione_pct = $2, cram_down_pct = $3, aggiornato_il = now()`,
+            [r.rango, r.tassoLiquidazionePct, r.cramDownPct]
+          );
+        }
       }
       await client.query('COMMIT');
     } catch (errore) {
@@ -121,7 +173,13 @@ export async function salvaParametriScenariAction(
       client.release();
     }
 
-    return { success: true, parametri };
+    const letto = await leggiParametriAllaData(nomeSchema, giorno);
+    return {
+      success: true,
+      parametri: letto.parametri,
+      versione: letto.versione,
+      versioni: letto.versioni,
+    };
   } catch (error: unknown) {
     console.error('[salvaParametriScenariAction] Errore:', error);
     return { success: false, error: `Salvataggio non riuscito: ${(error as Error).message}` };

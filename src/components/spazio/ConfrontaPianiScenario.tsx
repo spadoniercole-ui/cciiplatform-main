@@ -15,6 +15,8 @@ import { ottieniConfrontoPianoAction, type DatiConfrontoPiano } from '@/app/acti
 import { calcolaPiano, euro } from '@/lib/piano/piano';
 import { ipotesiDaPianoAzienda } from '@/lib/piano/pianoAziendale';
 import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
+import { calcolaPianoConLeve } from '@/lib/piano/levePiano';
+import { leveDaSalvate, type LeveSimulazione } from '@/lib/piano/leveSimulazione';
 
 interface Props {
   nomeSchema: string;
@@ -22,6 +24,8 @@ interface Props {
   aziendaId: number;
   dati: DatiPianoSviluppo;
   orizzonte: number;
+  /** Le leve vive del pannello: la variante corrente si ricalcola con queste. */
+  leve: LeveSimulazione;
 }
 
 interface PianoConfronto {
@@ -43,6 +47,7 @@ export function ConfrontaPianiScenario({
   aziendaId,
   dati,
   orizzonte,
+  leve,
 }: Props) {
   const [aperto, setAperto] = useState(false);
   const [piani, setPiani] = useState<PianoConfronto[]>([]);
@@ -70,6 +75,8 @@ export function ConfrontaPianiScenario({
           scenarioId,
           aziendaId
         ).then((r) => (r.success ? (r.dati ?? null) : null));
+        // Il piano presentato dall'azienda non ha le leve della simulazione:
+        // è il piano così come è arrivato, e resta il termine di paragone.
         if (conf?.piano) {
           const esito = calcolaPiano(
             base,
@@ -96,13 +103,17 @@ export function ConfrontaPianiScenario({
             ? dati
             : (await ottieniPianoSviluppoAction(nomeSchema, scenarioId, aziendaId, v)).dati;
           if (!datiV?.storico.length) continue;
-          const esito = calcolaPiano(
-            datiV.storico[0],
+          // La variante corrente usa le leve vive del pannello, le altre le
+          // leve salvate con loro: lo stesso piano mostra gli stessi numeri
+          // della scheda, senza applicarle due volte (0.256.36).
+          const esito = calcolaPianoConLeve({
+            storico: datiV.storico[0],
             orizzonte,
-            datiV.ipotesi,
+            ipotesi: datiV.ipotesi,
+            leve: corrente ? leve : leveDaSalvate(datiV.leve),
             rate,
-            datiV.capitaleSociale
-          );
+            capitaleSociale: datiV.capitaleSociale,
+          }).esito;
           const ultimo = esito.anni[esito.anni.length - 1];
           out.push({
             chiave: v,
@@ -132,7 +143,7 @@ export function ConfrontaPianiScenario({
       annullato = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aperto, nomeSchema, scenarioId, aziendaId, dati, orizzonte]);
+  }, [aperto, nomeSchema, scenarioId, aziendaId, dati, orizzonte, leve]);
 
   const scelti = piani.filter((p) => selezionati.includes(p.chiave));
 

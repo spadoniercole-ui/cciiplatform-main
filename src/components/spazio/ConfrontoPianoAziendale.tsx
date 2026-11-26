@@ -26,6 +26,8 @@ import {
   type DatiConfrontoPiano,
 } from '@/app/actions/pianoAziendale';
 import { calcolaPiano, ETICHETTA_RIGA, type IpotesiPiano } from '@/lib/piano/piano';
+import { calcolaPianoConLeve } from '@/lib/piano/levePiano';
+import type { LeveSimulazione } from '@/lib/piano/leveSimulazione';
 import { crescitaDiRiferimento, ipotesiAutomatiche } from '@/lib/piano/automatico';
 import { confrontaPiani, type Luce } from '@/lib/piano/confronto';
 import {
@@ -49,6 +51,8 @@ interface Props {
   /** RICEVUTA: piano dell'azienda caricato; DA_DEFINIRE: autoverifica della variante sullo schermo. */
   lato: 'RICEVUTA' | 'DA_DEFINIRE';
   ipotesiCorrenti: IpotesiPiano;
+  /** Le leve della variante sullo schermo: le applica il calcolo, una volta sola (0.256.36). */
+  leve: LeveSimulazione;
   nomeVariante: string;
   /** Il contesto per l'elaborazione con l'AI, già calcolato qui: il genitore non lo rilegge. */
   onContesto?: (c: ContestoConfronto) => void;
@@ -93,6 +97,7 @@ export function ConfrontoPianoAziendale({
   onVarianteCreata,
   lato,
   ipotesiCorrenti,
+  leve,
   nomeVariante,
   onContesto,
   senzaCopia,
@@ -139,7 +144,16 @@ export function ConfrontoPianoAziendale({
       dati.capitaleSociale
     );
     if (redigente) {
-      const mio = calcolaPiano(base, orizzonte, ipotesiCorrenti, rate, dati.capitaleSociale);
+      // Il piano della variante passa dallo stesso punto della pagina: ipotesi
+      // scritte e leve una volta, non ipotesi già riscritte (0.256.36).
+      const mio = calcolaPianoConLeve({
+        storico: base,
+        orizzonte,
+        ipotesi: ipotesiCorrenti,
+        leve,
+        rate,
+        capitaleSociale: dati.capitaleSociale,
+      }).esito;
       const esito = confrontaPiani(
         auto.anni,
         mio.anni,
@@ -157,7 +171,7 @@ export function ConfrontoPianoAziendale({
     const esito = confrontaPiani(auto.anni, azienda.anni, ipAz, conf.soglie, anniConDati);
     return { crescita, auto, azienda, esito, ipAz };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conf, dati, orizzonte, redigente ? ipotesiCorrenti : null, rateScelte]);
+  }, [conf, dati, orizzonte, redigente ? ipotesiCorrenti : null, rateScelte, leve]);
 
   useEffect(() => {
     if (!calcolo || !onContesto) return;

@@ -24,6 +24,8 @@ import bcrypt from 'bcryptjs';
 import { pool } from '@/lib/db';
 import { avviaChallengeMfa } from '@/lib/mfa/challenge';
 import { improntaToken } from '@/lib/improntaToken';
+import { creaSessione } from '@/lib/sessione';
+import { accessoDemoSenzaMfa } from '@/lib/demoAccesso';
 
 /** Confronto a tempo costante, per non rivelare via timing quanti caratteri della password sono corretti. */
 function confrontoSicuro(a: string, b: string): boolean {
@@ -323,6 +325,17 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
           }
 
           await azzeraTentativiCondivisi(pool, chiaveTentativi);
+          // Demo locale: la password basta, niente TOTP/PIN. Il guard richiede
+          // PORTABLE=1 e DEMO_SENZA_MFA=1, quindi il cloud non lo vede mai.
+          if (accessoDemoSenzaMfa()) {
+            await creaSessione(
+              'USER',
+              schemaAdmin.spazioId,
+              (utenteDb[0].email || '').toLowerCase(),
+              username
+            );
+            return { success: true, mfa: false, next: schemaAdmin.codiceSpazio };
+          }
           const { next } = await avviaChallengeMfa({
             identitaKey: `USER:${username}`,
             ruolo: 'USER',
@@ -386,6 +399,15 @@ export async function eseguiAutenticazione(utenteInput: any, passwordInput: any)
       }
 
       await azzeraTentativiCondivisi(pool, chiaveTentativi);
+      if (accessoDemoSenzaMfa()) {
+        await creaSessione(
+          'USER',
+          schemaUtente.spazioId,
+          (utenteDb[0].email || '').toLowerCase(),
+          username
+        );
+        return { success: true, mfa: false, next: schemaUtente.codiceSpazio };
+      }
       const { next } = await avviaChallengeMfa({
         identitaKey: `USER:${username}`,
         ruolo: 'USER',

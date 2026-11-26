@@ -48,6 +48,7 @@ vi.mock('@/db/provision', () => ({
   assicuraTabelleVerificaAzienda: async () => undefined,
   assicuraTabellaXbrlAzienda: async () => undefined,
   assicuraTabellaSpiegazioniContabili: async () => undefined,
+  assicuraTabelleScenariTriage: async () => undefined,
 }));
 
 const { salvaSimulazioneContabileAction } = await import('./verificaContabile');
@@ -93,7 +94,8 @@ async function inserisciBilancio(anno: number, over: Record<string, number> = {}
 
 async function simulazioni() {
   const r = await db.query(
-    `SELECT id, profilo, annualita, debito_ente, colonne, avvertenze, base_per_proposta
+    `SELECT id, profilo, annualita, debito_ente, colonne, avvertenze, base_per_proposta,
+            parametri_versione
        FROM ${SCHEMA}.verifica_azienda_simulazioni
       ORDER BY id ASC`
   );
@@ -105,6 +107,7 @@ async function simulazioni() {
     colonne: { anno: number; tipo: string; dati: Record<string, number> }[];
     avvertenze: unknown[];
     base_per_proposta: boolean;
+    parametri_versione: unknown;
   }[];
 }
 
@@ -138,8 +141,48 @@ beforeEach(async () => {
       colonne JSONB NOT NULL,
       avvertenze JSONB NOT NULL DEFAULT '[]'::jsonb,
       base_per_proposta BOOLEAN NOT NULL DEFAULT FALSE,
+      -- 0.256.33: l'istantanea dei parametri degli scenari con cui la
+      -- simulazione nasce (qui null: lo schema di prova non ha versioni).
+      parametri_versione JSONB,
       created_at TIMESTAMP NOT NULL DEFAULT now()
     );
+    -- Le versioni dei parametri degli scenari (0.256.33): una sola, già in
+    -- vigore, così la simulazione deve nascerne con quella.
+    CREATE TABLE ${SCHEMA}.parametri_scenari_versioni (
+      id SERIAL PRIMARY KEY,
+      validi_da DATE NOT NULL UNIQUE,
+      nota TEXT,
+      costi_procedura_pct NUMERIC,
+      creato_il TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE TABLE ${SCHEMA}.parametri_scenari_versione_ranghi (
+      versione_id INTEGER NOT NULL REFERENCES ${SCHEMA}.parametri_scenari_versioni(id)
+        ON DELETE CASCADE,
+      rango TEXT NOT NULL,
+      tasso_liquidazione_pct NUMERIC,
+      cram_down_pct NUMERIC,
+      PRIMARY KEY (versione_id, rango)
+    );
+    CREATE TABLE ${SCHEMA}.parametri_scenari (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      costi_procedura_pct NUMERIC,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE TABLE ${SCHEMA}.parametri_scenari_rango (
+      rango TEXT PRIMARY KEY,
+      tasso_liquidazione_pct NUMERIC,
+      cram_down_pct NUMERIC,
+      aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
+    );
+    INSERT INTO ${SCHEMA}.parametri_scenari_versioni
+      (id, validi_da, nota, costi_procedura_pct)
+      VALUES (1, DATE '2020-01-01', 'assetto iniziale', 12);
+    INSERT INTO ${SCHEMA}.parametri_scenari_versione_ranghi
+      (versione_id, rango, tasso_liquidazione_pct, cram_down_pct)
+      VALUES (1, 'POSTERGATO', 0, 5),
+             (1, 'CHIROGRAFARIO', 20, 25),
+             (1, 'PRIVILEGIATO', 60, 65),
+             (1, 'PREDEDUCIBILE', 100, 100);
   `);
   await inserisciBilancio(2023);
   await inserisciBilancio(2024);
@@ -168,6 +211,42 @@ describe('salvaSimulazioneContabileAction', () => {
     expect(riga.colonne.at(-1)?.anno).toBe(2026);
     expect(riga.colonne.at(-1)?.tipo).toBe('CALCOLATO');
     expect(Array.isArray(riga.avvertenze)).toBe(true);
+  });
+
+  it('nasce con l’istantanea dei parametri in vigore, non con un rimando', async () => {
+    const esito = await salvaSimulazioneContabileAction(SCHEMA, AZIENDA);
+    expect(esito.success).toBe(true);
+
+    const riga = (await simulazioni())[0];
+    const congelati = riga.parametri_versione as {
+      versioneId: number;
+      validiDa: string;
+      congelatiIl: string;
+      parametri: {
+        costiProceduraPct: number | null;
+        ranghi: {
+          rango: string;
+          tassoLiquidazionePct: number | null;
+          cramDownPct: number | null;
+        }[];
+      };
+    };
+    // Non è l'id di una versione da rileggere: sono i valori di allora, e
+    // l'ordine dei ranghi è quello con cui il triage li legge.
+    expect(congelati.versioneId).toBe(1);
+    expect(congelati.validiDa).toBe('2020-01-01');
+    expect(congelati.congelatiIl).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(congelati.parametri.costiProceduraPct).toBe(12);
+    expect(congelati.parametri.ranghi.map((r) => r.rango)).toEqual([
+      'PREDEDUCIBILE',
+      'PRIVILEGIATO',
+      'CHIROGRAFARIO',
+      'POSTERGATO',
+    ]);
+    expect(congelati.parametri.ranghi.find((r) => r.rango === 'CHIROGRAFARIO')).toMatchObject({
+      tassoLiquidazionePct: 20,
+      cramDownPct: 25,
+    });
   });
 
   it('la verifica aziendale la legge davvero come fotografia base', async () => {

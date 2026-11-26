@@ -43,7 +43,15 @@ export const RIGHE_INPUT: RigaInput[] = [
   'apportiSoci',
 ];
 
-export const ETICHETTA_RIGA: Record<RigaInput, string> = {
+/**
+ * Le righe che possono portare un'ipotesi. `costiPersonale` non è una manopola:
+ * è dentro i costi operativi e si dettaglia solo per mostrare che cosa costa il
+ * piano (0.256.35). Lo scrive la leva del personale, o si ricava dalla quota
+ * storica del bilancio.
+ */
+export type RigaIpotesi = RigaInput | 'costiPersonale';
+
+export const ETICHETTA_RIGA: Record<RigaIpotesi, string> = {
   ricaviVendite: 'Ricavi delle vendite e delle prestazioni',
   altriRicavi: 'Altri ricavi e variazioni (valore della produzione − ricavi)',
   costiOperativi: 'Costi della produzione (senza ammortamenti; personale compreso)',
@@ -55,6 +63,7 @@ export const ETICHETTA_RIGA: Record<RigaInput, string> = {
   debitiFornitori: 'Debiti verso fornitori (a fine anno)',
   debitiBanche: 'Debiti verso banche (a fine anno)',
   apportiSoci: 'Apporti dei soci (nell’anno)',
+  costiPersonale: 'Costo del personale (compreso nei costi della produzione)',
 };
 
 /** Righe che nel bilancio sono un valore assoluto dell'anno, non un saldo. */
@@ -72,7 +81,7 @@ export interface Ipotesi {
 }
 
 /** ipotesi[riga][indiceAnno] — indice 0 = primo anno del piano. */
-export type IpotesiPiano = Partial<Record<RigaInput, (Ipotesi | null)[]>>;
+export type IpotesiPiano = Partial<Record<RigaIpotesi, (Ipotesi | null)[]>>;
 
 export interface EsercizioStorico {
   anno: number;
@@ -80,6 +89,8 @@ export interface EsercizioStorico {
   valoreProduzione: number;
   costiProduzione: number;
   ammortamenti: number;
+  /** Costo del personale, quando il bilancio lo separa: serve a mostrarlo nel piano. */
+  costiPersonale?: number | null;
   oneriFinanziari: number;
   utileEsercizio: number;
   immobilizzazioni: number;
@@ -108,6 +119,8 @@ export interface AnnoPiano {
   altriRicavi: number;
   valoreProduzione: number;
   costiOperativi: number;
+  /** Costo del personale dentro i costi operativi; null se il bilancio non lo separa. */
+  costiPersonale: number | null;
   ammortamenti: number;
   ebitda: number;
   ebit: number;
@@ -190,11 +203,20 @@ export function calcolaPiano(
     s.totaleDebiti - s.debitiBanche - s.debitiFornitori - s.debitiTributari - s.debitiPrevidenziali
   );
   const aliquotaBase = aliquotaImplicita(s) ?? 27.9; // IRES 24% + IRAP 3,9%, se lo storico non la rivela
+  const costiBase = Math.max(0, s.costiProduzione - s.ammortamenti);
+  // La quota del personale sui costi operativi: il piano la porta avanti, così
+  // la riga del personale è coerente con i costi e non un numero a parte.
+  const quotaPersonale =
+    typeof s.costiPersonale === 'number' && s.costiPersonale > 0 && costiBase > 0
+      ? Math.min(1, s.costiPersonale / costiBase)
+      : null;
 
   let prev = {
     ricaviVendite: s.ricaviVendite,
     altriRicavi: s.valoreProduzione - s.ricaviVendite,
-    costiOperativi: Math.max(0, s.costiProduzione - s.ammortamenti),
+    costiOperativi: costiBase,
+    costiPersonale: typeof s.costiPersonale === 'number' ? s.costiPersonale : 0,
+    quotaPersonale,
     ammortamenti: s.ammortamenti,
     oneriFinanziari: s.oneriFinanziari,
     aliquota: aliquotaBase,
@@ -212,10 +234,19 @@ export function calcolaPiano(
 
   for (let i = 0; i < orizzonte; i++) {
     const anno = s.anno + 1 + i;
-    const ip = (r: RigaInput) => ipotesi[r]?.[i] ?? null;
+    const ip = (r: RigaIpotesi) => ipotesi[r]?.[i] ?? null;
     const ricaviVendite = applica(prev.ricaviVendite, ip('ricaviVendite'), false);
     const altriRicavi = applica(prev.altriRicavi, ip('altriRicavi'), false);
     const costiOperativi = applica(prev.costiOperativi, ip('costiOperativi'), false);
+    // Il personale: la leva lo scrive in valore assoluto; senza, segue la quota
+    // storica dei costi operativi. Non può superare i costi dell'anno.
+    const ipPersonale = ip('costiPersonale');
+    const costiPersonale =
+      ipPersonale !== null
+        ? Math.max(0, Math.min(costiOperativi, applica(prev.costiPersonale, ipPersonale, false)))
+        : prev.quotaPersonale !== null
+          ? Math.min(costiOperativi, costiOperativi * prev.quotaPersonale)
+          : null;
     const ammortamenti = applica(prev.ammortamenti, ip('ammortamenti'), false);
     const oneriFinanziari = applica(prev.oneriFinanziari, ip('oneriFinanziari'), false);
     const aliquota = ip('aliquotaImposte') ? ip('aliquotaImposte')!.valore : prev.aliquota;
@@ -286,6 +317,7 @@ export function calcolaPiano(
       altriRicavi: r2(altriRicavi),
       valoreProduzione: r2(valoreProduzione),
       costiOperativi: r2(costiOperativi),
+      costiPersonale: costiPersonale === null ? null : r2(costiPersonale),
       ammortamenti: r2(ammortamenti),
       ebitda: r2(ebitda),
       ebit: r2(ebit),
@@ -315,6 +347,8 @@ export function calcolaPiano(
       ricaviVendite,
       altriRicavi,
       costiOperativi,
+      costiPersonale: costiPersonale ?? 0,
+      quotaPersonale, // se la riga del personale non è nel bilancio resta null
       ammortamenti,
       oneriFinanziari,
       aliquota,

@@ -1312,6 +1312,12 @@ export async function assicuraTabelleParametriSpazio(nomeSchema: string): Promis
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS progetto_il TIMESTAMP`
   );
+  // I parametri degli scenari con cui il progetto è nato (0.256.33):
+  // un'istantanea, non un rimando, così una versione futura non riscrive le
+  // percentuali di un piano già depositato.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.piano_sviluppo ADD COLUMN IF NOT EXISTS parametri_versione JSONB`
+  );
   // Vecchia simulazione a levette (sostituita dal Piano di sviluppo nella
   // 0.109.113 e tolta dal codice nella 0.109.118, su indicazione di Ercole:
   // «la simulazione attuale la puoi cestinare»). Le sue tabelle si
@@ -2983,6 +2989,59 @@ export async function assicuraTabelleScenariTriage(nomeSchema: string): Promise<
       aggiornato_il TIMESTAMP NOT NULL DEFAULT now()
     )`
   );
+  // LE VERSIONI DEI PARAMETRI CON DECORRENZA (0.256.33).
+  //
+  // Ogni insieme di percentuali è una versione con una data da cui vale: i
+  // calcoli nuovi prendono l'ultima in vigore, i documenti già chiusi
+  // conservano la loro (istantanea in colonna `parametri_versione`, non un
+  // rimando). Le due tabelle storiche restano perché sono la forma in cui i
+  // parametri sono già stati scritti: si allineano quando si salva una versione
+  // con decorrenza già passata.
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_scenari_versioni (
+      id SERIAL PRIMARY KEY,
+      validi_da DATE NOT NULL,
+      nota TEXT,
+      costi_procedura_pct NUMERIC,
+      creato_il TIMESTAMP NOT NULL DEFAULT now(),
+      CONSTRAINT parametri_scenari_versioni_decorrenza UNIQUE (validi_da)
+    )`
+  );
+  await eseguiDdlTenant(
+    sql`CREATE TABLE IF NOT EXISTS ${s}.parametri_scenari_versione_ranghi (
+      versione_id INTEGER NOT NULL REFERENCES ${s}.parametri_scenari_versioni(id) ON DELETE CASCADE,
+      rango TEXT NOT NULL,
+      tasso_liquidazione_pct NUMERIC,
+      cram_down_pct NUMERIC,
+      PRIMARY KEY (versione_id, rango)
+    )`
+  );
+  // I parametri già impostati diventano la prima versione, con la decorrenza
+  // dell'ultimo salvataggio: uno spazio esistente non deve vedere cambiare i
+  // propri numeri all'aggiornamento, e la versione non deve precedere il giorno
+  // in cui quei valori sono stati scritti.
+  await eseguiDdlTenant(
+    sql`INSERT INTO ${s}.parametri_scenari_versioni (validi_da, nota, costi_procedura_pct)
+        SELECT COALESCE((SELECT aggiornato_il::date FROM ${s}.parametri_scenari WHERE id = 1), CURRENT_DATE),
+               'Versione iniziale: i parametri già impostati dallo spazio.',
+               (SELECT costi_procedura_pct FROM ${s}.parametri_scenari WHERE id = 1)
+         WHERE NOT EXISTS (SELECT 1 FROM ${s}.parametri_scenari_versioni)
+           AND (EXISTS (SELECT 1 FROM ${s}.parametri_scenari WHERE id = 1)
+                OR EXISTS (SELECT 1 FROM ${s}.parametri_scenari_rango))`
+  );
+  await eseguiDdlTenant(
+    sql`INSERT INTO ${s}.parametri_scenari_versione_ranghi
+          (versione_id, rango, tasso_liquidazione_pct, cram_down_pct)
+        SELECT (SELECT id FROM ${s}.parametri_scenari_versioni ORDER BY validi_da DESC, id DESC LIMIT 1),
+               r.rango, r.tasso_liquidazione_pct, r.cram_down_pct
+          FROM ${s}.parametri_scenari_rango r
+         WHERE NOT EXISTS (
+           SELECT 1 FROM ${s}.parametri_scenari_versione_ranghi vr
+            WHERE vr.versione_id = (SELECT id FROM ${s}.parametri_scenari_versioni
+                                     ORDER BY validi_da DESC, id DESC LIMIT 1)
+         )
+        ON CONFLICT DO NOTHING`
+  );
   await eseguiDdlTenant(
     sql`CREATE TABLE IF NOT EXISTS ${s}.triage_scenario (
       azienda_id INTEGER PRIMARY KEY REFERENCES ${s}.aziende(id) ON DELETE CASCADE,
@@ -3367,6 +3426,11 @@ export async function assicuraTabelleVerificaAzienda(nomeSchema: string): Promis
   // (0.195.0). Una sola per azienda: l'azione azzera le altre.
   await eseguiDdlTenant(
     sql`ALTER TABLE ${s}.verifica_azienda_simulazioni ADD COLUMN IF NOT EXISTS base_per_proposta BOOLEAN NOT NULL DEFAULT FALSE`
+  );
+  // Le percentuali degli scenari con cui la verifica è stata chiusa
+  // (0.256.33): una verifica chiusa resta sulla versione con cui è nata.
+  await eseguiDdlTenant(
+    sql`ALTER TABLE ${s}.verifica_azienda_simulazioni ADD COLUMN IF NOT EXISTS parametri_versione JSONB`
   );
   // Il modello di proiezione è configurabile per spazio (0.208.0): quanto la
   // crescita converge verso il settore a ogni annualità e in quante rate si

@@ -23,7 +23,6 @@
 // risultato. L'AI, se disponibile, ne scrive la lettura; non sposta numeri.
 
 import {
-  calcolaPiano,
   type AnnoPiano,
   type EsitoPiano,
   type EsercizioStorico,
@@ -35,6 +34,8 @@ import {
 } from './piano';
 import { RIGHE_CONFRONTO, semaforo, type Luce, type SoglieConfronto } from './confronto';
 import { applicaRettifiche, righeDelPianoAzienda, type Rettifiche } from './rettifiche';
+import { calcolaPianoConLeve } from './levePiano';
+import type { LeveSimulazione } from './leveSimulazione';
 
 /** Orizzonte massimo del piano (anni), anche per rateazioni lunghe. */
 export const ORIZZONTE_MASSIMO = 10;
@@ -267,8 +268,10 @@ export interface IngressoSoluzione {
   orizzonte: number;
   /** Piano dell'azienda (già esteso all'orizzonte). */
   ipAzienda: IpotesiPiano;
-  /** Ipotesi delle righe che il piano dell'azienda non contiene. */
+  /** Ipotesi delle righe che il piano dell'azienda non contiene (senza leve). */
   ipOrdinarie: IpotesiPiano;
+  /** Le leve del piano: le applica il calcolo, una volta sola (0.256.36). */
+  leve?: LeveSimulazione | null;
   rate: RatePiano;
   capitaleSociale: number | null;
 }
@@ -341,7 +344,14 @@ export function cercaSoluzioneVerde(ing: IngressoSoluzione): Soluzione {
     for (const l of leve)
       if (l.riga !== 'apportoIniziale' && s[l.riga]) rett[l.riga] = { valore: s[l.riga] };
     const ip = ipotesiConLeve(ing, rett, s.apportoIniziale ?? 0);
-    const esito = calcolaPiano(ing.storico, ing.orizzonte, ip, ing.rate, ing.capitaleSociale);
+    const esito = calcolaPianoConLeve({
+      storico: ing.storico,
+      orizzonte: ing.orizzonte,
+      ipotesi: ip,
+      leve: ing.leve,
+      rate: ing.rate,
+      capitaleSociale: ing.capitaleSociale,
+    }).esito;
     return { rett, esito, m: mancanza(esito, ing.capitaleSociale), verde: pianoVerde(esito) };
   };
   const passo = (l: Leva) => (l.riga === 'apportoIniziale' ? passoApporto : 1);

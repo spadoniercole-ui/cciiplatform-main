@@ -43,7 +43,9 @@ import {
   type Ipotesi,
   type IpotesiPiano,
   type RigaInput,
+  type RigaIpotesi,
 } from '@/lib/piano/piano';
+import { calcolaPianoConLeve } from '@/lib/piano/levePiano';
 import { confermaApp } from '@/components/FinestreApp';
 import { stampaHtml } from '@/lib/stampaTesto';
 import {
@@ -100,7 +102,7 @@ const GRUPPI: DefinizioneManopola['gruppo'][] = ['Ricavi', 'Costi', 'Circolante'
 /** Allunga le ipotesi quando cresce l'orizzonte: l'ultimo valore di ogni riga prosegue. */
 function estendiIpotesi(ip: IpotesiPiano, orizzonte: number): IpotesiPiano {
   const out: IpotesiPiano = {};
-  for (const [r, arr] of Object.entries(ip) as [RigaInput, (Ipotesi | null)[]][]) {
+  for (const [r, arr] of Object.entries(ip) as [RigaIpotesi, (Ipotesi | null)[]][]) {
     const a = [...(arr ?? [])].slice(0, orizzonte);
     const ultimo = [...a].reverse().find(Boolean) ?? null;
     while (a.length < orizzonte)
@@ -181,6 +183,10 @@ export function PianoSviluppoScenario({
   // misura in percentuale, che la piattaforma propone e chi simula può
   // cambiare. Valgono per questa simulazione, non per lo spazio.
   const [leve, setLeve] = useState<LeveSimulazione>(LEVE_PREDEFINITE);
+  // LE VARIABILI SONO DELL'OPERATORE (0.256.34): appena le tocca, la proposta
+  // dell'analisi non le riscrive — fino al salvataggio del piano, che è il
+  // momento in cui la scelta diventa quella della variante.
+  const [leveToccate, setLeveToccate] = useState(false);
   // Ricevente, ordine dei fattori (0.129): variante di sistema, piano di
   // rientro, soluzione verde.
   const [serieSistema, setSerieSistema] = useState(false);
@@ -243,7 +249,9 @@ export function PianoSviluppoScenario({
     setSoluzione(r.dati.soluzione);
     // Le leve salvate con la variante tornano nel pannello: la simulazione
     // ricorda con quali leve è stata prodotta, anche dopo un ricaricamento.
-    if (r.dati.leve) setLeve(r.dati.leve);
+    // Una variante senza leve non eredita quelle della variante precedente.
+    setLeve(r.dati.leve ?? LEVE_PREDEFINITE);
+    setLeveToccate(false);
     setModificato(false);
   };
   useEffect(() => {
@@ -279,6 +287,16 @@ export function PianoSviluppoScenario({
 
   // L'attenzione della contabile si legge una volta per azienda: è materia sua,
   // non dello scenario. Se non è leggibile la simulazione va avanti senza.
+  // Il debito non si restituisce in meno anni di quelli scelti: se una
+  // variante torna con un orizzonte più corto dell'arco di restituzione,
+  // l'orizzonte si allunga (0.256.35).
+  useEffect(() => {
+    if (anniRientro && orizzonte < anniRientro) {
+      setOrizzonte(anniRientro);
+      setIpotesi((ip) => estendiIpotesi(ip, anniRientro));
+    }
+  }, [anniRientro, orizzonte]);
+
   useEffect(() => {
     let annullato = false;
     (async () => {
@@ -343,30 +361,64 @@ export function PianoSviluppoScenario({
       anticipoPct: 0,
       ...(debito === null ? {} : { offerto: { ente: debito, altri: 0 } }),
     });
+    // IL PIANO NON PUÒ ESSERE PIÙ CORTO DELLA RESTITUZIONE (0.256.35): se si
+    // sceglie di pagare in più anni, l'orizzonte si allunga con loro.
+    if (anni > orizzonte) {
+      setOrizzonte(anni);
+      setIpotesi((ip) => estendiIpotesi(ip, anni));
+    }
   };
 
-  const esito = useMemo(() => {
+  // LE LEVE ENTRANO NEL CALCOLO IN UN SOLO PUNTO (0.256.36). Le ipotesi sono
+  // il percorso; `calcolaPianoConLeve` applica le leve una volta e restituisce
+  // piano e ipotesi che lo producono. Tabella, effetti, confronto e
+  // salvataggio leggono da qui: nessuna vista ricalcola lo stesso piano con
+  // premesse diverse, e nessuna applica le leve una seconda volta.
+  const calcolo = useMemo(() => {
     if (!dati || dati.storico.length === 0) return null;
-    return calcolaPiano(dati.storico[0], orizzonte, ipotesiEffettive, rate, dati.capitaleSociale);
-  }, [dati, ipotesiEffettive, orizzonte, rate]);
+    return calcolaPianoConLeve({
+      storico: dati.storico[0],
+      orizzonte,
+      ipotesi: ipotesiEffettive,
+      leve,
+      rate,
+      capitaleSociale: dati.capitaleSociale,
+    });
+  }, [dati, orizzonte, ipotesiEffettive, leve, rate]);
+  const conLeve = calcolo?.applicazione ?? null;
+  const esito = calcolo?.esito ?? null;
 
-  // Riferimento di settore e variante di sistema: le stesse rettifiche delle
-  // manopole valgono per le righe del piano dell'azienda anche qui.
+  // Riferimento di settore e piano di sistema: le stesse rettifiche delle
+  // manopole valgono per le righe del piano dell'azienda anche qui, e il piano
+  // di sistema porta le stesse leve del piano in schermo (0.256.36), così le
+  // due colonne si leggono con le stesse premesse. Il riferimento resta quello
+  // di settore, senza leve: è il metro con cui si misura il piano.
   const sistema = useMemo(() => {
     if (!dati || dati.storico.length === 0 || !ipAzienda || !contestoConfronto) return null;
     const base = dati.storico[0];
     const auto = ipotesiAutomatiche(base, orizzonte, tassoSettore);
     const riferimento = calcolaPiano(base, orizzonte, auto, rate, dati.capitaleSociale);
     const ipSis = ipotesiAssoluteDa(riferimento.anni, [...righeAzienda]);
-    const rettificato = calcolaPiano(
-      base,
+    const rettificato = calcolaPianoConLeve({
+      storico: base,
       orizzonte,
-      applicaRettifiche(ipSis, rettifiche, auto),
+      ipotesi: applicaRettifiche(ipSis, rettifiche, auto),
+      leve,
       rate,
-      dati.capitaleSociale
-    );
+      capitaleSociale: dati.capitaleSociale,
+    }).esito;
     return { riferimento, rettificato };
-  }, [dati, ipAzienda, contestoConfronto, orizzonte, tassoSettore, rate, righeAzienda, rettifiche]);
+  }, [
+    dati,
+    ipAzienda,
+    contestoConfronto,
+    orizzonte,
+    tassoSettore,
+    rate,
+    righeAzienda,
+    rettifiche,
+    leve,
+  ]);
 
   if (errore)
     return (
@@ -387,6 +439,19 @@ export function PianoSviluppoScenario({
   const base = dati.storico[0];
   const anniPiano = esito?.anni ?? [];
   const manopole = definizioniManopole(base, aliquotaImplicita(base) ?? 27.9);
+
+  // LE VARIABILI FERME (0.256.34). Se i ricavi del piano ripetono quelli
+  // dell'ultimo bilancio per tutti gli anni e nessuna leva è accesa, la tabella
+  // mostra la stessa riga per tutto l'orizzonte: chi legge deve sapere se è una
+  // scelta o un'ipotesi che manca.
+  const variazioneRicavi =
+    anniPiano.length > 0 && base.ricaviVendite > 0
+      ? ((anniPiano[anniPiano.length - 1].ricaviVendite - base.ricaviVendite) /
+          base.ricaviVendite) *
+        100
+      : null;
+  const pianoFermo =
+    variazioneRicavi !== null && Math.abs(variazioneRicavi) < 0.5 && contaLeve(leve) === 0;
   const setCella = (riga: RigaInput, i: number, ip: Ipotesi | null) => {
     if (righeAzienda.has(riga)) return; // la riga segue il piano dell'azienda e la sua manopola
     const arr = [...(ipotesi[riga] ?? [])];
@@ -451,6 +516,11 @@ export function PianoSviluppoScenario({
       forte: true,
     },
     { chiave: 'ebit', etichetta: 'EBIT', storico: (s) => s.valoreProduzione - s.costiProduzione },
+    {
+      chiave: 'costiPersonale',
+      etichetta: 'Costo del personale',
+      storico: (s) => s.costiPersonale ?? null,
+    },
     { chiave: 'imposte', etichetta: 'Imposte', storico: () => null },
     {
       chiave: 'utile',
@@ -513,7 +583,7 @@ export function PianoSviluppoScenario({
     if (
       dati.varianti.includes(VARIANTE_AI) &&
       !(await confermaApp(
-        'Esiste già la variante «elaborazione-ai»: una nuova elaborazione la sostituisce. Le altre varianti restano come sono.',
+        'Esiste già la variante «elaborazione-ai»: una nuova elaborazione la riscrive. Le altre varianti restano come sono; se è il progetto del piano, l’elaborazione si ferma senza toccarla.',
         { titolo: 'Nuova elaborazione con l’AI', etichettaConferma: 'Elabora di nuovo' }
       ))
     )
@@ -539,6 +609,10 @@ export function PianoSviluppoScenario({
         // prompt e le salva con la variante. Il contesto economico e il piano
         // della verifica aziendale li aggiunge il server (dati dello spazio).
         leveScelte: leve,
+        leveModificate: leveToccate,
+        minAnni: anniRientro ?? 0,
+        impostazione: lancio.prudenza,
+        procedura: lancio.procedura,
         vincoli: [...esito.vincoli.map((v) => v.testo), ...(attenzione?.vincoli ?? [])],
       });
       if (!r.success) {
@@ -559,8 +633,10 @@ export function PianoSviluppoScenario({
     setErrore(null);
     try {
       const base = dati.storico[0];
-      // Si parte sempre dal piano dell'azienda: manopole a zero, nessun apporto aggiunto.
-      const ipOrdinarie: IpotesiPiano = { ...ipotesi };
+      // Si parte sempre dal piano dell'azienda: manopole a zero, nessun apporto
+      // aggiunto. Le ipotesi restano quelle scritte: le leve le applica il
+      // calcolo, una volta sola (0.256.36).
+      const ipOrdinarie: IpotesiPiano = { ...ipotesiEffettive };
       if (soluzione?.apportoIniziale && ipOrdinarie.apportiSoci?.[0]) {
         const arr = [...ipOrdinarie.apportiSoci];
         const v = (arr[0]?.valore ?? 0) - soluzione.apportoIniziale;
@@ -572,17 +648,19 @@ export function PianoSviluppoScenario({
         orizzonte,
         ipAzienda,
         ipOrdinarie,
+        leve,
         rate,
         capitaleSociale: dati.capitaleSociale,
       };
       const sol = cercaSoluzioneVerde(ing);
-      const pianoAz = calcolaPiano(
-        base,
+      const pianoAz = calcolaPianoConLeve({
+        storico: base,
         orizzonte,
-        applicaRettifiche(ipAzienda, {}, ipOrdinarie),
+        ipotesi: applicaRettifiche(ipAzienda, {}, ipOrdinarie),
+        leve,
         rate,
-        dati.capitaleSociale
-      );
+        capitaleSociale: dati.capitaleSociale,
+      }).esito;
       const diff = differenzeSoluzione(sol, sistema.riferimento.anni);
       const ind = {
         azienda: indicatori(pianoAz),
@@ -700,6 +778,7 @@ export function PianoSviluppoScenario({
       onVarianteCreata={(v) => carica(v)}
       lato={tipoProposta === 'RICEVUTA' ? 'RICEVUTA' : 'DA_DEFINIRE'}
       ipotesiCorrenti={ipotesiEffettive}
+      leve={leve}
       nomeVariante={variante}
       onContesto={setContestoConfronto}
       senzaCopia={tipoProposta === 'RICEVUTA'}
@@ -889,7 +968,7 @@ export function PianoSviluppoScenario({
                   : 'L’AI imposta manopole e scelte'}
             </button>
           }
-          {!dati.progetto && variante !== 'base' && (
+          {!dati.progetto && (
             <button
               type="button"
               onClick={async () => {
@@ -900,7 +979,26 @@ export function PianoSviluppoScenario({
                   ))
                 )
                   return;
-                const r = await rendiProgettoPianoAction(codice, scenarioId, variante);
+                // La «base» non ha una riga finché non si salva: il server
+                // riceve lo stato del pannello e lo salva prima di renderlo
+                // definitivo (0.256.32).
+                const r = await rendiProgettoPianoAction(
+                  codice,
+                  scenarioId,
+                  variante,
+                  dati.salvata
+                    ? undefined
+                    : {
+                        orizzonte,
+                        ipotesi: ipotesiEffettive,
+                        note: note || null,
+                        ...(modoRettifica
+                          ? { rettifiche, pianoRientro, serieSistema, soluzione }
+                          : {}),
+                        leve,
+                        lancio: { ...lancio, anniRientro },
+                      }
+                );
                 if (!r.success) return setErrore(r.error ?? 'Errore.');
                 await carica(variante);
               }}
@@ -932,6 +1030,11 @@ export function PianoSviluppoScenario({
             </button>
           )}
           <label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Orizzonte</label>
+          {anniRientro !== null && (
+            <span className="text-[10px] text-slate-500">
+              non meno degli anni di restituzione del debito ({anniRientro})
+            </span>
+          )}
           <select
             value={orizzonte}
             onChange={(e) => {
@@ -950,7 +1053,16 @@ export function PianoSviluppoScenario({
             )
               .sort((a, b) => a - b)
               .map((n) => (
-                <option key={n} value={n}>
+                <option
+                  key={n}
+                  value={n}
+                  disabled={anniRientro !== null && n < anniRientro}
+                  title={
+                    anniRientro !== null && n < anniRientro
+                      ? `Il debito si restituisce in ${anniRientro} anni: il piano non può essere più corto.`
+                      : undefined
+                  }
+                >
                   {n} {n === 1 ? 'anno' : 'anni'}
                 </option>
               ))}
@@ -1082,11 +1194,23 @@ export function PianoSviluppoScenario({
               ))}
             </div>
 
+            {pianoFermo && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900 leading-relaxed">
+                <strong>
+                  I ricavi restano {fmt(base.ricaviVendite)} per tutti gli anni del piano.
+                </strong>{' '}
+                Se non è una scelta, il piano non prevede sviluppo: chiedi all’analisi di rifare le
+                ipotesi partendo dalla crescita (fatturato, incidenza dei costi, tecnologia,
+                ambiente), oppure accendi le leve che servono e rilancia l’elaborazione. Le leve
+                sono le variabili che l’analisi usa, e le scegli tu.
+              </div>
+            )}
+
             <div className="overflow-x-auto border border-slate-200 rounded-lg">
               <table className="w-full text-xs">
                 <thead className="bg-slate-50 text-[9px] uppercase text-slate-500">
                   <tr>
-                    <th className="px-2 py-2 text-left font-bold">Risultato</th>
+                    <th className="px-2 py-2 text-left font-bold">Conto economico e cassa</th>
                     <th className="px-2 py-2 text-right font-bold">
                       {base.anno} {dati.partenza.fonte === 'posizione' ? '(attuale)' : ''}
                     </th>
@@ -1100,12 +1224,25 @@ export function PianoSviluppoScenario({
                 <tbody className="divide-y divide-slate-100">
                   {(
                     [
-                      ['Ricavi', base.ricaviVendite, (a) => a.ricaviVendite],
+                      ['Valore della produzione', base.valoreProduzione, (a) => a.valoreProduzione],
+                      ['Ricavi delle vendite', base.ricaviVendite, (a) => a.ricaviVendite],
+                      [
+                        'Costi della produzione',
+                        base.costiProduzione,
+                        (a) => a.costiOperativi + a.ammortamenti,
+                      ],
+                      [
+                        'di cui costo del personale',
+                        base.costiPersonale ?? null,
+                        (a) => a.costiPersonale,
+                      ],
                       [
                         'EBITDA',
                         base.valoreProduzione - base.costiProduzione + base.ammortamenti,
                         (a) => a.ebitda,
                       ],
+                      ['EBIT', base.valoreProduzione - base.costiProduzione, (a) => a.ebit],
+                      ['Oneri finanziari', base.oneriFinanziari, (a) => a.oneriFinanziari],
                       ['Risultato d’esercizio', base.utileEsercizio, (a) => a.utile],
                       ['Flusso di gestione', null, (a) => a.flussoGestione],
                       ['Rate del piano di rientro', null, (a) => a.rateEnte + a.rateAltri],
@@ -1115,10 +1252,11 @@ export function PianoSviluppoScenario({
                         (a) => a.disponibilitaLiquide,
                       ],
                       ['Patrimonio netto', base.patrimonioNetto, (a) => a.patrimonioNetto],
-                    ] as [string, number | null, (a: (typeof anniPiano)[number]) => number][]
+                      ['Totale debiti', base.totaleDebiti, (a) => a.totaleDebiti],
+                    ] as [string, number | null, (a: (typeof anniPiano)[number]) => number | null][]
                   ).map(([et, b, f]) => (
                     <React.Fragment key={et}>
-                      <tr>
+                      <tr className={et.startsWith('di cui') ? 'text-slate-500' : undefined}>
                         <td className="px-2 py-1.5 text-slate-800">{et}</td>
                         <td className="px-2 py-1.5 text-right text-slate-500 tabular-nums">
                           {fmt(b)}
@@ -1128,7 +1266,7 @@ export function PianoSviluppoScenario({
                           return (
                             <td
                               key={a.anno}
-                              className={`px-2 py-1.5 text-right tabular-nums font-medium ${v < 0 && et !== 'Rate del piano di rientro' ? 'text-red-700' : 'text-slate-900'}`}
+                              className={`px-2 py-1.5 text-right tabular-nums font-medium ${v !== null && v < 0 && et !== 'Rate del piano di rientro' ? 'text-red-700' : 'text-slate-900'}`}
                             >
                               {fmt(v)}
                             </td>
@@ -1146,7 +1284,7 @@ export function PianoSviluppoScenario({
                             return (
                               <td
                                 key={a.anno}
-                                className={`px-2 py-1 text-right tabular-nums text-[11px] ${v < 0 && et !== 'Rate del piano di rientro' ? 'text-red-600' : 'text-sky-900'}`}
+                                className={`px-2 py-1 text-right tabular-nums text-[11px] ${v !== null && v < 0 && et !== 'Rate del piano di rientro' ? 'text-red-600' : 'text-sky-900'}`}
                               >
                                 {fmt(v)}
                               </td>
@@ -1159,6 +1297,43 @@ export function PianoSviluppoScenario({
                 </tbody>
               </table>
             </div>
+            {conLeve &&
+              (conLeve.effetti.length > 0 ||
+                conLeve.sacrifici.length > 0 ||
+                conLeve.avvisi.length > 0) && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Che cosa fanno le leve ai numeri
+                  </p>
+                  <ul className="space-y-1">
+                    {conLeve.effetti.map((e) => (
+                      <li key={e.id} className="text-[11px] text-slate-700 leading-relaxed">
+                        <strong>{e.domanda}</strong> ({e.pct}%) — {e.testo}
+                      </li>
+                    ))}
+                  </ul>
+                  {conLeve.sacrifici.length > 0 && (
+                    <div className="border-t border-slate-200 pt-2">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        I sacrifici che il piano chiede
+                      </p>
+                      <ul className="mt-1 space-y-1">
+                        {conLeve.sacrifici.map((s) => (
+                          <li key={s} className="text-[11px] text-amber-900 leading-relaxed">
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {conLeve.avvisi.length > 0 &&
+                    conLeve.avvisi.map((a) => (
+                      <p key={a} className="text-[11px] text-red-800 leading-relaxed">
+                        {a}
+                      </p>
+                    ))}
+                </div>
+              )}
             {modoRettifica && (
               <PassiPianoRicevente
                 offerto={dati.offerto}
@@ -1192,6 +1367,7 @@ export function PianoSviluppoScenario({
                 aziendaId={aziendaId}
                 dati={dati}
                 orizzonte={orizzonte}
+                leve={leve}
               />
             )}
           </div>
@@ -1222,8 +1398,21 @@ export function PianoSviluppoScenario({
               Le leve di questa simulazione ({contaLeve(leve)} accese su {LEVE.length})
             </p>
             <p className="text-[10px] text-slate-500 leading-relaxed">
-              Che cosa deve prevedere il piano. La misura è in percentuale ed è quella suggerita
-              dalla piattaforma: cambiala se per questa azienda non vale.
+              Che cosa deve prevedere il piano. L’analisi sceglie le leve e la misura; la
+              piattaforma le traduce nei numeri del piano (personale, investimenti, ricavi nuovi,
+              costi e crediti) e la tabella li mostra. Spegni o cambia una misura: il piano si
+              ricalcola.{' '}
+              {leveToccate ? (
+                <strong className="text-slate-700">
+                  Hai già scelto tu queste leve: la prossima analisi non le riscriverà, e le sue
+                  proposte le leggerai nella sintesi. Restano con la variante quando salvi il piano.
+                </strong>
+              ) : (
+                <>
+                  L’analisi le propone insieme alle ipotesi e le motiva; se le cambi, la sua
+                  proposta non le sostituisce, e i numeri si ricalcolano con le tue.
+                </>
+              )}
             </p>
             <div className="space-y-1.5">
               {LEVE.map((l) => {
@@ -1238,6 +1427,11 @@ export function PianoSviluppoScenario({
                       <p className="text-[10px] text-slate-500 leading-relaxed">
                         {l.misura} — {l.effetto}
                       </p>
+                      {s.motivazione && (
+                        <p className="text-[10px] text-violet-800 leading-relaxed mt-0.5">
+                          <strong>Analisi:</strong> {s.motivazione}
+                        </p>
+                      )}
                     </div>
                     <select
                       value={s.attiva ? 'SI' : 'NO'}
@@ -1246,6 +1440,7 @@ export function PianoSviluppoScenario({
                           ...prev,
                           [l.id]: { ...prev[l.id], attiva: e.target.value === 'SI' },
                         }));
+                        setLeveToccate(true);
                         setModificato(true);
                       }}
                       className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800"
@@ -1263,15 +1458,22 @@ export function PianoSviluppoScenario({
                         value={s.misura}
                         onChange={(e) => {
                           const n = Number(e.target.value);
-                          setLeve((prev) => ({
-                            ...prev,
-                            [l.id]: {
-                              ...prev[l.id],
-                              misura: Number.isFinite(n)
-                                ? Math.max(0, Math.min(100, n))
-                                : prev[l.id].misura,
-                            },
-                          }));
+                          setLeve((prev) => {
+                            const misura = Number.isFinite(n)
+                              ? Math.max(0, Math.min(100, n))
+                              : prev[l.id].misura;
+                            return {
+                              ...prev,
+                              [l.id]: {
+                                ...prev[l.id],
+                                misura,
+                                // Lo 0% non produce numeri: la leva si spegne,
+                                // così il pannello non dice «Sì» a un effetto nullo.
+                                ...(misura === 0 ? { attiva: false } : {}),
+                              },
+                            };
+                          });
+                          setLeveToccate(true);
                           setModificato(true);
                         }}
                         disabled={!s.attiva}

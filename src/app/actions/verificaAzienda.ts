@@ -29,6 +29,7 @@ import { nomeDaSessione } from '@/lib/identitaSessione';
 import { apriVerifica } from '@/lib/verificheApertura';
 import { assicuraTabelleVerificaAzienda } from '@/db/provision';
 import { leggiVerificaAzienda } from '@/lib/verificaAzienda/letturaVerifica';
+import { istantaneaParametriInVigore } from '@/lib/triage/letturaParametriScenari';
 import type { FotografiaVerificaAzienda } from '@/lib/verificaAzienda/fotografia';
 import type {
   AsseContabileVerificaAzienda,
@@ -97,11 +98,15 @@ export async function calcolaVerificaAziendaAction(
 
     let fotografiaId: number | undefined;
     if (lettura.fotografia.anni.length > 0) {
+      // LA VERIFICA NASCE CON LE PERCENTUALI DEL GIORNO (0.256.33): la versione
+      // resta scritta con lei, in modo che una versione pubblicata dopo non
+      // cambi gli scenari di una verifica già chiusa.
+      const congelati = await istantaneaParametriInVigore(nomeSchema).catch(() => null);
       const inserita = await pool.query(
         `INSERT INTO "${nomeSchema}".verifica_azienda_simulazioni
            (azienda_id, profilo, annualita, debito_ente, crescita_storica_pct,
-            crescita_applicata_pct, colonne, avvertenze)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+            crescita_applicata_pct, colonne, avvertenze, parametri_versione)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
          RETURNING id`,
         [
           aziendaId,
@@ -114,6 +119,7 @@ export async function calcolaVerificaAziendaAction(
           0,
           JSON.stringify(lettura.fotografia.anni),
           JSON.stringify(lettura.fotografia.avvertenze),
+          congelati ? JSON.stringify(congelati) : null,
         ]
       );
       fotografiaId = Number(inserita.rows[0]?.id);

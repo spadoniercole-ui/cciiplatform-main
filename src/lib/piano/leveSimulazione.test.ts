@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ETICHETTA_LEVA,
   LEVE,
   LEVE_PREDEFINITE,
   contaLeve,
   leveAccese,
   leveDaSalvate,
   leveValide,
-  misuraSuggerita,
   testoLeve,
 } from './leveSimulazione';
 import {
@@ -74,15 +72,15 @@ describe('parametri del contesto', () => {
 describe('leve della simulazione', () => {
   it('sono cinque, ognuna con la sua misura suggerita', () => {
     expect(LEVE).toHaveLength(5);
-    expect(LEVE.map((l) => ETICHETTA_LEVA[l.id])).toEqual([
-      'tagli del personale',
-      'investimenti in tecnologia',
-      'diversificazione della produzione',
-      'diversificazione dei mercati',
-      'cambio del target di clientela',
+    expect(LEVE.map((l) => l.domanda)).toEqual([
+      'Tagli del personale',
+      'Investimenti in tecnologia',
+      'Diversificazione della produzione',
+      'Diversificazione dei mercati',
+      'Cambio del target di clientela',
     ]);
     for (const l of LEVE) expect(l.suggeritaPct).toBeGreaterThan(0);
-    expect(misuraSuggerita('PERSONALE')).toBe(10);
+    expect(LEVE.find((l) => l.id === 'PERSONALE')?.suggeritaPct).toBe(10);
   });
 
   it('parte con tutte le leve spente e la misura suggerita pronta', () => {
@@ -99,6 +97,13 @@ describe('leve della simulazione', () => {
     expect(l.PERSONALE).toEqual({ attiva: true, misura: 100 });
     expect(l.MERCATI).toEqual({ attiva: false, misura: 0 });
     expect(l.TECNOLOGIA).toEqual({ attiva: false, misura: 5 });
+  });
+
+  it('una leva accesa allo 0% è spenta: non si conta e non entra nel prompt', () => {
+    const l = leveValide({ PERSONALE: { attiva: true, misura: 0 } });
+    expect(l.PERSONALE).toEqual({ attiva: false, misura: 0 });
+    expect(contaLeve(l)).toBe(0);
+    expect(testoLeve(l)).toBe('');
   });
 
   it('nel prompt entrano solo le leve accese, con la misura', () => {

@@ -100,7 +100,26 @@ describe('Ricevente: manopole sul piano dell’azienda', () => {
       })
     ).toMatch(/"rettifiche"/);
     expect(promptElaborazione({ ...base, lato: 'RICEVUTA', pianoAzienda: null })).toMatch(
-      /MANOPOLE/
+      /Imposti le righe del piano/
     );
+    const conLeve = promptElaborazione({
+      ...base,
+      lato: 'RICEVUTA',
+      pianoAzienda: { ricaviVendite: { '2027': 1_290_000 } },
+      leveModificate: true,
+    });
+    expect(conLeve).toContain('Le leve sono già state scelte dall’operatore');
+    expect(conLeve).not.toContain('"leve":');
+    const conLancioFisso = promptElaborazione({
+      ...base,
+      lato: 'RICEVUTA',
+      pianoAzienda: { ricaviVendite: { '2027': 1_290_000 } },
+      procedura: 'ACCORDO',
+      impostazione: 'PRUDENTE',
+    });
+    expect(conLancioFisso).not.toContain('procedura (ACCORDO, LIQUIDAZIONE o CRAM_DOWN)');
+    expect(conLancioFisso).not.toContain('"procedura": "ACCORDO"');
+    expect(conLancioFisso).not.toContain('"prudenza": "PRUDENTE"');
+    expect(conLancioFisso).toContain('"lancio": {"percentualeOfferta": 40, "anniRientro": 5}');
   });
 });

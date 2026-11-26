@@ -50,6 +50,15 @@ export const TABELLE_CONFIGURAZIONE: TabellaConfigurazione[] = [
   // mentre a perderli sarebbe stato il file.
   { nome: 'parametri_scenari', descrizione: 'Scenari del triage: spese di procedura' },
   { nome: 'parametri_scenari_rango', descrizione: 'Scenari del triage: percentuali per rango' },
+  // 0.256.33: le stesse percentuali, ma con la decorrenza. Le due tabelle qui
+  // sopra restano la «versione corrente» letta dai ripristini vecchi; senza
+  // queste, ripristinando un backup la storia delle versioni sparirebbe e ogni
+  // documento chiuso perderebbe il riferimento a quella con cui è nato.
+  { nome: 'parametri_scenari_versioni', descrizione: 'Scenari del triage: versioni e decorrenze' },
+  {
+    nome: 'parametri_scenari_versione_ranghi',
+    descrizione: 'Scenari del triage: percentuali per rango di ogni versione',
+  },
   // 0.141.0: obbligo del file della certificazione dei debiti nel triage. Configurazione, non dato:
   // un altro spazio dello stesso ente deve poter partire con la stessa regola.
   {

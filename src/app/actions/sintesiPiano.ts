@@ -18,6 +18,8 @@ import { confrontaPiani } from '@/lib/piano/confronto';
 import { anniDelPiano, ipotesiDaPianoAzienda, valoriPuliti } from '@/lib/piano/pianoAziendale';
 import { leggiParametriSimulazione } from '@/lib/piano/letturaParametriSimulazione';
 import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
+import { calcolaPianoConLeve } from '@/lib/piano/levePiano';
+import { leveDaSalvate } from '@/lib/piano/leveSimulazione';
 import { soluzionePulita } from '@/lib/piano/riceventeSalvataggio';
 import {
   etichettaPiano,
@@ -75,10 +77,12 @@ export async function sintesiPianoScenarioAction(
         : Promise.resolve({ rows: [] as { valori: unknown; nome_file: string | null }[] }),
       d.varianti.includes(VARIANTE_AI)
         ? pool.query(
-            `SELECT ipotesi, note FROM "${nomeSchema}".piano_sviluppo WHERE scenario_id = $1 AND variante = $2`,
+            `SELECT ipotesi, note, leve FROM "${nomeSchema}".piano_sviluppo WHERE scenario_id = $1 AND variante = $2`,
             [scenarioId, VARIANTE_AI]
           )
-        : Promise.resolve({ rows: [] as { ipotesi: unknown; note: string | null }[] }),
+        : Promise.resolve({
+            rows: [] as { ipotesi: unknown; note: string | null; leve: unknown }[],
+          }),
     ]);
     const punti = settore?.punti ?? (settoreLetto?.success ? settoreLetto.punti : []);
     const descrizione =
@@ -99,7 +103,16 @@ export async function sintesiPianoScenarioAction(
       rate,
       d.capitaleSociale
     );
-    const mio = calcolaPiano(base, o, d.ipotesi, rate, d.capitaleSociale);
+    // Le leve entrano nel calcolo in un solo punto, come nella pagina: la
+    // sintesi non può dire numeri diversi da quelli che l'operatore ha davanti.
+    const mio = calcolaPianoConLeve({
+      storico: base,
+      orizzonte: o,
+      ipotesi: d.ipotesi,
+      leve: d.leve,
+      rate,
+      capitaleSociale: d.capitaleSociale,
+    }).esito;
     const vincoli = mio.vincoli.map((v) => v.testo);
 
     const righe: string[] = [
@@ -165,7 +178,14 @@ export async function sintesiPianoScenarioAction(
     const ai = aiRis.rows[0];
     if (ai) {
       const ipAi = (ai.ipotesi ?? {}) as IpotesiPiano;
-      const pAi = calcolaPiano(base, o, ipAi, rate, d.capitaleSociale);
+      const pAi = calcolaPianoConLeve({
+        storico: base,
+        orizzonte: o,
+        ipotesi: ipAi,
+        leve: leveDaSalvate(ai.leve),
+        rate,
+        capitaleSociale: d.capitaleSociale,
+      }).esito;
       const sintesiAi = String(ai.note ?? '').split('\n')[1] ?? '';
       righe.push(
         `VARIANTE «elaborazione-ai» (ipotesi scritte dall’AI con motivazione, risultati del motore): ${pAi.sintesi.replace(/\n/g, ' ')}${sintesiAi ? ` Impostazione dichiarata: ${sintesiAi}` : ''}`

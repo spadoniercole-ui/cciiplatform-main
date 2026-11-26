@@ -83,8 +83,8 @@ describe('elaborazione con l’AI: validazione della risposta', () => {
     );
     expect(e.ipotesi.ricaviVendite).toEqual([
       { tipo: 'pct', valore: 3, motivazione: 'In linea con il settore (2%).' },
-      { tipo: 'pct', valore: 0, motivazione: 'Non indicato dall’AI: come l’anno prima.' },
-      { tipo: 'pct', valore: 0, motivazione: 'Non indicato dall’AI: come l’anno prima.' },
+      { tipo: 'pct', valore: 3, motivazione: 'Non indicato dall’AI: come l’anno prima.' },
+      { tipo: 'pct', valore: 3, motivazione: 'Non indicato dall’AI: come l’anno prima.' },
     ]);
     expect(e.ipotesi.investimenti?.[0]).toEqual({
       tipo: 'abs',
@@ -112,6 +112,51 @@ describe('elaborazione con l’AI: validazione della risposta', () => {
       'La proposta è non coerente con i parametri configurati.'
     );
   });
+  it('il piano deve crescere: fatturato, incidenza dei costi, tecnologia, ambiente, rate', () => {
+    for (const lato of ['RICEVUTA', 'DA_DEFINIRE'] as const) {
+      const p = promptElaborazione({ ...BASE, lato });
+      // Un piano che ripete il fatturato per tutti gli anni non è prudente: è
+      // un'azienda ferma, e le rate non le paga.
+      expect(p).toContain('IL PIANO È IL CAMBIAMENTO, NON LA RIPETIZIONE');
+      // L'ordine della simulazione: base contabile, settore, obiettivo, leve,
+      // percorso anno per anno, sacrifici, rate.
+      expect(p).toContain('BASE CONTABILE');
+      expect(p).toContain('IL SETTORE E I MERCATI');
+      expect(p).toContain("L'OBIETTIVO");
+      expect(p).toContain('IL PERCORSO ANNO PER ANNO');
+      expect(p).toContain('I SACRIFICI');
+      expect(p).toContain('CHIUDERE SULLE RATE');
+      // L'ambiente non sta nei bilanci: si cerca, e ogni ipotesi che ne
+      // dipende cita la fonte.
+      expect(p).toMatch(/ricerca web/);
+      // Ricavi e costi hanno una serie per anno, non un valore ripetuto.
+      expect(p).toContain('SCRIVI UNA SERIE');
+      // Le leve sono le variabili del piano, non un contorno: le sceglie l'analisi.
+      expect(p).toContain('LE CINQUE LEVE LE SCEGLI TU');
+      expect(p).not.toContain("LE LEVE LE HA GIÀ SCELTE L'OPERATORE");
+    }
+  });
+
+  it('le leve toccate dall’operatore non sono più terra dell’analisi', () => {
+    const p = promptElaborazione({
+      ...BASE,
+      lato: 'DA_DEFINIRE',
+      leveModificate: true,
+      leve: 'PERSONALE 10%',
+    });
+    expect(p).toContain("LE LEVE LE HA GIÀ SCELTE L'OPERATORE");
+    expect(p).not.toContain('LE CINQUE LEVE LE SCEGLI TU');
+    // La richiesta delle leve sparisce anche dall'elenco delle scelte, dal
+    // contesto e dal modello di risposta: il server conserverà quelle del
+    // pannello.
+    expect(p).toContain('non fanno parte della risposta');
+    expect(p).not.toContain('LEVE CHIESTE AL LANCIO');
+    expect(p).not.toContain('attiva true/false, misura');
+    expect(p).not.toContain('"leve": {"PERSONALE"');
+    expect(p).not.toContain('Non accendere leve');
+    expect(p).not.toContain('le leve che scegli');
+  });
+
   it('il prompt chiede anche le scelte che reggono il piano', () => {
     const p = promptElaborazione({
       lato: 'DA_DEFINIRE',
@@ -122,6 +167,30 @@ describe('elaborazione con l’AI: validazione della risposta', () => {
     });
     expect(p).toContain('LE SCELTE CHE REGGONO IL PIANO');
     expect(p).toMatch(/anniRientro/);
+    expect(p).toContain('procedura (ACCORDO, LIQUIDAZIONE o CRAM_DOWN)');
+    expect(p).toContain('prudenza (PRUDENTE, NEUTRA o FAVOREVOLE)');
+    expect(p).toContain('"procedura": "ACCORDO"');
+    expect(p).toContain('"prudenza": "PRUDENTE"');
+    expect(p).toContain('attiva true/false, misura');
+    expect(p).toContain('"leve": {"PERSONALE"');
+  });
+
+  it('non chiede procedura e impostazione già fissate dal server', () => {
+    const p = promptElaborazione({
+      ...BASE,
+      lato: 'DA_DEFINIRE',
+      procedura: 'CRAM_DOWN',
+      impostazione: 'NEUTRA',
+    });
+    // Il server le sostituisce con quelle dello scenario e dell’operatore:
+    // chiederle all’AI sarebbe una richiesta che finisce nel cestino.
+    expect(p).toContain('La procedura è già fissata dallo scenario: non restituirla');
+    expect(p).toContain("L'impostazione è già scelta dall'operatore: non restituirla");
+    expect(p).not.toContain('procedura (ACCORDO, LIQUIDAZIONE o CRAM_DOWN)');
+    expect(p).not.toContain('prudenza (PRUDENTE, NEUTRA o FAVOREVOLE)');
+    expect(p).not.toContain('"procedura": "ACCORDO"');
+    expect(p).not.toContain('"prudenza": "PRUDENTE"');
+    expect(p).toContain('"lancio": {"percentualeOfferta": 40, "anniRientro": 5}');
   });
 });
 
