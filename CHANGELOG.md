@@ -26,6 +26,33 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.51 — 2026-11-27
+
+IL LANCIO DELLA SIMULAZIONE STA SU QUATTRO COLONNE ALLINEATE.
+
+Le quattro scelte del lancio — procedura, offerta, anni, impostazione — erano
+messe in fila con `items-end`: campi larghi 128 pixel appoggiati in basso, e le
+etichette a quote diverse perché ognuna aveva un’altezza sua. Ne usciva una
+scalinata: la percentuale, stretta, sotto un’etichetta più larga di lei; gli
+anni con la nota «0 = unica soluzione» che spingeva il campo più in alto degli
+altri.
+
+- **Una griglia invece di una fila.** Quattro colonne uguali da `xl`, due da
+  `sm`, una sul telefono, con etichetta in cima e campo sotto: le etichette
+  partono dalla stessa riga e i campi pure.
+- **Il campo prende la larghezza della colonna.** Niente più `w-32`: la
+  percentuale e gli anni si scrivono in un campo largo quanto la colonna, e i
+  numeri sono `tabular-nums`, così si incolonnano.
+- **Le note non spostano più i campi.** «0 = unica soluzione» e «è quella dello
+  scenario» stanno sotto il proprio campo, come didascalia, e non alzano o
+  abbassano la riga dei controlli.
+- **La procedura bloccata si legge come un campo, non come un testo.** Quando lo
+  scenario ha già scelto la procedura, il valore sta in un riquadro grigio
+  identico agli altri campi, con la nota sotto: la riga resta allineata anche
+  nel caso in cui non c’è niente da scegliere.
+- **Il fuoco si vede.** I campi hanno un anello viola tenue quando sono attivi,
+  coerente con il pulsante dell’elaborazione che sta nella stessa card.
+
 ## 0.256.50 — 2026-11-27
 
 IL DEBITO CHE ENTRA NEL PIANO DICE QUANTO VA ALL’ENTE E QUANTO ALL’ADR.

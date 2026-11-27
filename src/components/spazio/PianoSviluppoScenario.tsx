@@ -959,19 +959,31 @@ export function PianoSviluppoScenario({
             impostazione. Il piano qui sotto parte da qui.
           </p>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
+        {/* Le quattro scelte stanno in colonne uguali, con l’etichetta in cima e
+            il campo sotto: allineate per riga, non appoggiate in basso come prima
+            (0.256.51). Il campo prende la larghezza della colonna, così la
+            percentuale non resta un rettangolo stretto accanto a un’etichetta
+            più larga di lui. */}
+        <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
           {dati.simulazioneAttiva ? (
             // La procedura è già quella dello scenario: chiederla di nuovo
             // significherebbe mettere in dubbio il tipo scelto alla creazione.
-            <div className="text-[10px] font-bold text-slate-500 uppercase">
-              Procedura da sostenere
-              <p className="mt-1 text-xs font-normal normal-case tracking-normal text-slate-800">
-                {ETICHETTA_PROCEDURA[lancio.procedura]} — è quella dello scenario.
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+                Procedura da sostenere
+              </span>
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800">
+                {ETICHETTA_PROCEDURA[lancio.procedura]}
               </p>
+              <span className="text-[9px] font-normal normal-case text-slate-500">
+                È quella dello scenario.
+              </span>
             </div>
           ) : (
-            <label className="text-[10px] font-bold text-slate-500 uppercase">
-              Procedura da sostenere
+            <label className="flex min-w-0 flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+                Procedura da sostenere
+              </span>
               <select
                 value={lancio.procedura}
                 onChange={(e) =>
@@ -980,7 +992,7 @@ export function PianoSviluppoScenario({
                     procedura: e.target.value as LancioSimulazione['procedura'],
                   }))
                 }
-                className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
               >
                 {(['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'] as const).map((p) => (
                   <option key={p} value={p}>
@@ -990,8 +1002,10 @@ export function PianoSviluppoScenario({
               </select>
             </label>
           )}
-          <label className="text-[10px] font-bold text-slate-500 uppercase">
-            Offerta ipotizzata (%)
+          <label className="flex min-w-0 flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+              Offerta ipotizzata (%)
+            </span>
             <input
               type="number"
               min={0}
@@ -1007,11 +1021,13 @@ export function PianoSviluppoScenario({
               }}
               placeholder="come la proposta"
               title="La percentuale che la proposta applica al dovuto dell’ente: qui si legge e da qui si cambia."
-              className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800 tabular-nums focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
             />
           </label>
-          <label className="text-[10px] font-bold text-slate-500 uppercase">
-            Restituzione del debito (anni)
+          <label className="flex min-w-0 flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+              Restituzione del debito (anni)
+            </span>
             <input
               type="number"
               min={0}
@@ -1027,14 +1043,16 @@ export function PianoSviluppoScenario({
               }}
               placeholder="come la proposta"
               title={`Il debito da restituire è ${euro(debitoDaRestituire)}: le rate si dividono sugli anni indicati. 0 = un’unica soluzione. Vuoto = rate della proposta.`}
-              className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800 tabular-nums focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
             />
-            <span className="block mt-0.5 text-[9px] font-normal normal-case tracking-normal text-slate-500">
+            <span className="text-[9px] font-normal normal-case text-slate-500">
               {anniRientro === 0 ? 'tutto nel primo anno' : '0 = unica soluzione'}
             </span>
           </label>
-          <label className="text-[10px] font-bold text-slate-500 uppercase">
-            Impostazione
+          <label className="flex min-w-0 flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+              Impostazione
+            </span>
             <select
               value={lancio.prudenza}
               onChange={(e) =>
@@ -1043,7 +1061,7 @@ export function PianoSviluppoScenario({
                   prudenza: e.target.value as LancioSimulazione['prudenza'],
                 }))
               }
-              className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
             >
               <option value="PRUDENTE">Prudente</option>
               <option value="NEUTRA">Neutra</option>
