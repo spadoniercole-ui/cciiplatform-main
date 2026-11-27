@@ -26,6 +26,39 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.49 — 2026-11-27
+
+IL PULSANTE DELL’ELABORAZIONE ORA HA UN TETTO D’USO E DICE QUANDO È FINITO.
+
+L’elaborazione del piano con l’AI era l’ultima funzione a consumo che partiva con
+la sola sessione e non contava le chiamate: un clic sul pulsante viola e il
+modello più caro della piattaforma (contesto lungo, fino a sei ricerche web,
+seimila token di risposta) rispondeva senza che nessuno tenesse il conto. Ora
+conta anche lei, come le visure e i riscontri.
+
+- **Quante volte si può, e dove si cambia.** Dieci elaborazioni all’ora per
+  utente e sessanta al giorno per spazio, con contatori propri (non si sommano a
+  quelli delle visure). I numeri si cambiano senza toccare il codice, con
+  `AI_PIANI_PER_UTENTE_ORA` e `AI_PIANI_PER_SPAZIO_GIORNO`.
+- **Il conto si paga solo se si arriva davvero al modello.** Il controllo sta
+  dopo i rifiuti gratuiti — scenario bloccato, variante «elaborazione-ai» già
+  progetto del piano, contesto incompleto — e accanto a quello della chiave:
+  chi sbaglia un input, o lavora su un server senza `ANTHROPIC_API_KEY`, non
+  consuma una delle sue dieci. Il problema che legge resta quello vero.
+- **A quota finita l’avviso si legge sotto il pulsante, senza scorrere.** La
+  riga ambra compare subito sotto «L’AI imposta manopole e scelte» e riporta il
+  messaggio del server: «Limite di 10 elaborazioni del piano all’ora raggiunto.
+  Riprova più tardi: il piano in schermo resta quello salvato.» Se è finito il
+  tetto giornaliero dello spazio dice «Limite giornaliero di 60 elaborazioni del
+  piano per questo spazio raggiunto», con lo stesso consiglio. I numeri nel
+  testo sono quelli in vigore, non una frase scritta a mano.
+- **Non cambia nient’altro.** Nessuna elaborazione parte, nessun credito si
+  spende, e le ipotesi, le manopole e le varianti salvate restano sullo schermo
+  esattamente com’erano: l’avviso è l’unica cosa che cambia.
+- **Se il contatore non risponde, il lavoro non si ferma.** Come per le visure,
+  un errore del database lascia passare la chiamata: il tetto serve a difendersi
+  dai costi, non a impedire di lavorare.
+
 ## 0.256.48 — 2026-11-27
 
 LA RICERCA DEL PIANO SI LEGGE IN UN PUNTO SOLO.

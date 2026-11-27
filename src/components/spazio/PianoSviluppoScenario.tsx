@@ -175,6 +175,10 @@ export function PianoSviluppoScenario({
   const [contestoBase, setContestoBase] = useState<ContestoConfronto | null>(null);
   const [aiInCorso, setAiInCorso] = useState(false);
   const [avvisoAi, setAvvisoAi] = useState<string | null>(null);
+  // L'esito dell'elaborazione — quota finita compresa — si legge sotto il pulsante
+  // che la lancia (0.256.49): chi ha appena cliccato non deve scorrere il pannello
+  // per sapere perché non è partita.
+  const [avvisoElaborazione, setAvvisoElaborazione] = useState<string | null>(null);
   // L'ATTENZIONE DELLA CONTABILE E IL LANCIO (0.256.14). Il riquadro «Dove si
   // concentra l'attenzione» non resta una lettura da guardare: entra nel
   // prompt, con i vincoli che ne discendono. Procedura, offerta e prudenza si
@@ -658,6 +662,7 @@ export function PianoSviluppoScenario({
       return;
     setAiInCorso(true);
     setErrore(null);
+    setAvvisoElaborazione(null);
     try {
       const r = await elaboraPianoConAiAction(codice, scenarioId, {
         lato: tipoProposta === 'RICEVUTA' ? 'RICEVUTA' : 'DA_DEFINIRE',
@@ -693,10 +698,10 @@ export function PianoSviluppoScenario({
         vincoliDocumentati: attenzione?.vincoli ?? [],
       });
       if (!r.success) {
-        setAvvisoAi(r.error ?? 'Elaborazione non riuscita.');
+        setAvvisoElaborazione(r.error ?? 'Elaborazione non riuscita.');
         return;
       }
-      setAvvisoAi(null);
+      setAvvisoElaborazione(null);
       await carica(VARIANTE_AI);
     } finally {
       setAiInCorso(false);
@@ -1172,6 +1177,11 @@ export function PianoSviluppoScenario({
                   : 'L’AI imposta manopole e scelte'}
             </button>
           }
+          {avvisoElaborazione && (
+            <p className="w-full text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              {avvisoElaborazione}
+            </p>
+          )}
           {!dati.progetto && (
             <button
               type="button"

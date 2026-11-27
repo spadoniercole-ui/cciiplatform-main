@@ -20,18 +20,20 @@ export interface Esecutore {
   query(testo: string, parametri?: unknown[]): Promise<{ rows: any[] }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export type FunzioneAi = 'VISURA' | 'RISCONTRO';
+export type FunzioneAi = 'VISURA' | 'RISCONTRO' | 'PIANO';
 
 /** Come si chiama, a schermo, ciò che si conta. */
 const CONTEGGIO: Record<FunzioneAi, string> = {
   VISURA: 'estrazioni automatiche',
   RISCONTRO: 'verifiche sulle fonti',
+  PIANO: 'elaborazioni del piano',
 };
 
 /** Cosa può fare chi ha esaurito il tetto. */
 const CONSIGLIO: Record<FunzioneAi, string> = {
   VISURA: 'Riprova più tardi o compila i campi a mano.',
   RISCONTRO: 'Riprova più tardi: la riga resta «da riscontrare».',
+  PIANO: 'Riprova più tardi: il piano in schermo resta quello salvato.',
 };
 
 interface Limiti {
@@ -58,6 +60,16 @@ export function limitiAi(funzione: FunzioneAi, env: NodeJS.ProcessEnv = process.
       return {
         perUtenteOra: numeroDaEnv(env.AI_RISCONTRI_PER_UTENTE_ORA, 60),
         perSpazioGiorno: numeroDaEnv(env.AI_RISCONTRI_PER_SPAZIO_GIORNO, 600),
+      };
+    case 'PIANO':
+      // Un'elaborazione è la chiamata più cara della piattaforma: contesto
+      // lungo, fino a sei ricerche web e seimila token di risposta, seguiti
+      // dalla ricerca del motore. Il tetto è basso di proposito: un operatore
+      // che rielabora il piano dieci volte in un'ora sta cercando il valore, non
+      // lavorando, e dallo spazio non devono uscire sessanta al giorno.
+      return {
+        perUtenteOra: numeroDaEnv(env.AI_PIANI_PER_UTENTE_ORA, 10),
+        perSpazioGiorno: numeroDaEnv(env.AI_PIANI_PER_SPAZIO_GIORNO, 60),
       };
   }
 }

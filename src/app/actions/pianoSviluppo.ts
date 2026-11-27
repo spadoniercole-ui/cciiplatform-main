@@ -17,6 +17,7 @@ import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import Anthropic from '@anthropic-ai/sdk';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
+import { consumaQuotaAi } from '@/lib/limiteAi';
 import { ottieniScenarioPerId, verificaScenarioNonBloccato } from '@/app/actions/scenari';
 import type { TipoIstruttoria } from '@/lib/giudice/lettura';
 import { estraiJson } from '@/lib/visura/fatti';
@@ -830,6 +831,25 @@ export async function elaboraPianoConAiAction(
     const c = contestoPulito(contesto);
     if (!c)
       return { success: false, error: 'Dati del piano incompleti: serve almeno un bilancio.' };
+    // LA CHIAVE E LA QUOTA, PRIMA DI OGNI LAVORO (0.256.49). La chiave assente è
+    // un caso previsto, non un errore tecnico: il messaggio dice dove si mette
+    // (nella demo locale `.env.local`, nella portable `apikey.txt`).
+    // L'elaborazione è una chiamata AI a pagamento con ricerca web e la sola
+    // sessione basta a farla partire: passa dal tetto d'uso come le visure e i
+    // riscontri. La quota si consuma dopo i controlli che non costano nulla
+    // (scenario bloccato, variante «elaborazione-ai» già progetto, contesto
+    // completo) e prima del modello: un rifiuto non fa aspettare e non spende.
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return { success: false, error: messaggioChiaveAiMancante() };
+    const quota = await consumaQuotaAi(pool, 'PIANO', {
+      utente: contestoSpazio.email || `spazio:${contestoSpazio.spazioId}`,
+      spazioId: contestoSpazio.spazioId,
+    });
+    if (!quota.consentito)
+      return {
+        success: false,
+        error: quota.error ?? 'Limite di elaborazioni del piano raggiunto: riprova più tardi.',
+      };
     // Le leve del lancio (0.256.19): una sola fonte, `leveScelte`. Da qui il
     // testo per il prompt e, più sotto, il jsonb salvato con la variante: la
     // simulazione ricorda con quali leve è stata prodotta.
@@ -886,11 +906,8 @@ export async function elaboraPianoConAiAction(
       variazioneMassimaPct: parametri.variazioneMassimaPct,
       aliquotaImposteDefault: parametri.aliquotaImposteDefault,
     };
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    // La chiave assente è un caso previsto, non un errore tecnico: il messaggio
-    // dice dove si mette (nella demo locale `.env.local`, nella portable
-    // `apikey.txt`). Le altre funzioni AI lo dicono già, questa no (0.256.47).
-    if (!apiKey) return { success: false, error: messaggioChiaveAiMancante() };
+    // Chiave e quota sono già state verificate qui sopra: da qui in poi la
+    // chiamata è consentita.
     const anthropic = new Anthropic({ apiKey, timeout: SCADENZA_ELABORAZIONE_MS, maxRetries: 1 });
     // LA RICERCA WEB (0.256.34). L'ambiente — situazione internazionale,
     // stabilità politica, mercati emergenti, energia, tassi, cambi — non sta

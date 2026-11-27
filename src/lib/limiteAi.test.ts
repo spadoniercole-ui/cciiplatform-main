@@ -61,6 +61,26 @@ describe('consumaQuotaAi', () => {
     expect((await consumaQuotaAi(db, 'VISURA', chi, e)).consentito).toBe(false);
   });
 
+  it('il tetto delle elaborazioni del piano ha i suoi contatori', async () => {
+    expect(limitiAi('PIANO', env({}))).toEqual({ perUtenteOra: 10, perSpazioGiorno: 60 });
+    const e = env({ AI_PIANI_PER_UTENTE_ORA: '2', AI_PIANI_PER_SPAZIO_GIORNO: '100' });
+    expect((await consumaQuotaAi(db, 'PIANO', { utente: 'luca', spazioId: 5 }, e)).consentito).toBe(
+      true
+    );
+    expect((await consumaQuotaAi(db, 'PIANO', { utente: 'luca', spazioId: 5 }, e)).consentito).toBe(
+      true
+    );
+    const oltre = await consumaQuotaAi(db, 'PIANO', { utente: 'luca', spazioId: 5 }, e);
+    expect(oltre.consentito).toBe(false);
+    // Il messaggio dice che cosa si è fermato e che cosa resta all'operatore.
+    expect(oltre.error).toContain("Limite di 2 elaborazioni del piano all'ora raggiunto.");
+    expect(oltre.error).toContain('il piano in schermo resta quello salvato');
+    // I contatori delle visure non ne risentono.
+    expect(
+      (await consumaQuotaAi(db, 'VISURA', { utente: 'luca', spazioId: 5 }, e)).consentito
+    ).toBe(true);
+  });
+
   it('il messaggio del tetto dice quale lavoro si è fermato', async () => {
     const e = env({ AI_RISCONTRI_PER_UTENTE_ORA: '1', AI_RISCONTRI_PER_SPAZIO_GIORNO: '100' });
     expect(
