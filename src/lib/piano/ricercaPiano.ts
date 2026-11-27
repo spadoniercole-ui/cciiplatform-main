@@ -371,21 +371,23 @@ const ORDINE_MANOPOLE: Manopola[] = [
   'CLIENTELA',
 ];
 
+/** Una manopola con la regolazione da cui parte e i tetti che lo spazio le impone. */
+interface StatoManopola {
+  reg: Regolazione;
+  manopola: Manopola;
+  pctRicavi0: number;
+  pctCosti0: number;
+  tettoCrescita: number;
+  minimoCosti: number;
+  leveBloccate: boolean;
+}
+
 /**
- * Il passo successivo di una manopola: uno solo per giro, piccolo. La ricerca
- * avanza a piccoli passi su tutte le manopole, così la crescita si ferma al
- * punto che serve invece di andare al tetto appena i vincoli si stringono.
+ * La mossa di una manopola di `k` scatti: la crescita si ferma al punto che
+ * serve invece di andare al tetto appena i vincoli si stringono.
  */
 function mossaManopola(
-  input: {
-    reg: Regolazione;
-    manopola: Manopola;
-    pctRicavi0: number;
-    pctCosti0: number;
-    tettoCrescita: number;
-    minimoCosti: number;
-    leveBloccate: boolean;
-  },
+  input: StatoManopola,
   /** Quanti scatti di base vale la mossa: 1 è il passo piccolo. */
   k: number
 ): Mossa | null {
@@ -446,20 +448,9 @@ function mossaManopola(
  * Quanti scatti di base può ancora fare una manopola prima del suo tetto. Si
  * calcola costruendo le mosse, non valutando piani: nessun tentativo speso.
  */
-function scattiMassimi(
-  input: {
-    reg: Regolazione;
-    manopola: Manopola;
-    pctRicavi0: number;
-    pctCosti0: number;
-    tettoCrescita: number;
-    minimoCosti: number;
-    leveBloccate: boolean;
-  },
-  massimo: number = SCATTI_MASSIMI
-): number {
+function scattiMassimi(input: StatoManopola): number {
   let scatti = 0;
-  for (let k = 1; k <= massimo; k++) {
+  for (let k = 1; k <= SCATTI_MASSIMI; k++) {
     if (!mossaManopola(input, k)) break;
     scatti = k;
   }
@@ -502,30 +493,10 @@ export function cercaPiano(input: ParametriRicerca): EsitoRicerca {
   const passi: PassoRicerca[] = [];
   let tentativi = 1;
 
-  /** La mossa di una manopola con k scatti, calcolata e valutata: un tentativo. */
-  const prova = (manopola: Manopola, k: number) => {
-    if (LIMITE.tentativi - tentativi <= 0) return null;
-    const mossa = mossaManopola(
-      {
-        reg: corrente.reg,
-        manopola,
-        pctRicavi0: pctRicavi[0] ?? 0,
-        pctCosti0: pctCosti[0] ?? 0,
-        tettoCrescita,
-        minimoCosti,
-        leveBloccate: input.leveBloccate === true,
-      },
-      k
-    );
-    if (!mossa) return null;
-    const dopo = valuta(input, mossa.reg, ricaviFermiConsentiti, leveIniziali);
-    tentativi += 1;
-    return { mossa, dopo };
-  };
-
-  const manopole = (manopola: Manopola) => ({
+  /** Il contesto di una manopola: la regolazione corrente e i tetti dello spazio. */
+  const manopola = (m: Manopola): StatoManopola => ({
     reg: corrente.reg,
-    manopola,
+    manopola: m,
     pctRicavi0: pctRicavi[0] ?? 0,
     pctCosti0: pctCosti[0] ?? 0,
     tettoCrescita,
@@ -533,63 +504,70 @@ export function cercaPiano(input: ParametriRicerca): EsitoRicerca {
     leveBloccate: input.leveBloccate === true,
   });
 
-  for (let mosse = 0; mosse < LIMITE.mosse && corrente.mancanza > 0; mosse++) {
-    // 1. LA MANOPOLA CHE RENDE DI PIÙ. Ognuna si misura al suo scatto più ampio:
-    //    così il confronto dice quanto può dare, non quanto dà un passo uguale
-    //    per tutte. Si guarda il ritorno per unità di percorso speso, perché una
-    //    leva che chiude con poco non deve perdere contro una crescita che
-    //    chiude di più ma allontana il piano dal punto di partenza.
+  /** La mossa di una manopola con k scatti, calcolata e valutata: un tentativo. */
+  const prova = (m: Manopola, k: number) => {
+    if (LIMITE.tentativi - tentativi <= 0) return null;
+    const mossa = mossaManopola(manopola(m), k);
+    if (!mossa) return null;
+    const dopo = valuta(input, mossa.reg, ricaviFermiConsentiti, leveIniziali);
+    tentativi += 1;
+    return { mossa, dopo };
+  };
+
+  /** Il ritorno di un passo: guadagno sui vincoli per percorso speso; null se non si vede. */
+  const resaDi = (prima: Valutazione, dopo: Valutazione): number | null => {
+    const guadagno = r2(prima.mancanza - dopo.mancanza);
+    if (guadagno < MIGLIORAMENTO_MINIMO) return null;
+    return guadagno / (1 + Math.max(0.01, dopo.deviazione - prima.deviazione));
+  };
+
+  /**
+   * La manopola che rende di più: al primo scatto o, se nessuna si muove per un
+   * guadagno visibile, allo scatto più ampio che il suo tetto consente — così
+   * una leva che rende solo da grande non si perde.
+   */
+  const migliore = (ampi: boolean) => {
     let scelta: {
-      manopola: Manopola;
+      m: Manopola;
       k: number;
-      prova: { mossa: Mossa; dopo: Valutazione };
+      p: { mossa: Mossa; dopo: Valutazione };
       resa: number;
     } | null = null;
-    for (const manopola of ORDINE_MANOPOLE) {
-      const p = prova(manopola, 1);
+    for (const m of ORDINE_MANOPOLE) {
+      const k = ampi ? scattiMassimi(manopola(m)) : 1;
+      if (ampi && k < 2) continue;
+      const p = prova(m, k);
       if (!p) continue;
-      const guadagno = r2(corrente.mancanza - p.dopo.mancanza);
-      if (guadagno < MIGLIORAMENTO_MINIMO) continue;
-      const extra = Math.max(0.01, p.dopo.deviazione - corrente.deviazione);
-      const resa = guadagno / (1 + extra);
-      if (!scelta || resa > scelta.resa + 1e-9) scelta = { manopola, k: 1, prova: p, resa };
+      const resa = resaDi(corrente, p.dopo);
+      if (resa === null) continue;
+      if (!scelta || resa > scelta.resa + 1e-9) scelta = { m, k, p, resa };
     }
-    // Nessuna manopola si muove di un passo per un guadagno visibile? Allora si
-    // prova lo scatto ampio: una leva che rende solo da grande non si perde.
-    if (!scelta) {
-      for (const manopola of ORDINE_MANOPOLE) {
-        const scatti = scattiMassimi(manopole(manopola));
-        if (scatti < 2) continue;
-        const p = prova(manopola, scatti);
-        if (!p) continue;
-        const guadagno = r2(corrente.mancanza - p.dopo.mancanza);
-        if (guadagno < MIGLIORAMENTO_MINIMO) continue;
-        const extra = Math.max(0.01, p.dopo.deviazione - corrente.deviazione);
-        const resa = guadagno / (1 + extra);
-        if (!scelta || resa > scelta.resa + 1e-9) scelta = { manopola, k: scatti, prova: p, resa };
-      }
-    }
+    return scelta;
+  };
+
+  for (let mosse = 0; mosse < LIMITE.mosse && corrente.mancanza > 0; mosse++) {
+    // 1. LA MANOPOLA CHE RENDE DI PIÙ. Si guarda il ritorno per unità di percorso
+    //    speso: una leva che chiude con poco non deve perdere contro una crescita
+    //    che chiude di più ma allontana il piano dal punto di partenza.
+    const scelta = migliore(false) ?? migliore(true);
     if (!scelta) break;
 
     // 2. QUANTO BASTA. Il passo si allunga sulla manopola scelta finché gli
     //    scatti successivi rendono almeno metà del primo, e si ferma appena il
     //    piano chiude: i ricavi non salgono più del necessario.
-    let utile = scelta.prova;
+    let utile = scelta.p;
     let kUtile = scelta.k;
-    let kSpezzato = scelta.k;
-    if (scelta.k === 1) {
-      const scatti = scattiMassimi(manopole(scelta.manopola));
+    let kPrecedente = scelta.k;
+    if (scelta.k === 1 && utile.dopo.mancanza > 0) {
+      const scatti = scattiMassimi(manopola(scelta.m));
       let resaPrecedente = scelta.resa;
-      let prima = scelta.prova.dopo;
+      let prima = utile.dopo;
       for (let k = 2; k <= scatti; k++) {
-        const p = prova(scelta.manopola, k);
+        const p = prova(scelta.m, k);
         if (!p) break;
-        const passoGuadagno = r2(prima.mancanza - p.dopo.mancanza);
-        if (passoGuadagno < MIGLIORAMENTO_MINIMO) break;
-        const passoExtra = Math.max(0.01, p.dopo.deviazione - prima.deviazione);
-        const resa = passoGuadagno / (1 + passoExtra);
-        if (resa < resaPrecedente * RESA_MINIMA_ESTENSIONE) break;
-        kSpezzato = kUtile;
+        const resa = resaDi(prima, p.dopo);
+        if (resa === null || resa < resaPrecedente * RESA_MINIMA_ESTENSIONE) break;
+        kPrecedente = kUtile;
         utile = p;
         kUtile = k;
         prima = p.dopo;
@@ -599,13 +577,13 @@ export function cercaPiano(input: ParametriRicerca): EsitoRicerca {
       // 3. LA RIFINITURA. Fra l'ultimo passo che non chiudeva e quello che
       //    chiude, si cerca il più corto che basta: lo scatto fisso non si
       //    arrotonda al rialzo, così i ricavi si alzano solo di quel tanto.
-      if (utile.dopo.mancanza <= 0 && kUtile > kSpezzato) {
-        let basso = kSpezzato;
+      if (utile.dopo.mancanza <= 0 && kUtile > kPrecedente) {
+        let basso = kPrecedente;
         let alto = kUtile;
         for (let i = 0; i < 4; i++) {
           const k = r2((basso + alto) / 2);
           if (k <= basso || k >= alto) break;
-          const p = prova(scelta.manopola, k);
+          const p = prova(scelta.m, k);
           if (!p) break;
           if (p.dopo.mancanza <= 0) {
             utile = p;
@@ -637,25 +615,19 @@ export function cercaPiano(input: ParametriRicerca): EsitoRicerca {
   };
 }
 
-export interface PassoRaggruppato extends PassoRicerca {
-  /** Quante volte la ricerca ha girato questa manopola. */
-  volte: number;
-}
-
 /**
- * I passi per manopola: la ricerca avanza a piccoli passi, e chi legge vuole
- * sapere dove è arrivata quella manopola, non contare i singoli scatti.
+ * I passi per manopola: chi legge vuole sapere dove è arrivata quella manopola,
+ * non contare i singoli scatti.
  */
-export function passiRaggruppati(passi: PassoRicerca[]): PassoRaggruppato[] {
-  const out: PassoRaggruppato[] = [];
+export function passiRaggruppati(passi: PassoRicerca[]): PassoRicerca[] {
+  const out: PassoRicerca[] = [];
   for (const p of passi) {
     const gia = out.find((x) => x.manopola === p.manopola);
     if (gia) {
       gia.a = p.a;
-      gia.volte += 1;
       continue;
     }
-    out.push({ ...p, volte: 1 });
+    out.push({ ...p });
   }
   return out;
 }

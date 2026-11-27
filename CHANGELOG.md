@@ -26,6 +26,29 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.48 — 2026-11-27
+
+LA RICERCA DEL PIANO SI LEGGE IN UN PUNTO SOLO.
+
+Nessun cambio di comportamento: i casi misurati nella 0.256.46 (3 mosse invece
+di 12, 4 invece di 19, 8 invece di 30, stessi vincoli aperti) restano quelli.
+
+- **La scelta della manopola era scritta due volte.** I due giri della ricerca —
+  il passo piccolo, e lo scatto ampio quando nessuna manopola si muove per un
+  guadagno visibile — avevano lo stesso corpo, e `prova` ricostruiva a mano il
+  contesto che `manopole` costruiva già. Ora c’è un `migliore(...)` solo, un
+  `resaDi(...)` solo e un tipo `StatoManopola` dichiarato una volta: la scelta si
+  legge in una riga (`migliore(false) ?? migliore(true)`).
+- **Un tentativo non si spende più quando il piano è già chiuso.** Se il primo
+  scatto chiudeva i vincoli, il motore provava comunque lo scatto successivo per
+  scoprire che non rendeva. L’estensione ora parte solo con i vincoli ancora
+  aperti: il conteggio dei piani calcolati può calare di uno in quel caso limite.
+- **`volte` non lo leggeva nessuno.** Il campo dei passi raggruppati, rimasto dal
+  vecchio elenco «in N passaggi» della 0.256.45, è sparito insieme al conteggio.
+- **Niente doppio calcolo su anni e offerta.** `anniFissati` veniva chiamato tre
+  volte nella stessa espressione del contesto, e `etichettaPiano` aveva due rami
+  consecutivi per la variante dell’analisi.
+
 ## 0.256.47 — 2026-11-26
 
 LA PRIMA ELABORAZIONE VERA SI PUÒ LEGGERE FINO IN FONDO.

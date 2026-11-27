@@ -56,7 +56,9 @@ export function etichettaPiano(chiave: string | null | undefined): string {
   if (!chiave) return 'nessun piano scelto';
   if (chiave === 'azienda') return 'piano dell’azienda';
   if (chiave === 'base') return 'piano base della piattaforma';
-  if (chiave === VARIANTE_AI) return 'piano elaborato dall’AI';
-  if (eVarianteDellAnalisi(chiave)) return 'piano elaborato dall’AI e messo da parte';
+  if (eVarianteDellAnalisi(chiave))
+    return chiave === VARIANTE_AI
+      ? 'piano elaborato dall’AI'
+      : 'piano elaborato dall’AI e messo da parte';
   return `variante «${chiave}»`;
 }

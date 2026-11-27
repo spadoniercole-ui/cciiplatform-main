@@ -159,13 +159,14 @@ export function testoContesto(c: ContestoElaborazione): string {
         `${s.anno}: ricavi ${arrot(s.ricaviVendite)}; valore produzione ${arrot(s.valoreProduzione)}; costi produzione ${arrot(s.costiProduzione)} (ammortamenti ${arrot(s.ammortamenti)}; personale ${s.costiPersonale ? arrot(s.costiPersonale) : 'non separato'}); oneri finanziari ${arrot(s.oneriFinanziari)}; utile ${arrot(s.utileEsercizio)}; crediti clienti ${arrot(s.creditiClienti)}; debiti fornitori ${arrot(s.debitiFornitori)}; debiti banche ${arrot(s.debitiBanche)}; liquidità ${arrot(s.disponibilitaLiquide)}; patrimonio netto ${arrot(s.patrimonioNetto)}`
     )
     .join('\n');
+  const anniOperatore = anniFissati(c);
   const parti = [
     `ANNI DEL PIANO: ${anni.join(', ')} (indice 0 = ${anni[0]}).`,
     `STORICO (euro):\n${righeStorico}`,
     `RIFERIMENTO DI SETTORE: ${c.crescita.descrizione} Tasso usato dal piano automatico: ${c.crescita.tasso}% annuo.`,
     `RATE DELLA PROPOSTA per anno (euro): ente ${c.rate.ente.map(arrot).join(' / ')}; altri creditori ${c.rate.altri.map(arrot).join(' / ')}.`,
-    anniFissati(c) !== null
-      ? `RESTITUZIONE DEL DEBITO: ${anniFissati(c) === 0 ? 'in un’unica soluzione' : `in ${anniFissati(c)} anni`}, già decisa dall’operatore. Non proporla e non restituirla.`
+    anniOperatore !== null
+      ? `RESTITUZIONE DEL DEBITO: ${anniOperatore === 0 ? 'in un’unica soluzione' : `in ${anniOperatore} anni`}, già decisa dall’operatore. Non proporla e non restituirla.`
       : c.minAnni && c.minAnni > 0
         ? `RESTITUZIONE DEL DEBITO: ${c.minAnni} anni. Il piano non può essere più corto di questo arco.`
         : '',
