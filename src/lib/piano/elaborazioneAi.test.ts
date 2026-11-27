@@ -192,6 +192,26 @@ describe('elaborazione con l’AI: validazione della risposta', () => {
     expect(p).not.toContain('"prudenza": "PRUDENTE"');
     expect(p).toContain('"lancio": {"percentualeOfferta": 40, "anniRientro": 5}');
   });
+
+  it('non chiede gli anni e l’offerta già scritti nel lancio', () => {
+    const p = promptElaborazione({
+      ...BASE,
+      lato: 'DA_DEFINIRE',
+      anniFissi: 0,
+      offertaFissa: 40,
+    });
+    // Sono decisioni dell’operatore: il server le impone, chiederle sarebbe
+    // una richiesta che finisce nel cestino — e gli anni 0 non sono «meno di
+    // un anno», sono l’unica soluzione.
+    expect(p).toContain('già decisa dall’operatore');
+    expect(p).toContain('in un’unica soluzione');
+    expect(p).toContain('Gli anni di restituzione sono già fissati');
+    expect(p).toContain("L'offerta è già fissata dall'operatore");
+    expect(p).not.toMatch(/anniRientro \(0-10/);
+    expect(p).not.toMatch(/percentualeOfferta \(0-100/);
+    expect(p).not.toContain('"anniRientro": 5');
+    expect(p).not.toContain('"percentualeOfferta": 40');
+  });
 });
 
 describe('le scelte proposte dall’AI', () => {

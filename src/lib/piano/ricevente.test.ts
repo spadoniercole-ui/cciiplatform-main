@@ -8,6 +8,8 @@ import {
   estendiConTrend,
   ipotesiAssoluteDa,
   luceManopola,
+  offertaDaPercentuale,
+  percentualeOfferta,
   pianoVerde,
   rateDaPianoRientro,
 } from './ricevente';
@@ -140,5 +142,17 @@ describe('piano del Ricevente', () => {
     });
     expect(sol.verde).toBe(false);
     expect(sol.residui.length).toBeGreaterThan(0);
+  });
+});
+
+describe('offerta in percentuale sul dovuto dell’ente', () => {
+  it('la percentuale è l’offerta sul dovuto, e torna indietro come cifra', () => {
+    expect(percentualeOfferta(214_387, 85_754.8)).toBe(40);
+    expect(offertaDaPercentuale(214_387, 40)).toBe(85_754.8);
+  });
+
+  it('senza dovuto non c’è una percentuale da riportare', () => {
+    expect(percentualeOfferta(0, 10_000)).toBeNull();
+    expect(offertaDaPercentuale(0, 40)).toBe(0);
   });
 });

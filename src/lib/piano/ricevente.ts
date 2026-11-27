@@ -168,6 +168,23 @@ export interface TotaleOfferto {
 }
 
 /**
+ * La percentuale d'offerta che il totale offerto rappresenta sul dovuto
+ * dell'ente: è il numero che il lancio della simulazione riporta nel campo
+ * «Offerta ipotizzata» prima che l'operatore lo cambi. Null quando il dovuto
+ * non è noto.
+ */
+export function percentualeOfferta(dovuto: number, offerto: number): number | null {
+  if (!(dovuto > 0) || !Number.isFinite(offerto)) return null;
+  return Math.round((offerto / dovuto) * 1000) / 10;
+}
+
+/** Il totale offerto all'ente per una percentuale sul dovuto, al centesimo. */
+export function offertaDaPercentuale(dovuto: number, percentuale: number): number {
+  if (!(dovuto > 0) || !Number.isFinite(percentuale)) return 0;
+  return Math.round(dovuto * percentuale) / 100;
+}
+
+/**
  * Rate annue dal piano di rientro scelto, sul totale offerto a tutti i
  * creditori; ente e altri conservano la proporzione della proposta. La
  * quota in anticipo e l'unica soluzione cadono nel primo anno.

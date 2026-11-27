@@ -14,8 +14,8 @@ import { ottieniPianoSviluppoAction, type DatiPianoSviluppo } from '@/app/action
 import { ottieniConfrontoPianoAction, type DatiConfrontoPiano } from '@/app/actions/pianoAziendale';
 import { calcolaPiano, euro } from '@/lib/piano/piano';
 import { ipotesiDaPianoAzienda } from '@/lib/piano/pianoAziendale';
-import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
 import { calcolaPianoConLeve } from '@/lib/piano/levePiano';
+import { nomeVariantePiano } from '@/lib/piano/variantiPiano';
 import { leveDaSalvate, type LeveSimulazione } from '@/lib/piano/leveSimulazione';
 
 interface Props {
@@ -37,15 +37,6 @@ interface PianoConfronto {
   patrimonio: number;
   vincoli: number;
 }
-
-const nomeVariante = (v: string): string =>
-  v === 'base'
-    ? 'Piano base'
-    : v === VARIANTE_AI
-      ? 'Piano AI'
-      : v.startsWith(`${VARIANTE_AI}-archiviata-`)
-        ? 'Piano AI messo da parte'
-        : `Variante ${v}`;
 
 export function ConfrontaPianiScenario({
   nomeSchema,
@@ -123,7 +114,7 @@ export function ConfrontaPianiScenario({
           const ultimo = esito.anni[esito.anni.length - 1];
           out.push({
             chiave: v,
-            nome: nomeVariante(v),
+            nome: nomeVariantePiano(v),
             ebitda: ultimo?.ebitda ?? 0,
             utile: ultimo?.utile ?? 0,
             cassaMinima: esito.cassaMinima,

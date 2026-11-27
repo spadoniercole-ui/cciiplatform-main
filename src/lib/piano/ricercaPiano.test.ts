@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { cercaPiano, notaRicerca, ricercaDaSalvare, ricercaPulita } from './ricercaPiano';
+import {
+  cercaPiano,
+  notaRicerca,
+  passiRaggruppati,
+  ricercaDaSalvare,
+  ricercaPulita,
+} from './ricercaPiano';
 import { LEVE_PREDEFINITE } from './leveSimulazione';
+import { calcolaPianoConLeve } from './levePiano';
 import type { EsercizioStorico, IpotesiPiano } from './piano';
 
 const BASE: EsercizioStorico = {
@@ -111,6 +118,35 @@ describe('ricerca del piano', () => {
     expect(notaRicerca(r)).toContain('Restano aperti');
   });
 
+  it('comincia dalla manopola che rende di più, non sempre dai ricavi', () => {
+    const r = cercaPiano(input({ rate: { ente: [150_000], altri: [] } }));
+    // Le leve costano meno di un punto di crescita: a parità di resa vanno
+    // prima, e i ricavi restano fermi finché serve.
+    expect(r.passi[0].manopola).not.toMatch(/^Crescita dei ricavi/);
+  });
+
+  it('arriva al piano in poche mosse e non alza i ricavi oltre il necessario', () => {
+    const rate = { ente: [150_000], altri: [] };
+    const r = cercaPiano(input({ rate }));
+    expect(r.soddisfatto).toBe(true);
+    // Con gli scatti fissi servivano dodici mosse; il passo adattivo ne basta tre.
+    expect(r.passi.length).toBeLessThanOrEqual(4);
+    // L'ultimo scatto è rifinito: abbassare la crescita di 0,4 punti riapre i
+    // vincoli, quindi il piano non è stato arrotondato al rialzo.
+    const meno = (r.ipotesi.ricaviVendite ?? []).map((x) =>
+      x && x.tipo === 'pct' ? { ...x, valore: Math.round((x.valore - 0.4) * 100) / 100 } : x
+    );
+    const { esito } = calcolaPianoConLeve({
+      storico: BASE,
+      orizzonte: 5,
+      ipotesi: { ...r.ipotesi, ricaviVendite: meno },
+      leve: r.leve,
+      rate,
+      capitaleSociale: null,
+    });
+    expect(esito.vincoli.length).toBeGreaterThan(0);
+  });
+
   it('è deterministica', () => {
     expect(cercaPiano(input())).toEqual(cercaPiano(input()));
   });
@@ -134,6 +170,18 @@ describe('ricerca del piano', () => {
     expect(r.soddisfatto).toBe(false);
     expect(r.aperti.length).toBeGreaterThan(0);
     expect(notaRicerca(r)).toContain('Restano aperti');
+  });
+
+  it('la nota ha una riga per manopola, dal valore di partenza a quello finale', () => {
+    const r = cercaPiano(input({ orizzonte: 5, variazioneMassimaPct: 0.5, leveBloccate: true }));
+    const nota = notaRicerca(r);
+    const passi = passiRaggruppati(r.passi);
+    // Testa, una riga per manopola, chiusura sui vincoli: il dettaglio delle
+    // singole mosse non entra nella nota.
+    expect(nota.split('\n')).toHaveLength(passi.length + 2);
+    for (const p of passi) expect(nota).toContain(`${p.manopola}: ${p.da} → ${p.a}`);
+    expect(nota).not.toContain('passaggi');
+    expect(nota).not.toContain('restava aperto');
   });
 
   it('la ricerca salvata si rilegge ripulita', () => {

@@ -58,7 +58,7 @@ const MESSAGGI = {
 
 /** Messaggio unico per la chiave ANTHROPIC_API_KEY assente. */
 export function messaggioChiaveAiMancante(): string {
-  return "Funzione AI non disponibile: la chiave API Anthropic (ANTHROPIC_API_KEY) non è configurata sul server. Nell'edizione portable, inserire la chiave nel file apikey.txt accanto al programma di avvio e riavviare. Le altre funzioni della piattaforma funzionano normalmente.";
+  return "Funzione AI non disponibile: la chiave API Anthropic (ANTHROPIC_API_KEY) non è configurata sul server. Nell'edizione portable, inserirla nel file apikey.txt accanto al programma di avvio; nella demo locale avviata dai sorgenti, nel file .env.local del progetto. Riavviare il server. Le altre funzioni della piattaforma funzionano normalmente.";
 }
 
 type Categoria = 'offline' | 'timeout' | 'chiave' | 'sovraccarico' | 'credito';

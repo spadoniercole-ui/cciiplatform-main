@@ -9,6 +9,10 @@ describe('valoreIpotesi', () => {
     expect(valoreIpotesi('aliquotaImposte', { tipo: 'abs', valore: 27.9 })).toBe('27,9%');
     expect(valoreIpotesi('investimenti', { tipo: 'abs', valore: 25000 })).toBe('25.000 €');
   });
+
+  it('legge in euro le righe in valore assoluto: col piano dell’azienda i ricavi sono importi', () => {
+    expect(valoreIpotesi('ricaviVendite', { tipo: 'abs', valore: 1_016_000 })).toBe('1.016.000 €');
+  });
 });
 
 describe('parametriElaborazione', () => {
@@ -53,12 +57,12 @@ describe('parametriElaborazione', () => {
     );
   });
 
-  it('mette in coda il costo del personale, che non è una manopola', () => {
+  it('elenca solo le manopole del piano, nell’ordine in cui si leggono', () => {
     const ipotesi: IpotesiPiano = {
-      costiPersonale: [{ tipo: 'abs', valore: 360000 }],
+      costiOperativi: [{ tipo: 'pct', valore: 1 }],
       ricaviVendite: [{ tipo: 'pct', valore: 2 }],
     };
     const out = parametriElaborazione(ipotesi, 1, 2027);
-    expect(out.map((p) => p.riga)).toEqual(['ricaviVendite', 'costiPersonale']);
+    expect(out.map((p) => p.riga)).toEqual(['ricaviVendite', 'costiOperativi']);
   });
 });

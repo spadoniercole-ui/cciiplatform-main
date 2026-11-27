@@ -31,6 +31,8 @@ import {
   ETICHETTA_PROCEDURA,
   LANCIO_PREDEFINITO,
   testoLancio,
+  testoAnniRientro,
+  type LancioPiano,
   type LancioSimulazione,
 } from '@/lib/piano/contestoContabile';
 import {
@@ -57,6 +59,7 @@ import { crescitaDiRiferimento } from '@/lib/piano/automatico';
 import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
 import { parametriElaborazione } from '@/lib/piano/riepilogoElaborazione';
 import { passiRaggruppati } from '@/lib/piano/ricercaPiano';
+import { eVarianteDellAnalisi } from '@/lib/piano/variantiPiano';
 import {
   LEVE,
   LEVE_PREDEFINITE,
@@ -88,6 +91,8 @@ import {
   estendiConTrend,
   ipotesiAssoluteDa,
   luceManopola,
+  offertaDaPercentuale,
+  percentualeOfferta,
   rateDaPianoRientro,
   type PianoRientro,
 } from '@/lib/piano/ricevente';
@@ -212,24 +217,28 @@ export function PianoSviluppoScenario({
     setPianoRientro(r.dati.pianoRientro);
     // Il lancio torna con la variante: procedura, offerta, anni, impostazione.
     // Prima viveva solo nello stato del pannello e richiamare una variante lo
-    // riportava ai valori predefiniti (0.256.31).
-    if (r.dati.lancio)
-      setLancio({
-        procedura: r.dati.lancio.procedura,
-        percentualeOfferta: r.dati.lancio.percentualeOfferta,
-        prudenza: r.dati.lancio.prudenza,
-      });
+    // riportava ai valori predefiniti (0.256.31). La percentuale, se il lancio
+    // non la ricorda, è quella che la proposta applica all'ente (0.256.44).
+    setLancio({
+      procedura: r.dati.lancio?.procedura ?? LANCIO_PREDEFINITO.procedura,
+      percentualeOfferta:
+        r.dati.lancio?.percentualeOfferta ??
+        percentualeOfferta(r.dati.dovuto.ente, r.dati.offerto.ente),
+      prudenza: r.dati.lancio?.prudenza ?? LANCIO_PREDEFINITO.prudenza,
+    });
     const anniSalvati =
-      r.dati.pianoRientro?.modalita === 'RATEALE' && r.dati.pianoRientro.mesi > 0
-        ? Math.max(1, Math.round(r.dati.pianoRientro.mesi / 12))
-        : (r.dati.lancio?.anniRientro ?? null);
+      r.dati.pianoRientro?.modalita === 'UNICA'
+        ? 0
+        : r.dati.pianoRientro?.modalita === 'RATEALE' && r.dati.pianoRientro.mesi > 0
+          ? Math.max(1, Math.round(r.dati.pianoRientro.mesi / 12))
+          : (r.dati.lancio?.anniRientro ?? null);
     setAnniRientro(anniSalvati);
     // Gli anni del lancio senza un piano di rientro salvato: le rate si
     // dimensionano su quell'arco, come se fossero stati scritti a mano.
-    if (!r.dati.pianoRientro && anniSalvati) {
+    if (!r.dati.pianoRientro && anniSalvati !== null) {
       const debito = r.dati.debitoTarget ?? r.dati.offerto.ente + r.dati.offerto.altri;
       setPianoRientro({
-        modalita: 'RATEALE',
+        modalita: anniSalvati === 0 ? 'UNICA' : 'RATEALE',
         mesi: anniSalvati * 12,
         anticipoPct: 0,
         ...(debito > 0 ? { offerto: { ente: debito, altri: 0 } } : {}),
@@ -347,7 +356,15 @@ export function PianoSviluppoScenario({
     return { ente: dati.rate.ente.slice(0, orizzonte), altri: dati.rate.altri.slice(0, orizzonte) };
   }, [dati, pianoRientro, orizzonte]);
 
-  /** Fissa le rate: il debito accertato diviso gli anni scelti. */
+  // IL DOVUTO DELL'ENTE E L'OFFERTA IN PERCENTUALE (0.256.44). La percentuale
+  // non è una nota a margine: è la cifra offerta all'ente sul suo dovuto, e
+  // cambiarla cambia le rate del piano di rientro.
+  const dovutoEnte = dati ? dati.dovuto.ente : 0;
+  const offertaEnte = dati ? (pianoRientro?.offerto ?? dati.offerto).ente : 0;
+  const percentualeInUso =
+    dati === null ? lancio.percentualeOfferta : percentualeOfferta(dovutoEnte, offertaEnte);
+
+  /** Fissa le rate: il debito accertato diviso gli anni scelti; 0 = unica soluzione. */
   const impostaAnniRientro = (anni: number | null) => {
     setAnniRientro(anni);
     setModificato(true);
@@ -358,10 +375,10 @@ export function PianoSviluppoScenario({
     }
     const debito = debitoDaRestituire > 0 ? debitoDaRestituire : null;
     setPianoRientro({
-      modalita: 'RATEALE',
+      modalita: anni === 0 ? 'UNICA' : 'RATEALE',
       mesi: anni * 12,
-      anticipoPct: 0,
-      ...(debito === null ? {} : { offerto: { ente: debito, altri: 0 } }),
+      anticipoPct: pianoRientro?.anticipoPct ?? 0,
+      ...(debito === null ? {} : { offerto: pianoRientro?.offerto ?? { ente: debito, altri: 0 } }),
     });
     // IL PIANO NON PUÒ ESSERE PIÙ CORTO DELLA RESTITUZIONE (0.256.35): se si
     // sceglie di pagare in più anni, l'orizzonte si allunga con loro.
@@ -369,6 +386,41 @@ export function PianoSviluppoScenario({
       setOrizzonte(anni);
       setIpotesi((ip) => estendiIpotesi(ip, anni));
     }
+  };
+
+  /**
+   * L'offerta scritta in percentuale sul dovuto dell'ente: si traduce nella
+   * cifra offerta, e da lì nelle rate. Vuota = come la proposta.
+   */
+  const impostaOfferta = (pct: number | null) => {
+    setLancio((l) => ({ ...l, percentualeOfferta: pct }));
+    setModificato(true);
+    setSoluzione(null);
+    if (!dati) return;
+    const base: PianoRientro = pianoRientro ?? {
+      modalita: dati.rientroProposta.modalita,
+      mesi: dati.rientroProposta.mesi,
+      anticipoPct: dati.rientroProposta.anticipoPct,
+    };
+    const dovuto = dovutoEnte > 0 ? dovutoEnte : debitoDaRestituire;
+    setPianoRientro({
+      ...base,
+      offerto:
+        pct === null
+          ? dati.offerto
+          : {
+              ente: offertaDaPercentuale(dovuto, pct),
+              altri: (base.offerto ?? dati.offerto).altri,
+            },
+    });
+  };
+
+  // Il lancio come lo leggono il salvataggio e il prompt: la percentuale è
+  // quella in uso (dalla cifra offerta), non l'ultima digitata.
+  const lancioInUso: LancioPiano = {
+    ...lancio,
+    percentualeOfferta: percentualeInUso,
+    anniRientro,
   };
 
   // LE LEVE ENTRANO NEL CALCOLO IN UN SOLO PUNTO (0.256.36). Le ipotesi sono
@@ -450,8 +502,7 @@ export function PianoSviluppoScenario({
   // (0.256.42), raggruppate per manopola: chi legge vede dove è arrivata, non
   // ogni singolo scatto.
   const passiRicerca = passiRaggruppati(dati.ricerca?.passi ?? []);
-  const varianteDellAnalisi =
-    dati.variante === VARIANTE_AI || dati.variante.startsWith(`${VARIANTE_AI}-`);
+  const varianteDellAnalisi = eVarianteDellAnalisi(dati.variante);
   // Il riquadro è dei parametri dell'analisi: le motivazioni lo dicono anche
   // quando la variante è una copia di quella dell'analisi. Per un piano scritto
   // a mano sarebbe un doppione delle manopole.
@@ -584,8 +635,8 @@ export function PianoSviluppoScenario({
       note || null,
       modoRettifica ? rettifiche : null,
       modoRettifica
-        ? { pianoRientro, serieSistema, soluzione, leve, lancio: { ...lancio, anniRientro } }
-        : { leve, lancio: { ...lancio, anniRientro } }
+        ? { pianoRientro, serieSistema, soluzione, leve, lancio: lancioInUso }
+        : { leve, lancio: lancioInUso }
     );
     if (!r.success) return setErrore(r.error ?? 'Errore.');
     await carica(variante);
@@ -613,24 +664,33 @@ export function PianoSviluppoScenario({
         orizzonte,
         storico: dati.storico.slice(0, 3),
         crescita: contestoAi.crescita,
+        // Le rate sono quelle che il piano qui sotto usa davvero: gli anni e
+        // l'offerta scritti nel lancio devono valere anche per l'elaborazione.
         rate: {
-          ente: dati.rate.ente.slice(0, orizzonte),
-          altri: dati.rate.altri.slice(0, orizzonte),
+          ente: rate.ente.slice(0, orizzonte),
+          altri: rate.altri.slice(0, orizzonte),
         },
         pianoAzienda: contestoAi.pianoAzienda,
         scostamenti: contestoAi.scostamenti,
         ipotesiCorrenti: ipotesi,
         attenzioneContabile: attenzione?.testo ?? null,
-        lancio: testoLancio({ ...lancio, anniRientro }),
+        lancio: testoLancio(lancioInUso),
         // Le leve del lancio come scelte: il server ne ricava il testo per il
         // prompt e le salva con la variante. Il contesto economico e il piano
         // della verifica aziendale li aggiunge il server (dati dello spazio).
         leveScelte: leve,
         leveModificate: leveToccate,
         minAnni: anniRientro ?? 0,
+        // Gli anni e la percentuale del lancio sono decisioni, non proposte:
+        // l'elaborazione li tiene e non li riscrive.
+        anniFissi: anniRientro,
+        offertaFissa: percentualeInUso,
         impostazione: lancio.prudenza,
         procedura: lancio.procedura,
         vincoli: [...esito.vincoli.map((v) => v.testo), ...(attenzione?.vincoli ?? [])],
+        // Solo quelli della contabile sono documentati: possono giustificare
+        // ricavi fermi, mentre i vincoli aperti qui sopra vanno chiusi.
+        vincoliDocumentati: attenzione?.vincoli ?? [],
       });
       if (!r.success) {
         setAvvisoAi(r.error ?? 'Elaborazione non riuscita.');
@@ -836,9 +896,10 @@ export function PianoSviluppoScenario({
           </p>
         )}
         <p className="border-t border-slate-200 pt-3 text-[10px] text-slate-500 leading-relaxed">
-          Le leve e i parametri del lancio — che cosa l’azienda mette in gioco, con quale offerta e
-          in quanti anni restituisce il debito — stanno sotto l’analisi del piano: li propone l’AI e
-          li cambi tu.
+          Il lancio della simulazione — la procedura, l’offerta in percentuale, gli anni di
+          restituzione del debito e l’impostazione — sta nel riquadro qui sotto, prima del piano: è
+          quello che il piano deve rispettare. Le leve di che cosa l’azienda mette in gioco stanno
+          più sotto, sotto l’analisi del piano: le propone l’AI e le cambi tu.
         </p>
         {/* IL PIANO DELLA VERIFICA AZIENDALE (passo 3): con il flag di
             simulazione è il piano di sviluppo dell'azienda, ed è quello su cui
@@ -876,6 +937,132 @@ export function PianoSviluppoScenario({
               : `${dati.parametriContesto} parametri con un valore, in Parametri › Piano e simulazione AI.`}
           </p>
         </div>
+      </div>
+      {/* IL LANCIO DELLA SIMULAZIONE (0.256.44). Prima del piano, non dopo:
+          il piano nasce da queste scelte. L'offerta è la percentuale che la
+          proposta applica al dovuto dell'ente — qui si vede e da qui si cambia
+          —; gli anni a 0 valgono «unica soluzione»; l'impostazione decide come
+          l'elaborazione imposta l'orizzonte. */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+        <div>
+          <h2 className="font-bold text-slate-900 uppercase text-xs tracking-wider">
+            Il lancio della simulazione
+          </h2>
+          <p className="text-[11px] text-slate-600 mt-0.5">
+            Con che cosa si affronta il debito, prima di vedere il piano: la procedura, l’offerta in
+            percentuale sul dovuto dell’ente, in quanti anni lo si restituisce e con quale
+            impostazione. Il piano qui sotto parte da qui.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          {dati.simulazioneAttiva ? (
+            // La procedura è già quella dello scenario: chiederla di nuovo
+            // significherebbe mettere in dubbio il tipo scelto alla creazione.
+            <div className="text-[10px] font-bold text-slate-500 uppercase">
+              Procedura da sostenere
+              <p className="mt-1 text-xs font-normal normal-case tracking-normal text-slate-800">
+                {ETICHETTA_PROCEDURA[lancio.procedura]} — è quella dello scenario.
+              </p>
+            </div>
+          ) : (
+            <label className="text-[10px] font-bold text-slate-500 uppercase">
+              Procedura da sostenere
+              <select
+                value={lancio.procedura}
+                onChange={(e) =>
+                  setLancio((l) => ({
+                    ...l,
+                    procedura: e.target.value as LancioSimulazione['procedura'],
+                  }))
+                }
+                className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+              >
+                {(['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'] as const).map((p) => (
+                  <option key={p} value={p}>
+                    {ETICHETTA_PROCEDURA[p]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="text-[10px] font-bold text-slate-500 uppercase">
+            Offerta ipotizzata (%)
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="1"
+              value={percentualeInUso ?? ''}
+              onChange={(e) => {
+                const testo = e.target.value.trim();
+                if (testo === '') return impostaOfferta(null);
+                const n = Number(testo);
+                if (!Number.isFinite(n)) return;
+                impostaOfferta(Math.max(0, Math.min(100, Math.round(n))));
+              }}
+              placeholder="come la proposta"
+              title="La percentuale che la proposta applica al dovuto dell’ente: qui si legge e da qui si cambia."
+              className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+            />
+          </label>
+          <label className="text-[10px] font-bold text-slate-500 uppercase">
+            Restituzione del debito (anni)
+            <input
+              type="number"
+              min={0}
+              max={ORIZZONTE_MASSIMO}
+              step="1"
+              value={anniRientro ?? ''}
+              onChange={(e) => {
+                const testo = e.target.value.trim();
+                if (testo === '') return impostaAnniRientro(null);
+                const n = Number(testo);
+                if (!Number.isFinite(n)) return;
+                impostaAnniRientro(Math.max(0, Math.min(ORIZZONTE_MASSIMO, Math.round(n))));
+              }}
+              placeholder="come la proposta"
+              title={`Il debito da restituire è ${euro(debitoDaRestituire)}: le rate si dividono sugli anni indicati. 0 = un’unica soluzione. Vuoto = rate della proposta.`}
+              className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+            />
+            <span className="block mt-0.5 text-[9px] font-normal normal-case tracking-normal text-slate-500">
+              {anniRientro === 0 ? 'tutto nel primo anno' : '0 = unica soluzione'}
+            </span>
+          </label>
+          <label className="text-[10px] font-bold text-slate-500 uppercase">
+            Impostazione
+            <select
+              value={lancio.prudenza}
+              onChange={(e) =>
+                setLancio((l) => ({
+                  ...l,
+                  prudenza: e.target.value as LancioSimulazione['prudenza'],
+                }))
+              }
+              className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
+            >
+              <option value="PRUDENTE">Prudente</option>
+              <option value="NEUTRA">Neutra</option>
+              <option value="FAVOREVOLE">Favorevole</option>
+            </select>
+          </label>
+        </div>
+        <p className="text-[10px] text-slate-500 leading-relaxed">
+          {percentualeInUso === null
+            ? 'La proposta non porta il dovuto dell’ente, quindi non c’è una percentuale da riportare: scrivila e le rate si dimensionano su quella.'
+            : `Offerta del ${percentualeInUso}% dei ${euro(dovutoEnte)} dovuti all’ente: ${euro(offertaEnte)}.`}{' '}
+          L’impostazione decide l’orizzonte dell’elaborazione: prudente diluisce la restituzione,
+          favorevole la stringe, neutra segue i dati — quando gli anni non sono già scritti qui
+          sopra.
+        </p>
+        {attenzione && attenzione.vincoli.length > 0 && (
+          <ul className="space-y-0.5">
+            {attenzione.vincoli.map((v) => (
+              <li key={v} className="text-[10px] text-amber-900 leading-relaxed">
+                <strong>Vincolo:</strong> {v}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
         <div className="flex items-start gap-2 flex-wrap">
@@ -949,7 +1136,7 @@ export function PianoSviluppoScenario({
                 modoRettifica ? rettifiche : null,
                 {
                   leve,
-                  lancio: { ...lancio, anniRientro },
+                  lancio: lancioInUso,
                   ...(modoRettifica ? { pianoRientro, serieSistema, soluzione } : {}),
                 }
               );
@@ -1013,7 +1200,7 @@ export function PianoSviluppoScenario({
                           ? { rettifiche, pianoRientro, serieSistema, soluzione }
                           : {}),
                         leve,
-                        lancio: { ...lancio, anniRientro },
+                        lancio: lancioInUso,
                       }
                 );
                 if (!r.success) return setErrore(r.error ?? 'Errore.');
@@ -1047,7 +1234,7 @@ export function PianoSviluppoScenario({
             </button>
           )}
           <label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Orizzonte</label>
-          {anniRientro !== null && (
+          {anniRientro !== null && anniRientro > 0 && (
             <span className="text-[10px] text-slate-500">
               non meno degli anni di restituzione del debito ({anniRientro})
             </span>
@@ -1073,9 +1260,9 @@ export function PianoSviluppoScenario({
                 <option
                   key={n}
                   value={n}
-                  disabled={anniRientro !== null && n < anniRientro}
+                  disabled={anniRientro !== null && anniRientro > 0 && n < anniRientro}
                   title={
-                    anniRientro !== null && n < anniRientro
+                    anniRientro !== null && anniRientro > 0 && n < anniRientro
                       ? `Il debito si restituisce in ${anniRientro} anni: il piano non può essere più corto.`
                       : undefined
                   }
@@ -1249,42 +1436,43 @@ export function PianoSviluppoScenario({
                       {dati.lancio.percentualeOfferta === null
                         ? 'come la proposta'
                         : `${dati.lancio.percentualeOfferta}%`}
-                      {' · '}restituzione{' '}
-                      {dati.lancio.anniRientro === null
-                        ? 'come la proposta'
-                        : `${dati.lancio.anniRientro} ${dati.lancio.anniRientro === 1 ? 'anno' : 'anni'}`}
+                      {' · '}restituzione {testoAnniRientro(dati.lancio.anniRientro)}
                       {' · '}impostazione {dati.lancio.prudenza.toLowerCase()}.
                     </li>
                   )}
                 </ul>
-                {dati.ricerca && (passiRicerca.length > 0 || dati.ricerca.aperti.length > 0) && (
+                {/* La ricerca si mostra sempre quando esiste: se l’analisi
+                    chiudeva già i vincoli il pannello nascondeva anche il
+                    conteggio dei piani calcolati (0.256.47). */}
+                {dati.ricerca && (
                   <div className="space-y-1 border-t border-violet-200 pt-2">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-violet-900">
-                      Le manopole che il motore ha girato
+                      La ricerca del motore
                     </p>
                     <p className="text-[10px] text-violet-950/80 leading-relaxed">
-                      L’analisi ha scritto il punto di partenza; il motore ha poi cercato il piano
-                      che copre le rate e tiene la cassa positiva, calcolando{' '}
-                      {dati.ricerca.tentativi} piani.{' '}
-                      {dati.ricerca.soddisfatto
-                        ? 'Con queste manopole i vincoli sono chiusi.'
-                        : 'Non tutti i vincoli si chiudono con le manopole ammesse dallo spazio.'}
+                      Dal punto di partenza dell’analisi, in {dati.ricerca.tentativi} piani
+                      calcolati
+                      {passiRicerca.length > 0
+                        ? ': una riga per manopola, dal valore di partenza a quello finale.'
+                        : ': nessuna manopola girata.'}
                     </p>
-                    {passiRicerca.length > 0 && (
+                    {passiRicerca.length > 0 ? (
                       <ul className="space-y-1">
                         {passiRicerca.map((p) => (
                           <li
                             key={p.manopola}
                             className="text-[11px] text-slate-800 leading-relaxed"
                           >
-                            <span className="font-semibold">{p.manopola}</span>: da {p.da} a {p.a}
-                            {p.volte > 1 ? ` in ${p.volte} passaggi` : ''}.
-                            <span className="block text-[10px] text-violet-800">
-                              Motore: {p.perche}
-                            </span>
+                            <span className="font-semibold">{p.manopola}</span>: {p.da} → {p.a}.
                           </li>
                         ))}
                       </ul>
+                    ) : (
+                      <p className="text-[11px] text-slate-800 leading-relaxed">
+                        {dati.ricerca.aperti.length === 0
+                          ? 'Le ipotesi dell’analisi coprivano già le rate e la cassa: non c’era niente da correggere.'
+                          : 'Nessuna manopola ammessa dallo spazio migliora il piano: i vincoli restano quelli qui sotto.'}
+                      </p>
                     )}
                     {dati.ricerca.aperti.length > 0 && (
                       <p className="text-[10px] text-amber-900 leading-relaxed">
@@ -1298,13 +1486,12 @@ export function PianoSviluppoScenario({
 
             {pianoFermo && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900 leading-relaxed">
-                <strong>
-                  Le manopole sono a zero: il piano ripete {fmt(base.ricaviVendite)} € di ricavi per
-                  tutti gli anni.
-                </strong>{' '}
-                {varianteDellAnalisi
-                  ? 'Non è un’ipotesi che manca: un vincolo documentato impone di non far crescere i ricavi, e la motivazione sta accanto alle righe. La ricerca del motore non ha alzato la crescita proprio per quel vincolo: se non lo condividi, cambia i parametri qui sopra e rilancia l’elaborazione.'
-                  : 'Non devi inventare dei numeri: premi «L’AI imposta manopole e scelte» e sarà l’analisi a fissare crescita, costi e margini con i bilanci, il settore e il contesto economico. Le manopole mostreranno il percorso che ne risulta.'}
+                <strong>I ricavi restano {fmt(base.ricaviVendite)} € per tutti gli anni.</strong>{' '}
+                {dati.ricerca?.ricaviFermiConsentiti
+                  ? 'La ricerca del motore non li ha alzati perché un vincolo documentato lo impone: è il vincolo che l’analisi ha dovuto rispettare, e la motivazione sta accanto alle righe. Se non lo condividi, cambia i parametri qui sopra e rilancia.'
+                  : varianteDellAnalisi
+                    ? 'L’analisi ha lasciato i ricavi fermi e la motivazione sta accanto alle righe. Se non la condividi, cambia i parametri qui sopra e rilancia l’elaborazione.'
+                    : 'Non devi inventare dei numeri: premi «L’AI imposta manopole e scelte» e sarà l’analisi a fissare crescita, costi e margini con i bilanci, il settore e il contesto economico. Le manopole mostreranno il percorso che ne risulta.'}
                 {!varianteDellAnalisi && dati.varianti.includes(VARIANTE_AI) && (
                   <> Il piano dell’analisi è nella variante «elaborazione-ai».</>
                 )}
@@ -1488,9 +1675,10 @@ export function PianoSviluppoScenario({
               Le scelte del piano — proposte dall’analisi
             </h2>
             <p className="text-[10px] text-slate-500 leading-relaxed mt-0.5">
-              Che cosa l’azienda mette in gioco, con quale offerta e in quanti anni restituisce il
-              debito verso l’ente. L’analisi AI le propone con le ipotesi; se per questa azienda non
-              valgono, cambiale e salvale con la variante: ogni variante le ricorda.
+              Che cosa l’azienda mette in gioco per restituire il debito verso l’ente — l’offerta e
+              gli anni sono nel lancio, qui sopra. L’analisi AI le propone con le ipotesi; se per
+              questa azienda non valgono, cambiale e salvale con la variante: ogni variante le
+              ricorda.
             </p>
           </div>
           {/* LE LEVE DEL LANCIO (0.256.18). Non sono manopole del motore: sono
@@ -1590,103 +1778,6 @@ export function PianoSviluppoScenario({
               })}
             </div>
           </div>
-          <div className="flex flex-wrap items-end gap-3">
-            {dati.simulazioneAttiva ? (
-              // La procedura è già quella dello scenario: chiederla di nuovo
-              // significherebbe mettere in dubbio il tipo scelto alla creazione.
-              <div className="text-[10px] font-bold text-slate-500 uppercase">
-                Procedura da sostenere
-                <p className="mt-1 text-xs font-normal normal-case tracking-normal text-slate-800">
-                  {ETICHETTA_PROCEDURA[lancio.procedura]} — è quella dello scenario.
-                </p>
-              </div>
-            ) : (
-              <label className="text-[10px] font-bold text-slate-500 uppercase">
-                Procedura da sostenere
-                <select
-                  value={lancio.procedura}
-                  onChange={(e) =>
-                    setLancio((l) => ({
-                      ...l,
-                      procedura: e.target.value as LancioSimulazione['procedura'],
-                    }))
-                  }
-                  className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
-                >
-                  {(['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'] as const).map((p) => (
-                    <option key={p} value={p}>
-                      {ETICHETTA_PROCEDURA[p]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label className="text-[10px] font-bold text-slate-500 uppercase">
-              Offerta ipotizzata (%)
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step="1"
-                value={lancio.percentualeOfferta ?? ''}
-                onChange={(e) => {
-                  const n = e.target.value.trim() === '' ? null : Number(e.target.value);
-                  setLancio((l) => ({
-                    ...l,
-                    percentualeOfferta: n === null || !Number.isFinite(n) ? null : n,
-                  }));
-                }}
-                placeholder="come la proposta"
-                className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
-              />
-            </label>
-            <label className="text-[10px] font-bold text-slate-500 uppercase">
-              Restituzione del debito (anni)
-              <input
-                type="number"
-                min={1}
-                max={ORIZZONTE_MASSIMO}
-                step="1"
-                value={anniRientro ?? ''}
-                onChange={(e) => {
-                  const testo = e.target.value.trim();
-                  if (testo === '') return impostaAnniRientro(null);
-                  const n = Number(testo);
-                  if (!Number.isFinite(n)) return;
-                  impostaAnniRientro(Math.max(1, Math.min(ORIZZONTE_MASSIMO, Math.round(n))));
-                }}
-                placeholder="come la proposta"
-                title={`Il debito da restituire è ${euro(debitoDaRestituire)}: le rate si dividono sugli anni indicati. Vuoto = rate della proposta.`}
-                className="mt-1 block w-32 p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
-              />
-            </label>
-            <label className="text-[10px] font-bold text-slate-500 uppercase">
-              Impostazione
-              <select
-                value={lancio.prudenza}
-                onChange={(e) =>
-                  setLancio((l) => ({
-                    ...l,
-                    prudenza: e.target.value as LancioSimulazione['prudenza'],
-                  }))
-                }
-                className="mt-1 block p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-normal normal-case tracking-normal text-slate-800"
-              >
-                <option value="PRUDENTE">Prudente</option>
-                <option value="NEUTRA">Neutra</option>
-                <option value="FAVOREVOLE">Favorevole</option>
-              </select>
-            </label>
-          </div>
-          {attenzione && attenzione.vincoli.length > 0 && (
-            <ul className="space-y-0.5">
-              {attenzione.vincoli.map((v) => (
-                <li key={v} className="text-[10px] text-amber-900 leading-relaxed">
-                  <strong>Vincolo:</strong> {v}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
         <details className="group">
           <summary className="cursor-pointer text-[11px] font-bold text-blue-700 hover:underline">
@@ -1850,8 +1941,8 @@ export function PianoSviluppoScenario({
         </details>
         <p className="text-[10px] text-slate-500">
           Partenza: {dati.partenza.etichetta}.{' '}
-          {anniRientro && pianoRientro
-            ? `Rate del piano di rientro: debito di ${euro(debitoDaRestituire)} in ${anniRientro} ${anniRientro === 1 ? 'anno' : 'anni'} — ente ${euro(rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))}.`
+          {anniRientro !== null && pianoRientro
+            ? `Rate del piano di rientro: debito di ${euro(debitoDaRestituire)} in ${anniRientro === 0 ? 'un’unica soluzione' : `${anniRientro} ${anniRientro === 1 ? 'anno' : 'anni'}`} — ente ${euro(rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))}.`
             : dati.rateDaDebito
               ? `Rate calcolate sul debito accertato (la proposta non ne porta): ente ${euro(rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))} in ${orizzonte} anni.`
               : `Rate dalla proposta: ente ${euro(dati.rate.ente.slice(0, orizzonte).reduce((x, y) => x + y, 0))}, altri creditori ${euro(dati.rate.altri.slice(0, orizzonte).reduce((x, y) => x + y, 0))}.`}

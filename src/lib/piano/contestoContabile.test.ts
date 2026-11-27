@@ -3,6 +3,7 @@ import {
   LANCIO_PREDEFINITO,
   lancioDaSalvato,
   lancioPianoValido,
+  testoAnniRientro,
   testoAttenzioneContabile,
   testoLancio,
   vincoliDaAttenzioneContabile,
@@ -95,6 +96,15 @@ describe('attenzione della contabile come contesto della simulazione', () => {
   it('gli anni di restituzione entrano nel testo del lancio', () => {
     expect(testoLancio({ ...LANCIO_PREDEFINITO, anniRientro: 5 })).toContain('in 5 anni');
   });
+  it('0 anni è l’unica soluzione, non un campo vuoto', () => {
+    expect(testoLancio({ ...LANCIO_PREDEFINITO, anniRientro: 0 })).toContain(
+      'in un’unica soluzione'
+    );
+    expect(testoAnniRientro(0)).toBe('un’unica soluzione');
+    expect(testoAnniRientro(1)).toBe('1 anno');
+    expect(testoAnniRientro(5)).toBe('5 anni');
+    expect(testoAnniRientro(null)).toBe('come la proposta');
+  });
 });
 
 describe('lancioPianoValido', () => {
@@ -111,6 +121,11 @@ describe('lancioPianoValido', () => {
       prudenza: 'NEUTRA',
       anniRientro: 10,
     });
+  });
+
+  it('0 anni resta 0: è l’unica soluzione, non il minimo di un anno', () => {
+    expect(lancioPianoValido({ anniRientro: 0 }).anniRientro).toBe(0);
+    expect(lancioPianoValido({ anniRientro: -3 }).anniRientro).toBe(0);
   });
 
   it('un valore che non si riconosce non fa fallire il salvataggio', () => {

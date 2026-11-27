@@ -26,6 +26,109 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.47 — 2026-11-26
+
+LA PRIMA ELABORAZIONE VERA SI PUÒ LEGGERE FINO IN FONDO.
+
+- **Chiave AI assente o errata: il pannello lo dice in italiano.** L’elaborazione del piano
+  restituiva il messaggio grezzo del fornitore quando la chiave mancava, era revocata o il
+  credito era esaurito. Ora passa da `messaggioChiaveAiMancante` e da `erroreServizioEsterno`,
+  come le altre funzioni AI: si legge che cosa manca e dove si mette (nella demo locale
+  `.env.local`, nell’edizione portable `apikey.txt`).
+- **La traccia della ricerca non sparisce quando non gira nessuna manopola.** Se le ipotesi
+  dell’analisi chiudevano già i vincoli, il pannello nascondeva anche il conteggio dei piani
+  calcolati. Ora la ricerca si mostra sempre: manopole girate (o «nessuna manopola girata»),
+  piani calcolati e, se ce ne sono, vincoli restano aperti.
+
+---
+
+## 0.256.46 — 2026-11-26
+
+LA RICERCA ALLUNGA IL PASSO SULLA MANOPOLA CHE RENDE DI PIÙ.
+
+- **Non più uno scatto uguale per tutte, un giro alla volta.** A ogni mossa il motore misura il
+  ritorno del primo scatto di ogni manopola, sceglie quella che rende di più per unità di percorso
+  speso e allunga il passo solo su quella, finché il rendimento tiene. Sulle stesse prove: 3 mosse
+  invece di 12, 4 invece di 19, 8 invece di 30 — e gli stessi vincoli aperti di prima, mai uno in
+  più.
+- **L’ultimo scatto è rifinito.** Fra il passo che non chiudeva e quello che chiude il motore
+  cerca il più corto che basta (crescita +9,6% invece di +10% arrotondato al passo fisso): i
+  ricavi si alzano solo di quel tanto, e la distanza dal punto di partenza scende (9,6 contro
+  12,0 nella prova con 150.000 € di rate).
+- **La scelta guarda il rendimento, non l’ordine.** Le leve costano una frazione di punto di
+  crescita e vengono prima quando rendono di più: la prima mossa non è più «sempre la crescita
+  dei ricavi». Restano invariati il tetto di tentativi, la ricerca deterministica e la regola dei
+  ricavi fermi solo con un vincolo documentato.
+
+## 0.256.45 — 2026-11-26
+
+LA RICERCA SI RACCONTA IN UNA RIGA PER MANOPOLA.
+
+- **La nota dell’elaborazione non elenca più gli scatti.** Una manopola, una riga: «Crescita dei
+  ricavi in ogni anno: +2% → +8%». Spariscono «in N passaggi» e l’elenco delle mosse in fila;
+  restano il numero dei piani calcolati e l’esito in una riga.
+- **I vincoli si dicono una volta, e solo se qualcuno resta aperto.** Quando il piano sta in
+  piede la nota non ripete i vincoli chiusi; quando non sta in piede li elenca in fondo, da soli,
+  invece di ripeterli per ogni manopola che li stava chiudendo.
+- **Nel pannello la traccia è la stessa.** La riga «Motore: restava aperto: …» sotto ogni
+  manopola è sparita: la manopola mostra da quale valore a quale è arrivata, e il riquadro dei
+  vincoli aperti resta l’unico posto dove il dettaglio serve.
+
+## 0.256.44 — 2026-11-26
+
+IL LANCIO VIENE PRIMA DEL PIANO, E I SUOI NUMERI CONTANO.
+
+- **Il lancio della simulazione ha un riquadro suo, prima del piano.** Procedura, offerta,
+  anni di restituzione e impostazione stavano in coda alle leve, sotto il piano che dovevano
+  guidare. Ora sono una card a sé, subito sopra «Piano di sviluppo»; le leve — che cosa
+  l’azienda mette in gioco — restano sotto l’analisi del piano, e i testi che rimandavano
+  all’una o all’altra posizione dicono quella vera.
+- **L’offerta è una percentuale vera, non una nota.** Il campo mostra la percentuale che la
+  proposta applica al dovuto dell’ente (`offerta.ente / dovuto.ente`, arrotondata) e dice a
+  quanto ammonta: scriverla cambia la cifra offerta e quindi le rate del piano di rientro.
+  Il server porta `dovuto` (ente e altri) accanto a `offerto`, così la percentuale si calcola
+  dai dati e non si inventa.
+- **0 anni = un’unica soluzione.** Il campo ammette lo 0: il piano di rientro passa a `UNICA`
+  (tutto nel primo anno), `lancioPianoValido` non lo riporta più a 1 e il testo del lancio dice
+  «in un’unica soluzione». `testoAnniRientro` è l’unico modo in cui gli anni si leggono nel
+  pannello e nel riquadro dei parametri.
+- **Gli anni e l’offerta scritti sono decisioni, non proposte.** L’elaborazione riceve
+  `anniFissi` e `offertaFissa` e li impone al lancio salvato: il prompt non li chiede più e
+  l’esempio di risposta non li contiene. Restano liberi solo quando il campo è vuoto, e allora
+  è l’impostazione a governare l’orizzonte: prudente diluisce la restituzione, favorevole la
+  stringe, neutra segue i dati — regola dichiarata nel prompt, senza soglie inventate.
+- **L’elaborazione parte dalle rate del piano in schermo.** Mandava `dati.rate` (quelle della
+  proposta) mentre il pannello calcolava su `pianoRientro`: l’AI vedeva un debito diverso da
+  quello che l’operatore stava guardando.
+
+## 0.256.43 — 2026-11-26
+
+REVISIONE DELLA 0.256.41: UN SOLO NOME PER LA VARIANTE DELL’ANALISI.
+
+- **I ricavi del piano dell’azienda si leggono in euro.** Il riquadro dei parametri sceglieva
+  l’unità dalla riga: con il piano dell’azienda rettificato i ricavi sono importi assoluti e si
+  leggevano come «+1.016.000%». Ora l’unità la decide il tipo dell’ipotesi e l’aliquota resta
+  l’unica riga sempre in percentuale.
+- **Un solo modo di dire «variante dell’analisi».** Il pannello la riconosceva con un prefisso,
+  il confronto con un altro, la sintesi contando la seconda riga della nota. Ora
+  `eVarianteDellAnalisi` e `nomeVariantePiano` stanno in `variantiPiano.ts`, e le versioni messe
+  da parte si distinguono con il loro numero («Piano AI messo da parte (2)») nel confronto e
+  nella scelta del piano della valutazione.
+- **Ricavi fermi solo con un vincolo documentato.** L’azione passava alla ricerca anche i
+  vincoli aperti del piano in schermo: una cassa negativa poteva congelare i ricavi, che invece
+  vanno alzati. Il pannello manda ora `vincoliDocumentati` a parte — la sola verifica contabile —
+  e la ricerca distingue i vincoli da chiudere da quelli che giustificano un piano fermo. Il
+  testo del piano fermo non dice più «le manopole sono a zero» (non è detto) e non rimanda a
+  note che non contengono il vincolo.
+- **La sintesi dell’analisi si trova per etichetta.** La sintesi del piano leggeva la seconda
+  riga della nota e la presentava come «impostazione dichiarata» — era la riga sulle leve. Ora
+  la nota marca «Sintesi dell’analisi: » e la sintesi cerca quella riga.
+- **Meno casi finti.** L’archivio non ripiega più su un nome col timestamp: nel limite dei 30
+  caratteri ci stanno 999 nomi e, se sono presi, l’elaborazione si ferma con un messaggio invece
+  di inventare un nome. Il costo del personale esce dai parametri dell’analisi (non è una
+  manopola e non può essere un’ipotesi salvata) e `chiaviValide` in `scelteValutazione` era una
+  condizione sempre vera.
+
 ## 0.256.42 — 2026-11-26
 
 IL MOTORE CERCA IL PIANO, NON LO PROPONE IN UN COLPO SOLO.

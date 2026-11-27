@@ -17,7 +17,7 @@ import { crescitaDiRiferimento, ipotesiAutomatiche, type PuntoSerie } from '@/li
 import { confrontaPiani } from '@/lib/piano/confronto';
 import { anniDelPiano, ipotesiDaPianoAzienda, valoriPuliti } from '@/lib/piano/pianoAziendale';
 import { leggiParametriSimulazione } from '@/lib/piano/letturaParametriSimulazione';
-import { VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
+import { PREFISSO_SINTESI_NOTA, VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
 import { calcolaPianoConLeve } from '@/lib/piano/levePiano';
 import { leveDaSalvate } from '@/lib/piano/leveSimulazione';
 import { soluzionePulita } from '@/lib/piano/riceventeSalvataggio';
@@ -186,9 +186,15 @@ export async function sintesiPianoScenarioAction(
         rate,
         capitaleSociale: d.capitaleSociale,
       }).esito;
-      const sintesiAi = String(ai.note ?? '').split('\n')[1] ?? '';
+      // La sintesi dell'analisi è la riga marcata nella nota, non la seconda
+      // riga: la nota cambia con le versioni e contare le righe la sbagliava.
+      const sintesiAi =
+        String(ai.note ?? '')
+          .split('\n')
+          .find((riga) => riga.startsWith(PREFISSO_SINTESI_NOTA))
+          ?.slice(PREFISSO_SINTESI_NOTA.length) ?? '';
       righe.push(
-        `VARIANTE «elaborazione-ai» (ipotesi scritte dall’AI con motivazione, risultati del motore): ${pAi.sintesi.replace(/\n/g, ' ')}${sintesiAi ? ` Impostazione dichiarata: ${sintesiAi}` : ''}`
+        `VARIANTE «elaborazione-ai» (ipotesi scritte dall’AI con motivazione, risultati del motore): ${pAi.sintesi.replace(/\n/g, ' ')}${sintesiAi ? ` Sintesi dell’analisi: ${sintesiAi}` : ''}`
       );
     }
     // Ricevente: la soluzione verde salvata (motore), con la lettura dell'AI.

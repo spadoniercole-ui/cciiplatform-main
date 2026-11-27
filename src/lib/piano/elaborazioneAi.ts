@@ -56,6 +56,13 @@ export interface OpzioniSimulazione {
 
 export const VARIANTE_AI = 'elaborazione-ai';
 
+/**
+ * La riga della nota che porta la sintesi dell'analisi. La nota è un testo
+ * lungo e l'ordine delle righe può cambiare: chi la rilegge cerca questa
+ * etichetta invece di contare le righe (0.256.43).
+ */
+export const PREFISSO_SINTESI_NOTA = 'Sintesi dell’analisi: ';
+
 export interface ContestoElaborazione {
   lato: LatoPiano;
   orizzonte: number;
@@ -114,8 +121,26 @@ export interface ContestoElaborazione {
   impostazione?: string | null;
   /** La procedura dello scenario: è quella, non una scelta dell'analisi. */
   procedura?: string | null;
-  /** Vincoli che scattano con il piano di partenza (testo breve). */
+  /**
+   * Gli anni di restituzione già fissati dall'operatore nel lancio: 0 = unica
+   * soluzione. Quando ci sono, l'analisi non li propone e il server li tiene.
+   */
+  anniFissi?: number | null;
+  /** La percentuale d'offerta già fissata dall'operatore: l'analisi non la riscrive. */
+  offertaFissa?: number | null;
+  /**
+   * Vincoli che scattano oggi: quelli del piano in schermo e quelli della
+   * verifica contabile. Servono al prompt, che deve sapere che cosa il piano
+   * deve affrontare.
+   */
   vincoli?: string[];
+  /**
+   * Solo i vincoli DOCUMENTATI (contabilità, procedure, note integrative):
+   * sono gli unici che possono giustificare ricavi fermi. I vincoli aperti del
+   * piano in schermo no: quelli la ricerca li deve chiudere alzando le manopole
+   * (0.256.43).
+   */
+  vincoliDocumentati?: string[];
 }
 
 /** Il tetto di sistema alla variazione di una manopola, quando lo spazio non ne ha uno. */
@@ -139,9 +164,11 @@ export function testoContesto(c: ContestoElaborazione): string {
     `STORICO (euro):\n${righeStorico}`,
     `RIFERIMENTO DI SETTORE: ${c.crescita.descrizione} Tasso usato dal piano automatico: ${c.crescita.tasso}% annuo.`,
     `RATE DELLA PROPOSTA per anno (euro): ente ${c.rate.ente.map(arrot).join(' / ')}; altri creditori ${c.rate.altri.map(arrot).join(' / ')}.`,
-    c.minAnni && c.minAnni > 0
-      ? `RESTITUZIONE DEL DEBITO: ${c.minAnni} anni. Il piano non può essere più corto di questo arco.`
-      : '',
+    anniFissati(c) !== null
+      ? `RESTITUZIONE DEL DEBITO: ${anniFissati(c) === 0 ? 'in un’unica soluzione' : `in ${anniFissati(c)} anni`}, già decisa dall’operatore. Non proporla e non restituirla.`
+      : c.minAnni && c.minAnni > 0
+        ? `RESTITUZIONE DEL DEBITO: ${c.minAnni} anni. Il piano non può essere più corto di questo arco.`
+        : '',
   ].filter(Boolean);
   if (c.pianoAzienda && Object.keys(c.pianoAzienda).length) {
     parti.push(
@@ -243,13 +270,26 @@ function impostazioneFissa(c: ContestoElaborazione): boolean {
   return typeof c.impostazione === 'string' && PRUDENZE_FISSE.includes(c.impostazione);
 }
 
+/** Gli anni di restituzione già decisi dall'operatore: 0 = unica soluzione. */
+function anniFissati(c: ContestoElaborazione): number | null {
+  if (typeof c.anniFissi !== 'number' || !Number.isFinite(c.anniFissi)) return null;
+  return Math.max(0, Math.round(c.anniFissi));
+}
+
+/** L'offerta già decisa dall'operatore, in percentuale. */
+function offertaFissata(c: ContestoElaborazione): number | null {
+  if (typeof c.offertaFissa !== 'number' || !Number.isFinite(c.offertaFissa)) return null;
+  return Math.max(0, Math.min(100, c.offertaFissa));
+}
+
 function bloccoStrategia(c: ContestoElaborazione): string {
   const leve = c.leveModificate
     ? `LE LEVE LE HA GIÀ SCELTE L'OPERATORE: non proporre valori diversi. Sono il suo perimetro e, fino al salvataggio del piano, l'analisi non le tocca. Se i dati dicono che una misura diversa sarebbe più sostenibile, scrivilo nella sintesi senza cambiarla.`
     : `LE CINQUE LEVE LE SCEGLI TU, con la misura e con il motivo. Sono le variabili del piano: se la crescita che proponi ha bisogno del personale, della tecnologia, di linee nuove, di mercati nuovi o di un target nuovo, accendile con la misura che i dati sostengono. Un piano che cresce senza mettere in gioco nulla non regge; non accendere una leva che i dati non sostengono.`;
+  const anni = anniFissati(c);
   const impostazione = impostazioneFissa(c)
     ? `L'IMPOSTAZIONE È GIÀ SCELTA DALL'OPERATORE: non proporne un'altra e non restituirla. Il percorso ne tiene conto.`
-    : `Prudente, neutra e favorevole non sono etichette: cambiano le misure delle leve e il percorso. Prudente = misure contenute e ripresa lenta; neutra = quello che dicono i dati; favorevole = il miglior esito plausibile, dichiarato. Se per una leva non esiste una variante, non inventarla.`;
+    : `Prudente, neutra e favorevole non sono etichette: cambiano le misure delle leve, il percorso e la restituzione del debito. Prudente = misure contenute, ripresa lenta e debito più diluito; neutra = quello che dicono i dati; favorevole = il miglior esito plausibile, dichiarato, con la restituzione più corta che il flusso sostiene.${anni !== null ? ' Gli anni di restituzione però li ha già fissati l’operatore: qui non cambiano.' : ''} Se per una leva non esiste una variante, non inventarla.`;
   const minAnni = c.minAnni && c.minAnni > 0 ? c.minAnni : 0;
   return `IL PIANO È IL CAMBIAMENTO, NON LA RIPETIZIONE. Un piano che ripete i numeri dell'ultimo bilancio per tutti gli anni non è prudente: è un'azienda ferma, e le rate non le paga. La tabella mostra le stesse righe del conto economico, quindi costi e personale devono risultare coerenti con le ipotesi: se dici di ridurre il personale, la riduzione deve stare nei numeri.
 
@@ -264,7 +304,7 @@ COME SI COSTRUISCE IL PIANO — in quest'ordine:
    Le ipotesi delle righe ricavi e costi che scrivi sono il percorso SENZA l'effetto delle leve: la piattaforma aggiunge ${c.leveModificate ? 'le leve già scelte dall’operatore' : 'le leve che scegli'}. Non metterle anche nelle percentuali.
 5. IL PERCORSO ANNO PER ANNO. Per ricavi e costi scrivi un valore per OGNI anno del piano, non uno ripetuto: il fatturato sale in modo sostenibile (se lo storico cala, il primo anno tiene e i successivi riprendono), i costi crescono meno dei ricavi, il margine EBITDA migliora. Ricavi fermi si giustificano solo con un vincolo documentato, e la motivazione deve dirlo.
 6. L'IMPOSTAZIONE. ${impostazione}
-7. GLI ANNI. ${minAnni > 0 ? `Il debito si restituisce in ${minAnni} anni: anniRientro deve essere almeno ${minAnni} e non può superare l'orizzonte già scelto.` : `Gli anni di restituzione del debito non possono superare l'orizzonte del piano.`}
+7. GLI ANNI. ${anni !== null ? `Gli anni di restituzione li ha già fissati l'operatore (${anni === 0 ? 'unica soluzione' : `${anni} anni`}): non proporli e non cambiarli.` : minAnni > 0 ? `Il debito si restituisce in ${minAnni} anni: anniRientro deve essere almeno ${minAnni} e non può superare l'orizzonte già scelto.` : `Gli anni di restituzione del debito li scegli tu, e non possono superare l'orizzonte del piano.`}
 8. I SACRIFICI. Di' che cosa il piano chiede di rinunciare o di anticipare (organico, investimenti, credito ai clienti, cassa) e dove il piano non arriva. Sono parte del piano, non un'appendice.
 9. CHIUDERE SULLE RATE. Il flusso di gestione deve coprire le rate verso l'ente e gli altri creditori: se con ipotesi difendibili non ci arriva, dillo nella sintesi invece di gonfiare i numeri.
 10. LA RICERCA DEL MOTORE. Dopo la tua risposta la piattaforma gira le manopole a piccoli passi — crescita dei ricavi, costi, leve — finché rate, cassa e patrimonio stanno in piedi, e mette da parte le mosse che ha fatto. Tu scrivi il punto di partenza motivato, non devi indovinare il valore finale; e non gonfiare i numeri per arrivarci: la ricerca si ferma dove serve e, se non basta, lo dichiara.`;
@@ -283,18 +323,29 @@ ${LEVE.map(
     : 'Le scelte devono puntare a far fronte agli impegni assunti verso l’ente: gli anni determinano le rate, l’offerta determina quanto entra. Non accendere leve che i dati non sostengono; non lasciarne nessuna accesa quando la crescita che proponi ne ha bisogno.';
   const campi = [
     ...(proceduraFissa(c) ? [] : ['procedura (ACCORDO, LIQUIDAZIONE o CRAM_DOWN)']),
-    "percentualeOfferta (0-100 sul credito dell'ente, null se non la fissi)",
-    "anniRientro (1-10, null se come la proposta, mai oltre l'orizzonte)",
+    ...(offertaFissata(c) === null
+      ? ["percentualeOfferta (0-100 sul credito dell'ente, null se non la fissi)"]
+      : []),
+    ...(anniFissati(c) === null
+      ? ["anniRientro (0-10; 0 = unica soluzione, null se come la proposta, mai oltre l'orizzonte)"]
+      : []),
     ...(impostazioneFissa(c) ? [] : ['prudenza (PRUDENTE, NEUTRA o FAVOREVOLE)']),
   ];
   const fissi = [
     proceduraFissa(c) ? 'La procedura è già fissata dallo scenario: non restituirla.' : '',
+    offertaFissata(c) !== null ? "L'offerta è già fissata dall'operatore: non restituirla." : '',
+    anniFissati(c) !== null
+      ? 'Gli anni di restituzione sono già fissati dall’operatore: non restituirli.'
+      : '',
     impostazioneFissa(c) ? "L'impostazione è già scelta dall'operatore: non restituirla." : '',
   ]
     .filter(Boolean)
     .join(' ');
+  const riga = campi.length
+    ? `- lancio: ${campi.join(', ')}.${fissi ? ` ${fissi}` : ''}`
+    : `- lancio: non c'è niente da decidere, è già tutto dell'operatore. ${fissi}`;
   return `LE SCELTE CHE REGGONO IL PIANO — ${leve}
-- lancio: ${campi.join(', ')}.${fissi ? ` ${fissi}` : ''}
+${riga}
 ${chiusura}
 `;
 }
@@ -303,7 +354,8 @@ ${chiusura}
 function esempioLancio(c: ContestoElaborazione): string {
   const campi: string[] = [];
   if (!proceduraFissa(c)) campi.push('"procedura": "ACCORDO"');
-  campi.push('"percentualeOfferta": 40', '"anniRientro": 5');
+  if (offertaFissata(c) === null) campi.push('"percentualeOfferta": 40');
+  if (anniFissati(c) === null) campi.push('"anniRientro": 5');
   if (!impostazioneFissa(c)) campi.push('"prudenza": "PRUDENTE"');
   return `{${campi.join(', ')}}`;
 }

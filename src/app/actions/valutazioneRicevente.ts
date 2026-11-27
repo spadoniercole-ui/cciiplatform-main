@@ -19,6 +19,7 @@ import {
   type PianoDisponibile,
   type SceltePianoValutazione,
 } from '@/lib/piano/scelteValutazione';
+import { nomeVariantePiano } from '@/lib/piano/variantiPiano';
 
 export interface DichiarazioniValutazione {
   asseverazioneNonPervenuta?: boolean;
@@ -108,12 +109,7 @@ export async function ottieniStatoValutazioneAction(
     for (const v of varianti) {
       piani.push({
         chiave: v,
-        nome:
-          v === 'base'
-            ? 'Piano base della piattaforma'
-            : v === 'elaborazione-ai'
-              ? 'Piano elaborato dall’AI'
-              : `Variante «${v}»`,
+        nome: nomeVariantePiano(v),
         tipo: v === 'base' ? 'base' : v === 'elaborazione-ai' ? 'ai' : 'variante',
       });
     }

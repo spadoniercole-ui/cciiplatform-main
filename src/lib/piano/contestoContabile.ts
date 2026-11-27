@@ -82,11 +82,12 @@ export function lancioPianoValido(
         ? Math.max(0, Math.min(100, Math.round(offerta * 100) / 100))
         : null;
   const anni = Number(o.anniRientro);
+  // 0 è un valore, non un campo vuoto: significa «in un'unica soluzione».
   const anniRientro =
     o.anniRientro === null || o.anniRientro === undefined || o.anniRientro === ''
       ? null
       : Number.isFinite(anni)
-        ? Math.max(1, Math.min(orizzonteMassimo, Math.round(anni)))
+        ? Math.max(0, Math.min(orizzonteMassimo, Math.round(anni)))
         : null;
   return { procedura, percentualeOfferta, prudenza, anniRientro };
 }
@@ -125,8 +126,17 @@ export function testoLancio(l: LancioSimulazione | LancioPiano): string {
     pezzi.push(
       `RESTITUZIONE DEL DEBITO: il debito dell’ente si restituisce in ${anni} anni; le rate si dimensionano su questo arco.`
     );
+  } else if (anni === 0) {
+    pezzi.push('RESTITUZIONE DEL DEBITO: in un’unica soluzione, tutta nel primo anno del piano.');
   }
   return pezzi.join(' ');
+}
+
+/** Gli anni di restituzione come si leggono: vuoto, unica soluzione, N anni. */
+export function testoAnniRientro(anni: number | null | undefined): string {
+  if (anni === null || anni === undefined) return 'come la proposta';
+  if (anni <= 0) return 'un’unica soluzione';
+  return `${anni} ${anni === 1 ? 'anno' : 'anni'}`;
 }
 
 const euro = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;

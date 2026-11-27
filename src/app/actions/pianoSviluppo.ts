@@ -16,12 +16,14 @@ import { DATI_VUOTI } from '@/lib/posizioneAggiornata/schemaCampi';
 import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import Anthropic from '@anthropic-ai/sdk';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
+import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { ottieniScenarioPerId, verificaScenarioNonBloccato } from '@/app/actions/scenari';
 import type { TipoIstruttoria } from '@/lib/giudice/lettura';
 import { estraiJson } from '@/lib/visura/fatti';
 import { rettifichePulite, applicaRettifiche, type Rettifiche } from '@/lib/piano/rettifiche';
 import { ipotesiDaPianoAzienda, valoriPuliti } from '@/lib/piano/pianoAziendale';
 import {
+  PREFISSO_SINTESI_NOTA,
   VARIANTE_AI,
   VARIAZIONE_MASSIMA_PREDEFINITA,
   modoRettifiche,
@@ -51,6 +53,7 @@ import {
 } from '@/lib/piano/piano';
 import { ORIZZONTE_MASSIMO, type PianoRientro, type TotaleOfferto } from '@/lib/piano/ricevente';
 import {
+  LANCIO_PIANO_PREDEFINITO,
   lancioDaSalvato,
   lancioPianoValido,
   testoAttenzioneContabile,
@@ -108,6 +111,11 @@ export interface DatiPianoSviluppo {
   salvatoIl: string | null;
   /** Totale offerto dalla proposta: all'ente e agli altri creditori. */
   offerto: TotaleOfferto;
+  /**
+   * Il dovuto della proposta, all'ente e agli altri creditori: è la base su cui
+   * si calcola la percentuale d'offerta che il lancio riporta.
+   */
+  dovuto: TotaleOfferto;
   /**
    * Il debito da restituire con il piano, quando la proposta non lo dice: la
    * cifra accertata dalla verifica amministrativa (memorizzata) o, in mancanza,
@@ -284,8 +292,14 @@ export async function ottieniPianoSviluppoAction(
     // Totale offerto a tutti i creditori e piano di rientro della proposta:
     // il punto di partenza delle domande sul piano di rientro.
     const offerto: TotaleOfferto = { ente: 0, altri: 0 };
+    const dovuto: TotaleOfferto = { ente: 0, altri: 0 };
     let mesiProposta = 0;
     for (const r of righeRate) {
+      const d = Number(r.importoDovuto);
+      if (Number.isFinite(d)) {
+        if (eEnte(r.categoriaCreditore)) dovuto.ente += d;
+        else dovuto.altri += d;
+      }
       const o = (Number(r.importoDovuto) * Number(r.percentualeOfferta)) / 100;
       if (!Number.isFinite(o)) continue;
       if (eEnte(r.categoriaCreditore)) offerto.ente += o;
@@ -377,6 +391,10 @@ export async function ottieniPianoSviluppoAction(
         offerto: {
           ente: Math.round(offerto.ente * 100) / 100,
           altri: Math.round(offerto.altri * 100) / 100,
+        },
+        dovuto: {
+          ente: Math.round(dovuto.ente * 100) / 100,
+          altri: Math.round(dovuto.altri * 100) / 100,
         },
         debitoTarget,
         tipoIstruttoria,
@@ -747,9 +765,22 @@ function contestoPulito(c: ContestoElaborazione): ContestoElaborazione | null {
     pianoVerifica: c.pianoVerifica ? String(c.pianoVerifica).slice(0, 4000) : null,
     noteIntegrative: c.noteIntegrative ? String(c.noteIntegrative).slice(0, 6000) : null,
     minAnni: Math.max(0, Math.min(ORIZZONTE_MASSIMO, Math.round(n(c.minAnni)))),
+    // Gli anni e l'offerta scritti nel lancio sono decisioni dell'operatore:
+    // l'elaborazione li tiene (0 anni = unica soluzione).
+    anniFissi:
+      typeof c.anniFissi === 'number' && Number.isFinite(c.anniFissi)
+        ? Math.max(0, Math.min(ORIZZONTE_MASSIMO, Math.round(c.anniFissi)))
+        : null,
+    offertaFissa:
+      typeof c.offertaFissa === 'number' && Number.isFinite(c.offertaFissa)
+        ? Math.max(0, Math.min(100, c.offertaFissa))
+        : null,
     impostazione: c.impostazione ? String(c.impostazione).slice(0, 20) : null,
     procedura: c.procedura ? String(c.procedura).slice(0, 20) : null,
     vincoli: (c.vincoli ?? []).slice(0, 10).map((v) => String(v).slice(0, 200)),
+    vincoliDocumentati: (c.vincoliDocumentati ?? [])
+      .slice(0, 10)
+      .map((v) => String(v).slice(0, 200)),
   };
 }
 
@@ -856,12 +887,10 @@ export async function elaboraPianoConAiAction(
       aliquotaImposteDefault: parametri.aliquotaImposteDefault,
     };
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey)
-      return {
-        success: false,
-        error:
-          'Chiave API ANTHROPIC_API_KEY non configurata nel server: l’elaborazione con l’AI non è disponibile.',
-      };
+    // La chiave assente è un caso previsto, non un errore tecnico: il messaggio
+    // dice dove si mette (nella demo locale `.env.local`, nella portable
+    // `apikey.txt`). Le altre funzioni AI lo dicono già, questa no (0.256.47).
+    if (!apiKey) return { success: false, error: messaggioChiaveAiMancante() };
     const anthropic = new Anthropic({ apiKey, timeout: SCADENZA_ELABORAZIONE_MS, maxRetries: 1 });
     // LA RICERCA WEB (0.256.34). L'ambiente — situazione internazionale,
     // stabilità politica, mercati emergenti, energia, tassi, cambi — non sta
@@ -947,9 +976,9 @@ export async function elaboraPianoConAiAction(
       ipotesiIniziali: esito.ipotesi,
       leveIniziali: leveFinali,
       variazioneMassimaPct: opzioni.variazioneMassimaPct ?? VARIAZIONE_MASSIMA_PREDEFINITA,
-      // I vincoli documentati sono quelli che il pannello manda già all'analisi:
-      // se ce n'è uno, i ricavi possono restare fermi.
-      vincoliDocumentati: c.vincoli,
+      // Solo i vincoli documentati possono lasciare i ricavi fermi: i vincoli
+      // aperti del piano in schermo sono proprio quelli da chiudere.
+      vincoliDocumentati: c.vincoliDocumentati,
       // Con il piano dell'azienda rettificato il percorso di ricavi e costi è
       // quello rettificato: la ricerca agisce sulle leve.
       percorsoFisso: modoRettifiche(c),
@@ -966,9 +995,15 @@ export async function elaboraPianoConAiAction(
               .join(', ') || 'nessuna leva accesa'
           }) non le ha sostituite.`
         : '';
-    // La restituzione del debito non può essere più lunga del piano: se il
-    // modello propone più anni dell'orizzonte, si tiene l'orizzonte e lo si dice.
-    const lancioFinale = esito.lancio ?? null;
+    // La restituzione del debito non può essere più lunga del piano: se gli anni
+    // superano l'orizzonte, si tiene l'orizzonte e lo si dice.
+    const anniFissi = typeof c.anniFissi === 'number' ? c.anniFissi : null;
+    const offertaFissa = typeof c.offertaFissa === 'number' ? c.offertaFissa : null;
+    const lancioFinale: LancioPiano | null = esito.lancio
+      ? { ...esito.lancio }
+      : anniFissi !== null || offertaFissa !== null
+        ? { ...LANCIO_PIANO_PREDEFINITO }
+        : null;
     let anniTroncati = false;
     const minAnni = c.minAnni ?? 0;
     if (lancioFinale) {
@@ -978,8 +1013,11 @@ export async function elaboraPianoConAiAction(
         lancioFinale.prudenza = c.impostazione as LancioPiano['prudenza'];
       if (c.procedura && ['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'].includes(c.procedura))
         lancioFinale.procedura = c.procedura as LancioPiano['procedura'];
+      // Gli anni e l'offerta del lancio sono quelli scritti dall'operatore.
+      if (offertaFissa !== null) lancioFinale.percentualeOfferta = offertaFissa;
+      if (anniFissi !== null) lancioFinale.anniRientro = anniFissi;
       // Il piano non si restituisce in meno anni dell'arco scelto.
-      if (minAnni > 0)
+      else if (minAnni > 0)
         lancioFinale.anniRientro = Math.max(minAnni, lancioFinale.anniRientro ?? minAnni);
       if (lancioFinale.anniRientro && lancioFinale.anniRientro > c.orizzonte) {
         lancioFinale.anniRientro = c.orizzonte;
@@ -990,9 +1028,9 @@ export async function elaboraPianoConAiAction(
       `Ipotesi impostate dall’AI il ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}; i risultati li calcola il motore della piattaforma.`,
       `Le leve scelte dall’analisi sono applicate al calcolo dalla piattaforma: le percentuali delle righe sono il percorso senza il loro effetto.`,
       anniTroncati
-        ? `L’analisi proponeva di restituire il debito in più anni dell’orizzonte: la restituzione resta entro i ${c.orizzonte} anni del piano.`
+        ? `La restituzione del debito resta entro i ${c.orizzonte} anni del piano: gli anni chiesti nel lancio non potevano essere più lunghi dell'orizzonte.`
         : '',
-      esito.sintesi,
+      esito.sintesi ? `${PREFISSO_SINTESI_NOTA}${esito.sintesi}` : '',
       notaRicerca(ricerca),
       propostaScartata,
       esito.scartati.length
@@ -1012,10 +1050,20 @@ export async function elaboraPianoConAiAction(
     );
     const variantiEsistenti = nomiVarianti.rows.map((r) => String(r.variante));
     if (variantiEsistenti.includes(VARIANTE_AI)) {
+      // Il nome archivio manca solo se i nomi ammessi sono tutti presi: in quel
+      // caso meglio fermarsi che sovrascrivere un piano già messo da parte.
+      const archivio = nomeArchivioElaborazione(variantiEsistenti);
+      if (!archivio)
+        return {
+          success: false,
+          error:
+            'Ci sono già tutte le varianti messe da parte che il nome consente: eliminane qualcuna e riprova.',
+        };
+      // Qui la variante non è il progetto (il controllo è più sopra): non serve
+      // ripeterlo nella condizione dell'UPDATE.
       await pool.query(
-        `UPDATE "${s}".piano_sviluppo SET variante = $3
-          WHERE scenario_id = $1 AND variante = $2 AND progetto = FALSE`,
-        [scenarioId, VARIANTE_AI, nomeArchivioElaborazione(variantiEsistenti)]
+        `UPDATE "${s}".piano_sviluppo SET variante = $3 WHERE scenario_id = $1 AND variante = $2`,
+        [scenarioId, VARIANTE_AI, archivio]
       );
     }
     await pool.query(
@@ -1044,9 +1092,14 @@ export async function elaboraPianoConAiAction(
     };
   } catch (error: unknown) {
     console.error('[elaboraPianoConAiAction]', error);
+    // Chiave revocata, credito esaurito, rete assente: il pannello legge il
+    // messaggio in italiano come per le altre funzioni AI, non l'errore grezzo
+    // del fornitore (0.256.47).
     return {
       success: false,
-      error: `Elaborazione con l’AI non riuscita: ${(error as Error).message || error}`,
+      error:
+        erroreServizioEsterno(error, 'AI') ??
+        `Elaborazione con l’AI non riuscita: ${(error as Error).message || error}`,
     };
   }
 }

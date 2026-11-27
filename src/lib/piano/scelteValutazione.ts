@@ -3,6 +3,9 @@
 // tra piani deve comparire nella relazione finale. La forma è una sola perché
 // la scrive il browser, la rilegge la sintesi e la usa l'analisi AI.
 
+import { VARIANTE_AI } from './elaborazioneAi';
+import { eVarianteDellAnalisi } from './variantiPiano';
+
 export interface PianoDisponibile {
   chiave: string;
   nome: string;
@@ -22,8 +25,6 @@ export const SCELTE_PIANO_PREDEFINITE: SceltePianoValutazione = {
   includiConfronto: true,
   pianiConfronto: [],
 };
-
-const chiaviValide = new Set(['azienda', 'base', 'elaborazione-ai']);
 
 /** Pulizia di ciò che arriva dal browser o dal database. */
 export function sceltePianoPulite(v: unknown): SceltePianoValutazione | null {
@@ -45,7 +46,7 @@ export function sceltePianoPulite(v: unknown): SceltePianoValutazione | null {
     : [];
   return {
     includiPianoAziendale: o.includiPianoAziendale !== false,
-    pianoScelto: pianoScelto ?? (chiaviValide.has('base') ? 'base' : null),
+    pianoScelto: pianoScelto ?? 'base',
     includiConfronto: o.includiConfronto !== false,
     pianiConfronto,
   };
@@ -55,6 +56,7 @@ export function etichettaPiano(chiave: string | null | undefined): string {
   if (!chiave) return 'nessun piano scelto';
   if (chiave === 'azienda') return 'piano dell’azienda';
   if (chiave === 'base') return 'piano base della piattaforma';
-  if (chiave === 'elaborazione-ai') return 'piano elaborato dall’AI';
+  if (chiave === VARIANTE_AI) return 'piano elaborato dall’AI';
+  if (eVarianteDellAnalisi(chiave)) return 'piano elaborato dall’AI e messo da parte';
   return `variante «${chiave}»`;
 }

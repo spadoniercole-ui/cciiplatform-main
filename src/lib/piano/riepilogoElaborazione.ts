@@ -30,10 +30,14 @@ const numero = (n: number) => n.toLocaleString('it-IT', { maximumFractionDigits:
 
 const euro0 = (n: number) => `${Math.round(n).toLocaleString('it-IT')} €`;
 
-/** Un valore d'ipotesi come si legge accanto alla manopola. */
+/**
+ * Un valore d'ipotesi come si legge accanto alla manopola. L'unità la decide
+ * il tipo, non la riga: con il piano dell'azienda le righe sono importi
+ * assoluti, e un ricavo non si legge in percentuale.
+ */
 export function valoreIpotesi(riga: RigaIpotesi, ip: Ipotesi): string {
   if (riga === 'aliquotaImposte') return `${numero(ip.valore)}%`;
-  if (riga === 'investimenti' || riga === 'apportiSoci') return euro0(ip.valore);
+  if (ip.tipo === 'abs') return euro0(ip.valore);
   return `${ip.valore > 0 ? '+' : ''}${numero(ip.valore)}%`;
 }
 
@@ -46,9 +50,8 @@ export function parametriElaborazione(
   orizzonte: number,
   primoAnno: number
 ): ParametroElaborazione[] {
-  const righe: RigaIpotesi[] = [...RIGHE_INPUT, 'costiPersonale'];
   const out: ParametroElaborazione[] = [];
-  for (const riga of righe) {
+  for (const riga of RIGHE_INPUT) {
     const celle = (ipotesi[riga] ?? []).slice(0, Math.max(0, orizzonte));
     const presenti = celle
       .map((ip, i) => ({ ip, anno: primoAnno + i }))
