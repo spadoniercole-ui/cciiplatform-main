@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   riepilogoVerificheEnte,
+  ripartoDebitoPiano,
   saldoRigaPosizione,
   sintesiVerificheEnte,
   totaleVerificheEnte,
@@ -41,6 +42,28 @@ describe('verifiche dell’ente', () => {
 
   it('il saldo non scende sotto zero se il versato supera l’importo', () => {
     expect(saldoRigaPosizione({ importo: 100, importoVersato: 150 })).toBe(0);
+  });
+
+  it('il debito che entra nel piano si divide fra ente e AdR', () => {
+    const r = ripartoDebitoPiano({ totale: 194_712, creditiAgente: 44_712 }, 194_712);
+    expect(r.adr).toBe(44_712);
+    expect(r.ente).toBe(150_000);
+    expect(r.diversoDallElenco).toBe(false);
+  });
+
+  it('dichiara quando la cifra del piano non è la somma delle posizioni', () => {
+    // Le posizioni a schermo sommano 194.712: sospese e non determinate restano
+    // fuori dal debito certo, quindi il piano parte da 180.000.
+    const r = ripartoDebitoPiano({ totale: 180_000, creditiAgente: 30_000 }, 194_712);
+    expect(r.totale).toBe(180_000);
+    expect(r.ente).toBe(150_000);
+    expect(r.diversoDallElenco).toBe(true);
+  });
+
+  it('una quota AdR più grande del totale non produce cifre negative', () => {
+    const r = ripartoDebitoPiano({ totale: 100, creditiAgente: 150 }, 100);
+    expect(r.adr).toBe(100);
+    expect(r.ente).toBe(0);
   });
 
   it('la sintesi dice quante verifiche e per quanto', () => {

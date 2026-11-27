@@ -18,7 +18,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle2, CircleDashed, Loader2 } from 'lucide-react';
 import { impostaVerificheScenarioAction } from '@/app/actions/verificheScenario';
-import { sintesiVerificheEnte, type RiepilogoVerificheEnte } from '@/lib/debitiEnte/verificheEnte';
+import {
+  sintesiVerificheEnte,
+  type RiepilogoVerificheEnte,
+  type RipartoDebitoPiano,
+} from '@/lib/debitiEnte/verificheEnte';
 import { PassoProcedura } from './PassoProcedura';
 import { type AggancioContabile } from '@/lib/debitiEnte/aggancioContabile';
 
@@ -42,6 +46,7 @@ export interface DisponibilitaVerificheScenario {
 
 export function VerificheEnteScenario({
   riepilogo,
+  debitoPiano,
   codice,
   aziendaId,
   nomeSchema,
@@ -51,6 +56,13 @@ export function VerificheEnteScenario({
   disponibilita,
 }: {
   riepilogo: RiepilogoVerificheEnte;
+  /**
+   * Il debito che il piano restituisce, diviso fra ente e AdR. Null quando la
+   * cifra non viene dalla certificazione dei debiti: le posizioni del triage e
+   * quelle dell’ente non distinguono le due destinazioni, e ripartirle sarebbe
+   * inventare.
+   */
+  debitoPiano: RipartoDebitoPiano | null;
   codice: string;
   aziendaId: number;
   nomeSchema: string;
@@ -162,6 +174,40 @@ export function VerificheEnteScenario({
               </li>
             ))}
           </ul>
+          {/* IL DEBITO CHE ENTRA NEL PIANO SI LEGGE IN DUE RIGHE (0.256.50). Il
+              piano restituisce la cifra accertata dalla verifica, e dentro ci
+              sono due crediti diversi: quello che si rimborsa all’ente e quello
+              che si rimborsa all’AdR, dove giacciono le posizioni a ruolo. Se la
+              cifra non è la somma delle posizioni, il riquadro lo dice. */}
+          {debitoPiano && (
+            <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/70 p-2 space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-900">
+                Di cui: quello che entra nel piano — {euro(debitoPiano.totale)}
+              </p>
+              <ul className="space-y-0.5 text-[10px] text-slate-700">
+                <li className="flex items-center justify-between gap-2">
+                  <span>Rimborso diretto all’ente</span>
+                  <span className="tabular-nums font-bold text-slate-900 shrink-0">
+                    {euro(debitoPiano.ente)}
+                  </span>
+                </li>
+                <li className="flex items-center justify-between gap-2">
+                  <span>Rimborso all’AdR (Agente della Riscossione) — debiti già a ruolo</span>
+                  <span className="tabular-nums font-bold text-slate-900 shrink-0">
+                    {euro(debitoPiano.adr)}
+                  </span>
+                </li>
+              </ul>
+              <p className="text-[10px] text-slate-600 leading-relaxed">
+                {debitoPiano.adr > 0
+                  ? 'Sono due incassi distinti: le rate verso l’ente e quelle verso l’AdR si restituiscono a due soggetti diversi, e il piano le copre entrambe.'
+                  : 'Nessuna posizione è già a ruolo: il debito si restituisce tutto all’ente.'}
+                {debitoPiano.diversoDallElenco
+                  ? ' Il piano parte dalla cifra accertata dalla verifica, non dalla somma delle posizioni qui sopra: le sospese, le non determinate e le doppie restano fuori dal debito certo.'
+                  : ''}
+              </p>
+            </div>
+          )}
           <p className="mt-2 flex items-center gap-1 text-[10px] font-bold text-emerald-800">
             {verifiche.amministrativa ? (
               <CheckCircle2 className="w-3 h-3" />

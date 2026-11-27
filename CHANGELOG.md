@@ -26,6 +26,45 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.50 — 2026-11-27
+
+IL DEBITO CHE ENTRA NEL PIANO DICE QUANTO VA ALL’ENTE E QUANTO ALL’ADR.
+
+Al passo 1 la card delle verifiche diceva una cifra sola — «1 verifica caricata —
+194.712 €» — e chi scriveva le rate la leggeva come se andasse tutta all’ente.
+Dentro quella cifra, però, ci sono due crediti che si restituiscono a due
+soggetti diversi: quello dell’ente e quello già affidato all’Agente della
+Riscossione, dove giacciono le posizioni a ruolo. Il piano le copre entrambe, e
+ora lo dice prima che si scrivano le rate.
+
+- **Due righe sotto la cifra del piano.** Nel riquadro «Di cui: quello che entra
+  nel piano — 194.712 €» compaiono «Rimborso diretto all’ente» e «Rimborso
+  all’AdR (Agente della Riscossione) — debiti già a ruolo». Sotto, una riga che
+  spiega il caso: due incassi distinti se c’è una quota a ruolo, altrimenti che
+  il debito si restituisce tutto all’ente.
+- **La quota a ruolo non si stima.** È `creditiAgente`, che lo snapshot del
+  debito ricava dalle sezioni della certificazione intestate all’Agente; la
+  differenza con il totale è quello che si rimborsa direttamente all’ente. Se la
+  quota a ruolo supera il totale — un dato incoerente — va tutta all’AdR e
+  all’ente restano zero euro: nessuna cifra negativa in schermo.
+- **La cifra del piano non è la somma dell’elenco, e il riquadro lo dice.** Il
+  piano parte dal debito certo accertato dalla verifica, non dalla somma delle
+  posizioni mostrate: sospese, non determinate e doppie restano fuori. Quando le
+  due cifre non coincidono (scarto di almeno 50 centesimi) il riquadro lo
+  dichiara, così nessuno cerca l’errore in un totale che i due conti fanno
+  diverso per costruzione.
+- **Finché la verifica non è chiusa il riparto si legge lo stesso.** Se la cifra
+  memorizzata non viene ancora dalla certificazione, il riparto si calcola sulle
+  posizioni correnti con `snapshotDebitoEnte`, cioè lo stesso conto che la
+  chiusura memorizzerà. Il riquadro resta spento quando in elenco non c’è una
+  certificazione dei debiti: le posizioni del triage e quelle dell’ente non
+  distinguono le due destinazioni, e ripartirle sarebbe inventare.
+- **La lettura in più non costa un giro al database.** Il debito memorizzato si
+  legge insieme alle altre due letture del passo 1, con `Promise.all`.
+
+Coperto da tre casi in `verificheEnte.test.ts`: riparto normale, cifra diversa
+dall’elenco, quota a ruolo più grande del totale.
+
 ## 0.256.49 — 2026-11-27
 
 IL PULSANTE DELL’ELABORAZIONE ORA HA UN TETTO D’USO E DICE QUANDO È FINITO.

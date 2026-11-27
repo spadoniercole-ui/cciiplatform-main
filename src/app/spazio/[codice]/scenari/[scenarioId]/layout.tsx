@@ -5,7 +5,9 @@ import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import { ottieniScenarioPerId } from '@/app/actions/scenari';
 import { ottieniDebitiVera } from '@/app/actions/posizioneVera';
 import { ottieniDebitiEnte } from '@/app/actions/debitiEnte';
-import { riepilogoVerificheEnte } from '@/lib/debitiEnte/verificheEnte';
+import { riepilogoVerificheEnte, ripartoDebitoPiano } from '@/lib/debitiEnte/verificheEnte';
+import { leggiDebitoEnteMemorizzato } from '@/lib/debitiEnte/memorizzaDebitoEnte';
+import { snapshotDebitoEnte } from '@/lib/debitiEnte/debitoEnte';
 import { VerificheEnteScenario } from '@/components/spazio/VerificheEnteScenario';
 import { verificheDisponibiliAziendaAction } from '@/app/actions/verificheScenario';
 import { AGGANGIO_VUOTO } from '@/lib/debitiEnte/aggancioContabile';
@@ -64,15 +66,33 @@ export default async function ScenarioLayout({
   // PRIMO PASSO DI OGNI SCENARIO: le verifiche che l’ente ha già fatto su
   // questa azienda. Sta nel layout perché vale per tutti i tipi di scenario
   // (Redigente, Ricevente, decreto, cram down), non solo per uno.
-  const [vera, posizione] = await Promise.all([
+  const [vera, posizione, memorizzato] = await Promise.all([
     ottieniDebitiVera(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
     ottieniDebitiEnte(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
+    leggiDebitoEnteMemorizzato(contesto.nomeSchema, scenario.aziendaId).catch(() => null),
   ]);
   const verifiche = riepilogoVerificheEnte({
     righeVera: vera && vera.success ? vera.righe : [],
     documentiCaricatiIl: vera && vera.success ? (vera.documentiCaricatiIl ?? null) : null,
     righePosizione: posizione && posizione.success ? posizione.righe : [],
   });
+  // IL RIPARTO DEL DEBITO CHE ENTRA NEL PIANO (0.256.50). Il piano parte dalla
+  // cifra memorizzata a fine verifica — la stessa che la ricerca usa — e solo la
+  // certificazione distingue il credito dell’ente da quello già affidato
+  // all’Agente della Riscossione. Finché la verifica non è chiusa quella cifra
+  // non c’è: il riparto si legge dal suo stesso calcolo sulle posizioni correnti
+  // (`snapshotDebitoEnte`), che è ciò che la chiusura memorizzerà.
+  const voceCertificazione = verifiche.voci.find((v) => v.codice === 'CERTIFICAZIONE');
+  const debitoPerRiparto =
+    memorizzato?.debito.fonteTipo === 'certificazione'
+      ? memorizzato.debito
+      : vera && vera.success && voceCertificazione
+        ? snapshotDebitoEnte(vera.righe)
+        : null;
+  const debitoPiano =
+    debitoPerRiparto && voceCertificazione
+      ? ripartoDebitoPiano(debitoPerRiparto, voceCertificazione.totale)
+      : null;
 
   // Le quattro letture che seguono non dipendono l'una dall'altra: in parallelo
   // costavano quattro andate e ritorni in fila al database. Che cosa esiste
@@ -145,6 +165,7 @@ export default async function ScenarioLayout({
 
         <VerificheEnteScenario
           riepilogo={verifiche}
+          debitoPiano={debitoPiano}
           codice={codice}
           aziendaId={scenario.aziendaId}
           nomeSchema={contesto.nomeSchema}

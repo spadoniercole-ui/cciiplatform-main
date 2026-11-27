@@ -74,6 +74,48 @@ export function totaleVerificheEnte(riepilogo: RiepilogoVerificheEnte): number {
   return riepilogo.voci.reduce((s, v) => s + v.totale, 0);
 }
 
+/**
+ * IL RIPARTO DEL DEBITO CHE ENTRA NEL PIANO (0.256.50).
+ *
+ * Il piano non parte dalla somma delle posizioni in elenco: parte dalla cifra
+ * accertata dalla verifica, quella memorizzata, e le posizioni sospese,
+ * potenziali o doppie restano fuori. Dentro quella cifra il credito dell'ente e
+ * quello già affidato all'Agente della Riscossione si restituiscono a due
+ * soggetti diversi, e l'operatore deve vederlo prima di scrivere le rate.
+ *
+ * La quota a ruolo non si stima: è `creditiAgente`, che lo snapshot del debito
+ * calcola dalle sezioni della certificazione intestate all'Agente. La
+ * differenza con il totale è quello che si rimborsa direttamente all'ente.
+ */
+export interface RipartoDebitoPiano {
+  /** La cifra che il piano restituisce: contabilizzato + da contabilizzare. */
+  totale: number;
+  /** Rimborso diretto all'ente. */
+  ente: number;
+  /** Rimborso all'Agente della Riscossione: le posizioni già a ruolo. */
+  adr: number;
+  /** true quando la cifra del piano non è la somma delle posizioni mostrate. */
+  diversoDallElenco: boolean;
+}
+
+export function ripartoDebitoPiano(
+  debito: { totale: number; creditiAgente: number },
+  /** Il totale della voce in elenco: la somma delle posizioni, non il debito certo. */
+  totaleElenco: number
+): RipartoDebitoPiano {
+  const centesimi = (n: number) => Math.round(n * 100) / 100;
+  const totale = centesimi(Math.max(0, debito.totale));
+  // Una quota a ruolo più grande del totale sarebbe un dato incoerente: si
+  // tiene il totale e la si dichiara tutta all'Agente, senza cifre negative.
+  const adr = centesimi(Math.min(totale, Math.max(0, debito.creditiAgente)));
+  return {
+    totale,
+    adr,
+    ente: centesimi(totale - adr),
+    diversoDallElenco: Math.abs(totale - totaleElenco) >= 0.5,
+  };
+}
+
 /** Testo unico della testata: dice quante verifiche ci sono e per quanto. */
 export function sintesiVerificheEnte(riepilogo: RiepilogoVerificheEnte): string {
   if (riepilogo.presenti === 0)
