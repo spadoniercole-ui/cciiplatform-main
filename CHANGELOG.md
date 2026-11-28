@@ -26,6 +26,48 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.53 — 2026-11-27
+
+IL LANCIO DELLA SIMULAZIONE SI DEFINISCE IN UN PUNTO SOLO.
+
+La card della 0.256.51 ripeteva la stessa stringa su quattro campi: riga,
+etichetta e campo. Una modifica alla resa andava ripetuta a mano quattro volte,
+e tre erano destinate a divergere. A schermo non cambia niente.
+
+- **Quattro costanti al posto di quattro copie.** Riga (`CLASSE_RIGA_LANCIO`),
+  etichetta, campo e nota della card stanno sopra il componente, una volta sola;
+  i campi le compongono, con `tabular-nums` per i due numeri.
+- **Il fuoco è dei campi che si toccano.** L’anello viola è in una classe a
+  parte: la procedura già scelta, che è un riquadro di sola lettura, non se lo
+  porta dietro.
+- **Due classi morte tolte dalle note.** «0 = unica soluzione» e «È quella dello
+  scenario» dichiaravano `font-normal normal-case` contro un maiuscolo e un
+  grassetto che stavano sull’etichetta sorella, non su di loro: non facevano
+  niente e non fanno più niente.
+
+## 0.256.52 — 2026-11-27
+
+LE ALTRE RIGHE DI CAMPI DEL PIANO STANNO SULLA LINEA DEL LANCIO.
+
+Il riallineamento della card del lancio valeva per una card sola. Nel resto del
+pannello restavano due righe con lo stesso difetto: il campo appeso al testo e
+largo una misura fissa, così i controlli cominciavano a quote diverse e i numeri
+non si incolonnarono mai.
+
+- **Le leve di questa simulazione.** Il sì/no stava centrato sulla riga mentre la
+  misura pendeva da una didascalia che le abbassava il campo: due controlli
+  della stessa riga a due altezze diverse. Ora ognuno ha la sua etichetta in cima
+  — «nel piano», «misura (%)» — e il campo largo quanto la colonna, con lo stesso
+  anello viola dei campi del lancio.
+- **Il piano di rientro (passo 3).** Gli importi erano larghi 112 pixel e le
+  misure 64, appesi al testo sulla stessa riga: il totale, il «di cui all’ente»,
+  i mesi e la quota pagata subito cominciavano ognuno dove finiva la propria
+  etichetta. Ora l’etichetta sta sopra e il campo prende tutta la larghezza
+  della card, con l’unità nell’etichetta (€, mesi, %).
+- **Le verifiche dell’ente non avevano niente da raddrizzare.** Le sue righe
+  sono etichette e importi allineati a destra: nessun campo, nessuna fila da
+  sistemare.
+
 ## 0.256.51 — 2026-11-27
 
 IL LANCIO DELLA SIMULAZIONE STA SU QUATTRO COLONNE ALLINEATE.

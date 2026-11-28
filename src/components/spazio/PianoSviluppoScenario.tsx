@@ -150,6 +150,23 @@ interface Props {
 const fmt = (n: number | null | undefined) =>
   n === null || n === undefined ? '—' : Math.round(n).toLocaleString('it-IT');
 
+// IL LANCIO IN UN PUNTO SOLO (0.256.53). Riga, etichetta, campo e nota delle
+// quattro scelte erano la stessa stringa scritta quattro volte: un ritocco alla
+// resa andava ripetuto a mano su ognuna, e tre erano destinate a divergere. La
+// resa è quella della 0.256.51, classe per classe.
+const CLASSE_RIGA_LANCIO = 'flex min-w-0 flex-col gap-1';
+const CLASSE_ETICHETTA_LANCIO =
+  'text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight';
+const CLASSE_CAMPO_LANCIO =
+  'w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800';
+// L’anello del fuoco appartiene ai soli campi che si possono toccare: la
+// procedura già scelta è un riquadro di sola lettura e non lo porta.
+const CLASSE_FUOCO_CAMPO =
+  'focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100';
+// La nota sotto il campo: il grigio del testo secondario, senza il maiuscolo
+// dell’etichetta — quel maiuscolo è suo, non della riga.
+const CLASSE_NOTA_LANCIO = 'text-[9px] text-slate-500';
+
 export function PianoSviluppoScenario({
   nomeSchema,
   codice,
@@ -968,22 +985,14 @@ export function PianoSviluppoScenario({
           {dati.simulazioneAttiva ? (
             // La procedura è già quella dello scenario: chiederla di nuovo
             // significherebbe mettere in dubbio il tipo scelto alla creazione.
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
-                Procedura da sostenere
-              </span>
-              <p className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800">
-                {ETICHETTA_PROCEDURA[lancio.procedura]}
-              </p>
-              <span className="text-[9px] font-normal normal-case text-slate-500">
-                È quella dello scenario.
-              </span>
+            <div className={CLASSE_RIGA_LANCIO}>
+              <span className={CLASSE_ETICHETTA_LANCIO}>Procedura da sostenere</span>
+              <p className={CLASSE_CAMPO_LANCIO}>{ETICHETTA_PROCEDURA[lancio.procedura]}</p>
+              <span className={CLASSE_NOTA_LANCIO}>È quella dello scenario.</span>
             </div>
           ) : (
-            <label className="flex min-w-0 flex-col gap-1">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
-                Procedura da sostenere
-              </span>
+            <label className={CLASSE_RIGA_LANCIO}>
+              <span className={CLASSE_ETICHETTA_LANCIO}>Procedura da sostenere</span>
               <select
                 value={lancio.procedura}
                 onChange={(e) =>
@@ -992,7 +1001,7 @@ export function PianoSviluppoScenario({
                     procedura: e.target.value as LancioSimulazione['procedura'],
                   }))
                 }
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                className={`${CLASSE_CAMPO_LANCIO} ${CLASSE_FUOCO_CAMPO}`}
               >
                 {(['ACCORDO', 'LIQUIDAZIONE', 'CRAM_DOWN'] as const).map((p) => (
                   <option key={p} value={p}>
@@ -1002,10 +1011,8 @@ export function PianoSviluppoScenario({
               </select>
             </label>
           )}
-          <label className="flex min-w-0 flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
-              Offerta ipotizzata (%)
-            </span>
+          <label className={CLASSE_RIGA_LANCIO}>
+            <span className={CLASSE_ETICHETTA_LANCIO}>Offerta ipotizzata (%)</span>
             <input
               type="number"
               min={0}
@@ -1021,13 +1028,11 @@ export function PianoSviluppoScenario({
               }}
               placeholder="come la proposta"
               title="La percentuale che la proposta applica al dovuto dell’ente: qui si legge e da qui si cambia."
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800 tabular-nums focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
+              className={`${CLASSE_CAMPO_LANCIO} ${CLASSE_FUOCO_CAMPO} tabular-nums`}
             />
           </label>
-          <label className="flex min-w-0 flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
-              Restituzione del debito (anni)
-            </span>
+          <label className={CLASSE_RIGA_LANCIO}>
+            <span className={CLASSE_ETICHETTA_LANCIO}>Restituzione del debito (anni)</span>
             <input
               type="number"
               min={0}
@@ -1043,16 +1048,14 @@ export function PianoSviluppoScenario({
               }}
               placeholder="come la proposta"
               title={`Il debito da restituire è ${euro(debitoDaRestituire)}: le rate si dividono sugli anni indicati. 0 = un’unica soluzione. Vuoto = rate della proposta.`}
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800 tabular-nums focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
+              className={`${CLASSE_CAMPO_LANCIO} ${CLASSE_FUOCO_CAMPO} tabular-nums`}
             />
-            <span className="text-[9px] font-normal normal-case text-slate-500">
+            <span className={CLASSE_NOTA_LANCIO}>
               {anniRientro === 0 ? 'tutto nel primo anno' : '0 = unica soluzione'}
             </span>
           </label>
-          <label className="flex min-w-0 flex-col gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
-              Impostazione
-            </span>
+          <label className={CLASSE_RIGA_LANCIO}>
+            <span className={CLASSE_ETICHETTA_LANCIO}>Impostazione</span>
             <select
               value={lancio.prudenza}
               onChange={(e) =>
@@ -1061,7 +1064,7 @@ export function PianoSviluppoScenario({
                   prudenza: e.target.value as LancioSimulazione['prudenza'],
                 }))
               }
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
+              className={`${CLASSE_CAMPO_LANCIO} ${CLASSE_FUOCO_CAMPO}`}
             >
               <option value="PRUDENTE">Prudente</option>
               <option value="NEUTRA">Neutra</option>
@@ -1739,11 +1742,15 @@ export function PianoSviluppoScenario({
               {LEVE.map((l) => {
                 const s = leve[l.id];
                 return (
+                  // ETICHETTA IN CIMA E CAMPO LARGO QUANTO LA COLONNA (0.256.52). Il
+                  // sì/no stava centrato sulla riga mentre la misura pendeva da una
+                  // didascalia che le abbassava il campo: i due controlli non
+                  // partivano dalla stessa quota.
                   <div
                     key={l.id}
-                    className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_90px_120px] items-center rounded-lg border border-slate-200 p-2"
+                    className="grid gap-x-3 gap-y-2 sm:grid-cols-[minmax(0,1fr)_7rem_7rem] sm:items-start rounded-lg border border-slate-200 p-2"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-[11px] font-semibold text-slate-800">{l.domanda}</p>
                       <p className="text-[10px] text-slate-500 leading-relaxed">
                         {l.misura} — {l.effetto}
@@ -1754,23 +1761,30 @@ export function PianoSviluppoScenario({
                         </p>
                       )}
                     </div>
-                    <select
-                      value={s.attiva ? 'SI' : 'NO'}
-                      onChange={(e) => {
-                        setLeve((prev) => ({
-                          ...prev,
-                          [l.id]: { ...prev[l.id], attiva: e.target.value === 'SI' },
-                        }));
-                        setLeveToccate(true);
-                        setModificato(true);
-                      }}
-                      className="p-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-800"
-                    >
-                      <option value="NO">No</option>
-                      <option value="SI">Sì</option>
-                    </select>
-                    <label className="text-[10px] text-slate-500">
-                      <span className="block">misura (%)</span>
+                    <label className="flex min-w-0 flex-col gap-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+                        nel piano
+                      </span>
+                      <select
+                        value={s.attiva ? 'SI' : 'NO'}
+                        onChange={(e) => {
+                          setLeve((prev) => ({
+                            ...prev,
+                            [l.id]: { ...prev[l.id], attiva: e.target.value === 'SI' },
+                          }));
+                          setLeveToccate(true);
+                          setModificato(true);
+                        }}
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-normal text-slate-800 focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                      >
+                        <option value="NO">No</option>
+                        <option value="SI">Sì</option>
+                      </select>
+                    </label>
+                    <label className="flex min-w-0 flex-col gap-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+                        misura (%)
+                      </span>
                       <input
                         type="number"
                         min={0}
@@ -1798,7 +1812,7 @@ export function PianoSviluppoScenario({
                           setModificato(true);
                         }}
                         disabled={!s.attiva}
-                        className="mt-0.5 w-full p-1.5 text-xs text-right bg-white border border-slate-200 rounded-lg text-slate-800 disabled:opacity-50"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-right text-slate-800 tabular-nums focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100 disabled:opacity-50"
                       />
                     </label>
                   </div>

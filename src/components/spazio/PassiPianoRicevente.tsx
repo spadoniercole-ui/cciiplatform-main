@@ -172,29 +172,35 @@ export function PassiPianoRicevente({
                 La proposta valutata non indica il totale offerto: scrivilo qui.
               </p>
             )}
-            <label className="flex items-center gap-2">
-              Totale offerto a tutti i creditori
+            {/* ETICHETTA IN CIMA E CAMPO A TUTTA LARGHEZZA (0.256.52). Con il
+                campo appeso al testo, i due importi (112 px) e le due misure
+                (64 px) cominciavano a colonne diverse e i numeri non si
+                incolonnarono mai. */}
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+                Totale offerto a tutti i creditori (€)
+              </span>
               <input
                 type="number"
                 min={0}
                 step={1000}
                 value={totaleScritto}
                 onChange={(e) => setTotaleScritto(Math.max(0, Number(e.target.value)))}
-                className="w-28 p-1 border border-slate-300 rounded text-right"
+                className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs text-right text-slate-900 tabular-nums focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
               />
-              €
             </label>
-            <label className="flex items-center gap-2">
-              di cui all’ente
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+                di cui all’ente (€)
+              </span>
               <input
                 type="number"
                 min={0}
                 step={1000}
                 value={enteScritto}
                 onChange={(e) => setEnteScritto(Math.max(0, Number(e.target.value)))}
-                className="w-28 p-1 border border-slate-300 rounded text-right"
+                className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs text-right text-slate-900 tabular-nums focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
               />
-              €
             </label>
             <fieldset className="flex gap-3">
               <legend className="sr-only">Modalità di pagamento</legend>
@@ -211,21 +217,24 @@ export function PassiPianoRicevente({
               ))}
             </fieldset>
             {modalita === 'RATEALE' && (
-              <label className="flex items-center gap-2">
-                Ammortamento in
+              <label className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+                  Ammortamento (mesi)
+                </span>
                 <input
                   type="number"
                   min={2}
                   max={ORIZZONTE_MASSIMO * 12 * 2}
                   value={mesi}
                   onChange={(e) => setMesi(Number(e.target.value))}
-                  className="w-16 p-1 border border-slate-300 rounded text-right"
+                  className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs text-right text-slate-900 tabular-nums focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
                 />
-                mesi
               </label>
             )}
-            <label className="flex items-center gap-2">
-              Quota pagata subito
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 leading-tight">
+                Quota pagata subito (%) del totale
+              </span>
               <input
                 type="number"
                 min={0}
@@ -233,9 +242,8 @@ export function PassiPianoRicevente({
                 step={0.5}
                 value={anticipo}
                 onChange={(e) => setAnticipo(Number(e.target.value))}
-                className="w-16 p-1 border border-slate-300 rounded text-right"
+                className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs text-right text-slate-900 tabular-nums focus:border-violet-300 focus:outline-none focus:ring-2 focus:ring-violet-100"
               />
-              % del totale
             </label>
             <p className="text-[10px] text-slate-400">
               Le risposte valgono per il totale offerto a tutti i creditori, non per il solo debito
