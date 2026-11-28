@@ -17,7 +17,7 @@ import { ottieniContestoAccessoSpazio } from '@/app/actions/spazi';
 import Anthropic from '@anthropic-ai/sdk';
 import { istruzioniLessicoPerPrompt } from '@/lib/lessico/lessico';
 import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
-import { consumaQuotaAi } from '@/lib/limiteAi';
+import { consumaQuotaAi, rimborsaQuotaAi } from '@/lib/limiteAi';
 import { ottieniScenarioPerId, verificaScenarioNonBloccato } from '@/app/actions/scenari';
 import type { TipoIstruttoria } from '@/lib/giudice/lettura';
 import { estraiJson } from '@/lib/visura/fatti';
@@ -123,6 +123,12 @@ export interface DatiPianoSviluppo {
    * la somma delle posizioni dell'ente. null = nessuna cifra disponibile.
    */
   debitoTarget: number | null;
+  /**
+   * Di quel debito, la quota già affidata all'Agente della Riscossione: non si
+   * restituisce all'ente ma all'AdR, ed è un creditore distinto. null quando la
+   * cifra non è disponibile; 0 quando il debito non ha posizioni a ruolo.
+   */
+  adrTarget: number | null;
   /** La situazione dello scenario: con il flag di simulazione la procedura non si sceglie. */
   tipoIstruttoria: TipoIstruttoria | null;
   /** Piano di rientro come lo dice la proposta (risposte proposte alle domande). */
@@ -326,14 +332,25 @@ export async function ottieniPianoSviluppoAction(
       : null;
     // Il debito da restituire: la verifica amministrativa lo ha già accertato.
     // Serve al piano di rientro quando la proposta non porta righe (0.256.21).
-    const debitoTarget = await (async (): Promise<number | null> => {
+    // Il debito da restituire, e quanto di quel debito è già a ruolo: la
+    // verifica memorizza le due cifre insieme, e il piano deve sapere che una
+    // parte si restituisce all'Agente della Riscossione, non all'ente.
+    const debitoAccertato = await (async (): Promise<{
+      totale: number;
+      adr: number;
+    } | null> => {
       const mem = await pool
-        .query(`SELECT totale FROM "${nomeSchema}".debiti_ente_memorizzati WHERE azienda_id = $1`, [
-          aziendaId,
-        ])
-        .catch(() => ({ rows: [] as { totale: string | number }[] }));
+        .query(
+          `SELECT totale, crediti_agente FROM "${nomeSchema}".debiti_ente_memorizzati WHERE azienda_id = $1`,
+          [aziendaId]
+        )
+        .catch(() => ({
+          rows: [] as { totale: string | number; crediti_agente: string | number }[],
+        }));
       const memorizzato = num(mem.rows[0]?.totale);
-      if (memorizzato > 0) return memorizzato;
+      // La quota a ruolo non si stima e non supera il totale.
+      const adr = Math.min(memorizzato, Math.max(0, num(mem.rows[0]?.crediti_agente)));
+      if (memorizzato > 0) return { totale: memorizzato, adr };
       const posizioni = await pool
         .query(
           `SELECT COALESCE(SUM(importo), 0) AS totale FROM "${nomeSchema}".debiti_ente
@@ -342,8 +359,12 @@ export async function ottieniPianoSviluppoAction(
         )
         .catch(() => ({ rows: [] as { totale: string | number }[] }));
       const somma = num(posizioni.rows[0]?.totale);
-      return somma > 0 ? somma : null;
+      return somma > 0 ? { totale: somma, adr: 0 } : null;
     })();
+    const debitoTarget = debitoAccertato?.totale ?? null;
+    // Le posizioni dell'ente non distinguono le due destinazioni: senza la cifra
+    // memorizzata la quota a ruolo non si inventa.
+    const adrTarget = debitoAccertato?.adr ?? null;
     let pianoVerifica: AnnoPianoVerifica[] = [];
     if (simulazioneAttiva) {
       const va = await pool
@@ -398,6 +419,7 @@ export async function ottieniPianoSviluppoAction(
           altri: Math.round(dovuto.altri * 100) / 100,
         },
         debitoTarget,
+        adrTarget,
         tipoIstruttoria,
         rientroProposta,
         pianoRientro: pianoRientroPulito(piano.rows[0]?.piano_rientro),
@@ -477,7 +499,7 @@ export async function salvaPianoSviluppoAction(
     // Le leve si salvano solo se il browser le manda: se non arrivano (un
     // salvataggio che non le conosce) restano quelle già registrate.
     const leve = extra.leve ? JSON.stringify(leveValide(extra.leve)) : null;
-    const lancio = extra.lancio ? JSON.stringify(lancioPianoValido(extra.lancio)) : null;
+    const lancio = extra.lancio ? JSON.stringify(lancioPianoValido(extra.lancio, o)) : null;
     await pool.query(
       `INSERT INTO "${contesto.nomeSchema}".piano_sviluppo (scenario_id, variante, orizzonte, ipotesi, note, rettifiche, piano_rientro, serie_sistema, soluzione, leve, lancio, salvato_il)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
@@ -749,6 +771,11 @@ function contestoPulito(c: ContestoElaborazione): ContestoElaborazione | null {
       ente: (c.rate?.ente ?? []).slice(0, orizzonte).map(n),
       altri: (c.rate?.altri ?? []).slice(0, orizzonte).map(n),
     },
+    // Il riparto ente/AdR del debito: due quote, due creditori. Solo numeri
+    // non negativi; senza la voce resta null e il prompt non ne parla.
+    ripartoDebito: c.ripartoDebito
+      ? { ente: Math.max(0, n(c.ripartoDebito.ente)), adr: Math.max(0, n(c.ripartoDebito.adr)) }
+      : null,
     pianoAzienda: c.lato === 'RICEVUTA' ? (c.pianoAzienda ?? null) : null,
     scostamenti: c.lato === 'RICEVUTA' ? (c.scostamenti ?? []).slice(0, 12) : [],
     ipotesiCorrenti: c.ipotesiCorrenti ?? null,
@@ -841,10 +868,14 @@ export async function elaboraPianoConAiAction(
     // completo) e prima del modello: un rifiuto non fa aspettare e non spende.
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return { success: false, error: messaggioChiaveAiMancante() };
-    const quota = await consumaQuotaAi(pool, 'PIANO', {
+    // La quota si paga solo se il lavoro si fa: se il modello non risponde il
+    // contatore torna indietro (`rimborsaQuotaAi`), anche a metà dei tre giri
+    // della ricerca.
+    const chiQuota = {
       utente: contestoSpazio.email || `spazio:${contestoSpazio.spazioId}`,
       spazioId: contestoSpazio.spazioId,
-    });
+    };
+    const quota = await consumaQuotaAi(pool, 'PIANO', chiQuota);
     if (!quota.consentito)
       return {
         success: false,
@@ -918,18 +949,25 @@ export async function elaboraPianoConAiAction(
       { role: 'user', content: promptElaborazione(c, opzioni) },
     ];
     let risposta: Anthropic.Messages.Message | null = null;
-    for (let giro = 0; giro < 3; giro++) {
-      risposta = await anthropic.messages.create({
-        model: 'claude-sonnet-5',
-        max_tokens: 6000,
-        thinking: { type: 'disabled' },
-        messages: messaggi,
-        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
-      });
-      if (risposta.stop_reason !== 'pause_turn') break;
-      // La ricerca può sospendere il turno: si riprende da quello che il
-      // modello ha già prodotto, senza rimandargli il prompt da capo.
-      messaggi.push({ role: 'assistant', content: risposta.content });
+    try {
+      for (let giro = 0; giro < 3; giro++) {
+        risposta = await anthropic.messages.create({
+          model: 'claude-sonnet-5',
+          max_tokens: 6000,
+          thinking: { type: 'disabled' },
+          messages: messaggi,
+          tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }],
+        });
+        if (risposta.stop_reason !== 'pause_turn') break;
+        // La ricerca può sospendere il turno: si riprende da quello che il
+        // modello ha già prodotto, senza rimandargli il prompt da capo.
+        messaggi.push({ role: 'assistant', content: risposta.content });
+      }
+    } catch (error) {
+      // Il modello non ha risposto: la chiamata non si paga. L'errore risale al
+      // catch della funzione, che lo traduce in italiano.
+      await rimborsaQuotaAi(pool, 'PIANO', chiQuota);
+      throw error;
     }
     if (!risposta)
       return { success: false, error: 'L’elaborazione con l’AI non ha prodotto una risposta.' };
@@ -1152,6 +1190,19 @@ export async function commentaSoluzionePianoAction(
         error:
           'Chiave API ANTHROPIC_API_KEY non configurata nel server: la soluzione è calcolata, la lettura dell’AI non è disponibile.',
       };
+    // ANCHE LA LETTURA DELLA SOLUZIONE È UNA CHIAMATA A PAGAMENTO (0.256.54):
+    // parte con la sola sessione come l'elaborazione del piano, e consuma la
+    // stessa quota: senza tetto, un ciclo di clic faceva spesa illimitata.
+    const chiQuota = {
+      utente: contestoSpazio.email || `spazio:${contestoSpazio.spazioId}`,
+      spazioId: contestoSpazio.spazioId,
+    };
+    const quota = await consumaQuotaAi(pool, 'PIANO', chiQuota);
+    if (!quota.consentito)
+      return {
+        success: false,
+        error: quota.error ?? 'Limite di elaborazioni del piano raggiunto: riprova più tardi.',
+      };
     const testo = String(testoSoluzione ?? '').slice(0, 4000);
     const crescita = String(contesto?.crescita ?? '').slice(0, 400);
     const scostamenti = (Array.isArray(contesto?.scostamenti) ? contesto.scostamenti : [])
@@ -1171,12 +1222,18 @@ Scrivi in italiano una lettura breve (al massimo 220 parole, 2-3 paragrafi, nien
 - che cosa cambia rispetto al piano di sistema.
 Regole: usa SOLO i numeri qui sopra, senza ricalcolarli né aggiungerne; non esprimere giudizi riservati al professionista o al tribunale (vedi il lessico sotto); non dire che l'azienda è o non è in crisi; parla di ipotesi da verificare, non di certezze.${istruzioniLessicoPerPrompt()}`;
     const anthropic = new Anthropic({ apiKey, timeout: SCADENZA_AI_MS, maxRetries: 1 });
-    const risposta = await anthropic.messages.create({
-      model: 'claude-sonnet-5',
-      max_tokens: 1200,
-      thinking: { type: 'disabled' },
-      messages: [{ role: 'user', content: prompt }],
-    });
+    const risposta = await anthropic.messages
+      .create({
+        model: 'claude-sonnet-5',
+        max_tokens: 1200,
+        thinking: { type: 'disabled' },
+        messages: [{ role: 'user', content: prompt }],
+      })
+      .catch(async (error: unknown) => {
+        // Il modello non ha risposto: la chiamata non si paga.
+        await rimborsaQuotaAi(pool, 'PIANO', chiQuota);
+        throw error;
+      });
     const commento = risposta.content
       .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')
       .map((b) => b.text)

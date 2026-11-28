@@ -193,6 +193,26 @@ describe('elaborazione con l’AI: validazione della risposta', () => {
     expect(p).toContain('"lancio": {"percentualeOfferta": 40, "anniRientro": 5}');
   });
 
+  it('dice di chi è il debito: ente e Agente della Riscossione', () => {
+    const p = promptElaborazione({
+      ...BASE,
+      lato: 'DA_DEFINIRE',
+      ripartoDebito: { ente: 150_000, adr: 44_712 },
+    });
+    expect(p).toContain('DI CHI È IL DEBITO');
+    expect(p).toContain('all’ente 150000');
+    expect(p).toContain('Riscossione (AdR');
+    expect(p).toContain('44712');
+    // Senza una quota a ruolo il piano ha un creditore solo: la riga non si
+    // scrive, invece di dire «all’AdR 0 euro».
+    const senzaAdr = promptElaborazione({
+      ...BASE,
+      lato: 'DA_DEFINIRE',
+      ripartoDebito: { ente: 150_000, adr: 0 },
+    });
+    expect(senzaAdr).not.toContain('DI CHI È IL DEBITO');
+  });
+
   it('non chiede gli anni e l’offerta già scritti nel lancio', () => {
     const p = promptElaborazione({
       ...BASE,

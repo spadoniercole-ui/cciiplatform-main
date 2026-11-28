@@ -16,6 +16,10 @@ portable-dist/
 # Database dell'ambiente demo locale (npm run demo): si ricrea, non si committa
 /.dati-demo/
 
+# Log delle prove locali (demo e build): rumore di macchina, non lavoro
+/.demo-*.log
+/.build-*.log
+
 # Variabili d'ambiente e segreti
 .env
 .env*.local

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
-import { consumaQuotaAi, limitiAi, type Esecutore } from './limiteAi';
+import { consumaQuotaAi, limitiAi, rimborsaQuotaAi, type Esecutore } from './limiteAi';
 
 const pg = await PGlite.create();
 const db: Esecutore = { query: (t, p) => pg.query(t, p) };
@@ -93,6 +93,29 @@ describe('consumaQuotaAi', () => {
     expect(
       (await consumaQuotaAi(db, 'VISURA', { utente: 'sara', spazioId: 4 }, e)).consentito
     ).toBe(true);
+  });
+
+  it('un tentativo rifiutato non consuma la quota, e il rimborso la restituisce', async () => {
+    const e = env({ AI_VISURE_PER_UTENTE_ORA: '2', AI_VISURE_PER_SPAZIO_GIORNO: '100' });
+    const chi = { utente: 'elsa', spazioId: 6 };
+    expect((await consumaQuotaAi(db, 'VISURA', chi, e)).consentito).toBe(true);
+    expect((await consumaQuotaAi(db, 'VISURA', chi, e)).consentito).toBe(true);
+    // Tre tentativi negati di fila: il contatore non sale, quindi il tetto
+    // resta al suo posto invece di allontanarsi a ogni clic.
+    for (let i = 0; i < 3; i++)
+      expect((await consumaQuotaAi(db, 'VISURA', chi, e)).consentito).toBe(false);
+    await rimborsaQuotaAi(db, 'VISURA', chi);
+    // Restituita una delle due: si può chiamare ancora una volta.
+    expect((await consumaQuotaAi(db, 'VISURA', chi, e)).consentito).toBe(true);
+    expect((await consumaQuotaAi(db, 'VISURA', chi, e)).consentito).toBe(false);
+  });
+
+  it('il rimborso non porta il contatore sotto zero', async () => {
+    const e = env({ AI_VISURE_PER_UTENTE_ORA: '100', AI_VISURE_PER_SPAZIO_GIORNO: '100' });
+    const chi = { utente: 'nessuno', spazioId: 7 };
+    await rimborsaQuotaAi(db, 'VISURA', chi);
+    await rimborsaQuotaAi(db, 'VISURA', chi);
+    expect((await consumaQuotaAi(db, 'VISURA', chi, e)).consentito).toBe(true);
   });
 
   it('con il database irraggiungibile la chiamata è consentita', async () => {

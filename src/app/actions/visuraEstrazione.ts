@@ -25,7 +25,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { erroreServizioEsterno, messaggioChiaveAiMancante } from '@/lib/serviziEsterni';
 import { richiediSessione } from '@/lib/autorizzazione';
-import { consumaQuotaAi } from '@/lib/limiteAi';
+import { consumaQuotaAi, rimborsaQuotaAi } from '@/lib/limiteAi';
 import { pool } from '@/lib/db';
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -112,10 +112,11 @@ export async function estraiAnagraficaDaVisuraAction(
     }
 
     // Tetto d'uso: ogni estrazione è una chiamata AI a pagamento.
-    const quota = await consumaQuotaAi(pool, 'VISURA', {
+    const chiQuota = {
       utente: sessione.username ?? sessione.email ?? sessione.ruolo,
       spazioId: sessione.workspaceId,
-    });
+    };
+    const quota = await consumaQuotaAi(pool, 'VISURA', chiQuota);
     if (!quota.consentito) return { success: false, error: quota.error };
 
     const prompt = `Sei davanti a una visura camerale italiana (Registro Imprese).
@@ -132,25 +133,31 @@ Estrai ESATTAMENTE i dati anagrafici elencati sotto. Regole non negoziabili:
 Rispondi SOLO con JSON valido, nessun testo prima o dopo:
 {"ragioneSociale":null,"formaGiuridica":null,"codiceFiscale":null,"partitaIva":null,"codiceAteco":null,"numeroRea":null,"capitaleSociale":null,"indirizzoSedeLegale":null,"citta":null,"provincia":null,"cap":null,"rappresentanteLegale":null,"ruoloRappresentanteLegale":null,"pec":null,"annoCostituzione":null}`;
 
-    const resp = await anthropic.messages.create({
-      model: 'claude-sonnet-5',
-      max_tokens: 2000,
-      // Senza questo il ragionamento esteso consuma il budget prima di
-      // produrre output, e il JSON arriva troncato.
-      thinking: { type: 'disabled' },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
-            },
-            { type: 'text', text: prompt },
-          ],
-        },
-      ],
-    });
+    const resp = await anthropic.messages
+      .create({
+        model: 'claude-sonnet-5',
+        max_tokens: 2000,
+        // Senza questo il ragionamento esteso consuma il budget prima di
+        // produrre output, e il JSON arriva troncato.
+        thinking: { type: 'disabled' },
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'document',
+                source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
+              },
+              { type: 'text', text: prompt },
+            ],
+          },
+        ],
+      })
+      .catch(async (error: unknown) => {
+        // Il modello non ha risposto: la chiamata non si paga.
+        await rimborsaQuotaAi(pool, 'VISURA', chiQuota);
+        throw error;
+      });
 
     const raw = resp.content
       .filter((b): b is Anthropic.Messages.TextBlock => b.type === 'text')

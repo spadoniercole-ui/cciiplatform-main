@@ -70,6 +70,13 @@ export interface ContestoElaborazione {
   storico: EsercizioStorico[];
   crescita: { tasso: number; descrizione: string };
   rate: { ente: number[]; altri: number[] };
+  /**
+   * Come si divide il debito da restituire: all'ente e all'Agente della
+   * Riscossione (debiti già a ruolo). Sono due crediti che si pagano a due
+   * soggetti distinti: un piano che ne copre uno solo non chiude gli impegni
+   * assunti (la stessa cifra che la card delle verifiche mostra in schermo).
+   */
+  ripartoDebito?: { ente: number; adr: number } | null;
   /** Ricevente: valori del piano dell'azienda per riga e anno (euro). */
   pianoAzienda?: Partial<Record<RigaInput, Record<string, number>>> | null;
   /** Ricevente: righe su cui l'azienda è più ottimista del riferimento oltre le soglie. */
@@ -165,6 +172,9 @@ export function testoContesto(c: ContestoElaborazione): string {
     `STORICO (euro):\n${righeStorico}`,
     `RIFERIMENTO DI SETTORE: ${c.crescita.descrizione} Tasso usato dal piano automatico: ${c.crescita.tasso}% annuo.`,
     `RATE DELLA PROPOSTA per anno (euro): ente ${c.rate.ente.map(arrot).join(' / ')}; altri creditori ${c.rate.altri.map(arrot).join(' / ')}.`,
+    c.ripartoDebito && c.ripartoDebito.adr > 0
+      ? `DI CHI È IL DEBITO (euro): all’ente ${arrot(c.ripartoDebito.ente)}, all’Agente della Riscossione (AdR, debiti già a ruolo) ${arrot(c.ripartoDebito.adr)}. Sono due crediti distinti, che si restituiscono a due soggetti: le rate devono coprirli entrambi e la sintesi deve dire come.`
+      : '',
     anniOperatore !== null
       ? `RESTITUZIONE DEL DEBITO: ${anniOperatore === 0 ? 'in un’unica soluzione' : `in ${anniOperatore} anni`}, già decisa dall’operatore. Non proporla e non restituirla.`
       : c.minAnni && c.minAnni > 0

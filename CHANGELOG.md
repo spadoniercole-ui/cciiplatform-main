@@ -26,6 +26,56 @@ il terzo per correzioni.
 
 ---
 
+## 0.256.54 — 2026-11-28
+
+LA QUOTA SI PAGA SOLO SE IL LAVORO SI FA, E IL PIANO SA A CHI DEVE I SOLDI.
+
+Otto punti rimasti aperti nelle consegne del piano, chiusi insieme perché
+riguardano la stessa catena: il lancio della simulazione, il tetto d’uso
+dell’AI e il riparto del debito fra ente e Agente della Riscossione.
+
+- **Un tentativo rifiutato non consuma quota.** Il contatore sale prima del
+  controllo, e chi era già al tetto lo faceva salire ancora a ogni clic: dopo
+  dieci clic il tetto orario era più lontano di quando si era cominciato. Ora il
+  tentativo negato si toglie dai contatori — utente e spazio — nella stessa
+  chiamata che lo rifiuta.
+- **Una chiamata che non arriva al modello si rimborsa.** Chiave revocata,
+  credito esaurito, rete assente: la richiesta era partita, il lavoro no. Nuova
+  `rimborsaQuotaAi` in `limiteAi.ts`, usata dall’elaborazione del piano (anche a
+  metà dei tre giri della ricerca web), dalla lettura della soluzione verde e
+  dall’estrazione dell’anagrafica dalla visura.
+- **Anche la lettura della soluzione ha il suo tetto.** `commentaSoluzionePianoAction`
+  partiva con la sola sessione e non contava le chiamate, pur essendo una
+  chiamata al modello a pagamento: ora consuma la quota delle elaborazioni del
+  piano, con gli stessi contatori e gli stessi messaggi.
+- **Il piano sa che una parte del debito è dell’AdR.** La verifica memorizza il
+  debito accertato insieme alla quota già affidata all’Agente della Riscossione,
+  ma l’elaborazione riceveva solo le rate: l’analisi vedeva un creditore solo.
+  Ora il riparto (`ripartoDebito`, letto da `crediti_agente`) entra nel contesto
+  e nel prompt: «all’ente 150.000, all’AdR 44.712 — due crediti distinti, le
+  rate devono coprirli entrambi». Senza una cifra memorizzata la riga non si
+  scrive: le posizioni dell’ente non distinguono le due destinazioni.
+- **Il lancio entra nei documenti.** Brogliaccio e Relazione leggevano il piano
+  senza le scelte che lo governano. La sintesi del piano porta ora una riga
+  «LANCIO DELLA SIMULAZIONE» con procedura, offerta, anni di restituzione e
+  impostazione, con le stesse parole del pannello (`testoLancio`).
+- **La card del lancio mostra i numeri che produce.** Sotto i quattro campi,
+  quando gli anni sono scritti, si legge che cosa diventano: «Restituzione di
+  194.712 € in 5 anni: 60 rate da 3.245 €, su un piano di 5 anni». Prima la
+  cifra stava solo nella tabella, più sotto.
+- **Anni e orizzonte dicono la stessa cosa.** Il lancio si salvava con il tetto
+  di sistema (dieci anni) e non con l’orizzonte della variante: ora si valida
+  con l’orizzonte del piano che lo contiene, così una variante non promette una
+  restituzione più lunga del piano che la mostra.
+- **I log delle prove locali restano fuori dal repository.** `.gitignore` copre
+  `/.demo-*.log` e `/.build-*.log`: sono rumore di macchina, non lavoro, e
+  finivano tra i file non tracciati a ogni giro.
+- **Test.** Quattro casi nuovi: il rifiuto che non consuma e il rimborso che
+  restituisce la chiamata (`limiteAi.test.ts`), il rimborso quando il modello non
+  risponde (`pianoSviluppo.quota.test.ts`), gli anni dentro l’orizzonte
+  (`contestoContabile.test.ts`), il riparto ente/AdR nel prompt
+  (`elaborazioneAi.test.ts`).
+
 ## 0.256.53 — 2026-11-27
 
 IL LANCIO DELLA SIMULAZIONE SI DEFINISCE IN UN PUNTO SOLO.

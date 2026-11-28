@@ -111,6 +111,25 @@ async function incrementa(
   return Number(r.rows[0]?.chiamate ?? 0);
 }
 
+/**
+ * Toglie una chiamata dal contatore: serve quando il conto va rifatto — un
+ * tentativo rifiutato o un lavoro che non è arrivato al modello. Il GREATEST a
+ * zero protegge dal rimborso doppio, che altrimenti porterebbe il contatore
+ * sotto lo zero e regalerebbe quota.
+ */
+async function decrementa(
+  db: Esecutore,
+  funzione: FunzioneAi,
+  soggetto: string,
+  unita: 'hour' | 'day'
+): Promise<void> {
+  await db.query(
+    `UPDATE public.uso_ai SET chiamate = GREATEST(chiamate - 1, 0)
+      WHERE funzione = $1 AND soggetto = $2 AND periodo = date_trunc($3, now())`,
+    [funzione, soggetto, unita]
+  );
+}
+
 export interface EsitoQuota {
   consentito: boolean;
   error?: string;
@@ -132,6 +151,10 @@ export async function consumaQuotaAi(
     await assicuraTabella(db);
     const perUtente = await incrementa(db, funzione, `UTENTE:${chi.utente}`, 'hour');
     if (perUtente > limiti.perUtenteOra) {
+      // Il tentativo rifiutato non consuma: il contatore dice quante chiamate
+      // sono partite, non quante sono state chieste. Chi è al tetto resta al
+      // tetto, ma non perde la quota che gli resta.
+      await decrementa(db, funzione, `UTENTE:${chi.utente}`, 'hour');
       return {
         consentito: false,
         error: `Limite di ${limiti.perUtenteOra} ${CONTEGGIO[funzione]} all'ora raggiunto. ${CONSIGLIO[funzione]}`,
@@ -140,6 +163,10 @@ export async function consumaQuotaAi(
     if (chi.spazioId !== null) {
       const perSpazio = await incrementa(db, funzione, `SPAZIO:${chi.spazioId}`, 'day');
       if (perSpazio > limiti.perSpazioGiorno) {
+        // Si torna indietro su entrambi i contatori: la chiamata non parte, e
+        // non deve pesare né sullo spazio né sull'utente che l'ha chiesta.
+        await decrementa(db, funzione, `SPAZIO:${chi.spazioId}`, 'day');
+        await decrementa(db, funzione, `UTENTE:${chi.utente}`, 'hour');
         return {
           consentito: false,
           error: `Limite giornaliero di ${limiti.perSpazioGiorno} ${CONTEGGIO[funzione]} per questo spazio raggiunto. ${CONSIGLIO[funzione]}`,
@@ -154,5 +181,25 @@ export async function consumaQuotaAi(
   } catch (e) {
     console.error('[limiteAi] contatore non disponibile, chiamata consentita:', e);
     return { consentito: true };
+  }
+}
+
+/**
+ * Restituisce la chiamata registrata quando il lavoro non è stato fatto: la
+ * quota si paga se il modello ha risposto, non se la richiesta è partita. Si
+ * chiama dagli errori che avvengono dopo `consumaQuotaAi` — guasto di rete,
+ * chiave revocata, credito esaurito — e non fa fallire il lavoro se il
+ * contatore non risponde: il rimborso è una cortesia, l'errore vero è un altro.
+ */
+export async function rimborsaQuotaAi(
+  db: Esecutore,
+  funzione: FunzioneAi,
+  chi: { utente: string; spazioId: number | null }
+): Promise<void> {
+  try {
+    await decrementa(db, funzione, `UTENTE:${chi.utente}`, 'hour');
+    if (chi.spazioId !== null) await decrementa(db, funzione, `SPAZIO:${chi.spazioId}`, 'day');
+  } catch (e) {
+    console.error('[limiteAi] rimborso non riuscito:', e);
   }
 }

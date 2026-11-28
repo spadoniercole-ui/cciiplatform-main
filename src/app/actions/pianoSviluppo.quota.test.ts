@@ -55,7 +55,8 @@ vi.mock('@/db/provision', () => ({
 }));
 
 const consumaQuotaAi = vi.fn();
-vi.mock('@/lib/limiteAi', () => ({ consumaQuotaAi }));
+const rimborsaQuotaAi = vi.fn();
+vi.mock('@/lib/limiteAi', () => ({ consumaQuotaAi, rimborsaQuotaAi }));
 
 // Il modello: se la quota lo ferma, non deve essere chiamato.
 const creaMessaggio = vi.fn();
@@ -149,6 +150,21 @@ describe('elaborazione del piano: quota', () => {
     expect(chi).toEqual({ utente: 'anna@alfa.it', spazioId: 3 });
     // Con la quota disponibile la strada arriva al modello.
     expect(creaMessaggio).toHaveBeenCalled();
+  });
+
+  it('se il modello non risponde la quota torna indietro', async () => {
+    const rumore = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Il modello di prova non restituisce niente: la chiamata è un errore.
+    const r = await elaboraPianoConAiAction('SPAZIO-PROVA', SCENARIO, contesto());
+    rumore.mockRestore();
+
+    expect(r.success).toBe(false);
+    // La quota si paga se il modello ha risposto, non se la richiesta è
+    // partita: il contatore torna indietro con gli stessi soggetti.
+    expect(rimborsaQuotaAi).toHaveBeenCalledTimes(1);
+    const [, funzione, chi] = rimborsaQuotaAi.mock.calls[0];
+    expect(funzione).toBe('PIANO');
+    expect(chi).toEqual({ utente: 'anna@alfa.it', spazioId: 3 });
   });
 
   it('senza chiave AI non si consuma quota: il problema non è il tetto', async () => {

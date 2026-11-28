@@ -692,6 +692,20 @@ export function PianoSviluppoScenario({
           ente: rate.ente.slice(0, orizzonte),
           altri: rate.altri.slice(0, orizzonte),
         },
+        // DI CHI È IL DEBITO (0.256.54): una parte del debito accertato è già
+        // a ruolo e si restituisce all'AdR, non all'ente. Il piano deve coprire
+        // entrambe le quote, e senza questa riga l'analisi vedeva un creditore
+        // solo. La cifra viene dalla verifica memorizzata: se non c'è, null.
+        ripartoDebito:
+          dati.adrTarget && dati.adrTarget > 0
+            ? {
+                ente: Math.max(
+                  0,
+                  debitoDaRestituire - Math.min(dati.adrTarget, debitoDaRestituire)
+                ),
+                adr: Math.min(dati.adrTarget, debitoDaRestituire),
+              }
+            : null,
         pianoAzienda: contestoAi.pianoAzienda,
         scostamenti: contestoAi.scostamenti,
         ipotesiCorrenti: ipotesi,
@@ -1080,6 +1094,17 @@ export function PianoSviluppoScenario({
           favorevole la stringe, neutra segue i dati — quando gli anni non sono già scritti qui
           sopra.
         </p>
+        {/* L’ANTEPRIMA DEI NUMERI (0.256.54). Gli anni si scrivono in un campo e la
+            cifra che ne esce era solo nella tabella, più sotto: qui si legge subito
+            che cosa diventa quella scelta — quante rate e da quanto — e che l’arco
+            di restituzione sta dentro l’orizzonte del piano. */}
+        {anniRientro !== null && debitoDaRestituire > 0 && (
+          <p className="text-[10px] text-slate-600 leading-relaxed tabular-nums">
+            {anniRientro === 0
+              ? `Unica soluzione: ${euro(debitoDaRestituire)} nel primo anno, su un piano di ${orizzonte} anni.`
+              : `Restituzione di ${euro(debitoDaRestituire)} in ${anniRientro} ${anniRientro === 1 ? 'anno' : 'anni'}: ${anniRientro * 12} rate da ${euro(debitoDaRestituire / (anniRientro * 12))}, su un piano di ${orizzonte} anni.`}
+          </p>
+        )}
         {attenzione && attenzione.vincoli.length > 0 && (
           <ul className="space-y-0.5">
             {attenzione.vincoli.map((v) => (

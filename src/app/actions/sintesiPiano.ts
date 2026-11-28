@@ -21,6 +21,7 @@ import { PREFISSO_SINTESI_NOTA, VARIANTE_AI } from '@/lib/piano/elaborazioneAi';
 import { calcolaPianoConLeve } from '@/lib/piano/levePiano';
 import { leveDaSalvate } from '@/lib/piano/leveSimulazione';
 import { soluzionePulita } from '@/lib/piano/riceventeSalvataggio';
+import { testoLancio } from '@/lib/piano/contestoContabile';
 import {
   etichettaPiano,
   sceltePianoPulite,
@@ -114,10 +115,17 @@ export async function sintesiPianoScenarioAction(
       capitaleSociale: d.capitaleSociale,
     }).esito;
     const vincoli = mio.vincoli.map((v) => v.testo);
+    // IL LANCIO NEI DOCUMENTI (0.256.54). Brogliaccio e Relazione leggevano il
+    // piano senza le scelte che lo governano: le rate erano lì, ma non si
+    // sapeva su quale procedura, quale offerta, quanti anni e quale
+    // impostazione fossero state divise. Il lancio si scrive com'è, con le
+    // stesse parole del pannello (`testoLancio`).
+    const lancio = d.lancio;
 
     const righe: string[] = [
       `PIANO DI SVILUPPO (variante «base», ${o} anni, calcolato dal motore della piattaforma sulle macro-voci del bilancio ${base.anno}): ${mio.sintesi.replace(/\n/g, ' ')}`,
     ];
+    if (lancio) righe.push(`LANCIO DELLA SIMULAZIONE: ${testoLancio(lancio)}`);
     if (vincoli.length) righe.push(`Vincoli che scattano: ${vincoli.join(' ')}`);
     if (scelte?.pianoScelto) {
       righe.push(

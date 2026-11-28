@@ -136,6 +136,14 @@ describe('lancioPianoValido', () => {
     expect(l.anniRientro).toBeNull();
   });
 
+  it('gli anni stanno dentro l’orizzonte del piano che li salva', () => {
+    // Il lancio si salva con la variante, e la variante ha il suo orizzonte:
+    // otto anni su un piano di cinque non sono un arco di restituzione, sono
+    // una rata calcolata su anni che il piano non mostra.
+    expect(lancioPianoValido({ anniRientro: 8 }, 5).anniRientro).toBe(5);
+    expect(lancioPianoValido({ anniRientro: 3 }, 5).anniRientro).toBe(3);
+  });
+
   it('null quando la variante non ha un lancio salvato', () => {
     expect(lancioDaSalvato(null)).toBeNull();
     expect(lancioDaSalvato('x')).toBeNull();
